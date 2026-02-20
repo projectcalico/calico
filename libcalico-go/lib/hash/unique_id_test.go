@@ -85,4 +85,14 @@ var _ = Describe("GetLengthLimitedID", func() {
 	It("should return the hash if too long prefix", func() {
 		Expect(GetLengthLimitedID("felix", "12345678910", 13)).To(Equal("felix_Y2QCZIS"))
 	})
+	It("should treat empty suffix as shortenedPrefix and hash it when it fits", func() {
+		result := GetLengthLimitedID("felix", "", 10)
+		Expect(result).To(HavePrefix("felix_"))
+		Expect(len(result)).To(Equal(10))
+	})
+	It("should panic when maxLength is too small to hold prefix + shortened hash", func() {
+		Expect(func() {
+			GetLengthLimitedID("felix", "toolong", 6)
+		}).To(Panic())
+	})
 })

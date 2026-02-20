@@ -47,6 +47,9 @@ func MakeUniqueID(prefix, content string) string {
 // If it's too long, it hashes the suffix using SHA256, base64-encodes it, and truncates to fit.
 // Uses shortenedPrefix ("_") to indicate when a hash was used, to avoid collisions.
 func GetLengthLimitedID(fixedPrefix, suffix string, maxLength int) string {
+	if len(suffix) == 0 {
+		suffix = shortenedPrefix
+	}
 	prefixLen := len(fixedPrefix)
 	suffixLen := len(suffix)
 	totalLen := prefixLen + suffixLen
@@ -61,6 +64,10 @@ func GetLengthLimitedID(fixedPrefix, suffix string, maxLength int) string {
 		}
 		hash := base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
 		charsLeftForHash := maxLength - 1 - prefixLen
+		if charsLeftForHash <= 0 {
+			log.Panicf("GetLengthLimitedID: maxLength %d is too small for prefix %q (length %d); "+
+				"need at least %d", maxLength, fixedPrefix, prefixLen, prefixLen+2)
+		}
 		return fixedPrefix + shortenedPrefix + hash[0:charsLeftForHash]
 	}
 	// No need to shorten.
