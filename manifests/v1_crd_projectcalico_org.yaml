@@ -35007,9 +35007,19 @@ spec:
                   maximum: 128
                   minimum: 0
                   type: integer
+                  x-kubernetes-validations:
+                    - message:
+                        Block size cannot be changed; follow IP pool migration
+                        guide to avoid corruption.
+                      rule: self == oldSelf
                 cidr:
                   format: cidr
                   type: string
+                  x-kubernetes-validations:
+                    - message:
+                        CIDR cannot be changed; follow IP pool migration guide
+                        to avoid corruption.
+                      rule: self == oldSelf
                 disableBGPExport:
                   type: boolean
                 disabled:

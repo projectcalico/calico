@@ -88,6 +88,7 @@ type IPPoolSpec struct {
 	// The pool CIDR.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="CIDR cannot be changed; follow IP pool migration guide to avoid corruption."
 	CIDR string `json:"cidr" validate:"net"`
 
 	// Contains configuration for VXLAN tunneling for this pool.
@@ -112,6 +113,7 @@ type IPPoolSpec struct {
 	// or equal to the size of the pool CIDR.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=128
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Block size cannot be changed; follow IP pool migration guide to avoid corruption."
 	BlockSize int `json:"blockSize,omitempty"`
 
 	// Allows IPPool to allocate for a specific node by label selector.
