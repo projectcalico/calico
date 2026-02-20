@@ -26,7 +26,7 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	kubevirtclient "kubevirt.io/client-go/kubevirt/typed/core/v1"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -158,8 +158,8 @@ func vmimShouldEmitLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigratio
 
 // convertVMIMToLiveMigrationSpec extracts the LiveMigrationSpec from a VMIM.
 // The caller must ensure the VMIM has the required fields (see vmimShouldEmitLiveMigration).
-func convertVMIMToLiveMigrationSpec(vmim *kubevirtv1.VirtualMachineInstanceMigration) libapiv3.LiveMigrationSpec {
-	return libapiv3.LiveMigrationSpec{
+func convertVMIMToLiveMigrationSpec(vmim *kubevirtv1.VirtualMachineInstanceMigration) internalapi.LiveMigrationSpec {
+	return internalapi.LiveMigrationSpec{
 		DestinationWorkloadEndpointSelector: fmt.Sprintf(
 			"kubevirt.io/vmi-name == '%s' && kubevirt.io/migrationJobUID == '%s'",
 			vmim.Spec.VMIName, string(vmim.UID),
@@ -174,7 +174,7 @@ func convertVMIMToLiveMigrationSpec(vmim *kubevirtv1.VirtualMachineInstanceMigra
 // convertVMIMToLiveMigration converts a KubeVirt VirtualMachineInstanceMigration
 // to a Calico LiveMigration KVPair.
 func convertVMIMToLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigration) (*model.KVPair, error) {
-	lm := libapiv3.NewLiveMigration()
+	lm := internalapi.NewLiveMigration()
 	lm.Name = vmim.Name
 	lm.Namespace = vmim.Namespace
 	lm.ResourceVersion = vmim.ResourceVersion
@@ -185,7 +185,7 @@ func convertVMIMToLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigration
 	lm.Spec = convertVMIMToLiveMigrationSpec(vmim)
 	return &model.KVPair{
 		Key: model.ResourceKey{
-			Kind:      libapiv3.KindLiveMigration,
+			Kind:      internalapi.KindLiveMigration,
 			Namespace: vmim.Namespace,
 			Name:      vmim.Name,
 		},
@@ -207,14 +207,14 @@ func convertVMIMResourceToLiveMigration(r Resource) (*model.KVPair, error) {
 type vmimWatchAdapter struct {
 	inner  kwatch.Interface
 	ch     chan kwatch.Event
-	active map[string]libapiv3.LiveMigrationSpec
+	active map[string]internalapi.LiveMigrationSpec
 }
 
 func newVMIMWatchAdapter(inner kwatch.Interface) kwatch.Interface {
 	w := &vmimWatchAdapter{
 		inner:  inner,
 		ch:     make(chan kwatch.Event, resultsBufSize),
-		active: make(map[string]libapiv3.LiveMigrationSpec),
+		active: make(map[string]internalapi.LiveMigrationSpec),
 	}
 	go w.run()
 	return w

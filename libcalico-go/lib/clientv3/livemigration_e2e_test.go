@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -37,7 +37,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 	namespace2 := "namespace-2"
 	name1 := "livemigration-1"
 	name2 := "livemigration-2"
-	spec1 := libapiv3.LiveMigrationSpec{
+	spec1 := internalapi.LiveMigrationSpec{
 		DestinationWorkloadEndpoint: types.NamespacedName{
 			Namespace: "ns-dest-1",
 			Name:      "wep-dest-1",
@@ -47,7 +47,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			Name:      "wep-src-1",
 		},
 	}
-	spec2 := libapiv3.LiveMigrationSpec{
+	spec2 := internalapi.LiveMigrationSpec{
 		DestinationWorkloadEndpoint: types.NamespacedName{
 			Namespace: "ns-dest-2",
 			Name:      "wep-dest-2",
@@ -59,7 +59,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 	}
 
 	DescribeTable("LiveMigration e2e CRUD tests",
-		func(namespace1, namespace2, name1, name2 string, spec1, spec2 libapiv3.LiveMigrationSpec) {
+		func(namespace1, namespace2, name1, name2 string, spec1, spec2 internalapi.LiveMigrationSpec) {
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -68,7 +68,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			be.Clean()
 
 			By("Updating the LiveMigration before it is created")
-			_, outError := c.LiveMigrations().Update(ctx, &libapiv3.LiveMigration{
+			_, outError := c.LiveMigrations().Update(ctx, &internalapi.LiveMigration{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -81,7 +81,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: LiveMigration(" + namespace1 + "/" + name1 + ") with error:"))
 
 			By("Attempting to create a new LiveMigration with a non-empty ResourceVersion")
-			_, outError = c.LiveMigrations().Create(ctx, &libapiv3.LiveMigration{
+			_, outError = c.LiveMigrations().Create(ctx, &internalapi.LiveMigration{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "12345"},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -89,18 +89,18 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
 			By("Creating a new LiveMigration with namespace1/name1/spec1")
-			res1, outError := c.LiveMigrations().Create(ctx, &libapiv3.LiveMigration{
+			res1, outError := c.LiveMigrations().Create(ctx, &internalapi.LiveMigration{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(libapiv3.KindLiveMigration, namespace1, name1, spec1))
+			Expect(res1).To(MatchResource(internalapi.KindLiveMigration, namespace1, name1, spec1))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
 
 			By("Attempting to create the same LiveMigration with name1 but with spec2")
-			_, outError = c.LiveMigrations().Create(ctx, &libapiv3.LiveMigration{
+			_, outError = c.LiveMigrations().Create(ctx, &internalapi.LiveMigration{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1},
 				Spec:       spec2,
 			}, options.SetOptions{})
@@ -110,7 +110,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			By("Getting LiveMigration (name1) and comparing the output against spec1")
 			res, outError := c.LiveMigrations().Get(ctx, namespace1, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(libapiv3.KindLiveMigration, namespace1, name1, spec1))
+			Expect(res).To(MatchResource(internalapi.KindLiveMigration, namespace1, name1, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting LiveMigration (name2) before it is created")
@@ -122,36 +122,36 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			outList, outError := c.LiveMigrations().List(ctx, options.ListOptions{Namespace: namespace1})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(libapiv3.KindLiveMigration, namespace1, name1, spec1),
+				testutils.Resource(internalapi.KindLiveMigration, namespace1, name1, spec1),
 			))
 
 			By("Creating a new LiveMigration with namespace2/name2/spec2")
-			res2, outError := c.LiveMigrations().Create(ctx, &libapiv3.LiveMigration{
+			res2, outError := c.LiveMigrations().Create(ctx, &internalapi.LiveMigration{
 				ObjectMeta: metav1.ObjectMeta{Name: name2, Namespace: namespace2},
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(libapiv3.KindLiveMigration, namespace2, name2, spec2))
+			Expect(res2).To(MatchResource(internalapi.KindLiveMigration, namespace2, name2, spec2))
 
 			By("Getting LiveMigration (name2) and comparing the output against spec2")
 			res, outError = c.LiveMigrations().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(libapiv3.KindLiveMigration, namespace2, name2, spec2))
+			Expect(res).To(MatchResource(internalapi.KindLiveMigration, namespace2, name2, spec2))
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the LiveMigrations using an empty namespace (all-namespaces), expecting two results")
 			outList, outError = c.LiveMigrations().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(libapiv3.KindLiveMigration, namespace1, name1, spec1),
-				testutils.Resource(libapiv3.KindLiveMigration, namespace2, name2, spec2),
+				testutils.Resource(internalapi.KindLiveMigration, namespace1, name1, spec1),
+				testutils.Resource(internalapi.KindLiveMigration, namespace2, name2, spec2),
 			))
 
 			By("Listing all the LiveMigrations in namespace2, expecting a single result with name2/spec2")
 			outList, outError = c.LiveMigrations().List(ctx, options.ListOptions{Namespace: namespace2})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(libapiv3.KindLiveMigration, namespace2, name2, spec2),
+				testutils.Resource(internalapi.KindLiveMigration, namespace2, name2, spec2),
 			))
 
 			By("Updating LiveMigration name1 with spec2")
@@ -159,7 +159,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			res1Out, outError := c.LiveMigrations().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			res1 = res1Out
-			Expect(res1).To(MatchResource(libapiv3.KindLiveMigration, namespace1, name1, spec2))
+			Expect(res1).To(MatchResource(internalapi.KindLiveMigration, namespace1, name1, spec2))
 
 			// Track the version of the updated name1 data.
 			rv1_2 := res1.ResourceVersion
@@ -174,13 +174,13 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			By("Getting LiveMigration (name1) with the original resource version and comparing the output against spec1")
 			res, outError = c.LiveMigrations().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(libapiv3.KindLiveMigration, namespace1, name1, spec1))
+			Expect(res).To(MatchResource(internalapi.KindLiveMigration, namespace1, name1, spec1))
 			Expect(res.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting LiveMigration (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.LiveMigrations().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(libapiv3.KindLiveMigration, namespace1, name1, spec2))
+			Expect(res).To(MatchResource(internalapi.KindLiveMigration, namespace1, name1, spec2))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			By("Deleting LiveMigration (name1) with the old resource version")
@@ -191,12 +191,12 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			By("Deleting LiveMigration (name1) with the new resource version")
 			dres, outError := c.LiveMigrations().Delete(ctx, namespace1, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(dres).To(MatchResource(libapiv3.KindLiveMigration, namespace1, name1, spec2))
+			Expect(dres).To(MatchResource(internalapi.KindLiveMigration, namespace1, name1, spec2))
 
 			By("Deleting LiveMigration (name2)")
 			dres, outError = c.LiveMigrations().Delete(ctx, namespace2, name2, options.DeleteOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(dres).To(MatchResource(libapiv3.KindLiveMigration, namespace2, name2, spec2))
+			Expect(dres).To(MatchResource(internalapi.KindLiveMigration, namespace2, name2, spec2))
 
 			By("Attempting to delete LiveMigration (name2) again")
 			_, outError = c.LiveMigrations().Delete(ctx, namespace2, name2, options.DeleteOptions{})
@@ -239,7 +239,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			By("Configuring a LiveMigration namespace1/name1/spec1 and storing the response")
 			outRes1, err := c.LiveMigrations().Create(
 				ctx,
-				&libapiv3.LiveMigration{
+				&internalapi.LiveMigration{
 					ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1},
 					Spec:       spec1,
 				},
@@ -251,7 +251,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			By("Configuring a LiveMigration namespace2/name2/spec2 and storing the response")
 			outRes2, err := c.LiveMigrations().Create(
 				ctx,
-				&libapiv3.LiveMigration{
+				&internalapi.LiveMigration{
 					ObjectMeta: metav1.ObjectMeta{Namespace: namespace2, Name: name2},
 					Spec:       spec2,
 				},
@@ -270,7 +270,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking for two events, create res2 and delete res1")
-			testWatcher1.ExpectEvents(libapiv3.KindLiveMigration, []watch.Event{
+			testWatcher1.ExpectEvents(internalapi.KindLiveMigration, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes2,
@@ -291,14 +291,14 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			By("Modifying res2")
 			outRes3, err := c.LiveMigrations().Update(
 				ctx,
-				&libapiv3.LiveMigration{
+				&internalapi.LiveMigration{
 					ObjectMeta: outRes2.ObjectMeta,
 					Spec:       spec1,
 				},
 				options.SetOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher2.ExpectEvents(libapiv3.KindLiveMigration, []watch.Event{
+			testWatcher2.ExpectEvents(internalapi.KindLiveMigration, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes1,
@@ -324,7 +324,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher2_1.Stop()
-			testWatcher2_1.ExpectEvents(libapiv3.KindLiveMigration, []watch.Event{
+			testWatcher2_1.ExpectEvents(internalapi.KindLiveMigration, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes1,
@@ -341,7 +341,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher3.Stop()
-			testWatcher3.ExpectEvents(libapiv3.KindLiveMigration, []watch.Event{
+			testWatcher3.ExpectEvents(internalapi.KindLiveMigration, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes3,
@@ -354,7 +354,7 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher4.Stop()
-			testWatcher4.ExpectEvents(libapiv3.KindLiveMigration, []watch.Event{
+			testWatcher4.ExpectEvents(internalapi.KindLiveMigration, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes1,

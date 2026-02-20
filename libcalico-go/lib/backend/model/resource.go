@@ -26,7 +26,7 @@ import (
 	discovery "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/namespace"
 )
 
@@ -122,11 +122,11 @@ func init() {
 	registerResourceInfo[apiv3.IPAMConfiguration](apiv3.KindIPAMConfiguration, "ipamconfigurations")
 
 	// Register libcalico-go/v3 resources.
-	registerResourceInfo[libapiv3.Node](libapiv3.KindNode, "nodes")
-	registerResourceInfo[libapiv3.WorkloadEndpoint](libapiv3.KindWorkloadEndpoint, "workloadendpoints")
-	registerResourceInfo[libapiv3.IPAMConfig](libapiv3.KindIPAMConfig, "ipamconfigs")
-	registerResourceInfo[libapiv3.BlockAffinity](libapiv3.KindBlockAffinity, "blockaffinities")
-	registerResourceInfo[libapiv3.LiveMigration](libapiv3.KindLiveMigration, "livemigrations")
+	registerResourceInfo[internalapi.Node](internalapi.KindNode, "nodes")
+	registerResourceInfo[internalapi.WorkloadEndpoint](internalapi.KindWorkloadEndpoint, "workloadendpoints")
+	registerResourceInfo[internalapi.IPAMConfig](internalapi.KindIPAMConfig, "ipamconfigs")
+	registerResourceInfo[internalapi.BlockAffinity](internalapi.KindBlockAffinity, "blockaffinities")
+	registerResourceInfo[internalapi.LiveMigration](internalapi.KindLiveMigration, "livemigrations")
 
 	// Register Kubernetes resources.
 	registerResourceInfo[kapiv1.Service](KindKubernetesService, "kubernetesservice")

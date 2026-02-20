@@ -28,7 +28,7 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	kubevirtfake "kubevirt.io/client-go/kubevirt/fake"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -68,7 +68,7 @@ var _ = Describe("LiveMigrationClient", func() {
 
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvp, err := client.Get(ctx, model.ResourceKey{
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 				Namespace: "test-ns",
 				Name:      "vmim-1",
 			}, "")
@@ -76,11 +76,11 @@ var _ = Describe("LiveMigrationClient", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kvp).NotTo(BeNil())
 
-			lm := kvp.Value.(*libapiv3.LiveMigration)
+			lm := kvp.Value.(*internalapi.LiveMigration)
 			Expect(lm.Name).To(Equal("vmim-1"))
 			Expect(lm.Namespace).To(Equal("test-ns"))
 			Expect(lm.TypeMeta).To(Equal(metav1.TypeMeta{
-				Kind:       libapiv3.KindLiveMigration,
+				Kind:       internalapi.KindLiveMigration,
 				APIVersion: apiv3.GroupVersionCurrent,
 			}))
 			Expect(lm.Spec.DestinationWorkloadEndpointSelector).To(Equal(
@@ -91,7 +91,7 @@ var _ = Describe("LiveMigrationClient", func() {
 				Namespace: "test-ns",
 			}))
 			Expect(kvp.Key).To(Equal(model.ResourceKey{
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 				Namespace: "test-ns",
 				Name:      "vmim-1",
 			}))
@@ -103,7 +103,7 @@ var _ = Describe("LiveMigrationClient", func() {
 
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			_, err := client.Get(ctx, model.ResourceKey{
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 				Namespace: "test-ns",
 				Name:      "nonexistent",
 			}, "")
@@ -117,7 +117,7 @@ var _ = Describe("LiveMigrationClient", func() {
 
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			_, err := client.Get(ctx, model.ResourceKey{
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 				Namespace: "test-ns",
 				Name:      "vmim-done",
 			}, "")
@@ -132,7 +132,7 @@ var _ = Describe("LiveMigrationClient", func() {
 
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			_, err := client.Get(ctx, model.ResourceKey{
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 				Namespace: "test-ns",
 				Name:      "vmim-no-source",
 			}, "")
@@ -151,18 +151,18 @@ var _ = Describe("LiveMigrationClient", func() {
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvps, err := client.List(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 			}, "")
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 
-			lm1 := kvps.KVPairs[0].Value.(*libapiv3.LiveMigration)
+			lm1 := kvps.KVPairs[0].Value.(*internalapi.LiveMigration)
 			Expect(lm1.Name).To(Equal("vmim-1"))
 			Expect(lm1.Namespace).To(Equal("test-ns"))
 			Expect(lm1.Spec.SourceWorkloadEndpoint.Name).To(Equal("src-pod-1"))
 
-			lm2 := kvps.KVPairs[1].Value.(*libapiv3.LiveMigration)
+			lm2 := kvps.KVPairs[1].Value.(*internalapi.LiveMigration)
 			Expect(lm2.Name).To(Equal("vmim-2"))
 			Expect(lm2.Namespace).To(Equal("test-ns"))
 			Expect(lm2.Spec.SourceWorkloadEndpoint.Name).To(Equal("src-pod-2"))
@@ -175,7 +175,7 @@ var _ = Describe("LiveMigrationClient", func() {
 
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvps, err := client.List(ctx, model.ResourceListOptions{
-				Kind: libapiv3.KindLiveMigration,
+				Kind: internalapi.KindLiveMigration,
 			}, "")
 
 			Expect(err).NotTo(HaveOccurred())
@@ -188,7 +188,7 @@ var _ = Describe("LiveMigrationClient", func() {
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvps, err := client.List(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 			}, "")
 
 			Expect(err).NotTo(HaveOccurred())
@@ -204,12 +204,12 @@ var _ = Describe("LiveMigrationClient", func() {
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			kvps, err := client.List(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 			}, "")
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(1))
-			lm := kvps.KVPairs[0].Value.(*libapiv3.LiveMigration)
+			lm := kvps.KVPairs[0].Value.(*internalapi.LiveMigration)
 			Expect(lm.Name).To(Equal("vmim-running"))
 		})
 	})
@@ -221,7 +221,7 @@ var _ = Describe("LiveMigrationClient", func() {
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			w, err := client.Watch(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 			}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -236,7 +236,7 @@ var _ = Describe("LiveMigrationClient", func() {
 				select {
 				case event := <-w.ResultChan():
 					Expect(event.Error).NotTo(HaveOccurred())
-					lm := event.New.Value.(*libapiv3.LiveMigration)
+					lm := event.New.Value.(*internalapi.LiveMigration)
 					Expect(lm.Name).To(Equal("vmim-watch-1"))
 					Expect(lm.Namespace).To(Equal("test-ns"))
 					Expect(lm.Spec.SourceWorkloadEndpoint.Name).To(Equal("src-pod-w"))
@@ -259,7 +259,7 @@ var _ = Describe("LiveMigrationClient", func() {
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			w, err := client.Watch(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 			}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -276,7 +276,7 @@ var _ = Describe("LiveMigrationClient", func() {
 			case event := <-w.ResultChan():
 				Expect(event.Error).NotTo(HaveOccurred())
 				Expect(event.Type).To(Equal(api.WatchAdded))
-				lm := event.New.Value.(*libapiv3.LiveMigration)
+				lm := event.New.Value.(*internalapi.LiveMigration)
 				Expect(lm.Name).To(Equal("vmim-trans"))
 			case <-timer.C:
 				Fail("expected Added event before timer expired")
@@ -305,7 +305,7 @@ var _ = Describe("LiveMigrationClient", func() {
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 			w, err := client.Watch(ctx, model.ResourceListOptions{
 				Namespace: "test-ns",
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 			}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -335,11 +335,11 @@ var _ = Describe("LiveMigrationClient", func() {
 
 			kvp := &model.KVPair{
 				Key: model.ResourceKey{
-					Kind:      libapiv3.KindLiveMigration,
+					Kind:      internalapi.KindLiveMigration,
 					Namespace: "test-ns",
 					Name:      "test",
 				},
-				Value: libapiv3.NewLiveMigration(),
+				Value: internalapi.NewLiveMigration(),
 			}
 
 			_, err := client.Create(ctx, kvp)
@@ -354,11 +354,11 @@ var _ = Describe("LiveMigrationClient", func() {
 
 			kvp := &model.KVPair{
 				Key: model.ResourceKey{
-					Kind:      libapiv3.KindLiveMigration,
+					Kind:      internalapi.KindLiveMigration,
 					Namespace: "test-ns",
 					Name:      "test",
 				},
-				Value: libapiv3.NewLiveMigration(),
+				Value: internalapi.NewLiveMigration(),
 			}
 
 			_, err := client.Update(ctx, kvp)
@@ -372,7 +372,7 @@ var _ = Describe("LiveMigrationClient", func() {
 			client := resources.NewLiveMigrationClient(kvFake.KubevirtV1())
 
 			_, err := client.Delete(ctx, model.ResourceKey{
-				Kind:      libapiv3.KindLiveMigration,
+				Kind:      internalapi.KindLiveMigration,
 				Namespace: "test-ns",
 				Name:      "test",
 			}, "", nil)
@@ -387,11 +387,11 @@ var _ = Describe("LiveMigrationClient", func() {
 
 			kvp := &model.KVPair{
 				Key: model.ResourceKey{
-					Kind:      libapiv3.KindLiveMigration,
+					Kind:      internalapi.KindLiveMigration,
 					Namespace: "test-ns",
 					Name:      "test",
 				},
-				Value: libapiv3.NewLiveMigration(),
+				Value: internalapi.NewLiveMigration(),
 			}
 
 			_, err := client.DeleteKVP(ctx, kvp)

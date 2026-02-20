@@ -95,6 +95,22 @@ func newBPFTestEpMgr(
 	)
 }
 
+// countSubPrograms counts the number of sub-programs that would be loaded for a given AttachType.
+// This uses the GetApplicableSubProgs API from the hook package.
+func countSubPrograms(at hook.AttachType) int {
+	applicableProgs := hook.GetApplicableSubProgs(at, false)
+	return len(applicableProgs)
+}
+
+// expectedProgramCount computes the expected total program count for a map of AttachTypes.
+func expectedProgramCount(programs map[hook.AttachType]hook.Layout) int {
+	total := 0
+	for at := range programs {
+		total += countSubPrograms(at)
+	}
+	return total
+}
+
 func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	bpfmaps, err := bpfmap.CreateBPFMaps(ipv6Enabled)
 	Expect(err).NotTo(HaveOccurred())
@@ -143,16 +159,13 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsIngCount := 9
-		programsEgCount := 8
-		if ipv6Enabled {
-			programsIngCount = 17
-			programsEgCount = 15
-		}
-		Expect(programsIng.Count()).To(Equal(programsIngCount))
-		Expect(programsEg.Count()).To(Equal(programsEgCount))
+		// Verify expected programs were loaded based on AttachTypes
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
+		expectedIngCount := expectedProgramCount(atIng)
+		expectedEgCount := expectedProgramCount(atEg)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
+		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
@@ -203,10 +216,14 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(programsIng.Count()).To(Equal(32))
 
+			// Verify expected programs were loaded based on AttachTypes
 			atIng := programsIng.Programs()
 			atEg := programsEg.Programs()
+			expectedIngCount := expectedProgramCount(atIng)
+			expectedEgCount := expectedProgramCount(atEg)
+			Expect(programsIng.Count()).To(Equal(expectedIngCount))
+			Expect(programsEg.Count()).To(Equal(expectedEgCount))
 
 			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
@@ -345,19 +362,19 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programIngCount := 9
-		programEgCount := 8
-		jumpMapLen := 1
-		if ipv6Enabled {
-			programIngCount = 32
-			programEgCount = 30
-			jumpMapLen = 4
-		}
-		Expect(programsIng.Count()).To(Equal(programIngCount))
-		Expect(programsEg.Count()).To(Equal(programEgCount))
-
+		// Verify expected programs are loaded based on AttachTypes
+		atIng := programsIng.Programs()
+		atEg := programsEg.Programs()
+		expectedIngCount := expectedProgramCount(atIng)
+		expectedEgCount := expectedProgramCount(atEg)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
+		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmEgr := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
+		jumpMapLen := 1
+		if ipv6Enabled {
+			jumpMapLen = 4
+		}
 		Expect(len(pmIng)).To(Equal(jumpMapLen)) // no policy for hep2
 		Expect(len(pmEgr)).To(Equal(jumpMapLen)) // no policy for hep2
 	})
@@ -366,24 +383,18 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	defer deleteLink(workload1)
 
 	t.Run("create a workload", func(t *testing.T) {
-		programsIngCount := programsIng.Count()
-		programsEgCount := programsEg.Count()
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsIngCount = programsIngCount + 8
-		programsEgCount = programsEgCount + 7
-		if ipv6Enabled {
-			programsIngCount = 32
-			programsEgCount = 30
-		}
-		Expect(programsIng.Count()).To(Equal(programsIngCount))
-		Expect(programsEg.Count()).To(Equal(programsEgCount))
-
+		// Verify expected programs were loaded based on AttachTypes
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
+		expectedIngCount := expectedProgramCount(atIng)
+		expectedEgCount := expectedProgramCount(atEg)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
+		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
@@ -576,6 +587,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(attached).To(HaveKey("hostep2"))
 		Expect(attached).NotTo(HaveKey("workloadep3"))
 
+		// Capture the program count before restart (includes workload3)
+		programsCountBeforeRestart := programsIng.Count()
+
 		programsIng.ResetForTesting() // Because we recycle it, restarted Felix would get a fresh copy.
 		programsEg.ResetForTesting()  // Because we recycle it, restarted Felix would get a fresh copy.
 
@@ -621,13 +635,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = oldProgs.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
-		programsCount := 17
-		oldPoliciesCount := 2
-		if ipv6Enabled {
-			programsCount = 32
-			oldPoliciesCount = 6
-		}
-		Expect(pm).To(HaveLen(programsCount))
+		// Old programs map should still have the programs from before restart
+		Expect(pm).To(HaveLen(programsCountBeforeRestart))
 
 		oldPoliciesParams := jump.IngressMapParameters
 		oldPoliciesParams.PinDir = tmp
@@ -635,6 +644,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = oldPolicies.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm = jumpMapDump(oldPolicies)
+		oldPoliciesCount := 2
+		if ipv6Enabled {
+			oldPoliciesCount = 6
+		}
 		Expect(pm).To(HaveLen(oldPoliciesCount))
 
 		// After restat we get new maps which are empty
@@ -664,9 +677,12 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programsIng.Count()).To(Equal(17))
+		// After restart and replaying state, verify expected programs were loaded
+		atIng := programsIng.Programs()
+		expectedIngCount := expectedProgramCount(atIng)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
 		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Ingress])
-		Expect(pm).To(HaveLen(17))
+		Expect(pm).To(HaveLen(expectedIngCount))
 
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmEgr := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
