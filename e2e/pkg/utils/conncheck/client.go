@@ -42,11 +42,24 @@ func NewClient(id string, ns *v1.Namespace, opts ...ClientOption) *Client {
 }
 
 type Client struct {
-	name       string
-	namespace  *v1.Namespace
-	labels     map[string]string
-	pod        *v1.Pod
-	customizer func(pod *v1.Pod)
+	name        string
+	namespace   *v1.Namespace
+	labels      map[string]string
+	pod         *v1.Pod
+	customizers []func(pod *v1.Pod)
+}
+
+// composedCustomizer returns a single customizer function that applies all
+// registered customizers in order, or nil if none are registered.
+func (c *Client) composedCustomizer() func(*v1.Pod) {
+	if len(c.customizers) == 0 {
+		return nil
+	}
+	return func(pod *v1.Pod) {
+		for _, fn := range c.customizers {
+			fn(pod)
+		}
+	}
 }
 
 func (c *Client) ID() string {
@@ -76,7 +89,7 @@ func WithClientLabels(labels map[string]string) ClientOption {
 
 func WithClientCustomizer(customizer func(pod *v1.Pod)) ClientOption {
 	return func(c *Client) error {
-		c.customizer = customizer
+		c.customizers = append(c.customizers, customizer)
 		return nil
 	}
 }

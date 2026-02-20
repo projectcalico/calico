@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +33,7 @@ import (
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 
+	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/e2e/pkg/utils/remotecluster"
@@ -41,10 +41,6 @@ import (
 )
 
 const (
-	maxNameLength          = 63
-	randomLength           = 5
-	maxGeneratedNameLength = maxNameLength - randomLength
-
 	roleLabel  = "e2e.projectcalico.org/role"
 	roleClient = "client"
 	roleServer = "server"
@@ -113,7 +109,7 @@ func (c *connectionTester) deploy() error {
 			continue
 		}
 		By(fmt.Sprintf("Deploying client pod %s/%s", client.namespace.Name, client.name))
-		pod, err := createClientPod(c.f, client.namespace, client.name, client.labels, client.customizer)
+		pod, err := createClientPod(c.f, client.namespace, client.name, client.labels, client.composedCustomizer())
 		if err != nil {
 			return err
 		}
@@ -131,8 +127,8 @@ func (c *connectionTester) deploy() error {
 			server.name,
 			server.ports,
 			server.labels,
-			server.podCustomizer,
-			server.svcCustomizer,
+			server.composedPodCustomizer(),
+			server.composedSvcCustomizer(),
 			server.autoCreateSvc,
 		)
 		server.pod = pod
@@ -745,21 +741,10 @@ func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
 	e2eoutput.DumpDebugInfo(context.Background(), f.ClientSet, f.Namespace.Name)
 }
 
+// GenerateRandomName is a convenience wrapper around utils.GenerateRandomName.
+// Deprecated: Use utils.GenerateRandomName directly.
 func GenerateRandomName(base string) string {
-	if len(base) > maxGeneratedNameLength {
-		base = base[:maxGeneratedNameLength]
-	}
-	return fmt.Sprintf("%s-%s", base, randomString(randomLength))
-}
-
-func randomString(length int) string {
-	// Generate a random string of the specified length.
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(b)
+	return utils.GenerateRandomName(base)
 }
 
 // ExecInPod executes a kubectl command in a pod. Returns the response as a string, or an error upon failure.
