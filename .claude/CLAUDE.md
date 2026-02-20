@@ -273,6 +273,8 @@ lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
 
 ## PR Requirements
 
+**ALWAYS** use the PR template (`.github/PULL_REQUEST_TEMPLATE.md`) when submitting pull requests. Fill in all sections: Description, Related issues/PRs, Todos, and Release Note.
+
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
 
 ## Additional Resources
