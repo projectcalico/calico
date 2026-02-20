@@ -40,6 +40,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.IPAMHandleList":       schema_libcalico_go_lib_apis_internalapi_IPAMHandleList(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.IPAMHandleSpec":       schema_libcalico_go_lib_apis_internalapi_IPAMHandleSpec(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.IPNAT":                schema_libcalico_go_lib_apis_internalapi_IPNAT(ref),
+		"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.LiveMigration":        schema_libcalico_go_lib_apis_internalapi_LiveMigration(ref),
+		"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.LiveMigrationList":    schema_libcalico_go_lib_apis_internalapi_LiveMigrationList(ref),
+		"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.LiveMigrationSpec":    schema_libcalico_go_lib_apis_internalapi_LiveMigrationSpec(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.Node":                 schema_libcalico_go_lib_apis_internalapi_Node(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.NodeAddress":          schema_libcalico_go_lib_apis_internalapi_NodeAddress(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.NodeBGPSpec":          schema_libcalico_go_lib_apis_internalapi_NodeBGPSpec(ref),
@@ -776,6 +779,135 @@ func schema_libcalico_go_lib_apis_internalapi_IPNAT(ref common.ReferenceCallback
 				Required: []string{"internalIP", "externalIP"},
 			},
 		},
+	}
+}
+
+func schema_libcalico_go_lib_apis_internalapi_LiveMigration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "LiveMigration describes a live-migration operation in progress. It is orchestrator-independent and holds the fields that Calico needs for optimal live migration processing.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.LiveMigrationSpec"),
+						},
+					},
+				},
+				Required: []string{"metadata", "spec"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.LiveMigrationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_libcalico_go_lib_apis_internalapi_LiveMigrationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "LiveMigrationList contains a list of LiveMigration resources.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.LiveMigration"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"metadata", "items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.LiveMigration", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_libcalico_go_lib_apis_internalapi_LiveMigrationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "LiveMigrationSpec contains the specification for a LiveMigration resource.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"destinationWorkloadEndpoint": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name and namespace of the WorkloadEndpoint that this live migration operation is moving to.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/types.NamespacedName"),
+						},
+					},
+					"destinationWorkloadEndpointSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Selector for the WorkloadEndpoint that this live migration operation is moving to.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sourceWorkloadEndpoint": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name and namespace of the WorkloadEndpoint that this live migration operation is moving from.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/types.NamespacedName"),
+						},
+					},
+				},
+				Required: []string{"destinationWorkloadEndpoint", "destinationWorkloadEndpointSelector", "sourceWorkloadEndpoint"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/types.NamespacedName"},
 	}
 }
 
