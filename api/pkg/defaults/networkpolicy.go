@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,22 @@ func defaultGlobalNetworkPolicy(p *v3.GlobalNetworkPolicy) (bool, error) {
 	return changed, nil
 }
 
+func defaultStagedNetworkPolicy(p *v3.StagedNetworkPolicy) (bool, error) {
+	changed := defaultPolicyTypesField(p.Spec.Ingress, p.Spec.Egress, &p.Spec.Types)
+	changed = setTierLabel(p, p.Spec.Tier) || changed
+	return changed, nil
+}
+
+func defaultStagedGlobalNetworkPolicy(p *v3.StagedGlobalNetworkPolicy) (bool, error) {
+	changed := defaultPolicyTypesField(p.Spec.Ingress, p.Spec.Egress, &p.Spec.Types)
+	changed = setTierLabel(p, p.Spec.Tier) || changed
+	return changed, nil
+}
+
 func setTierLabel(obj v1.Object, tier string) bool {
+	if tier == "" {
+		tier = "default"
+	}
 	labels := obj.GetLabels()
 	if labels == nil {
 		labels = map[string]string{}

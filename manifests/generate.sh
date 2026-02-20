@@ -164,7 +164,7 @@ mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
 
 # Generating the upgrade manifest for OCP.
 # It excludes files specific to configuring the BPF dataplane, CRs (03-cr-*) and CRDs to maintain compatibility and not change the existing configuration in already installed clusters.
-OCP_VALUES_FILES=$(ls ocp | grep -v -e '01-configmap-kubernetes-services-endpoint\.yaml' -e '02-configmap-calico-resources\.yaml' -e '^03-cr-' -e 'cluster-network-operator\.yaml' -e '\.*crd\.*')
+OCP_VALUES_FILES=$(ls ocp | grep -v -e '01-configmap-kubernetes-services-endpoint\.yaml' -e '02-configmap-calico-resources\.yaml' -e '^03-cr-' -e 'cluster-network-operator\.yaml' -e '\.*crd\.*' -e 'mutatingadmissionpolicy')
 rm -f tigera-operator-ocp-upgrade.yaml
 for FILE in $OCP_VALUES_FILES; do
   cat "ocp/$FILE" >> tigera-operator-ocp-upgrade.yaml
