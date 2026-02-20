@@ -145,23 +145,6 @@ func Test_processIPPoolsV4(t *testing.T) {
 }
 
 func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
-	forKernelStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
-		`  if (net ~ 10.10.0.0/16) then { accept; }`,
-		`  if (net ~ 10.11.0.0/16) then { accept; }`,
-		`  if (net ~ 10.12.0.0/16) then { accept; }`,
-		`  if (net ~ 10.13.0.0/16) then { accept; }`,
-		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { accept; }`,
-		`  if (net ~ 10.15.0.0/16) then { accept; }`,
-		// IPv4 VXLAN Encapsulation cases.
-		`  if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-	}
-	slices.Sort(forKernelStatements)
-
 	forExportStatements := []string{
 		// IPv4 IPIP Encapsulation cases.
 		`  if (net ~ 10.10.0.0/16) then { accept; }`,
@@ -196,13 +179,11 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 	err := c.processIPPools(config, 4)
 	require.NoError(t, err)
 
-	expected := filterExpectedStatements(forKernelStatements, "reject")
-	if !reflect.DeepEqual(config.KernelFilterForIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.KernelFilterForIPPools, expected)
+	if config.KernelFilterForIPPools != nil {
+		t.Errorf("Expected BIRD filter for programming kernel to be nil")
 	}
 
-	expected = filterExpectedStatements(forExportStatements, "reject")
+	expected := filterExpectedStatements(forExportStatements, "reject")
 	if !reflect.DeepEqual(config.BGPExportFilterForDisabledIPPools, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForDisabledIPPools, expected)

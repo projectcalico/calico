@@ -750,7 +750,10 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		filterActionForKernel = "reject"
 	}
 
-	localSubnet := c.localSubnet(ipVersion)
+	localSubnet, localSubnetErr := c.localSubnet(ipVersion)
+	if err != nil {
+		logCtx.WithError(err).Debug("Failed to get local host subnet")
+	}
 
 	for key, value := range kvPairs {
 		var ippool model.IPPool
@@ -771,10 +774,12 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
-		// Generate statements for kernel programming filter.
-		statement = c.processIPPool(&ippool, true, filterActionForKernel, localSubnet, ipVersion)
-		if len(statement) != 0 {
-			config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
+		if ipVersion == 6 || ipVersion == 4 && localSubnetErr == nil {
+			// Generate statements for kernel programming filter.
+			statement = c.processIPPool(&ippool, true, filterActionForKernel, localSubnet, ipVersion)
+			if len(statement) != 0 {
+				config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
+			}
 		}
 	}
 
@@ -843,9 +848,6 @@ func (c *client) processIPPool(
 		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
 		// IPIP encapsulation or No-Encap.
 		if forProgrammingKernel && ipVersion == 4 {
-			if len(localSubnet) == 0 {
-				return ""
-			}
 			// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
 			// our fork of BIRD.
 			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
@@ -866,18 +868,13 @@ func (c *client) processIPPool(
 	return emitFilterStatementForIPPools(cidr, extraStatement, action, comment)
 }
 
-func (c *client) localSubnet(ipVersion int) string {
+func (c *client) localSubnet(ipVersion int) (string, error) {
 	key := fmt.Sprintf("/calico/bgp/v1/host/%s/network_v%d", NodeName, ipVersion)
-	logCtx := log.WithFields(map[string]any{
-		"ipVersion": ipVersion,
-		"path":      key,
-	})
-	if subnet, err := c.GetValue(key); err != nil {
-		logCtx.WithError(err).Debug("Failed to get local host subnet")
-		return ""
-	} else {
-		return subnet
+	subnet, err := c.GetValue(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to get local host subnet: %w", err)
 	}
+	return subnet, nil
 }
 
 func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSubnet string) string {
