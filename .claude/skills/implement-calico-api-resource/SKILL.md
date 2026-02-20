@@ -133,23 +133,20 @@ AllKnownTypes = []runtime.Object{
 }
 ```
 
-### Step 3: Run Code Generation
+### Step 3: Run API Code Generation
 
 ```bash
-# Run top-level generate — this regenerates everything including CRDs, manifests, and API clients
-make generate
+cd api && make gen-files
 ```
 
-This is a top-level target that runs multiple generation steps. It produces changes across many downstream files including:
+This generates the DeepCopy methods, typed Kubernetes client, informers, listers, and OpenAPI schema needed for compilation of downstream layers:
 - `api/pkg/apis/projectcalico/v3/zz_generated.deepcopy.go` — DeepCopy methods
 - `api/pkg/client/clientset_generated/` — typed Kubernetes client
 - `api/pkg/client/informers_generated/` — informer factories
 - `api/pkg/client/listers_generated/` — listers
 - `api/pkg/openapi/generated.openapi.go` — OpenAPI schema
-- `manifests/` — CRD YAML and installation manifests (generated from Helm charts)
-- `libcalico-go/lib/apis/crd.projectcalico.org/v1/` — CRD v1 types (deepcopy)
 
-**Gotcha:** You MUST commit all generated files alongside your changes. CI will reject PRs with stale generated files. Run `make generate` at the project root, not just `cd api && make gen-files` — there are many downstream generated files beyond the `api/` directory.
+Run this early so the remaining steps can compile against the generated types. A full `make generate` at the project root is still needed later (Step 19) to pick up CRDs, manifests, and other downstream generated files.
 
 ### Step 4: CRD Operator Types (crd.projectcalico.org/v1)
 
@@ -463,7 +460,74 @@ No `UpdateProcessor` is needed for resources using `ResourceKey` — they pass t
 - **Syncer** (Felix, Typha via syncer): needs explicit registration in the syncer.
 - **Informers** (kube-controllers, etc.): automatically available after codegen, but may need wiring in the controller.
 
-### Step 18: RBAC
+### Step 18: calicoctl Resource Manager
+
+**File:** `calicoctl/calicoctl/resourcemgr/<myresource>.go`
+
+Register the resource for calicoctl CRUD commands (create, get, update, delete, replace). This is a single file with an `init()` function — no other calicoctl files need changing.
+
+```go
+package resourcemgr
+
+import (
+	"context"
+
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+)
+
+func init() {
+	registerResource(
+		api.NewMyResource(),
+		newMyResourceList(),
+		false, // isNamespaced
+		[]string{"myresource", "myresources"},
+		[]string{"NAME"},
+		[]string{"NAME"},
+		map[string]string{
+			"NAME": "{{.ObjectMeta.Name}}",
+		},
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.MyResource)
+			return client.MyResources().Create(ctx, r, options.SetOptions{})
+		},
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.MyResource)
+			return client.MyResources().Update(ctx, r, options.SetOptions{})
+		},
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.MyResource)
+			return client.MyResources().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
+		},
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.MyResource)
+			return client.MyResources().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
+		},
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
+			r := resource.(*api.MyResource)
+			return client.MyResources().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
+		},
+	)
+}
+
+func newMyResourceList() *api.MyResourceList {
+	return &api.MyResourceList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       api.KindMyResourceList,
+			APIVersion: api.GroupVersionCurrent,
+		},
+	}
+}
+```
+
+For **namespaced** resources: set `isNamespaced` to `true`, add `"NAMESPACE": "{{.ObjectMeta.Namespace}}"` to the headings map, and pass `r.Namespace` as the first argument to Delete/Get/List client calls.
+
+The `init()` function auto-registers the resource — calicoctl's generic CRUD commands, help text, and resource name resolution all pick it up automatically.
+
+### Step 19: RBAC
 
 **File:** `charts/calico/templates/calico-node-rbac.yaml` (and/or operator role templates)
 
@@ -475,18 +539,19 @@ Add RBAC rules for the new resource if components need to access it:
   verbs: ["get", "list", "watch"]
 ```
 
-### Step 19: Formatting and Commit
+### Step 20: Full Generation, Formatting, and Commit
 
 ```bash
-# MANDATORY before committing
-make fix-changed
+# Regenerate everything — CRDs, manifests, CI config, and any remaining generated files
+make generate
 
+# This also runs make fix-changed automatically at the end.
 # Verify
 make yaml-lint
 make check-go-mod
 ```
 
-Commit ALL generated files alongside source changes.
+**Gotcha:** `make generate` at the project root produces many downstream files beyond the `api/` directory — CRD YAML in `manifests/`, Helm chart outputs, Semaphore CI config, etc. You MUST commit all generated files alongside your source changes. CI will reject PRs with stale generated files.
 
 ## Checklist Summary
 
@@ -511,6 +576,7 @@ Use this checklist to verify completeness:
 - [ ] Apiserver converter case in `apiserver/pkg/storage/calico/converter.go`
 - [ ] Apiserver REST storage provider in `apiserver/pkg/registry/projectcalico/rest/storage_calico.go`
 - [ ] Felix syncer (if needed) in `libcalico-go/lib/backend/syncersv1/felixsyncer/felixsyncerv1.go`
+- [ ] calicoctl resource manager in `calicoctl/calicoctl/resourcemgr/<resource>.go`
 - [ ] RBAC rules in Helm charts
 - [ ] Formatting applied (`make fix-changed`)
 - [ ] All generated files committed
