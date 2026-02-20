@@ -81,6 +81,24 @@ port:
       remiander: 1
 ```
 
+### Selectors
+
+Calico API's typically use our selector syntax instead of Kubernetes 
+matchLabels and similar.
+
+New APIs should avoid matching multiple resoruce types with the same selector. 
+We've learned that matching workload endpoints, host endpoints and network 
+sets with the same selctor is confusing, for example.  Prefer one selector per
+type of thing that is matched.
+
+Be critical of the need for a selector, referencing a single item by 
+name/namespace is often simpler for the user. For example, we've found that 
+most uses of network sets simply use a name label on the netowrk set and select
+on that.
+
+When slecting namespaced resources, use split namespaceSelector and 
+itemTypeSelector.
+
 ### Calico naming conventions.
 
 - Our API is slightly more general than Kubernetes, "pods" and OenStack VMs map to "workloads" in our model.
