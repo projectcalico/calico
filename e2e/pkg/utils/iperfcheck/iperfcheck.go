@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,12 +37,12 @@ const (
 	roleLabel = "e2e.projectcalico.org/role"
 	roleIperf = "iperf"
 
-	defaultPort         = 5201
-	defaultDuration     = 10
-	defaultOmitSeconds  = 5
-	defaultRetries      = 3
+	defaultPort          = 5201
+	defaultDuration      = 10
+	defaultOmitSeconds   = 5
+	defaultRetries       = 3
 	defaultRetryInterval = 5 * time.Second
-	defaultExecTimeout  = 60 * time.Second
+	defaultExecTimeout   = 60 * time.Second
 )
 
 // Peer represents an iperf3 endpoint. Any peer can act as server or client
