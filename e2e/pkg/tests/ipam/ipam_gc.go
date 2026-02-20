@@ -59,7 +59,12 @@ var _ = describe.CalicoDescribe(
 			// Ensure a clean starting environment before each test.
 			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred(), "failed to clean datastore")
 
-			// Verify that Calico IPAM is in use by checking for IP pools.
+			// Verify that the cluster uses Calico IPAM. The Installation resource
+			// provides a definitive answer when available; IP pools serve as a
+			// fallback indicator for manifest-based installs.
+			Expect(utils.UsesCalicoIPAM(cli)).To(BeTrue(), "cluster does not use Calico IPAM; this test requires Calico IPAM")
+
+			// Additionally verify IP pools exist as a sanity check.
 			poolList := &v3.IPPoolList{}
 			err = cli.List(context.Background(), poolList)
 			Expect(err).NotTo(HaveOccurred(), "failed to list IP pools")
@@ -78,7 +83,7 @@ var _ = describe.CalicoDescribe(
 		// non-existent pods. We create a fake IPAM allocation referencing a pod that
 		// doesn't exist, shorten the leak grace period so GC runs quickly, and then
 		// wait for the allocation to be released.
-		framework.ConformanceIt("should garbage-collect leaked IP addresses", func() {
+		It("should garbage-collect leaked IP addresses", func() {
 			ctx := context.Background()
 
 			// Shorten the leak grace period so GC detects the leak quickly.

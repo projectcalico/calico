@@ -587,7 +587,7 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	nodeselector := map[string]string{}
 
 	// Randomize pod names to avoid clashes with previous tests.
-	podName := GenerateRandomName(baseName)
+	podName := utils.GenerateRandomName(baseName)
 
 	if windows.ClusterIsWindows() {
 		image = images.WindowsClientImage()
@@ -739,12 +739,6 @@ func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
 
 	// Dump debug information for the test namespace.
 	e2eoutput.DumpDebugInfo(context.Background(), f.ClientSet, f.Namespace.Name)
-}
-
-// GenerateRandomName is a convenience wrapper around utils.GenerateRandomName.
-// Deprecated: Use utils.GenerateRandomName directly.
-func GenerateRandomName(base string) string {
-	return utils.GenerateRandomName(base)
 }
 
 // ExecInPod executes a kubectl command in a pod. Returns the response as a string, or an error upon failure.
