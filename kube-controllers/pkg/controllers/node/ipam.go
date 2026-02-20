@@ -502,15 +502,15 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 
 		// If there is no handle, then skip this IP. We need the handle
 		// in order to release the IP below.
-		if attr.AttrPrimary == nil {
+		if attr.HandleID == nil {
 			continue
 		}
-		handle := *attr.AttrPrimary
+		handle := *attr.HandleID
 
 		alloc := allocation{
 			ip:             ordinalToIP(b, ord).String(),
 			handle:         handle,
-			attrs:          attr.AttrSecondary,
+			attrs:          attr.ActiveOwnerAttrs,
 			sequenceNumber: b.GetSequenceNumberForOrdinal(ord),
 			block:          blockCIDR,
 		}
