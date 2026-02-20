@@ -20,8 +20,6 @@ github.com/evanphx/json-patch/v5 v5.9.11
 github.com/felixge/httpsnoop v1.0.4
 github.com/fxamacker/cbor/v2 v2.9.0
 github.com/gabriel-vasile/mimetype v1.4.10
-github.com/go-kit/log v0.2.1
-github.com/go-logfmt/logfmt v0.6.0
 github.com/go-logr/logr v1.4.3
 github.com/go-logr/stdr v1.2.2
 github.com/go-openapi/jsonpointer v0.21.0
@@ -119,7 +117,6 @@ k8s.io/kubernetes v1.34.3
 k8s.io/pod-security-admission v0.34.3
 k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 kubevirt.io/api v1.7.0
-kubevirt.io/client-go v1.7.0
 kubevirt.io/containerized-data-importer-api v1.63.1
 kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.34.0
