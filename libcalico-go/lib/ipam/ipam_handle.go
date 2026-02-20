@@ -63,3 +63,34 @@ func (h allocationHandle) decrementBlock(blockCidr cnet.IPNet, num int) (*int, e
 func (h allocationHandle) empty() bool {
 	return len(h.Block) == 0
 }
+
+// totalCount returns the total number of IP allocations across all blocks for this handle.
+func (h allocationHandle) totalCount() int {
+	total := 0
+	for _, count := range h.Block {
+		total += count
+	}
+	return total
+}
+
+// totalCountByVersion returns the total number of IP allocations for a specific IP version.
+// version should be 4 for IPv4 or 6 for IPv6.
+func (h allocationHandle) totalCountByVersion(version int) int {
+	total := 0
+	for blockCIDR, count := range h.Block {
+		// Parse the block CIDR to determine IP version
+		_, ipNet, err := cnet.ParseCIDR(blockCIDR)
+		if err != nil {
+			// Skip invalid CIDRs
+			continue
+		}
+
+		// Check if this block matches the requested IP version
+		if version == 4 && ipNet.IP.To4() != nil {
+			total += count
+		} else if version == 6 && ipNet.IP.To4() == nil {
+			total += count
+		}
+	}
+	return total
+}

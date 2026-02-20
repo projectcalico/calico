@@ -309,9 +309,14 @@ func (f *fakeIPAMClient) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOpt
 	return nil, opts, nil
 }
 
-// GetAssignmentAttributes returns the attributes stored with the given IP address
-// upon assignment, as well as the handle used for assignment (if any).
-func (f *fakeIPAMClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (map[string]string, *string, error) {
+// GetAssignmentAttributes returns the AllocationAttribute for the given IP address,
+// which includes the handle ID, ActiveOwnerAttrs, and AlternateOwnerAttrs.
+func (f *fakeIPAMClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (*model.AllocationAttribute, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
+func (f *fakeIPAMClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *ipam.OwnerAttributeUpdates, preconditions *ipam.OwnerAttributePreconditions) error {
 	panic("not implemented") // TODO: Implement
 }
 
