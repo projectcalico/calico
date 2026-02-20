@@ -46,7 +46,8 @@ type Interface interface {
 	// GetAssignmentAttributes returns the AllocationAttribute for the given IP address,
 	// which includes the handle ID, ActiveOwnerAttrs, and AlternateOwnerAttrs.
 	// This provides an atomic snapshot of all allocation attributes for the IP.
-	// Returns nil if the IP is not assigned.
+	// If the IP is not assigned, it returns a nil *model.AllocationAttribute and an
+	// ErrorResourceDoesNotExist error.
 	GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (*model.AllocationAttribute, error)
 
 	// IPsByHandle returns a list of all IP addresses that have been
