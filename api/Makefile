@@ -149,22 +149,12 @@ WHAT?=.
 GINKGO_FOCUS?=.*
 
 .PHONY:ut
-ut: kind-cluster-create
-	$(DOCKER_RUN) \
-		--privileged \
-		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
-		$(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus="$(GINKGO_FOCUS)" $(WHAT)'
-
-## Run CRD validation tests using envtest (no kind cluster required)
-.PHONY: ut-validation
-ut-validation: setup-envtest
+ut: setup-envtest
 	$(DOCKER_RUN) \
 		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
 		-e KUBEBUILDER_ASSETS=/envtest \
 		$(CALICO_BUILD) \
-		sh -c 'go test -count=1 ./test/validation/...'
+		sh -c 'go test -count=1 ./...'
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files

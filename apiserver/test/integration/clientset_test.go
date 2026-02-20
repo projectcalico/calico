@@ -2153,39 +2153,39 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	bgpFilterClient := client.ProjectcalicoV3().BGPFilters()
 	r1v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
 	r1v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
 	r2v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	r2v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	r3v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
 	r3v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
@@ -2201,13 +2201,13 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	}
 	r5v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	r5v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Action:        v3.Accept,
 	}
 	r6v4 := v3.BGPFilterRuleV4{

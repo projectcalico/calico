@@ -47,7 +47,7 @@ func TestBGPFilter_V4_Validation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},
 				Spec: v3.BGPFilterSpec{
 					ExportV4: []v3.BGPFilterRuleV4{
-						{MatchOperator: v3.Equal, Action: v3.Accept},
+						{MatchOperator: v3.MatchOperatorEqual, Action: v3.Accept},
 					},
 				},
 			},
@@ -74,10 +74,46 @@ func TestBGPFilter_V4_Validation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},
 				Spec: v3.BGPFilterSpec{
 					ExportV4: []v3.BGPFilterRuleV4{
-						{CIDR: "10.0.0.0/24", MatchOperator: v3.Equal, Action: v3.Accept},
+						{CIDR: "10.0.0.0/24", MatchOperator: v3.MatchOperatorEqual, Action: v3.Accept},
 					},
 				},
 			},
+		},
+		{
+			name: "V4 invalid action is rejected",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},
+				Spec: v3.BGPFilterSpec{
+					ExportV4: []v3.BGPFilterRuleV4{
+						{CIDR: "10.0.0.0/24", MatchOperator: v3.MatchOperatorEqual, Action: "InvalidAction"},
+					},
+				},
+			},
+			wantErr: "spec.exportV4[0].action",
+		},
+		{
+			name: "V4 invalid CIDR format is rejected",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},
+				Spec: v3.BGPFilterSpec{
+					ImportV4: []v3.BGPFilterRuleV4{
+						{CIDR: "invalid-cidr", MatchOperator: v3.MatchOperatorEqual, Action: v3.Accept},
+					},
+				},
+			},
+			wantErr: "spec.importV4[0].cidr",
+		},
+		{
+			name: "V4 invalid matchOperator is rejected",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},
+				Spec: v3.BGPFilterSpec{
+					ExportV4: []v3.BGPFilterRuleV4{
+						{CIDR: "10.0.0.0/24", MatchOperator: "InvalidOperator", Action: v3.Accept},
+					},
+				},
+			},
+			wantErr: "spec.exportV4[0].matchOperator",
 		},
 	}
 
@@ -116,7 +152,7 @@ func TestBGPFilter_V6_Validation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},
 				Spec: v3.BGPFilterSpec{
 					ExportV6: []v3.BGPFilterRuleV6{
-						{MatchOperator: v3.Equal, Action: v3.Accept},
+						{MatchOperator: v3.MatchOperatorEqual, Action: v3.Accept},
 					},
 				},
 			},
@@ -143,10 +179,22 @@ func TestBGPFilter_V6_Validation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},
 				Spec: v3.BGPFilterSpec{
 					ExportV6: []v3.BGPFilterRuleV6{
-						{CIDR: "fd00::/64", MatchOperator: v3.Equal, Action: v3.Accept},
+						{CIDR: "fd00::/64", MatchOperator: v3.MatchOperatorEqual, Action: v3.Accept},
 					},
 				},
 			},
+		},
+		{
+			name: "V6 invalid matchOperator is rejected",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpfilter")},
+				Spec: v3.BGPFilterSpec{
+					ExportV6: []v3.BGPFilterRuleV6{
+						{CIDR: "fd00::/64", MatchOperator: "InvalidOperator", Action: v3.Reject},
+					},
+				},
+			},
+			wantErr: "spec.exportV6[0].matchOperator",
 		},
 	}
 
