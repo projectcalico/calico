@@ -85,8 +85,9 @@ type IPAMBlockSpec struct {
 }
 
 type AllocationAttribute struct {
-	AttrPrimary   *string           `json:"handle_id,omitempty"`
-	AttrSecondary map[string]string `json:"secondary,omitempty"`
+	HandleID            *string           `json:"handle_id,omitempty"`
+	ActiveOwnerAttrs    map[string]string `json:"secondary,omitempty"`
+	AlternateOwnerAttrs map[string]string `json:"alternate,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

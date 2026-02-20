@@ -211,3 +211,14 @@ func (opts *ReleaseOptions) AsNetIP() (*cnet.IP, error) {
 	}
 	return nil, fmt.Errorf("failed to parse IP: %s", opts.Address)
 }
+
+// OwnerAttributeType specifies which owner attribute to operate on.
+type OwnerAttributeType string
+
+const (
+	// OwnerAttributeTypeActive refers to ActiveOwnerAttrs (current/primary owner).
+	OwnerAttributeTypeActive OwnerAttributeType = "active"
+
+	// OwnerAttributeTypeAlternate refers to AlternateOwnerAttrs (secondary owner during migration).
+	OwnerAttributeTypeAlternate OwnerAttributeType = "alternate"
+)
