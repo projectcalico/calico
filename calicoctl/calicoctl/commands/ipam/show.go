@@ -55,7 +55,7 @@ func getBorrowedIPs(ctx context.Context, ippoolClient clientv3.IPPoolInterface, 
 		return nil, 0, err
 	}
 
-	// For really old IP allocations, AttrSecondary[model.IPAMBlockAttributeNode] used to be not set.
+	// For really old IP allocations, ActiveOwnerAttrs[model.IPAMBlockAttributeNode] used to be not set.
 	// Count such IP addresses, and, if any, warn customer as we are unable to classify those as
 	// borrowed or not.
 	unclassifiedIPs := 0
@@ -87,16 +87,16 @@ func getBorrowedIPs(ctx context.Context, ippoolClient clientv3.IPPoolInterface, 
 					}
 				}
 
-				if borrowingNode, ok := attributes.AttrSecondary[model.IPAMBlockAttributeNode]; ok {
+				if borrowingNode, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeNode]; ok {
 					if blockOwner != borrowingNode {
 						bIP := borrowedIP{block: b.CIDR.IPNet.String(), blockOwner: blockOwner, borrowingNode: borrowingNode}
 						bIP.addr = b.OrdinalToIP(i).String()
-						if _, ok := attributes.AttrSecondary[model.IPAMBlockAttributePod]; ok {
-							bIP.allocatedTo = fmt.Sprintf("%s/%s", attributes.AttrSecondary[model.IPAMBlockAttributeNamespace],
-								attributes.AttrSecondary[model.IPAMBlockAttributePod])
+						if _, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributePod]; ok {
+							bIP.allocatedTo = fmt.Sprintf("%s/%s", attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeNamespace],
+								attributes.ActiveOwnerAttrs[model.IPAMBlockAttributePod])
 							bIP.allocationType = model.IPAMBlockAttributePod
-						} else if _, ok := attributes.AttrSecondary[model.IPAMBlockAttributeType]; ok {
-							bIP.allocationType = attributes.AttrSecondary[model.IPAMBlockAttributeType]
+						} else if _, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeType]; ok {
+							bIP.allocationType = attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeType]
 						}
 						details = append(details, &bIP)
 					}
@@ -145,7 +145,7 @@ func showBorrowedDetails(ctx context.Context, ippoolClient clientv3.IPPoolInterf
 
 func showIP(ctx context.Context, ipamClient ipam.Interface, passedIP any) error {
 	ip := argutils.ValidateIP(passedIP.(string))
-	attr, _, err := ipamClient.GetAssignmentAttributes(ctx, ip)
+	allocAttr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// IP address is not assigned.  The detailed error message here is either
@@ -160,6 +160,7 @@ func showIP(ctx context.Context, ipamClient ipam.Interface, passedIP any) error 
 
 	// IP address is assigned.
 	fmt.Printf("IP %s is in use\n", ip)
+	attr := allocAttr.ActiveOwnerAttrs
 	if len(attr) != 0 {
 		fmt.Println("Attributes:")
 		for k, v := range attr {
