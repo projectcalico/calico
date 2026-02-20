@@ -137,24 +137,25 @@ func TestOnUpdateRemoveOverwritesPendingUpdate(t *testing.T) {
 		pendingHostMetadataUpdates: make(map[string]any),
 	}
 
-	// Queue an update, then an immediate remove for the same hostname.
-	kp.OnUpdate(&proto.HostMetadataV4V6Update{
+	update1 := &proto.HostMetadataV4V6Update{
 		Hostname: "hn1",
 		Ipv4Addr: "1.2.3.4",
-	})
-	kp.OnUpdate(&proto.HostMetadataV4V6Update{
+	}
+	update2 := &proto.HostMetadataV4V6Update{
 		Hostname: "hn2",
 		Ipv4Addr: "1.2.3.4",
-	})
-	kp.OnUpdate(&proto.HostMetadataV4V6Remove{Hostname: "hn1"})
+	}
+	update1Remove := &proto.HostMetadataV4V6Remove{Hostname: "hn1"}
+
+	// Queue an update, then an immediate remove for the same hostname.
+	kp.OnUpdate(update1)
+	kp.OnUpdate(update2)
+	kp.OnUpdate(update1Remove)
 
 	Expect(kp.CompleteDeferredWork()).To(Succeed(), "CompleteDeferredWork should succeed")
 
 	Eventually(kp.checkHostMetadataV4V6Updates()).Should(Equal(map[string]any{
-		"hn1": &proto.HostMetadataV4V6Remove{Hostname: "hn1"},
-		"hn2": &proto.HostMetadataV4V6Update{
-			Hostname: "hn2",
-			Ipv4Addr: "1.2.3.4",
-		},
+		"hn1": update1Remove,
+		"hn2": update2,
 	}))
 }
