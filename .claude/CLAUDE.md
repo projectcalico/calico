@@ -17,12 +17,12 @@ Project Calico is a large monorepo providing container networking and security f
 - **NEVER** run `make ci` or `make cd` locally — destructive CI-only targets
 - **NEVER** run `make test` at root — takes hours. Always test components individually.
 - **ALWAYS** run `make fix-changed` before committing — CI rejects formatting errors
-- **ALWAYS** remove `FIt`/`FDescribe` before committing — pre-commit hook rejects focused tests
+- **ALWAYS** remove `FIt`/`FDescribe` before committing — pre-commit hook rejects Ginkgo focused tests
 - **ALWAYS** commit generated files alongside source changes
 
 ## Essential Build Commands
 
-**Prerequisites:** Docker, Make, Git, Linux environment (Ubuntu 22.04+ recommended)
+**Prerequisites:** Docker, Make, Git, Linux environment (Ubuntu 24.04+ recommended)
 
 ### Building Components
 
@@ -140,7 +140,7 @@ Run `make fix-changed` to auto-fix import ordering. Do not run `goimports` or `g
 
 All new `.go` files require:
 ```go
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) <YEAR> Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // ...
