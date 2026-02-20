@@ -76,14 +76,14 @@ var _ = describe.CalicoDescribe(
 			)
 
 			BeforeEach(func() {
-				customTier = conncheck.GenerateRandomName("e2e-staged-tier")
+				customTier = utils.GenerateRandomName("e2e-staged-tier")
 				tierObj = v3.NewTier()
 				tierObj.Name = customTier
 				tierObj.Spec.Order = ptr.To[float64](200)
 				Expect(cli.Create(context.TODO(), tierObj)).ToNot(HaveOccurred())
 
 				client1 = conncheck.NewClient(clientPodNamePrefix, f.Namespace)
-				server = conncheck.NewServer(conncheck.GenerateRandomName(serverPodNamePrefix), f.Namespace)
+				server = conncheck.NewServer(utils.GenerateRandomName(serverPodNamePrefix), f.Namespace)
 				checker.AddClient(client1)
 				checker.AddServer(server)
 				checker.Deploy()
@@ -226,14 +226,14 @@ var _ = describe.CalicoDescribe(
 				cli, err = client.New(f.ClientConfig())
 				Expect(err).ToNot(HaveOccurred())
 
-				customTier = conncheck.GenerateRandomName("e2e-staged-tier")
+				customTier = utils.GenerateRandomName("e2e-staged-tier")
 				tierObj = v3.NewTier()
 				tierObj.Name = customTier
 				tierObj.Spec.Order = ptr.To[float64](200)
 				Expect(cli.Create(context.TODO(), tierObj)).ToNot(HaveOccurred())
 
 				// Create server
-				server = conncheck.NewServer(conncheck.GenerateRandomName(serverPodNamePrefix), f.Namespace)
+				server = conncheck.NewServer(utils.GenerateRandomName(serverPodNamePrefix), f.Namespace)
 				client1 = conncheck.NewClient(clientPodNamePrefix, f.Namespace)
 				checker.AddServer(server)
 				checker.AddClient(client1)

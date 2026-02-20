@@ -84,7 +84,7 @@ var _ = describe.CalicoDescribe(
 			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
 
 			// Create an IP pool for the test.
-			poolName = conncheck.GenerateRandomName("ipip-pool")
+			poolName = utils.GenerateRandomName("ipip-pool")
 			pool := v3.NewIPPool()
 			pool.Name = poolName
 			pool.Spec.CIDR = "203.0.113.0/24"
