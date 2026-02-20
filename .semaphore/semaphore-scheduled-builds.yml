@@ -541,19 +541,6 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-  - name: Crypto
-    run:
-      when: "true"
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - cd crypto
-      jobs:
-        - name: "Crypto: CI"
-          commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
   - name: E2E script & pipeline validations
     run:
       when: "true or change_in(['/.semaphore/end-to-end/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
