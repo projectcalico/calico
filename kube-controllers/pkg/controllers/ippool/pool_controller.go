@@ -330,7 +330,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 			// pool if the user tries to delete it to resolve the overlap.
 			if hasFinalizer(p) {
 				logCtx.Info("IPPool is not active, removing finalizer")
-				p.Finalizers = slices.Delete(p.Finalizers, slices.Index(p.Finalizers, IPPoolFinalizer), slices.Index(p.Finalizers, IPPoolFinalizer)+1)
+				p.Finalizers = slices.DeleteFunc(p.Finalizers, func(s string) bool { return s == IPPoolFinalizer })
 				if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, metav1.UpdateOptions{}); err != nil {
 					logCtx.WithError(err).Error("Failed to remove finalizer from IPPool")
 					return err
@@ -375,7 +375,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 	}
 
 	logCtx.Info("No IPAM blocks left in pool, removing finalizer")
-	p.Finalizers = slices.Delete(p.Finalizers, slices.Index(p.Finalizers, IPPoolFinalizer), slices.Index(p.Finalizers, IPPoolFinalizer)+1)
+	p.Finalizers = slices.DeleteFunc(p.Finalizers, func(s string) bool { return s == IPPoolFinalizer })
 	if _, err := c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, metav1.UpdateOptions{}); err != nil {
 		logCtx.WithError(err).Error("Failed to remove finalizer from IPPool")
 		return err
