@@ -33,6 +33,7 @@ spec:
                       - Tunnel
                       - LoadBalancer
                     type: string
+                  maxItems: 10
                   type: array
                   x-kubernetes-list-type: set
                 assignmentMode:
@@ -45,9 +46,19 @@ spec:
                   maximum: 128
                   minimum: 0
                   type: integer
+                  x-kubernetes-validations:
+                    - message:
+                        Block size cannot be changed; follow IP pool migration
+                        guide to avoid corruption.
+                      rule: self == oldSelf
                 cidr:
                   format: cidr
                   type: string
+                  x-kubernetes-validations:
+                    - message:
+                        CIDR cannot be changed; follow IP pool migration guide
+                        to avoid corruption.
+                      rule: self == oldSelf
                 disableBGPExport:
                   type: boolean
                 disabled:
@@ -73,6 +84,24 @@ spec:
               required:
                 - cidr
               type: object
+              x-kubernetes-validations:
+                - message: ipipMode and vxlanMode cannot both be enabled
+                  rule:
+                    "!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode
+                    == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode)
+                    == 0 || size(self.vxlanMode) == 0"
+                - message: LoadBalancer IP pool cannot have IPIP or VXLAN enabled
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode
+                    == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) ==
+                    0 || self.vxlanMode == 'Never')"
+                - message:
+                    LoadBalancer cannot be combined with Workload or Tunnel allowed
+                    uses
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')"
           type: object
       served: true
       storage: true
