@@ -243,7 +243,9 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		internalapi.KindLiveMigration,
-		resources.NewLiveMigrationClient(kvClient),
+		resources.NewLiveMigrationClient(func(namespace string) resources.VMIMClient {
+			return kvClient.VirtualMachineInstanceMigrations(namespace)
+		}),
 	)
 	c.registerResourceClient(
 		reflect.TypeFor[model.ResourceKey](),

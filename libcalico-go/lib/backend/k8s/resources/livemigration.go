@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kwatch "k8s.io/apimachinery/pkg/watch"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-	kubevirtclient "kubevirt.io/client-go/kubevirt/typed/core/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -32,15 +31,25 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
-func NewLiveMigrationClient(kvClient kubevirtclient.KubevirtV1Interface) K8sResourceClient {
-	return &LiveMigrationClient{kvClient: kvClient}
+// VMIMClient provides read access to VirtualMachineInstanceMigration resources
+// in a specific namespace. This interface decouples the resources package from
+// the kubevirt.io/client-go dependency (whose log package registers a -v flag
+// that conflicts with klog in binaries that transitively import this package).
+type VMIMClient interface {
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (*kubevirtv1.VirtualMachineInstanceMigration, error)
+	List(ctx context.Context, opts metav1.ListOptions) (*kubevirtv1.VirtualMachineInstanceMigrationList, error)
+	Watch(ctx context.Context, opts metav1.ListOptions) (kwatch.Interface, error)
+}
+
+func NewLiveMigrationClient(vmimClient func(namespace string) VMIMClient) K8sResourceClient {
+	return &LiveMigrationClient{vmimClient: vmimClient}
 }
 
 // LiveMigrationClient implements the K8sResourceClient interface for LiveMigration
 // resources. LiveMigration is backed by KubeVirt VirtualMachineInstanceMigration
 // resources in the Kubernetes datastore.
 type LiveMigrationClient struct {
-	kvClient kubevirtclient.KubevirtV1Interface
+	vmimClient func(namespace string) VMIMClient
 }
 
 func (c *LiveMigrationClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -77,7 +86,7 @@ func (c *LiveMigrationClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) 
 
 func (c *LiveMigrationClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	k := key.(model.ResourceKey)
-	vmim, err := c.kvClient.VirtualMachineInstanceMigrations(k.Namespace).Get(ctx, k.Name, metav1.GetOptions{ResourceVersion: revision})
+	vmim, err := c.vmimClient(k.Namespace).Get(ctx, k.Name, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, key)
 	}
@@ -97,7 +106,7 @@ func (c *LiveMigrationClient) List(ctx context.Context, list model.ListInterface
 		opts.ResourceVersionMatch = metav1.ResourceVersionMatchNotOlderThan
 	}
 
-	result, err := c.kvClient.VirtualMachineInstanceMigrations(l.Namespace).List(ctx, opts)
+	result, err := c.vmimClient(l.Namespace).List(ctx, opts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
@@ -124,7 +133,7 @@ func (c *LiveMigrationClient) List(ctx context.Context, list model.ListInterface
 func (c *LiveMigrationClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	rlo := list.(model.ResourceListOptions)
 	k8sOpts := watchOptionsToK8sListOptions(options)
-	k8sWatch, err := c.kvClient.VirtualMachineInstanceMigrations(rlo.Namespace).Watch(ctx, k8sOpts)
+	k8sWatch, err := c.vmimClient(rlo.Namespace).Watch(ctx, k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
