@@ -877,23 +877,23 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 					continue
 				}
 
-			// Check if error is due to maxAlloc constraint
-			if maxAllocErr, ok := err.(ErrMaxAllocReached); ok {
-				logCtx.WithError(maxAllocErr)
-				existingIPs, handleErr := c.handleMaxAllocReached(ctx, *handleID, num, version, logCtx)
-				if handleErr != nil {
-					// Either insufficient IPs or query failed - both cases should retry
-					// because the concurrent operation may complete on the next attempt
-					logCtx.WithError(handleErr).Debug("Will retry after maxAlloc handling")
-					continue
+				// Check if error is due to maxAlloc constraint
+				if maxAllocErr, ok := err.(ErrMaxAllocReached); ok {
+					logCtx.WithError(maxAllocErr)
+					existingIPs, handleErr := c.handleMaxAllocReached(ctx, *handleID, num, version, logCtx)
+					if handleErr != nil {
+						// Either insufficient IPs or query failed - both cases should retry
+						// because the concurrent operation may complete on the next attempt
+						logCtx.WithError(handleErr).Debug("Will retry after maxAlloc handling")
+						continue
+					}
+					// Sufficient IPs found
+					ia.IPs = append(ia.IPs, existingIPs...)
+					rem = num - len(ia.IPs)
+					break
 				}
-				// Sufficient IPs found
-				ia.IPs = append(ia.IPs, existingIPs...)
-				rem = num - len(ia.IPs)
-				break
-			}
 
-			logCtx.WithError(err).Warningf("Failed to assign IPs in newly allocated block")
+				logCtx.WithError(err).Warningf("Failed to assign IPs in newly allocated block")
 				ia.AddMsg("Failed to assign IPs in newly allocated block")
 				break
 			}
@@ -959,22 +959,22 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 							continue
 						}
 
-					// Check if error is due to maxAlloc constraint
-					if maxAllocErr, ok := err.(ErrMaxAllocReached); ok {
-						logCtx.WithError(maxAllocErr)
-						existingIPs, handleErr := c.handleMaxAllocReached(ctx, *handleID, num, version, logCtx)
-						if handleErr != nil {
-							// Either insufficient IPs or query failed - both cases should retry
-							// because the concurrent operation may complete on the next attempt
-							logCtx.WithError(handleErr).Debug("Will retry after maxAlloc handling in non-affine block")
-							continue
+						// Check if error is due to maxAlloc constraint
+						if maxAllocErr, ok := err.(ErrMaxAllocReached); ok {
+							logCtx.WithError(maxAllocErr)
+							existingIPs, handleErr := c.handleMaxAllocReached(ctx, *handleID, num, version, logCtx)
+							if handleErr != nil {
+								// Either insufficient IPs or query failed - both cases should retry
+								// because the concurrent operation may complete on the next attempt
+								logCtx.WithError(handleErr).Debug("Will retry after maxAlloc handling in non-affine block")
+								continue
+							}
+							// Sufficient IPs found
+							ia.IPs = append(ia.IPs, existingIPs...)
+							rem = num - len(ia.IPs)
+							// Exit both loops since we found IPs
+							goto doneLookingForIPs
 						}
-						// Sufficient IPs found
-						ia.IPs = append(ia.IPs, existingIPs...)
-						rem = num - len(ia.IPs)
-						// Exit both loops since we found IPs
-						goto doneLookingForIPs
-					}
 
 						logCtx.WithError(err).Warningf("Failed to assign IPs from non-affine block in pool %s", p.Spec.CIDR)
 						break
