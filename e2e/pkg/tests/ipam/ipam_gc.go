@@ -42,6 +42,7 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("IPAM"),
+	describe.WithSerial(), // Modifies global state, so run serially.
 	describe.WithCategory(describe.Networking),
 	"IPAM GC",
 	func() {
