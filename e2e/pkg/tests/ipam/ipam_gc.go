@@ -78,7 +78,7 @@ var _ = describe.CalicoDescribe(
 		// non-existent pods. We create a fake IPAM allocation referencing a pod that
 		// doesn't exist, shorten the leak grace period so GC runs quickly, and then
 		// wait for the allocation to be released.
-		It("should garbage-collect leaked IP addresses", func() {
+		framework.ConformanceIt("should garbage-collect leaked IP addresses", func() {
 			ctx := context.Background()
 
 			// Shorten the leak grace period so GC detects the leak quickly.

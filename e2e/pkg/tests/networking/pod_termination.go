@@ -53,7 +53,7 @@ var _ = describe.CalicoDescribe(
 		// Setup: deny-all ingress + targeted allow policies so traffic only flows
 		// through explicit policy. A client pod traps SIGTERM and attempts wget
 		// during the termination window.
-		It("should allow client to reach server while client is terminating", func() {
+		framework.ConformanceIt("should allow client to reach server while client is terminating", func() {
 			ctx := context.Background()
 			ns := f.Namespace.Name
 			gracePeriod := int64(60)
@@ -374,11 +374,13 @@ func expectPingSuccess(ctx context.Context, f *framework.Framework, ns, podName,
 }
 
 // pingFromNewPod creates a pod that pings the given IP, waits for it to complete,
-// and returns an error if the ping failed.
+// and returns an error if the ping failed. Each invocation generates a unique pod
+// name to avoid conflicts when called repeatedly (e.g., inside Consistently).
 func pingFromNewPod(ctx context.Context, f *framework.Framework, ns, podName, ip string) error {
+	uniqueName := utils.GenerateRandomName(podName)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
+			Name:      uniqueName,
 			Namespace: ns,
 			Labels:    map[string]string{"pod-name": podName},
 		},

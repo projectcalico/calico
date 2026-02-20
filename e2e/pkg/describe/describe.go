@@ -73,6 +73,7 @@ var features = map[string]bool{
 	"Tiered-RBAC":     true,
 	"Pods":            true,
 	"QoS":             true,
+	"Datapath":        true,
 }
 
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
