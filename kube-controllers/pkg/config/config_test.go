@@ -707,6 +707,11 @@ func (m *mockKCC) Update(ctx context.Context, res *v3.KubeControllersConfigurati
 	return res, nil
 }
 
+func (m *mockKCC) UpdateStatus(ctx context.Context, res *v3.KubeControllersConfiguration, opts options.SetOptions) (*v3.KubeControllersConfiguration, error) {
+	m.update = res.DeepCopy()
+	return res, nil
+}
+
 func (m *mockKCC) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*v3.KubeControllersConfiguration, error) {
 	panic("implement me")
 }
