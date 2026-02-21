@@ -149,11 +149,24 @@ ${HELM} template \
 find ocp/tigera-operator -name "*.yaml" -print0 | xargs -0 sed -i -e 1,2d
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
 
+# The `ocp` directory will sort differently in different locales; en_US.UTF-8
+# will ignore hyphens when sorting, for example, while C.UTF-8 will not. It
+# doesn't matter which we use, as long as it's universally consistent; otherwise
+# it can trigger spurious diffs in CI preflight checks.
+#
+# Note that we also call `sort` now; we've been assuming that `ls` would return
+# a sorted list of files, which is true of GNU coreutils but not required by
+# POSIX. `sort` also uses the locale settings for sorting, so in most cases
+# `ls` and `ls | sort` will be the same, but it's better to be thorough.
+export LC_ALL=C.UTF-8
+
 # Generating the upgrade manifest for OCP.
 # It excludes files specific to configuring the BPF dataplane, CRs (03-cr-*) and CRDs to maintain compatibility and not change the existing configuration in already installed clusters.
-OCP_VALUES_FILES=$(ls ocp | grep -v -e '01-configmap-kubernetes-services-endpoint\.yaml' -e '02-configmap-calico-resources\.yaml' -e '^03-cr-' -e 'cluster-network-operator\.yaml' -e '\.*crd\.*')
+echo "Generating upgrade manifest for OCP"
+OCP_VALUES_FILES=$(ls ocp | sort | grep -v -e '01-configmap-kubernetes-services-endpoint\.yaml' -e '02-configmap-calico-resources\.yaml' -e '^03-cr-' -e 'cluster-network-operator\.yaml' -e '\.*crd\.*')
 rm -f tigera-operator-ocp-upgrade.yaml
 for FILE in $OCP_VALUES_FILES; do
+  echo "  Adding ${FILE}"
   cat "ocp/$FILE" >> tigera-operator-ocp-upgrade.yaml
   echo -e "---" >> tigera-operator-ocp-upgrade.yaml  # Add separator
 done
