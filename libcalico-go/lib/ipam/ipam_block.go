@@ -499,7 +499,7 @@ func (b allocationBlock) ipsByHandle(handleID string) []cnet.IP {
 	return ips
 }
 
-func (b allocationBlock) attributesForIP(ip cnet.IP, attrType OwnerAttributeType) (map[string]string, error) {
+func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) {
 	// Convert to an ordinal.
 	ordinal, err := b.IPToOrdinal(ip)
 	if err != nil {
@@ -512,37 +512,36 @@ func (b allocationBlock) attributesForIP(ip cnet.IP, attrType OwnerAttributeType
 		log.Debugf("IP %s is not currently assigned in block", ip)
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
 	}
-
-	switch attrType {
-	case OwnerAttributeTypeActive:
-		return b.Attributes[*attrIndex].ActiveOwnerAttrs, nil
-	case OwnerAttributeTypeAlternate:
-		return b.Attributes[*attrIndex].AlternateOwnerAttrs, nil
-	default:
-		return nil, fmt.Errorf("unknown attribute type: %s", attrType)
-	}
+	return b.Attributes[*attrIndex].ActiveOwnerAttrs, nil
 }
 
-func (b allocationBlock) handleForIP(ip cnet.IP) (*string, error) {
-	// Convert to an ordinal.
+// allocationAttributesForIP returns the full AllocationAttribute for the given IP,
+// including HandleID, ActiveOwnerAttrs, and AlternateOwnerAttrs in a single lookup.
+func (b allocationBlock) allocationAttributesForIP(ip cnet.IP) (*model.AllocationAttribute, error) {
 	ordinal, err := b.IPToOrdinal(ip)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if allocated.
 	attrIndex := b.Allocations[ordinal]
 	if attrIndex == nil {
 		log.Debugf("IP %s is not currently assigned in block", ip)
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
 	}
-	if h := b.Attributes[*attrIndex].HandleID; h != nil {
+
+	attr := b.Attributes[*attrIndex]
+	handle := attr.HandleID
+	if handle != nil {
 		// The handle in the allocation may be malformed, so requires sanitation
 		// before use in the code.
-		s := sanitizeHandle(*h)
-		return &s, nil
+		s := sanitizeHandle(*handle)
+		handle = &s
 	}
-	return nil, nil
+	return &model.AllocationAttribute{
+		HandleID:            handle,
+		ActiveOwnerAttrs:    attr.ActiveOwnerAttrs,
+		AlternateOwnerAttrs: attr.AlternateOwnerAttrs,
+	}, nil
 }
 
 func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]string) int {

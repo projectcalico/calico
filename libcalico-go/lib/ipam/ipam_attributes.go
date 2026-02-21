@@ -45,24 +45,5 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (
 		return nil, err
 	}
 	block := allocationBlock{obj.Value.(*model.AllocationBlock)}
-
-	activeAttrs, err := block.attributesForIP(addr, OwnerAttributeTypeActive)
-	if err != nil {
-		return nil, err
-	}
-	alternateAttrs, err := block.attributesForIP(addr, OwnerAttributeTypeAlternate)
-	if err != nil {
-		return nil, err
-	}
-
-	handle, err := block.handleForIP(addr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &model.AllocationAttribute{
-		HandleID:            handle,
-		ActiveOwnerAttrs:    activeAttrs,
-		AlternateOwnerAttrs: alternateAttrs,
-	}, nil
+	return block.allocationAttributesForIP(addr)
 }
