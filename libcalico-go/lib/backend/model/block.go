@@ -218,7 +218,7 @@ func (b *AllocationBlock) NonAffineAllocations() []Allocation {
 			continue
 		}
 		attrs := b.Attributes[*attrIdx]
-		host := attrs.AttrSecondary[IPAMBlockAttributeNode]
+		host := attrs.ActiveOwnerAttrs[IPAMBlockAttributeNode]
 		if myHost != "" && host == myHost {
 			continue // Skip allocations that are affine to this block.
 		}
@@ -255,6 +255,11 @@ func (b *AllocationBlock) OrdinalToIP(ord int) net.IP {
 }
 
 type AllocationAttribute struct {
-	AttrPrimary   *string           `json:"handle_id"`
-	AttrSecondary map[string]string `json:"secondary"`
+	// HandleID is the primary identifier for the allocation.
+	HandleID *string `json:"handle_id,omitempty"`
+	// ActiveOwnerAttrs contains attributes of the active owner (the pod currently using the IP).
+	ActiveOwnerAttrs map[string]string `json:"secondary,omitempty"`
+	// AlternateOwnerAttrs contains attributes of the previous or potential owner
+	// (used during live migration to track the source or target pod).
+	AlternateOwnerAttrs map[string]string `json:"alternate,omitempty"`
 }
