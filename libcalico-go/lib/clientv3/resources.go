@@ -56,6 +56,7 @@ type resourceList interface {
 type resourceInterface interface {
 	Create(ctx context.Context, opts options.SetOptions, kind string, in resource) (resource, error)
 	Update(ctx context.Context, opts options.SetOptions, kind string, in resource) (resource, error)
+	UpdateStatus(ctx context.Context, opts options.SetOptions, kind string, in resource) (resource, error)
 	Delete(ctx context.Context, opts options.DeleteOptions, kind, ns, name string) (resource, error)
 	Get(ctx context.Context, opts options.GetOptions, kind, ns, name string) (resource, error)
 	List(ctx context.Context, opts options.ListOptions, kind, listkind string, inout resourceList) error
@@ -155,6 +156,61 @@ func (c *resources) Update(ctx context.Context, opts options.SetOptions, kind st
 
 	// Convert the resource to a KVPair and pass that to the backend datastore, converting
 	// the response (if we get one) back to a resource.
+	kvp, err := c.backend.Update(ctx, c.resourceToKVPair(opts, kind, in))
+	if kvp != nil {
+		return c.kvPairToResource(kvp), err
+	}
+	return nil, err
+}
+
+// UpdateStatus updates the status of a resource in the backend datastore.
+// For backends that support it (Kubernetes), this uses the status subresource.
+// For backends that don't (etcd), this falls back to a regular Update.
+func (c *resources) UpdateStatus(ctx context.Context, opts options.SetOptions, kind string, in resource) (resource, error) {
+	// A ResourceVersion should always be specified on an UpdateStatus.
+	if len(in.GetObjectMeta().GetResourceVersion()) == 0 {
+		logWithResource(in).Info("Rejecting UpdateStatus request with empty resource version")
+		return nil, cerrors.ErrorValidation{
+			ErroredFields: []cerrors.ErroredField{{
+				Name:   "Metadata.ResourceVersion",
+				Reason: "field must be set for an Update request",
+				Value:  in.GetObjectMeta().GetResourceVersion(),
+			}},
+		}
+	}
+	if err := c.checkNamespace(in.GetObjectMeta().GetNamespace(), kind); err != nil {
+		return nil, err
+	}
+	creationTimestamp := in.GetObjectMeta().GetCreationTimestamp()
+	if creationTimestamp.IsZero() {
+		return nil, cerrors.ErrorValidation{
+			ErroredFields: []cerrors.ErroredField{{
+				Name:   "Metadata.CreationTimestamp",
+				Reason: "field must be set for an Update request",
+				Value:  in.GetObjectMeta().GetCreationTimestamp(),
+			}},
+		}
+	}
+	if in.GetObjectMeta().GetUID() == "" {
+		return nil, cerrors.ErrorValidation{
+			ErroredFields: []cerrors.ErroredField{{
+				Name:   "Metadata.UID",
+				Reason: "field must be set for an Update request",
+				Value:  in.GetObjectMeta().GetUID(),
+			}},
+		}
+	}
+
+	// If the backend supports UpdateStatus, use it. Otherwise fall back to Update.
+	if sc, ok := c.backend.(bapi.StatusClient); ok {
+		kvp, err := sc.UpdateStatus(ctx, c.resourceToKVPair(opts, kind, in))
+		if kvp != nil {
+			return c.kvPairToResource(kvp), err
+		}
+		return nil, err
+	}
+
+	// Fallback to regular Update for backends that don't support status subresource (e.g., etcd).
 	kvp, err := c.backend.Update(ctx, c.resourceToKVPair(opts, kind, in))
 	if kvp != nil {
 		return c.kvPairToResource(kvp), err
