@@ -28,6 +28,8 @@ components:
     version: test-build
   key-cert-provisioner:
     version: test-build
+  webhooks:
+    version: test-build
   whisker:
     version: test-build
   whisker-backend:
