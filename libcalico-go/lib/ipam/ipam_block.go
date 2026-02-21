@@ -84,7 +84,7 @@ func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 
 		// Create slice of IPs and perform the allocations.
 		log.Debugf("Reserving allocation attribute: %#v handle %s", attrs, handleID)
-		attr := model.AllocationAttribute{AttrPrimary: &handleID, AttrSecondary: attrs}
+		attr := model.AllocationAttribute{HandleID: &handleID, ActiveOwnerAttrs: attrs}
 		b.Attributes = append(b.Attributes, attr)
 	}
 
@@ -254,7 +254,7 @@ func (b *allocationBlock) containsOnlyReservedIPs() bool {
 			continue
 		}
 		attrs := b.Attributes[*attrIdx]
-		if attrs.AttrPrimary == nil || strings.ToLower(*attrs.AttrPrimary) != WindowsReservedHandle {
+		if attrs.HandleID == nil || strings.ToLower(*attrs.HandleID) != WindowsReservedHandle {
 			return false
 		}
 	}
@@ -316,7 +316,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 
 		// Compare handles.
 		handleID := ""
-		if h := b.Attributes[*attrIdx].AttrPrimary; h != nil {
+		if h := b.Attributes[*attrIdx].HandleID; h != nil {
 			// The handle in the allocation may be malformed, so requires sanitation
 			// before use in the code.
 			handleID = sanitizeHandle(*h)
@@ -434,7 +434,7 @@ func (b allocationBlock) attributeRefCounts() map[int]int {
 func (b allocationBlock) attributeIndexesByHandle(handleID string) []int {
 	indexes := []int{}
 	for i, attr := range b.Attributes {
-		if attr.AttrPrimary != nil && sanitizeHandle(*attr.AttrPrimary) == handleID {
+		if attr.HandleID != nil && sanitizeHandle(*attr.HandleID) == handleID {
 			indexes = append(indexes, i)
 		}
 	}
@@ -512,29 +512,36 @@ func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) 
 		log.Debugf("IP %s is not currently assigned in block", ip)
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
 	}
-	return b.Attributes[*attrIndex].AttrSecondary, nil
+	return b.Attributes[*attrIndex].ActiveOwnerAttrs, nil
 }
 
-func (b allocationBlock) handleForIP(ip cnet.IP) (*string, error) {
-	// Convert to an ordinal.
+// allocationAttributesForIP returns the full AllocationAttribute for the given IP,
+// including HandleID, ActiveOwnerAttrs, and AlternateOwnerAttrs in a single lookup.
+func (b allocationBlock) allocationAttributesForIP(ip cnet.IP) (*model.AllocationAttribute, error) {
 	ordinal, err := b.IPToOrdinal(ip)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if allocated.
 	attrIndex := b.Allocations[ordinal]
 	if attrIndex == nil {
 		log.Debugf("IP %s is not currently assigned in block", ip)
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
 	}
-	if h := b.Attributes[*attrIndex].AttrPrimary; h != nil {
+
+	attr := b.Attributes[*attrIndex]
+	handle := attr.HandleID
+	if handle != nil {
 		// The handle in the allocation may be malformed, so requires sanitation
 		// before use in the code.
-		s := sanitizeHandle(*h)
-		return &s, nil
+		s := sanitizeHandle(*handle)
+		handle = &s
 	}
-	return nil, nil
+	return &model.AllocationAttribute{
+		HandleID:            handle,
+		ActiveOwnerAttrs:    attr.ActiveOwnerAttrs,
+		AlternateOwnerAttrs: attr.AlternateOwnerAttrs,
+	}, nil
 }
 
 func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]string) int {
@@ -542,7 +549,7 @@ func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]
 	if handleID != nil {
 		logCtx = log.WithField("handle", *handleID)
 	}
-	attr := model.AllocationAttribute{AttrPrimary: handleID, AttrSecondary: attrs}
+	attr := model.AllocationAttribute{HandleID: handleID, ActiveOwnerAttrs: attrs}
 	for idx, existing := range b.Attributes {
 		if reflect.DeepEqual(attr, existing) {
 			log.Debugf("Attribute '%+v' already exists", attr)

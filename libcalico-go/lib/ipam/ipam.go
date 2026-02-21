@@ -1899,35 +1899,6 @@ func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockC
 	return errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
-// GetAssignmentAttributes returns the attributes stored with the given IP address
-// upon assignment, as well as the handle used for assignment (if any).
-func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr net.IP) (map[string]string, *string, error) {
-	pool, err := c.blockReaderWriter.getPoolForIP(ctx, addr, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	if pool == nil {
-		log.Errorf("Error reading pool for %s", addr.String())
-		return nil, nil, cerrors.ErrorResourceDoesNotExist{Identifier: addr.String(), Err: errors.New("No valid IPPool")}
-	}
-	blockCIDR := getBlockCIDRForAddress(addr, pool)
-	obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
-	if err != nil {
-		log.Errorf("Error reading block %s: %v", blockCIDR, err)
-		return nil, nil, err
-	}
-	block := allocationBlock{obj.Value.(*model.AllocationBlock)}
-	attrs, err := block.attributesForIP(addr)
-	if err != nil {
-		return nil, nil, err
-	}
-	handle, err := block.handleForIP(addr)
-	if err != nil {
-		return nil, nil, err
-	}
-	return attrs, handle, nil
-}
-
 // GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
