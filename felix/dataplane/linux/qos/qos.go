@@ -293,7 +293,7 @@ func CreateEgressQdisc(tbs *TokenBucketState, workloadDeviceName string, ifbDevi
 			},
 		}
 
-		err = netlink.QdiscAdd(qdisc)
+		err = netlink.QdiscReplace(qdisc)
 		if err != nil {
 			return fmt.Errorf("create ingress qdisc %+v on dev %s: %w", qdisc, workloadDeviceName, err)
 		}
@@ -463,7 +463,7 @@ func createTBF(tbs *TokenBucketState, workloadDevice netlink.Link) error {
 		return fmt.Errorf("make TBF qdisc %+v from tbs %+v: %w", qdisc, tbs, err)
 	}
 
-	err = netlink.QdiscAdd(qdisc)
+	err = netlink.QdiscReplace(qdisc)
 	if err != nil {
 		return fmt.Errorf("add TBF qdisc %+v, limit: %v, rate %v, buffer %v, peakrate %v, minburst %v: %w", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, qdisc.Peakrate, qdisc.Minburst, err)
 	}

@@ -205,10 +205,6 @@ var _ = infrastructure.DatastoreDescribe(
 					infra = getInfra(infrastructure.WithBPFLogByteLimit(16 * 1024 * 1024))
 					topt = infrastructure.DefaultTopologyOptions()
 
-					if bpfLogLevel != "Debug" && !BPFMode() {
-						Skip("Skipping QoS control tests with non-debug bpfLogLevel on iptables/nftables mode (for deduplication).")
-					}
-
 					switch encap {
 					case "none":
 						if !BPFMode() {
@@ -230,6 +226,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 					topt.DelayFelixStart = true
 					topt.TriggerDelayedFelixStart = true
+					topt.FelixLogSeverity = "Debug"
 					if BPFMode() {
 						topt.ExtraEnvVars["FELIX_BPFLogLevel"] = bpfLogLevel
 					}
@@ -320,7 +317,15 @@ var _ = infrastructure.DatastoreDescribe(
 						if BPFMode() && BPFAttachType() == "tc" {
 							Skip("Skipping QoS control bandwidth tests on BPF TC attach mode.")
 						}
+
+						By("Removing all limits from workloads")
+						for i := range len(w) {
+							w[i].WorkloadEndpoint.Spec.QoSControls = nil
+							w[i].UpdateInInfra(infra)
+							Eventually(tc.Felixes[i].ExecOutputFn("ip", "r", "get", fmt.Sprintf("10.65.%d.2", i)), "10s").Should(ContainSubstring(w[i].InterfaceName))
+						}
 					})
+
 					getQdisc := func() string {
 						out, err := tc.Felixes[1].ExecOutput("tc", "qdisc")
 						logrus.Infof("tc qdisc output:\n%v", out)
@@ -407,7 +412,29 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(err).NotTo(HaveOccurred())
 						err = serverCmd.Process.Release()
 						Expect(err).NotTo(HaveOccurred())
+					})
 
+					It("should correctly apply bandwidth limits when a non-default qdisc exists (handle != 0)", func() {
+						By("Replaceing the default noqueue qdisc with a non-default qdisc (handle 8001)")
+						out, err := tc.Felixes[1].ExecOutput("tc", "qdisc", "replace", "dev", w[1].InterfaceName, "root", "handle", "8001:", "noqueue")
+						logrus.Infof("tc qdisc replace output:\n%v", out)
+						Expect(err).NotTo(HaveOccurred())
+
+						By("Waiting for the config to appear in 'tc qdisc'")
+						Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc noqueue 8001: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+`))
+
+						By("Setting 10Mbps limit and 100Mbps peakrate for ingress on workload 1")
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							IngressBandwidth: 10000000,
+							IngressBurst:     300000000,
+							IngressPeakrate:  100000000,
+						}
+						w[1].UpdateInInfra(infra)
+						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
+
+						By("Waiting for the config to appear in 'tc qdisc'")
+						// ingress config should be present
+						Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc tbf \d+: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+ rate ` + regexp.QuoteMeta("10Mbit") + `.* peakrate ` + regexp.QuoteMeta("100Mbit")))
 					})
 				})
 
