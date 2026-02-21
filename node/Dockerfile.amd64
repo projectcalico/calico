@@ -100,11 +100,17 @@ RUN microdnf --enablerepo=appstream install -y \
 
 RUN microdnf --enablerepo=baseos install -y iproute-tc iptables-nft nftables ipset
 
-COPY --from=almalinux /usr/sbin/iptables-legacy /usr/sbin/iptables-legacy
-COPY --from=almalinux /usr/sbin/ip6tables-legacy /usr/sbin/ip6tables-legacy
+COPY --from=almalinux /usr/sbin/xtables-legacy-multi /usr/sbin/xtables-legacy-multi
+
 # Set alternatives
 RUN alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
     alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
+
+# Set symbolic links for legacy iptables binaries
+RUN set -eux; \
+    for bin in iptables-legacy iptables-legacy-restore iptables-legacy-save ip6tables-legacy ip6tables-legacy-restore ip6tables-legacy-save; do \
+        ln -sf /usr/sbin/xtables-legacy-multi /usr/sbin/${bin} || true; \
+    done
 
 RUN microdnf clean all
 
