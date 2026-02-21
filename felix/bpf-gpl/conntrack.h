@@ -105,6 +105,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 		struct calico_ct_value *ct_value = cali_ct_lookup_elem(k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!");
+			if (WORKLOAD_SRC_SPOOFING_CONFIGURED && cali_allowsource_lookup(&ctx->state->ip_src, skb_ingress_ifindex(ctx->skb))) {
+				CALI_DEBUG("CT-ALL src IP " IP_FMT " is allowed, skipping CT creation", debug_ip(ctx->state->ip_src));
+				return 0;
+			}
 			goto create;
 		}
 		if (srcLTDest) {
