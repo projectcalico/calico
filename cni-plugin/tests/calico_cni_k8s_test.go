@@ -2151,7 +2151,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			})
 			defer ensurePodDeleted(clientset, testutils.K8S_TEST_NS, testPodName)
 
-			containerID, _, contVeth, contAddresses, _, netNS, err := testutils.CreateContainer(netconfCalicoIPAM, testPodName, testutils.K8S_TEST_NS, "")
+			containerID, result, contVeth, contAddresses, _, netNS, err := testutils.CreateContainer(netconfCalicoIPAM, testPodName, testutils.K8S_TEST_NS, "")
 			Expect(err).NotTo(HaveOccurred())
 			mac := contVeth.Attrs().HardwareAddr
 
@@ -2160,6 +2160,18 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(podIPv4.To4()).NotTo(BeNil())
 			podIPv6 := contAddresses[1].IP
 			Expect(podIPv6.To16()).NotTo(BeNil())
+
+			// Verify that the IPAM plugin populates routes for both IPv4 and IPv6 allocated IPs.
+			Expect(result.IPs).Should(HaveLen(2))
+			Expect(result.Routes).Should(HaveLen(2))
+			routeDsts := map[string]bool{}
+			for _, route := range result.Routes {
+				routeDsts[route.Dst.IP.String()] = true
+			}
+			for _, ipConfig := range result.IPs {
+				Expect(routeDsts).To(HaveKey(ipConfig.Address.IP.String()),
+					fmt.Sprintf("Route should exist for allocated IP %s", ipConfig.Address.IP))
+			}
 
 			ids := names.WorkloadEndpointIdentifiers{
 				Node:         testNodeName,
@@ -2551,6 +2563,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			containerID, result, _, _, _, contNs, err = testutils.CreateContainer(netconf, testPodName, testutils.K8S_TEST_NS, "")
 			Expect(err).ShouldNot(HaveOccurred())
 
+			// Verify that IPAM populates routes in the result (one route per allocated IP).
+			Expect(result.IPs).Should(HaveLen(1))
+			Expect(result.Routes).Should(HaveLen(1))
+			Expect(result.Routes[0].Dst.IP.Equal(result.IPs[0].Address.IP)).Should(BeTrue(),
+				"Route Dst IP should match the allocated IP")
+
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
@@ -2597,6 +2615,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Otherwise, they should be the same.
 			resultSecondAdd.IPs = nil
 			result.IPs = nil
+
+			// Routes are derived from the allocated IPs, so they will differ too.
+			resultSecondAdd.Routes = nil
+			result.Routes = nil
 
 			// The MAC address will be different, since we create a new veth.
 			Expect(len(resultSecondAdd.Interfaces)).Should(Equal(len(result.Interfaces)))
@@ -3522,6 +3544,11 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(len(interfaces)).Should(Equal(2))
 			Expect(len(result.IPs)).Should(Equal(1))
 
+			// Verify that the IPAM plugin populates routes for the allocated IPv4 IP.
+			Expect(result.Routes).Should(HaveLen(1))
+			Expect(result.Routes[0].Dst.IP.Equal(result.IPs[0].Address.IP)).Should(BeTrue(),
+				"Route Dst IP should match the allocated IP")
+
 			for _, ip := range result.IPs {
 				interfaceIndex := ip.Interface
 				Expect(interfaceIndex).ShouldNot(BeNil())
@@ -3580,6 +3607,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			Expect(len(interfaces)).Should(Equal(2))
 			Expect(len(result.IPs)).Should(Equal(2))
+
+			// Verify that the IPAM plugin populates routes for both IPv4 and IPv6 allocated IPs.
+			Expect(result.Routes).Should(HaveLen(2))
+			routeDsts := map[string]bool{}
+			for _, route := range result.Routes {
+				routeDsts[route.Dst.IP.String()] = true
+			}
+			for _, ipConfig := range result.IPs {
+				Expect(routeDsts).To(HaveKey(ipConfig.Address.IP.String()),
+					fmt.Sprintf("Route should exist for allocated IP %s", ipConfig.Address.IP))
+			}
 
 			for _, ip := range result.IPs {
 				interfaceIndex := ip.Interface
