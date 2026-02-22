@@ -128,9 +128,9 @@ Tests in `fv/bpf_*_test.go` are focused on the BPF dataplane itself. Tests prefi
 | Parameter | Values                                      |
 |-----------|---------------------------------------------|
 | ip version| `ipv4`, `ipv6`                              |
-| protocol  | `tcp`, `udp`, `udp-connected`               |
+| protocol  | `tcp`, `udp`, `udp-unconnected`, `udp-conn-recvmsg` |
 | ct        | `true`, `false`                              |
-| log       | `debug`, `none`                              |
+| log       | `debug`, `off`                               |
 | tunnel    | `none`, `ipip`, `vxlan`, `wireguard`         |
 | dsr       | `true`, `false`                              |
 
