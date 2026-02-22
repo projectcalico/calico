@@ -32997,6 +32997,9 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfIPFragTimeout:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
                 bpfJITHardening:
                   allOf:
                     - enum:
