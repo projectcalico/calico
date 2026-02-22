@@ -74,4 +74,3 @@ func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc)
 		return registry.DryRunnableStorage{}, nil
 	}
 }
-
