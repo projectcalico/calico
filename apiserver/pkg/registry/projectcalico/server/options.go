@@ -174,3 +174,4 @@ func (o Options) GetStorage(
 	dryRunnableStorage, dFunc := calico.NewStorage(o.CalicoOptions)
 	return dryRunnableStorage, dFunc, nil
 }
+
