@@ -46,11 +46,7 @@ import (
 
 func describeBPFSingleNodeTests(s *bpfTestContext) {
 	Describe("with a single node and an allow-all policy", func() {
-		var (
-			hostW   *workload.Workload
-			w       [2]*workload.Workload
-			wepCopy [2]*internalapi.WorkloadEndpoint
-		)
+		var wepCopy [2]*internalapi.WorkloadEndpoint
 
 		if !s.testOpts.connTimeEnabled {
 			// These tests don't depend on NAT.
@@ -64,7 +60,7 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 
 		JustBeforeEach(func() {
 			s.tc, s.calicoClient = infrastructure.StartNNodeTopology(1, s.options, s.infra)
-			hostW = workload.Run(
+			s.hostW[0] = workload.Run(
 				s.tc.Felixes[0],
 				"host",
 				"default",
@@ -78,11 +74,11 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 				if s.testOpts.ipv6 {
 					wIP = fmt.Sprintf("dead:beef::%d", i+2)
 				}
-				w[i] = workload.Run(s.tc.Felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", s.testOpts.protocol)
-				w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
+				s.w[0][i] = workload.Run(s.tc.Felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", s.testOpts.protocol)
+				s.w[0][i].WorkloadEndpoint.Labels = map[string]string{"name": s.w[0][i].Name}
 				// WEP gets clobbered when we add it to the datastore, take a copy so we can re-create the WEP.
-				wepCopy[i] = w[i].WorkloadEndpoint
-				w[i].ConfigureInInfra(s.infra)
+				wepCopy[i] = s.w[0][i].WorkloadEndpoint
+				s.w[0][i].ConfigureInInfra(s.infra)
 			}
 
 			err := s.infra.AddDefaultDeny()
@@ -104,16 +100,16 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 
 			pol = s.createPolicy(pol)
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(s.tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-1", "allow", true)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(s.tc.Felixes[0], s.w[0][0].InterfaceName, "ingress", "policy-1", "allow", true)
 			}, "5s", "200ms").Should(BeTrue())
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(s.tc.Felixes[0], w[0].InterfaceName, "egress", "policy-1", "allow", true)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(s.tc.Felixes[0], s.w[0][0].InterfaceName, "egress", "policy-1", "allow", true)
 			}, "5s", "200ms").Should(BeTrue())
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(s.tc.Felixes[0], w[1].InterfaceName, "ingress", "policy-1", "allow", true)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(s.tc.Felixes[0], s.w[0][1].InterfaceName, "ingress", "policy-1", "allow", true)
 			}, "5s", "200ms").Should(BeTrue())
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(s.tc.Felixes[0], w[1].InterfaceName, "egress", "policy-1", "allow", true)
+				return bpfCheckIfGlobalNetworkPolicyProgrammed(s.tc.Felixes[0], s.w[0][1].InterfaceName, "egress", "policy-1", "allow", true)
 			}, "5s", "200ms").Should(BeTrue())
 		})
 
@@ -176,21 +172,21 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 			It("udp should have connectivity after a service is recreated", func() {
 				clusterIP := "10.101.123.1"
 
-				tcpdump := w[0].AttachTCPDump()
+				tcpdump := s.w[0][0].AttachTCPDump()
 				tcpdump.SetLogEnabled(true)
 				tcpdump.AddMatcher("udp-be",
-					regexp.MustCompile(fmt.Sprintf("%s\\.12345 > %s\\.8055: \\[udp sum ok\\] UDP", w[1].IP, w[0].IP)))
+					regexp.MustCompile(fmt.Sprintf("%s\\.12345 > %s\\.8055: \\[udp sum ok\\] UDP", s.w[0][1].IP, s.w[0][0].IP)))
 				tcpdump.Start(s.infra, "-vvv", "udp")
 
 				// Just to create the wrong normal entry to the service
-				_, err := w[1].RunCmd("pktgen", w[1].IP, clusterIP, "udp",
+				_, err := s.w[0][1].RunCmd("pktgen", s.w[0][1].IP, clusterIP, "udp",
 					"--port-src", "12345", "--port-dst", "80")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Make sure we got normal conntrack to service
 				ct := dumpCTMapsAny(4, s.tc.Felixes[0])
-				k1 := conntrack.NewKey(17, net.ParseIP(w[1].IP), 12345, net.ParseIP(clusterIP), 80)
-				k2 := conntrack.NewKey(17, net.ParseIP(clusterIP), 80, net.ParseIP(w[1].IP), 12345)
+				k1 := conntrack.NewKey(17, net.ParseIP(s.w[0][1].IP), 12345, net.ParseIP(clusterIP), 80)
+				k2 := conntrack.NewKey(17, net.ParseIP(clusterIP), 80, net.ParseIP(s.w[0][1].IP), 12345)
 
 				if v, ok := ct[k1]; ok {
 					Expect(v.Type() == conntrack.TypeNormal)
@@ -204,7 +200,7 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 				Consistently(func() int { return tcpdump.MatchCount("udp-be") }, "1s").
 					Should(BeNumerically("==", 0))
 
-				testSvc := k8sService("svc-no-backends", clusterIP, w[0], 80, 8055, 0, s.testOpts.protocol)
+				testSvc := k8sService("svc-no-backends", clusterIP, s.w[0][0], 80, 8055, 0, s.testOpts.protocol)
 				testSvcNamespace := testSvc.Namespace
 				k8sClient := s.infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 				_, err = k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(),
@@ -226,7 +222,7 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 				// Make sure that despite the wrong ct entry to start with,
 				// packets eventually go through.
 				Eventually(func() int {
-					_, err := w[1].RunCmd("pktgen", w[1].IP, clusterIP, "udp",
+					_, err := s.w[0][1].RunCmd("pktgen", s.w[0][1].IP, clusterIP, "udp",
 						"--port-src", "12345", "--port-dst", "80")
 					Expect(err).NotTo(HaveOccurred())
 					return tcpdump.MatchCount("udp-be")
@@ -244,8 +240,8 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 					Fail("No TypeNATForward ct entry")
 				}
 
-				k1 = conntrack.NewKey(17, net.ParseIP(w[1].IP), 12345, net.ParseIP(w[0].IP), 8055)
-				k2 = conntrack.NewKey(17, net.ParseIP(w[0].IP), 8055, net.ParseIP(w[1].IP), 12345)
+				k1 = conntrack.NewKey(17, net.ParseIP(s.w[0][1].IP), 12345, net.ParseIP(s.w[0][0].IP), 8055)
+				k2 = conntrack.NewKey(17, net.ParseIP(s.w[0][0].IP), 8055, net.ParseIP(s.w[0][1].IP), 12345)
 
 				if v, ok := ct[k1]; ok {
 					Expect(v.Type() == conntrack.TypeNATReverse)
@@ -262,10 +258,10 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 				s.options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "DROP"
 			})
 			It("should only allow traffic from workload to workload", func() {
-				s.cc.ExpectSome(w[0], w[1])
-				s.cc.ExpectSome(w[1], w[0])
-				s.cc.ExpectNone(w[1], hostW)
-				s.cc.ExpectSome(hostW, w[0])
+				s.cc.ExpectSome(s.w[0][0], s.w[0][1])
+				s.cc.ExpectSome(s.w[0][1], s.w[0][0])
+				s.cc.ExpectNone(s.w[0][1], s.hostW[0])
+				s.cc.ExpectSome(s.hostW[0], s.w[0][0])
 				s.cc.CheckConnectivity(conntrackChecks(s.tc.Felixes)...)
 			})
 		})
@@ -276,8 +272,8 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 				s.options.AutoHEPsEnabled = false
 			})
 			It("should allow traffic from workload to host", func() {
-				s.cc.Expect(Some, w[1], hostW)
-				s.cc.Expect(Some, hostW, w[0])
+				s.cc.Expect(Some, s.w[0][1], s.hostW[0])
+				s.cc.Expect(Some, s.hostW[0], s.w[0][0])
 				s.cc.CheckConnectivity(conntrackChecks(s.tc.Felixes)...)
 			})
 		})
@@ -288,10 +284,10 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 			})
 
 			It("should allow traffic from workload to workload and to/from host", func() {
-				s.cc.ExpectSome(w[0], w[1])
-				s.cc.ExpectSome(w[1], w[0])
-				s.cc.ExpectSome(w[1], hostW)
-				s.cc.ExpectSome(hostW, w[0])
+				s.cc.ExpectSome(s.w[0][0], s.w[0][1])
+				s.cc.ExpectSome(s.w[0][1], s.w[0][0])
+				s.cc.ExpectSome(s.w[0][1], s.hostW[0])
+				s.cc.ExpectSome(s.hostW[0], s.w[0][0])
 				s.cc.CheckConnectivity(conntrackChecks(s.tc.Felixes)...)
 			})
 		})
@@ -410,60 +406,60 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 			It("should recover if the BPF programs are removed", func() {
 				flapInterface := func() {
 					By("Flapping interface")
-					s.tc.Felixes[0].Exec("ip", "link", "set", "down", w[0].InterfaceName)
-					s.tc.Felixes[0].Exec("ip", "link", "set", "up", w[0].InterfaceName)
+					s.tc.Felixes[0].Exec("ip", "link", "set", "down", s.w[0][0].InterfaceName)
+					s.tc.Felixes[0].Exec("ip", "link", "set", "up", s.w[0][0].InterfaceName)
 				}
 
 				recreateWEP := func() {
 					By("Recreating WEP.")
-					w[0].RemoveFromInfra(s.infra)
-					w[0].WorkloadEndpoint = wepCopy[0]
-					w[0].ConfigureInInfra(s.infra)
+					s.w[0][0].RemoveFromInfra(s.infra)
+					s.w[0][0].WorkloadEndpoint = wepCopy[0]
+					s.w[0][0].ConfigureInInfra(s.infra)
 				}
 
 				for _, trigger := range []func(){flapInterface, recreateWEP} {
 					// Wait for initial programming to complete.
-					s.cc.Expect(Some, w[0], w[1])
+					s.cc.Expect(Some, s.w[0][0], s.w[0][1])
 					s.cc.CheckConnectivity()
 					s.cc.ResetExpectations()
 
 					By("handling ingress program removal")
 					if BPFAttachType() == "tc" {
-						s.tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
+						s.tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", s.w[0][0].InterfaceName)
 					} else {
-						s.tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+						s.tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", s.w[0][0].InterfaceName)))
 					}
 
 					// Removing the ingress program should break connectivity due to the lack of "seen" mark.
-					s.cc.Expect(None, w[0], w[1])
+					s.cc.Expect(None, s.w[0][0], s.w[0][1])
 					s.cc.CheckConnectivity()
 					s.cc.ResetExpectations()
 
 					// Trigger felix to recover.
 					trigger()
-					s.cc.Expect(Some, w[0], w[1])
+					s.cc.Expect(Some, s.w[0][0], s.w[0][1])
 					s.cc.CheckConnectivity()
 
 					// Check the program is put back.
 					if BPFAttachType() == "tc" {
 						Eventually(func() string {
-							out, _ := s.tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
+							out, _ := s.tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", s.w[0][0].InterfaceName)
 							return out
 						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+							fmt.Sprintf("from wep not loaded for %s", s.w[0][0].InterfaceName))
 					} else {
 						Eventually(func() string {
-							out, _ := s.tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+							out, _ := s.tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", s.w[0][0].InterfaceName)))
 							return out
 						}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
-							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+							fmt.Sprintf("from wep not loaded for %s", s.w[0][0].InterfaceName))
 					}
 
 					By("handling egress program removal")
 					if BPFAttachType() == "tc" {
-						s.tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
+						s.tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", s.w[0][0].InterfaceName)
 					} else {
-						s.tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+						s.tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", s.w[0][0].InterfaceName)))
 					}
 					// Removing the egress program doesn't stop traffic.
 
@@ -473,37 +469,37 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 					// Check the program is put back.
 					if BPFAttachType() == "tc" {
 						Eventually(func() string {
-							out, _ := s.tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
+							out, _ := s.tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", s.w[0][0].InterfaceName)
 							return out
 						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
+							fmt.Sprintf("to wep not loaded for %s", s.w[0][0].InterfaceName))
 					} else {
 						Eventually(func() string {
-							out, _ := s.tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+							out, _ := s.tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", s.w[0][0].InterfaceName)))
 							return out
 						}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
-							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+							fmt.Sprintf("from wep not loaded for %s", s.w[0][0].InterfaceName))
 					}
 					s.cc.CheckConnectivity()
 
 					if BPFAttachType() == "tc" {
 						By("Handling qdisc removal")
-						s.tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
+						s.tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", s.w[0][0].InterfaceName, "clsact")
 
 						// Trigger felix to recover.
 						trigger()
 
 						// Check programs are put back.
 						Eventually(func() string {
-							out, _ := s.tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
+							out, _ := s.tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", s.w[0][0].InterfaceName)
 							return out
 						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+							fmt.Sprintf("from wep not loaded for %s", s.w[0][0].InterfaceName))
 						Eventually(func() string {
-							out, _ := s.tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
+							out, _ := s.tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", s.w[0][0].InterfaceName)
 							return out
 						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
+							fmt.Sprintf("to wep not loaded for %s", s.w[0][0].InterfaceName))
 						s.cc.CheckConnectivity()
 					}
 					s.cc.ResetExpectations()
@@ -519,8 +515,8 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 					denyPol.Spec.Selector = "all()"
 					denyPol = s.createPolicy(denyPol)
 
-					s.cc.Expect(None, w[0], w[1])
-					s.cc.Expect(None, w[1], w[0])
+					s.cc.Expect(None, s.w[0][0], s.w[0][1])
+					s.cc.Expect(None, s.w[0][1], s.w[0][0])
 					s.cc.CheckConnectivity()
 					s.cc.ResetExpectations()
 
@@ -528,8 +524,8 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 					_, err := s.calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-2", options2.DeleteOptions{})
 					Expect(err).NotTo(HaveOccurred())
 
-					s.cc.Expect(Some, w[0], w[1])
-					s.cc.Expect(Some, w[1], w[0])
+					s.cc.Expect(Some, s.w[0][0], s.w[0][1])
+					s.cc.Expect(Some, s.w[0][1], s.w[0][0])
 					s.cc.CheckConnectivity()
 					s.cc.ResetExpectations()
 				}
@@ -542,12 +538,12 @@ func describeBPFSingleNodeTests(s *bpfTestContext) {
 
 				By("Setting up istio-like rules that SNAT host as link-local IP")
 
-				s.tc.Felixes[0].Exec("iptables", "-t", "nat", "-A", "POSTROUTING", "-d", w[0].IP, "-j",
+				s.tc.Felixes[0].Exec("iptables", "-t", "nat", "-A", "POSTROUTING", "-d", s.w[0][0].IP, "-j",
 					"SNAT", "--to-source", "169.254.7.127")
 
 				By("Testing connectivity from host to pod")
 
-				s.cc.Expect(Some, hostW, w[0], ExpectWithSrcIPs("169.254.7.127"))
+				s.cc.Expect(Some, s.hostW[0], s.w[0][0], ExpectWithSrcIPs("169.254.7.127"))
 				s.cc.CheckConnectivity()
 			})
 		}
