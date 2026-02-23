@@ -2795,6 +2795,10 @@ spec:
                 attributes:
                   items:
                     properties:
+                      alternate:
+                        additionalProperties:
+                          type: string
+                        type: object
                       handle_id:
                         type: string
                       secondary:
@@ -3312,6 +3316,8 @@ spec:
           type: object
       served: true
       storage: true
+      subresources:
+        status: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -6228,6 +6234,12 @@ rules:
       - update
       # watch for changes
       - watch
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - kubecontrollersconfigurations/status
+    verbs:
+      - get
+      - update
   # Needed for policy name migrator.
   - apiGroups: ["crd.projectcalico.org"]
     resources:

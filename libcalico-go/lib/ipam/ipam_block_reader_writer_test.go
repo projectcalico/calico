@@ -1236,8 +1236,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			Expect(b.Allocations[2]).To(BeNil())
 			Expect(*b.Allocations[3]).To(Equal(0))
 			// Attributes[0] should be the reservation attribute.
-			Expect(*b.Attributes[0].AttrPrimary).To(Equal("test-handle"))
-			Expect(b.Attributes[0].AttrSecondary["note"]).To(Equal("ipam ut"))
+			Expect(*b.Attributes[0].HandleID).To(Equal("test-handle"))
+			Expect(b.Attributes[0].ActiveOwnerAttrs["note"]).To(Equal("ipam ut"))
 		})
 
 		It("should allocate one ip", func() {

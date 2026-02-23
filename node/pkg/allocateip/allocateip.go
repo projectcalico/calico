@@ -346,8 +346,10 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, node *inte
 		}
 
 		// Check if we got correct assignment attributes.
-		attr, handle, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: ipAddr})
+		allocAttr, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: ipAddr})
 		if err == nil {
+			attr := allocAttr.ActiveOwnerAttrs
+			handle := allocAttr.HandleID
 			if attr[ipam.AttributeType] == attrType && attr[ipam.AttributeNode] == node.Name {
 				// The tunnel address is still assigned to this node, but is it in the correct pool this time?
 				if !isIpInPool(addr, cidrs) {
@@ -643,33 +645,37 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *interna
 			// belongs to us. If it has no handle and no attributes, then we can pretty confidently
 			// say that it belongs to us rather than a pod and should be cleaned up.
 			logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
-			attr, storedHandle, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
+			allocAttr, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 					logCtx.WithError(err).Error("Failed to query attributes")
 					return err
 				}
 				// Scenario #1: The allocation actually doesn't exist, we don't have anything to do.
-			} else if len(attr) == 0 && storedHandle == nil {
-				// Scenario #2: The allocation exists, but has no handle whatsoever.
-				// This is an ancient allocation and can be released.
-				if _, _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()}); err != nil {
-					logCtx.WithError(err).WithField("IP", ipAddr.String()).Error("Error releasing address from IPAM")
-					return err
-				}
-			} else if storedHandle != nil && *storedHandle == handle {
-				// Scenario #3: The allocation exists, has a handle, and it matches the one we expect.
-				// This means the handle object itself was wrongfully deleted. We can clean it up
-				// by releasing the IP directly with both address and handle specified.
-				if _, _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String(), Handle: handle}); err != nil {
-					logCtx.WithError(err).WithField("IP", ipAddr.String()).Error("Error releasing address from IPAM")
-					return err
-				}
 			} else {
-				// The final scenario: the IP on the node is allocated, but it is allocated to some other handle.
-				// It doesn't belong to us. We can't do anything here but it's worth logging.
-				fields := log.Fields{"attributes": attr, "IP": ipAddr.String()}
-				logCtx.WithFields(fields).Warnf("IP address has been reused by something else")
+				attr := allocAttr.ActiveOwnerAttrs
+				storedHandle := allocAttr.HandleID
+				if len(attr) == 0 && storedHandle == nil {
+					// Scenario #2: The allocation exists, but has no handle whatsoever.
+					// This is an ancient allocation and can be released.
+					if _, _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()}); err != nil {
+						logCtx.WithError(err).WithField("IP", ipAddr.String()).Error("Error releasing address from IPAM")
+						return err
+					}
+				} else if storedHandle != nil && *storedHandle == handle {
+					// Scenario #3: The allocation exists, has a handle, and it matches the one we expect.
+					// This means the handle object itself was wrongfully deleted. We can clean it up
+					// by releasing the IP directly with both address and handle specified.
+					if _, _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String(), Handle: handle}); err != nil {
+						logCtx.WithError(err).WithField("IP", ipAddr.String()).Error("Error releasing address from IPAM")
+						return err
+					}
+				} else {
+					// The final scenario: the IP on the node is allocated, but it is allocated to some other handle.
+					// It doesn't belong to us. We can't do anything here but it's worth logging.
+					fields := log.Fields{"attributes": attr, "IP": ipAddr.String()}
+					logCtx.WithFields(fields).Warnf("IP address has been reused by something else")
+				}
 			}
 		}
 	}

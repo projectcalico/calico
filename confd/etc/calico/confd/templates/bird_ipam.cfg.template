@@ -23,7 +23,7 @@ function reject_local_routes () {
 function calico_export_to_bgp_peers(bool internal_peer) {
   # filter code terminates when it calls `accept;` or `reject;`,
 
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") "reject" false "" 4 }}
+{{- range $line := $config.BGPExportFilterForDisabledIPPools }}
 {{ $line }}
 {{- end}}
 
@@ -57,12 +57,11 @@ function calico_export_to_bgp_peers(bool internal_peer) {
   {{- end}}
 {{- end}}
 {{- end}}
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") "accept" false "" 4 }}
+{{- range $line := $config.BGPExportFilterForEnabledIPPools }}
 {{ $line }}
-{{- end }}
+{{- end}}
 }
 
-{{$network_key := printf "/bgp/v1/host/%s/network_v4" $config.NodeName}}
 filter calico_kernel_programming {
 {{- $reject_key := "/rejectcidrs"}}
 {{- if ls $reject_key}}
@@ -76,10 +75,8 @@ filter calico_kernel_programming {
 
 {{- end}}
 
-{{- if exists $network_key}}{{$network := getv $network_key}}
-{{- range $line := ippoolsFilterBIRDFunc (gets "/v1/ipam/v4/pool/*") "" true $network 4 }}
+{{- range $line := $config.KernelFilterForIPPools }}
 {{ $line }}
-{{- end}}
 {{- end}}
   accept;                                  {{- /* Destination is not in any ipPool, accept  */}}
 }

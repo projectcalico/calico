@@ -157,6 +157,32 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 	}),
 )
 
+var _ = Describe("ModelWorkloadEndpointToProto with computed data", func() {
+	It("should apply computed data to the proto endpoint", func() {
+		in := model.WorkloadEndpoint{
+			State: "up",
+			Name:  "bill",
+		}
+		cd := &testApplyToComputedData{Annotation: "test-value"}
+		out := calc.ModelWorkloadEndpointToProto(&in, []calc.EndpointComputedData{cd}, nil, []*proto.TierInfo{})
+		Expect(out.State).To(Equal("up"))
+		Expect(out.Name).To(Equal("bill"))
+		Expect(out.Annotations).To(HaveKeyWithValue("computed", "test-value"))
+	})
+})
+
+// testApplyToComputedData implements calc.EndpointComputedData for testing.
+type testApplyToComputedData struct {
+	Annotation string
+}
+
+func (t *testApplyToComputedData) ApplyTo(wep *proto.WorkloadEndpoint) {
+	if wep.Annotations == nil {
+		wep.Annotations = map[string]string{}
+	}
+	wep.Annotations["computed"] = t.Annotation
+}
+
 var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 	var (
 		fullyLoadedParsedRules = calc.ParsedRules{

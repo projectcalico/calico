@@ -52,7 +52,7 @@ your contribution.
 
 ## How do I build Typha?
 
-Typha mostly uses Docker for builds.  We develop on Ubuntu 16.04 but other
+Typha mostly uses Docker for builds.  We develop on Ubuntu 24.04 but other
 Linux distributions should work (there are known Makefile that prevent building on OS X).
 To build Typha, you will need:
 

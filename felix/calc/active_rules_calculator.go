@@ -288,8 +288,8 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	return
 }
 
-// AddExtraComputedSelector adds an extra non-policy selector to the label index and gives OnComputedSelectorActive
-// and OnComputedSelectorInactive callbacks when that selector matches/stops matching local endpoints.  Allows for
+// AddExtraComputedSelector adds an extra non-policy selector to the label index and gives OnComputedSelectorMatch
+// and OnComputedSelectorMatchStopped callbacks when that selector matches/stops matching local endpoints.  Allows for
 // sharing the expensive selector index.
 func (arc *ActiveRulesCalculator) AddExtraComputedSelector(cs string) {
 	sel, err := selector.Parse(cs)
