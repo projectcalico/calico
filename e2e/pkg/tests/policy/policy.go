@@ -38,15 +38,6 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
 )
 
-// Increase Timeout in framework config in order to prevent context
-// deadline errors (as things tend to take longer on Windows).
-func init() {
-	config, err := framework.LoadConfig()
-	if err == nil {
-		config.Timeout = 2 * time.Minute
-	}
-}
-
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("NetworkPolicy"),
