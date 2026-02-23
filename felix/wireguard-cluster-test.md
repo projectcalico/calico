@@ -78,7 +78,7 @@ This rule directs **ALL** non-marked traffic (including host→pod) to the WireG
 ```mermaid
 graph LR
     H[Host/Control Plane<br/>IP: 172.18.0.5] -->|Packet to 192.168.162.131| R[Routing Decision]
-    R -->|Match rule 99<br/>"not from all"| W[WireGuard Table]
+    R -->|Match rule 99<br/>not from all| W[WireGuard Table]
     W -->|No route found<br/>Source IP not in allowed-IPs| X[❌ DROPPED]
     
     style H fill:#f9f,stroke:#333
