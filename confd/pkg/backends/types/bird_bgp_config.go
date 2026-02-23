@@ -29,7 +29,6 @@ type BirdBGPConfig struct {
 	ListenAddress    string
 	ListenPort       string
 	DirectInterfaces string // Complete interface pattern string for protocol direct
-	BGPWithinCluster bool
 
 	BGPExportFilterForDisabledIPPools []string
 	BGPExportFilterForEnabledIPPools  []string

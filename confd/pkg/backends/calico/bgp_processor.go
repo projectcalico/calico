@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
@@ -74,11 +73,6 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		Communities: make([]types.CommunityRule, 0),
 	}
 
-	if err := c.BGPWithinCluster(config); err != nil {
-		logrus.WithError(err).Error("failed to get value of BGPWithinCluster")
-		return nil, err
-	}
-
 	// Get basic node configuration
 	if err := c.populateNodeConfig(config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to populate node configuration")
@@ -126,19 +120,6 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc.Debug("Updated BGP config cache")
 
 	return config, nil
-}
-
-// getNodeOrGlobalValue attempts to get a value from a node-specific key first,
-// then falls back to the global key. Returns the value and any error.
-func (c *client) BGPWithinCluster(config *types.BirdBGPConfig) error {
-	globalKey := fmt.Sprintf("/calico/bgp/v1/global/bgpWithinCluster")
-	v, err := c.GetValue(globalKey)
-	if err != nil {
-		return err
-	}
-	logrus.Debug("BGPWithinCluster is %s", v)
-	config.BGPWithinCluster = (v != "Disabled")
-	return nil
 }
 
 // populateNodeConfig fills in basic node configuration
@@ -774,6 +755,8 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		logCtx.WithError(err).Debug("Failed to get local host subnet")
 	}
 
+	bgpWithinCluster := c.BGPWithinCluster()
+
 	for key, value := range kvPairs {
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
@@ -782,20 +765,20 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		}
 
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
-		statement := c.processIPPool(&ippool, false, "reject", "", ipVersion)
+		statement := c.processIPPool(&ippool, bgpWithinCluster, false, "reject", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
 		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
-		statement = c.processIPPool(&ippool, false, "accept", "", ipVersion)
+		statement = c.processIPPool(&ippool, bgpWithinCluster, false, "accept", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
 		if ipVersion == 6 || ipVersion == 4 && localSubnetErr == nil {
 			// Generate statements for kernel programming filter.
-			statement = c.processIPPool(&ippool, true, filterActionForKernel, localSubnet, ipVersion)
+			statement = c.processIPPool(&ippool, bgpWithinCluster, true, filterActionForKernel, localSubnet, ipVersion)
 			if len(statement) != 0 {
 				config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 			}
@@ -842,6 +825,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 //	if (net ~ 10.10.0.0/16) then { accept; }
 func (c *client) processIPPool(
 	ippool *model.IPPool,
+	bgpWithinCluster bool,
 	forProgrammingKernel bool,
 	filterAction string,
 	localSubnet string,
@@ -849,6 +833,16 @@ func (c *client) processIPPool(
 ) string {
 	cidr := ippool.CIDR.String()
 	var action, comment, extraStatement string
+
+	felixHandlesRoutes := func(forProgrammingKernel bool, routeType string) {
+		if forProgrammingKernel {
+			action = "reject"
+			comment = fmt.Sprintf("%s routes are handled by Felix.", routeType)
+		} else {
+			action = "accept"
+		}
+	}
+
 	switch {
 	case ippool.DisableBGPExport && !forProgrammingKernel:
 		// IPPool's BGP export is disabled, and filter is for exporting to other peers.
@@ -856,22 +850,20 @@ func (c *client) processIPPool(
 		comment = "BGP export is disabled."
 	case ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet:
 		// VXLAN encapsulation is always handled by Felix.
-		if forProgrammingKernel {
-			// Felix always handles programming VXLAN IPPools.
-			action = "reject"
-			comment = "VXLAN routes are handled by Felix."
-		} else {
-			action = "accept"
-		}
+		felixHandlesRoutes(forProgrammingKernel, "VXLAN")
 	case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
 		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
 		// IPIP encapsulation or No-Encap.
-		if forProgrammingKernel && ipVersion == 4 {
-			// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
-			// our fork of BIRD.
-			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
+		if bgpWithinCluster {
+			if forProgrammingKernel && ipVersion == 4 {
+				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+				// our fork of BIRD.
+				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
+			}
+			action = "accept"
+		} else {
+			felixHandlesRoutes(forProgrammingKernel, "Cluster")
 		}
-		action = "accept"
 	default:
 		log.WithFields(log.Fields{
 			"ippool":    ippool.CIDR,
@@ -885,6 +877,19 @@ func (c *client) processIPPool(
 		return ""
 	}
 	return emitFilterStatementForIPPools(cidr, extraStatement, action, comment)
+}
+
+// getNodeOrGlobalValue attempts to get a value from a node-specific key first,
+// then falls back to the global key. Returns the value and any error.
+func (c *client) BGPWithinCluster() bool {
+	globalKey := "/calico/bgp/v1/global/bgpWithinCluster"
+	v, err := c.GetValue(globalKey)
+	if err != nil {
+		log.WithError(err).Debug("Failed to get value of bgpWithinCluster in BGPConfiguration")
+		return true
+	}
+	log.Debugf("BGPWithinCluster is %s", v)
+	return (v != "Disabled")
 }
 
 func (c *client) localSubnet(ipVersion int) (string, error) {

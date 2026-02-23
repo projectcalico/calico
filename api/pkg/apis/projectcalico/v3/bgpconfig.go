@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -161,7 +161,7 @@ type BGPConfigurationSpec struct {
 	// BGPWithinCluster enables or disables BGP within the cluster. [Default: Enabled]
 	// +kubebuilder:default=Enabled
 	// +optional
-	BGPWithinCluster *BGPWithinCluster `json:"bgpWithinCluster,omitempty" validate:"omitempty"`
+	BGPWithinCluster *BGPWithinCluster `json:"bgpWithinCluster,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.
