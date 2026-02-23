@@ -40,43 +40,44 @@ import (
 type AttachPoint struct {
 	bpf.AttachPoint
 
-	LogFilter                   string
-	LogFilterIdx                int
-	Type                        tcdefs.EndpointType
-	ToOrFrom                    tcdefs.ToOrFromEp
-	HookLayoutV4                hook.Layout
-	HookLayoutV6                hook.Layout
-	HostIPv4                    net.IP
-	HostIPv6                    net.IP
-	HostTunnelIPv4              net.IP
-	HostTunnelIPv6              net.IP
-	IntfIPv4                    net.IP
-	IntfIPv6                    net.IP
-	ToHostDrop                  bool
-	DSR                         bool
-	DSROptoutCIDRs              bool
-	SkipEgressRedirect          bool
-	TunnelMTU                   uint16
-	VXLANPort                   uint16
-	WgPort                      uint16
-	Wg6Port                     uint16
-	ExtToServiceConnmark        uint32
-	PSNATStart                  uint16
-	PSNATEnd                    uint16
-	RPFEnforceOption            uint8
-	NATin                       uint32
-	NATout                      uint32
-	NATOutgoingExcludeHosts     bool
-	UDPOnly                     bool
-	RedirectPeer                bool
-	FlowLogsEnabled             bool
-	OverlayTunnelID             uint32
-	AttachType                  apiv3.BPFAttachOption
-	IngressPacketRateConfigured bool
-	EgressPacketRateConfigured  bool
-	DSCP                        int8
-	MaglevLUTSize               uint32
-	ProgramsMap                 maps.Map
+	LogFilter                     string
+	LogFilterIdx                  int
+	Type                          tcdefs.EndpointType
+	ToOrFrom                      tcdefs.ToOrFromEp
+	HookLayoutV4                  hook.Layout
+	HookLayoutV6                  hook.Layout
+	HostIPv4                      net.IP
+	HostIPv6                      net.IP
+	HostTunnelIPv4                net.IP
+	HostTunnelIPv6                net.IP
+	IntfIPv4                      net.IP
+	IntfIPv6                      net.IP
+	ToHostDrop                    bool
+	DSR                           bool
+	DSROptoutCIDRs                bool
+	SkipEgressRedirect            bool
+	TunnelMTU                     uint16
+	VXLANPort                     uint16
+	WgPort                        uint16
+	Wg6Port                       uint16
+	ExtToServiceConnmark          uint32
+	PSNATStart                    uint16
+	PSNATEnd                      uint16
+	RPFEnforceOption              uint8
+	NATin                         uint32
+	NATout                        uint32
+	NATOutgoingExcludeHosts       bool
+	UDPOnly                       bool
+	RedirectPeer                  bool
+	FlowLogsEnabled               bool
+	OverlayTunnelID               uint32
+	AttachType                    apiv3.BPFAttachOption
+	IngressPacketRateConfigured   bool
+	EgressPacketRateConfigured    bool
+	WorkloadSrcSpoofingConfigured bool
+	DSCP                          int8
+	MaglevLUTSize                 uint32
+	ProgramsMap                   maps.Map
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -166,7 +167,7 @@ func (ap *AttachPoint) AttachProgram() error {
 	}
 
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
-	* still the same */
+	 * still the same */
 	progsAttached, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	if err != nil {
 		return err
@@ -486,6 +487,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.NATOutgoingExcludeHosts {
 		globalData.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
+	}
+
+	if ap.WorkloadSrcSpoofingConfigured {
+		globalData.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
 	}
 
 	globalData.HostTunnelIPv4 = globalData.HostIPv4
