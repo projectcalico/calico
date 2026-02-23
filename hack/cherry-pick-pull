@@ -240,19 +240,43 @@ function build-pr-description() {
       # pick at the top.  Handles both old (## heading) and new (**bold**) header formats.
       local old_bullets
       old_bullets=$(echo "${pull_body}" | awk '
-        /^(## Cherry-pick history|\*\*Cherry-pick history\*\*)/ { next }
-        /^- Pick onto / { print; next }
-        /^[[:space:]]*$/ { next }
-        { exit }
+        BEGIN { in_hist = 0 }
+        # Enter history block at header, but do not print the header itself.
+        !in_hist && /^(## Cherry-pick history|\*\*Cherry-pick history\*\*)/ {
+          in_hist = 1
+          next
+        }
+        # Support legacy bodies that start directly with a top-level bullet.
+        !in_hist && /^- Pick onto / {
+          in_hist = 1
+        }
+        # While in the history block, collect all bullet lines (top-level or indented)
+        # until the first blank line, then stop.
+        in_hist {
+          if (/^[[:space:]]*$/) { exit }
+          if (/^[[:space:]]*-/) { print; next }
+          exit
+        }
       ')
       if [[ -n "${old_bullets}" ]]; then
         new_header+="${old_bullets}"$'\n'
       fi
       pull_body=$(echo "${pull_body}" | awk '
-        !body && /^(## Cherry-pick history|\*\*Cherry-pick history\*\*)/ { next }
-        !body && /^- Pick onto / { next }
-        !body && /^[[:space:]]*$/ { next }
-        { body=1; print }
+        BEGIN { in_hist = 0 }
+        !in_hist && /^(## Cherry-pick history|\*\*Cherry-pick history\*\*)/ {
+          in_hist = 1
+          next
+        }
+        !in_hist && /^- Pick onto / {
+          in_hist = 1
+          next
+        }
+        in_hist {
+          if (/^[[:space:]]*-/) { next }
+          if (/^[[:space:]]*$/) { next }
+          in_hist = 0
+        }
+        { print }
       ')
     fi
     new_body+="${pull_body}"

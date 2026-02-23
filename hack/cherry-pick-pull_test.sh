@@ -191,6 +191,46 @@ assert_contains "$BUILD_BODY" "This PR fixes the widget rendering bug." "body pr
 pass
 
 ###############################################################################
+# Test 4b: Re-pick of a multi-PR pick — indented sub-bullets
+###############################################################################
+run_test "re-pick of multi-PR pick (indented bullets)"
+
+rel="release-v3.15"
+SRC_MAIN_REPO_ORG="projectcalico"
+SRC_MAIN_REPO_NAME="calico"
+DST_MAIN_REPO_ORG="projectcalico"
+DST_MAIN_REPO_NAME="calico"
+EXTRA_LABELS=""
+META_BLOCK=""
+
+PULL_TITLES=( "[v3.14] Fix widget rendering; Update docs for widget" )
+PULL_BODIES=( '**Cherry-pick history**
+- Pick onto **release-v3.14**:
+  - projectcalico/calico#100
+  - projectcalico/calico#101
+
+The actual PR body starts here.' )
+PULL_LABELS=( "bug" )
+PULLLINK=( "projectcalico/calico#500" )
+
+build-pr-description
+
+assert_equals "$BUILD_TITLE" "Fix widget rendering; Update docs for widget" "title strips old tag" &&
+assert_contains "$BUILD_BODY" "- Pick onto **release-v3.15**: projectcalico/calico#500" "new bullet" &&
+assert_contains "$BUILD_BODY" "- Pick onto **release-v3.14**:" "old group bullet preserved" &&
+assert_contains "$BUILD_BODY" "  - projectcalico/calico#100" "old sub-bullet 1 preserved" &&
+assert_contains "$BUILD_BODY" "  - projectcalico/calico#101" "old sub-bullet 2 preserved" &&
+assert_contains "$BUILD_BODY" "The actual PR body starts here." "body preserved" &&
+assert_not_contains "$BUILD_BODY" "**Cherry-pick history**
+- Pick onto **release-v3.15**: projectcalico/calico#500
+- Pick onto **release-v3.14**:
+  - projectcalico/calico#100
+  - projectcalico/calico#101
+
+- Pick onto **release-v3.14**:" "no duplicate old bullets in body" &&
+pass
+
+###############################################################################
 # Test 5: Multi-PR pick
 ###############################################################################
 run_test "multi-PR pick"
