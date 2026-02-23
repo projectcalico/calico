@@ -35,8 +35,21 @@ import (
 )
 
 const (
-	envAdvertiseClusterIPs = "CALICO_ADVERTISE_CLUSTER_IPS"
+	envAdvertiseClusterIPs    = "CALICO_ADVERTISE_CLUSTER_IPS"
+	endpointSliceServiceIndex = "svcKey"
 )
+
+func endpointSliceServiceIndexFunc(obj interface{}) ([]string, error) {
+	ep, ok := obj.(*discoveryv1.EndpointSlice)
+	if !ok {
+		return nil, nil
+	}
+	svcName, ok := ep.Labels[discoveryv1.LabelServiceName]
+	if !ok || svcName == "" {
+		return nil, nil
+	}
+	return []string{ep.Namespace + "/" + svcName}, nil
+}
 
 // routeGenerator defines the data fields
 // necessary for monitoring the services/endpoints resources for
@@ -107,7 +120,7 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 		ObjectType:    &discoveryv1.EndpointSlice{},
 		ResyncPeriod:  0,
 		Handler:       epHandler,
-		Indexers:      cache.Indexers{},
+		Indexers:      cache.Indexers{endpointSliceServiceIndex: endpointSliceServiceIndexFunc},
 	})
 
 	return
@@ -177,24 +190,27 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) 
 
 // getEndpointsForService retrieves the corresponding ep for the given svc
 func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) ([]*discoveryv1.EndpointSlice, string) {
-	var eps []*discoveryv1.EndpointSlice
-	for _, obj := range rg.epIndexer.List() {
-		ep, ok := obj.(*discoveryv1.EndpointSlice)
-		if !ok {
-			log.Warn("getEndpointsForService: failed to assert type to endpointslice, passing")
-			continue
-		}
-		if svcName, ok := ep.Labels[discoveryv1.LabelServiceName]; ok && svcName == svc.Name && ep.Namespace == svc.Namespace {
-			eps = append(eps, ep)
-		}
-	}
-
 	key, err := cache.MetaNamespaceKeyFunc(svc)
 	if err != nil {
 		log.WithField("svc", svc.Name).WithError(err).Warn("getEndpointsForService: error on retrieving key for service, passing")
 		return nil, ""
 	}
 
+	objs, err := rg.epIndexer.(cache.Indexer).ByIndex(endpointSliceServiceIndex, key)
+	if err != nil {
+		log.WithField("key", key).WithError(err).Error("getEndpointsForService: error reading endpointslice index")
+		return nil, key
+	}
+
+	var eps []*discoveryv1.EndpointSlice
+	for _, obj := range objs {
+		ep, ok := obj.(*discoveryv1.EndpointSlice)
+		if !ok {
+			log.Warn("getEndpointsForService: failed to assert type to endpointslice, passing")
+			continue
+		}
+		eps = append(eps, ep)
+	}
 	return eps, key
 }
 
@@ -445,12 +461,7 @@ func addFullIPLength(items []string) []string {
 
 // contains returns true if items contains the target.
 func contains(items []string, target string) bool {
-	for _, item := range items {
-		if item == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(items, target)
 }
 
 // advertiseThisService returns true if this service should be advertised on this node,
@@ -535,7 +546,7 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 
 // unsetRouteForSvc removes the route from the svcClusterRouteMap
 // but checks to see if it wasn't already deleted by its sibling resource
-func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
+func (rg *routeGenerator) unsetRouteForSvc(obj any) {
 	// generate key
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
@@ -605,7 +616,7 @@ func (rg *routeGenerator) withdrawRoutesForKey(key string, routes []string) {
 }
 
 // onSvcAdd is called when a k8s service is created
-func (rg *routeGenerator) onSvcAdd(obj interface{}) {
+func (rg *routeGenerator) onSvcAdd(obj any) {
 	svc, ok := obj.(*v1.Service)
 	if !ok {
 		log.Warn("onSvcAdd: failed to assert type to service, passing")
@@ -615,7 +626,7 @@ func (rg *routeGenerator) onSvcAdd(obj interface{}) {
 }
 
 // onSvcUpdate is called when a k8s service is updated
-func (rg *routeGenerator) onSvcUpdate(_, obj interface{}) {
+func (rg *routeGenerator) onSvcUpdate(_, obj any) {
 	svc, ok := obj.(*v1.Service)
 	if !ok {
 		log.Warn("onSvcUpdate: failed to assert type to service, passing")
@@ -625,12 +636,12 @@ func (rg *routeGenerator) onSvcUpdate(_, obj interface{}) {
 }
 
 // onSvcUpdate is called when a k8s service is deleted
-func (rg *routeGenerator) onSvcDelete(obj interface{}) {
+func (rg *routeGenerator) onSvcDelete(obj any) {
 	rg.unsetRouteForSvc(obj)
 }
 
 // onEPAdd is called when a k8s endpoint is created
-func (rg *routeGenerator) onEPAdd(obj interface{}) {
+func (rg *routeGenerator) onEPAdd(obj any) {
 	ep, ok := obj.(*discoveryv1.EndpointSlice)
 	if !ok {
 		log.Warn("onEPAdd: failed to assert type to endpoint, passing")
@@ -640,7 +651,7 @@ func (rg *routeGenerator) onEPAdd(obj interface{}) {
 }
 
 // onEPUpdate is called when a k8s endpoint is updated
-func (rg *routeGenerator) onEPUpdate(_, obj interface{}) {
+func (rg *routeGenerator) onEPUpdate(_, obj any) {
 	ep, ok := obj.(*discoveryv1.EndpointSlice)
 	if !ok {
 		log.Warn("onEPUpdate: failed to assert type to endpoints, passing")
@@ -650,7 +661,7 @@ func (rg *routeGenerator) onEPUpdate(_, obj interface{}) {
 }
 
 // onEPDelete is called when a k8s endpoint is deleted
-func (rg *routeGenerator) onEPDelete(obj interface{}) {
+func (rg *routeGenerator) onEPDelete(obj any) {
 	rg.unsetRouteForSvc(obj)
 }
 

@@ -274,7 +274,7 @@ var _ = Describe("Typha address discovery", func() {
 		// Check that multiple calls to discover the addresses shuffles the order.
 		var shuffledLocal bool
 		var shuffledRemote bool
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			newTyphaAddr, err := DiscoverTyphaAddrs(
 				WithKubeService("kube-system", "calico-typha-service"),
 				WithKubeClient(k8sClient),

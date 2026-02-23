@@ -17,6 +17,7 @@ package mocknetlink
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"reflect"
 	"strings"
@@ -98,8 +99,8 @@ func init() {
 	}
 
 	// First check that our struct matches the netlink one...
-	nlType := reflect.TypeOf(ErrLinkNotFound)
-	ourType := reflect.TypeOf(myLinkNotFoundError{})
+	nlType := reflect.TypeFor[netlink.LinkNotFoundError]()
+	ourType := reflect.TypeFor[myLinkNotFoundError]()
 	if nlType.NumField() != ourType.NumField() {
 		panic("netlink.LinkNotFoundError structure appears to have changed (different number of fields)")
 	}
@@ -950,7 +951,6 @@ func (d *MockNetlinkDataplane) AddNeighs(family int, neighs ...netlink.Neigh) {
 
 func addNeighs(family int, neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
 	for _, neigh := range neighs {
-		neigh := neigh
 		nk := NeighKeyForFamily(family, neigh.LinkIndex, neigh.HardwareAddr, ip.FromNetIP(neigh.IP))
 		neighMap[nk] = &neigh
 	}
@@ -971,7 +971,6 @@ func (d *MockNetlinkDataplane) RemoveNeighs(family int, neighs ...netlink.Neigh)
 
 func removeNeighs(family int, neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
 	for _, neigh := range neighs {
-		neigh := neigh
 		nk := NeighKeyForFamily(family, neigh.LinkIndex, neigh.HardwareAddr, ip.FromNetIP(neigh.IP))
 		delete(neighMap, nk)
 	}
@@ -1199,9 +1198,7 @@ func (l *MockLink) copy() *MockLink {
 	var wgPeersCopy map[wgtypes.Key]wgtypes.Peer
 	if l.WireguardPeers != nil {
 		wgPeersCopy = map[wgtypes.Key]wgtypes.Peer{}
-		for k, v := range l.WireguardPeers {
-			wgPeersCopy[k] = v
-		}
+		maps.Copy(wgPeersCopy, l.WireguardPeers)
 	}
 
 	return &MockLink{

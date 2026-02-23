@@ -29,8 +29,8 @@ func NewStagedKubernetesNetworkPolicyClient(r rest.Interface, group BackingAPIGr
 	return &customResourceClient{
 		restClient:      r,
 		resource:        StagedKubernetesNetworkPolicyResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.StagedKubernetesNetworkPolicy{}),
-		k8sListType:     reflect.TypeOf(apiv3.StagedKubernetesNetworkPolicyList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.StagedKubernetesNetworkPolicy](),
+		k8sListType:     reflect.TypeFor[apiv3.StagedKubernetesNetworkPolicyList](),
 		kind:            apiv3.KindStagedKubernetesNetworkPolicy,
 		namespaced:      true,
 		apiGroup:        group,

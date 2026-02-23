@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 
@@ -125,7 +126,7 @@ var knownProtoRuleFields = set.From(
 )
 
 func testAllProtoRuleFieldsAreKnown() {
-	t := reflect.TypeOf(proto.Rule{})
+	t := reflect.TypeFor[proto.Rule]()
 	for i := 0; i < t.NumField(); i++ {
 		name := t.Field(i).Name
 		// skip protobuf fields
@@ -1487,7 +1488,7 @@ var _ = Describe("XDP state", func() {
 				//	},
 				// }),
 				Entry("invalid policies", func() testStruct {
-					modifiedRule := func(field string, value interface{}) *proto.Rule {
+					modifiedRule := func(field string, value any) *proto.Rule {
 						rule := denyRule("ipset")
 						rulePtrValue := reflect.ValueOf(rule)
 						ruleValue := rulePtrValue.Elem()
@@ -2719,12 +2720,8 @@ var _ = Describe("XDP state", func() {
 					state.ipV4State.bpfActions.UninstallXDP.AddAll(s.uninstall)
 					state.ipV4State.bpfActions.CreateMap.AddAll(s.create)
 					state.ipV4State.bpfActions.RemoveMap.AddAll(s.remove)
-					for i, p := range s.withProgs {
-						resyncState.ifacesWithProgs[i] = p
-					}
-					for i, p := range s.withMaps {
-						resyncState.ifacesWithMaps[i] = p
-					}
+					maps.Copy(resyncState.ifacesWithProgs, s.withProgs)
+					maps.Copy(resyncState.ifacesWithMaps, s.withMaps)
 					for iface, needsXDP := range s.newState {
 						data := xdpIfaceData{}
 						if needsXDP {

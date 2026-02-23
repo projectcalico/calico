@@ -81,7 +81,7 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 		scanType = "image"
 		bucketPath = fmt.Sprintf("hashrelease/%s", stream)
 	}
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"images":      images,
 		"bucket_path": bucketPath,
 	}

@@ -78,7 +78,7 @@ func (p *ProfileDecoder) OnUpdate(update api.Update) (filterOut bool) {
 	return false
 }
 
-func (p *ProfileDecoder) classifyProfile(key model.ResourceKey) interface{} {
+func (p *ProfileDecoder) classifyProfile(key model.ResourceKey) any {
 	namespace, name, err := p.converter.ProfileNameToServiceAccount(key.Name)
 	if err == nil {
 		return types.ServiceAccountID{Name: name, Namespace: namespace}

@@ -29,8 +29,8 @@ func NewHostEndpointClient(r rest.Interface, group BackingAPIGroup) K8sResourceC
 	return &customResourceClient{
 		restClient:      r,
 		resource:        HostEndpointResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.HostEndpoint{}),
-		k8sListType:     reflect.TypeOf(apiv3.HostEndpointList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.HostEndpoint](),
+		k8sListType:     reflect.TypeFor[apiv3.HostEndpointList](),
 		kind:            apiv3.KindHostEndpoint,
 		apiGroup:        group,
 	}

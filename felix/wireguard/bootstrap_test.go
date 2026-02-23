@@ -28,7 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	. "github.com/projectcalico/calico/felix/wireguard"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
@@ -82,62 +82,62 @@ var (
 	node1PrivateKeyV6, _ = wgtypes.GeneratePrivateKey()
 	node2PrivateKey, _   = wgtypes.GeneratePrivateKey()
 	node2PrivateKeyV6, _ = wgtypes.GeneratePrivateKey()
-	node1V4              = &libapiv3.Node{
+	node1V4              = &internalapi.Node{
 		ObjectMeta: v1.ObjectMeta{
 			Name: nodeName1,
 		},
-		Status: libapiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKey: node1PrivateKey.PublicKey().String(),
 		},
 	}
-	node1V6 = &libapiv3.Node{
+	node1V6 = &internalapi.Node{
 		ObjectMeta: v1.ObjectMeta{
 			Name: nodeName1,
 		},
-		Status: libapiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKeyV6: node1PrivateKeyV6.PublicKey().String(),
 		},
 	}
-	node1V4V6 = &libapiv3.Node{
+	node1V4V6 = &internalapi.Node{
 		ObjectMeta: v1.ObjectMeta{
 			Name: nodeName1,
 		},
-		Status: libapiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKey:   node1PrivateKey.PublicKey().String(),
 			WireguardPublicKeyV6: node1PrivateKeyV6.PublicKey().String(),
 		},
 	}
-	node2V4 = &libapiv3.Node{
+	node2V4 = &internalapi.Node{
 		ObjectMeta: v1.ObjectMeta{
 			Name: nodeName2,
 		},
-		Status: libapiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKey: node2PrivateKey.PublicKey().String(),
 		},
 	}
-	node2V6 = &libapiv3.Node{
+	node2V6 = &internalapi.Node{
 		ObjectMeta: v1.ObjectMeta{
 			Name: nodeName2,
 		},
-		Status: libapiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKeyV6: node2PrivateKeyV6.PublicKey().String(),
 		},
 	}
-	node2V4V6 = &libapiv3.Node{
+	node2V4V6 = &internalapi.Node{
 		ObjectMeta: v1.ObjectMeta{
 			Name: nodeName2,
 		},
-		Status: libapiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKey:   node2PrivateKey.PublicKey().String(),
 			WireguardPublicKeyV6: node2PrivateKeyV6.PublicKey().String(),
 		},
 	}
 	// node3 has neither IPv4 nor IPv6 wireguard config
-	node3 = &libapiv3.Node{
+	node3 = &internalapi.Node{
 		ObjectMeta: v1.ObjectMeta{
 			Name: nodeName3,
 		},
-		Status: libapiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKey:   "",
 			WireguardPublicKeyV6: "",
 		},
@@ -146,7 +146,7 @@ var (
 
 func newMockClient() *mockClient {
 	return &mockClient{
-		nodes: make(map[string]*libapiv3.Node),
+		nodes: make(map[string]*internalapi.Node),
 	}
 }
 
@@ -158,14 +158,14 @@ type mockClient struct {
 	numUpdates      int
 	numGetErrors    int
 	numUpdateErrors int
-	nodes           map[string]*libapiv3.Node
+	nodes           map[string]*internalapi.Node
 }
 
 func (c *mockClient) Nodes() clientv3.NodeInterface {
 	return c
 }
 
-func (c *mockClient) Get(_ context.Context, name string, _ options.GetOptions) (*libapiv3.Node, error) {
+func (c *mockClient) Get(_ context.Context, name string, _ options.GetOptions) (*internalapi.Node, error) {
 	c.numGets++
 	if c.numGetErrors > 0 {
 		c.numGetErrors--
@@ -178,7 +178,7 @@ func (c *mockClient) Get(_ context.Context, name string, _ options.GetOptions) (
 	return n.DeepCopy(), nil
 }
 
-func (c *mockClient) Update(_ context.Context, res *libapiv3.Node, _ options.SetOptions) (*libapiv3.Node, error) {
+func (c *mockClient) Update(_ context.Context, res *internalapi.Node, _ options.SetOptions) (*internalapi.Node, error) {
 	c.numUpdates++
 	if c.numUpdateErrors > 0 {
 		c.numUpdateErrors--

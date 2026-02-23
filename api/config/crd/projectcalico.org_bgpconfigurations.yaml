@@ -10,6 +10,9 @@ spec:
     kind: BGPConfiguration
     listKind: BGPConfigurationList
     plural: bgpconfigurations
+    shortNames:
+      - bgpconfig
+      - bgpconfigs
     singular: bgpconfiguration
   preserveUnknownFields: false
   scope: Cluster

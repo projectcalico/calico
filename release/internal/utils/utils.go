@@ -92,6 +92,7 @@ var (
 		"third_party/envoy-proxy",
 		"third_party/envoy-ratelimit",
 		"typha",
+		"webhooks",
 		"whisker",
 		"whisker-backend",
 	}

@@ -30,7 +30,7 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -80,7 +80,7 @@ func (d *grpcDataplane) DoNetworking(
 	result *cniv1.Result,
 	desiredVethName string,
 	routes []*net.IPNet,
-	endpoint *api.WorkloadEndpoint,
+	endpoint *internalapi.WorkloadEndpoint,
 	annotations map[string]string,
 ) (ifName, contTapMAC string, err error) {
 	d.logger.Infof("Connecting to GRPC backend server at %s", d.socket)

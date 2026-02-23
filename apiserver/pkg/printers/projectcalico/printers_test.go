@@ -153,13 +153,13 @@ func TestPrintCalicoNodeStatus(t *testing.T) {
 		{
 			status: status,
 			option: printers.GenerateOptions{},
-			expected: []metav1.TableRow{{Cells: []interface{}{"mystatus",
+			expected: []metav1.TableRow{{Cells: []any{"mystatus",
 				"node0", "Agent,BGP,Routes", "10s", "3m", "3m ago"}}},
 		},
 		{
 			status: status,
 			option: printers.GenerateOptions{Wide: true},
-			expected: []metav1.TableRow{{Cells: []interface{}{"mystatus",
+			expected: []metav1.TableRow{{Cells: []any{"mystatus",
 				"node0", "Agent,BGP,Routes", "10s", "3m", "3m ago",
 				"v4(Ready) v6(Ready)", "2/3", "1/1", "2", "1",
 			}}},

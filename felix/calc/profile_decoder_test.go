@@ -199,7 +199,7 @@ func (p *passthruCallbackRecorder) OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
 }
 
 func labelsKV(name string, labels map[string]string) model.KVPair {
-	var value interface{}
+	var value any
 	if labels != nil {
 		value = &v3.Profile{
 			Spec: v3.ProfileSpec{

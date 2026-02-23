@@ -25,12 +25,12 @@ import (
 
 var _ = Describe("Dispatching", func() {
 	Context("BlockingDispatcher", func() {
-		var blockingDispatcher *dispatcher.BlockingDispatcher[interface{}]
+		var blockingDispatcher *dispatcher.BlockingDispatcher[any]
 		var ctx context.Context
 		var cancel context.CancelFunc
 		var dispatcherExited chan struct{}
-		var input chan interface{}
-		runDispatcherInBackgroundWithOutputChans := func(outputs ...chan interface{}) {
+		var input chan any
+		runDispatcherInBackgroundWithOutputChans := func(outputs ...chan any) {
 			go func() {
 				blockingDispatcher.DispatchForever(ctx, outputs...)
 				close(dispatcherExited)
@@ -39,8 +39,8 @@ var _ = Describe("Dispatching", func() {
 
 		BeforeEach(func() {
 			var err error
-			input = make(chan interface{})
-			blockingDispatcher, err = dispatcher.NewBlockingDispatcher[interface{}](input)
+			input = make(chan any)
+			blockingDispatcher, err = dispatcher.NewBlockingDispatcher[any](input)
 			Expect(err).NotTo(HaveOccurred())
 
 			ctx, cancel = context.WithCancel(context.Background())
@@ -53,7 +53,7 @@ var _ = Describe("Dispatching", func() {
 		})
 
 		It("should dispatch a message to all outputs", func() {
-			output1, output2 := make(chan interface{}, 0), make(chan interface{}, 0)
+			output1, output2 := make(chan any, 0), make(chan any, 0)
 			dummyInput := 666
 
 			runDispatcherInBackgroundWithOutputChans(output1, output2)
@@ -62,7 +62,7 @@ var _ = Describe("Dispatching", func() {
 			Eventually(input).Should(BeSent(dummyInput), "Couldn't send input to dispatcher")
 
 			// Should output to each consumer in order.
-			for _, o := range []chan interface{}{output1, output2} {
+			for _, o := range []chan any{output1, output2} {
 				Eventually(o, "10s").Should(Receive(Equal(dummyInput)), "Output channel didn't receive from dispatcher")
 			}
 		})

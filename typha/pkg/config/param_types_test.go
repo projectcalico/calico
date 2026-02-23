@@ -22,7 +22,7 @@ import (
 )
 
 var _ = DescribeTable("Endpoint list parameter parsing",
-	func(raw string, expected interface{}) {
+	func(raw string, expected any) {
 		p := config.EndpointListParam{config.Metadata{
 			Name: "Endpoints",
 		}}

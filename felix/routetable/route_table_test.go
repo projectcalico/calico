@@ -1235,7 +1235,6 @@ var _ = Describe("RouteTable", func() {
 		// each case, we make the failure transient so that only the first Apply() should
 		// fail.  Then, at most, the second call to Apply() should succeed.
 		for _, testFailFlags := range mocknetlink.RoutetableFailureScenarios {
-			testFailFlags := testFailFlags
 			desc := fmt.Sprintf("with some routes added and failures: %v", testFailFlags)
 			Describe(desc, func() {
 				BeforeEach(func() {
@@ -1430,7 +1429,6 @@ var _ = Describe("RouteTable", func() {
 			mocknetlink.FailNextRouteListEINTR,
 			mocknetlink.FailNextRouteListWrappedEINTR,
 		} {
-			failure := failure
 			It(fmt.Sprintf("with a %v failure it should ignore Down updates", failure), func() {
 				// First Apply() with a failure.
 				dataplane.FailuresToSimulate = failure
@@ -1742,7 +1740,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 			It("should be able to toggle between throw and local iface routes", func() {
 				// Modify the action associated with a particular destination.
-				for ii := 0; ii < 3; ii++ {
+				for range 3 {
 					rt.RouteRemove(RouteClassWireguard, InterfaceNone, ip.MustParseCIDROrIP("10.10.10.10/32"))
 					rt.RouteUpdate(RouteClassLocalWorkload, "cali", Target{
 						CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),

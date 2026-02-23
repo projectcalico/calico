@@ -28,8 +28,8 @@ type resource struct {
 	name string
 }
 
-func listFunc() (map[string]interface{}, error) {
-	m := make(map[string]interface{})
+func listFunc() (map[string]any, error) {
+	m := make(map[string]any)
 	for i := 1; i <= 10; i++ {
 		resourceName := fmt.Sprintf("ns%d", i)
 		obj := resource{
@@ -45,7 +45,7 @@ var _ = Describe("Cache", func() {
 
 	rcargs := cache.ResourceCacheArgs{
 		ListFunc:   listFunc,
-		ObjectType: reflect.TypeOf(resource{}),
+		ObjectType: reflect.TypeFor[resource](),
 	}
 
 	Context("Get operation", func() {

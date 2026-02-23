@@ -162,7 +162,7 @@ func FuzzAdaptiveSet(f *testing.F) {
 			}
 			sort.Strings(sl1)
 			sort.Strings(sl2)
-			for i := 0; i < len(sl1); i++ {
+			for i := range sl1 {
 				if sl1[i] != sl2[i] {
 					t.Fatal("Slices are not the same")
 				}

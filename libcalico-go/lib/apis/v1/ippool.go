@@ -31,8 +31,8 @@ import (
 //     between compute hosts).
 type IPPool struct {
 	unversioned.TypeMetadata
-	Metadata IPPoolMetadata `json:"metadata,omitempty"`
-	Spec     IPPoolSpec     `json:"spec,omitempty"`
+	Metadata IPPoolMetadata `json:"metadata"`
+	Spec     IPPoolSpec     `json:"spec"`
 }
 
 func (t IPPool) GetResourceMetadata() unversioned.ResourceMetadata {
@@ -93,7 +93,7 @@ func NewIPPool() *IPPool {
 // enumerations in the client interface.
 type IPPoolList struct {
 	unversioned.TypeMetadata
-	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Metadata unversioned.ListMetadata `json:"metadata"`
 	Items    []IPPool                 `json:"items" validate:"dive"`
 }
 

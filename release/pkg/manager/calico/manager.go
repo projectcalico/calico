@@ -363,8 +363,8 @@ func (r *CalicoManager) getRegistryFromManifests() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error getting registry from calicoctl.yaml manifest: %w", err)
 	}
-	imgs := strings.Split(out, "\n")
-	for _, i := range imgs {
+	imgs := strings.SplitSeq(out, "\n")
+	for i := range imgs {
 		parts := strings.Split(i, "/")
 		if len(parts) > 1 {
 			return strings.Join(parts[:len(parts)-1], "/"), nil
@@ -1363,8 +1363,8 @@ func (r *CalicoManager) assertManifestVersions(ver string) error {
 		if err != nil {
 			return fmt.Errorf("failed to get images from manifest %s: %w", m, err)
 		}
-		imgs := strings.Split(out, "\n")
-		for _, i := range imgs {
+		imgs := strings.SplitSeq(out, "\n")
+		for i := range imgs {
 			if strings.Contains(i, "operator") {
 				// We don't handle the operator image here yet, since
 				// the version is different.

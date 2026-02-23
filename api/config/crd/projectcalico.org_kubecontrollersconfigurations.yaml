@@ -10,6 +10,9 @@ spec:
     kind: KubeControllersConfiguration
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
+    shortNames:
+      - kcc
+      - kccs
     singular: kubecontrollersconfiguration
   preserveUnknownFields: false
   scope: Cluster
@@ -269,3 +272,5 @@ spec:
           type: object
       served: true
       storage: true
+      subresources:
+        status: {}

@@ -17,6 +17,7 @@ package health
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"sort"
@@ -36,9 +37,7 @@ var (
 
 func SetGlobalTimeoutOverrides(overrides map[string]time.Duration) {
 	overridesCopy := map[string]time.Duration{}
-	for k, v := range overrides {
-		overridesCopy[k] = v
-	}
+	maps.Copy(overridesCopy, overrides)
 	globalOverridesLock.Lock()
 	defer globalOverridesLock.Unlock()
 	globalTimeoutOverrides = overrides

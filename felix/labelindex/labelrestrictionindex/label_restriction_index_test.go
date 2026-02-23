@@ -211,7 +211,7 @@ func TestFindMostRestrictedLabel(t *testing.T) {
 		"findMostRestrictedLabel should prefer impossible selector (present and absent)")
 
 	var manyVals []uniquestr.Handle
-	for i := 0; i < 15000; i++ {
+	for i := range 15000 {
 		manyVals = append(manyVals, uniquestr.Make(fmt.Sprint(i)))
 	}
 	Expect(mostRestricted(map[string]parser.LabelRestriction{

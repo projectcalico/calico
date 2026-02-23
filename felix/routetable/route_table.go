@@ -949,7 +949,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 
 	var err error
 	seenKeys := set.NewSize[kernelRouteKey](r.kernelRoutes.Dataplane().Len())
-	for attempt := 0; attempt < routeListFilterAttempts; attempt++ {
+	for range routeListFilterAttempts {
 		// Using the Iter version here saves allocating a large slice of netlink.Route,
 		// which we immediately discard.
 		var scratchRoute netlink.Route
@@ -1060,7 +1060,7 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 	routeFilterFlags := netlink.RT_FILTER_OIF | netlink.RT_FILTER_TABLE
 
 	seenRoutes := set.New[kernelRouteKey]()
-	for attempt := 0; attempt < routeListFilterAttempts; attempt++ {
+	for range routeListFilterAttempts {
 		// Using the Iter version here saves allocating a large slice of netlink.Route,
 		// which we immediately discard.
 		var scratchRoute netlink.Route

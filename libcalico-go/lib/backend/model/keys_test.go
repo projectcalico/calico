@@ -519,7 +519,7 @@ var _ = DescribeTable(
 
 var _ = DescribeTable(
 	"value parsing",
-	func(key Key, rawVal string, expectedVal interface{}) {
+	func(key Key, rawVal string, expectedVal any) {
 		val, err := ParseValue(key, []byte(rawVal))
 		Expect(err).ToNot(HaveOccurred())
 		Expect(val).To(Equal(expectedVal))

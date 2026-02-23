@@ -69,6 +69,7 @@ var features = map[string]bool{
 	"Maglev":          true,
 	"BGPPeer":         true,
 	"IPIP":            true,
+	"Tiered-RBAC":     true,
 }
 
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.

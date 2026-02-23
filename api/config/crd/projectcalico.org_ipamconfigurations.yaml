@@ -17,7 +17,20 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: Whether borrowing IP addresses is allowed
+          jsonPath: .spec.strictAffinity
+          name: StrictAffinity
+          type: boolean
+        - description: The max number of blocks that can be affine to each host
+          jsonPath: .spec.maxBlocksPerHost
+          name: MaxBlocksPerHost
+          type: integer
+        - description: Whether or not to auto allocate blocks to hosts
+          jsonPath: .spec.autoAllocateBlocks
+          name: AutoAllocateBlocks
+          type: boolean
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -51,3 +64,4 @@ spec:
           type: object
       served: true
       storage: true
+      subresources: {}

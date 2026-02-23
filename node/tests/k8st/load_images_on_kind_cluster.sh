@@ -14,6 +14,7 @@ images=(
     pod2daemon
     kube-controllers
     goldmane
+    webhook
     whisker
     whisker-backend
 )

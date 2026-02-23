@@ -64,7 +64,7 @@ func Run() {
 
 		var wg sync.WaitGroup
 		wg.Add(1)
-		stop := make(chan interface{})
+		stop := make(chan any)
 		go func() {
 			defer wg.Done()
 			for {

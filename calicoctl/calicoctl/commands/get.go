@@ -200,14 +200,14 @@ Description:
 	}
 
 	if len(results.ResErrs) > 0 {
-		var errStr string
+		var errStr strings.Builder
 		for i, err := range results.ResErrs {
-			errStr += err.Error()
+			errStr.WriteString(err.Error())
 			if (i + 1) != len(results.ResErrs) {
-				errStr += "\n"
+				errStr.WriteString("\n")
 			}
 		}
-		return errors.New(errStr)
+		return errors.New(errStr.String())
 	}
 
 	return nil

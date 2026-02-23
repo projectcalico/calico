@@ -161,7 +161,7 @@ func (u *UsageReporter) reportUsage(clusterGUID, clusterType, calicoVersion stri
 		log.WithError(err).Info("Failed to report usage/get deprecation warnings.")
 		return
 	}
-	jsonResp := map[string]interface{}{}
+	jsonResp := map[string]any{}
 	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
 		log.WithError(err).Warn(
 			"Failed to decode report server response")

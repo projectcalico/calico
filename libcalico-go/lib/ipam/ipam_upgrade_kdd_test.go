@@ -24,7 +24,7 @@ import (
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
@@ -77,7 +77,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, hostB, "10.10.1.0/26")).To(Succeed())
 
 		// Sanity check: List and assert they currently have no labels.
-		var list libapiv3.BlockAffinityList
+		var list internalapi.BlockAffinityList
 		Expect(crdClient.List(ctx, &list)).To(Succeed())
 		Expect(list.Items).To(HaveLen(3))
 		for _, item := range list.Items {
@@ -88,7 +88,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		Expect(ic.UpgradeHost(ctx, hostA)).To(Succeed())
 
 		// Re-list and verify labels applied to hostA's affinities, but not hostB.
-		list = libapiv3.BlockAffinityList{}
+		list = internalapi.BlockAffinityList{}
 		Expect(crdClient.List(ctx, &list)).To(Succeed())
 		By("verifying labels exist for host-a and not for host-b")
 		for _, item := range list.Items {

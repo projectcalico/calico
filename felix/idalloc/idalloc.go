@@ -81,7 +81,7 @@ func (a *IDAllocator) GetOrAlloc(id string) uint64 {
 	if debug {
 		log.WithFields(log.Fields{"id": id}).Debug("No existing IP set ID mapping, allocating one...")
 	}
-	for n := uint64(0); n < math.MaxUint64; n++ {
+	for n := range uint64(math.MaxUint64) {
 		candidate := a.TrialHash(id, n)
 		if candidate == 0 {
 			if debug {

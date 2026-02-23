@@ -26,7 +26,7 @@ include ../lib.Makefile
 BINDIR?=bin
 
 # Create a list of files upon which the generated file depends, skip the generated file itself
-APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
+APIS_SRCS := $(filter-out ./lib/apis/internalapi/zz_generated.deepcopy.go, $(wildcard ./lib/apis/internalapi/*.go))
 
 .PHONY: clean
 clean:
@@ -36,8 +36,8 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
-	./lib/apis/v3/generated.openapi.go \
+GENERATED_FILES:=./lib/apis/internalapi/zz_generated.deepcopy.go \
+	./lib/apis/internalapi/generated.openapi.go \
 	./lib/apis/v1/generated.openapi.go \
 	./lib/selector/tokenizer/kind_string.go
 
@@ -70,23 +70,23 @@ gen-crds:
 	# Patch in manual tweaks to the generated CRDs.
 	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
 
-./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS)
+./lib/apis/internalapi/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
 		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
 		--output-file zz_generated.deepcopy.go \
-		"$(PACKAGE_NAME)/lib/apis/v3"'
+		"$(PACKAGE_NAME)/lib/apis/internalapi"'
 
 # Generate OpenAPI spec
-./lib/apis/v3/generated.openapi.go: $(APIS_SRCS)
+./lib/apis/internalapi/generated.openapi.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) \
            sh -c 'openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
-				--output-dir "./lib/apis/v3" \
-                --output-pkg "$(PACKAGE_NAME)/lib/apis/v3" \
-                "$(PACKAGE_NAME)/lib/apis/v3" \
+				--output-dir "./lib/apis/internalapi" \
+                --output-pkg "$(PACKAGE_NAME)/lib/apis/internalapi" \
+                "$(PACKAGE_NAME)/lib/apis/internalapi" \
 				"$(PACKAGE_NAME)/lib/apis/v1"'
 
 	$(DOCKER_GO_BUILD) \

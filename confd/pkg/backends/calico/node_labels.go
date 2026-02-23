@@ -1,6 +1,7 @@
 package calico
 
 import (
+	"maps"
 	"reflect"
 	"sync"
 
@@ -32,9 +33,7 @@ func (m *nodeLabelManager) labelsForNode(n string) (map[string]string, bool) {
 
 	// Make a copy of the labels map.
 	labels := make(map[string]string, len(l))
-	for k, v := range l {
-		labels[k] = v
-	}
+	maps.Copy(labels, l)
 	return labels, ok
 }
 
