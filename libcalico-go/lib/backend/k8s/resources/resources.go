@@ -358,11 +358,18 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	return nil
 }
 
+// watchTimeout is the explicit server-side timeout for watch requests. This
+// ensures watches reconnect at a known interval, which reclaims resources such
+// as json.Decoder internal buffers that grow monotonically over the lifetime of
+// a connection.
+var watchTimeout = int64(300) // 5 minutes
+
 func watchOptionsToK8sListOptions(wo api.WatchOptions) metav1.ListOptions {
 	return metav1.ListOptions{
 		ResourceVersion:     wo.Revision,
 		Watch:               true,
 		AllowWatchBookmarks: wo.AllowWatchBookmarks,
+		TimeoutSeconds:      &watchTimeout,
 	}
 }
 

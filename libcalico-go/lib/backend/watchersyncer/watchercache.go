@@ -433,6 +433,21 @@ func (wc *watcherCache) cleanExistingWatcher() {
 	if wc.watch != nil {
 		wc.logger.Debug("Stopping previous watcher")
 		wc.watch.Stop()
+		// Non-blocking drain of any buffered events so GC can reclaim them
+		// promptly. After Stop() the processing goroutine will exit and
+		// close the channel, but we don't block waiting for that.
+		ch := wc.watch.ResultChan()
+		for {
+			select {
+			case _, ok := <-ch:
+				if !ok {
+					goto done
+				}
+			default:
+				goto done
+			}
+		}
+	done:
 		wc.watch = nil
 	}
 }
