@@ -118,7 +118,8 @@ installation:
   # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
   imagePullSecrets: []
 
-  # Disable CSI driver. Default: /var/lib/kubelet
+  # Configure the kubelet volume plugin path used by the CSI driver.
+  # Set to "None" to disable the CSI driver. If this field is left unset, /var/lib/kubelet is used and CSI is enabled.
   kubeletVolumePluginPath: "None"
 
 # Configures general installation parameters for Calico. Schema is based

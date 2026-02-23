@@ -13,13 +13,14 @@ installation:
   # Uncomment to enable prometheus metrics reporting for node and typha.
   # nodeMetricsPort: 9090
   # typhaMetricsPort: 9091
-  # Disable CSI driver. Default: /var/lib/kubelet
+  # Path to the kubelet volume plugin directory used by the Calico CSI driver.
+  # Set to "None" to disable the CSI driver. If unset, defaults to /var/lib/kubelet (CSI enabled).
   kubeletVolumePluginPath: "None"
 
   # --- General Image Settings ---
-  registry: ""
-  imagePath: ""
-  imagePrefix: ""
+  # registry: <custom-registry>
+  # imagePath: <optional-path>
+  # imagePrefix: <optional-prefix>
 
   # imagePullSecrets are configured on all images deployed by the tigera-operator.
   # secrets specified here must exist in the tigera-operator namespace; they won't be created by the operator or helm.
