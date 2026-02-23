@@ -57,7 +57,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -543,7 +543,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			var (
 				hostW   *workload.Workload
 				w       [2]*workload.Workload
-				wepCopy [2]*libapi.WorkloadEndpoint
+				wepCopy [2]*internalapi.WorkloadEndpoint
 			)
 
 			if !testOpts.connTimeEnabled {

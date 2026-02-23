@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v3
+package internalapi
 
 import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -85,8 +85,9 @@ type IPAMBlockSpec struct {
 }
 
 type AllocationAttribute struct {
-	AttrPrimary   *string           `json:"handle_id,omitempty"`
-	AttrSecondary map[string]string `json:"secondary,omitempty"`
+	HandleID            *string           `json:"handle_id,omitempty"`
+	ActiveOwnerAttrs    map[string]string `json:"secondary,omitempty"`
+	AlternateOwnerAttrs map[string]string `json:"alternate,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

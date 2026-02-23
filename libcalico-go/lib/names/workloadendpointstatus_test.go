@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
@@ -37,13 +37,13 @@ var _ = DescribeTable("WorkloadEndpointKey to endpoint-status filename",
 )
 
 var _ = DescribeTable("V3 WorkloadEndpoint to model WorkloadEndpointKey",
-	func(ep *v3.WorkloadEndpoint, expectedKey *model.WorkloadEndpointKey) {
+	func(ep *internalapi.WorkloadEndpoint, expectedKey *model.WorkloadEndpointKey) {
 		genKey, err := names.V3WorkloadEndpointToWorkloadEndpointKey(ep)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(genKey).To(BeEquivalentTo(expectedKey))
 	},
 	Entry("Valid, FV endpoint (etcd datastore)",
-		&v3.WorkloadEndpoint{
+		&internalapi.WorkloadEndpoint{
 			//"felixfv default%2Fworkload-endpoint-status-tests-0-idx7 workload-endpoint-status-tests-0-idx7"
 			TypeMeta: v1.TypeMeta{
 				Kind:       "WorkloadEndpoint",
@@ -66,7 +66,7 @@ var _ = DescribeTable("V3 WorkloadEndpoint to model WorkloadEndpointKey",
 				Finalizers:                 nil,
 				ManagedFields:              nil,
 			},
-			Spec: v3.WorkloadEndpointSpec{
+			Spec: internalapi.WorkloadEndpointSpec{
 				Orchestrator:               "felixfv",
 				Workload:                   "workload-endpoint-status-tests-0-idx7",
 				Node:                       "felix-0-821432-15-felixfv",
@@ -94,7 +94,7 @@ var _ = DescribeTable("V3 WorkloadEndpoint to model WorkloadEndpointKey",
 	),
 
 	Entry("Valid, FV endpoint (kubernetes datastore)",
-		&v3.WorkloadEndpoint{
+		&internalapi.WorkloadEndpoint{
 			//"k8s default%2Fworkload-endpoint-status-tests-0-idx3 eth0"
 			TypeMeta: v1.TypeMeta{
 				Kind:       "WorkloadEndpoint",
@@ -117,7 +117,7 @@ var _ = DescribeTable("V3 WorkloadEndpoint to model WorkloadEndpointKey",
 				Finalizers:                 nil,
 				ManagedFields:              nil,
 			},
-			Spec: v3.WorkloadEndpointSpec{
+			Spec: internalapi.WorkloadEndpointSpec{
 				Orchestrator:               "k8s",
 				Workload:                   "workload-endpoint-status-tests-0-idx3",
 				Node:                       "felix-0-821432-9-felixfv",

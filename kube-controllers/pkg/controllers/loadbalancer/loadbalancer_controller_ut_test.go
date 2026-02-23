@@ -223,8 +223,8 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &svcKey.handle,
-					AttrSecondary: map[string]string{
+					HandleID: &svcKey.handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeService:   svc.Name,
 						ipam.AttributeType:      string(svc.Spec.Type),
 						ipam.AttributeNamespace: svc.Namespace,
@@ -253,16 +253,16 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		block.Unallocated = []int{2, 3}
 		block.Attributes = []model.AllocationAttribute{
 			{
-				AttrPrimary: &svcKey.handle,
-				AttrSecondary: map[string]string{
+				HandleID: &svcKey.handle,
+				ActiveOwnerAttrs: map[string]string{
 					ipam.AttributeService:   svc.Name,
 					ipam.AttributeType:      string(svc.Spec.Type),
 					ipam.AttributeNamespace: svc.Namespace,
 				},
 			},
 			{
-				AttrPrimary: &svcKey.handle,
-				AttrSecondary: map[string]string{
+				HandleID: &svcKey.handle,
+				ActiveOwnerAttrs: map[string]string{
 					ipam.AttributeService:   svc.Name,
 					ipam.AttributeType:      string(svc.Spec.Type),
 					ipam.AttributeNamespace: svc.Namespace,

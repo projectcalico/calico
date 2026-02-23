@@ -20,10 +20,28 @@ import (
 	"github.com/google/go-cmp/cmp"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
+
+const (
+	testComputedDataKindA EndpointComputedDataKind = "kindA"
+	testComputedDataKindB EndpointComputedDataKind = "kindB"
+)
+
+type testComputedData struct {
+	Value string
+}
+
+func (t *testComputedData) ApplyTo(wep *proto.WorkloadEndpoint) {
+	// Append to Annotations as a simple way to observe the effect.
+	if wep.Annotations == nil {
+		wep.Annotations = map[string]string{}
+	}
+	wep.Annotations["test-computed"] = t.Value
+}
 
 func TestPolicyResolver_OnUpdate(t *testing.T) {
 	pr, recorder := createPolicyResolver()
@@ -72,20 +90,22 @@ func createPolicyResolver() (*PolicyResolver, *policyResolverRecorder) {
 }
 
 type policyResolverUpdate struct {
-	Key      model.Key
-	Endpoint any
-	Tiers    []TierInfo
+	Key          model.Key
+	Endpoint     any
+	Tiers        []TierInfo
+	ComputedData []EndpointComputedData
 }
 
 type policyResolverRecorder struct {
 	updates []policyResolverUpdate
 }
 
-func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, peerData *EndpointBGPPeer, filteredTiers []TierInfo) {
+func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, computedData []EndpointComputedData, peerData *EndpointBGPPeer, filteredTiers []TierInfo) {
 	p.updates = append(p.updates, policyResolverUpdate{
-		Key:      endpointKey,
-		Endpoint: endpoint,
-		Tiers:    filteredTiers,
+		Key:          endpointKey,
+		Endpoint:     endpoint,
+		ComputedData: computedData,
+		Tiers:        filteredTiers,
 	})
 }
 
@@ -208,5 +228,153 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 		Tiers:    []TierInfo{},
 	}); d != "" {
 		t.Error("Incorrect update:", d)
+	}
+}
+
+func TestPolicyResolver_ComputedDataIncludedInFlush(t *testing.T) {
+	pr, recorder := createPolicyResolver()
+	pr.OnDatamodelStatus(api.InSync)
+
+	endpointKey := model.WorkloadEndpointKey{Hostname: "host1"}
+	wep := &model.WorkloadEndpoint{Name: "we1"}
+	pr.endpoints[endpointKey] = wep
+
+	// Need a policy match to get the endpoint into the flush path.
+	polKey := model.PolicyKey{Name: "test-policy", Kind: v3.KindNetworkPolicy}
+	pr.allPolicies[polKey] = ExtractPolicyMetadata(&model.Policy{Tier: "default"})
+	pr.OnPolicyMatch(polKey, endpointKey)
+
+	cd := &testComputedData{Value: "hello"}
+	pr.OnEndpointComputedDataUpdate(endpointKey, testComputedDataKindA, cd)
+
+	pr.Flush()
+
+	if len(recorder.updates) != 1 {
+		t.Fatalf("expected 1 update, got %d", len(recorder.updates))
+	}
+	if len(recorder.updates[0].ComputedData) != 1 {
+		t.Fatalf("expected 1 computed data entry, got %d", len(recorder.updates[0].ComputedData))
+	}
+	if recorder.updates[0].ComputedData[0] != cd {
+		t.Errorf("expected computed data %v, got %v", cd, recorder.updates[0].ComputedData[0])
+	}
+}
+
+func TestPolicyResolver_ComputedDataNilRemoves(t *testing.T) {
+	pr, recorder := createPolicyResolver()
+	pr.OnDatamodelStatus(api.InSync)
+
+	endpointKey := model.WorkloadEndpointKey{Hostname: "host1"}
+	wep := &model.WorkloadEndpoint{Name: "we1"}
+	pr.endpoints[endpointKey] = wep
+
+	polKey := model.PolicyKey{Name: "test-policy", Kind: v3.KindNetworkPolicy}
+	pr.allPolicies[polKey] = ExtractPolicyMetadata(&model.Policy{Tier: "default"})
+	pr.OnPolicyMatch(polKey, endpointKey)
+
+	// Add computed data.
+	cd := &testComputedData{Value: "hello"}
+	pr.OnEndpointComputedDataUpdate(endpointKey, testComputedDataKindA, cd)
+	pr.Flush()
+	recorder.updates = nil
+
+	// Remove with nil.
+	pr.OnEndpointComputedDataUpdate(endpointKey, testComputedDataKindA, nil)
+	pr.Flush()
+
+	if len(recorder.updates) != 1 {
+		t.Fatalf("expected 1 update after nil removal, got %d", len(recorder.updates))
+	}
+	if len(recorder.updates[0].ComputedData) != 0 {
+		t.Errorf("expected no computed data after nil update, got %d entries", len(recorder.updates[0].ComputedData))
+	}
+
+	// Internal map should be cleaned up.
+	if _, exists := pr.endpointComputedData[endpointKey]; exists {
+		t.Error("expected endpointComputedData entry to be cleaned up")
+	}
+}
+
+func TestPolicyResolver_ComputedDataNilToNilIsNoOp(t *testing.T) {
+	pr, _ := createPolicyResolver()
+	pr.OnDatamodelStatus(api.InSync)
+
+	endpointKey := model.WorkloadEndpointKey{Hostname: "host1"}
+	wep := &model.WorkloadEndpoint{Name: "we1"}
+	pr.endpoints[endpointKey] = wep
+
+	polKey := model.PolicyKey{Name: "test-policy", Kind: v3.KindNetworkPolicy}
+	pr.allPolicies[polKey] = ExtractPolicyMetadata(&model.Policy{Tier: "default"})
+	pr.OnPolicyMatch(polKey, endpointKey)
+	pr.Flush()
+
+	// Clear dirty set after initial flush.
+	pr.dirtyEndpoints.Clear()
+
+	// nil → nil should not dirty the endpoint.
+	pr.OnEndpointComputedDataUpdate(endpointKey, testComputedDataKindA, nil)
+
+	if pr.dirtyEndpoints.Contains(endpointKey) {
+		t.Error("nil-to-nil computed data update should not dirty the endpoint")
+	}
+}
+
+func TestPolicyResolver_ComputedDataMultipleKinds(t *testing.T) {
+	pr, recorder := createPolicyResolver()
+	pr.OnDatamodelStatus(api.InSync)
+
+	endpointKey := model.WorkloadEndpointKey{Hostname: "host1"}
+	wep := &model.WorkloadEndpoint{Name: "we1"}
+	pr.endpoints[endpointKey] = wep
+
+	polKey := model.PolicyKey{Name: "test-policy", Kind: v3.KindNetworkPolicy}
+	pr.allPolicies[polKey] = ExtractPolicyMetadata(&model.Policy{Tier: "default"})
+	pr.OnPolicyMatch(polKey, endpointKey)
+
+	cdA := &testComputedData{Value: "a"}
+	cdB := &testComputedData{Value: "b"}
+	pr.OnEndpointComputedDataUpdate(endpointKey, testComputedDataKindA, cdA)
+	pr.OnEndpointComputedDataUpdate(endpointKey, testComputedDataKindB, cdB)
+
+	pr.Flush()
+
+	if len(recorder.updates) != 1 {
+		t.Fatalf("expected 1 update, got %d", len(recorder.updates))
+	}
+	if len(recorder.updates[0].ComputedData) != 2 {
+		t.Fatalf("expected 2 computed data entries, got %d", len(recorder.updates[0].ComputedData))
+	}
+	// Since map iteration order is non-deterministic, check both are present.
+	found := map[string]bool{}
+	for _, cd := range recorder.updates[0].ComputedData {
+		found[cd.(*testComputedData).Value] = true
+	}
+	if !found["a"] || !found["b"] {
+		t.Errorf("expected both computed data kinds, got %v", found)
+	}
+}
+
+func TestPolicyResolver_EndpointDeleteClearsComputedData(t *testing.T) {
+	pr, _ := createPolicyResolver()
+	pr.OnDatamodelStatus(api.InSync)
+
+	endpointKey := model.WorkloadEndpointKey{Hostname: "host1"}
+	wep := &model.WorkloadEndpoint{Name: "we1"}
+	pr.endpoints[endpointKey] = wep
+
+	// Add computed data.
+	cd := &testComputedData{Value: "hello"}
+	pr.OnEndpointComputedDataUpdate(endpointKey, testComputedDataKindA, cd)
+
+	// Delete the endpoint via OnUpdate.
+	pr.OnUpdate(api.Update{
+		KVPair: model.KVPair{
+			Key:   endpointKey,
+			Value: nil,
+		},
+	})
+
+	if _, exists := pr.endpointComputedData[endpointKey]; exists {
+		t.Error("expected endpointComputedData to be cleaned up after endpoint deletion")
 	}
 }

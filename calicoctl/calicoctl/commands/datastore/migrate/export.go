@@ -36,7 +36,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 )
 
 var title = cases.Title(language.English)
@@ -239,7 +239,7 @@ Description:
 			// Nodes need to also be modified to move the Orchestrator reference to the name field.
 			if r == "nodes" {
 				err := meta.EachListItem(resource, func(obj runtime.Object) error {
-					node, ok := obj.(*libapiv3.Node)
+					node, ok := obj.(*internalapi.Node)
 					if !ok {
 						return fmt.Errorf("failed to convert resource to Node object for migration processing: %+v", obj)
 					}

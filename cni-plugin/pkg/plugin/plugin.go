@@ -45,7 +45,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -299,7 +299,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	logger.Debugf("Retrieved list of endpoints: %v", endpoints)
 
-	var endpoint *libapi.WorkloadEndpoint
+	var endpoint *internalapi.WorkloadEndpoint
 
 	// If the prefix list returns 1 or more items, we go through the items and try to see if the name matches the WEP
 	// identifiers we have. The identifiers we use for this match at this point are:
@@ -450,7 +450,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			}
 
 			// 2) Create the endpoint object
-			endpoint = libapi.NewWorkloadEndpoint()
+			endpoint = internalapi.NewWorkloadEndpoint()
 			endpoint.Name = wepIDs.WEPName
 			endpoint.Namespace = wepIDs.Namespace
 			endpoint.Spec.Endpoint = wepIDs.Endpoint

@@ -24,7 +24,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("Test the (BGP) Node update processor", func() {
 	v3NodeKey1 := model.ResourceKey{
-		Kind: libapiv3.KindNode,
+		Kind: internalapi.KindNode,
 		Name: "bgpnode1",
 	}
 	numBgpConfigs := 6
@@ -47,7 +47,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 	// our validation.  Note that it expects a node name of bgpnode1.
 	It("should handle conversion of valid Nodes", func() {
 		By("converting a zero-ed Node")
-		res := libapiv3.NewNode()
+		res := internalapi.NewNode()
 		res.Name = "bgpnode1"
 		expected := map[string]any{
 			"ip_addr_v4":    "",
@@ -70,9 +70,9 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("converting a zero-ed but non-nil BGPNodeSpec")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "bgpnode1"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{}
+		res.Spec.BGP = &internalapi.NodeBGPSpec{}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
 			Value: res,
@@ -87,9 +87,9 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("converting a Node with an IPv4 (specified without the network) only - expect /32 net")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "bgpnode1"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "1.2.3.4",
 		}
 		expected = map[string]any{
@@ -113,9 +113,9 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("converting a Node with an IPv6 (specified without the network) only - expect /128 net")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "bgpnode1"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv6Address: "aa:bb:cc::",
 		}
 		expected = map[string]any{
@@ -139,10 +139,10 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("converting a Node with IPv4 and IPv6 network and AS number")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "bgpnode1"
 		asn := numorstring.ASNumber(12345)
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "1.2.3.4/24",
 			IPv6Address: "aa:bb:cc::ffff/120",
 			ASNumber:    &asn,
@@ -170,7 +170,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 
 	It("should fail to convert an invalid resource", func() {
 		By("trying to convert with the wrong key type")
-		res := libapiv3.NewNode()
+		res := internalapi.NewNode()
 
 		_, err := up.Process(&model.KVPair{
 			Key: model.GlobalConfigKey{
@@ -191,10 +191,10 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert with an invalid IPv4 address - treat as unassigned")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "bgpnode1"
 		asn := numorstring.ASNumber(12345)
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "1.2.3.4/240",
 			IPv6Address: "aa:bb:cc::ffff/120",
 			ASNumber:    &asn,
@@ -221,9 +221,9 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("trying to convert with an invalid IPv6 address - treat as unassigned")
-		res = libapiv3.NewNode()
+		res = internalapi.NewNode()
 		res.Name = "bgpnode1"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "1.2.3.4/24",
 			IPv6Address: "aazz::qq/100",
 		}
@@ -250,9 +250,9 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 	})
 
 	It("should handle route reflector cluster ID field", func() {
-		res := libapiv3.NewNode()
+		res := internalapi.NewNode()
 		res.Name = "bgpnode1"
-		res.Spec.BGP = &libapiv3.NodeBGPSpec{
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address:             "172.17.0.2/24",
 			RouteReflectorClusterID: "255.0.0.1",
 		}
@@ -280,7 +280,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 
 var _ = Describe("Test the (BGP) Node update processor with USE_POD_CIDR=true", func() {
 	v3NodeKey1 := model.ResourceKey{
-		Kind: libapiv3.KindNode,
+		Kind: internalapi.KindNode,
 		Name: "mynode",
 	}
 	up := updateprocessors.NewBGPNodeUpdateProcessor(true)
@@ -291,7 +291,7 @@ var _ = Describe("Test the (BGP) Node update processor with USE_POD_CIDR=true", 
 
 	It("should properly convert nodes into block affinities for BGP", func() {
 		By("converting a node with PodCIDRs set")
-		res := libapiv3.NewNode()
+		res := internalapi.NewNode()
 		res.Name = "mynode"
 		res.Status.PodCIDRs = []string{
 			"192.168.1.0/24",

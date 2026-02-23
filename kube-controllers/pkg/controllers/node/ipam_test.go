@@ -32,7 +32,7 @@ import (
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -184,10 +184,10 @@ var _ = Describe("IPAM controller UTs", func() {
 		c.Start(stopChan)
 
 		calicoNodeName := "cname"
-		key := model.ResourceKey{Name: calicoNodeName, Kind: libapiv3.KindNode}
-		n := libapiv3.Node{}
+		key := model.ResourceKey{Name: calicoNodeName, Kind: internalapi.KindNode}
+		n := internalapi.Node{}
 		n.Name = calicoNodeName
-		n.Spec.OrchRefs = []libapiv3.OrchRef{
+		n.Spec.OrchRefs = []internalapi.OrchRef{
 			{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes},
 		}
 		kvp := model.KVPair{
@@ -302,8 +302,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		b.Allocations[0] = &idx
 		b.Unallocated = []int{1, 2, 3}
 		b.Attributes = append(b.Attributes, model.AllocationAttribute{
-			AttrPrimary: &handle,
-			AttrSecondary: map[string]string{
+			HandleID: &handle,
+			ActiveOwnerAttrs: map[string]string{
 				ipam.AttributeNode:      "cnode",
 				ipam.AttributePod:       "test-pod",
 				ipam.AttributeNamespace: "test-namespace",
@@ -314,7 +314,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		expectedAllocation := &allocation{
 			ip:     "10.0.0.0",
 			handle: handle,
-			attrs:  b.Attributes[0].AttrSecondary,
+			attrs:  b.Attributes[0].ActiveOwnerAttrs,
 			block:  "10.0.0.0/30",
 		}
 
@@ -602,8 +602,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       "test-pod",
 						ipam.AttributeNamespace: "test-namespace",
@@ -692,9 +692,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should clean up leaked IP addresses", func() {
 		// Add a new block with one allocation - on a valid node but no corresponding pod.
-		n := libapiv3.Node{}
+		n := internalapi.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -721,8 +721,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       "test-pod",
 						ipam.AttributeNamespace: "test-namespace",
@@ -764,9 +764,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should handle blocks losing their affinity", func() {
 		// Create Calico and k8s nodes for the test.
-		n := libapiv3.Node{}
+		n := internalapi.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		kn := v1.Node{}
@@ -802,8 +802,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -844,8 +844,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -928,9 +928,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should NOT clean up IPs if another valid IP shares the handle", func() {
 		// Create Calico and k8s nodes for the test.
-		n := libapiv3.Node{}
+		n := internalapi.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -969,8 +969,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -995,8 +995,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -1104,9 +1104,9 @@ var _ = Describe("IPAM controller UTs", func() {
 		c.config.LeakGracePeriod = &metav1.Duration{Duration: 0 * time.Second}
 
 		// Add a new block with one allocation - on a valid node but no corresponding pod.
-		n := libapiv3.Node{}
+		n := internalapi.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1133,8 +1133,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       "test-pod",
 						ipam.AttributeNamespace: "test-namespace",
@@ -1176,9 +1176,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should clean up empty blocks", func() {
 		// Create Calico and k8s nodes for the test.
-		n := libapiv3.Node{}
+		n := internalapi.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		kn := v1.Node{}
@@ -1214,8 +1214,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -1285,9 +1285,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should clean up empty blocks even if the node is full", func() {
 		// Create Calico and k8s nodes for the test.
-		n := libapiv3.Node{}
+		n := internalapi.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1324,8 +1324,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -1398,9 +1398,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should NOT clean up all blocks assigned to a node", func() {
 		// Create Calico and k8s nodes for the test.
-		n := libapiv3.Node{}
+		n := internalapi.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1487,9 +1487,9 @@ var _ = Describe("IPAM controller UTs", func() {
 	// Reference: https://github.com/projectcalico/calico/issues/7987
 	It("should clean up small IPAM blocks", func() {
 		// Create Calico and k8s nodes for the test.
-		n := libapiv3.Node{}
+		n := internalapi.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		kn := v1.Node{}
@@ -1618,9 +1618,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 			// Create Calico and k8s nodes for the test.
 			for _, name := range []string{"node1", "node2"} {
-				n := libapiv3.Node{}
+				n := internalapi.Node{}
 				n.Name = name
-				n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: name, Orchestrator: apiv3.OrchestratorKubernetes}}
+				n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: name, Orchestrator: apiv3.OrchestratorKubernetes}}
 				_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1720,9 +1720,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 			// Create 5k nodes.
 			for i := range numNodes {
-				n := libapiv3.Node{}
+				n := internalapi.Node{}
 				n.Name = fmt.Sprintf("node%d", i)
-				n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: n.Name, Orchestrator: apiv3.OrchestratorKubernetes}}
+				n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: n.Name, Orchestrator: apiv3.OrchestratorKubernetes}}
 				_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1869,8 +1869,8 @@ func createBlock(pods []v1.Pod, host, cidrStr string) bapi.Update {
 	attrs := []model.AllocationAttribute{}
 	for i, pod := range pods {
 		attrs = append(attrs, model.AllocationAttribute{
-			AttrPrimary: &pod.Name,
-			AttrSecondary: map[string]string{
+			HandleID: &pod.Name,
+			ActiveOwnerAttrs: map[string]string{
 				ipam.AttributeNode:      host,
 				ipam.AttributePod:       pod.Name,
 				ipam.AttributeNamespace: pod.Namespace,
