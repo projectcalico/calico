@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,6 +63,17 @@ const (
 	ServiceLoadBalancerAggregationEnabled ServiceLoadBalancerAggregation = "Enabled"
 	// ServiceLoadBalancerAggregationDisabled means individual /32 routes will be advertised for each LoadBalancer service
 	ServiceLoadBalancerAggregationDisabled ServiceLoadBalancerAggregation = "Disabled"
+)
+
+// BGPWithinCluster defines whether BGP within the cluster is enabled or disabled.
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type BGPWithinCluster string
+
+const (
+	// BGPWithinClusterEnabled means BGP within the cluster is enabled (default behavior)
+	BGPWithinClusterEnabled BGPWithinCluster = "Enabled"
+	// BGPWithinClusterDisabled means BGP within the cluster is disabled
+	BGPWithinClusterDisabled BGPWithinCluster = "Disabled"
 )
 
 // BGPConfigurationSpec contains the values of the BGP configuration.
@@ -146,6 +157,11 @@ type BGPConfigurationSpec struct {
 	// It is recommended to use a link-local address.
 	// +optional
 	LocalWorkloadPeeringIPV6 string `json:"localWorkloadPeeringIPV6,omitempty" validate:"omitempty,ipv6"`
+
+	// BGPWithinCluster enables or disables BGP within the cluster. [Default: Enabled]
+	// +kubebuilder:default=Enabled
+	// +optional
+	BGPWithinCluster *BGPWithinCluster `json:"bgpWithinCluster,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.
