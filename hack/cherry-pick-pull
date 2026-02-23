@@ -185,9 +185,9 @@ trap return_to_kansas EXIT
 #   EXTRA_LABELS      - (optional) extra comma-separated labels to append
 #
 # Outputs (set after calling):
-#   BUILD_TITLE       - generated PR title (without [relshort] prefix)
-#   BUILD_BODY        - generated PR body
-#   BUILD_LABELS      - generated comma-separated labels
+#   NEW_PR_TITLE       - generated PR title (without [relshort] prefix)
+#   NEW_PR_BODY        - generated PR body
+#   NEW_PR_LABELS      - generated comma-separated labels
 function build-pr-description() {
   local new_labels=""
   local new_body=""
@@ -235,55 +235,19 @@ function build-pr-description() {
       new_body+=$'\n---\n'
       new_body+="**$pull_title** (${PULLLINK[idx]})"$'\n'
     else
-      # Strip any previous cherry-pick history header and bullet lines from the source
-      # PR body, absorbing old bullets into new_header so they stack up with the newest
-      # pick at the top.  Handles both old (## heading) and new (**bold**) header formats.
-      local old_bullets
-      old_bullets=$(echo "${pull_body}" | awk '
-        BEGIN { in_hist = 0 }
-        # Enter history block at header, but do not print the header itself.
-        !in_hist && /^(## Cherry-pick history|\*\*Cherry-pick history\*\*)/ {
-          in_hist = 1
-          next
-        }
-        # Support legacy bodies that start directly with a top-level bullet.
-        !in_hist && /^- Pick onto / {
-          in_hist = 1
-        }
-        # While in the history block, collect all bullet lines (top-level or indented)
-        # until the first blank line, then stop.
-        in_hist {
-          if (/^[[:space:]]*$/) { exit }
-          if (/^[[:space:]]*-/) { print; next }
-          exit
-        }
-      ')
-      if [[ -n "${old_bullets}" ]]; then
-        new_header+="${old_bullets}"$'\n'
+      # If the body already starts with a cherry-pick history header, strip
+      # it (the old bullets remain in place and stack beneath ours).
+      # Otherwise add a blank line to separate the new header from the body.
+      local first_line
+      first_line=$(echo "${pull_body}" | head -n1)
+      if [[ "${first_line}" == "## Cherry-pick history" || "${first_line}" == "**Cherry-pick history**" ]]; then
+        pull_body=$(echo "${pull_body}" | tail -n +2)
+      else
+        new_header+=$'\n'
       fi
-      pull_body=$(echo "${pull_body}" | awk '
-        BEGIN { in_hist = 0 }
-        !in_hist && /^(## Cherry-pick history|\*\*Cherry-pick history\*\*)/ {
-          in_hist = 1
-          next
-        }
-        !in_hist && /^- Pick onto / {
-          in_hist = 1
-          next
-        }
-        in_hist {
-          if (/^[[:space:]]*-/) { next }
-          if (/^[[:space:]]*$/) { next }
-          in_hist = 0
-        }
-        { print }
-      ')
     fi
     new_body+="${pull_body}"
   done
-
-  # Blank line after the cherry-pick history bullets to separate from the body.
-  new_header+=$'\n'
 
   new_labels=$(echo -e "${new_labels}" | sort -u | grep '.' | grep -v 'cherry-pick-candidate' | paste -sd,)
   if [[ -n "${EXTRA_LABELS:-}" ]]; then
@@ -294,9 +258,9 @@ function build-pr-description() {
     fi
   fi
 
-  BUILD_TITLE="${new_title}"
-  BUILD_BODY="${new_header}${new_body}"$'\n'"${META_BLOCK:-}"
-  BUILD_LABELS="${new_labels}"
+  NEW_PR_TITLE="${new_title}"
+  NEW_PR_BODY="${new_header}${new_body}"$'\n'"${META_BLOCK:-}"
+  NEW_PR_LABELS="${new_labels}"
 }
 
 function make-a-pr() {
@@ -324,7 +288,7 @@ function make-a-pr() {
   build-pr-description
 
   pr_body_file="$(mktemp -t prtext.XXXX)" # cleaned in return_to_kansas
-  printf '%s\n' "${BUILD_BODY}" >"${pr_body_file}"
+  printf '%s\n' "${NEW_PR_BODY}" >"${pr_body_file}"
 
   if [[ -n "${DRY_RUN}" ]]; then
     echo "!!! Skipping PR creation. PR text would have been:"
@@ -338,14 +302,14 @@ function make-a-pr() {
       head_ref="${NEWBRANCH}"
     fi
 
-    echo "+++ Creating PR into ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}. Running: gh pr create -t \"[${relshort}] ${BUILD_TITLE}\" -F \"${pr_body_file}\" --repo \"${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}\" -H \"${head_ref}\" -B \"${rel}\" -l \"${BUILD_LABELS}\""
+    echo "+++ Creating PR into ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}. Running: gh pr create -t \"[${relshort}] ${NEW_PR_TITLE}\" -F \"${pr_body_file}\" --repo \"${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}\" -H \"${head_ref}\" -B \"${rel}\" -l \"${NEW_PR_LABELS}\""
     gh pr create \
-      -t "[${relshort}] ${BUILD_TITLE}" \
+      -t "[${relshort}] ${NEW_PR_TITLE}" \
       -F "${pr_body_file}" \
       --repo "${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}" \
       -H "${head_ref}" \
       -B "${rel}" \
-      -l "${BUILD_LABELS}"
+      -l "${NEW_PR_LABELS}"
   fi
 }
 
