@@ -40,11 +40,19 @@ type configInterface interface {
 	ToConfigUpdate() *proto.ConfigUpdate
 }
 
+// Struct for additional data that feeds into proto.WorkloadEndpoint but is computed rather
+// than stored on resource's database.
+type EndpointComputedDataKind string
+type EndpointComputedData interface {
+	ApplyTo(*proto.WorkloadEndpoint)
+}
+
 // EndpointUpdate contains information about updates applied to the endpoint.
 type endpointUpdate struct {
-	endpoint any
-	peerData *EndpointBGPPeer
-	tierInfo []TierInfo
+	endpoint     any
+	computedData []EndpointComputedData
+	peerData     *EndpointBGPPeer
+	tierInfo     []TierInfo
 }
 
 // EventSequencer buffers and coalesces updates from the calculation graph then flushes them
@@ -403,7 +411,7 @@ func (buf *EventSequencer) flushProfileDeletes() {
 	}
 }
 
-func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
+func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, computedData []EndpointComputedData, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
 	mac := ""
 	if ep.Mac != nil {
 		mac = ep.Mac.String()
@@ -456,7 +464,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		skipRedir.Egress = true
 	}
 
-	return &proto.WorkloadEndpoint{
+	wep := &proto.WorkloadEndpoint{
 		State:                      ep.State,
 		Name:                       ep.Name,
 		Mac:                        mac,
@@ -473,6 +481,12 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		SkipRedir:                  skipRedir,
 		QosPolicies:                qosPolicies,
 	}
+
+	for _, cd := range computedData {
+		cd.ApplyTo(wep)
+	}
+
+	return wep
 }
 
 func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, preDNATTiers []*proto.TierInfo, forwardTiers []*proto.TierInfo) *proto.HostEndpoint {
@@ -498,6 +512,7 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 func (buf *EventSequencer) OnEndpointTierUpdate(
 	endpointKey model.EndpointKey,
 	endpoint model.Endpoint,
+	computedData []EndpointComputedData,
 	peerData *EndpointBGPPeer,
 	filteredTiers []TierInfo,
 ) {
@@ -512,9 +527,10 @@ func (buf *EventSequencer) OnEndpointTierUpdate(
 		// Update.
 		buf.pendingEndpointDeletes.Discard(endpointKey)
 		buf.pendingEndpointUpdates[endpointKey] = endpointUpdate{
-			endpoint: endpoint,
-			peerData: peerData,
-			tierInfo: filteredTiers,
+			endpoint:     endpoint,
+			computedData: computedData,
+			peerData:     peerData,
+			tierInfo:     filteredTiers,
 		}
 	}
 }
@@ -534,7 +550,7 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-				Endpoint: ModelWorkloadEndpointToProto(wlep, endpointUpdate.peerData, tiers),
+				Endpoint: ModelWorkloadEndpointToProto(wlep, endpointUpdate.computedData, endpointUpdate.peerData, tiers),
 			})
 		case model.HostEndpointKey:
 			hep := endpoint.(*model.HostEndpoint)
