@@ -111,7 +111,7 @@ require (
 	k8s.io/component-base v0.34.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.34.3
-	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
+	k8s.io/kube-openapi v0.31.0
 	k8s.io/kubernetes v1.34.3
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	modernc.org/memory v1.11.0
@@ -368,6 +368,19 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
 
+require (
+	kubevirt.io/api v1.8.0-alpha.0
+	kubevirt.io/client-go v1.8.0-alpha.0
+)
+
+require (
+	github.com/go-kit/log v0.2.1 // indirect
+	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	kubevirt.io/containerized-data-importer-api v1.63.1 // indirect
+	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
+)
+
 replace (
 	github.com/projectcalico/api => ./api
 	github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery
@@ -394,6 +407,9 @@ replace (
 	k8s.io/externaljwt => k8s.io/externaljwt v0.34.3
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.34.3
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.34.3
+
+	// KubeVirt requires a specific pseudo-version of kube-openapi
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.34.3
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.34.3
 	k8s.io/kubectl => k8s.io/kubectl v0.34.3
