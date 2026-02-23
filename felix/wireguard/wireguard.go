@@ -1663,12 +1663,16 @@ func (w *Wireguard) addRouteRule() {
 			GoToTable(w.config.RoutingTableIndex).
 			Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)))
 	} else {
-		for cidr := range w.localCIDRs.All() {
-			w.routerule.SetRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
-				MatchSrcAddress(cidr.ToIPNet()).
-				Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)).
-				GoToTable(w.config.RoutingTableIndex))
-			w.programmedRoutingRuleCIDRs.Add(cidr)
+		// Source-scoped routing rules: only pod-originated traffic should use WireGuard table
+		// Use the local node's filtered CIDRs (programmed CIDRs) to create source-matched rules
+		if node, ok := w.nodes[w.hostname]; ok {
+			for cidr := range node.cidrs.All() {
+				w.routerule.SetRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
+					MatchSrcAddress(cidr.ToIPNet()).
+					Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)).
+					GoToTable(w.config.RoutingTableIndex))
+				w.programmedRoutingRuleCIDRs.Add(cidr)
+			}
 		}
 	}
 }
