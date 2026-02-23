@@ -422,7 +422,7 @@ type bpfEndpointManagerDataplane struct {
 	ipSetIDAlloc        *idalloc.IDAllocator
 
 	allowedSourcesPerWorkload map[types.WorkloadEndpointID]set.Set[string]
-	workloadRemoveChan  	  chan string
+	workloadRemoveChan        chan string
 }
 
 type serviceKey struct {
@@ -716,7 +716,7 @@ func newBPFEndpointManagerDataplane(
 		iptablesFilterTable:       iptablesFilterTable,
 		ipSetIDAlloc:              ipSetIDAlloc,
 		allowedSourcesPerWorkload: map[types.WorkloadEndpointID]set.Set[string]{},
-    	workloadRemoveChan:        workloadRemoveChan,
+		workloadRemoveChan:        workloadRemoveChan,
 	}
 }
 
