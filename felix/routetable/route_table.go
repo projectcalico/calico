@@ -310,8 +310,8 @@ func New(
 		ifaceToRoutes: map[RouteClass]map[string]map[ip.CIDR]Target{},
 		cidrToIfaces:  map[RouteClass]map[ip.CIDR]set.Set[string]{},
 
-		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](
-			deltatracker.WithValuesEqualFn[kernelRouteKey, kernelRoute](func(a, b kernelRoute) bool {
+		kernelRoutes: deltatracker.New(
+			deltatracker.WithValuesEqualFn[kernelRouteKey](func(a, b kernelRoute) bool {
 				return a.Equals(b)
 			}),
 		),
@@ -479,17 +479,17 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 	}
 
 	// Clean up the old CIDRs.
-	for cidr := range oldTargetsToCleanUp {
+	for cidr, target := range oldTargetsToCleanUp {
 		r.logCxt.WithField("cidr", cidr).Debug("Cleaning up old route.")
 		// removeOwningIface() calls recalculateDesiredKernelRoute.
-		r.removeOwningIface(routeClass, ifaceName, cidr)
+		r.removeOwningIface(routeClass, ifaceName, cidr, target)
 	}
 
 	// Clean out the pending ARP list, then recalculate it below.
 	delete(r.permanentARPs, ifaceName)
 	for cidr, target := range newTargets {
 		// addOwningIface() calls recalculateDesiredKernelRoute.
-		r.addOwningIface(routeClass, ifaceName, cidr)
+		r.addOwningIface(routeClass, ifaceName, cidr, target)
 		r.updatePermanentARP(ifaceName, cidr.Addr(), target.DestMAC)
 	}
 }
@@ -514,7 +514,7 @@ func (r *RouteTable) RouteUpdate(routeClass RouteClass, ifaceName string, target
 		r.ifaceToRoutes[routeClass][ifaceName] = routesByCIDR
 	}
 	routesByCIDR[target.CIDR] = target
-	r.addOwningIface(routeClass, ifaceName, target.CIDR)
+	r.addOwningIface(routeClass, ifaceName, target.CIDR, target)
 	r.updatePermanentARP(ifaceName, target.CIDR.Addr(), target.DestMAC)
 }
 
@@ -527,11 +527,15 @@ func (r *RouteTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr i
 		return
 	}
 
+	target, exists := r.ifaceToRoutes[routeClass][ifaceName][cidr]
+	if !exists {
+		return
+	}
 	delete(r.ifaceToRoutes[routeClass][ifaceName], cidr)
 	if len(r.ifaceToRoutes[routeClass][ifaceName]) == 0 {
 		delete(r.ifaceToRoutes[routeClass], ifaceName)
 	}
-	r.removeOwningIface(routeClass, ifaceName, cidr)
+	r.removeOwningIface(routeClass, ifaceName, cidr, target)
 	r.removePermanentARP(ifaceName, cidr.Addr())
 }
 
@@ -562,7 +566,7 @@ func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
 	}
 }
 
-func (r *RouteTable) addOwningIface(class RouteClass, ifaceName string, cidr ip.CIDR) {
+func (r *RouteTable) addOwningIface(class RouteClass, ifaceName string, cidr ip.CIDR, target Target) {
 	if r.cidrToIfaces[class] == nil {
 		r.cidrToIfaces[class] = map[ip.CIDR]set.Set[string]{}
 	}
@@ -572,10 +576,10 @@ func (r *RouteTable) addOwningIface(class RouteClass, ifaceName string, cidr ip.
 		r.cidrToIfaces[class][cidr] = ifaceNames
 	}
 	ifaceNames.Add(ifaceName)
-	r.recalculateDesiredKernelRoute(cidr)
+	r.recalculateDesiredKernelRoute(cidr, target)
 }
 
-func (r *RouteTable) removeOwningIface(class RouteClass, ifaceName string, cidr ip.CIDR) {
+func (r *RouteTable) removeOwningIface(class RouteClass, ifaceName string, cidr ip.CIDR, target Target) {
 	ifaceNames, ok := r.cidrToIfaces[class][cidr]
 	if !ok {
 		return
@@ -584,7 +588,7 @@ func (r *RouteTable) removeOwningIface(class RouteClass, ifaceName string, cidr 
 	if ifaceNames.Len() == 0 {
 		delete(r.cidrToIfaces[class], cidr)
 	}
-	r.recalculateDesiredKernelRoute(cidr)
+	r.recalculateDesiredKernelRoute(cidr, target)
 }
 
 // recheckRouteOwnershipsByIface reruns conflict resolution for all
@@ -592,11 +596,11 @@ func (r *RouteTable) removeOwningIface(class RouteClass, ifaceName string, cidr 
 func (r *RouteTable) recheckRouteOwnershipsByIface(name string) {
 	seen := set.New[ip.CIDR]()
 	for _, ifaceToRoutes := range r.ifaceToRoutes {
-		for cidr := range ifaceToRoutes[name] {
+		for cidr, target := range ifaceToRoutes[name] {
 			if seen.Contains(cidr) {
 				continue
 			}
-			r.recalculateDesiredKernelRoute(cidr)
+			r.recalculateDesiredKernelRoute(cidr, target)
 			seen.Add(cidr)
 		}
 	}
@@ -625,9 +629,9 @@ func (r *RouteTable) ifaceNameForIndex(ifindex int) (string, bool) {
 	return name, ok
 }
 
-func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
+func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR, target Target) {
 	defer r.updateGauges()
-	kernKey := r.routeKeyForCIDR(cidr)
+	kernKey := r.routeKeyForCIDR(cidr, target)
 	oldDesiredRoute, _ := r.kernelRoutes.Desired().Get(kernKey)
 
 	var bestTarget Target
@@ -804,6 +808,7 @@ func (r *RouteTable) ReadRoutesFromKernel(ifaceName string) ([]Target, error) {
 			CIDR:     key.CIDR,
 			Src:      kernRoute.Src,
 			Protocol: kernRoute.Protocol,
+			Priority: key.Priority,
 		}
 
 		switch kernRoute.Type {
@@ -1117,8 +1122,8 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 
 	// Look for routes that the tracker says are there but are actually missing.
 	for _, ifaceToRoutes := range r.ifaceToRoutes {
-		for cidr := range ifaceToRoutes[ifaceName] {
-			kernKey := r.routeKeyForCIDR(cidr)
+		for cidr, target := range ifaceToRoutes[ifaceName] {
+			kernKey := r.routeKeyForCIDR(cidr, target)
 			if seenRoutes.Contains(kernKey) {
 				// Route still there; handled above.
 				continue
@@ -1236,12 +1241,15 @@ func (r *RouteTable) refreshIfaceStateBestEffort(nl netlinkshim.Interface, iface
 	return nil
 }
 
-func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR) kernelRouteKey {
-	key := kernelRouteKey{CIDR: cidr}
-	// For IPv6, set priority to 1024. The kernel treats priority 0 as a sigil
+func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR, target Target) kernelRouteKey {
+	key := kernelRouteKey{
+		CIDR:     cidr,
+		Priority: target.Priority,
+	}
+	// If IPv6 and Priority is 0, set it to 1024. The kernel treats priority 0 as a sigil
 	// meaning "use the default value", which is 1024 for IPv6. We need to set
 	// an explicit priority so that routes round trip cleanly.
-	if r.ipVersion == 6 {
+	if r.ipVersion == 6 && key.Priority == 0 {
 		key.Priority = 1024
 	}
 	return key
