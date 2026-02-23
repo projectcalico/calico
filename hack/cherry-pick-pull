@@ -183,7 +183,7 @@ function make-a-pr() {
   # Build up the PR text.
   local new_labels=""
   local new_body=""
-  local new_header=$'## Cherry-pick history\n'
+  local new_header=$'**Cherry-pick history**\n'
   local new_title=""
   local idx=0
 
@@ -226,16 +226,34 @@ function make-a-pr() {
     if [[ "${#PULLS[@]}" -gt 1 ]]; then
       # Picking multiple PRs, so use a separator and link to each PR.
       new_body+=$'\n---\n'
-      new_body+="# $pull_title (${PULLLINK[idx]})"$'\n'
+      new_body+="**$pull_title** (${PULLLINK[idx]})"$'\n'
     else
-      # If there's only one PR, strip off any previous cherry-pick title.
-      # This gives a nice result when cherry-picking a previous pick.
-      pull_body=$(echo "${pull_body}" | head -n 1 | grep -v "## Cherry-pick history";
-                  echo "${pull_body}" | tail -n +2 )
+      # Strip any previous cherry-pick history header and bullet lines from the source
+      # PR body, absorbing old bullets into new_header so they stack up with the newest
+      # pick at the top.  Handles both old (## heading) and new (**bold**) header formats.
+      local old_bullets
+      old_bullets=$(echo "${pull_body}" | awk '
+        !found_body && /^(## Cherry-pick history|\*\*Cherry-pick history\*\*)/ { next }
+        !found_body && /^- Pick onto / { print; next }
+        !found_body && /^[[:space:]]*$/ { next }
+        { exit }
+      ')
+      if [[ -n "${old_bullets}" ]]; then
+        new_header+="${old_bullets}"$'\n'
+      fi
+      pull_body=$(echo "${pull_body}" | awk '
+        !found_body && /^(## Cherry-pick history|\*\*Cherry-pick history\*\*)/ { next }
+        !found_body && /^- Pick onto / { next }
+        !found_body && /^[[:space:]]*$/ { next }
+        { found_body=1; print }
+      ')
     fi
     new_body+="${pull_body}"
     idx=$((idx + 1))
   done
+
+  # Blank line after the cherry-pick history bullets to separate from the body.
+  new_header+=$'\n'
 
   new_labels=$(echo -e "${new_labels}" | sort -u | grep '.' | grep -v 'cherry-pick-candidate' | paste -sd,)
   if [[ -n "${EXTRA_LABELS:-}" ]]; then
