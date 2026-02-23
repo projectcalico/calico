@@ -59,15 +59,8 @@ const (
     KindMyResourceList = "MyResourceList"
 )
 
-// For cluster-scoped:
-// +genclient:nonNamespaced
+// +genclient:nonNamespaced  (cluster-scoped only)
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Cluster
-
-// For namespaced:
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Namespaced
 
 // MyResourceList contains a list of MyResource resources.
 type MyResourceList struct {
@@ -117,7 +110,7 @@ func NewMyResource() *MyResource {
 - `+kubebuilder:resource:scope=Cluster|Namespaced` — CRD scope
 - `+kubebuilder:resource:shortName={...}` — kubectl short names
 
-**Gotcha:** The `List` type needs `+genclient:nonNamespaced` too (for cluster-scoped resources), and `+k8s:deepcopy-gen:interfaces=...` on both types.
+**Gotcha:** The `List` type needs `+genclient:nonNamespaced` too (for cluster-scoped resources), and `+k8s:deepcopy-gen:interfaces=...` on both types. Do NOT put `+kubebuilder:resource` on the List type — only on the main resource type.
 
 ### Step 2: Register in API Scheme
 
@@ -246,14 +239,7 @@ c.registerResourceClient(
 )
 ```
 
-Also add to the `knownV3Kinds` list (used for CRD cleanup):
-
-```go
-knownV3Kinds := []string{
-    // ... existing kinds ...
-    apiv3.KindMyResource,
-}
-```
+If there is any CRD cleanup or garbage-collection mechanism for v3 kinds in this client, ensure your new kind is included there as appropriate.
 
 ### Step 9: Namespace Helper (if namespaced)
 
@@ -276,7 +262,9 @@ func IsNamespaced(kind string) bool {
 
 **File:** `libcalico-go/lib/validator/v3/validator.go`
 
-If your resource has custom validation beyond kubebuilder annotations, register a struct validator:
+**Prefer kubebuilder annotations** for validation wherever possible (e.g., `+kubebuilder:validation:Enum`, `+kubebuilder:validation:Pattern`, `+kubebuilder:validation:Required`). Kubebuilder annotations generate CRD schema validation that is enforced by the Kubernetes API server. The Go struct validator in this file is only executed by the `crd.projectcalico.org/v1` code path — it is **not** executed for `projectcalico.org/v3` CRDs, so any validation that only lives here will be silently skipped on newer clusters.
+
+If your resource needs cross-field or complex validation that cannot be expressed with kubebuilder annotations, register a struct validator:
 
 ```go
 // In the init/registration function:
