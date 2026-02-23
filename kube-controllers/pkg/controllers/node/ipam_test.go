@@ -1851,6 +1851,140 @@ var _ = Describe("IPAM controller UTs", func() {
 			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "IP was not marked as leaked")
 		})
 	})
+
+	It("should clean up node with tunnel IPs in a single sync pass", func() {
+		// Start the controller.
+		c.Start(stopChan)
+
+		// Create a block with a tunnel address allocation for a node that doesn't exist.
+		tunnelHandle := "vxlan-tunnel-addr-dead-node"
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:dead-node"
+		idx := 0
+		key := model.BlockKey{CIDR: cidr}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					AttrPrimary: &tunnelHandle,
+					AttrSecondary: map[string]string{
+						ipam.AttributeNode: "dead-node",
+						ipam.AttributeType: ipam.AttributeTypeVXLAN,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{Key: key, Value: &b}
+		update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update)
+
+		// Wait for internal caches to update.
+		blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allBlocks[blockCIDR]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Mark the syncer as InSync and trigger a full scan.
+		c.fullScanNextSync("forced by test")
+		c.onStatusUpdate(bapi.InSync)
+
+		// Both the tunnel IP GC and the node affinity release should eventually complete.
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		Eventually(func() bool {
+			return fakeClient.handlesReleased[tunnelHandle]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "Tunnel IP handle should be released via GC")
+
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("dead-node")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "Node affinity should be released")
+	})
+
+	// Regression test for https://github.com/projectcalico/calico/issues/8643
+	//
+	// Scenario: When nodes are rapidly scaled down, the IPAM GC controller can get
+	// stuck in an infinite retry loop. The root cause is that if
+	// ReleaseHostAffinities(mustBeEmpty=true) fails (e.g., because blocks still have
+	// allocations due to a race between IP release and block update propagation),
+	// syncIPAM() returned an error which prevented syncComplete() from running.
+	// Without syncComplete(), dirty nodes accumulated and each subsequent sync
+	// processed more and more nodes, increasing contention and making recovery
+	// impossible.
+	//
+	// The fix changes releaseNodes() to return failed nodes instead of an error,
+	// ensuring syncComplete() always runs. Failed nodes are re-dirtied after
+	// syncComplete() so they are retried on the next pass.
+	//
+	// This test drives syncIPAM() manually to verify:
+	//   Pass 1: node cleanup fails, but syncComplete() still runs; node is re-dirtied
+	//   Pass 2: node cleanup succeeds after the injected error is cleared
+	It("should not get stuck when node cleanup fails (issue #8643)", func() {
+		// Create a block for a node that does not exist in Kubernetes
+		// (simulating node deletion during scale-down).
+		tunnelHandle := "vxlan-tunnel-addr-stuck-node-8643"
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:stuck-node"
+		idx := 0
+		key := model.BlockKey{CIDR: cidr}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					AttrPrimary: &tunnelHandle,
+					AttrSecondary: map[string]string{
+						ipam.AttributeNode: "stuck-node",
+						ipam.AttributeType: ipam.AttributeTypeVXLAN,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{Key: key, Value: &b}
+
+		// Load the block directly into the controller state (bypassing the async loop).
+		c.onBlockUpdated(kvp)
+
+		// Set controller state for sync: in-sync, datastore ready, full scan required.
+		c.syncStatus = bapi.InSync
+		c.datastoreReady = true
+		c.fullScanNextSync("forced by test")
+
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+
+		// Inject an error to simulate ReleaseHostAffinities failing (e.g., "block not empty").
+		cli.(*FakeCalicoClient).SetReleaseHostAffinityError(fmt.Errorf("block is not empty"))
+
+		// --- Pass 1: cleanup should fail, but syncIPAM() should still succeed ---
+		err := c.syncIPAM()
+		Expect(err).NotTo(HaveOccurred(), "syncIPAM should not return error when node cleanup fails")
+
+		// The tunnel IP should be GC'd (it's a confirmed leak).
+		Expect(fakeClient.handlesReleased[tunnelHandle]).To(BeTrue(), "Tunnel IP handle should be released")
+
+		// The node affinity should NOT be released because cleanup failed.
+		Expect(fakeClient.affinityReleased("stuck-node")).To(BeFalse(), "Node affinity should NOT be released when cleanup fails")
+
+		// The node should be re-dirtied for retry.
+		Expect(c.allocationState.dirtyNodes).To(HaveKey("stuck-node"), "Failed node should be re-dirtied for retry")
+
+		// --- Pass 2: clear the error, cleanup should succeed ---
+		cli.(*FakeCalicoClient).SetReleaseHostAffinityError(nil)
+
+		err = c.syncIPAM()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(fakeClient.affinityReleased("stuck-node")).To(BeTrue(), "Node affinity should be released after error is cleared")
+
+		// Start the controller for proper cleanup in AfterEach.
+		c.Start(stopChan)
+	})
 })
 
 // createBlock creates a block based on the given pods and CIDR, and sends it as an update to the controller.
