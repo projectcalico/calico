@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -499,7 +499,7 @@ func (b allocationBlock) ipsByHandle(handleID string) []cnet.IP {
 	return ips
 }
 
-func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) {
+func (b allocationBlock) attributesForIP(ip cnet.IP, attrType OwnerAttributeType) (map[string]string, error) {
 	// Convert to an ordinal.
 	ordinal, err := b.IPToOrdinal(ip)
 	if err != nil {
@@ -532,8 +532,6 @@ func (b allocationBlock) allocationAttributesForIP(ip cnet.IP) (*model.Allocatio
 	attr := b.Attributes[*attrIndex]
 	handle := attr.HandleID
 	if handle != nil {
-		// The handle in the allocation may be malformed, so requires sanitation
-		// before use in the code.
 		s := sanitizeHandle(*handle)
 		handle = &s
 	}
@@ -601,4 +599,78 @@ func largerThanOrEqualToBlock(blockCIDR cnet.IPNet, pool *v3.IPPool) bool {
 
 func intInSlice(searchInt int, slice []int) bool {
 	return slices.Contains(slice, searchInt)
+}
+
+// setOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP address atomically.
+// Callers must validate updates and preconditions before calling this method.
+func (b *allocationBlock) setOwnerAttributes(ip cnet.IP, handleID string, updates *OwnerAttributeUpdates, preconditions *OwnerAttributePreconditions) error {
+	logCtx := log.WithFields(log.Fields{
+		"ip":            ip,
+		"handleID":      handleID,
+		"updates":       updates,
+		"preconditions": preconditions,
+	})
+
+	ordinal, err := b.IPToOrdinal(ip)
+	if err != nil {
+		return err
+	}
+
+	attrIndex := b.Allocations[ordinal]
+	if attrIndex == nil {
+		logCtx.Debug("IP is not currently assigned in block")
+		return cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
+	}
+
+	attr := &b.Attributes[*attrIndex]
+
+	if attr.HandleID == nil || sanitizeHandle(*attr.HandleID) != handleID {
+		return fmt.Errorf("IP %s is not assigned to handle %s", ip, handleID)
+	}
+
+	// Update ActiveOwnerAttrs if requested.
+	if updates.ActiveOwnerAttrs != nil || updates.ClearActiveOwner {
+		if err := verifyExpectedOwner(attr.ActiveOwnerAttrs, preconditions.expectedActiveOwner(), ip, "ActiveOwnerAttrs"); err != nil {
+			return err
+		}
+		if updates.ClearActiveOwner {
+			attr.ActiveOwnerAttrs = nil
+		} else {
+			attr.ActiveOwnerAttrs = updates.ActiveOwnerAttrs
+		}
+	}
+
+	// Update AlternateOwnerAttrs if requested.
+	if updates.AlternateOwnerAttrs != nil || updates.ClearAlternateOwner {
+		if err := verifyExpectedOwner(attr.AlternateOwnerAttrs, preconditions.expectedAlternateOwner(), ip, "AlternateOwnerAttrs"); err != nil {
+			return err
+		}
+		if updates.ClearAlternateOwner {
+			attr.AlternateOwnerAttrs = nil
+		} else {
+			attr.AlternateOwnerAttrs = updates.AlternateOwnerAttrs
+		}
+	}
+
+	return nil
+}
+
+// verifyExpectedOwner checks that currentAttrs matches expectedOwner. Returns nil if
+// expectedOwner is nil (no check requested) or the match succeeds.
+func verifyExpectedOwner(currentAttrs map[string]string, expectedOwner *AttributeOwner, ip cnet.IP, field string) error {
+	if expectedOwner == nil {
+		return nil
+	}
+	if MatchAttributeOwner(currentAttrs, expectedOwner) {
+		return nil
+	}
+	var currentPod, currentNamespace string
+	if currentAttrs != nil {
+		currentPod = currentAttrs[AttributePod]
+		currentNamespace = currentAttrs[AttributeNamespace]
+	}
+	return cerrors.ErrorResourceUpdateConflict{
+		Err:        fmt.Errorf("cannot set %s: expected pod=%s namespace=%s but found pod=%s namespace=%s", field, expectedOwner.Name, expectedOwner.Namespace, currentPod, currentNamespace),
+		Identifier: ip.String(),
+	}
 }
