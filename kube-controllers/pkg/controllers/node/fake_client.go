@@ -143,6 +143,10 @@ func (f *FakeCalicoClient) HostEndpoints() clientv3.HostEndpointInterface {
 	panic("not implemented")
 }
 
+func (f *FakeCalicoClient) LiveMigrations() clientv3.LiveMigrationInterface {
+	panic("not implemented")
+}
+
 // WorkloadEndpoints returns an interface for managing workload endpoint resources.
 func (f *FakeCalicoClient) WorkloadEndpoints() clientv3.WorkloadEndpointInterface {
 	panic("not implemented")

@@ -248,6 +248,11 @@ func (c *MockIPAMClient) HostEndpoints() client.HostEndpointInterface {
 	return nil
 }
 
+func (c *MockIPAMClient) LiveMigrations() client.LiveMigrationInterface {
+	// DO NOTHING
+	return nil
+}
+
 func (c *MockIPAMClient) WorkloadEndpoints() client.WorkloadEndpointInterface {
 	// DO NOTHING
 	return nil
