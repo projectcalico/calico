@@ -30,7 +30,7 @@ installation:
 
   # Valid options: EKS, GKE, AKS, RKE2, OpenShift, DockerEnterprise, TKG, Kind.
   # If empty the operator will attempt to automatically determine the current provider.
-  # kubernetesProvider: ""
+  kubernetesProvider: ""
 
   # cni:
   #   # "Calico" (default), "AmazonVPC", "GKE", "AzureVNET", "HostLocal"
