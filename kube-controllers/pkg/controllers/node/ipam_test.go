@@ -1961,9 +1961,9 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Inject an error to simulate ReleaseHostAffinities failing (e.g., "block not empty").
 		cli.(*FakeCalicoClient).SetReleaseHostAffinityError(fmt.Errorf("block is not empty"))
 
-		// --- Pass 1: cleanup should fail, but syncIPAM() should still succeed ---
+		// --- Pass 1: cleanup should fail, but syncComplete() should still run ---
 		err := c.syncIPAM()
-		Expect(err).NotTo(HaveOccurred(), "syncIPAM should not return error when node cleanup fails")
+		Expect(err).To(HaveOccurred(), "syncIPAM should return error when work remains")
 
 		// The tunnel IP should be GC'd (it's a confirmed leak).
 		Expect(fakeClient.handlesReleased[tunnelHandle]).To(BeTrue(), "Tunnel IP handle should be released")

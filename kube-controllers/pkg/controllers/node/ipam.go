@@ -1102,10 +1102,10 @@ func (c *IPAMController) syncIPAM() error {
 		c.allocationState.markDirty(node, "node cleanup failed, will retry")
 	}
 
-	// If there is still pending work, schedule another pass.
-	if len(c.confirmedLeaks) > 0 || len(c.allocationState.dirtyNodes) > 0 {
-		log.Info("Pending work remains, scheduling another pass")
-		kick(c.syncChan)
+	// If there is remaining work, return an error so the retry controller schedules
+	// the next sync with exponential backoff, avoiding tight-loop retries.
+	if len(failedNodes) > 0 || len(c.confirmedLeaks) > 0 {
+		return fmt.Errorf("work remaining: %d nodes, %d confirmed leaks", len(failedNodes), len(c.confirmedLeaks))
 	}
 	return nil
 }
