@@ -65,6 +65,17 @@ const (
 	ServiceLoadBalancerAggregationDisabled ServiceLoadBalancerAggregation = "Disabled"
 )
 
+// BGPWithinCluster defines whether BGP within the cluster is enabled or disabled.
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type BGPWithinCluster string
+
+const (
+	// BGPWithinClusterEnabled means BGP within the cluster is enabled (default behavior)
+	BGPWithinClusterEnabled BGPWithinCluster = "Enabled"
+	// BGPWithinClusterDisabled means BGP within the cluster is disabled
+	BGPWithinClusterDisabled BGPWithinCluster = "Disabled"
+)
+
 // BGPConfigurationSpec contains the values of the BGP configuration.
 type BGPConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
@@ -146,6 +157,11 @@ type BGPConfigurationSpec struct {
 	// It is recommended to use a link-local address.
 	// +optional
 	LocalWorkloadPeeringIPV6 string `json:"localWorkloadPeeringIPV6,omitempty" validate:"omitempty,ipv6"`
+
+	// BGPWithinCluster enables or disables BGP within the cluster. [Default: Enabled]
+	// +kubebuilder:default=Enabled
+	// +optional
+	BGPWithinCluster *BGPWithinCluster `json:"bgpWithinCluster,omitempty" validate:"omitempty"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.
