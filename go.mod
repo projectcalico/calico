@@ -380,6 +380,19 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
 
+require (
+	kubevirt.io/api v1.8.0-alpha.0
+	kubevirt.io/client-go v1.8.0-alpha.0
+)
+
+require (
+	github.com/go-kit/log v0.2.1 // indirect
+	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	kubevirt.io/containerized-data-importer-api v1.63.1 // indirect
+	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
+)
+
 replace (
 	github.com/projectcalico/api => ./api
 	github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery

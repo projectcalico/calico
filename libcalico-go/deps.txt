@@ -49,6 +49,7 @@ github.com/openshift/custom-resource-status v1.1.2
 github.com/pkg/errors v0.9.1
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
+github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
 github.com/prometheus/client_golang v1.23.2
 github.com/prometheus/client_model v0.6.2
 github.com/prometheus/common v0.67.2
@@ -97,7 +98,8 @@ k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
 k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
 k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
-kubevirt.io/api v1.7.0
+kubevirt.io/api v1.8.0-alpha.0
+kubevirt.io/client-go v1.8.0-alpha.0
 kubevirt.io/containerized-data-importer-api v1.63.1
 kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90
 sigs.k8s.io/controller-runtime v0.22.3
