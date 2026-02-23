@@ -19,49 +19,34 @@ import (
 	"fmt"
 
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"kubevirt.io/client-go/kubecli"
+	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
 )
 
-// GetVirtClientFromConfig creates a KubeVirt client from a clientcmd.ClientConfig
-func GetVirtClientFromConfig(clientConfig clientcmd.ClientConfig) (kubecli.KubevirtClient, error) {
-	virtClient, err := kubecli.GetKubevirtClientFromClientConfig(clientConfig)
+// NewVirtClient creates a VirtClientInterface from a rest.Config.
+func NewVirtClient(restConfig *rest.Config) (VirtClientInterface, error) {
+	kvClient, err := kubevirtcorev1.NewForConfig(restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("cannot obtain KubeVirt client: %w", err)
 	}
-	return virtClient, nil
+	return &virtClientAdapter{client: kvClient}, nil
 }
 
-// GetVirtClientFromRestConfig creates a KubeVirt client from a rest.Config
-func GetVirtClientFromRestConfig(restConfig *rest.Config) (kubecli.KubevirtClient, error) {
-	virtClient, err := kubecli.GetKubevirtClientFromRESTConfig(restConfig)
-	if err != nil {
-		return nil, fmt.Errorf("cannot obtain KubeVirt client: %w", err)
-	}
-	return virtClient, nil
-}
-
-// virtClientAdapter adapts the real kubecli.KubevirtClient to our VirtClientInterface.
+// virtClientAdapter adapts the typed KubeVirt client to our VirtClientInterface.
 type virtClientAdapter struct {
-	client kubecli.KubevirtClient
-}
-
-// NewVirtClientAdapter wraps a real KubeVirt client with our interface.
-func NewVirtClientAdapter(client kubecli.KubevirtClient) VirtClientInterface {
-	return &virtClientAdapter{client: client}
+	client kubevirtcorev1.KubevirtV1Interface
 }
 
 // VirtualMachineInstance implements VirtClientInterface.
 func (v *virtClientAdapter) VirtualMachineInstance(namespace string) VMIInterface {
-	return v.client.VirtualMachineInstance(namespace)
+	return v.client.VirtualMachineInstances(namespace)
 }
 
 // VirtualMachine implements VirtClientInterface.
 func (v *virtClientAdapter) VirtualMachine(namespace string) VMInterface {
-	return v.client.VirtualMachine(namespace)
+	return v.client.VirtualMachines(namespace)
 }
 
 // VirtualMachineInstanceMigration implements VirtClientInterface.
 func (v *virtClientAdapter) VirtualMachineInstanceMigration(namespace string) VMIMInterface {
-	return v.client.VirtualMachineInstanceMigration(namespace)
+	return v.client.VirtualMachineInstanceMigrations(namespace)
 }

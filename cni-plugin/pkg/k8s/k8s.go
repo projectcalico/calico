@@ -980,13 +980,7 @@ func NewKubeVirtClient(conf types.NetConf, logger *logrus.Entry) (kubevirt.VirtC
 	}
 
 	// Create KubeVirt client
-	realClient, err := kubevirt.GetVirtClientFromRestConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	// Wrap with our interface adapter
-	return kubevirt.NewVirtClientAdapter(realClient), nil
+	return kubevirt.NewVirtClient(config)
 }
 
 func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotations map[string]string, err error) {
