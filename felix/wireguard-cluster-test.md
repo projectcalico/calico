@@ -545,19 +545,26 @@ kubectl exec -n kube-system <calico-pod> -- ip link show wireguard.cali
 
 ### Test Automation
 
-Comprehensive automated test suite covering:
+**FV Test Suite**: `felix/fv/wireguard_routing_fix_test.go`
 
-**Test Steps**:
-1. Verify cluster state (nodes ready)
-2. Verify Calico pods (4/4 running)
-3. Check WireGuard interfaces (all UP)
-4. **Verify routing rules (source-scoped)**
-5. Check WireGuard route table
-6. Deploy test pod
-7. **Test host→pod connectivity (critical)**
-8. Test pod→pod connectivity
-9. Verify WireGuard peers
-10. Check Felix logs
+Comprehensive automated test covering:
+
+**Test Scenarios**:
+1. Source-scoped routing rule creation (EncryptHostTraffic=false)
+2. Legacy single-rule behavior (EncryptHostTraffic=true)
+3. Dynamic CIDR addition/removal
+4. Host→pod connectivity validation
+5. Pod→pod encrypted connectivity
+6. Routing rule cleanup on workload changes
+7. State machine transitions
+8. Multi-node cluster scenarios
+
+**Validation Steps**:
+- WireGuard interface initialization
+- Routing rules programmed per node CIDR
+- Connectivity matrix (host↔pod, pod↔pod)
+- Firewall mark handling (0x200000)
+- Route table lookups
 
 ### Test Coverage
 
@@ -890,10 +897,22 @@ Cluster Validation: ✅ PASS
 ### Test Artifacts
 
 ```
-cluster-config.yaml          - Kubernetes cluster configuration
-test-suite.sh                - Automated test suite
-test-results.txt             - Test execution logs
-routing-rules-validation.sh  - Routing rule verification script
+felix/fv/wireguard_routing_fix_test.go       - FV test suite (Ginkgo/Gomega)
+felix/test-wireguard-routing-fix.sh          - Manual validation script
+felix/wireguard/wireguard_test.go            - Unit tests (in progress)
+felix/wireguard-cluster-test.md              - This comprehensive report
+```
+
+**FV Test Execution**:
+```bash
+cd felix
+make fv FV_FOCUS="WireGuard source-scoped routing"
+```
+
+**Manual Validation** (any Kubernetes cluster):
+```bash
+# Run on cluster with Calico + WireGuard enabled
+./felix/test-wireguard-routing-fix.sh
 ```
 
 ### References
