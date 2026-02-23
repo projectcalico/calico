@@ -112,7 +112,6 @@ func ParseTLSVersion(version string) (uint16, error) {
 // NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
 // boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
 func NewTLSConfig() (*tls.Config, error) {
-	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
 	env := os.Getenv("TLS_CIPHER_SUITES")
 	ciphers, err := ParseTLSCiphers(env)
 	if err != nil {

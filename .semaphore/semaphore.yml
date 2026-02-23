@@ -541,19 +541,6 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-  - name: Crypto
-    run:
-      when: "change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml','/.semaphore/semaphore.yml.d/02-global_job_config.yml','/.semaphore/semaphore.yml.d/03-promotions.yml','/.semaphore/semaphore.yml.d/09-blocks.yml','/.semaphore/semaphore.yml.d/99-after_pipeline.yml','/.semaphore/semaphore.yml.d/blocks/20-crypto.yml','/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/crypto/**','/hack/test/certs/','/lib.Makefile','/metadata.mk'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go']})"
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - cd crypto
-      jobs:
-        - name: "Crypto: CI"
-          commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
   - name: E2E script & pipeline validations
     run:
       when: "false or change_in(['/.semaphore/end-to-end/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
