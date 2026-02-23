@@ -141,10 +141,14 @@ func (c *connectionTester) deploy() error {
 
 	// Wait for all pods to be running.
 	By("Waiting for all pods in the connection checker to be running")
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	timeout := 1 * time.Minute
+	if windows.ClusterIsWindows() {
+		timeout = 15 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	for _, client := range c.clients {
-		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, 1*time.Minute)
+		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, timeout)
 		if err != nil {
 			return err
 		}
@@ -156,7 +160,7 @@ func (c *connectionTester) deploy() error {
 		client.pod = p
 	}
 	for _, server := range c.servers {
-		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, server.pod.Name, server.pod.Namespace, 1*time.Minute)
+		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, server.pod.Name, server.pod.Namespace, timeout)
 		if err != nil {
 			return err
 		}
@@ -359,7 +363,11 @@ func (c *connectionTester) Execute() {
 	// Context to control overall timeout for all connections. After it times out, we'll forcefully
 	// terminate any remaining connections. This avoids deadlocking the test waiting for results if
 	// something goes wrong.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	timeout := 10 * time.Second
+	if windows.ClusterIsWindows() {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Launch all of the connections in parallel. We'll wait for them all to finish at the end and report on success / failure.
@@ -494,9 +502,7 @@ func (c *connectionTester) command(t Target) string {
 		// Windows.
 		switch t.GetProtocol() {
 		case TCP:
-			cmd = fmt.Sprintf("$sb={Invoke-WebRequest %s -UseBasicParsing -TimeoutSec 3 -DisableKeepAlive}; "+
-				"For ($i=0; $i -lt 5; $i++) { sleep 5; "+
-				"try {& $sb} catch { echo failed loop $i ; continue }; exit 0 ; }; exit 1", t.Destination())
+			cmd = fmt.Sprintf("Invoke-WebRequest %s -UseBasicParsing -TimeoutSec 5 -DisableKeepAlive -ErrorAction Stop | Out-Null", t.Destination())
 		case ICMP:
 			cmd = fmt.Sprintf("Test-Connection -Count 5 -ComputerName %s", t.Destination())
 		default:
@@ -596,7 +602,7 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	if windows.ClusterIsWindows() {
 		image = images.WindowsClientImage()
 		command = []string{"powershell.exe"}
-		args = []string{"Start-Sleep", "600"}
+		args = []string{"Start-Sleep", "3600"}
 		nodeselector["kubernetes.io/os"] = "windows"
 	} else {
 		image = images.Alpine
@@ -766,7 +772,7 @@ func randomString(length int) string {
 func ExecInPod(pod *v1.Pod, sh, opt, cmd string) (string, error) {
 	args := []string{"exec", pod.Name, "--", sh, opt, cmd}
 	return kubectl.NewKubectlCommand(pod.Namespace, args...).
-		WithTimeout(time.After(5 * time.Second)).
+		WithTimeout(time.After(10 * time.Second)).
 		Exec()
 }
 
