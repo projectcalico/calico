@@ -79,6 +79,16 @@ func (f *FakeCalicoClient) IPAMUpgradeNodeNames() []string {
 	return nil
 }
 
+// SetReleaseHostAffinityError configures the fake IPAM client to return the given
+// error from ReleaseHostAffinities, simulating cleanup failures.
+func (f *FakeCalicoClient) SetReleaseHostAffinityError(err error) {
+	if fic, ok := f.ipamClient.(*fakeIPAMClient); ok {
+		fic.Lock()
+		defer fic.Unlock()
+		fic.releaseHostAffinityError = err
+	}
+}
+
 // StagedGlobalNetworkPolicies returns an interface for managing staged global network policy resources.
 func (f *FakeCalicoClient) StagedGlobalNetworkPolicies() clientv3.StagedGlobalNetworkPolicyInterface {
 	panic("not implemented") // TODO: Implement
@@ -266,6 +276,10 @@ type fakeIPAMClient struct {
 	upgradeCalls     int
 	upgradeNodeNames []string
 	upgradeErrors    []error // returned in order on successive calls
+
+	// releaseHostAffinityError, when set, causes ReleaseHostAffinities to return
+	// this error (simulating "block not empty" failures during node cleanup).
+	releaseHostAffinityError error
 }
 
 func (f *fakeIPAMClient) affinityReleased(aff string) bool {
@@ -372,7 +386,9 @@ func (f *fakeIPAMClient) ReleaseBlockAffinity(ctx context.Context, block *model.
 func (f *fakeIPAMClient) ReleaseHostAffinities(ctx context.Context, affinityCfg ipam.AffinityConfig, mustBeEmpty bool) error {
 	f.Lock()
 	defer f.Unlock()
-
+	if f.releaseHostAffinityError != nil {
+		return f.releaseHostAffinityError
+	}
 	f.affinitiesReleased[affinityCfg.Host] = true
 	return nil
 }
