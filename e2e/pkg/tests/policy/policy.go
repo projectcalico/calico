@@ -38,13 +38,11 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
 )
 
-// Increase QPS, Burst and Timeout in framework config
-// in order to prevent context deadline errors.
+// Increase Timeout in framework config in order to prevent context
+// deadline errors (as things tend to take longer on Windows).
 func init() {
 	config, err := framework.LoadConfig()
 	if err == nil {
-		config.QPS = 100
-		config.Burst = 200
 		config.Timeout = 2 * time.Minute
 	}
 }

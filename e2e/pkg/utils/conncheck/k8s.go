@@ -55,8 +55,10 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 		if windows.ClusterIsWindows() {
 			env = []v1.EnvVar{
 				{
+					// porter (the windows server pod) uses the port value from the
+					// env var name, it doesn't care about the env var value here
 					Name:  fmt.Sprintf("SERVE_PORT_%d", port),
-					Value: "foo",
+					Value: "value-not-used",
 				},
 			}
 		} else {
