@@ -6,6 +6,7 @@ go 1.25.7
 github.com/beorn7/perks v1.0.1
 github.com/cespare/xxhash/v2 v2.3.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+github.com/emicklei/go-restful v2.15.0+incompatible
 github.com/emicklei/go-restful/v3 v3.12.2
 github.com/fxamacker/cbor/v2 v2.9.0
 github.com/go-logr/logr v1.4.3
