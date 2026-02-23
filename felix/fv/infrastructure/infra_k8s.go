@@ -623,7 +623,6 @@ func (kds *K8sDatastoreInfra) GetDockerArgs() []string {
 		"-e", "K8S_API_ENDPOINT=" + kds.Endpoint,
 		"-e", "KUBERNETES_MASTER=" + kds.Endpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"-v", kds.CertFileName + ":/tmp/apiserver.crt",
 	}
 }
 
@@ -634,7 +633,6 @@ func (kds *K8sDatastoreInfra) GetBadEndpointDockerArgs() []string {
 		"-e", "TYPHA_DATASTORETYPE=kubernetes",
 		"-e", "K8S_API_ENDPOINT=" + kds.BadEndpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"-v", kds.CertFileName + ":/tmp/apiserver.crt",
 	}
 }
 
