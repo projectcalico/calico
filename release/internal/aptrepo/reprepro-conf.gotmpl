@@ -1,0 +1,11 @@
+{{ $config := . }}
+{{ range $codename := .Components }}
+Origin: {{ $config.Origin }}
+Label: {{ $config.Label }}
+Codename: {{ $codename }}
+Architectures: {{ join $config.Architectures " "}}
+Components: main
+Description: {{ $config.ProductName }} packages for Debian and Ubuntu systems
+SignWith: {{ $config.GPGKeyID }}
+Contents:
+{{ end }}
