@@ -756,6 +756,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	}
 
 	bgpWithinCluster := c.BGPWithinCluster()
+	log.Infof("pepper %v", bgpWithinCluster)
 
 	for key, value := range kvPairs {
 		var ippool model.IPPool
@@ -889,7 +890,7 @@ func (c *client) BGPWithinCluster() bool {
 		return true
 	}
 	log.Debugf("BGPWithinCluster is %s", v)
-	return (v != "Disabled")
+	return v == "Enabled"
 }
 
 func (c *client) localSubnet(ipVersion int) (string, error) {
