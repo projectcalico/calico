@@ -329,7 +329,7 @@ func (kp *KubeProxy) pollHostMetadataV4V6UpdatesNonBlocking() map[string]any {
 // - An 'update' in latest overwrites the corresponding key in 'existing'.
 // - If 'latest' or 'existing' is nil, does nothing.
 func mergeHostMetadataV4V6Updates(existing map[string]*proto.HostMetadataV4V6Update, latest map[string]any) {
-	if latest == nil || existing == nil {
+	if latest == nil {
 		return
 	}
 
