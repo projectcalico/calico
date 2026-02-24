@@ -43,6 +43,8 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"k8s.io/kubernetes/pkg/proxy/runner"
 	"k8s.io/kubernetes/pkg/proxy/util"
+
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // Proxy watches for updates of Services and Endpoints, maintains their mapping
@@ -58,6 +60,7 @@ type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
 	SetHostIPs([]net.IP)
+	SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -94,6 +97,8 @@ type proxy struct {
 
 	svcMap k8sp.ServicePortMap
 	epsMap k8sp.EndpointsMap
+
+	hostMetadataByHostname map[string]*proto.HostMetadataV4V6Update
 
 	dpSyncer  DPSyncer
 	syncerLck sync.Mutex
@@ -146,6 +151,8 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		ipFamily: 4,
 		svcMap:   make(k8sp.ServicePortMap),
 		epsMap:   make(k8sp.EndpointsMap),
+
+		hostMetadataByHostname: make(map[string]*proto.HostMetadataV4V6Update),
 
 		recorder: new(loggerRecorder),
 
@@ -389,6 +396,25 @@ func (p *proxy) SetHostIPs(hostIPs []net.IP) {
 	log.Infof("NodePortAddresses V%d for health checks: %s", p.ipFamily, npa.String())
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder,
 		npa, p.healthzServer)
+}
+
+func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool) {
+	p.runnerLck.Lock()
+	defer p.runnerLck.Unlock()
+
+	// Clear the proxy's map and repopulate.
+	for k := range p.hostMetadataByHostname {
+		delete(p.hostMetadataByHostname, k)
+	}
+
+	for k, v := range updates {
+		p.hostMetadataByHostname[k] = v
+	}
+
+	if requestResync {
+		// Invoke a sync via the runner, so that we can release any locks in this goroutine.
+		p.syncDP()
+	}
 }
 
 func (p *proxy) IPFamily() discovery.AddressType {
