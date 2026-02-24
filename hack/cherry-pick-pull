@@ -178,8 +178,9 @@ trap return_to_kansas EXIT
 #   rel               - release branch basename (e.g. "release-v3.14")
 #   PULL_TITLES[]     - array of PR titles
 #   PULL_BODIES[]     - array of PR bodies
-#   PULL_LABELS[]     - array of PR labels (newline-separated per element)
-#   PULLLINK[]        - array of markdown links (e.g. "org/repo#123")
+#   PULL_LABELS[]     - array of PR labels (one element per PR, labels
+#                       within each element separated by newlines)
+#   PULLLINK[]        - array of PR links (e.g. "org/repo#123")
 #   SRC_MAIN_REPO_ORG, SRC_MAIN_REPO_NAME
 #   DST_MAIN_REPO_ORG, DST_MAIN_REPO_NAME
 #   EXTRA_LABELS      - (optional) extra comma-separated labels to append
