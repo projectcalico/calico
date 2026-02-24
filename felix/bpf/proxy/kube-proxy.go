@@ -300,7 +300,7 @@ func (kp *KubeProxy) CompleteDeferredWork() error {
 	for k, v := range kp.pendingHostMetadataUpdates {
 		updates[k] = v
 		log.WithField("nodeName", k).Debug("Queueing new host metadata update")
-		// ... And don't forget to clear the pending updates after processing!
+		// ... And clear the pending updates after processing.
 		delete(kp.pendingHostMetadataUpdates, k)
 	}
 
