@@ -402,7 +402,15 @@ func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update
 	p.runnerLck.Lock()
 	defer p.runnerLck.Unlock()
 
-	p.hostMetadataByHostname = updates
+	// Clear the proxy's map and repopulate.
+	for k := range p.hostMetadataByHostname {
+		delete(p.hostMetadataByHostname, k)
+	}
+
+	for k, v := range updates {
+		p.hostMetadataByHostname[k] = v
+	}
+
 	if requestResync {
 		// Invoke a sync via the runner, so that we can release any locks in this goroutine.
 		p.syncDP()
