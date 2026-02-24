@@ -198,9 +198,11 @@ func (kp *KubeProxy) start() error {
 	// Wait for the initial update.
 	hostIPs := <-kp.hostIPUpdates
 
-	// Could be nil, initially. Doesn't block.
-	hostMetadataUpdates := kp.checkHostMetadataV4V6Updates()
 	hostMetadata := make(map[string]*proto.HostMetadataV4V6Update)
+	// Block until we go in-sync and get the first batch of hostmetadata
+	// updates, to avoid a flap after a Felix restart. In practice, this
+	// recv should happen very soon after receiving the host IPs above.
+	hostMetadataUpdates := <-kp.hostMetadataUpdates
 	mergeHostMetadataV4V6Updates(hostMetadata, hostMetadataUpdates)
 
 	err = kp.run(hostIPs, hostMetadata)
