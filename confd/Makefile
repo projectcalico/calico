@@ -41,7 +41,7 @@ endif
 ###############################################################################
 # Set to true when calling test-xxx to update the rendered templates instead of
 # checking them.
-UPDATE_EXPECTED_DATA?=false
+UPDATE_EXPECTED_DATA?=true
 
 test: ut test-kdd test-etcd
 
