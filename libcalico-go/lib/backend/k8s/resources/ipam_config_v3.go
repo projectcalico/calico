@@ -58,6 +58,11 @@ func (c ipamConfigurationVersionConverter) ConvertFromK8s(r Resource) (Resource,
 	switch o := r.(type) {
 	case *internalapi.IPAMConfig:
 		// This is a crd.projectcalico.org/v1 CRD, convert it to the v3 API struct expected by clientv3.
+		var kubeVirtVMAddressPersistence *v3.VMAddressPersistence
+		if o.Spec.KubeVirtVMAddressPersistence != nil {
+			val := v3.VMAddressPersistence(*o.Spec.KubeVirtVMAddressPersistence)
+			kubeVirtVMAddressPersistence = &val
+		}
 		return &v3.IPAMConfiguration{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       v3.KindIPAMConfiguration,
@@ -65,9 +70,10 @@ func (c ipamConfigurationVersionConverter) ConvertFromK8s(r Resource) (Resource,
 			},
 			ObjectMeta: o.ObjectMeta,
 			Spec: v3.IPAMConfigurationSpec{
-				StrictAffinity:     o.Spec.StrictAffinity,
-				AutoAllocateBlocks: o.Spec.AutoAllocateBlocks,
-				MaxBlocksPerHost:   int32(o.Spec.MaxBlocksPerHost),
+				StrictAffinity:               o.Spec.StrictAffinity,
+				AutoAllocateBlocks:           o.Spec.AutoAllocateBlocks,
+				MaxBlocksPerHost:             int32(o.Spec.MaxBlocksPerHost),
+				KubeVirtVMAddressPersistence: kubeVirtVMAddressPersistence,
 			},
 		}, nil
 	case *v3.IPAMConfiguration:
