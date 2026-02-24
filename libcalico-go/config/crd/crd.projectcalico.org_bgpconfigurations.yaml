@@ -29,6 +29,12 @@ spec:
                 asNumber:
                   format: int32
                   type: integer
+                bgpWithinCluster:
+                  default: Enabled
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 bindMode:
                   enum:
                     - None
