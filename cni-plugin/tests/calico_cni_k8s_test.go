@@ -2164,14 +2164,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Verify that the IPAM plugin populates routes for both IPv4 and IPv6 allocated IPs.
 			Expect(result.IPs).Should(HaveLen(2))
 			Expect(result.Routes).Should(HaveLen(2))
-			routeDsts := map[string]bool{}
-			for _, route := range result.Routes {
-				routeDsts[route.Dst.IP.String()] = true
-			}
-			for _, ipConfig := range result.IPs {
-				Expect(routeDsts).To(HaveKey(ipConfig.Address.IP.String()),
-					fmt.Sprintf("Route should exist for allocated IP %s", ipConfig.Address.IP))
-			}
+			verifyRoutesPopulatedInResult(result, true)
 
 			ids := names.WorkloadEndpointIdentifiers{
 				Node:         testNodeName,
@@ -3610,14 +3603,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Verify that the IPAM plugin populates routes for both IPv4 and IPv6 allocated IPs.
 			Expect(result.Routes).Should(HaveLen(2))
-			routeDsts := map[string]bool{}
-			for _, route := range result.Routes {
-				routeDsts[route.Dst.IP.String()] = true
-			}
-			for _, ipConfig := range result.IPs {
-				Expect(routeDsts).To(HaveKey(ipConfig.Address.IP.String()),
-					fmt.Sprintf("Route should exist for allocated IP %s", ipConfig.Address.IP))
-			}
+			verifyRoutesPopulatedInResult(result, true)
 
 			for _, ip := range result.IPs {
 				interfaceIndex := ip.Interface
