@@ -242,7 +242,7 @@ func mostRestricted(m map[string]parser.LabelRestriction) string {
 			lrs[uniquestr.Make(k)] = v
 		}
 	}
-	handle, found := findMostRestrictedLabel(lrs)
+	handle, found := findMostRestrictedLabel(parser.MakeLabelRestrictions(lrs))
 	if found {
 		return handle.Value()
 	}
