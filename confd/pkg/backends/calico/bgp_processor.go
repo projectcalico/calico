@@ -755,8 +755,12 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		logCtx.WithError(err).Debug("Failed to get local host subnet")
 	}
 
-	bgpWithinCluster := c.BGPWithinCluster()
-	log.Infof("pepper %v", bgpWithinCluster)
+	bgpWithinCluster := v3.BGPWithinClusterEnabled // Default value defined in the BGPConfig CRD.
+	if c.globalBGPConfig != nil && c.globalBGPConfig.Spec.BGPWithinCluster != nil {
+		bgpWithinCluster = *c.globalBGPConfig.Spec.BGPWithinCluster
+	}
+	log.Debugf("BGP within cluster is %v", bgpWithinCluster)
+	bgpInCluster := (bgpWithinCluster != v3.BGPWithinClusterDisabled)
 
 	for key, value := range kvPairs {
 		var ippool model.IPPool
@@ -766,20 +770,20 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		}
 
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
-		statement := c.processIPPool(&ippool, bgpWithinCluster, false, "reject", "", ipVersion)
+		statement := c.processIPPool(&ippool, bgpInCluster, false, "reject", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
 		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
-		statement = c.processIPPool(&ippool, bgpWithinCluster, false, "accept", "", ipVersion)
+		statement = c.processIPPool(&ippool, bgpInCluster, false, "accept", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
 		if ipVersion == 6 || ipVersion == 4 && localSubnetErr == nil {
 			// Generate statements for kernel programming filter.
-			statement = c.processIPPool(&ippool, bgpWithinCluster, true, filterActionForKernel, localSubnet, ipVersion)
+			statement = c.processIPPool(&ippool, bgpInCluster, true, filterActionForKernel, localSubnet, ipVersion)
 			if len(statement) != 0 {
 				config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 			}

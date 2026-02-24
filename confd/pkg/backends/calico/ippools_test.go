@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -311,9 +312,14 @@ func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
 
 	cache := ippoolTestCasesToKVPairs(t, poolsTestsV4, 4)
 	cache[fmt.Sprintf("/calico/bgp/v1/host/%s/network_v4", NodeName)] = "1.1.1.0/24"
-	cache["/calico/bgp/v1/global/bgpWithinCluster"] = "Disabled"
 
 	c := newTestClient(cache, nil)
+	bgpWithinCluster := v3.BGPWithinClusterDisabled
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			BGPWithinCluster: &bgpWithinCluster,
+		},
+	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
@@ -382,9 +388,14 @@ func Test_processIPPoolsV6_BGPFDisabledWithinCluster(t *testing.T) {
 	}()
 
 	cache := ippoolTestCasesToKVPairs(t, poolsTestsV6, 6)
-	cache["/calico/bgp/v1/global/bgpWithinCluster"] = "Disabled"
 
 	c := newTestClient(cache, nil)
+	bgpWithinCluster := v3.BGPWithinClusterDisabled
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			BGPWithinCluster: &bgpWithinCluster,
+		},
+	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
