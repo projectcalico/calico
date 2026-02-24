@@ -499,7 +499,7 @@ func (b allocationBlock) ipsByHandle(handleID string) []cnet.IP {
 	return ips
 }
 
-func (b allocationBlock) attributesForIP(ip cnet.IP, attrType OwnerAttributeType) (map[string]string, error) {
+func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) {
 	// Convert to an ordinal.
 	ordinal, err := b.IPToOrdinal(ip)
 	if err != nil {

@@ -996,7 +996,6 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 	}
 
 doneLookingForIPs:
-	// Remove the old retry logic that was checking at the end
 	logCtx.Infof("Auto-assigned %d out of %d IPv%ds: %v", len(ia.IPs), num, version, ia.IPs)
 	return ia, nil
 }
