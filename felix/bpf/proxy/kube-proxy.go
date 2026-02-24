@@ -325,8 +325,7 @@ func (kp *KubeProxy) checkHostMetadataV4V6Updates() map[string]any {
 // mergeHostMetadataV4V6Updates merges the existing host metadata updates with the latest updates:
 // - A 'remove' in latest deletes the corresponding key in 'existing'.
 // - An 'update' in latest overwrites the corresponding key in 'existing'.
-// - If 'latest' is nil, does nothing.
-// - If 'existing' is nil, initializes it and merges in 'latest'.
+// - If 'latest' or 'existing' is nil, does nothing.
 func mergeHostMetadataV4V6Updates(existing map[string]*proto.HostMetadataV4V6Update, latest map[string]any) {
 	if latest == nil || existing == nil {
 		return
