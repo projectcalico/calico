@@ -328,11 +328,8 @@ func (kp *KubeProxy) checkHostMetadataV4V6Updates() map[string]any {
 // - If 'latest' is nil, does nothing.
 // - If 'existing' is nil, initializes it and merges in 'latest'.
 func mergeHostMetadataV4V6Updates(existing map[string]*proto.HostMetadataV4V6Update, latest map[string]any) {
-	if latest == nil {
+	if latest == nil || existing == nil {
 		return
-	}
-	if existing == nil {
-		existing = make(map[string]*proto.HostMetadataV4V6Update)
 	}
 
 	for k, v := range latest {
