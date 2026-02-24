@@ -246,7 +246,7 @@ func updateIPAMKubeVirtIPPersistence(calicoClient client.Interface, persistence 
 // KubeVirt VM-based handle ID tests
 // These tests verify that virt-launcher pods use VM-based handle IDs for IP persistence.
 // The Makefile installs minimal KubeVirt CRDs (without operators) before running tests.
-// Tests will skip gracefully if CRD installation fails.
+// Tests require KubeVirt CRDs to be installed and will fail if they are missing.
 var _ = Describe("KubeVirt VM-based handle ID", func() {
 	// Skip these tests if not running against Kubernetes datastore
 	// since we need to create CRD resources
