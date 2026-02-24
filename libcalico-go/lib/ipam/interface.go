@@ -112,4 +112,18 @@ type Interface interface {
 	// UpgradeHost checks the resources related to the given node and, if it
 	// finds any that are in older formats, upgrades them.  It is idempotent.
 	UpgradeHost(ctx context.Context, nodeName string) error
+
+	// SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
+	//
+	// Parameters:
+	//   - updates: Specifies the attribute values to set. See OwnerAttributeUpdates for details.
+	//   - preconditions: Optional verification of expected owners before setting attributes.
+	//     If nil, no verification is performed.
+	//
+	// Use cases:
+	//   - Set AlternateOwnerAttrs only: updates.AlternateOwnerAttrs=<target pod attrs>
+	//   - Clear ActiveOwnerAttrs: updates.ClearActiveOwner=true
+	//   - Swap attributes: updates.ActiveOwnerAttrs=<current alternate>, updates.AlternateOwnerAttrs=<current active>
+	//   - Set both: updates.ActiveOwnerAttrs=<new active>, updates.AlternateOwnerAttrs=<new alternate>
+	SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *OwnerAttributeUpdates, preconditions *OwnerAttributePreconditions) error
 }
