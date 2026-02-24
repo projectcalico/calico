@@ -751,7 +751,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	}
 
 	localSubnet, localSubnetErr := c.localSubnet(ipVersion)
-	if err != nil {
+	if localSubnetErr != nil {
 		logCtx.WithError(err).Debug("Failed to get local host subnet")
 	}
 
