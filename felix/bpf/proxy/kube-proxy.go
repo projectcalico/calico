@@ -284,6 +284,11 @@ func (kp *KubeProxy) OnUpdate(msg any) {
 // CompleteDeferredWork implements the manager interface.
 // Avoids blocking the thread by draining & merging older updates on the channel before sending.
 func (kp *KubeProxy) CompleteDeferredWork() error {
+	if len(kp.pendingHostMetadataUpdates) == 0 {
+		log.Debug("No pending host metadata updates to process")
+		return nil
+	}
+
 	// Drain any pre-existing msg first and merge.
 	updates := kp.checkHostMetadataV4V6Updates()
 	if updates == nil {
@@ -294,6 +299,9 @@ func (kp *KubeProxy) CompleteDeferredWork() error {
 	// Always send 'Removes' instead of just deleting updates of the same key (since downstream may need to see a remove).
 	for k, v := range kp.pendingHostMetadataUpdates {
 		updates[k] = v
+		log.WithField("nodeName", k).Debug("Queueing new host metadata update")
+		// ... And don't forget to clear the pending updates after processing!
+		delete(kp.pendingHostMetadataUpdates, k)
 	}
 
 	// Send the merged updates back down the channel.
