@@ -292,7 +292,7 @@ func (kp *KubeProxy) CompleteDeferredWork() error {
 	}
 
 	// Drain any pre-existing msg first and merge.
-	updates := kp.checkHostMetadataV4V6Updates()
+	updates := kp.pollHostMetadataV4V6UpdatesNonBlocking()
 	if updates == nil {
 		updates = make(map[string]any)
 	}
@@ -313,9 +313,9 @@ func (kp *KubeProxy) CompleteDeferredWork() error {
 	return nil
 }
 
-// checkHostMetadataV4V6Updates tries to read a pending host metadata update on the update channel.
+// pollHostMetadataV4V6UpdatesNonBlocking tries to read a pending host metadata update on the update channel.
 // Returns nil immediately, if nothing can be received from the updates channel.
-func (kp *KubeProxy) checkHostMetadataV4V6Updates() map[string]any {
+func (kp *KubeProxy) pollHostMetadataV4V6UpdatesNonBlocking() map[string]any {
 	select {
 	case upd := <-kp.hostMetadataUpdates:
 		return upd
