@@ -290,17 +290,17 @@ func (c *loadBalancerController) handleUpdate(update any) {
 }
 
 func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
-	if kvp.Value == nil {
+	block, ok := kvp.Value.(*model.AllocationBlock)
+	if !ok || block == nil {
 		c.allocationTracker.deleteBlock(kvp.Key.String())
 		return
 	}
 
-	affinity := kvp.Value.(*model.AllocationBlock).Affinity
-	block := kvp.Value.(*model.AllocationBlock)
+	affinity := block.Affinity
 	key := kvp.Key.String()
 
-	if affinity != nil && *affinity != fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
-		c.allocationTracker.deleteBlock(kvp.Key.String())
+	if affinity == nil || *affinity != fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
+		c.allocationTracker.deleteBlock(key)
 		return
 	}
 
