@@ -884,19 +884,6 @@ func (c *client) processIPPool(
 	return emitFilterStatementForIPPools(cidr, extraStatement, action, comment)
 }
 
-// getNodeOrGlobalValue attempts to get a value from a node-specific key first,
-// then falls back to the global key. Returns the value and any error.
-func (c *client) BGPWithinCluster() bool {
-	globalKey := "/calico/bgp/v1/global/bgpWithinCluster"
-	v, err := c.GetValue(globalKey)
-	if err != nil {
-		log.WithError(err).Debug("Failed to get value of bgpWithinCluster in BGPConfiguration")
-		return true
-	}
-	log.Debugf("BGPWithinCluster is %s", v)
-	return v == "Enabled"
-}
-
 func (c *client) localSubnet(ipVersion int) (string, error) {
 	key := fmt.Sprintf("/calico/bgp/v1/host/%s/network_v%d", NodeName, ipVersion)
 	subnet, err := c.GetValue(key)

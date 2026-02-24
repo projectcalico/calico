@@ -345,7 +345,7 @@ func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
 	}
 }
 
-func Test_processIPPoolsV6_BGPFDisabledWithinCluster(t *testing.T) {
+func Test_processIPPoolsV6_BGPDisabledWithinCluster(t *testing.T) {
 	forKernelStatements := []string{
 		// IPv6 IPIP Encapsulation cases.
 		`  if (net ~ dead:beef:10::/64) then { reject; } # Cluster routes are handled by Felix.`,
