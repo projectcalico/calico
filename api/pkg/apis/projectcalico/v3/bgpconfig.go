@@ -161,7 +161,7 @@ type BGPConfigurationSpec struct {
 	// BGPWithinCluster enables or disables BGP within the cluster. [Default: Enabled]
 	// +kubebuilder:default=Enabled
 	// +optional
-	BGPWithinCluster *BGPWithinCluster `json:"bgpWithinCluster,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
+	BGPWithinCluster *BGPWithinCluster `json:"bgpWithinCluster,omitempty"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.

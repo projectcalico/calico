@@ -967,7 +967,7 @@ test_felix_program_cluster_routes() {
 
     # Run confd as a background process.
     echo "Running confd as background process"
-    CALICO_NETWORKING_BACKEND="felix" BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
     CONFD_PID=$!
     echo "Running with PID " $CONFD_PID
 
