@@ -26,20 +26,20 @@ import (
 func printUsageAndExit() {
 	_, _ = fmt.Fprint(os.Stderr, `CI Dependency helper tool.
 
-Usage: 
+Usage:
 
   deps [options] modules <package>          # Print go modules that package depends on
   deps [options] local-dirs <package>       # Print in-repo go package dirs that
                                   # package depends on.
-  deps local-dirs-main-only <package> # Print in-repo go package dirs that 
+  deps local-dirs-main-only <package> # Print in-repo go package dirs that
                                   # package depends on. (Main packages only.)
   deps [options] local-dirs-main-only <package> # Print in-repo go package dirs that
                                   # package depends on. (Main packages only.)
   deps [options] test-exclusions <package>  # Print glob patterns to match *_test.go
-                                  # files in dependency dirs outside the 
+                                  # files in dependency dirs outside the
                                   # package itself.
   deps [options] sem-change-in(-pretty) <package>[,<secondary package>...] # Print a SemaphoreCI
-                                  # conditions DSL change_in() clause for 
+                                  # conditions DSL change_in() clause for
                                   # <package>, including non-test deps from
                                   # any <secondary package> clauses.
 
@@ -54,7 +54,7 @@ The test-exclusions and sem-change-in sub-commands are intended to be used with
 packages at the top-level of the repo.  Test exclusions are based on whether
 a dependency is within the package.
 
-The change_in() clause always depends on the whole package directory itself. 
+The change_in() clause always depends on the whole package directory itself.
 Some non-Go dependencies are hard-coded in the tool.  For example, it knows
 that node depends on felix/bpf-*.
 `)
@@ -434,6 +434,9 @@ func printModules(pkg string) {
 	// For ease, do the full cross product. Only takes ~100ms.
 	var mods []string
 	for _, mod := range modules {
+		if mod.Replace != nil {
+			mod = *mod.Replace
+		}
 		for _, pkg := range packageDeps {
 			if strings.HasPrefix(pkg, mod.Path) {
 				if mod.Version != "" {
@@ -510,6 +513,7 @@ func findMainPackages(pkg string) ([]string, error) {
 type module struct {
 	Path    string
 	Version string
+	Replace *module
 }
 
 func loadGoMods() ([]module, error) {
