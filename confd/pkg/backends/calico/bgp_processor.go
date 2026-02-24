@@ -755,6 +755,13 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		logCtx.WithError(err).Debug("Failed to get local host subnet")
 	}
 
+	bgpWithinCluster := v3.BGPWithinClusterEnabled // Default value defined in the BGPConfig CRD.
+	if c.globalBGPConfig != nil && c.globalBGPConfig.Spec.BGPWithinCluster != nil {
+		bgpWithinCluster = *c.globalBGPConfig.Spec.BGPWithinCluster
+	}
+	log.Debugf("BGP within cluster is %v", bgpWithinCluster)
+	bgpInCluster := (bgpWithinCluster != v3.BGPWithinClusterDisabled)
+
 	for key, value := range kvPairs {
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
@@ -763,20 +770,20 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		}
 
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
-		statement := c.processIPPool(&ippool, false, "reject", "", ipVersion)
+		statement := c.processIPPool(&ippool, bgpInCluster, false, "reject", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
 		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
-		statement = c.processIPPool(&ippool, false, "accept", "", ipVersion)
+		statement = c.processIPPool(&ippool, bgpInCluster, false, "accept", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
 		if ipVersion == 6 || ipVersion == 4 && localSubnetErr == nil {
 			// Generate statements for kernel programming filter.
-			statement = c.processIPPool(&ippool, true, filterActionForKernel, localSubnet, ipVersion)
+			statement = c.processIPPool(&ippool, bgpInCluster, true, filterActionForKernel, localSubnet, ipVersion)
 			if len(statement) != 0 {
 				config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 			}
@@ -823,6 +830,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 //	if (net ~ 10.10.0.0/16) then { accept; }
 func (c *client) processIPPool(
 	ippool *model.IPPool,
+	bgpWithinCluster bool,
 	forProgrammingKernel bool,
 	filterAction string,
 	localSubnet string,
@@ -830,6 +838,16 @@ func (c *client) processIPPool(
 ) string {
 	cidr := ippool.CIDR.String()
 	var action, comment, extraStatement string
+
+	felixHandlesRoutes := func(forProgrammingKernel bool, routeType string) {
+		if forProgrammingKernel {
+			action = "reject"
+			comment = fmt.Sprintf("%s routes are handled by Felix.", routeType)
+		} else {
+			action = "accept"
+		}
+	}
+
 	switch {
 	case ippool.DisableBGPExport && !forProgrammingKernel:
 		// IPPool's BGP export is disabled, and filter is for exporting to other peers.
@@ -837,22 +855,20 @@ func (c *client) processIPPool(
 		comment = "BGP export is disabled."
 	case ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet:
 		// VXLAN encapsulation is always handled by Felix.
-		if forProgrammingKernel {
-			// Felix always handles programming VXLAN IPPools.
-			action = "reject"
-			comment = "VXLAN routes are handled by Felix."
-		} else {
-			action = "accept"
-		}
+		felixHandlesRoutes(forProgrammingKernel, "VXLAN")
 	case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
 		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
 		// IPIP encapsulation or No-Encap.
-		if forProgrammingKernel && ipVersion == 4 {
-			// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
-			// our fork of BIRD.
-			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
+		if bgpWithinCluster {
+			if forProgrammingKernel && ipVersion == 4 {
+				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+				// our fork of BIRD.
+				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
+			}
+			action = "accept"
+		} else {
+			felixHandlesRoutes(forProgrammingKernel, "Cluster")
 		}
-		action = "accept"
 	default:
 		log.WithFields(log.Fields{
 			"ippool":    ippool.CIDR,
@@ -866,6 +882,19 @@ func (c *client) processIPPool(
 		return ""
 	}
 	return emitFilterStatementForIPPools(cidr, extraStatement, action, comment)
+}
+
+// getNodeOrGlobalValue attempts to get a value from a node-specific key first,
+// then falls back to the global key. Returns the value and any error.
+func (c *client) BGPWithinCluster() bool {
+	globalKey := "/calico/bgp/v1/global/bgpWithinCluster"
+	v, err := c.GetValue(globalKey)
+	if err != nil {
+		log.WithError(err).Debug("Failed to get value of bgpWithinCluster in BGPConfiguration")
+		return true
+	}
+	log.Debugf("BGPWithinCluster is %s", v)
+	return v == "Enabled"
 }
 
 func (c *client) localSubnet(ipVersion int) (string, error) {
