@@ -148,8 +148,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
+	logger := logrus.WithFields(logrus.Fields{
+		"Workload":    epIDs.WEPName,
+		"ContainerID": epIDs.ContainerID,
+	})
+
 	// Always detect VMI info so we can reject migration targets when persistence is disabled.
-	vmiInfo, err := getVMIInfoForPod(conf, epIDs)
+	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get VMI info: %w", err)
 	}
@@ -160,18 +165,17 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// Reject migration target pods when persistence is disabled.
 	if vmiInfo != nil && vmiInfo.IsMigrationTarget() {
 		if !ipPersistenceEnabledForVM {
-			logrus.Error("Live migration target pod rejected: KubeVirtVMAddressPersistence is disabled")
+			logger.Error("Live migration target pod rejected: KubeVirtVMAddressPersistence is disabled")
 			return fmt.Errorf("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
 		}
 	}
 
-	// Use VM-based handle ID only when both vmiInfo is present and persistence is enabled.
 	var handleID string
 	if ipPersistenceEnabledForVM {
 		// Use VM-based handle ID for IP stability across pod recreations/migrations.
 		// Handle ID is based on namespace/vmName which remains stable across VMI recreation.
 		handleID = ipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
-		logrus.WithFields(logrus.Fields{
+		logger.WithFields(logrus.Fields{
 			"pod":               epIDs.Pod,
 			"namespace":         epIDs.Namespace,
 			"vmiName":           vmiInfo.GetName(),
@@ -184,11 +188,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		handleID = utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
 	}
 
-	logger := logrus.WithFields(logrus.Fields{
-		"Workload":    epIDs.WEPName,
-		"ContainerID": epIDs.ContainerID,
-		"HandleID":    handleID,
-	})
+	logger = logger.WithField("HandleID", handleID)
 
 	ipamArgs := ipamArgs{}
 	if err = cnitypes.LoadArgs(args.Args, &ipamArgs); err != nil {
@@ -466,7 +466,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Set routes in the result - one route per IP for normal pods.
 	// For migration target pods, handleVirtLauncherPod() returns early with empty routes,
-	// so we only reach here for normal pods.
+	// so we only reach here for normal pods or migration source pods.
 	for _, ipConfig := range r.IPs {
 		r.Routes = append(r.Routes, &cnitypes.Route{
 			Dst: ipConfig.Address,
@@ -549,37 +549,37 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
 // Returns (nil, nil) if the pod is not a virt-launcher pod.
 // Returns (nil, error) if there was an error retrieving or validating VMI information.
-func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers) (*kubevirt.PodVMIInfo, error) {
+func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
 	// Only check for VMI info in Kubernetes orchestrator
 	if epIDs.Orchestrator != "k8s" || epIDs.Pod == "" || epIDs.Namespace == "" {
 		return nil, nil
 	}
 
 	// Create Kubernetes client
-	k8sClient, err := k8s.NewK8sClient(conf, logrus.NewEntry(logrus.StandardLogger()))
+	k8sClient, err := k8s.NewK8sClient(conf, logger)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to create Kubernetes client for VMI detection")
+		logger.WithError(err).Error("Failed to create Kubernetes client for VMI detection")
 		return nil, err
 	}
 
 	// Get the pod
 	pod, err := k8sClient.CoreV1().Pods(epIDs.Namespace).Get(context.Background(), epIDs.Pod, metav1.GetOptions{})
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get pod for VMI detection")
+		logger.WithError(err).Error("Failed to get pod for VMI detection")
 		return nil, err
 	}
 
 	// Create KubeVirt client for VMI verification
-	virtClient, err := k8s.NewKubeVirtClient(conf, logrus.NewEntry(logrus.StandardLogger()))
+	virtClient, err := k8s.NewKubeVirtClient(conf, logger)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to create KubeVirt client for VMI detection")
+		logger.WithError(err).Error("Failed to create KubeVirt client for VMI detection")
 		return nil, err
 	}
 
 	// Get and verify VMI info (queries VMI resource for verification)
 	vmiInfo, err := kubevirt.GetPodVMIInfo(pod, virtClient)
 	if err != nil {
-		logrus.WithError(err).Error("Invalid virt-launcher pod configuration")
+		logger.WithError(err).Error("Invalid virt-launcher pod configuration")
 		return nil, err
 	}
 
@@ -631,8 +631,13 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
+	logger := logrus.WithFields(logrus.Fields{
+		"Workload":    epIDs.WEPName,
+		"ContainerID": epIDs.ContainerID,
+	})
+
 	// Always detect VMI info for logging, but only use VM-based handle when persistence is enabled.
-	vmiInfo, err := getVMIInfoForPod(conf, epIDs)
+	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get VMI info: %w", err)
 	}
@@ -648,7 +653,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		handleID = ipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
 
 		// VMI deletion status is already available from embedded VMIResource
-		logrus.WithFields(logrus.Fields{
+		logger.WithFields(logrus.Fields{
 			"pod":                   epIDs.Pod,
 			"namespace":             epIDs.Namespace,
 			"vmiName":               vmiInfo.GetName(),
@@ -663,11 +668,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		handleID = utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
 	}
 
-	logger := logrus.WithFields(logrus.Fields{
-		"Workload":    epIDs.WEPName,
-		"ContainerID": epIDs.ContainerID,
-		"HandleID":    handleID,
-	})
+	logger = logger.WithField("HandleID", handleID)
 
 	logger.Info("Releasing address using handleID")
 
