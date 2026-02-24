@@ -327,7 +327,7 @@ func (kp *KubeProxy) pollHostMetadataV4V6UpdatesNonBlocking() map[string]any {
 // mergeHostMetadataV4V6Updates merges the existing host metadata updates with the latest updates:
 // - A 'remove' in latest deletes the corresponding key in 'existing'.
 // - An 'update' in latest overwrites the corresponding key in 'existing'.
-// - If 'latest' or 'existing' is nil, does nothing.
+// - If 'latest' is nil, does nothing. 'existing' must be non-nil.
 func mergeHostMetadataV4V6Updates(existing map[string]*proto.HostMetadataV4V6Update, latest map[string]any) {
 	if latest == nil {
 		return
