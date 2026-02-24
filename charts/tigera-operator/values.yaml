@@ -5,9 +5,23 @@
 # Example: --set-file imagePullSecrets.gcr=./pull-secret.json
 imagePullSecrets: {}
 
+# Configures general installation parameters for Calico. Schema is based
+# on the operator.tigera.io/Installation API documented
+# here: https://docs.tigera.io/calico/latest/reference/installation/api#installationspec
 installation:
   enabled: true
-  kubernetesProvider: ""
+  # Uncomment to enable prometheus metrics reporting for node and typha.
+  # nodeMetricsPort: 9090
+  # typhaMetricsPort: 9091
+  # Path to the kubelet volume plugin directory used by the Calico CSI driver.
+  # Set to "None" to disable the CSI driver. If unset, defaults to /var/lib/kubelet (CSI enabled).
+  kubeletVolumePluginPath: "None"
+
+  # --- General Image Settings ---
+  # registry: <custom-registry>
+  # imagePath: <optional-path>
+  # imagePrefix: <optional-prefix>
+
   # imagePullSecrets are configured on all images deployed by the tigera-operator.
   # secrets specified here must exist in the tigera-operator namespace; they won't be created by the operator or helm.
   # imagePullSecrets are a slice of LocalObjectReferences, which is the same format they appear as on deployments.
@@ -15,8 +29,58 @@ installation:
   # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
   imagePullSecrets: []
 
-  # Disable CSI driver by default.
-  kubeletVolumePluginPath: "None"
+  # Valid options: EKS, GKE, AKS, RKE2, OpenShift, DockerEnterprise, TKG, Kind.
+  # If empty the operator will attempt to automatically determine the current provider.
+  kubernetesProvider: ""
+
+  # cni:
+  #   # "Calico" (default), "AmazonVPC", "GKE", "AzureVNET", "HostLocal"
+  #   type: "Calico"
+  #   ipam:
+  #     # "Calico" (default), "HostLocal", "AmazonVPC", "AzureVNET"
+  #     type: "Calico"
+
+  # calicoNetwork:
+  #   # "Enabled" (default) or "Disabled"
+  #   bgp: "Enabled"
+  #
+  #   # One of: Iptables, BPF, VPP, Nftables
+  #   linuxDataplane: "Iptables"
+  #
+  #   # Enable HostPorts (default: Enabled)
+  #   hostPorts: "Enabled"
+  #
+  #   # Default: auto-detected based on node interface (typically around 1450)
+  #   mtu: 1450
+  #
+  #   ipPools:
+  #     - cidr: "192.168.0.0/16"
+  #       encapsulation: "IPIP" # IPIP, VXLAN, IPIPCrossSubnet, VXLANCrossSubnet, None
+  #       natOutgoing: "Enabled"
+  #       nodeSelector: "all()"
+  #       blockSize: 26
+
+  # Number of replicas for Typha/Control Plane (default: 2)
+  controlPlaneReplicas: 2
+
+  controlPlaneNodeSelector: {}
+
+  controlPlaneTolerations: []
+
+  # Run Calico in non-privileged mode (Rootless)
+  nonPrivileged: "Disabled"
+
+  # Enable FIPS compliance mode (Requires FIPS compliant cluster/images)
+  # Only supported for Variant=Calico.
+  # fipsMode: "Disabled"
+
+  # Configure log severity (Info, Debug, Warning, Error, Fatal)
+  # logging:
+  #   cni:
+  #     logSeverity: Info
+  #     logFileMaxSize: 100Mi
+  #     logFileMaxAgeDays: 30 # Days
+  #     logFileMaxCount: 10
 
 # apiServer configures the Calico API server, needed for interacting with
 # the projectcalico.org/v3 suite of APIs.
