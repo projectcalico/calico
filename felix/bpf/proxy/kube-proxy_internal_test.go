@@ -124,7 +124,7 @@ func TestOnUpdateBatchesHostMetadataUpdates(t *testing.T) {
 
 	Expect(kp.CompleteDeferredWork()).To(Succeed(), "CompleteDeferredWork should succeed")
 	// Read the queued update from the channel.
-	Eventually(kp.checkHostMetadataV4V6Updates).Should(Equal(map[string]any{
+	Expect(kp.checkHostMetadataV4V6Updates()).To(Equal(map[string]any{
 		"hn1": update,
 		"hn2": update2,
 	}))
@@ -154,7 +154,7 @@ func TestOnUpdateRemoveOverwritesPendingUpdate(t *testing.T) {
 
 	Expect(kp.CompleteDeferredWork()).To(Succeed(), "CompleteDeferredWork should succeed")
 
-	Eventually(kp.checkHostMetadataV4V6Updates()).Should(Equal(map[string]any{
+	Expect(kp.checkHostMetadataV4V6Updates()).To(Equal(map[string]any{
 		"hn1": update1Remove,
 		"hn2": update2,
 	}))
