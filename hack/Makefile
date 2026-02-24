@@ -45,8 +45,15 @@ st:
 	@echo "No STs available"
 
 ###############################################################################
+# Shell script tests
+###############################################################################
+.PHONY: shell-test
+shell-test:
+	bash cherry-pick-pull_test.sh
+
+###############################################################################
 # CI
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks test
+ci: clean static-checks test shell-test
