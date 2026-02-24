@@ -694,9 +694,10 @@ func (e ErrInsufficientIPsByHandle) Error() string {
 }
 
 // handleMaxAllocReached handles the case where incrementHandle fails due to maxAlloc constraint.
-// It queries for existing IPs allocated to the handle, filtered by IP version.
+// It queries for existing IPs allocated to the handle, filtered by IP version, and returns
+// exactly num IPs if sufficient allocations already exist.
 // Returns:
-//   - []net.IPNet: The existing IPs if sufficient IPs (>= num) were found
+//   - []net.IPNet (len == num): Exactly num existing IPs if sufficient IPs (>= num) were found
 //   - nil, ErrInsufficientIPsByHandle: If partial/no IPs found (caller should retry)
 //   - nil, error: If the query failed
 func (c ipamClient) handleMaxAllocReached(ctx context.Context, handleID string, num int, ipVersion int, logCtx *log.Entry) ([]net.IPNet, error) {
@@ -720,8 +721,8 @@ func (c ipamClient) handleMaxAllocReached(ctx context.Context, handleID string, 
 
 	if len(filtered) >= num {
 		logCtx.WithField("existingIPs", filtered).Info("Found sufficient existing IP allocations, reusing them")
-		result := make([]net.IPNet, 0, len(filtered))
-		for _, ip := range filtered {
+		result := make([]net.IPNet, 0, num)
+		for _, ip := range filtered[:num] {
 			result = append(result, *ip.Network())
 		}
 		return result, nil
