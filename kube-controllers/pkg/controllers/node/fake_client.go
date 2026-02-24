@@ -314,6 +314,11 @@ func (f *fakeIPAMClient) GetAssignmentAttributes(ctx context.Context, addr cnet.
 	panic("not implemented") // TODO: Implement
 }
 
+// SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
+func (f *fakeIPAMClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *ipam.OwnerAttributeUpdates, preconditions *ipam.OwnerAttributePreconditions) error {
+	panic("not implemented") // TODO: Implement
+}
+
 // IPsByHandle returns a list of all IP addresses that have been
 // assigned using the provided handle.
 func (f *fakeIPAMClient) IPsByHandle(ctx context.Context, handleID string) ([]cnet.IP, error) {
