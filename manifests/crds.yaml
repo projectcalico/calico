@@ -33,7 +33,6 @@ spec:
                   format: int32
                   type: integer
                 bgpWithinCluster:
-                  default: Enabled
                   enum:
                     - Enabled
                     - Disabled

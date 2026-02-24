@@ -159,7 +159,6 @@ type BGPConfigurationSpec struct {
 	LocalWorkloadPeeringIPV6 string `json:"localWorkloadPeeringIPV6,omitempty" validate:"omitempty,ipv6"`
 
 	// BGPWithinCluster enables or disables BGP within the cluster. [Default: Enabled]
-	// +kubebuilder:default=Enabled
 	// +optional
 	BGPWithinCluster *BGPWithinCluster `json:"bgpWithinCluster,omitempty"`
 }
