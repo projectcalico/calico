@@ -35,10 +35,10 @@ type KubeProxy struct {
 	proxy  ProxyFrontend
 	syncer DPSyncer
 
-	// Non-thread-safe map - only written/read by the Felix dataplane thread.
-	// Keyed by hostname, value is either a HostMetadataV4V6Update or HostMetadataV4V6Remove.
+	// pendingHostMetadataUpdates contains HostMetadataV4V6Update and HostMetadataV4V6Removes
+	// that we're batching up to send. Only accessed from the int-dataplane goroutine.
 	pendingHostMetadataUpdates map[string]any
-	// Map key is a hostname, value a host metadata update/remove.
+	// hostMetadataUpdates is keyed by hostname, value a host metadata update/remove.
 	// The size-1 channel allows for one non-blocking write,
 	// and repeated updates get merged into older unconsumed ones.
 	hostMetadataUpdates chan map[string]any
