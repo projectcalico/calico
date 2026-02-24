@@ -37,9 +37,9 @@ type KubeProxy struct {
 
 	// pendingHostMetadataUpdates contains HostMetadataV4V6Update and HostMetadataV4V6Removes
 	// that we're batching up to send. Only accessed from the int-dataplane goroutine.
+	// Keyed by hostname (node name).
 	pendingHostMetadataUpdates map[string]any
-	// hostMetadataUpdates is keyed by hostname, value a host metadata update/remove.
-	// The size-1 channel allows for one non-blocking write,
+	// hostMetadataUpdates is a size-1 channel - allows for one non-blocking write,
 	// and repeated updates get merged into older unconsumed ones.
 	hostMetadataUpdates chan map[string]any
 
