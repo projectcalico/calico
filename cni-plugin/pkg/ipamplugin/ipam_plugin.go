@@ -24,6 +24,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -552,6 +553,13 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
 	// Only check for VMI info in Kubernetes orchestrator
 	if epIDs.Orchestrator != "k8s" || epIDs.Pod == "" || epIDs.Namespace == "" {
+		return nil, nil
+	}
+
+	// Quick pre-filter: skip API server queries for pods that are clearly not virt-launcher pods.
+	// KubeVirt hardcodes the "virt-launcher-" prefix in pod GenerateName when creating virt-launcher pods.
+	// This avoids unnecessary API server queries for normal (non-VM) pods on the CNI hot path.
+	if !strings.HasPrefix(epIDs.Pod, "virt-launcher-") {
 		return nil, nil
 	}
 
