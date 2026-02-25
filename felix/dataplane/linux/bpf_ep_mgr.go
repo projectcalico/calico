@@ -4472,10 +4472,10 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 
 func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
 	if m.v6 != nil && cidr.Version() == 6 {
-		m.routeTableV6.RouteRemove(dataplanedefs.BPFInDev, cidr)
+		m.routeTableV6.RouteRemove(dataplanedefs.BPFInDev, routetable.Target{CIDR: cidr})
 	}
 	if m.v4 != nil && cidr.Version() == 4 {
-		m.routeTableV4.RouteRemove(dataplanedefs.BPFInDev, cidr)
+		m.routeTableV4.RouteRemove(dataplanedefs.BPFInDev, routetable.Target{CIDR: cidr})
 	}
 	logrus.WithFields(logrus.Fields{
 		"cidr": cidr,

@@ -2,7 +2,6 @@ package routetable
 
 import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
-	"github.com/projectcalico/calico/felix/ip"
 )
 
 type DummyTable struct {
@@ -24,7 +23,7 @@ func (*DummyTable) Apply() error {
 func (*DummyTable) SetRoutes(routeClass RouteClass, ifaceName string, targets []Target) {
 }
 
-func (*DummyTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr ip.CIDR) {
+func (*DummyTable) RouteRemove(routeClass RouteClass, ifaceName string, target Target) {
 }
 
 func (*DummyTable) RouteUpdate(routeClass RouteClass, ifaceName string, target Target) {
