@@ -23,8 +23,9 @@ echo "[INFO] starting prologue"
 echo "[INFO] Clean out language tools we don't use to free up disk"
 sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*} /root/.local/share/heroku /usr/local/lib/heroku
 
-# Set up the DNS resolver to use OpenDNS servers, which appear to be more reliable.
+echo "[INFO] overriding DNS..."
 echo "nameserver 208.67.222.222" | sudo tee /etc/resolv.conf
+echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
 
 echo "[INFO] checkout..."
 checkout
@@ -41,8 +42,8 @@ RANDOM_TOKEN2=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 4 || true)
 echo "[INFO] random tokens: ${RANDOM_TOKEN1} ${RANDOM_TOKEN2}"
 
 echo "[INFO] Installing jq..."
-sudo apt-get update -y
-sudo apt-get install jq -y
+sudo apt-get -o Acquire::Retries=5 update  -y
+sudo apt-get install -o Acquire::Retries=5 jq -y
 
 echo "[INFO] exporting default env vars..."
 export SEMAPHORE_PIPELINE_STARTED_AT=$(date +%s)
@@ -109,15 +110,11 @@ echo "-----------"
 echo "Semaphore OS information"
 lsb_release -a
 
-echo "[INFO] overriding DNS..."
-echo "nameserver 208.67.222.222" | sudo tee /etc/resolv.conf
-echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
-
 echo "[INFO] installing google cloud sdk..."
 gcloud_cmd_c1="echo \"deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main\" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list"
 gcloud_cmd_c1="$gcloud_cmd_c1 && curl --retry 9 --retry-all-errors -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$gcloud_cmd_c1"; fi
-sudo apt-get update -y || true; sudo apt-get install google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin -y || true
+sudo apt-get -o Acquire::Retries=5 update  -y || true; sudo apt-get install -o Acquire::Retries=5 google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin -y || true
 
 echo "[INFO] activating google service account..."
 export GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-$HOME/secrets/banzai-google-service-account.json}
@@ -131,7 +128,7 @@ export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --filter="region~'
 # Install python3-pip without requiring manual confirmation (-y flag).
 # Explicitly restart all necessary services using needrestart to ensure daemons using outdated libraries are refreshed.
 pip_install_cmd="echo \"[INFO] installing pip beforehand for c1...\""
-pip_install_cmd="$pip_install_cmd; echo \"[INFO] Installing pip3...\" && sudo apt update && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install python3-pip -y && sudo needrestart -r a"
+pip_install_cmd="$pip_install_cmd; echo \"[INFO] Installing pip3...\" && sudo apt-get -o Acquire::Retries=5 update  && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 python3-pip -y && sudo needrestart -r a"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* && $SEMAPHORE_AGENT_MACHINE_OS_IMAGE == "ubuntu2204" ]]; then eval "$pip_install_cmd"; fi
 
 aws_cli_cmd="echo \"[INFO] installing AWS CLI using pip3...\""
@@ -145,11 +142,11 @@ azure_cli_cmd="$azure_cli_cmd; az login --service-principal -u ${AZ_SP_ID} -p ${
 if [[ $PROVISIONER =~ ^azr-.* ]]; then eval "$azure_cli_cmd"; fi
 
 install_tools_cmd="echo \"[INFO] installing addtional tools for c1...\""
-install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing jq, unzip...\" && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install jq unzip -y && sudo needrestart -r a"
+install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing unzip...\" && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 unzip -y && sudo needrestart -r a"
 install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing requests...\" && pip3 install --retries=20 --upgrade requests"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$install_tools_cmd"; fi
 
-if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-tools..."; sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -y putty-tools && sudo needrestart -r a; fi
+if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-tools..."; sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 -y putty-tools && sudo needrestart -r a; fi
 
 echo "[INFO] Installing Banzai CLI..."
 [[ -n "${BZ_VERSION}" ]] && export BZ_RELEASE=tags/${BZ_VERSION} || export BZ_RELEASE=latest
@@ -189,9 +186,6 @@ if [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; the
 
 if [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then python3 -m pip install -r ${BZ_HOME}/scripts/requirements.txt; export PROVISIONER=aws-openshift; pip3 install --upgrade --user awscli; fi
 export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-"${BZ_HOME}/.local"}
-
-cmd="sudo apt-get install -y putty-tools"
-if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then eval "$cmd"; fi
 
 if [[ "${HCP_STAGE}" == "hosted" ]]; then artifact pull workflow hosting-${HOSTING_CLUSTER}-kubeconfig -f --destination ${BZ_LOCAL_DIR}/hosting-kubeconfig; fi
 
