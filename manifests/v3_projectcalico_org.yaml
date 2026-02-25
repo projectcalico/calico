@@ -34304,6 +34304,12 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfUDPGSOLinearize:
+                  enum:
+                    - Enabled
+                    - Disabled
+                    - Auto
+                  type: string
                 cgroupV2Path:
                   type: string
                 chainInsertMode:

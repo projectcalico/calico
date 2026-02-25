@@ -3931,6 +3931,36 @@
           "DescriptionHTML": "<p>Controls whether traffic may be forwarded directly to the peer side of a workload’s device.\nNote that the legacy \"L2Only\" option is now deprecated and if set it is treated like \"Enabled.\nSetting this option to \"Enabled\" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),\nwhich can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.\nAs a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic.</p>",
           "UserEditable": true,
           "GoType": "string"
+        },
+        {
+          "Group": "Dataplane: eBPF",
+          "GroupWithSortPrefix": "22 Dataplane: eBPF",
+          "NameConfigFile": "BPFUDPGSOLinearize",
+          "NameEnvVar": "FELIX_BPFUDPGSOLinearize",
+          "NameYAML": "bpfUDPGSOLinearize",
+          "NameGoAPI": "BPFUDPGSOLinearize",
+          "StringSchema": "One of: `Auto`, `Disabled`, `Enabled` (case insensitive)",
+          "StringSchemaHTML": "One of: <code>Auto</code>, <code>Disabled</code>, <code>Enabled</code> (case insensitive)",
+          "StringDefault": "Auto",
+          "ParsedDefault": "Auto",
+          "ParsedDefaultJSON": "\"Auto\"",
+          "ParsedType": "string",
+          "YAMLType": "string",
+          "YAMLSchema": "One of: `\"Auto\"`, `\"Disabled\"`, `\"Enabled\"`.",
+          "YAMLEnumValues": [
+            "`\"Auto\"`",
+            "`\"Disabled\"`",
+            "`\"Enabled\"`"
+          ],
+          "YAMLSchemaHTML": "One of: <code>\"Auto\"</code>, <code>\"Disabled\"</code>, <code>\"Enabled\"</code>.",
+          "YAMLDefault": "Auto",
+          "Required": true,
+          "OnParseFailure": "ReplaceWithDefault",
+          "AllowedConfigSources": "All",
+          "Description": "Controls whether Felix fully linearizes UDP GSO packets\nafter a partial bpf_skb_pull_data() to work around a kernel bug that causes\ncrashes with GSO_FRAGLIST packets. The kernel fix is in 6.16+.\nWhen set to \"Auto\", Felix detects the kernel version and only enables\nlinearization on kernels older than 6.16.",
+          "DescriptionHTML": "<p>Controls whether Felix fully linearizes UDP GSO packets\nafter a partial bpf_skb_pull_data() to work around a kernel bug that causes\ncrashes with GSO_FRAGLIST packets. The kernel fix is in 6.16+.\nWhen set to \"Auto\", Felix detects the kernel version and only enables\nlinearization on kernels older than 6.16.</p>",
+          "UserEditable": true,
+          "GoType": "string"
         }
       ]
     },

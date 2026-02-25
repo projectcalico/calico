@@ -146,7 +146,7 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 		//
 		// See: https://github.com/projectcalico/calico/issues/11424
 		//      https://lkml.org/lkml/2025/5/29/75 (kernel fix in 6.16+)
-		if (skb_is_gso(ctx->skb)) {
+		if ((ctx->globals->data.flags & CALI_GLOBALS_UDP_GSO_LINEARIZE) && skb_is_gso(ctx->skb)) {
 			__u8 ip_proto;
 #ifdef IPVER6
 			ip_proto = ((struct ipv6hdr *)(ctx->data_start + skb_iphdr_offset(ctx)))->nexthdr;
