@@ -650,7 +650,6 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.programmedRouteRefCount).NotTo(HaveKey(key))
 			})
 
-
 			// This test reproduces the CI-1944 bug: when serviceLoadBalancerIPs has a /32 entry
 			// and the LB IP is assigned from an IPPool (so spec.loadBalancerIP is empty, IP only in
 			// status.loadBalancer.ingress), services with externalTrafficPolicy=Cluster should still
