@@ -171,22 +171,11 @@ func GetPodVMIInfo(pod *corev1.Pod, virtClient VirtClientInterface) (*PodVMIInfo
 			vmiUID, vmiResource.UID)
 	}
 
-	// Check for migration target label (only label we trust for migration state)
-	// This label is only present on migration target pods during live migration
+	// Check for migration target label
 	migrationUIDFromLabel := ""
 	if pod.Labels != nil {
 		if migrationUID, ok := pod.Labels[LabelKubeVirtMigrationJobUID]; ok {
 			migrationUIDFromLabel = migrationUID
-
-			// Verify that the VMIM exists in the cluster
-			vmim, err := FindVMIMByUID(context.Background(), virtClient, pod.Namespace, migrationUID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to verify VirtualMachineInstanceMigration with UID %s: %w", migrationUID, err)
-			}
-			if vmim == nil {
-				return nil, fmt.Errorf("pod %s/%s claims to be migration target but VirtualMachineInstanceMigration with UID %s does not exist",
-					pod.Namespace, pod.Name, migrationUID)
-			}
 		}
 	}
 
@@ -209,35 +198,6 @@ func (v *PodVMIInfo) IsMigrationTarget() bool {
 // Returns empty string if this is not a migration target pod.
 func (v *PodVMIInfo) GetVMIMigrationUID() string {
 	return v.MigrationJobUID
-}
-
-// FindVMIMByUID finds a VirtualMachineInstanceMigration with the given UID
-// by querying all VMIMs in the namespace and finding the one matching the UID.
-// Returns:
-//   - (*VirtualMachineInstanceMigration, nil) if the VMIM is found
-//   - (nil, nil) if the VMIM is not found (no error)
-//   - (nil, error) if there was an error querying the API
-func FindVMIMByUID(ctx context.Context, virtClient VirtClientInterface, namespace, migrationUID string) (*kubevirtv1.VirtualMachineInstanceMigration, error) {
-	if migrationUID == "" {
-		return nil, fmt.Errorf("migration UID cannot be empty")
-	}
-
-	// List all VMIMs in the namespace
-	vmimList, err := virtClient.VirtualMachineInstanceMigration(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list VirtualMachineInstanceMigrations in namespace %s: %w", namespace, err)
-	}
-
-	// Find the VMIM with matching UID
-	for i := range vmimList.Items {
-		vmim := &vmimList.Items[i]
-		if string(vmim.UID) == migrationUID {
-			return vmim, nil
-		}
-	}
-
-	// VMIM not found - return nil, nil (not an error condition)
-	return nil, nil
 }
 
 // GetVMIResourceByName queries the Kubernetes API for a VirtualMachineInstance with the given name

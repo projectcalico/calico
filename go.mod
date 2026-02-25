@@ -132,8 +132,8 @@ require (
 
 require (
 	golang.org/x/crypto v0.47.0 // indirect
-	kubevirt.io/api v1.7.0
-	kubevirt.io/client-go v1.7.0
+	kubevirt.io/api v1.8.0-alpha.0
+	kubevirt.io/client-go v1.8.0-alpha.0
 )
 
 require (
@@ -378,19 +378,6 @@ require (
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
-)
-
-require (
-	kubevirt.io/api v1.8.0-alpha.0
-	kubevirt.io/client-go v1.8.0-alpha.0
-)
-
-require (
-	github.com/go-kit/log v0.2.1 // indirect
-	github.com/go-logfmt/logfmt v0.6.0 // indirect
-	github.com/openshift/custom-resource-status v1.1.2 // indirect
-	kubevirt.io/containerized-data-importer-api v1.63.1 // indirect
-	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 )
 
 replace (
