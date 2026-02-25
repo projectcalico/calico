@@ -82,6 +82,15 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct cali_tc_ctx *ctx)
 	}
 }
 
+static CALI_BPF_INLINE bool skb_is_gso(struct __sk_buff *skb) {
+#ifdef BPF_CORE_SUPPORTED
+	if (bpf_core_field_exists(skb->gso_size)) {
+		return (skb->gso_size > 0);
+	}
+#endif
+	return (skb->gso_segs > 1);
+}
+
 /* skb_refresh_validate_ptrs refreshes the packet pointers in the context and validates access
  * to the IP header + nh_len (next header length) bytes.  If the skb is non-linear; attempts to
  * pull in that many bytes if needed.  If the pull fails, the packet pointers can be left invalid.
@@ -103,8 +112,8 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 						min_size + nh_len);
 		return -2;
 #else
-		// Try to pull in more data.  Ideally enough for TCP, or, failing that, the
-		// minimum we've been asked for.
+		// Try to pull in more data.  Ideally enough for TCP, or, failing
+		// that, the minimum we've been asked for.
 		if (nh_len > TCP_SIZE || bpf_skb_pull_data(ctx->skb, min_size + TCP_SIZE)) {
 			CALI_DEBUG("Pulling %d bytes.", min_size + nh_len);
 			if (bpf_skb_pull_data(ctx->skb, min_size + nh_len)) {
@@ -116,6 +125,45 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 		skb_refresh_start_end(ctx);
 		if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 			return -2;
+		}
+
+		// A partial bpf_skb_pull_data() on a UDP GSO_FRAGLIST packet
+		// (e.g. GRO-aggregated QUIC) corrupts the fraglist geometry:
+		// the head_skb ends up with more than gso_size bytes while
+		// frag_list entries still assume the original boundaries.
+		// When the kernel later tries to segment the packet in
+		// skb_segment(), it dereferences the (now-stale) frag_list
+		// and panics.
+		//
+		// Now that we have valid headers after the partial pull, check
+		// if this is a UDP GSO packet.  If so, fully linearize it:
+		// pulling skb->len moves all remaining non-linear data into
+		// the linear head (data_len=0, frag_list=NULL).  skb_segment()
+		// then processes contiguous linear data in MSS-sized chunks.
+		//
+		// This is rarely hit: GRO packets normally have headers in
+		// the linear portion so the outer pull is skipped entirely.
+		//
+		// See: https://github.com/projectcalico/calico/issues/11424
+		//      https://lkml.org/lkml/2025/5/29/75 (kernel fix in 6.16+)
+		if (skb_is_gso(ctx->skb)) {
+			__u8 ip_proto;
+#ifdef IPVER6
+			ip_proto = ((struct ipv6hdr *)(ctx->data_start + skb_iphdr_offset(ctx)))->nexthdr;
+#else
+			ip_proto = ((struct iphdr *)(ctx->data_start + skb_iphdr_offset(ctx)))->protocol;
+#endif
+			if (ip_proto == IPPROTO_UDP) {
+				CALI_DEBUG("UDP GSO pkt; linearizing %d bytes", ctx->skb->len);
+				if (bpf_skb_pull_data(ctx->skb, ctx->skb->len)) {
+					CALI_DEBUG("GSO linearize failed");
+					return -1;
+				}
+				skb_refresh_start_end(ctx);
+				if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
+					return -2;
+				}
+			}
 		}
 #endif
 	}
@@ -145,14 +193,6 @@ static CALI_BPF_INLINE __u32 skb_ingress_ifindex(struct __sk_buff *skb)
 #endif
 }
 
-static CALI_BPF_INLINE bool skb_is_gso(struct __sk_buff *skb) {
-#ifdef BPF_CORE_SUPPORTED
-	if (bpf_core_field_exists(skb->gso_size)) {
-		return (skb->gso_size > 0);
-	}
-#endif
-	return (skb->gso_segs > 1);
-}
 
 static CALI_BPF_INLINE void skb_set_mark(struct __sk_buff *skb, __u32 mark)
 {
