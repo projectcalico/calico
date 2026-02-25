@@ -76,7 +76,9 @@ RUN microdnf install -y \
     cryptsetup-libs \
     # Needed for iptables
     libpcap libmnl libnfnetlink libnetfilter_conntrack \
+    ipset \
     iputils \
+    nftables \
     # Need arp
     net-tools \
     # Need kmod to ensure ip6tables-save works correctly
@@ -89,28 +91,30 @@ RUN microdnf install -y \
     # Needed for the cleanup script
     findutils
 
-# Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
+# Since the ubi repos do not contain all the packages we need (e.g. they're missing conntrack-tools),
 # we're using AlmaLinux repos for missing packages.
 COPY almalinux.repo /etc/yum.repos.d/almalinux.repo
 
-RUN microdnf --enablerepo=appstream install -y \
-    # Needed for conntrack
+RUN microdnf --enablerepo=appstream --enablerepo=baseos install -y \
+    # Needed for conntrack - from appstream
     libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
-    conntrack-tools
-
-RUN microdnf --enablerepo=baseos install -y iproute-tc iptables-nft nftables ipset
+    conntrack-tools \
+    # from baseos
+    iproute-tc iptables-nft
 
 COPY --from=almalinux /usr/sbin/xtables-legacy-multi /usr/sbin/xtables-legacy-multi
-
-# Set alternatives
-RUN alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
-    alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
 
 # Set symbolic links for legacy iptables binaries
 RUN set -eux; \
     for bin in iptables-legacy iptables-legacy-restore iptables-legacy-save ip6tables-legacy ip6tables-legacy-restore ip6tables-legacy-save; do \
         ln -sf /usr/sbin/xtables-legacy-multi /usr/sbin/${bin} || true; \
     done
+
+# Set alternatives
+RUN alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
+    alternatives --set iptables /usr/sbin/iptables-legacy && \
+    alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1 && \
+    alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 RUN microdnf clean all
 
