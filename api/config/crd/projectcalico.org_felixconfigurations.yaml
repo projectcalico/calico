@@ -190,6 +190,12 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfUDPGSOLinearize:
+                  enum:
+                    - Enabled
+                    - Disabled
+                    - Auto
+                  type: string
                 bpfRedirectToPeer:
                   enum:
                     - Enabled
