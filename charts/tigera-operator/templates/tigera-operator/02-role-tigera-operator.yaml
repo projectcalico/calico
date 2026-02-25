@@ -616,3 +616,13 @@ rules:
       - update
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
+  # For monitoring KubeVirt live migration.  The operator does not do this itself, but needs to
+  # be able to assign this RBAC to Typha and calico-node.
+  - apiGroups:
+      - kubevirt.io
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
