@@ -920,14 +920,18 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 
 	var tunnelIfaces []string
 
-	if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
-	}
-	if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV4)
-	}
-	if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
+	if !r.BPFEnabled {
+		// In BPF mode, encap/decap and source IP selection are handled by BPF programs
+		// directly, so these masquerade rules for IPIP/VXLAN tunnels are not needed.
+		if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
+		}
+		if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV4)
+		}
+		if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
+		}
 	}
 	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 {
 		// Wireguard is assigned an IP dynamically and without restarting Felix. Just add the interface if we have
