@@ -488,6 +488,15 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout, sleep t
 			continue
 		} else {
 			fmt.Printf("err = %+v\n", err)
+			// If the loop file exists, we were asked to stop. The connection
+			// error is expected during shutdown, so exit cleanly.
+			if ls.loopFile != "" {
+				if _, statErr := os.Stat(ls.loopFile); statErr == nil {
+					log.WithError(err).Info("Connection error during shutdown, exiting cleanly")
+					os.Remove(ls.loopFile)
+					break
+				}
+			}
 			log.WithError(err).Fatal("Failed to receive")
 		}
 
