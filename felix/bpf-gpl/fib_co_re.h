@@ -237,11 +237,14 @@ skip_redir_ifindex:
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
+			ipv6_addr_t host_ip_copy = CALI_CONFIGURABLE(host_ip);
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &host_ip_copy);
 			flags |= BPF_F_TUNINFO_IPV6;
 			size = offsetof(struct bpf_tunnel_key, local_ipv6);
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+			key.local_ipv4 = HOST_IP;
 			flags |= BPF_F_ZERO_CSUM_TX;
 			size = offsetof(struct bpf_tunnel_key, local_ipv4);
 #endif
@@ -284,11 +287,14 @@ skip_redir_ifindex:
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
+			ipv6_addr_t host_ip_copy = CALI_CONFIGURABLE(host_ip);
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &host_ip_copy);
 			flags |= BPF_F_TUNINFO_IPV6;
 			size = offsetof(struct bpf_tunnel_key, local_ipv6);
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+			key.local_ipv4 = HOST_IP;
 			flags |= BPF_F_ZERO_CSUM_TX;
 			size = offsetof(struct bpf_tunnel_key, local_ipv4);
 #endif
