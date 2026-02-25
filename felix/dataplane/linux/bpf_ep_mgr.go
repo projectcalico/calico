@@ -105,6 +105,15 @@ var (
 		Help: "Number of BPF endpoints that are successfully programmed.",
 	})
 	errApplyingPolicy = errors.New("error applying policy")
+
+	bpfPolProgCacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_bpf_policy_prog_cache_hits",
+		Help: "Number of BPF policy program cache hits (compilation skipped).",
+	})
+	bpfPolProgCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_bpf_policy_prog_cache_misses",
+		Help: "Number of BPF policy program cache misses (compilation required).",
+	})
 )
 
 var (
@@ -124,6 +133,8 @@ func init() {
 	prometheus.MustRegister(bpfEndpointsGauge)
 	prometheus.MustRegister(bpfDirtyEndpointsGauge)
 	prometheus.MustRegister(bpfHappyEndpointsGauge)
+	prometheus.MustRegister(bpfPolProgCacheHits)
+	prometheus.MustRegister(bpfPolProgCacheMisses)
 
 	binary.LittleEndian.PutUint32(jumpMapV4PolicyKey, uint32(tcdefs.ProgIndexPolicy))
 	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexPolicy))
@@ -162,6 +173,102 @@ type attachPointWithPolicyJumps interface {
 type fileDescriptor interface {
 	FD() uint32
 	Close() error
+}
+
+// policyProgramCacheKey identifies a unique effective policy set for caching.
+// Two endpoints with the same key will produce identical BPF policy bytecode.
+type policyProgramCacheKey struct {
+	tiers     string // canonical string of tier+policy names
+	profiles  string // canonical string of profile names
+	direction PolDirection
+	ipFamily  proto.IPVersion
+}
+
+// cachedPolicyProgram holds a compiled+loaded BPF policy program that can be
+// shared across multiple endpoints.
+type cachedPolicyProgram struct {
+	progFDs []fileDescriptor // loaded BPF program FDs (len=1 for shareable programs)
+	insns   []asm.Insns      // for debug info writing
+	split   bool             // true if program was split into sub-programs (not shareable)
+}
+
+// policyProgramCache is a per-apply-pass cache of compiled policy programs.
+// Thread-safe for concurrent access from the parallel WEP apply goroutines.
+type policyProgramCache struct {
+	mu    sync.Mutex
+	items map[policyProgramCacheKey]*cachedPolicyProgram
+}
+
+func (c *policyProgramCache) lookup(key policyProgramCacheKey) (*cachedPolicyProgram, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	prog, ok := c.items[key]
+	return prog, ok
+}
+
+func (c *policyProgramCache) store(key policyProgramCacheKey, prog *cachedPolicyProgram) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items[key] = prog
+}
+
+// closeAndClear closes all cached program FDs and resets the cache.
+// Called after all dirty endpoints have been processed in an apply pass.
+func (c *policyProgramCache) closeAndClear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, prog := range c.items {
+		for _, fd := range prog.progFDs {
+			if err := fd.Close(); err != nil {
+				logrus.WithError(err).Warn("Failed to close cached policy program FD.")
+			}
+		}
+	}
+	c.items = make(map[policyProgramCacheKey]*cachedPolicyProgram)
+}
+
+func computePolicyCacheKey(
+	tiers []*proto.TierInfo,
+	profileIDs []string,
+	direction PolDirection,
+	ipFamily proto.IPVersion,
+) policyProgramCacheKey {
+	var tb strings.Builder
+	for _, t := range tiers {
+		tb.WriteString(t.Name)
+		tb.WriteByte('|')
+		for _, p := range t.IngressPolicies {
+			tb.WriteString(p.Kind)
+			tb.WriteByte('/')
+			tb.WriteString(p.Namespace)
+			tb.WriteByte('/')
+			tb.WriteString(p.Name)
+			tb.WriteByte(',')
+		}
+		tb.WriteByte(';')
+		for _, p := range t.EgressPolicies {
+			tb.WriteString(p.Kind)
+			tb.WriteByte('/')
+			tb.WriteString(p.Namespace)
+			tb.WriteByte('/')
+			tb.WriteString(p.Name)
+			tb.WriteByte(',')
+		}
+		tb.WriteByte('#')
+	}
+
+	var pb strings.Builder
+	for _, pid := range profileIDs {
+		pb.WriteString(pid)
+		pb.WriteByte(',')
+	}
+
+	return policyProgramCacheKey{
+		tiers:     tb.String(),
+		profiles:  pb.String(),
+		direction: direction,
+		ipFamily:  ipFamily,
+	}
 }
 
 type bpfDataplane interface {
@@ -340,6 +447,10 @@ type bpfEndpointManager struct {
 	) ([]fileDescriptor, []asm.Insns, error)
 	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error
 
+	// Per-apply-pass cache of compiled policy programs. Cleared at the
+	// start of each apply pass and closed at the end.
+	polProgCache *policyProgramCache
+
 	// HEP processing.
 	hostIfaceToEpMap     map[string]*proto.HostEndpoint
 	wildcardHostEndpoint *proto.HostEndpoint
@@ -515,6 +626,7 @@ func NewBPFEndpointManager(
 		bpfRedirectToPeer:      config.BPFRedirectToPeer,
 		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:             set.New[polprog.RuleMatchID](),
+		polProgCache:           &policyProgramCache{items: make(map[policyProgramCacheKey]*cachedPolicyProgram)},
 
 		natOutgoingExclusions: config.RulesConfig.NATOutgoingExclusions,
 
@@ -2110,6 +2222,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	}
 	wg.Wait()
 
+	// Close all cached FDs now that all endpoints have been processed.
+	m.polProgCache.closeAndClear()
+
 	for ifaceName, err := range errs {
 		var wlID *types.WorkloadEndpointID
 
@@ -2722,13 +2837,43 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 	}
 
 	m := d.mgr
+
+	// Check cache for a previously compiled program with the same effective policy set.
+	// Only use the cache path when loadPolicyProgramFn is available (real dataplane or
+	// mock with hasLoadPolicyProgram). Otherwise, fall through to the original path.
+	if m.loadPolicyProgramFn != nil {
+		cacheKey := computePolicyCacheKey(tiers, profileIDs, polDirection, d.ipFamily)
+		if cached, ok := m.polProgCache.lookup(cacheKey); ok {
+			if !cached.split {
+				// Cache hit with a non-split program: write the cached FD(s) to this
+				// endpoint's jump map entry, skipping both compilation and bpf_prog_load.
+				bpfPolProgCacheHits.Inc()
+				return m.installCachedPolicyProgram(cached, ap, polDirection, d.ipFamily)
+			}
+			// Cache hit but split=true: this policy set requires sub-program splitting.
+			// Fall through to per-endpoint compilation (policyMapIndex is per-endpoint).
+		}
+		bpfPolProgCacheMisses.Inc()
+
+		// Cache miss or split program: extract rules and compile.
+		rules := m.wepBuildRules(tiers, profileIDs, polDirection)
+		return m.updatePolicyProgramCached(rules, polDirection, ap, d.ipFamily, cacheKey)
+	}
+
+	// Fallback path: no loadPolicyProgramFn (simple mock dp).
+	rules := m.wepBuildRules(tiers, profileIDs, polDirection)
+	return m.updatePolicyProgramFn(rules, polDirection.RuleDir().String(), ap, d.ipFamily)
+}
+
+// wepBuildRules extracts rules for a workload endpoint and adds host policy.
+func (m *bpfEndpointManager) wepBuildRules(tiers []*proto.TierInfo, profileIDs []string, polDirection PolDirection) polprog.Rules {
 	// If tier or profileIDs is nil, this will return an empty set of rules but updatePolicyProgram appends a
 	// drop rule, giving us default drop behaviour in that case.
 	rules := m.extractRules(tiers, profileIDs, polDirection)
 
 	// If host-* endpoint is configured, add in its policy.
 	if m.wildcardExists {
-		m.addHostPolicy(&rules, d.mgr.wildcardHostEndpoint, polDirection.Inverse())
+		m.addHostPolicy(&rules, m.wildcardHostEndpoint, polDirection.Inverse())
 	}
 
 	// Intentionally leaving this code here until the *-hep takes precedence.
@@ -2748,8 +2893,7 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 	if polDirection == PolDirnIngress {
 		rules.SuppressNormalHostPolicy = true
 	}
-
-	return m.updatePolicyProgramFn(rules, polDirection.RuleDir().String(), ap, d.ipFamily)
+	return rules
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -3970,6 +4114,166 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 		return fmt.Errorf("failed to update policy program v%d: %w", ipFamily, err)
 	}
 
+	return nil
+}
+
+// updatePolicyProgramCached compiles a policy program and caches the result for
+// reuse by other endpoints with the same effective policy set. On cache miss, it
+// compiles and loads the program, installs it, and stores it in the cache.
+func (m *bpfEndpointManager) updatePolicyProgramCached(
+	rules polprog.Rules, polDirection PolDirection, ap *tc.AttachPoint,
+	ipFamily proto.IPVersion, cacheKey policyProgramCacheKey,
+) error {
+	polDir := polDirection.RuleDir().String()
+	progName := policyProgramName(ap.IfaceName(), polDir, ipFamily)
+	polJumpMapIdx := ap.PolicyJmp(ipFamily)
+	hk := ap.HookName()
+
+	logCtx := logrus.WithFields(logrus.Fields{
+		"iface":    ap.IfaceName(),
+		"hook":     hk,
+		"progName": progName,
+		"mapIndex": polJumpMapIdx,
+		"ipFamily": ipFamily,
+	})
+	logCtx.Debug("Updating policy program (cached path)...")
+
+	staticProgsMap := ap.ProgramsMap
+	polProgsMap := m.commonMaps.JumpMaps[ap.Hook]
+	attachType := uint32(0)
+	if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+		attachType = libbpf.AttachTypeTcxIngress
+		if ap.Hook == hook.Egress {
+			attachType = libbpf.AttachTypeTcxEgress
+		}
+	}
+
+	stride := jump.TCMaxEntryPoints
+	var opts []polprog.Option
+	if m.bpfPolicyDebugEnabled {
+		opts = append(opts, polprog.WithPolicyDebugEnabled())
+	}
+	opts = append(opts, polprog.WithPolicyMapIndexAndStride(polJumpMapIdx, stride))
+
+	tstrideOrig := int(m.policyTrampolineStride.Load())
+	tstride := tstrideOrig
+
+	var (
+		progFDs []fileDescriptor
+		insns   []asm.Insns
+	)
+
+	for {
+		var err error
+		options := append(opts, polprog.WithTrampolineStride(tstride))
+		progFDs, insns, err = m.loadPolicyProgramFn(
+			progName, ipFamily, rules, staticProgsMap, polProgsMap, attachType, options...,
+		)
+		if err != nil {
+			if errors.Is(err, unix.ERANGE) {
+				if tstride >= 1000 {
+					tstride -= tstride / 4
+					tmp := m.policyTrampolineStride.Load()
+					if tmp < int32(tstride) {
+						tstride = int(tmp)
+					}
+					logCtx.Debugf("Reducing trampoline stride to %d and retrying", tstride)
+					continue
+				}
+				return fmt.Errorf("reducing trampoline stride below 1000 not practical")
+			}
+			return fmt.Errorf("failed to update policy program v%d: %w", ipFamily, err)
+		}
+		break
+	}
+
+	for tstride < tstrideOrig {
+		if m.policyTrampolineStride.CompareAndSwap(int32(tstrideOrig), int32(tstride)) {
+			logCtx.Warnf("Reducing policy program trampoline stride to %d", tstride)
+		} else {
+			tstrideOrig = int(m.policyTrampolineStride.Load())
+		}
+	}
+
+	// Write debug info.
+	perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, hk, nil)
+	if perr != nil {
+		logrus.WithError(perr).Warn("error writing policy debug information")
+	}
+
+	// Install FDs into this endpoint's jump map entries.
+	if err := m.installProgramInJumpMap(polProgsMap, polJumpMapIdx, stride, hk, progFDs); err != nil {
+		for _, fd := range progFDs {
+			fd.Close()
+		}
+		return err
+	}
+
+	split := len(progFDs) > 1
+	if !split {
+		// Non-split: cache for other endpoints. DON'T close FDs yet —
+		// they'll be closed when the cache is cleared after the apply pass.
+		m.polProgCache.store(cacheKey, &cachedPolicyProgram{
+			progFDs: progFDs,
+			insns:   insns,
+			split:   false,
+		})
+	} else {
+		// Split: close FDs now, don't cache (bytecode is per-endpoint).
+		for _, fd := range progFDs {
+			fd.Close()
+		}
+		// Store a marker so subsequent endpoints with the same key
+		// know to compile per-endpoint instead of waiting for a cache hit.
+		m.polProgCache.store(cacheKey, &cachedPolicyProgram{split: true})
+	}
+
+	return nil
+}
+
+// installCachedPolicyProgram writes cached program FDs to this endpoint's jump
+// map entry, skipping both compilation and bpf_prog_load.
+func (m *bpfEndpointManager) installCachedPolicyProgram(
+	cached *cachedPolicyProgram, ap *tc.AttachPoint,
+	polDirection PolDirection, ipFamily proto.IPVersion,
+) error {
+	polJumpMapIdx := ap.PolicyJmp(ipFamily)
+	hk := ap.HookName()
+	polProgsMap := m.commonMaps.JumpMaps[ap.Hook]
+	stride := jump.TCMaxEntryPoints
+
+	// Write debug info for this endpoint too.
+	polDir := polDirection.RuleDir().String()
+	perr := m.writePolicyDebugInfo(cached.insns, ap.IfaceName(), ipFamily, polDir, hk, nil)
+	if perr != nil {
+		logrus.WithError(perr).Warn("error writing policy debug information")
+	}
+
+	return m.installProgramInJumpMap(polProgsMap, polJumpMapIdx, stride, hk, cached.progFDs)
+}
+
+// installProgramInJumpMap writes program FDs into the policy jump map at the
+// appropriate indices and cleans up stale sub-program entries.
+func (m *bpfEndpointManager) installProgramInJumpMap(
+	polProgsMap maps.Map, polJumpMapIdx, stride int, hk hook.Hook,
+	progFDs []fileDescriptor,
+) error {
+	for i, progFD := range progFDs {
+		subProgIdx := polprog.SubProgramJumpIdx(polJumpMapIdx, i, stride)
+		if err := polProgsMap.Update(jump.Key(subProgIdx), jump.Value(progFD.FD())); err != nil {
+			return fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w",
+				hk, subProgIdx, progFD, err)
+		}
+	}
+	for i := len(progFDs); i < jump.MaxSubPrograms; i++ {
+		subProgIdx := polprog.SubProgramJumpIdx(polJumpMapIdx, i, stride)
+		if err := polProgsMap.Delete(jump.Key(subProgIdx)); err != nil {
+			if os.IsNotExist(err) {
+				break
+			}
+			logrus.WithError(err).Warn("Unexpected error while trying to clean up old policy programs.")
+		}
+	}
 	return nil
 }
 
