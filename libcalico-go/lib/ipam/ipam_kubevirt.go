@@ -55,7 +55,7 @@ var (
 // Examples:
 //   - CreateVMHandleID("", "default", "vm1") -> "k8s-pod-network.vmi.default.vm1"
 //   - CreateVMHandleID("multus-net1", "default", "vm1") -> "multus-net1.vmi.default.vm1"
-//   - CreateVMHandleID("net", "ns", "very-long-name...") -> "net.vmi.-<hash>" (if exceeds 128 chars)
+//   - CreateVMHandleID("net", "ns", "very-long-name...") -> "net.vmi._<hash>" (if exceeds 128 chars)
 func CreateVMHandleID(networkName, namespace, vmName string) string {
 	if networkName == "" {
 		networkName = "k8s-pod-network"
