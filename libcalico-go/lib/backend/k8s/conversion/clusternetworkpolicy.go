@@ -394,10 +394,7 @@ func k8sCNPPortToCalicoFields(cnpProto *clusternetpol.ClusterNetworkPolicyProtoc
 		return
 	}
 
-	// TODO: Add support for NamedPorts
 	if len(cnpProto.DestinationNamedPort) != 0 {
-		err = fmt.Errorf("named ports are not supported yet.")
-		return
 	}
 
 	return
