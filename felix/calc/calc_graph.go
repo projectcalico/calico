@@ -313,7 +313,11 @@ func NewCalculationGraph(
 		if ipSet.Service != "" {
 			serviceIndex.UpdateIPSet(ipSet.UniqueID(), ipSet.Service)
 		} else {
-			ipsetMemberIndex.UpdateIPSet(ipSet.UniqueID(), ipSet.Selector, ipSet.NamedPortProtocol, ipSet.NamedPort)
+			namedPortProto := ipsetmember.ProtocolNone
+			if ipSet.NamedPortProtocol != nil {
+				namedPortProto = *ipSet.NamedPortProtocol
+			}
+			ipsetMemberIndex.UpdateIPSet(ipSet.UniqueID(), ipSet.Selector, namedPortProto, ipSet.NamedPort)
 		}
 		gaugeNumActiveSelectors.Inc()
 	}
