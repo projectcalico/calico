@@ -3667,6 +3667,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfUDPGSOLinearize": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFUDPGSOLinearize controls whether Felix fully linearizes UDP GSO packets after a partial bpf_skb_pull_data() to work around a kernel bug that causes crashes with GSO_FRAGLIST packets. The kernel fix is in 6.16+. When set to \"Auto\", Felix detects the kernel version and only enables linearization on kernels older than 6.16. [Default: Auto]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"routeSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.",
