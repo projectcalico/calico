@@ -266,8 +266,6 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			ushort vxlanPort,
 			ushort psnat_start,
 			ushort psnat_len,
-			char* host_tunnel_ip,
-			char* host_tunnel_ip6,
 			uint flags,
 			ushort wg_port,
 			ushort wg6_port,
@@ -308,11 +306,9 @@ void bpf_tc_set_globals(struct bpf_map *map,
 
 	memcpy(&v4.host_ip, host_ip, 16);
 	memcpy(&v4.intf_ip, intf_ip, 16);
-	memcpy(&v4.host_tunnel_ip, host_tunnel_ip, 16);
 
 	memcpy(&v6.host_ip, host_ip6, 16);
 	memcpy(&v6.intf_ip, intf_ip6, 16);
-	memcpy(&v6.host_tunnel_ip, host_tunnel_ip6, 16);
 
 	int i;
 
