@@ -287,8 +287,9 @@ func (kp *KubeProxy) OnUpdate(msg any) {
 // CompleteDeferredWork implements the manager interface.
 // Avoids blocking the thread by draining & merging older updates on the channel before sending.
 func (kp *KubeProxy) CompleteDeferredWork() error {
-	// If not in-sync with felix, we allow sending an empty update
-	// to signal to the KP loop that it can start looping.
+	// Skip if we have nothing to send unless this is the first time
+	// we're in sync (need to send something in that case to signal to
+	// the background goroutine).
 	if len(kp.pendingHostMetadataUpdates) == 0 && kp.inSyncWithIntDataplane {
 		log.Debug("No pending host metadata updates to process")
 		return nil
