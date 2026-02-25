@@ -72,13 +72,13 @@ type RuleScanner struct {
 
 type IPSetData struct {
 	// The selector and named port that this IP set represents.  To represent an unfiltered named
-	// port, set selector to AllSelector.  If NamedPortProtocol == ProtocolNone then
+	// port, set selector to AllSelector.  If NamedPortProtocol == nil then
 	// this IP set represents a selector only, with no named port component.
 	Selector *selector.Selector
 
 	// NamedPortProtocol identifies the protocol (TCP or UDP) for a named port IP set.  It is
-	// set to ProtocolNone for a selector-only IP set.
-	NamedPortProtocol ipsetmember.Protocol
+	// set to nil for a selector-only IP set.
+	NamedPortProtocol *ipsetmember.Protocol
 	// NamedPort contains the name of the named port represented by this IP set or "" for a
 	// selector-only IP set
 	NamedPort string
@@ -97,7 +97,7 @@ func (d *IPSetData) String() string {
 	if d.Selector != nil {
 		parts = append(parts, fmt.Sprintf("selector:%q", d.Selector.String()))
 	}
-	if d.NamedPort != "" {
+	if d.NamedPort != "" && d.NamedPortProtocol != nil {
 		parts = append(parts, fmt.Sprintf("namedPort:%s(%s)", d.NamedPort, d.NamedPortProtocol.String()))
 	}
 	if d.Service != "" {
@@ -124,7 +124,7 @@ func (d *IPSetData) UniqueID() string {
 		} else {
 			// Selector / named-port based IP set.
 			selID := d.Selector.UniqueID()
-			if d.NamedPortProtocol == ipsetmember.ProtocolNone {
+			if d.NamedPortProtocol == nil {
 				d.cachedUID = selID
 			} else {
 				idToHash := selID + "," + d.NamedPortProtocol.String() + "," + d.NamedPort
@@ -138,7 +138,7 @@ func (d *IPSetData) UniqueID() string {
 // DataplaneProtocolType returns the dataplane driver protocol type of this IP set.
 // One of the proto.IPSetUpdate_IPSetType constants.
 func (d *IPSetData) DataplaneProtocolType() proto.IPSetUpdate_IPSetType {
-	if d.NamedPortProtocol != ipsetmember.ProtocolNone {
+	if d.NamedPortProtocol != nil {
 		return proto.IPSetUpdate_IP_AND_PORT
 	}
 	if d.Service != "" {
@@ -523,7 +523,7 @@ func namedPortsToIPSets(namedPorts []string, positiveSelectors []*selector.Selec
 		ipSet := IPSetData{
 			Selector:          sel,
 			NamedPort:         namedPort,
-			NamedPortProtocol: proto,
+			NamedPortProtocol: &proto,
 		}
 		ipSets = append(ipSets, &ipSet)
 	}
