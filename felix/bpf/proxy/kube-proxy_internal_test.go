@@ -130,6 +130,38 @@ func TestOnUpdateBatchesHostMetadataUpdates(t *testing.T) {
 	}))
 }
 
+func TestCompleteDeferredWorkSendsEmptyUpdateOnce(t *testing.T) {
+	RegisterTestingT(t)
+	kp := KubeProxy{
+		hostMetadataUpdates:        make(chan map[string]any, 1),
+		pendingHostMetadataUpdates: make(map[string]any),
+	}
+
+	// First call with no pending updates should still send an empty map
+	// to signal the KP loop to start.
+	Expect(kp.CompleteDeferredWork()).To(Succeed())
+	msg := kp.pollHostMetadataV4V6UpdatesNonBlocking()
+	Expect(msg).NotTo(BeNil(), "First call should send an empty update to unblock the KP loop")
+	Expect(msg).To(BeEmpty(), "The update should be an empty map")
+
+	// Second call with no pending updates should be a no-op.
+	Expect(kp.CompleteDeferredWork()).To(Succeed())
+	Expect(kp.pollHostMetadataV4V6UpdatesNonBlocking()).To(BeNil(),
+		"Second call with no pending updates should not send anything")
+
+	// Sending a real update should still work after we're in sync.
+	kp.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "host1", Ipv4Addr: "1.1.1.1"})
+	Expect(kp.CompleteDeferredWork()).To(Succeed())
+	msg = kp.pollHostMetadataV4V6UpdatesNonBlocking()
+	Expect(msg).To(HaveLen(1))
+	Expect(msg).To(HaveKey("host1"))
+
+	// And after that, no-op again with no pending updates.
+	Expect(kp.CompleteDeferredWork()).To(Succeed())
+	Expect(kp.pollHostMetadataV4V6UpdatesNonBlocking()).To(BeNil(),
+		"Should not send when in sync and no pending updates")
+}
+
 func TestOnUpdateRemoveOverwritesPendingUpdate(t *testing.T) {
 	RegisterTestingT(t)
 	kp := KubeProxy{
