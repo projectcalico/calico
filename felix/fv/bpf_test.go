@@ -2692,15 +2692,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if testOpts.ipv6 {
 							hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
 							switch testOpts.tunnel {
-							case "vxlan":
-								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
 							case "wireguard":
 								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
 							}
-						}
-						switch testOpts.tunnel {
-						case "ipip":
-							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
 						}
 
 						if !testOpts.connTimeEnabled {
@@ -3001,15 +2995,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if testOpts.ipv6 {
 							hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
 							switch testOpts.tunnel {
-							case "vxlan":
-								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
 							case "wireguard":
 								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
 							}
-						}
-						switch testOpts.tunnel {
-						case "ipip":
-							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
 						}
 
 						if !testOpts.connTimeEnabled {
@@ -3812,15 +3800,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if testOpts.ipv6 {
 							hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
 							switch testOpts.tunnel {
-							case "vxlan":
-								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
 							case "wireguard":
 								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
 							}
-						}
-						switch testOpts.tunnel {
-						case "ipip":
-							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
 						}
 
 						if !testOpts.connTimeEnabled {
@@ -3971,23 +3953,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
 										}
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
-									case "vxlan":
-										if testOpts.connTimeEnabled {
-											hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
-										}
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
 									}
 								} else {
 									switch testOpts.tunnel {
-									case "ipip":
-										if testOpts.connTimeEnabled {
-											hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
-										}
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
 									case "wireguard":
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-									case "vxlan":
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
 									}
 								}
 
@@ -4067,22 +4037,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										hostW0SrcIP = ExpectWithSrcIPs(testSvcExtIP0)
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
 										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
-									case "vxlan":
-										hostW0SrcIP = ExpectWithSrcIPs(testSvcExtIP0)
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
-										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
 									}
 								} else {
 									switch testOpts.tunnel {
-									case "ipip":
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
-										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
 									case "wireguard":
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
 										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-									case "vxlan":
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
-										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
 									}
 								}
 
@@ -4124,17 +4084,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 
 											switch testOpts.tunnel {
-											case "ipip":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
 											case "wireguard":
 												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
 												if testOpts.ipv6 {
 													hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
-												}
-											case "vxlan":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
-												if testOpts.ipv6 {
-													hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
 												}
 											}
 
@@ -4170,17 +4123,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 
 											switch testOpts.tunnel {
-											case "ipip":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
 											case "wireguard":
 												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
 												if testOpts.ipv6 {
 													hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
-												}
-											case "vxlan":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
-												if testOpts.ipv6 {
-													hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
 												}
 											}
 
@@ -4221,24 +4167,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 
 								switch testOpts.tunnel {
-								case "ipip":
-									if testOpts.connTimeEnabled {
-										hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
-									}
-									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
 								case "wireguard":
 									if testOpts.ipv6 {
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
 										hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
 									} else {
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-									}
-								case "vxlan":
-									if testOpts.ipv6 {
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
-										hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
-									} else {
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
 									}
 								}
 
@@ -4280,19 +4214,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 
 								switch testOpts.tunnel {
-								case "ipip":
-									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
 								case "wireguard":
 									if testOpts.ipv6 {
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
 									} else {
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-									}
-								case "vxlan":
-									if testOpts.ipv6 {
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
-									} else {
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
 									}
 								}
 								clusterIP := testSvc.Spec.ClusterIP
@@ -4313,15 +4239,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							if testOpts.ipv6 {
 								hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
 								switch testOpts.tunnel {
-								case "vxlan":
-									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
 								case "wireguard":
 									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
 								}
-							}
-							switch testOpts.tunnel {
-							case "ipip":
-								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
 							}
 
 							if !testOpts.connTimeEnabled {
@@ -4347,13 +4267,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								switch testOpts.tunnel {
 								case "wireguard":
 									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
-								case "vxlan":
-									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
-								}
-							} else {
-								switch testOpts.tunnel {
-								case "ipip":
-									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
 								}
 							}
 
