@@ -378,7 +378,8 @@ type bpfEndpointManager struct {
 	services         map[serviceKey][]ip.CIDR
 	dirtyServices    set.Set[serviceKey]
 	natExcludedCIDRs *ip.CIDRTrie
-	profiling        string
+	profiling          string
+	bpfUDPGSOLinearize bool
 
 	// Maps for policy rule counters
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
@@ -520,7 +521,8 @@ func NewBPFEndpointManager(
 
 		healthAggregator: healthAggregator,
 		features:         dataplanefeatures,
-		profiling:        config.BPFProfiling,
+		profiling:          config.BPFProfiling,
+		bpfUDPGSOLinearize: config.BPFUDPGSOLinearize == "Enabled",
 		bpfAttachType:    config.BPFAttachType,
 
 		QoSMap:        bpfmaps.CommonMaps.QoSMap,
@@ -3066,6 +3068,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.Profiling = m.profiling
+	ap.UDPGSOLinearize = m.bpfUDPGSOLinearize
 	ap.OverlayTunnelID = m.overlayTunnelID
 	ap.AttachType = m.bpfAttachType
 	ap.RedirectPeer = true
