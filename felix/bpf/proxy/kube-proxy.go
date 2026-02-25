@@ -42,7 +42,7 @@ type KubeProxy struct {
 	// hostMetadataUpdates is a size-1 channel - allows for one non-blocking write,
 	// and repeated updates get merged into older unconsumed ones.
 	hostMetadataUpdates chan map[string]any
-	inSyncWithFelix     bool
+	inSyncWithIntDataplane     bool
 
 	ipFamily      int
 	hostIPUpdates chan []net.IP
@@ -289,7 +289,7 @@ func (kp *KubeProxy) OnUpdate(msg any) {
 func (kp *KubeProxy) CompleteDeferredWork() error {
 	// If not in-sync with felix, we allow sending an empty update
 	// to signal to the KP loop that it can start looping.
-	if len(kp.pendingHostMetadataUpdates) == 0 && kp.inSyncWithFelix {
+	if len(kp.pendingHostMetadataUpdates) == 0 && kp.inSyncWithIntDataplane {
 		log.Debug("No pending host metadata updates to process")
 		return nil
 	}
@@ -313,7 +313,7 @@ func (kp *KubeProxy) CompleteDeferredWork() error {
 	log.Debug("Queueing new hostmetadata for main loop")
 	kp.hostMetadataUpdates <- updates
 	log.Debug("Successfully queued new hostmetadata")
-	kp.inSyncWithFelix = true
+	kp.inSyncWithIntDataplane = true
 	return nil
 }
 
