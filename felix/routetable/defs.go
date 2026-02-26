@@ -78,6 +78,7 @@ type Target struct {
 	Protocol  netlink.RouteProtocol
 	MultiPath []NextHop
 	MTU       int
+	Priority  int
 }
 
 func (t Target) Equal(t2 Target) bool {

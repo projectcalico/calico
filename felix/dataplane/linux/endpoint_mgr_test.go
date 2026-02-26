@@ -722,7 +722,7 @@ func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName s
 	t.currentRoutes[ifaceName] = targets
 }
 
-func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, cidr ip.CIDR) {
+func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, target routetable.Target) {
 }
 
 func (t *mockRouteTable) RouteUpdate(routeClass routetable.RouteClass, ifaceName string, target routetable.Target) {

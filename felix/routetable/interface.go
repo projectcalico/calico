@@ -16,7 +16,6 @@ package routetable
 
 import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
-	"github.com/projectcalico/calico/felix/ip"
 )
 
 // SyncerInterface is the interface used to manage data-sync of route table managers. This includes notification of
@@ -31,7 +30,7 @@ type SyncerInterface interface {
 type Interface interface {
 	SyncerInterface
 	SetRoutes(routeClass RouteClass, ifaceName string, targets []Target)
-	RouteRemove(routeClass RouteClass, ifaceName string, cidr ip.CIDR)
+	RouteRemove(routeClass RouteClass, ifaceName string, target Target)
 	RouteUpdate(routeClass RouteClass, ifaceName string, target Target)
 	Index() int
 	QueueResyncIface(ifaceName string)
@@ -68,8 +67,8 @@ func (cv *ClassView) SetRoutes(ifaceName string, targets []Target) {
 	cv.routeTable.SetRoutes(cv.class, ifaceName, targets)
 }
 
-func (cv *ClassView) RouteRemove(ifaceName string, cidr ip.CIDR) {
-	cv.routeTable.RouteRemove(cv.class, ifaceName, cidr)
+func (cv *ClassView) RouteRemove(ifaceName string, target Target) {
+	cv.routeTable.RouteRemove(cv.class, ifaceName, target)
 }
 
 func (cv *ClassView) RouteUpdate(ifaceName string, target Target) {
