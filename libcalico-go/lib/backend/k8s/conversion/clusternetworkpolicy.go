@@ -343,7 +343,10 @@ func unpackCNPProtocols(cnpProtocols []clusternetpol.ClusterNetworkPolicyProtoco
 			break
 		}
 
-		pStr := protocol.String()
+		pStr := ""
+		if protocol != nil {
+			pStr = protocol.String()
+		}
 		// treat nil as 'all ports'
 		if calicoPort == nil {
 			protocolPorts[pStr] = nil
