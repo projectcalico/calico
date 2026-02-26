@@ -123,7 +123,6 @@ monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
 test_pid=()
 monitor_pids=()
 log_files=()
-failed_log_files=()
 
 # Format batch name for log files: zero-pad numeric values to 3 digits
 format_batch_for_log() {
@@ -168,7 +167,7 @@ for batch in "${batches[@]}"; do
     else
       mv "$log_file" "$failed_log_file"
       echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $failed_log_file."
-      if [ -n "${GCS_WORKFLOW_DIR:-}" ]; then
+      if [ -n "${GCS_WORKFLOW_DIR:-}" ] && [ -n "${COMPONENT:-}" ]; then
         gcloud storage cp "$failed_log_file" "${GCS_WORKFLOW_DIR}/${COMPONENT}/failed-fv-logs/" || true
       fi
     fi
@@ -196,7 +195,6 @@ for batch in "${batches[@]}"; do
   pid=$!
 
   log_files+=( "$log_file" )
-  failed_log_files+=( "$failed_log_file" )
   test_pid+=( "$pid" )
 
   (
@@ -226,7 +224,8 @@ for i in "${!batches[@]}"; do
   if wait "$pid"; then
     summary+=( "Test batch $batch SUCCEEDED" )
   else
-    summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact ${failed_log_files[$i]}" )
+    batch_formatted="$(format_batch_for_log "$batch")"
+    summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact $artifacts_dir/test-$batch_formatted-FAILED.log" )
     final_result=1
   fi
 done
