@@ -241,13 +241,12 @@ skip_redir_ifindex:
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
 			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &host_ip_copy);
 			flags |= BPF_F_TUNINFO_IPV6;
-			size = offsetof(struct bpf_tunnel_key, local_ipv6);
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
 			key.local_ipv4 = HOST_IP;
 			flags |= BPF_F_ZERO_CSUM_TX;
-			size = offsetof(struct bpf_tunnel_key, local_ipv4);
 #endif
+			size = sizeof(struct bpf_tunnel_key);
 
 			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
 			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
@@ -291,13 +290,12 @@ skip_redir_ifindex:
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
 			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &host_ip_copy);
 			flags |= BPF_F_TUNINFO_IPV6;
-			size = offsetof(struct bpf_tunnel_key, local_ipv6);
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
 			key.local_ipv4 = HOST_IP;
 			flags |= BPF_F_ZERO_CSUM_TX;
-			size = offsetof(struct bpf_tunnel_key, local_ipv4);
 #endif
+			size = sizeof(struct bpf_tunnel_key);
 
 			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
 			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
