@@ -11,34 +11,32 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 ARG GIT_VERSION=unknown
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
 ARG BPFTOOL_IMAGE
+
 FROM ${BPFTOOL_IMAGE} AS bpftool
+
 FROM ${BIRD_IMAGE} AS bird
 
-# Use this build stage to build iptables rpm and runit binaries.
-# We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
+# Use this build stage to install iptables-legacy and build runit binaries.
 # We need to build runit because there aren't any rpms for it in AlmaLinux or ubi repositories.
 FROM almalinux:9 AS almalinux
 
 ARG RUNIT_VER
 
-# Install build dependencies and security updates.
-RUN dnf install -y 'dnf-command(config-manager)' && \
-    # Enable CRB (legacy PowerTools) repo for '-devel' packages
-    dnf config-manager --set-enabled crb && \
-    # Need these to build runit.
-    yum install --allowerasing -y wget glibc-static gcc && \
-    # Ensure all security updates are installed.
-    yum -y update-minimal --security
-
 RUN dnf upgrade -y && dnf install -y epel-release
 
-RUN dnf install -y \
+RUN dnf --enablerepo=crb install -y \
     iptables-legacy \
+    # Needed for building runit
+    gcc \
+    glibc-static \
     patch
+
+RUN dnf clean all
 
 # Copy the patch that adjusts svlogd log file permissions from 0744 to 0644.
 # This file is used in the next step to apply the patch during the build process.
@@ -51,24 +49,14 @@ RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}
     patch -p1 < /svlogd_use_0644_permission_instead_of_0744.patch && \
     package/compile
 
-RUN dnf clean all
-
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS ubi
 
 ARG GIT_VERSION
 ARG RUNIT_VER
 
-# Update base packages to pick up security updates.  Must do this before adding the AlmaLinux repo.
+# Update base packages to pick up security updates - must do this before adding the AlmaLinux repo,
+# and install the necessary packages from ubi repos.
 RUN microdnf upgrade -y
-
-# Copy in runit binaries
-COPY --from=almalinux /root/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
-
-# Install a subset of packages from UBI prior to removing the UBI repo below.
-# We do this because the UBI repo has updated versions with CVE fixes. We can remove
-# this once the AlmaLinux repo updates the version of these packages.
-# gzip >= 1.9-13.el9_5
-# cryptsetup-libs >= 2.3.3-4.el9_5.1
 RUN microdnf install -y \
     # Don't install copious docs.
     --setopt=tsflags=nodocs \
@@ -84,8 +72,8 @@ RUN microdnf install -y \
     # Need kmod to ensure ip6tables-save works correctly
     kmod \
     # Also needed (provides utilities for browsing procfs like ps)
-    procps \
     iproute \
+    procps \
     # Needed for runit startup script
     which \
     # Needed for the cleanup script
@@ -96,42 +84,34 @@ RUN microdnf install -y \
 COPY almalinux.repo /etc/yum.repos.d/almalinux.repo
 
 RUN microdnf --enablerepo=appstream --enablerepo=baseos install -y \
-    # Needed for conntrack - from appstream
+    # From appstream - needed for conntrack
     libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
     conntrack-tools \
-    # from baseos
+    # From baseos
     iproute-tc iptables-nft
-
-COPY --from=almalinux /usr/sbin/xtables-legacy-multi /usr/sbin/xtables-legacy-multi
-
-# Set symbolic links for legacy iptables binaries
-RUN set -eux; \
-    for bin in iptables-legacy iptables-legacy-restore iptables-legacy-save ip6tables-legacy ip6tables-legacy-restore ip6tables-legacy-save; do \
-        ln -sf /usr/sbin/xtables-legacy-multi /usr/sbin/${bin} || true; \
-    done
-
-# Set alternatives
-RUN alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
-    alternatives --set iptables /usr/sbin/iptables-legacy && \
-    alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1 && \
-    alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 RUN microdnf clean all
 
-# Change the permissions for ipset so it can be run by any container user.
-RUN chgrp 0 /usr/sbin/ipset && \
-    chmod g=u /usr/sbin/ipset
+# Copy in runit binaries
+COPY --from=almalinux /root/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 
-# Change the permissions for iptables so it can be run by any container user.
-RUN chgrp 0 /usr/sbin/iptables && \
-    chmod g=u /usr/sbin/iptables
+# Copy in xtables-legacy binary and libs
+COPY --from=almalinux /usr/sbin/xtables-legacy-multi /usr/sbin/xtables-legacy-multi
+COPY --from=almalinux /usr/lib64/libip4tc.so.2 /usr/lib64/libip4tc.so.2
+COPY --from=almalinux /usr/lib64/libip6tc.so.2 /usr/lib64/libip6tc.so.2
+COPY --from=almalinux /usr/lib64/libxtables.so.12 /usr/lib64/libxtables.so.12
+
+# Set symbolic links for iptables-legacy binaries
+RUN set -eux; \
+    for bin in iptables-legacy iptables-legacy-restore iptables-legacy-save ip6tables-legacy ip6tables-legacy-restore ip6tables-legacy-save; do \
+        ln -sf xtables-legacy-multi /usr/sbin/${bin} || true; \
+    done
 
 # Copy our bird binaries in
-COPY --from=bird /bird* /bin/
-
-# Set the suid bit on bird to allow our user to execute them with root permissions.
-RUN chmod u+s /bin/bird
-RUN chmod u+s /bin/bird6
+COPY --from=bird /bird /bin/bird
+COPY --from=bird /birdcl /bin/birdcl
+COPY --from=bird /bird6 /bin/bird6
+COPY --from=bird /birdcl6 /bin/birdcl6
 
 # Copy in the filesystem - this contains licenses, etc...
 COPY filesystem/etc/ /etc
@@ -139,25 +119,15 @@ COPY filesystem/included-source/ /included-source
 COPY filesystem/usr/ /usr
 COPY filesystem/sbin/* /usr/sbin/
 
-# Change permissions to make confd templates and output available in /etc/calico
-# to all container users.
-RUN chgrp -R 0 /etc/calico && \
-    chmod -R g=u /etc/calico
-
-COPY --from=bpftool /bpftool /bin
+COPY --from=bpftool /bpftool /bin/bpftool
 
 ARG BIN_DIR
+
 # Copy in the calico-node binary
 COPY ${BIN_DIR}/calico-node-amd64 /bin/calico-node
 
-# Set the suid bit on calico-node
-RUN chmod u+s /bin/calico-node
-
 # Copy in the mountns binary
 COPY ${BIN_DIR}/mountns-amd64 /bin/mountns
-
-# Set the suid bit on mountns
-RUN chmod u+s /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
