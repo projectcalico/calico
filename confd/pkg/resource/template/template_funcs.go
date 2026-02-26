@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
@@ -38,7 +37,7 @@ func newFuncMap() map[string]any {
 	m["fileExists"] = isFileExist
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
-	m["bgpFilterBIRDFuncs"] = BGPFilterBIRDFuncs
+	m["conditionJoin"] = ConditionJoin
 	return m
 }
 
@@ -62,57 +61,6 @@ func addCalicoFuncs(funcMap map[string]any) {
 	}
 }
 
-// filterStatement produces a single comparison expression to be used within a multi-statement BIRD filter
-// function.
-// e.g input of ("In", "77.0.0.1/16", "accept") produces output of "if ((net ~ 77.0.0.1/16)) then { accept; }"
-func filterStatement(fields filterArgs) (string, error) {
-	actionStatement, err := filterAction(fields.action)
-	if err != nil {
-		return "", err
-	}
-
-	var conditions []string
-	if fields.cidr != "" {
-		if fields.operator == "" {
-			return "", fmt.Errorf("operator not included in BGPFilter")
-		}
-		cidrCondition, err := filterMatchCIDR(fields.cidr, fields.prefixLengthV4, fields.prefixLengthV6, fields.operator)
-		if err != nil {
-			return "", err
-		}
-		conditions = append(conditions, cidrCondition)
-	}
-
-	if fields.source != "" {
-		sourceCondition, err := filterMatchSource(fields.source)
-		if err != nil {
-			return "", nil
-		}
-		conditions = append(conditions, sourceCondition)
-	}
-
-	if fields.iface != "" {
-		ifaceCondition, err := filterMatchInterface(fields.iface)
-		if err != nil {
-			return "", nil
-		}
-		conditions = append(conditions, ifaceCondition)
-	}
-
-	conditionExpr := strings.Join(conditions, "&&")
-	if conditionExpr != "" {
-		return fmt.Sprintf("if (%s) then { %s }", conditionExpr, actionStatement), nil
-	}
-	return actionStatement, nil
-}
-
-func filterAction(action v3.BGPFilterAction) (string, error) {
-	if action != v3.Accept && action != v3.Reject {
-		return "", fmt.Errorf("unexpected action found in BGPFilter: %s", action)
-	}
-	return fmt.Sprintf("%s;", strings.ToLower(string(action))), nil
-}
-
 var (
 	operatorLUT = map[v3.BGPFilterMatchOperator]string{
 		v3.Equal:    "=",
@@ -122,7 +70,7 @@ var (
 	}
 )
 
-func filterMatchPrefixLength(cidr string, prefixMin, prefixMax *int32) (string, error) {
+func FilterMatchPrefixLength(cidr string, prefixMin, prefixMax *int32) (string, error) {
 	cidrIP, cidrNet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return "", fmt.Errorf("unexpected error when parsing cidr %s: %s", cidr, err)
@@ -148,7 +96,7 @@ func filterMatchPrefixLength(cidr string, prefixMin, prefixMax *int32) (string, 
 	return fmt.Sprintf("[ %s{%d,%d} ]", cidr, minLength, maxLength), nil
 }
 
-func filterMatchCIDR(cidr string, prefixLengthV4 *v3.BGPFilterPrefixLengthV4, prefixLengthV6 *v3.BGPFilterPrefixLengthV6, operator v3.BGPFilterMatchOperator) (string, error) {
+func FilterMatchCIDR(cidr string, prefixLengthV4 *v3.BGPFilterPrefixLengthV4, prefixLengthV6 *v3.BGPFilterPrefixLengthV6, operator v3.BGPFilterMatchOperator) (string, error) {
 	op, ok := operatorLUT[operator]
 	if !ok {
 		return "", fmt.Errorf("unexpected operator found in BGPFilter: %s", operator)
@@ -156,9 +104,9 @@ func filterMatchCIDR(cidr string, prefixLengthV4 *v3.BGPFilterPrefixLengthV4, pr
 
 	var err error
 	if prefixLengthV4 != nil {
-		cidr, err = filterMatchPrefixLength(cidr, prefixLengthV4.Min, prefixLengthV4.Max)
+		cidr, err = FilterMatchPrefixLength(cidr, prefixLengthV4.Min, prefixLengthV4.Max)
 	} else if prefixLengthV6 != nil {
-		cidr, err = filterMatchPrefixLength(cidr, prefixLengthV6.Min, prefixLengthV6.Max)
+		cidr, err = FilterMatchPrefixLength(cidr, prefixLengthV6.Min, prefixLengthV6.Max)
 	}
 
 	if err != nil {
@@ -168,7 +116,7 @@ func filterMatchCIDR(cidr string, prefixLengthV4 *v3.BGPFilterPrefixLengthV4, pr
 	return fmt.Sprintf("(net %s %s)", op, cidr), nil
 }
 
-func filterMatchSource(source v3.BGPFilterMatchSource) (string, error) {
+func FilterMatchSource(source v3.BGPFilterMatchSource) (string, error) {
 	switch source {
 	case v3.BGPFilterSourceRemotePeers:
 		return "((defined(source))&&(source ~ [ RTS_BGP ]))", nil
@@ -177,11 +125,22 @@ func filterMatchSource(source v3.BGPFilterMatchSource) (string, error) {
 	}
 }
 
-func filterMatchInterface(iface string) (string, error) {
+func FilterMatchInterface(iface string) (string, error) {
 	if iface == "" {
 		return "", fmt.Errorf("empty interface found in BGPFilter")
 	}
 	return fmt.Sprintf("((defined(ifname))&&(ifname ~ \"%s\"))", iface), nil
+}
+
+// ConditionJoin joins non-empty condition strings with "&&" for use in BIRD filter expressions.
+func ConditionJoin(conditions ...string) string {
+	var nonEmpty []string
+	for _, c := range conditions {
+		if c != "" {
+			nonEmpty = append(nonEmpty, c)
+		}
+	}
+	return strings.Join(nonEmpty, "&&")
 }
 
 // BGPFilterFunctionName returns a formatted name for use as a BIRD function, truncating and hashing if the provided
@@ -201,203 +160,6 @@ func BGPFilterFunctionName(filterName, direction, version string) (string, error
 	pieces[1] = resizedName
 	fullName := strings.Join(pieces, "")
 	return fmt.Sprintf("'%s'", fullName), nil
-}
-
-type filterArgs struct {
-	operator       v3.BGPFilterMatchOperator
-	cidr           string
-	prefixLengthV4 *v3.BGPFilterPrefixLengthV4
-	prefixLengthV6 *v3.BGPFilterPrefixLengthV6
-	source         v3.BGPFilterMatchSource
-	iface          string
-	action         v3.BGPFilterAction
-}
-
-// BGPFilterBIRDFuncs generates a set of BIRD functions for BGPFilter resources that have been packaged into KVPairs.
-// By doing the formatting inside of this function we eliminate the need to copy and paste repeated blocks of golang
-// template code into our BIRD config templates that is both difficult to read and prone to errors
-//
-// e.g. for a BGPFilter resource specified as follows:
-//
-// kind: BGPFilter
-// apiVersion: projectcalico.org/v3
-// metadata:
-//
-//	name: test-bgpfilter
-//
-// spec:
-//
-//	exportV4:
-//	  - action: Accept
-//	    matchOperator: In
-//	    cidr: 77.0.0.0/16
-//	  - action: Reject
-//	    matchOperator: In
-//	    cidr: 77.1.0.0/16
-//	importV4:
-//	  - action: Accept
-//	    matchOperator: In
-//	    cidr: 44.0.0.0/16
-//	  - action: Reject
-//	    matchOperator: In
-//	    cidr: 44.1.0.0/16
-//
-// Would produce the following string array that can be easily output via BIRD config template:
-//
-//	[]string{
-//	  "# v4 BGPFilter test-bgpfilter",
-//	  "function 'bgp_test-bgpfilter_importFilterV4'() {",
-//	  "  if ((net ~ 44.0.0.0/16)) then { accept; }",
-//	  "  if ((net ~ 44.1.0.0/16)) then { reject; }",
-//	  "}",
-//	  "function 'bgp_test-bgpfilter_exportFilterV4'() {",
-//	  "  if ((net ~ 77.0.0.0/16)) then { accept; }",
-//	  "  if ((net ~ 77.1.0.0/16)) then { reject; }",
-//	  "}",
-//	 }
-func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
-	lines := []string{}
-	var line string
-	var versionStr string
-
-	if version == 4 || version == 6 {
-		versionStr = fmt.Sprintf("%d", version)
-	} else {
-		return []string{}, fmt.Errorf("version must be either 4 or 6")
-	}
-
-	for _, kvp := range pairs {
-		var filter v3.BGPFilter
-		err := json.Unmarshal([]byte(kvp.Value), &filter)
-		if err != nil {
-			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
-		}
-
-		importFiltersV4 := filter.Spec.ImportV4
-		exportFiltersV4 := filter.Spec.ExportV4
-		importFiltersV6 := filter.Spec.ImportV6
-		exportFiltersV6 := filter.Spec.ExportV6
-
-		var filterName string
-		var emitImports bool
-		var emitExports bool
-		v4Selected := version == 4
-
-		if v4Selected {
-			emitImports = len(importFiltersV4) > 0
-			emitExports = len(exportFiltersV4) > 0
-		} else {
-			emitImports = len(importFiltersV6) > 0
-			emitExports = len(exportFiltersV6) > 0
-		}
-
-		if emitImports || emitExports {
-			filterName = path.Base(kvp.Key)
-			line = fmt.Sprintf("# v%s BGPFilter %s", versionStr, filterName)
-			lines = append(lines, line)
-		}
-
-		var filterFuncName string
-		var filterRule string
-		if emitImports {
-			filterFuncName, err = BGPFilterFunctionName(filterName, "import", versionStr)
-			if err != nil {
-				return []string{}, err
-			}
-			line = fmt.Sprintf("function %s() {", filterFuncName)
-			lines = append(lines, line)
-
-			var ruleFields []filterArgs
-
-			if v4Selected {
-				for _, importV4 := range importFiltersV4 {
-					ruleFields = append(ruleFields, filterArgs{
-						operator:       importV4.MatchOperator,
-						cidr:           importV4.CIDR,
-						prefixLengthV4: importV4.PrefixLength,
-						source:         importV4.Source,
-						iface:          importV4.Interface,
-						action:         importV4.Action,
-					})
-				}
-			} else {
-				for _, importV6 := range importFiltersV6 {
-					ruleFields = append(ruleFields, filterArgs{
-						operator:       importV6.MatchOperator,
-						cidr:           importV6.CIDR,
-						prefixLengthV6: importV6.PrefixLength,
-						source:         importV6.Source,
-						iface:          importV6.Interface,
-						action:         importV6.Action,
-					})
-				}
-			}
-
-			for _, fields := range ruleFields {
-				filterRule, err = filterStatement(fields)
-				if err != nil {
-					return []string{}, err
-				}
-				line = fmt.Sprintf("  %s", filterRule)
-				lines = append(lines, line)
-			}
-
-			line = "}"
-			lines = append(lines, line)
-		}
-
-		if emitExports {
-			filterFuncName, err = BGPFilterFunctionName(filterName, "export", versionStr)
-			if err != nil {
-				return []string{}, err
-			}
-			line = fmt.Sprintf("function %s() {", filterFuncName)
-			lines = append(lines, line)
-
-			var ruleFields []filterArgs
-
-			if v4Selected {
-				for _, exportV4 := range exportFiltersV4 {
-					ruleFields = append(ruleFields, filterArgs{
-						operator:       exportV4.MatchOperator,
-						cidr:           exportV4.CIDR,
-						prefixLengthV4: exportV4.PrefixLength,
-						source:         exportV4.Source,
-						iface:          exportV4.Interface,
-						action:         exportV4.Action,
-					})
-				}
-			} else {
-				for _, exportV6 := range exportFiltersV6 {
-					ruleFields = append(ruleFields, filterArgs{
-						operator:       exportV6.MatchOperator,
-						cidr:           exportV6.CIDR,
-						prefixLengthV6: exportV6.PrefixLength,
-						source:         exportV6.Source,
-						iface:          exportV6.Interface,
-						action:         exportV6.Action,
-					})
-				}
-			}
-
-			for _, fields := range ruleFields {
-				filterRule, err = filterStatement(fields)
-				if err != nil {
-					return []string{}, err
-				}
-				line = fmt.Sprintf("  %s", filterRule)
-				lines = append(lines, line)
-			}
-
-			line = "}"
-			lines = append(lines, line)
-		}
-	}
-	if len(lines) == 0 {
-		line = fmt.Sprintf("# No v%s BGPFilters configured", versionStr)
-		lines = append(lines, line)
-	}
-	return lines, nil
 }
 
 // CreateMap creates a key-value map of string -> interface{}

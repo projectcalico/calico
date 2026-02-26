@@ -2318,3 +2318,223 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestProcessFilterFuncs_NoFilters(t *testing.T) {
+	c := newTestClient(map[string]string{}, nil)
+	config := &types.BirdBGPConfig{}
+	err := c.processFilterFuncs(config, 4)
+	require.NoError(t, err)
+	assert.Empty(t, config.FilterFuncs)
+}
+
+func TestProcessFilterFuncs_ImportAndExport(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":        "Accept",
+					"matchOperator": "In",
+					"cidr":          "10.0.0.0/8",
+				},
+			},
+			"exportV4": []any{
+				map[string]any{
+					"action":        "Reject",
+					"matchOperator": "In",
+					"cidr":          "77.0.0.0/16",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/my-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+	err := c.processFilterFuncs(config, 4)
+	require.NoError(t, err)
+	require.Len(t, config.FilterFuncs, 1)
+
+	group := config.FilterFuncs[0]
+	assert.Equal(t, "my-filter", group.Name)
+
+	require.NotNil(t, group.ImportFunc)
+	importFuncName, _ := template.BGPFilterFunctionName("my-filter", "import", "4")
+	assert.Equal(t, importFuncName, group.ImportFunc.FuncName)
+	require.Len(t, group.ImportFunc.Rules, 1)
+	assert.Equal(t, "accept", group.ImportFunc.Rules[0].Action)
+	assert.Equal(t, "(net ~ 10.0.0.0/8)", group.ImportFunc.Rules[0].MatchCIDR)
+
+	require.NotNil(t, group.ExportFunc)
+	exportFuncName, _ := template.BGPFilterFunctionName("my-filter", "export", "4")
+	assert.Equal(t, exportFuncName, group.ExportFunc.FuncName)
+	require.Len(t, group.ExportFunc.Rules, 1)
+	assert.Equal(t, "reject", group.ExportFunc.Rules[0].Action)
+	assert.Equal(t, "(net ~ 77.0.0.0/16)", group.ExportFunc.Rules[0].MatchCIDR)
+}
+
+func TestProcessFilterFuncs_AllMatchTypes(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":        "Accept",
+					"matchOperator": "NotIn",
+					"cidr":          "55.4.0.0/16",
+					"source":        "RemotePeers",
+					"interface":     "vxlan.calico",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/combo-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+	err := c.processFilterFuncs(config, 4)
+	require.NoError(t, err)
+	require.Len(t, config.FilterFuncs, 1)
+
+	rule := config.FilterFuncs[0].ImportFunc.Rules[0]
+	assert.Equal(t, "accept", rule.Action)
+	assert.Equal(t, "(net !~ 55.4.0.0/16)", rule.MatchCIDR)
+	assert.Equal(t, "((defined(source))&&(source ~ [ RTS_BGP ]))", rule.MatchSource)
+	assert.Equal(t, `((defined(ifname))&&(ifname ~ "vxlan.calico"))`, rule.MatchInterface)
+}
+
+func TestProcessFilterFuncs_NoConditions(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action": "Reject",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/action-only": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+	err := c.processFilterFuncs(config, 4)
+	require.NoError(t, err)
+	require.Len(t, config.FilterFuncs, 1)
+
+	rule := config.FilterFuncs[0].ExportFunc.Rules[0]
+	assert.Equal(t, "reject", rule.Action)
+	assert.Empty(t, rule.MatchCIDR)
+	assert.Empty(t, rule.MatchSource)
+	assert.Empty(t, rule.MatchInterface)
+}
+
+func TestProcessFilterFuncs_MultipleFilters_Sorted(t *testing.T) {
+	filterA := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Accept", "matchOperator": "In", "cidr": "10.0.0.0/8"},
+			},
+		},
+	}
+	filterB := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Reject", "matchOperator": "In", "cidr": "20.0.0.0/8"},
+			},
+		},
+	}
+	filterAJSON, _ := json.Marshal(filterA)
+	filterBJSON, _ := json.Marshal(filterB)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/z-filter": string(filterAJSON),
+		"/calico/resources/v3/projectcalico.org/bgpfilters/a-filter": string(filterBJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+	err := c.processFilterFuncs(config, 4)
+	require.NoError(t, err)
+	require.Len(t, config.FilterFuncs, 2)
+
+	// Should be sorted by name
+	assert.Equal(t, "a-filter", config.FilterFuncs[0].Name)
+	assert.Equal(t, "z-filter", config.FilterFuncs[1].Name)
+}
+
+func TestProcessFilterFuncs_V6(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Accept", "matchOperator": "In", "cidr": "10.0.0.0/8"},
+			},
+			"importV6": []any{
+				map[string]any{"action": "Reject", "matchOperator": "In", "cidr": "5000::0/64"},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/dual-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+	err := c.processFilterFuncs(config, 6)
+	require.NoError(t, err)
+	require.Len(t, config.FilterFuncs, 1)
+
+	// Should only have V6 rules
+	group := config.FilterFuncs[0]
+	require.NotNil(t, group.ImportFunc)
+	assert.Contains(t, group.ImportFunc.FuncName, "importFilterV6")
+	require.Len(t, group.ImportFunc.Rules, 1)
+	assert.Equal(t, "(net ~ 5000::0/64)", group.ImportFunc.Rules[0].MatchCIDR)
+
+	// No export func since only importV6 has rules
+	assert.Nil(t, group.ExportFunc)
+}
+
+func TestProcessFilterFuncs_PrefixLength(t *testing.T) {
+	min := int32(16)
+	max := int32(24)
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":        "Reject",
+					"matchOperator": "NotIn",
+					"cidr":          "55.4.0.0/16",
+					"source":        "RemotePeers",
+					"prefixLength":  map[string]any{"min": min, "max": max},
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/prefix-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{}
+	err := c.processFilterFuncs(config, 4)
+	require.NoError(t, err)
+	require.Len(t, config.FilterFuncs, 1)
+
+	rule := config.FilterFuncs[0].ImportFunc.Rules[0]
+	assert.Equal(t, "(net !~ [ 55.4.0.0/16{16,24} ])", rule.MatchCIDR)
+	assert.Equal(t, "((defined(source))&&(source ~ [ RTS_BGP ]))", rule.MatchSource)
+}

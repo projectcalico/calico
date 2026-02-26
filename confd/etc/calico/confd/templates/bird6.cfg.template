@@ -78,9 +78,33 @@ template bgp bgp_template {
 }
 
 # -------------- BGP Filters ------------------
-{{- range $line := bgpFilterBIRDFuncs (gets "/resources/v3/projectcalico.org/bgpfilters/*") 6 }}
-{{ $line }}
-{{- end }}
+{{- range $config.FilterFuncs}}
+# v6 BGPFilter {{.Name}}
+{{- if .ImportFunc}}
+function {{.ImportFunc.FuncName}}() {
+{{- range .ImportFunc.Rules}}
+{{- $cond := conditionJoin .MatchCIDR .MatchSource .MatchInterface}}
+{{- if $cond}}
+  if ({{$cond}}) then { {{.Action}}; }
+{{- else}}
+  {{.Action}};
+{{- end}}
+{{- end}}
+}
+{{- end}}
+{{- if .ExportFunc}}
+function {{.ExportFunc.FuncName}}() {
+{{- range .ExportFunc.Rules}}
+{{- $cond := conditionJoin .MatchCIDR .MatchSource .MatchInterface}}
+{{- if $cond}}
+  if ({{$cond}}) then { {{.Action}}; }
+{{- else}}
+  {{.Action}};
+{{- end}}
+{{- end}}
+}
+{{- end}}
+{{- end}}
 
 {{- if $config.Peers}}
 # BGP Protocol Configurations

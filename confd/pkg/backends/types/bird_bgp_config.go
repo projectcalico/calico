@@ -22,6 +22,7 @@ type BirdBGPConfig struct {
 	ASNumber         string
 	RouterID         string
 	Peers            []BirdBGPPeer
+	FilterFuncs      []BirdBGPFilterGroup
 	Filters          map[string]string
 	Communities      []CommunityRule
 	LogLevel         string
@@ -57,6 +58,29 @@ type BirdBGPPeer struct {
 	GracefulRestart string // restart time value
 	KeepaliveTime   string
 	NumAllowLocalAs string
+}
+
+// BirdBGPFilterGroup represents all BIRD filter functions from a single BGPFilter resource.
+type BirdBGPFilterGroup struct {
+	Name       string             // Filter resource name (used in comment)
+	ImportFunc *BirdBGPFilterFunc // nil if no import rules
+	ExportFunc *BirdBGPFilterFunc // nil if no export rules
+}
+
+// BirdBGPFilterFunc represents a single BIRD filter function definition,
+// e.g. function 'bgp_myfilter_importFilterV4'() { ... }
+type BirdBGPFilterFunc struct {
+	FuncName string              // Full BIRD function name, e.g. "'bgp_myfilter_importFilterV4'"
+	Rules    []BirdBGPFilterRule // Ordered list of filter rules
+}
+
+// BirdBGPFilterRule represents one rule within a BIRD filter function.
+// Match fields are pre-formatted BIRD condition strings; empty means no condition.
+type BirdBGPFilterRule struct {
+	Action         string // "accept" or "reject"
+	MatchCIDR      string // e.g. "(net ~ 10.0.0.0/8)"
+	MatchSource    string // e.g. "((defined(source))&&(source ~ [ RTS_BGP ]))"
+	MatchInterface string // e.g. "((defined(ifname))&&(ifname ~ \"eth0\"))"
 }
 
 // CommunityRule represents BGP community application rules
