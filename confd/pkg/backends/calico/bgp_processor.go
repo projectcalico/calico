@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"slices"
 	"sort"
 	"strings"
@@ -109,6 +110,13 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		"numOfRejectedFiltersForBGPExport": len(config.BGPExportFilterForDisabledIPPools),
 		"numOfAcceptedFiltersForBGPExport": len(config.BGPExportFilterForEnabledIPPools),
 	}).Debug("Processed ippools")
+
+	// Process BGP filter function definitions
+	if err := c.processFilterFuncs(config, ipVersion); err != nil {
+		logc.WithError(err).Warn("Failed to process BGP filter functions")
+		return nil, err
+	}
+	logc.Debugf("Processed BGP filter functions: found %d filter groups", len(config.FilterFuncs))
 
 	// Update cache with write lock
 	configCacheMutex.Lock()
@@ -789,6 +797,179 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	slices.Sort(config.BGPExportFilterForEnabledIPPools)
 
 	return nil
+}
+
+// processFilterFuncs processes BGPFilter resources into structured BirdBGPFilterGroup entries
+// for template rendering.
+func (c *client) processFilterFuncs(config *types.BirdBGPConfig, ipVersion int) error {
+	logc := log.WithField("ipVersion", ipVersion)
+
+	filterPath := "/calico/resources/v3/projectcalico.org/bgpfilters"
+	kvPairs, err := c.GetValues([]string{filterPath})
+	if err != nil {
+		logc.WithError(err).Debug("No BGP filters found or error retrieving them")
+		return nil
+	}
+
+	versionStr := fmt.Sprintf("%d", ipVersion)
+
+	// Collect filter names for sorted iteration
+	var filterKeys []string
+	for key := range kvPairs {
+		filterKeys = append(filterKeys, key)
+	}
+	sort.Strings(filterKeys)
+
+	for _, key := range filterKeys {
+		value := kvPairs[key]
+		var filter v3.BGPFilter
+		if err := json.Unmarshal([]byte(value), &filter); err != nil {
+			logc.WithError(err).Warnf("Failed to unmarshal BGPFilter for key %s", key)
+			continue
+		}
+
+		filterName := path.Base(key)
+
+		var importRules []v3.BGPFilterRuleV4
+		var importRulesV6 []v3.BGPFilterRuleV6
+		var exportRules []v3.BGPFilterRuleV4
+		var exportRulesV6 []v3.BGPFilterRuleV6
+
+		if ipVersion == 4 {
+			importRules = filter.Spec.ImportV4
+			exportRules = filter.Spec.ExportV4
+		} else {
+			importRulesV6 = filter.Spec.ImportV6
+			exportRulesV6 = filter.Spec.ExportV6
+		}
+
+		hasImport := len(importRules) > 0 || len(importRulesV6) > 0
+		hasExport := len(exportRules) > 0 || len(exportRulesV6) > 0
+
+		if !hasImport && !hasExport {
+			continue
+		}
+
+		group := types.BirdBGPFilterGroup{
+			Name: filterName,
+		}
+
+		if hasImport {
+			funcName, err := template.BGPFilterFunctionName(filterName, "import", versionStr)
+			if err != nil {
+				return err
+			}
+			var rules []types.BirdBGPFilterRule
+			if ipVersion == 4 {
+				rules, err = buildFilterRulesV4(importRules)
+			} else {
+				rules, err = buildFilterRulesV6(importRulesV6)
+			}
+			if err != nil {
+				return err
+			}
+			group.ImportFunc = &types.BirdBGPFilterFunc{
+				FuncName: funcName,
+				Rules:    rules,
+			}
+		}
+
+		if hasExport {
+			funcName, err := template.BGPFilterFunctionName(filterName, "export", versionStr)
+			if err != nil {
+				return err
+			}
+			var rules []types.BirdBGPFilterRule
+			if ipVersion == 4 {
+				rules, err = buildFilterRulesV4(exportRules)
+			} else {
+				rules, err = buildFilterRulesV6(exportRulesV6)
+			}
+			if err != nil {
+				return err
+			}
+			group.ExportFunc = &types.BirdBGPFilterFunc{
+				FuncName: funcName,
+				Rules:    rules,
+			}
+		}
+
+		config.FilterFuncs = append(config.FilterFuncs, group)
+	}
+
+	return nil
+}
+
+// buildFilterRulesV4 converts v3 BGPFilterRuleV4 slices into BirdBGPFilterRule slices.
+func buildFilterRulesV4(rules []v3.BGPFilterRuleV4) ([]types.BirdBGPFilterRule, error) {
+	result := make([]types.BirdBGPFilterRule, 0, len(rules))
+	for _, r := range rules {
+		rule := types.BirdBGPFilterRule{
+			Action: strings.ToLower(string(r.Action)),
+		}
+		if r.CIDR != "" {
+			if r.MatchOperator == "" {
+				return nil, fmt.Errorf("operator not included in BGPFilter")
+			}
+			cidr, err := template.FilterMatchCIDR(r.CIDR, r.PrefixLength, nil, r.MatchOperator)
+			if err != nil {
+				return nil, err
+			}
+			rule.MatchCIDR = cidr
+		}
+		if r.Source != "" {
+			source, err := template.FilterMatchSource(r.Source)
+			if err != nil {
+				return nil, err
+			}
+			rule.MatchSource = source
+		}
+		if r.Interface != "" {
+			iface, err := template.FilterMatchInterface(r.Interface)
+			if err != nil {
+				return nil, err
+			}
+			rule.MatchInterface = iface
+		}
+		result = append(result, rule)
+	}
+	return result, nil
+}
+
+// buildFilterRulesV6 converts v3 BGPFilterRuleV6 slices into BirdBGPFilterRule slices.
+func buildFilterRulesV6(rules []v3.BGPFilterRuleV6) ([]types.BirdBGPFilterRule, error) {
+	result := make([]types.BirdBGPFilterRule, 0, len(rules))
+	for _, r := range rules {
+		rule := types.BirdBGPFilterRule{
+			Action: strings.ToLower(string(r.Action)),
+		}
+		if r.CIDR != "" {
+			if r.MatchOperator == "" {
+				return nil, fmt.Errorf("operator not included in BGPFilter")
+			}
+			cidr, err := template.FilterMatchCIDR(r.CIDR, nil, r.PrefixLength, r.MatchOperator)
+			if err != nil {
+				return nil, err
+			}
+			rule.MatchCIDR = cidr
+		}
+		if r.Source != "" {
+			source, err := template.FilterMatchSource(r.Source)
+			if err != nil {
+				return nil, err
+			}
+			rule.MatchSource = source
+		}
+		if r.Interface != "" {
+			iface, err := template.FilterMatchInterface(r.Interface)
+			if err != nil {
+				return nil, err
+			}
+			rule.MatchInterface = iface
+		}
+		result = append(result, rule)
+	}
+	return result, nil
 }
 
 // This function generates BIRD statements for an IPPool to be used as BIRD filters based on the following input:
