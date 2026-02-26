@@ -168,7 +168,11 @@ for batch in "${batches[@]}"; do
       mv "$log_file" "$failed_log_file"
       echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $failed_log_file."
       if [ -n "${GCS_WORKFLOW_DIR:-}" ] && [ -n "${COMPONENT:-}" ]; then
-        gcloud storage cp "$failed_log_file" "${GCS_WORKFLOW_DIR}/${COMPONENT}/failed-fv-logs/" || true
+        failed_log_upload_dir="${GCS_WORKFLOW_DIR}/${COMPONENT}/failed-fv-logs"
+        if [ -n "${JOB_TAG:-}" ]; then
+          failed_log_upload_dir="${failed_log_upload_dir}/${JOB_TAG}"
+        fi
+        gcloud storage cp "$failed_log_file" "${failed_log_upload_dir}/" || true
       fi
     fi
 
