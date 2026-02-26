@@ -980,7 +980,7 @@ metadata:
 spec:
   logSeverityScreen: Info
   nodeToNodeMeshEnabled: false
-  bgpWithinCluster: Disabled
+  programClusterRoutes: Disabled
 ---
 kind: Node
 apiVersion: projectcalico.org/v3

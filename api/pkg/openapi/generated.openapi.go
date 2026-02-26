@@ -834,9 +834,9 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							Format:      "",
 						},
 					},
-					"bgpWithinCluster": {
+					"programClusterRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BGPWithinCluster enables or disables BGP within the cluster. [Default: Enabled]",
+							Description: "ProgramClusterRoutes specifies whether BIRD or Felix should program cluster routes. When Enabled, Calico uses BGP to distribute route information between nodes. When disabled, Calico learns the necessary routing information from its IPAM database and running workloads on the cluster. Felix always programs VXLAN routes. [Default: Enabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

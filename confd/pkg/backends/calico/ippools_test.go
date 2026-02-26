@@ -314,10 +314,10 @@ func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
 	cache[fmt.Sprintf("/calico/bgp/v1/host/%s/network_v4", NodeName)] = "1.1.1.0/24"
 
 	c := newTestClient(cache, nil)
-	bgpWithinCluster := v3.BGPWithinClusterDisabled
+	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			BGPWithinCluster: &bgpWithinCluster,
+			ProgramClusterRoutes: &programClusterRoutes,
 		},
 	}
 	config := &types.BirdBGPConfig{
@@ -390,10 +390,10 @@ func Test_processIPPoolsV6_BGPDisabledWithinCluster(t *testing.T) {
 	cache := ippoolTestCasesToKVPairs(t, poolsTestsV6, 6)
 
 	c := newTestClient(cache, nil)
-	bgpWithinCluster := v3.BGPWithinClusterDisabled
+	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			BGPWithinCluster: &bgpWithinCluster,
+			ProgramClusterRoutes: &programClusterRoutes,
 		},
 	}
 	config := &types.BirdBGPConfig{

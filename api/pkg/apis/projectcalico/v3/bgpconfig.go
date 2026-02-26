@@ -65,17 +65,6 @@ const (
 	ServiceLoadBalancerAggregationDisabled ServiceLoadBalancerAggregation = "Disabled"
 )
 
-// BGPWithinCluster defines whether BGP within the cluster is enabled or disabled.
-// +kubebuilder:validation:Enum=Enabled;Disabled
-type BGPWithinCluster string
-
-const (
-	// BGPWithinClusterEnabled means BGP within the cluster is enabled (default behavior)
-	BGPWithinClusterEnabled BGPWithinCluster = "Enabled"
-	// BGPWithinClusterDisabled means BGP within the cluster is disabled
-	BGPWithinClusterDisabled BGPWithinCluster = "Disabled"
-)
-
 // BGPConfigurationSpec contains the values of the BGP configuration.
 type BGPConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
@@ -158,9 +147,12 @@ type BGPConfigurationSpec struct {
 	// +optional
 	LocalWorkloadPeeringIPV6 string `json:"localWorkloadPeeringIPV6,omitempty" validate:"omitempty,ipv6"`
 
-	// BGPWithinCluster enables or disables BGP within the cluster. [Default: Enabled]
+	// ProgramClusterRoutes specifies whether BIRD or Felix should program cluster routes. When Enabled, Calico uses BGP
+	// to distribute route information between nodes. When disabled, Calico learns the necessary routing information
+	// from its IPAM database and running workloads on the cluster. Felix always programs VXLAN routes. [Default: Enabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
 	// +optional
-	BGPWithinCluster *BGPWithinCluster `json:"bgpWithinCluster,omitempty"`
+	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.

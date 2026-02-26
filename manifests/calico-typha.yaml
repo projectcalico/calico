@@ -134,11 +134,6 @@ spec:
                 asNumber:
                   format: int32
                   type: integer
-                bgpWithinCluster:
-                  enum:
-                    - Enabled
-                    - Disabled
-                  type: string
                 bindMode:
                   enum:
                     - None
@@ -207,6 +202,11 @@ spec:
                     x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
+                programClusterRoutes:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 serviceClusterIPs:
                   items:
                     properties:
