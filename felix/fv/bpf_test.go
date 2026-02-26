@@ -3559,18 +3559,24 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								natFtKey = nat.NewNATKey(net.ParseIP(ip), port, numericProto)
 								family = 4
 							}
+							// Check all felixes. In the shared-cgroup FV environment,
+							// felix-0's CTLB program intercepts connects from all
+							// containers, so its NAT maps must be synced too.
 							Eventually(func() bool {
-								m, be, _ := dumpNATMapsAny(family, tc.Felixes[1])
+								for _, f := range tc.Felixes {
+									m, be, _ := dumpNATMapsAny(family, f)
 
-								v, ok := m[natFtKey]
-								if !ok || v.Count() == 0 {
-									return false
+									v, ok := m[natFtKey]
+									if !ok || v.Count() == 0 {
+										return false
+									}
+
+									beKey := nat.NewNATBackendKey(v.ID(), 0)
+									if _, ok = be[beKey]; !ok {
+										return false
+									}
 								}
-
-								beKey := nat.NewNATBackendKey(v.ID(), 0)
-
-								_, ok = be[beKey]
-								return ok
+								return true
 							}, 5*time.Second).Should(BeTrue())
 						})
 
