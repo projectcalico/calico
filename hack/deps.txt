@@ -9,9 +9,12 @@ github.com/cespare/xxhash/v2 v2.3.0
 github.com/coreos/go-semver v0.3.1
 github.com/coreos/go-systemd/v22 v22.6.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+github.com/emicklei/go-restful v2.15.0+incompatible
 github.com/emicklei/go-restful/v3 v3.12.2
 github.com/fxamacker/cbor/v2 v2.9.0
 github.com/go-ini/ini v1.67.0
+github.com/go-kit/log v0.2.1
+github.com/go-logfmt/logfmt v0.6.0
 github.com/go-logr/logr v1.4.3
 github.com/go-openapi/jsonpointer v0.21.0
 github.com/go-openapi/jsonreference v0.20.2
@@ -22,6 +25,7 @@ github.com/gogo/protobuf v1.3.2
 github.com/golang/protobuf v1.5.4
 github.com/google/gnostic-models v0.7.0
 github.com/google/uuid v1.6.0
+github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.1
 github.com/jinzhu/copier v0.4.0
 github.com/josharian/intern v1.0.0
@@ -34,6 +38,7 @@ github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
+github.com/openshift/custom-resource-status v1.1.2
 github.com/pkg/errors v0.9.1
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
@@ -79,6 +84,9 @@ k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
 k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
 k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
+kubevirt.io/api v1.7.0
+kubevirt.io/containerized-data-importer-api v1.63.1
+kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90
 sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
 sigs.k8s.io/network-policy-api v0.1.8-0.20260212153203-412bf65729a5
 sigs.k8s.io/randfill v1.0.0
