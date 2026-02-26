@@ -121,17 +121,25 @@ require (
 )
 
 require (
+	github.com/j-keck/arping v1.0.3
+	github.com/mdlayher/ndp v1.1.0
+	golang.org/x/crypto v0.47.0 // indirect
+)
+
+require (
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker v28.5.1+incompatible // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875 // indirect
+	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118 // indirect
+	github.com/mdlayher/packet v1.1.2 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	kubevirt.io/containerized-data-importer-api v1.63.1 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 )
 
 require (
-	golang.org/x/crypto v0.47.0 // indirect
 	kubevirt.io/api v1.8.0-alpha.0
 	kubevirt.io/client-go v1.8.0-alpha.0
 )

@@ -323,6 +323,11 @@ spec:
                       - timeout
                     type: object
                   type: array
+                hostSubnetNeighResponses:
+                  enum:
+                    - Disabled
+                    - PodsAndLoadBalancers
+                  type: string
                 interfaceExclude:
                   type: string
                 interfacePrefix:

@@ -74,8 +74,12 @@ github.com/libp2p/go-reuseport v0.4.0
 github.com/lithammer/dedent v1.1.0
 github.com/mailru/easyjson v0.7.7
 github.com/mattn/go-runewidth v0.0.16
+github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
+github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 github.com/mdlayher/genetlink v1.3.2
+github.com/mdlayher/ndp v1.1.0
 github.com/mdlayher/netlink v1.7.2
+github.com/mdlayher/packet v1.1.2
 github.com/mdlayher/socket v0.5.1
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd

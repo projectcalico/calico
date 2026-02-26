@@ -2011,6 +2011,17 @@ spec:
                       - timeout
                     type: object
                   type: array
+                hostSubnetNeighResponses:
+                  description: |-
+                    HostSubnetNeighResponses controls whether Felix automatically programs per-IP
+                    proxy ARP (IPv4) and proxy NDP (IPv6) neighbour entries on host interfaces for
+                    local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as
+                    the host interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+                    subnet are reachable from the local L2 segment without BGP. [Default: PodsAndLoadBalancers]
+                  enum:
+                    - Disabled
+                    - PodsAndLoadBalancers
+                  type: string
                 interfaceExclude:
                   description: |-
                     InterfaceExclude A comma-separated list of interface names that should be excluded when Felix is resolving

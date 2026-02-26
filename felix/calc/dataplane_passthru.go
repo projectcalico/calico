@@ -201,6 +201,13 @@ func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
 		ExternalIps:    s.Spec.ExternalIPs,
 	}
 
+	// Extract LoadBalancer ingress IPs from Status (the actual assigned IPs).
+	for _, ingress := range s.Status.LoadBalancer.Ingress {
+		if ingress.IP != "" {
+			up.LoadbalancerIngressIps = append(up.LoadbalancerIngressIps, ingress.IP)
+		}
+	}
+
 	ports := make([]*proto.ServicePort, 0, len(s.Spec.Ports))
 
 	protoGet := func(kp kapiv1.Protocol) string {
