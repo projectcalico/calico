@@ -58,17 +58,27 @@ if ! command -v fv-tests-guru &>/dev/null; then
         release_url="https://api.github.com/repos/${FV_TESTS_GURU_REPO}/releases/tags/${FV_TESTS_GURU_VERSION}"
     fi
 
-    # Get the download URL and asset name for the linux-amd64 binary.
-    asset_info=$(curl -sf \
+    # Get the download URL, asset name, and checksums URL from the release.
+    release_json=$(curl -sf \
         -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
         -H "Accept: application/vnd.github.v3+json" \
-        "$release_url" \
-        | python3 -c "
+        "$release_url") || true
+
+    asset_info=$(echo "$release_json" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 for asset in data.get('assets', []):
     if 'linux' in asset['name'] and 'amd64' in asset['name']:
         print(asset['url'] + ' ' + asset['name'])
+        break
+") || true
+
+    checksums_url=$(echo "$release_json" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for asset in data.get('assets', []):
+    if asset['name'] == 'checksums.txt':
+        print(asset['url'])
         break
 ") || true
 
@@ -88,6 +98,39 @@ for asset in data.get('assets', []):
         "$download_url" \
         -o "$tmp_download"; then
         echo "analyze-test-failures: Failed to download fv-tests-guru asset, skipping."
+        rm -f "$tmp_download"
+        exit 0
+    fi
+
+    # Verify SHA256 checksum.
+    if [ -n "$checksums_url" ]; then
+        tmp_checksums=$(mktemp /tmp/fv-tests-guru-checksums-XXXXXX)
+        if curl -sfL \
+            -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
+            -H "Accept: application/octet-stream" \
+            "$checksums_url" \
+            -o "$tmp_checksums" && [ -s "$tmp_checksums" ]; then
+            expected_hash=$(grep "$asset_name" "$tmp_checksums" | awk '{print $1}')
+            actual_hash=$(sha256sum "$tmp_download" | awk '{print $1}')
+            if [ -z "$expected_hash" ]; then
+                echo "analyze-test-failures: No checksum found for $asset_name in checksums.txt, skipping."
+                rm -f "$tmp_download" "$tmp_checksums"
+                exit 0
+            fi
+            if [ "$expected_hash" != "$actual_hash" ]; then
+                echo "analyze-test-failures: SHA256 mismatch for $asset_name (expected=$expected_hash, got=$actual_hash), skipping."
+                rm -f "$tmp_download" "$tmp_checksums"
+                exit 0
+            fi
+            echo "analyze-test-failures: SHA256 verified for $asset_name."
+        else
+            echo "analyze-test-failures: Failed to download checksums.txt, skipping."
+            rm -f "$tmp_download" "$tmp_checksums"
+            exit 0
+        fi
+        rm -f "$tmp_checksums"
+    else
+        echo "analyze-test-failures: No checksums.txt in release, skipping."
         rm -f "$tmp_download"
         exit 0
     fi
