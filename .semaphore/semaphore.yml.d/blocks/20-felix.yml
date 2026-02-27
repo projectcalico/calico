@@ -14,6 +14,7 @@
         - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
     secrets:
       - name: google-service-account-for-gce
+      - name: gemini-api-key
     jobs:
       - name: "Felix: Build and cache FV prerequisites"
         priority:
@@ -59,6 +60,7 @@
     epilogue:
       always:
         commands:
+          - ./.semaphore/analyze-test-failures --ut || true
           - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
 - name: "Felix: multi-arch build"
   run:
@@ -174,6 +176,7 @@
           - source felix/.semaphore/fv-epilogue
     secrets:
       - name: google-service-account-for-gce
+      - name: gemini-api-key
 - name: "Felix: nftables tests on Ubuntu 22.04"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
@@ -197,6 +200,7 @@
           - source felix/.semaphore/fv-epilogue
     secrets:
       - name: google-service-account-for-gce
+      - name: gemini-api-key
 - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
@@ -220,6 +224,7 @@
           - source felix/.semaphore/fv-epilogue
     secrets:
       - name: google-service-account-for-gce
+      - name: gemini-api-key
 - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
@@ -247,6 +252,7 @@
           - source felix/.semaphore/fv-epilogue
     secrets:
       - name: google-service-account-for-gce
+      - name: gemini-api-key
 - name: "Felix: BPF program-loading check on 25.10 (nftables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
@@ -273,6 +279,7 @@
           - source felix/.semaphore/fv-epilogue
     secrets:
       - name: google-service-account-for-gce
+      - name: gemini-api-key
 - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
@@ -300,3 +307,4 @@
           - source felix/.semaphore/fv-epilogue
     secrets:
       - name: google-service-account-for-gce
+      - name: gemini-api-key
