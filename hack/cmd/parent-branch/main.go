@@ -198,9 +198,10 @@ func tryGitTagStrategy(remote string) (string, bool, error) {
 	log.Debug("Trying to detect base branch by guessing based on the most recent git tag")
 	recentTag, err := runGit("describe", "--tags", "--abbrev=0")
 	if err != nil {
-		return "", false, fmt.Errorf("failed to get recent tag: %w", err)
+		log.Infof("Failed to get the most recent git tag: %s", err)
+		return "", false, nil
 	}
-	log.Debugf("Found git tag %s, trying to parse it", recentTag)
+	log.Debugf("Found git tag `%s`, trying to parse it", recentTag)
 	return tryVersionStrategy(recentTag, remote)
 }
 
@@ -215,7 +216,7 @@ func tryVersionStrategy(version, remote string) (string, bool, error) {
 
 	constructedBranch := strings.TrimSuffix(releasePrefix, "v") + versionBase
 
-	log.Debugf("Found version %s, looking for release branch %s", version, constructedBranch)
+	log.Debugf("Found version `%s`, looking for release branch %s", version, constructedBranch)
 
 	currentBranch, _ := runGit("branch", "--show-current")
 
