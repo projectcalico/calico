@@ -286,10 +286,14 @@ else
                 formatted_batch="$batch"
             fi
             log_file="$ARTIFACTS_DIR/test-${formatted_batch}.log"
+            # Some CI configurations rename failed batch logs with a -FAILED suffix.
+            if [ ! -f "$log_file" ]; then
+                log_file="$ARTIFACTS_DIR/test-${formatted_batch}-FAILED.log"
+            fi
         fi
 
         if [ ! -f "$log_file" ]; then
-            echo "analyze-test-failures: Log file $log_file not found for batch $batch, skipping."
+            echo "analyze-test-failures: Log file not found for batch $batch, skipping."
             continue
         fi
 
