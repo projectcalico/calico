@@ -108,14 +108,14 @@ def find_matching_analysis(test_name, analyses, used_keys):
 
 def format_summary(failure):
     """Extract a concise one-line summary for the failure message attribute."""
-    diagnosis = failure.get('diagnosis', '')
-    if not diagnosis:
+    # Prefer explicit summary field if fv-tests-guru provides one.
+    text = failure.get('summary', '') or failure.get('diagnosis', '')
+    if not text:
         return None
-    # Use the first non-empty line as the summary.
-    for line in diagnosis.splitlines():
+    # Use the first non-empty line.
+    for line in text.splitlines():
         line = line.strip()
         if line:
-            # Truncate to 200 chars to fit in the message attribute.
             if len(line) > 200:
                 return "[AI] " + line[:197] + "..."
             return "[AI] " + line
