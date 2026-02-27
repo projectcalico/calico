@@ -206,7 +206,7 @@ func (m Map) GetHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
 		if keyBits&(1<<pos) == 0 {
 			return uniquestr.Handle{}, false
 		}
-		arrayIdx := bits.OnesCount64(keyBits & ((1 << pos) - 1))
+		arrayIdx := bits.OnesCount64(keyBits & ((uint64(1) << pos) - 1))
 		return readValueAt(m.ptr, arrayIdx), true
 	}
 	v, ok := (*fallbackMap)(m.ptr).m[h]
@@ -346,7 +346,7 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 			val := readValueAt(a.ptr, aIdx)
 			if include(key, val) {
 				if otherV, ok := b.GetHandle(key); ok && otherV == val {
-					resultBf |= 1 << pos
+					resultBf |= uint64(1) << pos
 					vals = append(vals, val)
 				}
 			}

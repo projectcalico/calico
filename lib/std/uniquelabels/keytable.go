@@ -104,7 +104,7 @@ func (t *keyTable) registerKeys(m map[string]string) (uint64, []uniquestr.Handle
 	for k := range m {
 		h := uniquestr.Make(k)
 		if pos, found := snap.byHandle[h]; found {
-			bf |= 1 << pos
+			bf |= uint64(1) << pos
 		} else {
 			return t.registerKeysSlow(m)
 		}
@@ -130,7 +130,7 @@ func (t *keyTable) registerKeysSlow(m map[string]string) (uint64, []uniquestr.Ha
 		// All keys now known (registered by another goroutine).
 		var bf uint64
 		for k := range m {
-			bf |= 1 << snap.byHandle[uniquestr.Make(k)]
+			bf |= uint64(1) << snap.byHandle[uniquestr.Make(k)]
 		}
 		return bf | topBit, buildValues(snap, bf, m), true
 	}
@@ -144,13 +144,13 @@ func (t *keyTable) registerKeysSlow(m map[string]string) (uint64, []uniquestr.Ha
 	for k := range m {
 		h := uniquestr.Make(k)
 		if pos, found := snap.byHandle[h]; found {
-			bf |= 1 << pos
+			bf |= uint64(1) << pos
 		} else {
 			pos := uint8(snap.len)
 			snap.byHandle[h] = pos
 			snap.byIndex[pos] = h
 			snap.len++
-			bf |= 1 << pos
+			bf |= uint64(1) << pos
 		}
 	}
 	t.snap.Store(snap)
@@ -162,7 +162,7 @@ func buildValues(snap *keyTableSnap, bf uint64, m map[string]string) []uniquestr
 	vals := make([]uniquestr.Handle, bits.OnesCount64(bf))
 	for k, v := range m {
 		pos := snap.byHandle[uniquestr.Make(k)]
-		arrayIdx := bits.OnesCount64(bf & ((1 << pos) - 1))
+		arrayIdx := bits.OnesCount64(bf & ((uint64(1) << pos) - 1))
 		vals[arrayIdx] = uniquestr.Make(v)
 	}
 	return vals
