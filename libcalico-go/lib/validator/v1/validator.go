@@ -421,25 +421,27 @@ func validateRule(structLevel validator.StructLevel) {
 
 	// If the protocol does not support ports, check that the port values have not
 	// been specified.
-	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
-		if len(rule.Source.Ports) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-				"Source.Ports", "", reason(protocolPortsMsg), "")
-		}
-		if len(rule.Source.NotPorts) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-				"Source.NotPorts", "", reason(protocolPortsMsg), "")
-		}
+	/*
+		if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
+			if len(rule.Source.Ports) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
+					"Source.Ports", "", reason(protocolPortsMsg), "")
+			}
+			if len(rule.Source.NotPorts) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
+					"Source.NotPorts", "", reason(protocolPortsMsg), "")
+			}
 
-		if len(rule.Destination.Ports) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-				"Destination.Ports", "", reason(protocolPortsMsg), "")
+			if len(rule.Destination.Ports) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
+					"Destination.Ports", "", reason(protocolPortsMsg), "")
+			}
+			if len(rule.Destination.NotPorts) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
+					"Destination.NotPorts", "", reason(protocolPortsMsg), "")
+			}
 		}
-		if len(rule.Destination.NotPorts) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-				"Destination.NotPorts", "", reason(protocolPortsMsg), "")
-		}
-	}
+	*/
 
 	// Check that only one of the net or nets fields is specified.
 	hasNetField := rule.Source.Net != nil ||
@@ -486,11 +488,11 @@ func validateRule(structLevel validator.StructLevel) {
 }
 
 func validateBackendRule(structLevel validator.StructLevel) {
-	rule := structLevel.Current().Interface().(model.Rule)
+	//rule := structLevel.Current().Interface().(model.Rule)
 
 	// If the protocol does not support ports check that the port values have not
 	// been specified.
-	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
+	/*if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
 		if len(rule.SrcPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.SrcPorts),
 				"SrcPorts", "", reason(protocolPortsMsg), "")
@@ -508,7 +510,7 @@ func validateBackendRule(structLevel validator.StructLevel) {
 			structLevel.ReportError(reflect.ValueOf(rule.NotDstPorts),
 				"NotDstPorts", "", reason(protocolPortsMsg), "")
 		}
-	}
+	}*/
 }
 
 func validateNodeSpec(structLevel validator.StructLevel) {
