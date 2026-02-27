@@ -18,9 +18,11 @@
 
 Usage: inject-analysis-into-xml.py <json-file> <xml-file> [<xml-file> ...]
 
-Reads fv-tests-guru JSON output (mapping test names to analysis text),
-finds matching failed test cases in JUnit XML files, and prepends the
-analysis into the <system-out> element of each matched test case.
+Reads fv-tests-guru JSON output and finds matching failed test cases in
+JUnit XML files, prepending the analysis into the <system-out> element.
+
+Supports the fv-tests-guru output format:
+  {"failures": [{"description": "TestName", "diagnosis": "...", ...}, ...]}
 
 Pure stdlib implementation (xml.etree.ElementTree + json), no external
 dependencies required.
@@ -38,11 +40,46 @@ def normalize_name(name):
     return name.lower()
 
 
+def parse_analyses(data):
+    """Parse fv-tests-guru JSON into a {description: failure_dict} map.
+
+    Expected format:
+      {
+        "failures": [
+          {
+            "description": "TestName/subtest",
+            "diagnosis": "...",
+            "error_message": "...",
+            "bpf_verifier_log": "...",
+            "file_path": "...",
+            "line_number": "...",
+            ...
+          }
+        ]
+      }
+    """
+    if not isinstance(data, dict):
+        return {}
+
+    failures = data.get('failures')
+    if not isinstance(failures, list):
+        return {}
+
+    analyses = {}
+    for f in failures:
+        desc = f.get('description', '')
+        if not desc:
+            continue
+        analyses[desc] = f
+
+    return analyses
+
+
 def find_matching_analysis(test_name, analyses, used_keys):
     """Find the best matching analysis for a test name.
 
     Tries exact match, then normalized match, then substring match.
-    Returns (analysis_text, matched_key) or (None, None).
+    Returns (failure_dict, matched_key) or (None, None).
     """
     # 1. Exact match.
     if test_name in analyses and test_name not in used_keys:
@@ -50,43 +87,58 @@ def find_matching_analysis(test_name, analyses, used_keys):
 
     # 2. Normalized match.
     norm_test = normalize_name(test_name)
-    for key, text in analyses.items():
+    for key, entry in analyses.items():
         if key in used_keys:
             continue
         if normalize_name(key) == norm_test:
-            return text, key
+            return entry, key
 
     # 3. Substring match (JSON key is substring of XML name or vice versa).
-    for key, text in analyses.items():
+    for key, entry in analyses.items():
         if key in used_keys:
             continue
         norm_key = normalize_name(key)
         if norm_key in norm_test or norm_test in norm_key:
-            return text, key
+            return entry, key
 
     return None, None
 
 
-def format_analysis_block(analysis_text):
-    """Format the analysis text with a clear header/footer."""
+def format_analysis_block(failure):
+    """Format a failure entry with a clear header/footer."""
     header = "=" * 60
-    return (
-        f"\n{header}\n"
-        f"  AI FAILURE ANALYSIS (fv-tests-guru)\n"
-        f"{header}\n\n"
-        f"{analysis_text}\n\n"
-        f"{header}\n\n"
-    )
+    parts = [f"\n{header}", "  AI FAILURE ANALYSIS (fv-tests-guru)", header, ""]
+
+    diagnosis = failure.get('diagnosis', '')
+    if diagnosis:
+        parts.append(diagnosis)
+        parts.append("")
+
+    file_path = failure.get('file_path', '')
+    line_number = failure.get('line_number', '')
+    if file_path:
+        loc = file_path
+        if line_number:
+            loc += f":{line_number}"
+        parts.append(f"Location: {loc}")
+        parts.append("")
+
+    parts.append(header)
+    parts.append("")
+    return "\n".join(parts)
 
 
 def inject_into_xml(json_path, xml_paths):
     """Inject analysis from JSON into matching failed tests in XML files."""
     with open(json_path, 'r') as f:
-        analyses = json.load(f)
+        data = json.load(f)
 
-    if not isinstance(analyses, dict) or not analyses:
-        print(f"inject-analysis: No analyses found in {json_path}", file=sys.stderr)
+    analyses = parse_analyses(data)
+    if not analyses:
+        print(f"inject-analysis: No failure analyses found in {json_path}", file=sys.stderr)
         return
+
+    print(f"inject-analysis: Parsed {len(analyses)} failure(s) from {json_path}")
 
     used_keys = set()
     total_injected = 0
@@ -103,24 +155,24 @@ def inject_into_xml(json_path, xml_paths):
 
         # Find all testcase elements with failure children.
         for testcase in root.iter('testcase'):
-            failure = testcase.find('failure')
-            if failure is None:
+            failure_elem = testcase.find('failure')
+            if failure_elem is None:
                 continue
 
             test_name = testcase.get('name', '')
             if not test_name:
                 continue
 
-            analysis_text, matched_key = find_matching_analysis(
+            failure_entry, matched_key = find_matching_analysis(
                 test_name, analyses, used_keys
             )
-            if analysis_text is None:
+            if failure_entry is None:
                 continue
 
             used_keys.add(matched_key)
 
             # Prepend analysis to system-out.
-            analysis_block = format_analysis_block(analysis_text)
+            analysis_block = format_analysis_block(failure_entry)
 
             system_out = testcase.find('system-out')
             if system_out is None:
