@@ -495,9 +495,6 @@ func cmdDel(args *skel.CmdArgs) error {
 	})
 
 	logger.Info("Releasing address using handleID")
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
 
 	// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign/delete
 	// concurrently. ReleaseXXX is concurrency safe already but serialising the CNI plugins means that
@@ -505,6 +502,10 @@ func cmdDel(args *skel.CmdArgs) error {
 	// number of concurrent requests with essentially no downside.
 	unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
 	defer unlock()
+
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
 
 	if err := calicoClient.IPAM().ReleaseByHandle(ctx, handleID); err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
