@@ -37,6 +37,16 @@ import (
 
 const routePriorityForTest int = 48931
 
+// routeKeyStr builds a mock dataplane route key string that includes table, CIDR, and priority.
+func routeKeyStr(table int, cidr string, priority int) string {
+	return fmt.Sprintf("%d-%s-%d", table, cidr, priority)
+}
+
+// mainRouteKey builds a route key string for the main routing table with the standard test priority.
+func mainRouteKey(cidr string) string {
+	return routeKeyStr(254, cidr, routePriorityForTest)
+}
+
 var (
 	FelixRouteProtocol = netlink.RouteProtocol(syscall.RTPROT_BOOT)
 
@@ -94,7 +104,7 @@ var _ = Describe("RouteTable v6", func() {
 		})
 		err := rt.Apply()
 		Expect(err).ToNot(HaveOccurred())
-		Expect(dataplane.RouteKeyToRoute["254-f00f::/128"]).To(Equal(
+		Expect(dataplane.RouteKeyToRoute[routeKeyStr(254, "f00f::/128", 1024)]).To(Equal(
 			netlink.Route{
 				Family:    netlink.FAMILY_V6,
 				LinkIndex: 1,
@@ -157,6 +167,32 @@ var _ = Describe("RouteTable v6", func() {
 		Expect(dataplane.UpdatedRouteKeys).ToNot(HaveKey(mocknetlink.KeyForRoute(&noopRoute)))
 		Expect(dataplane.DeletedRouteKeys).To(HaveKey(mocknetlink.KeyForRoute(&deleteRoute)))
 		Expect(dataplane.DeletedRouteKeys).To(HaveKey(mocknetlink.KeyForRoute(&deleteRoute2)))
+	})
+
+	It("should normalize IPv6 Priority 0 to 1024 in RouteRemove", func() {
+		// Add a route with Priority 0 — internally, routeKeyForTarget normalizes this to 1024 for IPv6.
+		link := dataplane.AddIface(10, "cali10", true, true)
+		rt.OnIfaceStateChanged(link.LinkAttrs.Name, link.LinkAttrs.Index, ifacemonitor.StateUp)
+
+		rt.RouteUpdate(RouteClassLocalWorkload, link.LinkAttrs.Name, Target{
+			RouteKey: RouteKey{
+				CIDR: ip.MustParseCIDROrIP("fd00::1/128"),
+				// Priority 0 — will be normalized to 1024.
+			},
+			Type: TargetTypeVXLAN,
+		})
+		err := rt.Apply()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dataplane.RouteKeyToRoute).To(HaveKey(routeKeyStr(254, "fd00::1/128", 1024)))
+
+		// Now remove using Priority 0 again — RouteRemove should normalize it to 1024.
+		rt.RouteRemove(RouteClassLocalWorkload, link.LinkAttrs.Name, RouteKey{
+			CIDR: ip.MustParseCIDROrIP("fd00::1/128"),
+			// Priority 0 — should be normalized to 1024 to match the stored route.
+		})
+		err = rt.Apply()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(routeKeyStr(254, "fd00::1/128", 1024)))
 	})
 })
 
@@ -304,6 +340,7 @@ var _ = Describe("RouteTable", func() {
 				Scope:     netlink.SCOPE_LINK,
 				Src:       net.ParseIP("192.168.0.1"),
 				Table:     unix.RT_TABLE_MAIN,
+				Priority:  routePriorityForTest,
 			}
 			dataplane.AddMockRoute(&updateRoute)
 			rt.SetRoutes(RouteClassLocalWorkload, updateLink.LinkAttrs.Name, []Target{{
@@ -316,7 +353,6 @@ var _ = Describe("RouteTable", func() {
 
 			fixedRoute := updateRoute
 			fixedRoute.Src = nil
-			fixedRoute.Priority = routePriorityForTest
 
 			err := rt.Apply()
 			Expect(err).ToNot(HaveOccurred())
@@ -368,7 +404,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				cidr := mustParseCIDR("10.0.0.6/32")
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.6/32"]).To(Equal(netlink.Route{
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.6/32")]).To(Equal(netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       cidr,
@@ -452,7 +488,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey("254-10.0.0.6/32"))
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(mainRouteKey("10.0.0.6/32")))
 				dataplane.ExpectNeighs(unix.AF_INET)
 			})
 			It("Should skip adding an ARP entry if route is deleted via RouteRemove before sync", func() {
@@ -470,7 +506,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey("254-10.0.0.6/32"))
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(mainRouteKey("10.0.0.6/32")))
 				dataplane.ExpectNeighs(unix.AF_INET)
 			})
 			It("Should not remove routes with a source address", func() {
@@ -690,7 +726,7 @@ var _ = Describe("RouteTable", func() {
 				}})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.6/32"]).To(Equal(netlink.Route{
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.6/32")]).To(Equal(netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
@@ -736,7 +772,7 @@ var _ = Describe("RouteTable", func() {
 				}})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(Equal(netlink.Route{
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: 0,
 					Dst:       mustParseCIDR("10.0.0.0/24"),
@@ -809,7 +845,7 @@ var _ = Describe("RouteTable", func() {
 				By("Apply")
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero())
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(BeZero())
 
 				By("Bringing interfaces up")
 				dataplane.SetIface("cali6", true, true)
@@ -843,7 +879,7 @@ var _ = Describe("RouteTable", func() {
 					},
 					Priority: routePriorityForTest,
 				}
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(Equal(expectedRoute))
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(expectedRoute))
 
 				By("Bringing one interface down")
 				dataplane.SetIface("cali6", false, false)
@@ -854,7 +890,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(err).ToNot(HaveOccurred())
 				// It's ok to have one interface down on a multi-path route.
 				// Kernel keeps the route in place.
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(Equal(expectedRoute),
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(expectedRoute),
 					"Route should not be removed when only one interface is down")
 
 				By("Bringing other interface down")
@@ -866,7 +902,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(err).ToNot(HaveOccurred())
 				// The kernel will remove the route once all interfaces go down
 				// so we do the same to stay in sync.
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero(),
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(BeZero(),
 					"Route should be removed when all interfaces are down")
 			})
 			It("Should add/remove multi-path routes when interface creted/deleted", func() {
@@ -892,7 +928,7 @@ var _ = Describe("RouteTable", func() {
 				By("Apply")
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero())
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(BeZero())
 
 				By("Creating one interface")
 				addLink := dataplane.AddIface(6, "cali6", false, false)
@@ -902,7 +938,7 @@ var _ = Describe("RouteTable", func() {
 				By("Apply")
 				err = rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero())
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(BeZero())
 
 				By("Creating other interface")
 				addLink2 := dataplane.AddIface(7, "cali7", false, false)
@@ -935,7 +971,7 @@ var _ = Describe("RouteTable", func() {
 					},
 					Priority: routePriorityForTest,
 				}
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(Equal(expectedRoute))
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(expectedRoute))
 
 				By("Deleting one interface")
 				dataplane.DelIface("cali6")
@@ -946,7 +982,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(err).ToNot(HaveOccurred())
 				// Can't have a route with a deleted interface.  The ifindex becomes
 				// invalid.
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero(),
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(BeZero(),
 					"Route should be removed when one interface deleted")
 			})
 			It("Should add multiple routes with a protocol", func() {
@@ -967,7 +1003,7 @@ var _ = Describe("RouteTable", func() {
 				}})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.6/32"]).To(Equal(netlink.Route{
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.6/32")]).To(Equal(netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
@@ -977,7 +1013,7 @@ var _ = Describe("RouteTable", func() {
 					Table:     unix.RT_TABLE_MAIN,
 					Priority:  routePriorityForTest,
 				}))
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.7/32"]).To(Equal(netlink.Route{
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.7/32")]).To(Equal(netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.7/32"),
@@ -1015,7 +1051,7 @@ var _ = Describe("RouteTable", func() {
 				dataplane.PersistFailures = false
 				err = rt.Apply()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.6/32"]).To(Equal(netlink.Route{
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.6/32")]).To(Equal(netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
@@ -1025,7 +1061,7 @@ var _ = Describe("RouteTable", func() {
 					Table:     unix.RT_TABLE_MAIN,
 					Priority:  routePriorityForTest,
 				}))
-				Expect(dataplane.RouteKeyToRoute["254-10.0.0.7/32"]).To(Equal(netlink.Route{
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.7/32")]).To(Equal(netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.7/32"),
@@ -1471,7 +1507,7 @@ var _ = Describe("RouteTable", func() {
 				// resolution determines that no routes are eligible for programming.
 				if testFailFlags != mocknetlink.FailNextLinkByNameNotFound {
 					It("should keep correct route", func() {
-						Expect(dataplane.RouteKeyToRoute["254-10.0.0.1/32"]).To(Equal(netlink.Route{
+						Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.1/32")]).To(Equal(netlink.Route{
 							Family:    unix.AF_INET,
 							LinkIndex: cali1.LinkAttrs.Index,
 							Dst:       &ip1,
@@ -1481,12 +1517,12 @@ var _ = Describe("RouteTable", func() {
 							Table:     unix.RT_TABLE_MAIN,
 							Priority:  routePriorityForTest,
 						}))
-						Expect(dataplane.AddedRouteKeys.Contains("254-10.0.0.1/32")).To(BeFalse())
+						Expect(dataplane.AddedRouteKeys.Contains(mainRouteKey("10.0.0.1/32"))).To(BeFalse())
 					})
 				}
 				It("should add new route", func() {
-					Expect(dataplane.RouteKeyToRoute).To(HaveKey("254-10.0.0.2/32"))
-					Expect(dataplane.RouteKeyToRoute["254-10.0.0.2/32"]).To(Equal(netlink.Route{
+					Expect(dataplane.RouteKeyToRoute).To(HaveKey(mainRouteKey("10.0.0.2/32")))
+					Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.2/32")]).To(Equal(netlink.Route{
 						Family:    unix.AF_INET,
 						LinkIndex: cali2.LinkAttrs.Index,
 						Dst:       &ip2,
@@ -1498,8 +1534,8 @@ var _ = Describe("RouteTable", func() {
 					}))
 				})
 				It("should update changed route", func() {
-					Expect(dataplane.RouteKeyToRoute).To(HaveKey("254-10.0.1.3/32"))
-					Expect(dataplane.RouteKeyToRoute["254-10.0.1.3/32"]).To(Equal(netlink.Route{
+					Expect(dataplane.RouteKeyToRoute).To(HaveKey(mainRouteKey("10.0.1.3/32")))
+					Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.1.3/32")]).To(Equal(netlink.Route{
 						Family:    unix.AF_INET,
 						LinkIndex: cali3.LinkAttrs.Index,
 						Dst:       &ip13,
@@ -1509,7 +1545,7 @@ var _ = Describe("RouteTable", func() {
 						Table:     unix.RT_TABLE_MAIN,
 						Priority:  routePriorityForTest,
 					}))
-					Expect(dataplane.DeletedRouteKeys.Contains("254-10.0.0.3/32")).To(BeTrue())
+					Expect(dataplane.DeletedRouteKeys.Contains(mainRouteKey("10.0.0.3/32"))).To(BeTrue())
 					Eventually(dataplane.GetDeletedConntrackEntries).Should(ContainElement(net.ParseIP("10.0.0.3").To4()))
 				})
 				It("should have expected number of routes at the end", func() {
@@ -1670,6 +1706,330 @@ var _ = Describe("RouteTable", func() {
 			// Check that we really hit the case we intended to hit.
 			Expect(dataplane.HitRouteListFilteredNoDev).To(BeTrue(),
 				"RouteListFiltered wasn't called with missing device?  Perhaps test needs updating.")
+		})
+	})
+})
+
+var _ = Describe("RouteTable with multiple priorities", func() {
+	var dataplane *mocknetlink.MockNetlinkDataplane
+	var t *mocktime.MockTime
+	var rt *RouteTable
+
+	const (
+		lowPriority  = 100
+		highPriority = 200
+	)
+
+	BeforeEach(func() {
+		dataplane = mocknetlink.New()
+		t = mocktime.New()
+		t.SetAutoIncrement(11 * time.Second)
+		rt = New(
+			&defaultOwnershipPolicy,
+			4,
+			10*time.Second,
+			nil,
+			FelixRouteProtocol,
+			true,
+			0,
+			logutils.NewSummarizer("test"),
+			dataplane,
+			WithRouteCleanupGracePeriod(10*time.Second),
+			WithTimeShim(t),
+			WithConntrackShim(dataplane),
+			WithNetlinkHandleShim(dataplane.NewMockNetlink),
+		)
+	})
+
+	Describe("with an interface", func() {
+		var cali1 *mocknetlink.MockLink
+		BeforeEach(func() {
+			cali1 = dataplane.AddIface(3, "cali1", true, true)
+		})
+
+		It("should program two routes with the same CIDR but different priorities", func() {
+			rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{
+				{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+						Priority: lowPriority,
+					},
+				},
+				{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+						Priority: highPriority,
+					},
+				},
+			})
+			err := rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
+
+			lowKey := routeKeyStr(254, "10.0.0.1/32", lowPriority)
+			highKey := routeKeyStr(254, "10.0.0.1/32", highPriority)
+
+			Expect(dataplane.RouteKeyToRoute).To(HaveKey(lowKey))
+			Expect(dataplane.RouteKeyToRoute).To(HaveKey(highKey))
+			Expect(dataplane.RouteKeyToRoute[lowKey]).To(Equal(netlink.Route{
+				Family:    unix.AF_INET,
+				LinkIndex: cali1.LinkAttrs.Index,
+				Dst:       mustParseCIDR("10.0.0.1/32"),
+				Type:      syscall.RTN_UNICAST,
+				Protocol:  FelixRouteProtocol,
+				Scope:     netlink.SCOPE_LINK,
+				Table:     unix.RT_TABLE_MAIN,
+				Priority:  lowPriority,
+			}))
+			Expect(dataplane.RouteKeyToRoute[highKey]).To(Equal(netlink.Route{
+				Family:    unix.AF_INET,
+				LinkIndex: cali1.LinkAttrs.Index,
+				Dst:       mustParseCIDR("10.0.0.1/32"),
+				Type:      syscall.RTN_UNICAST,
+				Protocol:  FelixRouteProtocol,
+				Scope:     netlink.SCOPE_LINK,
+				Table:     unix.RT_TABLE_MAIN,
+				Priority:  highPriority,
+			}))
+		})
+
+		It("should add two routes with different priorities via RouteUpdate", func() {
+			rt.RouteUpdate(RouteClassLocalWorkload, "cali1", Target{
+				RouteKey: RouteKey{
+					CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+					Priority: lowPriority,
+				},
+			})
+			rt.RouteUpdate(RouteClassLocalWorkload, "cali1", Target{
+				RouteKey: RouteKey{
+					CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+					Priority: highPriority,
+				},
+			})
+			err := rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(dataplane.RouteKeyToRoute).To(HaveKey(routeKeyStr(254, "10.0.0.1/32", lowPriority)))
+			Expect(dataplane.RouteKeyToRoute).To(HaveKey(routeKeyStr(254, "10.0.0.1/32", highPriority)))
+		})
+
+		Context("after programming two routes with different priorities", func() {
+			BeforeEach(func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{
+					{
+						RouteKey: RouteKey{
+							CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+							Priority: lowPriority,
+						},
+					},
+					{
+						RouteKey: RouteKey{
+							CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+							Priority: highPriority,
+						},
+					},
+				})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should remove only the low-priority route when it is removed", func() {
+				rt.RouteRemove(RouteClassLocalWorkload, "cali1", RouteKey{
+					CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+					Priority: lowPriority,
+				})
+				dataplane.ResetDeltas()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				lowKey := routeKeyStr(254, "10.0.0.1/32", lowPriority)
+				highKey := routeKeyStr(254, "10.0.0.1/32", highPriority)
+
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(lowKey))
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(highKey))
+				Expect(dataplane.DeletedRouteKeys).To(HaveKey(lowKey))
+			})
+
+			It("should remove only the high-priority route when it is removed", func() {
+				rt.RouteRemove(RouteClassLocalWorkload, "cali1", RouteKey{
+					CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+					Priority: highPriority,
+				})
+				dataplane.ResetDeltas()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				lowKey := routeKeyStr(254, "10.0.0.1/32", lowPriority)
+				highKey := routeKeyStr(254, "10.0.0.1/32", highPriority)
+
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(lowKey))
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(highKey))
+				Expect(dataplane.DeletedRouteKeys).To(HaveKey(highKey))
+			})
+
+			It("should remove both routes when SetRoutes is called with nil", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", nil)
+				dataplane.ResetDeltas()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				lowKey := routeKeyStr(254, "10.0.0.1/32", lowPriority)
+				highKey := routeKeyStr(254, "10.0.0.1/32", highPriority)
+
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(lowKey))
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(highKey))
+				Expect(dataplane.DeletedRouteKeys).To(HaveKey(lowKey))
+				Expect(dataplane.DeletedRouteKeys).To(HaveKey(highKey))
+			})
+
+			It("should replace both routes when SetRoutes is called with new targets at same priorities", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{
+					{
+						RouteKey: RouteKey{
+							CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+							Priority: lowPriority,
+						},
+						GW: ip.FromString("10.0.0.254"),
+					},
+					{
+						RouteKey: RouteKey{
+							CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+							Priority: highPriority,
+						},
+						GW: ip.FromString("10.0.0.253"),
+					},
+				})
+				dataplane.ResetDeltas()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				lowKey := routeKeyStr(254, "10.0.0.1/32", lowPriority)
+				highKey := routeKeyStr(254, "10.0.0.1/32", highPriority)
+
+				Expect(dataplane.RouteKeyToRoute[lowKey].Gw).To(Equal(net.ParseIP("10.0.0.254").To4()))
+				Expect(dataplane.RouteKeyToRoute[highKey].Gw).To(Equal(net.ParseIP("10.0.0.253").To4()))
+			})
+
+			It("should handle removing one priority and keeping the other via SetRoutes", func() {
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{
+					{
+						RouteKey: RouteKey{
+							CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+							Priority: highPriority,
+						},
+					},
+				})
+				dataplane.ResetDeltas()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				lowKey := routeKeyStr(254, "10.0.0.1/32", lowPriority)
+				highKey := routeKeyStr(254, "10.0.0.1/32", highPriority)
+
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(lowKey))
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(highKey))
+				Expect(dataplane.DeletedRouteKeys).To(HaveKey(lowKey))
+			})
+
+			It("should survive a resync and keep both routes", func() {
+				rt.QueueResync()
+				dataplane.ResetDeltas()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				lowKey := routeKeyStr(254, "10.0.0.1/32", lowPriority)
+				highKey := routeKeyStr(254, "10.0.0.1/32", highPriority)
+
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(lowKey))
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(highKey))
+				// No changes should be needed.
+				Expect(dataplane.AddedRouteKeys).To(BeEmpty())
+				Expect(dataplane.DeletedRouteKeys).To(BeEmpty())
+			})
+
+			It("should add a third priority for the same CIDR", func() {
+				const thirdPriority = 300
+				rt.RouteUpdate(RouteClassLocalWorkload, "cali1", Target{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+						Priority: thirdPriority,
+					},
+				})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(routeKeyStr(254, "10.0.0.1/32", lowPriority)))
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(routeKeyStr(254, "10.0.0.1/32", highPriority)))
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(routeKeyStr(254, "10.0.0.1/32", thirdPriority)))
+			})
+		})
+
+		It("should clean up stale kernel routes at different priorities during resync", func() {
+			// Pre-populate the kernel with two routes at different priorities
+			// that we don't know about.
+			staleRouteLow := netlink.Route{
+				Family:    unix.AF_INET,
+				LinkIndex: cali1.LinkAttrs.Index,
+				Dst:       mustParseCIDR("10.0.0.1/32"),
+				Type:      syscall.RTN_UNICAST,
+				Protocol:  FelixRouteProtocol,
+				Scope:     netlink.SCOPE_LINK,
+				Table:     unix.RT_TABLE_MAIN,
+				Priority:  lowPriority,
+			}
+			staleRouteHigh := netlink.Route{
+				Family:    unix.AF_INET,
+				LinkIndex: cali1.LinkAttrs.Index,
+				Dst:       mustParseCIDR("10.0.0.1/32"),
+				Type:      syscall.RTN_UNICAST,
+				Protocol:  FelixRouteProtocol,
+				Scope:     netlink.SCOPE_LINK,
+				Table:     unix.RT_TABLE_MAIN,
+				Priority:  highPriority,
+			}
+			dataplane.AddMockRoute(&staleRouteLow)
+			dataplane.AddMockRoute(&staleRouteHigh)
+
+			err := rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Both stale routes should be deleted.
+			lowKey := routeKeyStr(254, "10.0.0.1/32", lowPriority)
+			highKey := routeKeyStr(254, "10.0.0.1/32", highPriority)
+			Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(lowKey))
+			Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(highKey))
+		})
+
+		It("should clean up stale priority and keep desired priority during resync", func() {
+			// Pre-populate the kernel with a stale route at one priority.
+			staleRoute := netlink.Route{
+				Family:    unix.AF_INET,
+				LinkIndex: cali1.LinkAttrs.Index,
+				Dst:       mustParseCIDR("10.0.0.1/32"),
+				Type:      syscall.RTN_UNICAST,
+				Protocol:  FelixRouteProtocol,
+				Scope:     netlink.SCOPE_LINK,
+				Table:     unix.RT_TABLE_MAIN,
+				Priority:  lowPriority,
+			}
+			dataplane.AddMockRoute(&staleRoute)
+
+			// Tell the routetable we want a route at a different priority.
+			rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{{
+				RouteKey: RouteKey{
+					CIDR:     ip.MustParseCIDROrIP("10.0.0.1/32"),
+					Priority: highPriority,
+				},
+			}})
+
+			err := rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
+
+			lowKey := routeKeyStr(254, "10.0.0.1/32", lowPriority)
+			highKey := routeKeyStr(254, "10.0.0.1/32", highPriority)
+
+			// Stale route should be cleaned up, desired route should be programmed.
+			Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(lowKey))
+			Expect(dataplane.RouteKeyToRoute).To(HaveKey(highKey))
 		})
 	})
 })
@@ -2064,7 +2424,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 					Table:     100,
 					Priority:  routePriorityForTest,
 				}))
-				Expect(dataplane.UpdatedRouteKeys.Contains("100-10.10.10.10/32")).To(BeTrue())
+				Expect(dataplane.UpdatedRouteKeys.Contains(routeKeyStr(100, "10.10.10.10/32", routePriorityForTest))).To(BeTrue())
 			})
 		})
 
@@ -2101,7 +2461,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 					Table:     100,
 					Priority:  routePriorityForTest,
 				}))
-				Expect(dataplane.UpdatedRouteKeys.Contains("100-10.10.10.10/32")).To(BeTrue())
+				Expect(dataplane.UpdatedRouteKeys.Contains(routeKeyStr(100, "10.10.10.10/32", routePriorityForTest))).To(BeTrue())
 			})
 		})
 	})
