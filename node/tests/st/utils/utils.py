@@ -24,10 +24,9 @@ from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
 from time import sleep
 
-import termios
 import yaml
 from netaddr import IPNetwork, IPAddress
-from exceptions import CommandExecError
+from tests.st.utils.exceptions import CommandExecError
 
 LOCAL_IP_ENV = "MY_IP"
 LOCAL_IPv6_ENV = "MY_IPv6"
@@ -83,12 +82,6 @@ def get_ip(v6=False):
     return ip
 
 
-# Some of the commands we execute like to mess with the TTY configuration, which can break the
-# output formatting. As a workaround, save off the terminal settings and restore them after
-# each command.
-_term_settings = termios.tcgetattr(sys.stdin.fileno())
-
-
 def log_and_run(command, raise_exception_on_failure=True):
     def log_output(results):
         if results is None:
@@ -100,20 +93,15 @@ def log_and_run(command, raise_exception_on_failure=True):
 
     try:
         logger.info("[%s] %s", datetime.datetime.now(), command)
-        try:
-            results = check_output(command, shell=True, stderr=STDOUT).rstrip()
-        finally:
-            # Restore terminal settings in case the command we ran manipulated them.  Note:
-            # under concurrent access, this is still not a perfect solution since another thread's
-            # child process may break the settings again before we log below.
-            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _term_settings)
+        results = check_output(command, shell=True, stderr=STDOUT).rstrip()
+        results = results.decode()
         log_output(results)
         return results
     except CalledProcessError as e:
         # Wrap the original exception with one that gives a better error
         # message (including command output).
         logger.info("  # Return code: %s", e.returncode)
-        log_output(e.output)
+        log_output(e.output.decode())
         if raise_exception_on_failure:
             raise CommandExecError(e)
 
@@ -360,7 +348,7 @@ def get_host_ips(version=4, exclude=None):
 
     # Call `ip addr`.
     try:
-        ip_addr_output = check_output(["ip", "-%d" % version, "addr"])
+        ip_addr_output = check_output(["ip", "-%d" % version, "addr"]).decode()
     except (CalledProcessError, OSError):
         print("Call to 'ip addr' Failed")
         sys.exit(1)
@@ -397,12 +385,12 @@ def curl_etcd(path, options=None, recursive=True, ip=None):
             "-sL https://%s:2379/v2/keys/%s?recursive=%s %s"
             % (ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL,
                path, str(recursive).lower(), " ".join(options)),
-            shell=True)
+            shell=True).decode()
     else:
         rc = check_output(
             "curl -sL http://%s:2379/v2/keys/%s?recursive=%s %s"
             % (ip, path, str(recursive).lower(), " ".join(options)),
-            shell=True)
+            shell=True).decode()
 
     return json.loads(rc.strip())
 

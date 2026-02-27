@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from nose.plugins.attrib import attr
+import pytest
 from unittest import skip
 
 from tests.st.test_base import TestBase
@@ -43,7 +43,7 @@ class TestBGP(TestBase):
             # Set the global-default AS number.
             update_bgp_config(host, asNum=12345)
 
-            self.assertEquals(get_bgp_spec(host)['asNumber'], 12345)
+            self.assertEqual(get_bgp_spec(host)['asNumber'], 12345)
 
             with self.assertRaises(CommandExecError):
                 update_bgp_config(host, asNum=99999999999999999999999)
@@ -52,15 +52,15 @@ class TestBGP(TestBase):
 
             # Check BGP mesh command
             if 'nodeToNodeMeshEnabled' in get_bgp_spec(host):
-                self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
+                self.assertEqual(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
 
             update_bgp_config(host, nodeMesh=False)
-            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], False)
+            self.assertEqual(get_bgp_spec(host)['nodeToNodeMeshEnabled'], False)
 
             update_bgp_config(host, nodeMesh=True)
-            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
+            self.assertEqual(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
 
-    @attr('slow')
+    @pytest.mark.slow
     def _test_as_num(self, backend='bird'):
         """
         Test using different AS number for the node-to-node mesh.
@@ -100,6 +100,6 @@ class TestBGP(TestBase):
             check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
             check_bird_status(host2, [("node-to-node mesh", host1.ip, "Established")])
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_as_num(self):
         self._test_as_num(backend='bird')

@@ -1622,3 +1622,8 @@ release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIE
 	for registry in $(DEV_REGISTRIES); do \
 		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$${describe_tag} $${registry}/$(WINDOWS_IMAGE):$${release_tag}; \
 	done;
+
+# Name of a test image that is used by both "node" and "calicoctl", so defined here.  This image is
+# built by node/Makefile.
+TEST_CONTAINER_NAME_VER?=latest
+TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
