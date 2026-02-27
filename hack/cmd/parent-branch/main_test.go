@@ -443,14 +443,6 @@ func TestMergeBaseStrategy(t *testing.T) {
 			},
 			want: "origin/release-v3.22",
 		},
-		{
-			name:   "empty refs returns empty",
-			remote: "origin",
-			gitMock: map[string]string{
-				"for-each-ref --format=%(refname:short) refs/remotes/origin": "",
-			},
-			want: "",
-		},
 	}
 
 	for _, tc := range tests {
@@ -463,6 +455,47 @@ func TestMergeBaseStrategy(t *testing.T) {
 			}
 			if got != tc.want {
 				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMergeBaseStrategy_NoMatchingBranches(t *testing.T) {
+	origPrefix := releasePrefix
+	t.Cleanup(func() { releasePrefix = origPrefix })
+	releasePrefix = "release-v"
+
+	tests := []struct {
+		name    string
+		remote  string
+		gitMock map[string]string
+	}{
+		{
+			name:   "empty refs",
+			remote: "origin",
+			gitMock: map[string]string{
+				"for-each-ref --format=%(refname:short) refs/remotes/origin": "",
+			},
+		},
+		{
+			name:   "only non-matching branches",
+			remote: "origin",
+			gitMock: map[string]string{
+				"for-each-ref --format=%(refname:short) refs/remotes/origin": "origin/feature-branch\norigin/bugfix-123",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			withMockGit(t, tc.gitMock)
+
+			_, err := mergeBaseStrategy(tc.remote)
+			if err == nil {
+				t.Fatal("expected error when no suitable branches found")
+			}
+			if !strings.Contains(err.Error(), "no suitable remote branches found") {
+				t.Errorf("unexpected error message: %v", err)
 			}
 		})
 	}
