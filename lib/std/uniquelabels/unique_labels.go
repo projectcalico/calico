@@ -122,16 +122,38 @@ func makeInner(m map[string]string) Map {
 
 // Equals returns true if the map contains the same key/value pairs as the
 // other map.  In line with maps.Equal, Nil and Empty compare equal.
+//
+// When both maps use the compact representation, Equals compares the
+// bitfields directly and then the value arrays element-by-element,
+// avoiding any hash-table lookups.
 func (m Map) Equals(other Map) bool {
 	if m.ptr == other.ptr {
 		return true
 	}
-	ml, ol := m.Len(), other.Len()
-	if ml != ol {
-		return false
+	if m.ptr == nil || other.ptr == nil {
+		// One is Nil, other is not (same-pointer handled above).
+		// Nil equals Empty by contract.
+		return m.Len() == 0 && other.Len() == 0
 	}
-	if ml == 0 {
-		return true // Both empty (covers Nil vs Empty).
+	mH := *(*uint64)(m.ptr)
+	oH := *(*uint64)(other.ptr)
+	if mH&topBit != 0 && oH&topBit != 0 {
+		// Both compact.  Different bitfields ⇒ different key sets.
+		if mH != oH {
+			return false
+		}
+		// Same keys — compare value arrays directly.
+		n := bits.OnesCount64(mH &^ topBit)
+		for i := range n {
+			if readValueAt(m.ptr, i) != readValueAt(other.ptr, i) {
+				return false
+			}
+		}
+		return true
+	}
+	// Mixed or both fallback: generic comparison.
+	if m.Len() != other.Len() {
+		return false
 	}
 	for k, v := range m.AllHandles() {
 		if ov, ok := other.GetHandle(k); !ok || ov != v {
@@ -277,6 +299,28 @@ func (m *Map) UnmarshalJSON(data []byte) error {
 		*m = Empty
 		return nil
 	}
+	// Try compact representation using already-known keys.
+	snap := globalKeyTable.currentSnap()
+	var bf uint64
+	allKnown := true
+	for k := range hm {
+		if pos, found := snap.byHandle[k]; found {
+			bf |= 1 << pos
+		} else {
+			allKnown = false
+			break
+		}
+	}
+	if allKnown {
+		vals := make([]uniquestr.Handle, bits.OnesCount64(bf))
+		for k, v := range hm {
+			pos := snap.byHandle[k]
+			arrayIdx := bits.OnesCount64(bf & ((1 << pos) - 1))
+			vals[arrayIdx] = v
+		}
+		*m = Map{ptr: allocCompact(bf|topBit, vals)}
+		return nil
+	}
 	*m = Map{ptr: unsafe.Pointer(&fallbackMap{m: hm})}
 	return nil
 }
@@ -323,6 +367,34 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 	}
 
 	// We _do_ need to make a new map, re-do the calculation.
+	// If a is compact, build a compact result (the intersection's keys
+	// are a subset of a's keys, which are all in the key table).
+	if a.isCompact() {
+		snap := globalKeyTable.currentSnap()
+		aBf := readKeyBits(a.ptr)
+		var resultBf uint64
+		var vals []uniquestr.Handle
+		remaining := aBf
+		aIdx := 0
+		for remaining != 0 {
+			pos := uint(bits.TrailingZeros64(remaining))
+			key := snap.byIndex[pos]
+			val := readValueAt(a.ptr, aIdx)
+			if include(key, val) {
+				if otherV, ok := b.GetHandle(key); ok && otherV == val {
+					resultBf |= 1 << pos
+					vals = append(vals, val)
+				}
+			}
+			remaining &= remaining - 1
+			aIdx++
+		}
+		if len(vals) == 0 {
+			return Empty
+		}
+		return Map{ptr: allocCompact(resultBf|topBit, vals)}
+	}
+
 	intersection := map[uniquestr.Handle]uniquestr.Handle{}
 	for k, v := range a.AllHandles() {
 		if !include(k, v) {

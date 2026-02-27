@@ -466,6 +466,85 @@ func TestNilAndEmptySemantics(t *testing.T) {
 	}
 }
 
+func TestIntersectAndFilterReturnsCompact(t *testing.T) {
+	a := Make(map[string]string{"x": "1", "y": "2", "z": "3"})
+	b := Make(map[string]string{"x": "1", "z": "3"})
+	if !a.isCompact() || !b.isCompact() {
+		t.Skip("inputs not compact")
+	}
+
+	// Intersection of a ∩ b should be {x:1, z:3} and compact.
+	result := IntersectAndFilter(a, b, nil)
+	if !result.isCompact() {
+		t.Error("IntersectAndFilter should return compact map when input is compact")
+	}
+	if !result.EquivalentTo(map[string]string{"x": "1", "z": "3"}) {
+		t.Errorf("wrong content: %v", result)
+	}
+
+	// With a filter that excludes "x", result should be {z:3} and compact.
+	result = IntersectAndFilter(a, b, func(k uniquestr.Handle, _ uniquestr.Handle) bool {
+		return k.Value() != "x"
+	})
+	if !result.isCompact() {
+		t.Error("filtered IntersectAndFilter should return compact map")
+	}
+	if !result.EquivalentTo(map[string]string{"z": "3"}) {
+		t.Errorf("wrong content: %v", result)
+	}
+
+	// Intersection that yields empty should return Empty (compact).
+	result = IntersectAndFilter(a, b, func(uniquestr.Handle, uniquestr.Handle) bool {
+		return false
+	})
+	if !result.isCompact() {
+		t.Error("empty IntersectAndFilter result should be compact (Empty)")
+	}
+	if result.Len() != 0 {
+		t.Error("expected empty result")
+	}
+}
+
+func TestCompactEqualsOptimization(t *testing.T) {
+	m1 := Make(map[string]string{"eq-a": "1", "eq-b": "2"})
+	m2 := Make(map[string]string{"eq-a": "1", "eq-b": "2"})
+	m3 := Make(map[string]string{"eq-a": "1", "eq-b": "99"})
+	m4 := Make(map[string]string{"eq-a": "1"})
+	if !m1.isCompact() || !m2.isCompact() || !m3.isCompact() || !m4.isCompact() {
+		t.Skip("inputs not compact")
+	}
+
+	// Same content → equal.
+	if !m1.Equals(m2) {
+		t.Error("identical compact maps should be equal")
+	}
+	// Same keys, different values → not equal.
+	if m1.Equals(m3) {
+		t.Error("compact maps with different values should not be equal")
+	}
+	// Different key sets → not equal (bitfield mismatch).
+	if m1.Equals(m4) {
+		t.Error("compact maps with different key sets should not be equal")
+	}
+}
+
+func TestUnmarshalJSONProducesCompact(t *testing.T) {
+	// First, ensure the keys are registered by calling Make.
+	_ = Make(map[string]string{"jk1": "a", "jk2": "b"})
+
+	data := []byte(`{"jk1":"x","jk2":"y"}`)
+	var m Map
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	if !m.isCompact() {
+		t.Error("UnmarshalJSON should produce compact map when keys are known")
+	}
+	if !m.EquivalentTo(map[string]string{"jk1": "x", "jk2": "y"}) {
+		t.Errorf("wrong content: %v", m)
+	}
+}
+
 func TestKeyTableConcurrent(t *testing.T) {
 	// Concurrent Make calls with new keys should not race.
 	const goroutines = 8
