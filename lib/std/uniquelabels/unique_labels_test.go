@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"unsafe"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
@@ -125,7 +126,7 @@ func TestAllHandles(t *testing.T) {
 }
 
 func sameUnderlyingMap(a, b Map) bool {
-	return reflect.ValueOf(a.m).UnsafePointer() == reflect.ValueOf(b.m).UnsafePointer()
+	return a.ptr == b.ptr
 }
 
 func TestMakeCacheHit(t *testing.T) {
@@ -134,9 +135,9 @@ func TestMakeCacheHit(t *testing.T) {
 	m1 := Make(input)
 	m2 := Make(input)
 
-	// Both calls should return the same underlying handleMap from the cache.
+	// Both calls should return the same underlying allocation from the cache.
 	if !sameUnderlyingMap(m1, m2) {
-		t.Errorf("expected Make to return cached handleMap on repeat call")
+		t.Errorf("expected Make to return cached Map on repeat call")
 	}
 }
 
@@ -350,4 +351,140 @@ func TestIntersectAndFilter(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---- Tests specific to the compact representation ----
+
+func TestCompactRepresentation(t *testing.T) {
+	// Make should use the compact representation for maps whose keys
+	// fit in the global key table.
+	m := Make(map[string]string{"alpha": "1", "beta": "2"})
+	if !m.isCompact() {
+		t.Fatal("expected compact representation")
+	}
+	if m.Len() != 2 {
+		t.Errorf("Len() = %d, want 2", m.Len())
+	}
+	v, ok := m.GetString("alpha")
+	if !ok || v != "1" {
+		t.Errorf("GetString(alpha) = %q, %v; want 1, true", v, ok)
+	}
+	v, ok = m.GetString("beta")
+	if !ok || v != "2" {
+		t.Errorf("GetString(beta) = %q, %v; want 2, true", v, ok)
+	}
+	_, ok = m.GetString("gamma")
+	if ok {
+		t.Error("GetString(gamma) should return false")
+	}
+}
+
+func TestCompactEmptyIsCompact(t *testing.T) {
+	if !Empty.isCompact() {
+		t.Error("Empty should use compact representation")
+	}
+	if Empty.Len() != 0 {
+		t.Errorf("Empty.Len() = %d, want 0", Empty.Len())
+	}
+}
+
+func TestCompactEqualsRegular(t *testing.T) {
+	// A compact map and a fallback map with the same content should be
+	// equal.
+	input := map[string]string{"p": "q", "r": "s"}
+	compact := Make(input)
+	if !compact.isCompact() {
+		t.Skip("map not compact (key table may be full)")
+	}
+
+	// Build a fallback map manually.
+	hm := make(handleMap, len(input))
+	for k, v := range input {
+		hm[uniquestr.Make(k)] = uniquestr.Make(v)
+	}
+	fb := Map{ptr: unsafeFallback(hm)}
+
+	if !compact.Equals(fb) {
+		t.Error("compact and fallback with same content should be equal")
+	}
+	if !fb.Equals(compact) {
+		t.Error("fallback and compact with same content should be equal")
+	}
+}
+
+// unsafeFallback is a test helper to create a fallback Map.
+func unsafeFallback(hm handleMap) unsafe.Pointer {
+	return unsafe.Pointer(&fallbackMap{m: hm})
+}
+
+func TestCompactManyKeys(t *testing.T) {
+	// Create a map with many keys and verify the compact representation.
+	input := make(map[string]string, 30)
+	for i := range 30 {
+		input[fmt.Sprintf("key-%d", i)] = fmt.Sprintf("val-%d", i)
+	}
+	m := Make(input)
+	if !m.isCompact() {
+		t.Fatal("expected compact representation for 30-key map")
+	}
+	if m.Len() != 30 {
+		t.Errorf("Len() = %d, want 30", m.Len())
+	}
+	if !m.EquivalentTo(input) {
+		t.Errorf("map content mismatch")
+	}
+}
+
+func TestNilAndEmptySemantics(t *testing.T) {
+	if !Nil.IsNil() {
+		t.Error("Nil.IsNil() should be true")
+	}
+	if Empty.IsNil() {
+		t.Error("Empty.IsNil() should be false")
+	}
+	if Nil.Len() != 0 {
+		t.Errorf("Nil.Len() = %d, want 0", Nil.Len())
+	}
+	if Empty.Len() != 0 {
+		t.Errorf("Empty.Len() = %d, want 0", Empty.Len())
+	}
+
+	// Nil and Empty should compare equal (matches maps.Equal behavior).
+	if !Nil.Equals(Empty) {
+		t.Error("Nil should equal Empty")
+	}
+	if !Empty.Equals(Nil) {
+		t.Error("Empty should equal Nil")
+	}
+
+	// But EquivalentTo distinguishes nil from empty.
+	if Nil.EquivalentTo(map[string]string{}) {
+		t.Error("Nil should not be equivalent to empty map")
+	}
+	if Empty.EquivalentTo(nil) {
+		t.Error("Empty should not be equivalent to nil")
+	}
+}
+
+func TestKeyTableConcurrent(t *testing.T) {
+	// Concurrent Make calls with new keys should not race.
+	const goroutines = 8
+	const keysPerGoroutine = 5
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := range goroutines {
+		go func() {
+			defer wg.Done()
+			input := make(map[string]string, keysPerGoroutine)
+			for k := range keysPerGoroutine {
+				input[fmt.Sprintf("conc-g%d-k%d", g, k)] = fmt.Sprintf("v%d", k)
+			}
+			m := Make(input)
+			if !m.EquivalentTo(input) {
+				t.Errorf("goroutine %d: Make returned wrong content", g)
+			}
+		}()
+	}
+	wg.Wait()
 }
