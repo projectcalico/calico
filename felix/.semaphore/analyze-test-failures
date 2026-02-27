@@ -1,0 +1,303 @@
+#!/bin/bash
+
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# analyze-test-failures - Run fv-tests-guru AI analysis on failed tests
+# and inject results into JUnit XML for Semaphore test results display.
+#
+# Usage:
+#   FV mode (from repo root):  felix/.semaphore/analyze-test-failures
+#   UT mode (from felix/):     ./.semaphore/analyze-test-failures --ut
+#
+# Never let analysis failures block report publishing.
+# Intentionally no set -e.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Kill switch: set FV_TESTS_GURU_ENABLED=false to disable.
+if [ "${FV_TESTS_GURU_ENABLED}" = "false" ]; then
+    echo "analyze-test-failures: Disabled via FV_TESTS_GURU_ENABLED=false, skipping."
+    exit 0
+fi
+
+if ! command -v python3 &>/dev/null; then
+    echo "analyze-test-failures: python3 not found on PATH, skipping."
+    exit 0
+fi
+
+# Download fv-tests-guru from private GitHub release if not already on PATH.
+if ! command -v fv-tests-guru &>/dev/null; then
+    if [ -z "${FV_TESTS_GURU_GITHUB_TOKEN}" ]; then
+        echo "analyze-test-failures: fv-tests-guru not on PATH and FV_TESTS_GURU_GITHUB_TOKEN not set, skipping."
+        exit 0
+    fi
+
+    FV_TESTS_GURU_VERSION="${FV_TESTS_GURU_VERSION:-latest}"
+    FV_TESTS_GURU_REPO="tigera/fv-tests-guru"
+    FV_TESTS_GURU_BIN="${HOME}/bin/fv-tests-guru"
+    mkdir -p "${HOME}/bin"
+    export PATH="${HOME}/bin:${PATH}"
+
+    echo "analyze-test-failures: Downloading fv-tests-guru (${FV_TESTS_GURU_VERSION}) from ${FV_TESTS_GURU_REPO}..."
+
+    if [ "$FV_TESTS_GURU_VERSION" = "latest" ]; then
+        release_url="https://api.github.com/repos/${FV_TESTS_GURU_REPO}/releases/latest"
+    else
+        release_url="https://api.github.com/repos/${FV_TESTS_GURU_REPO}/releases/tags/${FV_TESTS_GURU_VERSION}"
+    fi
+
+    # Get the download URL and asset name for the linux-amd64 binary.
+    asset_info=$(curl -sf \
+        -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
+        -H "Accept: application/vnd.github.v3+json" \
+        "$release_url" \
+        | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for asset in data.get('assets', []):
+    if 'linux' in asset['name'] and 'amd64' in asset['name']:
+        print(asset['url'] + ' ' + asset['name'])
+        break
+") || true
+
+    download_url="${asset_info%% *}"
+    asset_name="${asset_info#* }"
+
+    if [ -z "$download_url" ]; then
+        echo "analyze-test-failures: Failed to find fv-tests-guru release asset, skipping."
+        exit 0
+    fi
+
+    tmp_download=$(mktemp /tmp/fv-tests-guru-download-XXXXXX)
+
+    if ! curl -sfL \
+        -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
+        -H "Accept: application/octet-stream" \
+        "$download_url" \
+        -o "$tmp_download"; then
+        echo "analyze-test-failures: Failed to download fv-tests-guru asset, skipping."
+        rm -f "$tmp_download"
+        exit 0
+    fi
+
+    # Handle .tar.gz / .tgz archives vs bare binaries.
+    case "$asset_name" in
+        *.tar.gz|*.tgz)
+            echo "analyze-test-failures: Extracting fv-tests-guru from archive ${asset_name}..."
+            tmp_extract=$(mktemp -d /tmp/fv-tests-guru-extract-XXXXXX)
+            if tar -xzf "$tmp_download" -C "$tmp_extract"; then
+                # Find the binary inside the archive.
+                extracted_bin=$(find "$tmp_extract" -name 'fv-tests-guru' -type f | head -1)
+                if [ -n "$extracted_bin" ] && mv "$extracted_bin" "$FV_TESTS_GURU_BIN" && chmod +x "$FV_TESTS_GURU_BIN"; then
+                    : # success
+                else
+                    echo "analyze-test-failures: fv-tests-guru binary not found inside archive, skipping."
+                    rm -rf "$tmp_extract" "$tmp_download"
+                    exit 0
+                fi
+            else
+                echo "analyze-test-failures: Failed to extract archive, skipping."
+                rm -rf "$tmp_extract" "$tmp_download"
+                exit 0
+            fi
+            rm -rf "$tmp_extract"
+            ;;
+        *)
+            if ! mv "$tmp_download" "$FV_TESTS_GURU_BIN" || ! chmod +x "$FV_TESTS_GURU_BIN"; then
+                echo "analyze-test-failures: Failed to install fv-tests-guru binary, skipping."
+                rm -f "$tmp_download"
+                exit 0
+            fi
+            ;;
+    esac
+
+    rm -f "$tmp_download"
+    echo "analyze-test-failures: Installed fv-tests-guru to $FV_TESTS_GURU_BIN"
+fi
+
+INJECT_SCRIPT="${SCRIPT_DIR}/inject-analysis-into-xml.py"
+if [ ! -f "$INJECT_SCRIPT" ]; then
+    echo "analyze-test-failures: inject-analysis-into-xml.py not found at $INJECT_SCRIPT, skipping."
+    exit 0
+fi
+
+# has_failures - Check if any XML file contains <failure> elements.
+# Returns 0 (success) if failures found, 1 otherwise.
+has_failures() {
+    grep -ql '<failure' "$@" 2>/dev/null
+}
+
+UT_MODE=false
+if [ "$1" = "--ut" ]; then
+    UT_MODE=true
+fi
+
+if [ "$UT_MODE" = true ]; then
+    ############################################
+    # UT mode: cwd = felix/
+    ############################################
+    echo "analyze-test-failures: Running in UT mode."
+
+    XML_FILES=(./report/*.xml)
+    if [ ${#XML_FILES[@]} -eq 0 ] || [ ! -f "${XML_FILES[0]}" ]; then
+        echo "analyze-test-failures: No XML reports found in ./report/, skipping."
+        exit 0
+    fi
+
+    if ! has_failures "${XML_FILES[@]}"; then
+        echo "analyze-test-failures: No failures found in UT XML reports, skipping."
+        exit 0
+    fi
+
+    LOG_FILE="../artifacts/ut.log"
+    if [ ! -f "$LOG_FILE" ]; then
+        echo "analyze-test-failures: UT log file not found at $LOG_FILE, skipping."
+        exit 0
+    fi
+
+    CALICO_REPO="$(cd .. && pwd)"
+    JSON_OUTPUT=$(mktemp /tmp/guru-ut-XXXXXX.json)
+
+    echo "analyze-test-failures: Running fv-tests-guru on UT log..."
+    timeout 600 fv-tests-guru \
+        -ut \
+        -calico-repo "$CALICO_REPO" \
+        -ai-provider gemini \
+        -output-format json \
+        -debug-logfile "$LOG_FILE" \
+        > "$JSON_OUTPUT" 2>/dev/null || true
+
+    if [ -s "$JSON_OUTPUT" ]; then
+        echo "analyze-test-failures: Injecting analysis into UT XML reports..."
+        python3 "$INJECT_SCRIPT" "$JSON_OUTPUT" "${XML_FILES[@]}" || true
+    else
+        echo "analyze-test-failures: fv-tests-guru produced no output for UT, skipping injection."
+    fi
+
+    rm -f "$JSON_OUTPUT"
+else
+    ############################################
+    # FV mode: cwd = repo root
+    ############################################
+    echo "analyze-test-failures: Running in FV mode."
+
+    ARTIFACTS_DIR="./artifacts"
+    if [ ! -d "$ARTIFACTS_DIR" ]; then
+        echo "analyze-test-failures: No artifacts directory found, skipping."
+        exit 0
+    fi
+
+    CALICO_REPO="$(pwd)"
+
+    # Find batch directories that have failures in their XML reports.
+    failed_batches=()
+    for batch_dir in "$ARTIFACTS_DIR"/*/; do
+        [ -d "$batch_dir" ] || continue
+        batch_name="$(basename "$batch_dir")"
+
+        xml_files=("${batch_dir}report/"*.xml)
+        [ -f "${xml_files[0]}" ] || continue
+
+        if has_failures "${xml_files[@]}"; then
+            failed_batches+=("$batch_name")
+        fi
+    done
+
+    if [ ${#failed_batches[@]} -eq 0 ]; then
+        echo "analyze-test-failures: No failures found in any batch XML reports, skipping."
+        exit 0
+    fi
+
+    echo "analyze-test-failures: Found failures in batches: ${failed_batches[*]}"
+
+    # Run fv-tests-guru on each failed batch in parallel (max 4 concurrent).
+    MAX_PARALLEL=4
+    running=0
+    pids=()
+    batch_names=()
+    json_files=()
+
+    for batch in "${failed_batches[@]}"; do
+        # Map batch name to log file.
+        if [ "$batch" = "ut" ]; then
+            log_file="$ARTIFACTS_DIR/test-ut.log"
+            guru_flags="-ut"
+        else
+            # Zero-pad numeric batch names to 3 digits to match run-tests-on-vms convention.
+            if [[ "$batch" =~ ^[0-9]+$ ]]; then
+                formatted_batch=$(printf "%03d" "$batch")
+            else
+                formatted_batch="$batch"
+            fi
+            log_file="$ARTIFACTS_DIR/test-${formatted_batch}.log"
+            guru_flags=""
+        fi
+
+        if [ ! -f "$log_file" ]; then
+            echo "analyze-test-failures: Log file $log_file not found for batch $batch, skipping."
+            continue
+        fi
+
+        json_output=$(mktemp /tmp/guru-${batch}-XXXXXX.json)
+        json_files+=("$json_output")
+        batch_names+=("$batch")
+
+        echo "analyze-test-failures: Running fv-tests-guru on batch $batch (log: $log_file)..."
+        (
+            timeout 600 fv-tests-guru \
+                $guru_flags \
+                -calico-repo "$CALICO_REPO" \
+                -ai-provider gemini \
+                -output-format json \
+                -debug-logfile "$log_file" \
+                > "$json_output" 2>/dev/null || true
+        ) &
+        pids+=($!)
+        running=$((running + 1))
+
+        if [ "$running" -ge "$MAX_PARALLEL" ]; then
+            wait "${pids[0]}" || true
+            pids=("${pids[@]:1}")
+            running=$((running - 1))
+        fi
+    done
+
+    # Wait for remaining parallel jobs.
+    for pid in "${pids[@]}"; do
+        wait "$pid" || true
+    done
+
+    # Inject analysis into XML files for each batch.
+    for i in "${!batch_names[@]}"; do
+        batch="${batch_names[$i]}"
+        json_file="${json_files[$i]}"
+
+        if [ ! -s "$json_file" ]; then
+            echo "analyze-test-failures: fv-tests-guru produced no output for batch $batch, skipping injection."
+            rm -f "$json_file"
+            continue
+        fi
+
+        xml_files=("$ARTIFACTS_DIR/$batch/report/"*.xml)
+        if [ -f "${xml_files[0]}" ]; then
+            echo "analyze-test-failures: Injecting analysis into XML reports for batch $batch..."
+            python3 "$INJECT_SCRIPT" "$json_file" "${xml_files[@]}" || true
+        fi
+
+        rm -f "$json_file"
+    done
+fi
+
+echo "analyze-test-failures: Done."
