@@ -345,6 +345,30 @@ var _ = describe.CalicoDescribe(
 		// DeferCleanup safety net that restores the default tier if the
 		// operation unexpectedly succeeds, so we don't leave the cluster broken.
 		Context("default tier", func() {
+			// restoreDefaultTier is a safety net for default tier tests. If the
+			// tier was modified (ResourceVersion changed) it restores the saved
+			// spec; if it was deleted it recreates it.
+			restoreDefaultTier := func(saved *v3.Tier) {
+				current := v3.NewTier()
+				current.Name = "default"
+				if err := adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(current), current); err != nil {
+					// Tier was deleted, recreate it.
+					restore := v3.NewTier()
+					restore.Name = "default"
+					restore.Spec = saved.Spec
+					if err := adminCli.Create(ctx, restore); err != nil {
+						logrus.WithError(err).Error("CRITICAL: failed to recreate deleted default tier")
+					}
+					return
+				}
+				if current.ResourceVersion != saved.ResourceVersion {
+					current.Spec = saved.Spec
+					if err := adminCli.Update(ctx, current); err != nil {
+						logrus.WithError(err).Warn("Failed to restore default tier")
+					}
+				}
+			}
+
 			It("should not allow updating the default tier", func() {
 				tier := v3.NewTier()
 				tier.Name = "default"
@@ -353,20 +377,7 @@ var _ = describe.CalicoDescribe(
 				)
 
 				savedTier := tier.DeepCopy()
-				DeferCleanup(func() {
-					current := v3.NewTier()
-					current.Name = "default"
-					if err := adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(current), current); err != nil {
-						logrus.WithError(err).Warn("Could not get default tier during restore check")
-						return
-					}
-					if current.Spec.Order != nil && (savedTier.Spec.Order == nil || *current.Spec.Order != *savedTier.Spec.Order) {
-						current.Spec.Order = savedTier.Spec.Order
-						if err := adminCli.Update(ctx, current); err != nil {
-							logrus.WithError(err).Warn("Failed to restore default tier order")
-						}
-					}
-				})
+				DeferCleanup(func() { restoreDefaultTier(savedTier) })
 
 				tier.Spec.Order = ptr.To(999.0)
 				err := adminCli.Update(ctx, tier)
@@ -381,27 +392,16 @@ var _ = describe.CalicoDescribe(
 				)
 
 				savedTier := tier.DeepCopy()
-				DeferCleanup(func() {
-					check := v3.NewTier()
-					check.Name = "default"
-					if err := adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(check), check); err == nil {
-						return // Tier still exists, nothing to restore.
-					}
-					restore := v3.NewTier()
-					restore.Name = "default"
-					restore.Spec = savedTier.Spec
-					if err := adminCli.Create(ctx, restore); err != nil {
-						logrus.WithError(err).Error("CRITICAL: failed to recreate deleted default tier")
-					}
-				})
+				DeferCleanup(func() { restoreDefaultTier(savedTier) })
 
 				err := adminCli.Delete(ctx, tier)
 				Expect(err).To(HaveOccurred(), "default tier should not be deletable")
 			})
 		})
 
-		// Verifies that a user with read-only permissions on tier policies can
-		// get existing policies but cannot create, update, or delete them.
+		// Verifies that a user with read-only (get/list/watch) permissions on
+		// tier policies can get existing policies but cannot create, update,
+		// or delete them.
 		Context("read-only access", func() {
 			It("should allow reading but deny writing for a read-only user", func() {
 				By("Creating a policy with the admin client")
@@ -434,6 +434,12 @@ var _ = describe.CalicoDescribe(
 				Expect(err).To(HaveOccurred(), "read-only user should not be able to create policy")
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
 
+				By("Verifying the read-only user cannot update the policy")
+				readNP.Spec.Order = ptr.To(200.0)
+				err = cli.Update(ctx, readNP)
+				Expect(err).To(HaveOccurred(), "read-only user should not be able to update policy")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+
 				By("Verifying the read-only user cannot delete the policy")
 				err = cli.Delete(ctx, np)
 				Expect(err).To(HaveOccurred(), "read-only user should not be able to delete policy")
@@ -459,6 +465,7 @@ type tieredRBACSetup struct {
 //   - rbacNoTierGetUser: has tier policy access but NO tier GET
 //   - rbacNoPolicyUser: has tier GET but NO tier policy access
 //   - rbacOtherTierUser: full access but only for a different tier
+//   - rbacReadOnlyUser: read-only access (get/list/watch) on tier policies
 func buildTieredRBACResources() tieredRBACSetup {
 	setup := tieredRBACSetup{}
 
@@ -550,8 +557,8 @@ func buildTieredRBACResources() tieredRBACSetup {
 		},
 	))
 
-	// Read-only: has tier GET and read-only policy access (get/list only).
-	// Should be able to get/list policies but not create, update, or delete.
+	// Read-only: has tier GET and read-only policy access (get/list/watch).
+	// Should be able to get/list/watch policies but not create, update, or delete.
 	addRoleAndBinding("read-only", rbacReadOnlyUser, []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{"projectcalico.org"},
@@ -567,7 +574,7 @@ func buildTieredRBACResources() tieredRBACSetup {
 		{
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
-			Verbs:         []string{"get", "list"},
+			Verbs:         []string{"get", "list", "watch"},
 			ResourceNames: []string{rbacTestTier + ".*"},
 		},
 	})
