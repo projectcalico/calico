@@ -372,9 +372,9 @@ Description:
 	runCmd := exec.Command(cmd[0], cmd[1:]...)
 	if output, err := runCmd.CombinedOutput(); err != nil {
 		var errStr strings.Builder
-		errStr.WriteString(fmt.Sprintf("Error executing command: %v\n", err))
+		fmt.Fprintf(&errStr, "Error executing command: %v\n", err)
 		for line := range strings.SplitSeq(string(output), "/n") {
-			errStr.WriteString(fmt.Sprintf(" | %s/n", line))
+			fmt.Fprintf(&errStr, " | %s/n", line)
 		}
 		return errors.New(errStr.String())
 	}
