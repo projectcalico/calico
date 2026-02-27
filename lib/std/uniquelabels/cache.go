@@ -21,8 +21,8 @@ import (
 
 // recentCache is a small, direct-mapped cache of recently-computed Map values.
 // It is common for Make to be called in quick succession with the same input
-// from different call sites. Since the keys and values are interned, the
-// handleMap is the main allocation that can be avoided by caching.
+// from different call sites (including UnmarshalJSON). The cache avoids
+// redundant compact-struct allocations and key-table lookups.
 var recentCache = recentMapCache{
 	seed: maphash.MakeSeed(),
 }
