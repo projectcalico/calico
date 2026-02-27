@@ -220,7 +220,7 @@ func RunBPFLog(cp CleanupProvider, byteLimit int) *containers.Container {
 			IgnoreEmptyLines: true,
 			LogLimitBytes:    byteLimit,
 		}, "--privileged",
-		utils.Config.FelixImage, "/usr/bin/bpftool", "prog", "tracelog")
+		utils.Config.FelixImage, "/usr/sbin/bpftool", "prog", "tracelog")
 	cp.AddCleanup(c.Stop)
 	cp.AddCleanup(c.StopLogs)
 	return c
