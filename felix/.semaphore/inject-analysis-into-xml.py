@@ -36,6 +36,8 @@ import xml.etree.ElementTree as ET
 
 def normalize_name(name):
     """Normalize a test name for fuzzy matching."""
+    # Strip Ginkgo node type markers like [It], [BeforeEach], etc.
+    name = re.sub(r'\[(?:It|BeforeEach|AfterEach|JustBeforeEach|JustAfterEach|BeforeSuite|AfterSuite)\]\s*', '', name)
     name = re.sub(r'\s+', ' ', name.strip())
     return name.lower()
 
