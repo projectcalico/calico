@@ -47,15 +47,19 @@ var (
 // Internally, Map stores an unsafe.Pointer to one of two representations:
 //
 //   - Compact: the first uint64 has the top bit set and encodes a bitfield
-//     of which keys (from a global lookup table) are present.  The values
+//     of which keys (from a Factory's key table) are present.  The values
 //     follow immediately as a flat array of uniquestr.Handle.
 //   - Fallback: the first uint64 has the top bit clear, followed by a
 //     regular Go map[uniquestr.Handle]uniquestr.Handle.
+//
+// Each Map records which Factory created it.  Maps from the same Factory can
+// be compared with Equals and combined with IntersectAndFilter.
 //
 // Uses uniquestr.Handle internally, so it is most efficient to query the map
 // using AllHandles() and GetHandle().
 type Map struct {
 	_   [0]func()      // Explicitly non-comparable; must use Equals() method.
+	f   *Factory       // Factory that owns this Map's key table; nil for Nil/Empty.
 	ptr unsafe.Pointer // -> compact* or *fallbackMap; nil for Nil.
 }
 
@@ -81,43 +85,10 @@ func (m Map) Len() int {
 	return len((*fallbackMap)(m.ptr).m)
 }
 
-// Make makes an interned copy of the given map.  In order to benefit from
-// interning the map, the original map must be discarded and only the interned
-// copy should be kept.
-//
-// If passed nil, returns the zero value of Map.  If passed an empty map,
-// returns the singleton Empty.
-//
-// Make caches recently-returned Maps so that repeated calls with the same input
-// return the same Map, avoiding redundant allocations.
+// Make makes an interned copy of the given map using the Global factory.
+// See Factory.Make for details.
 func Make(m map[string]string) Map {
-	if m == nil {
-		return Nil
-	}
-	if len(m) == 0 {
-		return Empty
-	}
-
-	if cached, hash, ok := recentCache.Lookup(m); ok {
-		return cached
-	} else {
-		result := makeInner(m)
-		recentCache.Store(hash, result)
-		return result
-	}
-}
-
-// makeInner builds a Map from a non-nil, non-empty map[string]string.
-// It tries the compact representation first; falls back to a Go map.
-func makeInner(m map[string]string) Map {
-	if bf, vals, ok := globalKeyTable.registerKeys(m); ok {
-		return Map{ptr: allocCompact(bf, vals)}
-	}
-	hm := make(handleMap, len(m))
-	for k, v := range m {
-		hm[uniquestr.Make(k)] = uniquestr.Make(v)
-	}
-	return Map{ptr: unsafe.Pointer(&fallbackMap{m: hm})}
+	return Global.Make(m)
 }
 
 // Equals returns true if the map contains the same key/value pairs as the
@@ -137,8 +108,8 @@ func (m Map) Equals(other Map) bool {
 	}
 	mH := *(*uint64)(m.ptr)
 	oH := *(*uint64)(other.ptr)
-	if mH&topBit != 0 && oH&topBit != 0 {
-		// Both compact.  Different bitfields ⇒ different key sets.
+	if mH&topBit != 0 && oH&topBit != 0 && m.f == other.f {
+		// Both compact, same factory.  Different bitfields ⇒ different key sets.
 		if mH != oH {
 			return false
 		}
@@ -197,13 +168,16 @@ func (m Map) GetHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
 	}
 	header := *(*uint64)(m.ptr)
 	if header&topBit != 0 {
-		snap := globalKeyTable.currentSnap()
+		keyBits := header &^ topBit
+		if keyBits == 0 {
+			return uniquestr.Handle{}, false
+		}
+		snap := m.f.kt.currentSnap()
 		pos, ok := snap.byHandle[h]
 		if !ok {
 			return uniquestr.Handle{}, false
 		}
-		keyBits := header &^ topBit
-		if keyBits&(1<<pos) == 0 {
+		if keyBits&(uint64(1)<<pos) == 0 {
 			return uniquestr.Handle{}, false
 		}
 		arrayIdx := bits.OnesCount64(keyBits & ((uint64(1) << pos) - 1))
@@ -221,8 +195,11 @@ func (m Map) AllHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
 		}
 		header := *(*uint64)(m.ptr)
 		if header&topBit != 0 {
-			snap := globalKeyTable.currentSnap()
 			bf := header &^ topBit
+			if bf == 0 {
+				return
+			}
+			snap := m.f.kt.currentSnap()
 			arrayIdx := 0
 			for bf != 0 {
 				pos := bits.TrailingZeros64(bf)
@@ -277,7 +254,7 @@ func (m Map) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.  Unmarshalling
-// goes through Make so that keys are registered in the global key table
+// goes through Make (using the Global factory) so that keys are registered
 // and the cache is consulted.  This is important because UnmarshalJSON is
 // the main entry point when receiving data from Typha.
 func (m *Map) UnmarshalJSON(data []byte) error {
@@ -334,7 +311,7 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 	// If a is compact, build a compact result (the intersection's keys
 	// are a subset of a's keys, which are all in the key table).
 	if a.isCompact() {
-		snap := globalKeyTable.currentSnap()
+		snap := a.f.kt.currentSnap()
 		aBf := readKeyBits(a.ptr)
 		var resultBf uint64
 		var vals []uniquestr.Handle
@@ -356,7 +333,7 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 		if len(vals) == 0 {
 			return Empty
 		}
-		return Map{ptr: allocCompact(resultBf|topBit, vals)}
+		return Map{f: a.f, ptr: allocCompact(resultBf|topBit, vals)}
 	}
 
 	intersection := map[uniquestr.Handle]uniquestr.Handle{}
@@ -372,7 +349,7 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 	if len(intersection) == 0 {
 		return Empty
 	}
-	return Map{ptr: unsafe.Pointer(&fallbackMap{m: intersection})}
+	return Map{f: a.f, ptr: unsafe.Pointer(&fallbackMap{m: intersection})}
 }
 
 func noOpFilter(uniquestr.Handle, uniquestr.Handle) bool {

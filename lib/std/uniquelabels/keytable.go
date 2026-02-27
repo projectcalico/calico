@@ -23,9 +23,9 @@ import (
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
 
-// maxKeyTableSize is the maximum number of distinct label keys tracked in the
-// global key table.  Must be <= 63 because we use a uint64 bitfield with the
-// top bit reserved as a tag.
+// maxKeyTableSize is the maximum number of distinct label keys tracked in a
+// key table.  Must be <= 63 because we use a uint64 bitfield with the top
+// bit reserved as a tag.
 const maxKeyTableSize = 63
 
 // topBit is the tag in the first word of a compact map.  When set, the word
@@ -33,9 +33,6 @@ const maxKeyTableSize = 63
 const topBit = uint64(1) << 63
 
 const handleSize = unsafe.Sizeof(uniquestr.Handle{}) // 8
-
-// globalKeyTable is the package-wide key table shared by all Maps.
-var globalKeyTable keyTable
 
 // fallbackMap is used when the key table is full or a map can't use the
 // compact representation.  The sentinel field occupies the same position as
@@ -81,12 +78,6 @@ func (s *keyTableSnap) clone() *keyTableSnap {
 type keyTable struct {
 	snap atomic.Pointer[keyTableSnap]
 	mu   sync.Mutex
-}
-
-func init() {
-	globalKeyTable.snap.Store(&keyTableSnap{
-		byHandle: make(map[uniquestr.Handle]uint8),
-	})
 }
 
 func (t *keyTable) currentSnap() *keyTableSnap {

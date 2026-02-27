@@ -19,14 +19,6 @@ import (
 	"sync"
 )
 
-// recentCache is a small, direct-mapped cache of recently-computed Map values.
-// It is common for Make to be called in quick succession with the same input
-// from different call sites (including UnmarshalJSON). The cache avoids
-// redundant compact-struct allocations and key-table lookups.
-var recentCache = recentMapCache{
-	seed: maphash.MakeSeed(),
-}
-
 const recentMapCacheSize = 128 // Must be a power of two.
 
 type recentMapCache struct {
