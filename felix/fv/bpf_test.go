@@ -3559,19 +3559,23 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								natFtKey = nat.NewNATKey(net.ParseIP(ip), port, numericProto)
 								family = 4
 							}
-							Eventually(func() bool {
-								m, be, _ := dumpNATMapsAny(family, tc.Felixes[1])
+							// Check all felixes. In the shared-cgroup FV environment,
+							// felix-0's CTLB program intercepts connects from all
+							// containers, so its NAT maps must be synced too.
+							for _, f := range tc.Felixes {
+								Eventually(func() bool {
+									m, be, _ := dumpNATMapsAny(family, f)
 
-								v, ok := m[natFtKey]
-								if !ok || v.Count() == 0 {
-									return false
-								}
+									v, ok := m[natFtKey]
+									if !ok || v.Count() == 0 {
+										return false
+									}
 
-								beKey := nat.NewNATBackendKey(v.ID(), 0)
-
-								_, ok = be[beKey]
-								return ok
-							}, 5*time.Second).Should(BeTrue())
+									beKey := nat.NewNATBackendKey(v.ID(), 0)
+									_, ok = be[beKey]
+									return ok
+								}, 5*time.Second).Should(BeTrue())
+							}
 						})
 
 						By("Making sure that backend is ready")
