@@ -32,15 +32,60 @@ if [ "${FV_TESTS_GURU_ENABLED}" = "false" ]; then
     exit 0
 fi
 
-# Check prerequisites.
-if ! command -v fv-tests-guru &>/dev/null; then
-    echo "analyze-test-failures: fv-tests-guru not found on PATH, skipping."
-    exit 0
-fi
-
 if ! command -v python3 &>/dev/null; then
     echo "analyze-test-failures: python3 not found on PATH, skipping."
     exit 0
+fi
+
+# Download fv-tests-guru from private GitHub release if not already on PATH.
+if ! command -v fv-tests-guru &>/dev/null; then
+    if [ -z "${FV_TESTS_GURU_GITHUB_TOKEN}" ]; then
+        echo "analyze-test-failures: fv-tests-guru not on PATH and FV_TESTS_GURU_GITHUB_TOKEN not set, skipping."
+        exit 0
+    fi
+
+    FV_TESTS_GURU_VERSION="${FV_TESTS_GURU_VERSION:-latest}"
+    FV_TESTS_GURU_REPO="tigera/fv-tests-guru"
+    FV_TESTS_GURU_BIN="/usr/local/bin/fv-tests-guru"
+
+    echo "analyze-test-failures: Downloading fv-tests-guru (${FV_TESTS_GURU_VERSION}) from ${FV_TESTS_GURU_REPO}..."
+
+    if [ "$FV_TESTS_GURU_VERSION" = "latest" ]; then
+        release_url="https://api.github.com/repos/${FV_TESTS_GURU_REPO}/releases/latest"
+    else
+        release_url="https://api.github.com/repos/${FV_TESTS_GURU_REPO}/releases/tags/${FV_TESTS_GURU_VERSION}"
+    fi
+
+    # Get the download URL for the linux-amd64 binary.
+    download_url=$(curl -sf \
+        -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
+        -H "Accept: application/vnd.github.v3+json" \
+        "$release_url" \
+        | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for asset in data.get('assets', []):
+    if 'linux' in asset['name'] and 'amd64' in asset['name']:
+        print(asset['url'])
+        break
+") || true
+
+    if [ -z "$download_url" ]; then
+        echo "analyze-test-failures: Failed to find fv-tests-guru release asset, skipping."
+        exit 0
+    fi
+
+    if curl -sfL \
+        -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
+        -H "Accept: application/octet-stream" \
+        "$download_url" \
+        -o "$FV_TESTS_GURU_BIN"; then
+        chmod +x "$FV_TESTS_GURU_BIN"
+        echo "analyze-test-failures: Downloaded fv-tests-guru to $FV_TESTS_GURU_BIN"
+    else
+        echo "analyze-test-failures: Failed to download fv-tests-guru binary, skipping."
+        exit 0
+    fi
 fi
 
 INJECT_SCRIPT="${SCRIPT_DIR}/inject-analysis-into-xml.py"
