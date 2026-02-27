@@ -106,7 +106,7 @@ func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels map[s
 		return fmt.Errorf("interfaceName does not match. Expected: %q, Actual: %q", interfaceName, hep.Spec.InterfaceName)
 	}
 	if len(hep.Spec.Ports) > 0 {
-		return fmt.Errorf("expected ports to be empty. Actual: %q", hep.Spec.Ports)
+		return fmt.Errorf("expected ports to be empty. Actual: %v", hep.Spec.Ports)
 	}
 
 	if !reflect.DeepEqual(hep.Labels, expectedLabels) {
