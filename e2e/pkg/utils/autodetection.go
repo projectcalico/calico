@@ -16,16 +16,36 @@ package utils
 
 import (
 	"context"
+	"time"
 
 	"github.com/onsi/gomega"
 	v1 "github.com/tigera/operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 )
+
+func CalicoNamespace(f *framework.Framework) string {
+	// Get calico-node pods.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	podList, err := f.ClientSet.CoreV1().Pods(metav1.NamespaceAll).List(
+		ctx,
+		metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(map[string]string{"k8s-app": "calico-node"}).String(),
+		},
+	)
+	gomega.ExpectWithOffset(1, err).NotTo(gomega.HaveOccurred())
+	gomega.ExpectWithOffset(1, len(podList.Items)).To(gomega.BeNumerically(">", 0))
+
+	pod := podList.Items[0]
+	return pod.Namespace
+}
 
 // ExpectedPodMTU returns the MTU that should be configured on pods, based on the Installation
 // resource. If no MTU is configured, returns nil.

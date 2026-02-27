@@ -59,6 +59,8 @@ func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc)
 		return NewFelixConfigurationStorage(opts)
 	case "projectcalico.org/kubecontrollersconfigurations":
 		return NewKubeControllersConfigurationStorage(opts)
+	case "projectcalico.org/kubecontrollersconfigurations/status":
+		return NewKubeControllersConfigurationStatusStorage(opts)
 	case "projectcalico.org/clusterinformations":
 		return NewClusterInformationStorage(opts)
 	case "projectcalico.org/caliconodestatuses":

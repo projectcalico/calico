@@ -707,6 +707,68 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.programmedRouteRefCount).NotTo(HaveKey(key))
 			})
 
+			// This test reproduces the CI-1944 bug: when serviceLoadBalancerIPs has a /32 entry
+			// and the LB IP is assigned from an IPPool (so spec.loadBalancerIP is empty, IP only in
+			// status.loadBalancer.ingress), services with externalTrafficPolicy=Cluster should still
+			// be advertised per-service, since /32s are excluded from global aggregation.
+			It("should handle /32 routes for LoadBalancerIPs assigned from IPPool (status only, no spec.loadBalancerIP)", func() {
+				// Use a fresh LB IP that is not used by any other test service.
+				lbIP := "192.168.1.50"
+				key := "/calico/staticroutes/" + lbIP + "-32"
+
+				// Build a LoadBalancer service with Cluster traffic policy and NO spec.loadBalancerIP.
+				// The IP appears only in status.loadBalancer.ingress, as is typical for IPPool allocation.
+				lbSvcMeta := metav1.ObjectMeta{Namespace: "foo", Name: "lb-cluster", Labels: map[string]string{"kubernetes.io/service-name": "lb-cluster"}}
+				lbSvc := &v1.Service{
+					ObjectMeta: lbSvcMeta,
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "127.0.0.20",
+						ClusterIPs:            []string{"127.0.0.20"},
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
+						// LoadBalancerIP intentionally NOT set.
+					},
+					Status: v1.ServiceStatus{
+						LoadBalancer: v1.LoadBalancerStatus{
+							Ingress: []v1.LoadBalancerIngress{{IP: lbIP}},
+						},
+					},
+				}
+				lbEp := &discoveryv1.EndpointSlice{
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+					ObjectMeta:  lbSvcMeta,
+				}
+				addEndpointSubset(lbEp, rg.nodeName, "1.1.1.1")
+
+				// Configure a /32 serviceLoadBalancerIPs entry matching the service's LB IP.
+				lbIPRange := fmt.Sprintf("%s/32", lbIP)
+				By("onLoadBalancerIPsUpdate to include /32 route")
+				rg.client.onLoadBalancerIPsUpdate([]string{lbIPRange})
+
+				// No routes should be advertised yet (no service registered).
+				rg.resyncKnownRoutes()
+				Expect(rg.client.cache[key]).To(Equal(""))
+
+				// Add the service and endpoint.
+				err := rg.epIndexer.Add(lbEp)
+				Expect(err).NotTo(HaveOccurred())
+				err = rg.svcIndexer.Add(lbSvc)
+				Expect(err).NotTo(HaveOccurred())
+
+				// The /32 route should now be advertised from the per-service path.
+				By("Resyncing routes after adding service")
+				rg.resyncKnownRoutes()
+				Expect(rg.client.cache[key]).To(Equal(lbIP + "/32"))
+				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
+
+				// Remove BGPConfiguration and verify route is withdrawn.
+				rg.client.onLoadBalancerIPsUpdate([]string{})
+				rg.resyncKnownRoutes()
+				Expect(rg.client.cache).NotTo(HaveKey(key))
+				Expect(rg.client.programmedRouteRefCount).NotTo(HaveKey(key))
+			})
+
 			// This test simulates a situation where BGPConfiguration has a /32 route that exactly matches
 			// externalIP of a LoadBalancer service with ExternalTrafficPolicy set to Local. The route should only be advertised
 			// when the Service is created, and not when the BGPConfiguration is created.
@@ -830,6 +892,81 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 
 				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeFalse())
+			})
+
+			It("should advertise Cluster services with /32 LB IP from status.loadBalancer.ingress when aggregation is enabled", func() {
+				// This reproduces the CI-1944 bug: when serviceLoadBalancerIPs has a /32 entry
+				// and the LB IP is assigned via IPPool (so svc.Spec.LoadBalancerIP is empty,
+				// IP only in svc.Status.LoadBalancer.Ingress), the service should still be
+				// advertised per-service since /32s are excluded from global aggregation.
+				_, lbNet, _ := net.ParseCIDR("192.168.1.0/32")
+				mockClient.loadBalancerIPs = []string{"192.168.1.0/32"}
+				mockClient.loadBalancerIPNets = []*net.IPNet{lbNet}
+
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "10.0.0.1",
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
+						// Note: LoadBalancerIP is NOT set (empty), as is typical when
+						// IPs are assigned from a Calico IPPool.
+					},
+					Status: v1.ServiceStatus{
+						LoadBalancer: v1.LoadBalancerStatus{
+							Ingress: []v1.LoadBalancerIngress{{IP: "192.168.1.0"}},
+						},
+					},
+				}
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+					Endpoints: []discoveryv1.Endpoint{
+						{
+							Addresses: []string{"10.0.0.2"},
+							NodeName:  &rg.nodeName,
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
+				Expect(result).To(BeTrue())
+			})
+
+			It("should advertise Cluster services with /128 LB IP from status.loadBalancer.ingress when aggregation is enabled", func() {
+				// IPv6 equivalent of the CI-1944 bug.
+				_, lbNet, _ := net.ParseCIDR("fd00::1/128")
+				mockClient.loadBalancerIPs = []string{"fd00::1/128"}
+				mockClient.loadBalancerIPNets = []*net.IPNet{lbNet}
+
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "fd00::1",
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv6Protocol},
+					},
+					Status: v1.ServiceStatus{
+						LoadBalancer: v1.LoadBalancerStatus{
+							Ingress: []v1.LoadBalancerIngress{{IP: "fd00::1"}},
+						},
+					},
+				}
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					AddressType: discoveryv1.AddressType(v1.IPv6Protocol),
+					Endpoints: []discoveryv1.Endpoint{
+						{
+							Addresses: []string{"fd00::2"},
+							NodeName:  &rg.nodeName,
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
+				Expect(result).To(BeTrue())
 			})
 
 			It("should still advertise Local services when aggregation is enabled", func() {

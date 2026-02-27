@@ -304,6 +304,11 @@ func updateHostEndpointConfig(client ctrlclient.Client, desiredKCC v3.KubeContro
 		}
 
 		// Check if the current configuration matches the desired configuration.
+		if currentKCC.Status.RunningConfig == nil ||
+			currentKCC.Status.RunningConfig.Controllers.Node == nil ||
+			currentKCC.Status.RunningConfig.Controllers.Node.HostEndpoint == nil {
+			return fmt.Errorf("kubecontrollersconfiguration status is not yet updated")
+		}
 		if !reflect.DeepEqual(currentKCC.Status.RunningConfig.Controllers.Node.HostEndpoint, desiredKCC.Spec.Controllers.Node.HostEndpoint) {
 			return fmt.Errorf("failed to toggle auto-creation of host endpoints")
 		}

@@ -111,7 +111,7 @@ require (
 	k8s.io/component-base v0.34.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.34.3
-	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
+	k8s.io/kube-openapi v0.31.0
 	k8s.io/kubernetes v1.34.3
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	modernc.org/memory v1.11.0
@@ -122,7 +122,19 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
-require golang.org/x/crypto v0.47.0 // indirect
+require (
+	github.com/go-kit/log v0.2.1 // indirect
+	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	kubevirt.io/containerized-data-importer-api v1.63.1 // indirect
+	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
+)
+
+require (
+	golang.org/x/crypto v0.47.0 // indirect
+	kubevirt.io/api v1.7.0
+	kubevirt.io/client-go v1.7.0
+)
 
 require (
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect
@@ -394,6 +406,10 @@ replace (
 	k8s.io/externaljwt => k8s.io/externaljwt v0.34.3
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.34.3
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.34.3
+
+	// kubevirt.io/client-go requires a tagged kube-openapi version that doesn't
+	// exist; pin to the pseudo-version used by the rest of our k8s dependencies.
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.34.3
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.34.3
 	k8s.io/kubectl => k8s.io/kubectl v0.34.3
@@ -402,4 +418,6 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.34.3
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.34.3
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.34.3
+
+	kubevirt.io/client-go => github.com/tigera/kubevirt-client-go v1.7.0-tigera1
 )
