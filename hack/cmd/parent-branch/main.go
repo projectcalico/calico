@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -305,7 +305,10 @@ func mergeBaseStrategy(remote string) (string, error) {
 }
 
 // runGit executes a git command and returns its trimmed stdout.
-func runGit(args ...string) (string, error) {
+// It is a variable so that tests can replace it with a mock.
+var runGit = runGitReal
+
+func runGitReal(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	out, err := cmd.Output()
 	if err != nil {
