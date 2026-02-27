@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -148,7 +148,7 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 			// Create a number of goroutines to handle a Watcher.  Each go routine will pull
 			// events off the watcher and exit once the results channel is closed.
 			watchers := make([]watch.Interface, numWatchers)
-			for i := 0; i < numWatchers; i++ {
+			for i := range numWatchers {
 				watchers[i], err = c.BGPPeers().Watch(ctx, options.ListOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				defer watchers[i].Stop()
@@ -174,7 +174,7 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 
 			// Loop through the watchers and start stopping them with a random sized pause
 			// interval between each.
-			for i := 0; i < numWatchers; i++ {
+			for i := range numWatchers {
 				d := time.Millisecond * time.Duration(5+rand.Int()%50)
 				log.Infof("Sleeping for %v ms and then stopping watcher", d)
 				time.Sleep(d)

@@ -148,7 +148,7 @@ func (r *FlowLogReporter) Start() error {
 	return nil
 }
 
-func (r *FlowLogReporter) Report(u interface{}) error {
+func (r *FlowLogReporter) Report(u any) error {
 	mu, ok := u.(metric.Update)
 	if !ok {
 		return fmt.Errorf("invalid metric update")

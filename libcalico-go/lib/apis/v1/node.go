@@ -39,8 +39,8 @@ import (
 // on Node resources: deleting a Node resource will remove all Node specific data.
 type Node struct {
 	unversioned.TypeMetadata
-	Metadata NodeMetadata `json:"metadata,omitempty"`
-	Spec     NodeSpec     `json:"spec,omitempty"`
+	Metadata NodeMetadata `json:"metadata"`
+	Spec     NodeSpec     `json:"spec"`
 }
 
 func (t Node) GetResourceMetadata() unversioned.ResourceMetadata {
@@ -109,7 +109,7 @@ func NewNode() *Node {
 // enumerations on the client interface.
 type NodeList struct {
 	unversioned.TypeMetadata
-	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Metadata unversioned.ListMetadata `json:"metadata"`
 	Items    []Node                   `json:"items" validate:"dive,omitempty"`
 }
 

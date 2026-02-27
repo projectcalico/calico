@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -343,6 +343,11 @@ func (b *mockDatastore) Profiles() clientv3.ProfileInterface {
 
 // HostEndpoints returns an interface for managing host endpoint resources.
 func (b *mockDatastore) HostEndpoints() clientv3.HostEndpointInterface {
+	panic("not implemented")
+}
+
+// LiveMigrations returns an interface for managing live migration resources.
+func (b *mockDatastore) LiveMigrations() clientv3.LiveMigrationInterface {
 	panic("not implemented")
 }
 

@@ -68,7 +68,7 @@ func init() {
 }
 
 func marshalToBytes(str interface{ String() string }) ([]byte, error) {
-	return []byte(fmt.Sprintf("\"%s\"", str)), nil
+	return fmt.Appendf(nil, "\"%s\"", str), nil
 }
 
 // unmarshalProtoEnum unmarshals the bytes into the given int32 generic type (representing a proto enum) using the map

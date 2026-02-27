@@ -172,7 +172,7 @@ func (p *perf) openPerfRings(cpus, ringSize int) ([]*perfRing, error) {
 	pages := ringSize / pageSize
 	rings := make([]*perfRing, cpus)
 
-	for cpu := 0; cpu < cpus; cpu++ {
+	for cpu := range cpus {
 		var err error
 		rings[cpu], err = newPerfRing(cpu, pages, pageSize, p.watermark, p.watermarkBit)
 		if err != nil {
@@ -258,7 +258,7 @@ func (p *perf) poll() error {
 
 	// Reset quotas
 	p.readyCnt = n
-	for i := 0; i < n; i++ {
+	for i := range n {
 		p.ready[i].quota = p.dequeueQuota
 	}
 
@@ -478,7 +478,7 @@ func (p *ePoll) Wait(ready []*perfRing) (int, error) {
 	}
 
 	// Fill in all now ready rings
-	for i := 0; i < n; i++ {
+	for i := range n {
 		ready[i] = p.fd2ring[int(p.events[i].Fd)]
 	}
 
@@ -486,11 +486,11 @@ func (p *ePoll) Wait(ready []*perfRing) (int, error) {
 }
 
 // Option is taken by New
-type Option func(interface{})
+type Option func(any)
 
 // WithWakeUpBytes sets the wakup to be after reaching a watermark of n bytes.
 func WithWakeUpBytes(n int) Option {
-	return func(i interface{}) {
+	return func(i any) {
 		p := i.(*perf)
 		p.watermark = n
 		p.watermarkBit = true
@@ -500,7 +500,7 @@ func WithWakeUpBytes(n int) Option {
 // WithWakeUpEvents sets the wakup to be after reaching a watermark of n events.
 // Default is a single event.
 func WithWakeUpEvents(n int) Option {
-	return func(i interface{}) {
+	return func(i any) {
 		p := i.(*perf)
 		p.watermark = n
 		p.watermarkBit = false
@@ -510,7 +510,7 @@ func WithWakeUpEvents(n int) Option {
 // WithDequeueQuota changes how many messages are dequeued from a ring before we
 // switch to another one. Must be at least 1
 func WithDequeueQuota(n int) Option {
-	return func(i interface{}) {
+	return func(i any) {
 		if n < 1 {
 			return
 		}

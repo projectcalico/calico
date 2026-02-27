@@ -23,7 +23,7 @@ import (
 	"path"
 	"reflect"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
 	"google.golang.org/grpc"
@@ -51,7 +51,7 @@ func init() {
 
 var _ = Describe("Processor", func() {
 	var uut *policysync.Processor
-	var updates chan interface{}
+	var updates chan any
 	var updateServiceAccount func(name, namespace string)
 	var removeServiceAccount func(name, namespace string)
 	var updateNamespace func(name string)
@@ -60,7 +60,7 @@ var _ = Describe("Processor", func() {
 	var leave func(jm policysync.JoinMetadata)
 
 	BeforeEach(func() {
-		updates = make(chan interface{})
+		updates = make(chan any)
 		uut = policysync.NewProcessor(updates)
 
 		updateServiceAccount = func(name, namespace string) {
@@ -132,7 +132,7 @@ var _ = Describe("Processor", func() {
 
 					BeforeEach(func() {
 						output, _ = join("test", 1)
-						for i := 0; i < 3; i++ {
+						for i := range 3 {
 							msg := <-output
 							accounts[i] = types.ProtoToServiceAccountID(
 								msg.GetServiceAccountUpdate().GetId(),
@@ -175,7 +175,7 @@ var _ = Describe("Processor", func() {
 				var output [2]chan *proto.ToDataplane
 
 				BeforeEach(func() {
-					for i := 0; i < 2; i++ {
+					for i := range 2 {
 						w := fmt.Sprintf("test%d", i)
 						d := types.WorkloadEndpointIDToProto(testId(w))
 						output[i], _ = join(w, uint64(i))
@@ -254,7 +254,7 @@ var _ = Describe("Processor", func() {
 
 					BeforeEach(func() {
 						output, _ = join("test", 1)
-						for i := 0; i < 3; i++ {
+						for i := range 3 {
 							msg := <-output
 							accounts[i] = types.ProtoToNamespaceID(
 								msg.GetNamespaceUpdate().GetId(),
@@ -286,7 +286,7 @@ var _ = Describe("Processor", func() {
 				var output [2]chan *proto.ToDataplane
 
 				BeforeEach(func() {
-					for i := 0; i < 2; i++ {
+					for i := range 2 {
 						w := fmt.Sprintf("test%d", i)
 						d := types.WorkloadEndpointIDToProto(testId(w))
 						output[i], _ = join(w, uint64(i))
@@ -344,7 +344,7 @@ var _ = Describe("Processor", func() {
 				var proUpd *proto.ActiveProfileUpdate
 				var ipSetUpd *proto.IPSetUpdate
 
-				BeforeEach(func(done Done) {
+				BeforeEach(func() {
 					refdId = testId("refd")
 					refdOutput, _ = join("refd", 1)
 					unrefdId = testId("unrefd")
@@ -405,21 +405,18 @@ var _ = Describe("Processor", func() {
 						g := <-unrefdOutput
 						Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), u)).To(BeTrue())
 					}
-
-					close(done)
 				})
 
-				It("should send IPSetUpdate to only to ref'd endpoint", func(done Done) {
+				It("should send IPSetUpdate to only to ref'd endpoint", func() {
 					msg := updateIpSet(IPSetName, 2)
 					updates <- msg
 					g := <-refdOutput
 					Expect(googleproto.Equal(g, &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetUpdate{IpsetUpdate: msg}})).To(BeTrue())
 
 					assertInactiveNoUpdate()
-					close(done)
 				})
 
-				It("should send IPSetDeltaUpdate to ref'd endpoint", func(done Done) {
+				It("should send IPSetDeltaUpdate to ref'd endpoint", func() {
 					// Try combinations of adds, removes, and both to ensure the splitting logic
 					// doesn't split these up strangely.
 
@@ -447,11 +444,9 @@ var _ = Describe("Processor", func() {
 					Expect(g.GetIpsetDeltaUpdate().GetRemovedMembers()).To(Equal(msg2.RemovedMembers))
 
 					assertInactiveNoUpdate()
-
-					close(done)
 				})
 
-				It("should send IPSetUpdate when endpoint newly refs wep update", func(done Done) {
+				It("should send IPSetUpdate when endpoint newly refs wep update", func() {
 					wepUpd := &proto.WorkloadEndpointUpdate{
 						Id:       types.WorkloadEndpointIDToProto(unrefdId),
 						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
@@ -465,11 +460,9 @@ var _ = Describe("Processor", func() {
 
 					g = <-unrefdOutput
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
-
-					close(done)
 				})
 
-				It("should send IPSetRemove when endpoint stops ref wep update", func(done Done) {
+				It("should send IPSetRemove when endpoint stops ref wep update", func() {
 					wepUpd := &proto.WorkloadEndpointUpdate{
 						Id:       types.WorkloadEndpointIDToProto(refdId),
 						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{}},
@@ -493,10 +486,9 @@ var _ = Describe("Processor", func() {
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
 
 					assertInactiveNoUpdate()
-					close(done)
 				})
 
-				It("should send IPSetUpdate when endpoint newly refs profile update", func(done Done) {
+				It("should send IPSetUpdate when endpoint newly refs profile update", func() {
 					newSetName := "new-set"
 					updates <- updateIpSet(newSetName, 6)
 					pu := &proto.ActiveProfileUpdate{
@@ -518,11 +510,9 @@ var _ = Describe("Processor", func() {
 					Expect(googleproto.Equal(g.GetActiveProfileUpdate(), pu)).To(BeTrue())
 
 					assertInactiveNoUpdate()
-
-					close(done)
 				})
 
-				It("should send IPSetRemove when endpoint stops ref profile update", func(done Done) {
+				It("should send IPSetRemove when endpoint stops ref profile update", func() {
 					pu := &proto.ActiveProfileUpdate{
 						Id: &proto.ProfileID{Name: ProfileName},
 						Profile: &proto.Profile{
@@ -540,11 +530,9 @@ var _ = Describe("Processor", func() {
 					Expect(googleproto.Equal(g.GetIpsetRemove(), &proto.IPSetRemove{Id: IPSetName})).To(BeTrue())
 
 					assertInactiveNoUpdate()
-
-					close(done)
 				})
 
-				It("should send Update & remove profile update changes IPSet", func(done Done) {
+				It("should send Update & remove profile update changes IPSet", func() {
 					newSetName := "new-set"
 					updates <- updateIpSet(newSetName, 6)
 					pu := &proto.ActiveProfileUpdate{
@@ -570,11 +558,9 @@ var _ = Describe("Processor", func() {
 					Expect(googleproto.Equal(g.GetIpsetRemove(), &proto.IPSetRemove{Id: IPSetName})).To(BeTrue())
 
 					assertInactiveNoUpdate()
-
-					close(done)
 				})
 
-				It("should send IPSetUpdate/Remove when endpoint newly refs policy update", func(done Done) {
+				It("should send IPSetUpdate/Remove when endpoint newly refs policy update", func() {
 					// Create the policy without the ref, and link it to the unref'd WEP.
 					policyID := &proto.PolicyID{Name: "testpolicy"}
 					tier := "tier0"
@@ -638,10 +624,9 @@ var _ = Describe("Processor", func() {
 					Expect(googleproto.Equal(g.GetActivePolicyUpdate(), pu)).To(BeTrue())
 					g = <-unrefdOutput
 					Expect(googleproto.Equal(g.GetIpsetRemove(), &proto.IPSetRemove{Id: IPSetName})).To(BeTrue())
-					close(done)
 				})
 
-				It("should send IPSetUpdate/Remove when policy changes IPset", func(done Done) {
+				It("should send IPSetUpdate/Remove when policy changes IPset", func() {
 					// Create policy referencing the existing IPSet and link to the unreferenced WEP
 					policyID := &proto.PolicyID{Name: "testpolicy"}
 					tier := "tier0"
@@ -702,8 +687,6 @@ var _ = Describe("Processor", func() {
 					g = <-unrefdOutput
 					Expect(g.GetIpsetUpdate().GetId()).To(Equal(newSetName))
 					Expect(g.GetIpsetUpdate().GetMembers()).To(HaveLen(12))
-
-					close(done)
 				})
 			})
 
@@ -747,7 +730,7 @@ var _ = Describe("Processor", func() {
 					var clientCancel func()
 					var syncStream proto.PolicySync_SyncClient
 
-					BeforeEach(func(done Done) {
+					BeforeEach(func() {
 						wepId = testId("default/withsync")
 
 						opts := getDialOptions()
@@ -790,11 +773,9 @@ var _ = Describe("Processor", func() {
 						g, err = syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
+					})
 
-						close(done)
-					}, 2)
-
-					It("should split large IPSetUpdate", func(done Done) {
+					It("should split large IPSetUpdate", func() {
 						msg := updateIpSet(IPSetName, 82250)
 						By("sending a large IPSetUpdate")
 						updates <- msg
@@ -808,10 +789,9 @@ var _ = Describe("Processor", func() {
 						out, err = syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(50))
-						close(done)
-					}, 5)
+					})
 
-					It("should split IpSetDeltaUpdates with both large adds and removes", func(done Done) {
+					It("should split IpSetDeltaUpdates with both large adds and removes", func() {
 						msg2 := deltaUpdateIpSet(IPSetName, 82250, 82250)
 						By("sending a large IPSetDeltaUpdate")
 						updates <- msg2
@@ -833,11 +813,9 @@ var _ = Describe("Processor", func() {
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(0))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(82200))
+					})
 
-						close(done)
-					}, 5)
-
-					It("should split IpSetDeltaUpdates with large adds", func(done Done) {
+					It("should split IpSetDeltaUpdates with large adds", func() {
 						msg2 := deltaUpdateIpSet(IPSetName, 82250, 0)
 						By("sending a large IPSetDeltaUpdate")
 						updates <- msg2
@@ -853,11 +831,9 @@ var _ = Describe("Processor", func() {
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(50))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(0))
+					})
 
-						close(done)
-					}, 5)
-
-					It("should split IpSetDeltaUpdates with large removes", func(done Done) {
+					It("should split IpSetDeltaUpdates with large removes", func() {
 						msg2 := deltaUpdateIpSet(IPSetName, 0, 82250)
 						By("sending a large IPSetDeltaUpdate")
 						updates <- msg2
@@ -873,9 +849,7 @@ var _ = Describe("Processor", func() {
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(0))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(82200))
-
-						close(done)
-					}, 5)
+					})
 
 					AfterEach(func() {
 						clientCancel()
@@ -902,7 +876,7 @@ var _ = Describe("Processor", func() {
 						Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepu)).To(BeTrue())
 					}
 
-					for i := 0; i < 2; i++ {
+					for i := range 2 {
 						w := fmt.Sprintf("test%d", i)
 						wepID[i] = testId(w)
 						output[i], _ = join(w, uint64(i))
@@ -923,7 +897,7 @@ var _ = Describe("Processor", func() {
 						updates <- proUpdate
 					})
 
-					It("should add & remove profile when ref'd or not by WEP", func(done Done) {
+					It("should add & remove profile when ref'd or not by WEP", func() {
 						msg := &proto.WorkloadEndpointUpdate{
 							Id:       types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
@@ -956,11 +930,9 @@ var _ = Describe("Processor", func() {
 						updates <- msg
 						g = <-output[0]
 						Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), msg)).To(BeTrue())
-
-						close(done)
 					})
 
-					It("should add new & remove old when ref changes", func(done Done) {
+					It("should add new & remove old when ref changes", func() {
 						// Add new profile
 						newName := "new-profile-name"
 						newProfileID := proto.ProfileID{Name: newName}
@@ -1003,8 +975,6 @@ var _ = Describe("Processor", func() {
 						updates <- msg2
 						g = <-output[0]
 						Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), msg2)).To(BeTrue())
-
-						close(done)
 					})
 				})
 
@@ -1019,7 +989,7 @@ var _ = Describe("Processor", func() {
 						updates <- polUpd
 					})
 
-					It("should add & remove policy when ref'd or not by WEP", func(done Done) {
+					It("should add & remove policy when ref'd or not by WEP", func() {
 						msg := &proto.WorkloadEndpointUpdate{
 							Id: types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
@@ -1061,11 +1031,9 @@ var _ = Describe("Processor", func() {
 						updates <- msg
 						g = <-output[0]
 						Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), msg)).To(BeTrue())
-
-						close(done)
 					})
 
-					It("should add new & remove old when ref changes", func(done Done) {
+					It("should add new & remove old when ref changes", func() {
 						// Add new policy
 						newName := "new-policy-name"
 						newPolicyID := proto.PolicyID{Name: newName}
@@ -1116,8 +1084,6 @@ var _ = Describe("Processor", func() {
 						updates <- msg2
 						g = <-output[0]
 						Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), msg2)).To(BeTrue())
-
-						close(done)
 					})
 				})
 			})
@@ -1140,7 +1106,7 @@ var _ = Describe("Processor", func() {
 					updates <- wepUpd
 				})
 
-				It("should sync profile & wep when wep joins", func(done Done) {
+				It("should sync profile & wep when wep joins", func() {
 					output, _ := join("test", 1)
 
 					g := <-output
@@ -1148,11 +1114,9 @@ var _ = Describe("Processor", func() {
 
 					g = <-output
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
-
-					close(done)
 				})
 
-				It("should resync profile & wep", func(done Done) {
+				It("should resync profile & wep", func() {
 					output, jm := join("test", 1)
 					g := <-output
 					Expect(googleproto.Equal(g.GetActiveProfileUpdate(), proUpdate)).To(BeTrue())
@@ -1167,11 +1131,9 @@ var _ = Describe("Processor", func() {
 					Expect(googleproto.Equal(g.GetActiveProfileUpdate(), proUpdate)).To(BeTrue())
 					g = <-output
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
-
-					close(done)
 				})
 
-				It("should not resync removed profile", func(done Done) {
+				It("should not resync removed profile", func() {
 					output, jm := join("test", 1)
 					g := <-output
 					Expect(googleproto.Equal(g.GetActiveProfileUpdate(), proUpdate)).To(BeTrue())
@@ -1191,8 +1153,6 @@ var _ = Describe("Processor", func() {
 					output, _ = join("test", 2)
 					g = <-output
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd2)).To(BeTrue())
-
-					close(done)
 				})
 			})
 
@@ -1219,7 +1179,7 @@ var _ = Describe("Processor", func() {
 					updates <- wepUpd
 				})
 
-				It("should sync policy & wep when wep joins", func(done Done) {
+				It("should sync policy & wep when wep joins", func() {
 					output, _ := join("test", 1)
 
 					g := <-output
@@ -1227,11 +1187,9 @@ var _ = Describe("Processor", func() {
 
 					g = <-output
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
-
-					close(done)
 				})
 
-				It("should resync policy & wep", func(done Done) {
+				It("should resync policy & wep", func() {
 					output, jm := join("test", 1)
 					g := <-output
 					Expect(googleproto.Equal(g.GetActivePolicyUpdate(), polUpd)).To(BeTrue())
@@ -1246,11 +1204,9 @@ var _ = Describe("Processor", func() {
 					Expect(googleproto.Equal(g.GetActivePolicyUpdate(), polUpd)).To(BeTrue())
 					g = <-output
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
-
-					close(done)
 				})
 
-				It("should not resync removed policy", func(done Done) {
+				It("should not resync removed policy", func() {
 					output, jm := join("test", 1)
 					g := <-output
 					Expect(googleproto.Equal(g.GetActivePolicyUpdate(), polUpd)).To(BeTrue())
@@ -1269,8 +1225,6 @@ var _ = Describe("Processor", func() {
 					output, _ = join("test", 2)
 					g = <-output
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd2)).To(BeTrue())
-
-					close(done)
 				})
 			})
 		})
@@ -1287,7 +1241,7 @@ var _ = Describe("Processor", func() {
 					updates <- wepUpd
 				})
 
-				It("should close old channel on new join", func(done Done) {
+				It("should close old channel on new join", func() {
 					oldChan, _ := join("test", 1)
 					g := <-oldChan
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
@@ -1297,11 +1251,9 @@ var _ = Describe("Processor", func() {
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
 
 					Expect(oldChan).To(BeClosed())
-
-					close(done)
 				})
 
-				It("should ignore stale leave requests", func(done Done) {
+				It("should ignore stale leave requests", func() {
 					oldChan, oldMeta := join("test", 1)
 					g := <-oldChan
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
@@ -1316,11 +1268,9 @@ var _ = Describe("Processor", func() {
 					updates <- wepUpd
 					g = <-newChan
 					Expect(googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)).To(BeTrue())
-
-					close(done)
 				})
 
-				It("should close active connection on clean leave", func(done Done) {
+				It("should close active connection on clean leave", func() {
 					c, m := join("test", 1)
 
 					g := <-c
@@ -1334,8 +1284,6 @@ var _ = Describe("Processor", func() {
 					leave(m)
 
 					Eventually(c).Should(BeClosed())
-
-					close(done)
 				})
 			})
 
@@ -1347,18 +1295,17 @@ var _ = Describe("Processor", func() {
 		})
 
 		Describe("InSync processing", func() {
-			It("should send InSync on all open outputs", func(done Done) {
+			It("should send InSync on all open outputs", func() {
 				var c [2]chan *proto.ToDataplane
-				for i := 0; i < 2; i++ {
+				for i := range 2 {
 					c[i], _ = join(fmt.Sprintf("test%d", i), uint64(i))
 				}
 				is := &proto.InSync{}
 				updates <- is
-				for i := 0; i < 2; i++ {
+				for i := range 2 {
 					g := <-c[i]
 					Expect(googleproto.Equal(g.GetInSync(), is)).To(BeTrue())
 				}
-				close(done)
 			})
 		})
 	})
@@ -1378,7 +1325,7 @@ func updateIpSet(id string, num int) *proto.IPSetUpdate {
 		Type:    proto.IPSetUpdate_IP_AND_PORT,
 		Members: []string{},
 	}
-	for i := 0; i < num; i++ {
+	for i := range num {
 		msg.Members = append(msg.Members, makeIPAndPort(i))
 	}
 	return msg
@@ -1395,7 +1342,7 @@ func deltaUpdateIpSet(id string, add, del int) *proto.IPSetDeltaUpdate {
 	msg := &proto.IPSetDeltaUpdate{
 		Id: id,
 	}
-	for i := 0; i < add; i++ {
+	for i := range add {
 		msg.AddedMembers = append(msg.AddedMembers, makeIPAndPort(i))
 	}
 	for i := add; i < add+del; i++ {
@@ -1470,16 +1417,16 @@ func (t testCreds) Clone() credentials.TransportCredentials {
 
 func (t testCreds) OverrideServerName(string) error { return nil }
 
-func HavePayload(expected interface{}) gomegatypes.GomegaMatcher {
+func HavePayload(expected any) gomegatypes.GomegaMatcher {
 	return &payloadMatcher{equal: Equal(expected)}
 }
 
 type payloadMatcher struct {
 	equal   gomegatypes.GomegaMatcher
-	payload interface{}
+	payload any
 }
 
-func (p *payloadMatcher) Match(actual interface{}) (success bool, err error) {
+func (p *payloadMatcher) Match(actual any) (success bool, err error) {
 	td, ok := actual.(*proto.ToDataplane)
 	if !ok {
 		return false, fmt.Errorf("HasPayload expects a *proto.ToDataplane")
@@ -1488,10 +1435,10 @@ func (p *payloadMatcher) Match(actual interface{}) (success bool, err error) {
 	return p.equal.Match(p.payload)
 }
 
-func (p *payloadMatcher) FailureMessage(actual interface{}) (message string) {
+func (p *payloadMatcher) FailureMessage(actual any) (message string) {
 	return p.equal.FailureMessage(p.payload)
 }
 
-func (p *payloadMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (p *payloadMatcher) NegatedFailureMessage(actual any) (message string) {
 	return p.equal.NegatedFailureMessage(p.payload)
 }

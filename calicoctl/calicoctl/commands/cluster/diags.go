@@ -443,6 +443,14 @@ func collectKubernetesResource(dir string) {
 		CmdStr:   "kubectl get baselineadminnetworkpolicies.policy.networking.k8s.io -Ao wide",
 		FilePath: fmt.Sprintf("%s/baselineadminnetworkpolicies.txt", dir),
 	}, common.Cmd{
+		Info:     "Collect multus network-attachment-definitions (yaml)",
+		CmdStr:   "kubectl get network-attachment-definitions.k8s.cni.cncf.io -Ao yaml",
+		FilePath: fmt.Sprintf("%s/network-attachment-definitions.yaml", dir),
+	}, common.Cmd{
+		Info:     "Collect multus network-attachment-definitions (text)",
+		CmdStr:   "kubectl get network-attachment-definitions.k8s.cni.cncf.io -Ao wide",
+		FilePath: fmt.Sprintf("%s/network-attachment-definitions.txt", dir),
+	}, common.Cmd{
 		Info:     "Collect k8s validatingwebhookconfigurations (text)",
 		CmdStr:   "kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io -o wide",
 		FilePath: fmt.Sprintf("%s/validatingwebhookconfigurations.txt", dir),

@@ -452,7 +452,7 @@ func TestDeltaTracker_IterPendingActions(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Loop to check IterActionNoOp really is a no-op
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 			"2": "B1",
 			"4": "D1",
@@ -641,10 +641,7 @@ func TestPendingUpdatesView_IterBatched_PartialApplication(t *testing.T) {
 			}
 		}
 
-		applyCount := 2
-		if len(cleanKeys) < applyCount {
-			applyCount = len(cleanKeys)
-		}
+		applyCount := min(len(cleanKeys), 2)
 
 		applyCalls = append(applyCalls, struct {
 			keys    []string
@@ -715,10 +712,7 @@ func TestPendingDeletesView_IterBatched_PartialApplication(t *testing.T) {
 			}
 		}
 
-		deleteCount := 2
-		if len(cleanKeys) < deleteCount {
-			deleteCount = len(cleanKeys)
-		}
+		deleteCount := min(len(cleanKeys), 2)
 
 		deleteCalls = append(deleteCalls, struct {
 			keys    []string

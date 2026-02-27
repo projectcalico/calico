@@ -16,7 +16,7 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/mcuadros/go-version"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/vishvananda/netlink"
@@ -26,7 +26,7 @@ import (
 	grpc_dataplane "github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/linux"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
@@ -45,7 +45,7 @@ var _ = Describe("CalicoCni", func() {
 		testutils.WipeDatastore()
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		var err error
-		n := libapiv3.NewNode()
+		n := internalapi.NewNode()
 		n.Name, err = names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
 		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
@@ -121,7 +121,7 @@ var _ = Describe("CalicoCni", func() {
 
 			mac := contVeth.Attrs().HardwareAddr
 
-			Expect(endpoints.Items[0].Spec).Should(Equal(libapiv3.WorkloadEndpointSpec{
+			Expect(endpoints.Items[0].Spec).Should(Equal(internalapi.WorkloadEndpointSpec{
 				InterfaceName: fmt.Sprintf("cali%s", containerID),
 				IPNetworks:    []string{result.IPs[0].Address.String()},
 				MAC:           mac.String(),
@@ -379,7 +379,7 @@ var _ = Describe("CalicoCni", func() {
 	})
 
 	Context("With a gRPC dataplane", func() {
-		It("communicates with the dataplane", func(done Done) {
+		It("communicates with the dataplane", func() {
 			var contNs ns.NetNS
 			var grpcBackend *grpc_dataplane.TestServer
 			var exitCode int
@@ -456,8 +456,7 @@ var _ = Describe("CalicoCni", func() {
 			if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 				Expect(err).NotTo(HaveOccurred())
 			}
-			close(done)
-		}, 30.0)
+		})
 	})
 
 	Context("deprecate hostname for nodename", func() {
@@ -713,7 +712,7 @@ var _ = Describe("CalicoCni", func() {
 
 		var containerID string
 		var workloadName string
-		var endpointSpec libapiv3.WorkloadEndpointSpec
+		var endpointSpec internalapi.WorkloadEndpointSpec
 		var contNs ns.NetNS
 		var result *cniv1.Result
 
@@ -874,7 +873,7 @@ var _ = Describe("CalicoCni", func() {
 
 	Describe("testConnection tests", func() {
 
-		It("successfully connects to the datastore", func(done Done) {
+		It("successfully connects to the datastore", func() {
 			netconf := fmt.Sprintf(`
 {
   "cniVersion": "%s",
@@ -901,10 +900,9 @@ var _ = Describe("CalicoCni", func() {
 
 			_, err = c.CombinedOutput()
 			Expect(err).ToNot(HaveOccurred())
-			close(done)
-		}, 10)
+		})
 
-		It("reports it cannot connect to the datastore", func(done Done) {
+		It("reports it cannot connect to the datastore", func() {
 			// wrong port.
 			netconf := fmt.Sprintf(`
 {
@@ -932,8 +930,7 @@ var _ = Describe("CalicoCni", func() {
 
 			_, err = c.CombinedOutput()
 			Expect(err).To(HaveOccurred())
-			close(done)
-		}, 10)
+		})
 
 	})
 

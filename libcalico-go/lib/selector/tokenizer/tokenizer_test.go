@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
@@ -267,7 +267,6 @@ var tokenTests = []struct {
 
 var _ = Describe("Token", func() {
 	for _, test := range tokenTests {
-		test := test // Take copy for closure
 		if test.expected == nil {
 			It(fmt.Sprintf("should return error for input %#v", test.input), func() {
 				_, err := tokenizer.Tokenize(test.input)

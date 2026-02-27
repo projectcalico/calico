@@ -196,7 +196,7 @@ func TestMapUpgradeV3ToV5WithLowerSize(t *testing.T) {
 	err := mockMapv3.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		k := v3.NewKey(0x1234 + uint32(i))
 		v := v3.NewValue(0x4568 + uint32(i))
 
@@ -251,7 +251,7 @@ func TestMapUpgradeWithDeltaEntries(t *testing.T) {
 	Expect(val).To(Equal(val5.AsBytes()))
 
 	// update v2 map with new k,v pairs
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		k = v2.NewKey(0x1234 + uint32(i))
 		v = v2.NewValue(0x4568 + uint32(i))
 		err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
@@ -272,7 +272,7 @@ func TestMapUpgradeWithDeltaEntries(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(val).To(Equal(val5.AsBytes()))
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		k5 = v5.NewKey(0x1234 + uint32(i))
 		val5 = v5.NewValue(0x4568 + uint32(i))
 		val, err = mockMapv5.Get(k5.AsBytes())
@@ -294,7 +294,7 @@ func TestMapResizeWhileUpgradeInProgress(t *testing.T) {
 	err := mockMapv2.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		k := v2.NewKey(0x1234 + uint32(i))
 		v := v2.NewValue(0x4568 + uint32(i))
 		err = mockMapv2.Update(k.AsBytes(), v.AsBytes())
@@ -306,7 +306,7 @@ func TestMapResizeWhileUpgradeInProgress(t *testing.T) {
 	err = mockMapv5.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		k := v5.NewKey(0x1234 + uint32(i))
 		v := v5.NewValue(0x4568 + uint32(i))
 		val, err := mockMapv5.Get(k.AsBytes())
@@ -314,7 +314,7 @@ func TestMapResizeWhileUpgradeInProgress(t *testing.T) {
 		Expect(val).To(Equal(v.AsBytes()))
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		k := v5.NewKey(0x1234 + uint32(i))
 		err := mockMapv5.Delete(k.AsBytes())
 		Expect(err).NotTo(HaveOccurred())
@@ -324,7 +324,7 @@ func TestMapResizeWhileUpgradeInProgress(t *testing.T) {
 	err = mockMapv5_new.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		k := v5.NewKey(0x1234 + uint32(i))
 		v := v5.NewValue(0x4568 + uint32(i))
 		val, err := mockMapv5_new.Get(k.AsBytes())
@@ -346,7 +346,7 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	err := mockMapv2_old.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		k := v2.NewKey(0x1234 + uint32(i))
 		v := v2.NewValue(0x4568 + uint32(i))
 		err = mockMapv2_old.Update(k.AsBytes(), v.AsBytes())
@@ -391,7 +391,7 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	err = mockMapv5.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		k := v5.NewKey(0x1234 + uint32(i))
 		v := v5.NewValue(0x4568 + uint32(i))
 		val, err := mockMapv5.Get(k.AsBytes())

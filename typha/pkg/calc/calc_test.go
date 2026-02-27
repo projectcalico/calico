@@ -15,7 +15,7 @@
 package calc_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +27,7 @@ import (
 
 type testSink struct {
 	countUpdates int
-	values       []interface{}
+	values       []any
 }
 
 func (s *testSink) OnStatusUpdated(status api.SyncStatus) {}

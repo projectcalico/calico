@@ -45,7 +45,7 @@ func ConvertStagedGlobalNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.K
 	}, nil
 }
 
-func ConvertStagedGlobalNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
+func ConvertStagedGlobalNetworkPolicyV3ToV1Value(val any) (any, error) {
 	staged, ok := val.(*apiv3.StagedGlobalNetworkPolicy)
 	if !ok {
 		return nil, errors.New("Value is not a valid StagedGlobalNetworkPolicy resource value")

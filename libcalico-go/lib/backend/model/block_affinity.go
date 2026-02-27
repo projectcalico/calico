@@ -27,14 +27,14 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/labels"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var (
 	matchBlockAffinity = regexp.MustCompile(fmt.Sprintf("^/?calico/ipam/v2/(@|%s|%s)/([^/]+)/ipv./block/([^/]+)$", IPAMAffinityTypeHost, IPAMAffinityTypeVirtual))
-	typeBlockAff       = reflect.TypeOf(BlockAffinity{})
+	typeBlockAff       = reflect.TypeFor[BlockAffinity]()
 )
 
 type BlockAffinityState string
@@ -168,7 +168,7 @@ func EnsureBlockAffinityLabelsV3(ba *apiv3.BlockAffinity) {
 	ba.Labels[apiv3.LabelIPVersion] = ipVersion
 }
 
-func EnsureBlockAffinityLabels(ba *libapiv3.BlockAffinity) {
+func EnsureBlockAffinityLabels(ba *internalapi.BlockAffinity) {
 	if ba.Labels == nil {
 		ba.Labels = make(map[string]string)
 	}

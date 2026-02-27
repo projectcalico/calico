@@ -156,7 +156,7 @@ func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bo
 	return false
 }
 
-func (m *routeManager) OnUpdate(protoBufMsg interface{}) {
+func (m *routeManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
 		// Check to make sure that we are dealing with messages of the correct IP version.

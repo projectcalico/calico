@@ -31,8 +31,8 @@ func NewKubeControllersConfigClient(r rest.Interface, group BackingAPIGroup) K8s
 	return &customResourceClient{
 		restClient:      r,
 		resource:        KubeControllersConfigResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.KubeControllersConfiguration{}),
-		k8sListType:     reflect.TypeOf(apiv3.KubeControllersConfigurationList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.KubeControllersConfiguration](),
+		k8sListType:     reflect.TypeFor[apiv3.KubeControllersConfigurationList](),
 		kind:            apiv3.KindKubeControllersConfiguration,
 		validator:       kubeControllersConfigValidator{},
 		apiGroup:        group,

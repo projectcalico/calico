@@ -84,7 +84,7 @@ var _ = describe.CalicoDescribe(
 			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
 
 			// Create an IP pool for the test.
-			poolName = conncheck.GenerateRandomName("ipip-pool")
+			poolName = utils.GenerateRandomName("ipip-pool")
 			pool := v3.NewIPPool()
 			pool.Name = poolName
 			pool.Spec.CIDR = "203.0.113.0/24"
@@ -245,7 +245,7 @@ func getNodeRoutes(cli ctrlclient.Client, match string) []string {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying routes from pod %s", p.Name)
 
 	matches := []string{}
-	for _, s := range strings.Split(out, "\n") {
+	for s := range strings.SplitSeq(out, "\n") {
 		if strings.Contains(s, match) {
 			matches = append(matches, s)
 		}

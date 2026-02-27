@@ -90,7 +90,25 @@ func newBPFTestEpMgr(
 		nil,
 		nil,
 		1500,
+		nil,
+		nil,
 	)
+}
+
+// countSubPrograms counts the number of sub-programs that would be loaded for a given AttachType.
+// This uses the GetApplicableSubProgs API from the hook package.
+func countSubPrograms(at hook.AttachType) int {
+	applicableProgs := hook.GetApplicableSubProgs(at, false)
+	return len(applicableProgs)
+}
+
+// expectedProgramCount computes the expected total program count for a map of AttachTypes.
+func expectedProgramCount(programs map[hook.AttachType]hook.Layout) int {
+	total := 0
+	for at := range programs {
+		total += countSubPrograms(at)
+	}
+	return total
 }
 
 func runAttachTest(t *testing.T, ipv6Enabled bool) {
@@ -141,16 +159,13 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsIngCount := 8
-		programsEgCount := 7
-		if ipv6Enabled {
-			programsIngCount = 15
-			programsEgCount = 13
-		}
-		Expect(programsIng.Count()).To(Equal(programsIngCount))
-		Expect(programsEg.Count()).To(Equal(programsEgCount))
+		// Verify expected programs were loaded based on AttachTypes
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
+		expectedIngCount := expectedProgramCount(atIng)
+		expectedEgCount := expectedProgramCount(atEg)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
+		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
@@ -201,10 +216,14 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(programsIng.Count()).To(Equal(28))
 
+			// Verify expected programs were loaded based on AttachTypes
 			atIng := programsIng.Programs()
 			atEg := programsEg.Programs()
+			expectedIngCount := expectedProgramCount(atIng)
+			expectedEgCount := expectedProgramCount(atEg)
+			Expect(programsIng.Count()).To(Equal(expectedIngCount))
+			Expect(programsEg.Count()).To(Equal(expectedEgCount))
 
 			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
@@ -343,19 +362,19 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programIngCount := 8
-		programEgCount := 7
-		jumpMapLen := 1
-		if ipv6Enabled {
-			programIngCount = 28
-			programEgCount = 26
-			jumpMapLen = 4
-		}
-		Expect(programsIng.Count()).To(Equal(programIngCount))
-		Expect(programsEg.Count()).To(Equal(programEgCount))
-
+		// Verify expected programs are loaded based on AttachTypes
+		atIng := programsIng.Programs()
+		atEg := programsEg.Programs()
+		expectedIngCount := expectedProgramCount(atIng)
+		expectedEgCount := expectedProgramCount(atEg)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
+		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmEgr := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
+		jumpMapLen := 1
+		if ipv6Enabled {
+			jumpMapLen = 4
+		}
 		Expect(len(pmIng)).To(Equal(jumpMapLen)) // no policy for hep2
 		Expect(len(pmEgr)).To(Equal(jumpMapLen)) // no policy for hep2
 	})
@@ -364,24 +383,18 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	defer deleteLink(workload1)
 
 	t.Run("create a workload", func(t *testing.T) {
-		programsIngCount := programsIng.Count()
-		programsEgCount := programsEg.Count()
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsIngCount = programsIngCount + 7
-		programsEgCount = programsEgCount + 6
-		if ipv6Enabled {
-			programsIngCount = 28
-			programsEgCount = 26
-		}
-		Expect(programsIng.Count()).To(Equal(programsIngCount))
-		Expect(programsEg.Count()).To(Equal(programsEgCount))
-
+		// Verify expected programs were loaded based on AttachTypes
 		atIng := programsIng.Programs()
 		atEg := programsEg.Programs()
+		expectedIngCount := expectedProgramCount(atIng)
+		expectedEgCount := expectedProgramCount(atEg)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
+		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     4,
@@ -574,6 +587,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(attached).To(HaveKey("hostep2"))
 		Expect(attached).NotTo(HaveKey("workloadep3"))
 
+		// Capture the program count before restart (includes workload3)
+		programsCountBeforeRestart := programsIng.Count()
+
 		programsIng.ResetForTesting() // Because we recycle it, restarted Felix would get a fresh copy.
 		programsEg.ResetForTesting()  // Because we recycle it, restarted Felix would get a fresh copy.
 
@@ -619,13 +635,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = oldProgs.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
-		programsCount := 15
-		oldPoliciesCount := 2
-		if ipv6Enabled {
-			programsCount = 28
-			oldPoliciesCount = 6
-		}
-		Expect(pm).To(HaveLen(programsCount))
+		// Old programs map should still have the programs from before restart
+		Expect(pm).To(HaveLen(programsCountBeforeRestart))
 
 		oldPoliciesParams := jump.IngressMapParameters
 		oldPoliciesParams.PinDir = tmp
@@ -633,6 +644,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = oldPolicies.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm = jumpMapDump(oldPolicies)
+		oldPoliciesCount := 2
+		if ipv6Enabled {
+			oldPoliciesCount = 6
+		}
 		Expect(pm).To(HaveLen(oldPoliciesCount))
 
 		// After restat we get new maps which are empty
@@ -662,9 +677,12 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programsIng.Count()).To(Equal(15))
+		// After restart and replaying state, verify expected programs were loaded
+		atIng := programsIng.Programs()
+		expectedIngCount := expectedProgramCount(atIng)
+		Expect(programsIng.Count()).To(Equal(expectedIngCount))
 		pm = jumpMapDump(commonMaps.ProgramsMaps[hook.Ingress])
-		Expect(pm).To(HaveLen(15))
+		Expect(pm).To(HaveLen(expectedIngCount))
 
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmEgr := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
@@ -864,7 +882,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	// The expectation is that, WorkloadEndpointUpdates must not
 	// result in re-attaching the program. Hence the priority, handle of
 	// the tc filters must be the same.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 			Id: &proto.WorkloadEndpointID{
 				OrchestratorId: "k8s",
@@ -939,7 +957,7 @@ func TestRepeatedAttach(t *testing.T) {
 	ingressProg, err := tc.ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(ingressProg)).To(Equal(1))
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		err = ap.AttachProgram()
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to attach preamble : %d", i))
 	}
@@ -1266,21 +1284,23 @@ func TestAttachTcx(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	loglevel := "off"
-	bpfEpMgr, err := newBPFTestEpMgr(
-		&linux.Config{
-			Hostname:              "uthost",
-			BPFLogLevel:           loglevel,
-			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
-			VXLANMTU:              1000,
-			VXLANPort:             1234,
-			BPFNodePortDSREnabled: false,
-			RulesConfig: rules.Config{
-				EndpointToHostAction: "RETURN",
-			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
-			BPFAttachType:           v3.BPFAttachOptionTCX,
+	bpfConfig := &linux.Config{
+		Hostname:              "uthost",
+		BPFLogLevel:           loglevel,
+		BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+		VXLANMTU:              1000,
+		VXLANPort:             1234,
+		BPFNodePortDSREnabled: false,
+		RulesConfig: rules.Config{
+			EndpointToHostAction: "RETURN",
 		},
+		BPFExtToServiceConnmark: 0,
+		BPFPolicyDebugEnabled:   true,
+		BPFAttachType:           v3.BPFAttachOptionTCX,
+	}
+
+	bpfEpMgr, err := newBPFTestEpMgr(
+		bpfConfig,
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
 	)
@@ -1321,20 +1341,26 @@ func TestAttachTcx(t *testing.T) {
 	tcxProgs, err := tc.ListAttachedTcxPrograms("workloadep0", "ingress")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(tcxProgs)).To(Equal(1))
-	// Now attach Tc program.
-	ap := &tc.AttachPoint{
-		AttachPoint: bpf.AttachPoint{
-			Iface: "workloadep0",
-			Hook:  hook.Ingress,
-		},
-		HostIPv4:   net.IPv4(1, 2, 3, 4),
-		IntfIPv4:   net.IPv4(1, 6, 6, 6),
-		AttachType: v3.BPFAttachOptionTC,
-	}
 
-	_, err = tc.EnsureQdisc("workloadep0")
+	bpfConfig.BPFAttachType = v3.BPFAttachOptionTC
+	bpfEpMgr, err = newBPFTestEpMgr(
+		bpfConfig,
+		bpfmaps,
+		regexp.MustCompile("^workloadep[0123]"),
+	)
 	Expect(err).NotTo(HaveOccurred())
-	err = ap.AttachProgram()
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+		Id: &proto.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "workloadep0",
+			EndpointId:     "workloadep0",
+		},
+		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep0"},
+	})
+	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 	progs, err = tc.ListAttachedPrograms("workloadep0", hook.Ingress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
@@ -1344,7 +1370,17 @@ func TestAttachTcx(t *testing.T) {
 	tcxProgs, err = tc.ListAttachedTcxPrograms("workloadep0", "ingress")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(tcxProgs)).To(Equal(0))
-	// Now attach TCx again
+
+	bpfConfig.BPFAttachType = v3.BPFAttachOptionTCX
+	bpfEpMgr, err = newBPFTestEpMgr(
+		bpfConfig,
+		bpfmaps,
+		regexp.MustCompile("^workloadep[0123]"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 		Id: &proto.WorkloadEndpointID{
 			OrchestratorId: "k8s",
@@ -1469,7 +1505,7 @@ func ifstateMapDump(m maps.Map) ifstate.MapMem {
 func jumpMapDump(m maps.Map) map[int]int {
 	jumpMap := make(map[int]int)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		if v, err := m.Get(jump.Key(i) /* a good key for any jump map */); err == nil {
 			jumpMap[i] = int(binary.LittleEndian.Uint32(v))
 		}

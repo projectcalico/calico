@@ -18,8 +18,7 @@ import (
 	"reflect"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -520,7 +519,7 @@ var _ = DescribeTable(
 
 var _ = DescribeTable(
 	"value parsing",
-	func(key Key, rawVal string, expectedVal interface{}) {
+	func(key Key, rawVal string, expectedVal any) {
 		val, err := ParseValue(key, []byte(rawVal))
 		Expect(err).ToNot(HaveOccurred())
 		Expect(val).To(Equal(expectedVal))

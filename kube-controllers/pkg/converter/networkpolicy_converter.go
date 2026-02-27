@@ -40,7 +40,7 @@ func NewPolicyConverter() Converter {
 }
 
 // Convert takes a Kubernetes NetworkPolicy and returns a Calico api.NetworkPolicy representation.
-func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
+func (p *policyConverter) Convert(k8sObj any) (any, error) {
 	np, ok := k8sObj.(*networkingv1.NetworkPolicy)
 
 	if !ok {
@@ -76,7 +76,7 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 }
 
 // GetKey returns the 'namespace/name' for the given Calico NetworkPolicy as its key.
-func (p *policyConverter) GetKey(obj interface{}) string {
+func (p *policyConverter) GetKey(obj any) string {
 	policy := obj.(api.NetworkPolicy)
 	return fmt.Sprintf("%s/%s", policy.Namespace, policy.Name)
 }

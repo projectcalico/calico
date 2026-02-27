@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -344,7 +344,7 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(baselinePeakrate).To(BeNumerically(">=", 100000000.0*10))
 
 						By("Setting 10Mbps limit and 100Mbps peakrate for ingress on workload 1")
-						w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							IngressBandwidth: 10000000,
 							IngressBurst:     300000000,
 							IngressPeakrate:  100000000,
@@ -368,7 +368,7 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(ingressLimitedPeakrate).To(BeNumerically("<=", 100000000.0*1.2))
 
 						By("Setting 10Mbps limit and 100Mbps peakrate for egress on workload 1")
-						w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							EgressBandwidth: 10000000,
 							EgressBurst:     300000000,
 							EgressPeakrate:  100000000,
@@ -428,7 +428,7 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(baselineRate).To(BeNumerically(">=", 100*1e6*0.8))
 
 						By("Setting 100 packets/s limit for ingress on workload 0 (iperf2 server)")
-						w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							IngressPacketRate:  100,
 							IngressPacketBurst: 200,
 						}
@@ -497,7 +497,7 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Setting 100kpps limit for egress on workload 1 (iperf2 client)")
-						w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							EgressPacketRate:  100,
 							EgressPacketBurst: 200,
 						}
@@ -610,7 +610,7 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Setting connection limit for ingress on workload 0")
-						w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							IngressMaxConnections: int64(numConnections),
 						}
 						w[0].UpdateInInfra(infra)
@@ -669,7 +669,7 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Setting connection limit for egress on workload 1 (clients)")
-						w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							EgressMaxConnections: int64(numConnections),
 						}
 						w[1].UpdateInInfra(infra)

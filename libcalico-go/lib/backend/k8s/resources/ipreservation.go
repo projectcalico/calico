@@ -29,8 +29,8 @@ func NewIPReservationClient(r rest.Interface, group BackingAPIGroup) K8sResource
 	return &customResourceClient{
 		restClient:      r,
 		resource:        IPReservationResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.IPReservation{}),
-		k8sListType:     reflect.TypeOf(apiv3.IPReservationList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.IPReservation](),
+		k8sListType:     reflect.TypeFor[apiv3.IPReservationList](),
 		kind:            apiv3.KindIPReservation,
 		apiGroup:        group,
 	}

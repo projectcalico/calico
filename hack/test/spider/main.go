@@ -172,7 +172,7 @@ func main() {
 		if err != nil {
 			panic(fmt.Sprintf("%s: %s", err, stderr.String()))
 		}
-		for _, p := range strings.Split(out.String(), "\n") {
+		for p := range strings.SplitSeq(out.String(), "\n") {
 			fmt.Println(p)
 		}
 		return
@@ -180,7 +180,7 @@ func main() {
 
 	// From the list of files, condense that to a set of packages.
 	changedPackages := map[string]string{}
-	for _, f := range strings.Split(out.String(), "\n") {
+	for f := range strings.SplitSeq(out.String(), "\n") {
 		changedPackages[filepath.Dir(f)] = ""
 	}
 
@@ -199,7 +199,7 @@ func main() {
 
 	// Loop through impacted packages a few times to make sure capture the full
 	// depth of the dependency tree.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		originalSize := len(impactedPackages)
 		for pkg := range impactedPackages {
 			for d := range packageToDeps[pkg] {

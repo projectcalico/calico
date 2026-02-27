@@ -58,9 +58,8 @@ require (
 	github.com/natefinch/atomic v1.0.1
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/ginkgo/v2 v2.27.2
-	github.com/onsi/gomega v1.38.2
+	github.com/onsi/ginkgo/v2 v2.28.1
+	github.com/onsi/gomega v1.39.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/api v0.0.0-20220722155641-439a754a988b
@@ -90,13 +89,12 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.24
 	go.etcd.io/etcd/client/v3 v3.6.5
 	go.yaml.in/yaml/v3 v3.0.4
-	golang.org/x/crypto v0.46.0
-	golang.org/x/mod v0.31.0
-	golang.org/x/net v0.48.0
+	golang.org/x/mod v0.32.0
+	golang.org/x/net v0.49.0
 	golang.org/x/oauth2 v0.34.0
 	golang.org/x/sync v0.19.0
-	golang.org/x/sys v0.39.0
-	golang.org/x/text v0.32.0
+	golang.org/x/sys v0.40.0
+	golang.org/x/text v0.33.0
 	golang.org/x/time v0.14.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c
@@ -113,7 +111,7 @@ require (
 	k8s.io/component-base v0.34.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.34.3
-	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
+	k8s.io/kube-openapi v0.31.0
 	k8s.io/kubernetes v1.34.3
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	modernc.org/memory v1.11.0
@@ -122,6 +120,20 @@ require (
 	sigs.k8s.io/knftables v0.0.19
 	sigs.k8s.io/network-policy-api v0.1.8-0.20260212153203-412bf65729a5
 	sigs.k8s.io/yaml v1.6.0
+)
+
+require (
+	github.com/go-kit/log v0.2.1 // indirect
+	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	kubevirt.io/containerized-data-importer-api v1.63.1 // indirect
+	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
+)
+
+require (
+	golang.org/x/crypto v0.47.0 // indirect
+	kubevirt.io/api v1.7.0
+	kubevirt.io/client-go v1.7.0
 )
 
 require (
@@ -238,7 +250,7 @@ require (
 	github.com/google/cel-go v0.26.0 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
-	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect
+	github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
@@ -288,7 +300,6 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
-	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/opencontainers/cgroups v0.0.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
@@ -340,8 +351,8 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
-	golang.org/x/term v0.38.0 // indirect
-	golang.org/x/tools v0.40.0 // indirect
+	golang.org/x/term v0.39.0 // indirect
+	golang.org/x/tools v0.41.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173 // indirect
 	google.golang.org/api v0.247.0 // indirect
 	google.golang.org/genproto v0.0.0-20250603155806-513f23925822 // indirect
@@ -349,7 +360,6 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/cloud-provider v0.34.3 // indirect
 	k8s.io/component-helpers v0.34.3 // indirect
@@ -396,6 +406,10 @@ replace (
 	k8s.io/externaljwt => k8s.io/externaljwt v0.34.3
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.34.3
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.34.3
+
+	// kubevirt.io/client-go requires a tagged kube-openapi version that doesn't
+	// exist; pin to the pseudo-version used by the rest of our k8s dependencies.
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.34.3
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.34.3
 	k8s.io/kubectl => k8s.io/kubectl v0.34.3
@@ -404,4 +418,6 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.34.3
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.34.3
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.34.3
+
+	kubevirt.io/client-go => github.com/tigera/kubevirt-client-go v1.7.0-tigera1
 )

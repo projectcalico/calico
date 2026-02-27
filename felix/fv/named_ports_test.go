@@ -20,8 +20,7 @@ import (
 	"os"
 	"strconv"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -32,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -117,7 +116,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 
 			// Includes some named ports on each workload.  Each workload gets its own named port,
 			// which is unique and a shared one.
-			w[ii].WorkloadEndpoint.Spec.Ports = []libv3.WorkloadEndpointPort{
+			w[ii].WorkloadEndpoint.Spec.Ports = []internalapi.WorkloadEndpointPort{
 				{
 					Port:     sharedPort,
 					Name:     sharedPortName,
@@ -206,7 +205,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 			ports := []numorstring.Port{
 				numorstring.NamedPort(sharedPortName),
 			}
-			for i := 0; i < numNumericPorts; i++ {
+			for i := range numNumericPorts {
 				ports = append(ports, numorstring.SinglePort(3000+uint16(i)))
 			}
 			entRule := api.EntityRule{}
@@ -688,7 +687,7 @@ var _ = infrastructure.DatastoreDescribe("TCP: named port with a simulated kuber
 		nginx.WorkloadEndpoint.Labels = map[string]string{
 			"name": "nginx",
 		}
-		nginx.WorkloadEndpoint.Spec.Ports = []libv3.WorkloadEndpointPort{
+		nginx.WorkloadEndpoint.Spec.Ports = []internalapi.WorkloadEndpointPort{
 			{
 				Port:     80,
 				Name:     "http-port",
@@ -834,7 +833,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range tc.Felixes {
 				if NFTMode() {
 					logNFTDiags(felix)
@@ -975,7 +974,7 @@ var _ = infrastructure.DatastoreDescribe("tests with mixed TCP/UDP", []apiconfig
 			w.WorkloadEndpoint.Labels = map[string]string{
 				"name": "nginx",
 			}
-			w.WorkloadEndpoint.Spec.Ports = []libv3.WorkloadEndpointPort{
+			w.WorkloadEndpoint.Spec.Ports = []internalapi.WorkloadEndpointPort{
 				{
 					Port:     80,
 					Name:     "tcp-port",

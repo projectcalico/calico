@@ -22,8 +22,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -122,7 +121,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 	})
 })
 
-func fieldsByName(example interface{}) map[string]reflect.StructField {
+func fieldsByName(example any) map[string]reflect.StructField {
 	fields := map[string]reflect.StructField{}
 	t := reflect.TypeOf(example)
 	for i := 0; i < t.NumField(); i++ {
@@ -221,7 +220,7 @@ var (
 )
 
 var _ = DescribeTable("Config parsing",
-	func(key, value string, expected interface{}, errorExpected ...bool) {
+	func(key, value string, expected any, errorExpected ...bool) {
 		cfg := config.New()
 		_, err := cfg.UpdateFrom(map[string]string{key: value}, config.EnvironmentVariable)
 		configPtr := reflect.ValueOf(cfg)
@@ -540,7 +539,7 @@ var _ = DescribeTable("Config parsing",
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",
-	func(clusterType, metadataAddr, metadataPort, ifacePrefixes interface{}, expected bool) {
+	func(clusterType, metadataAddr, metadataPort, ifacePrefixes any, expected bool) {
 		c := config.New()
 		values := make(map[string]string)
 		if clusterType != nil {

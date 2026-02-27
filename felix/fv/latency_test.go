@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -210,9 +210,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Latency tests with initiali
 })
 
 func generateIPv4s(n int) (result []string) {
-	for a := 0; a < 256; a++ {
-		for b := 0; b < 256; b++ {
-			for c := 0; c < 256; c++ {
+	for a := range 256 {
+		for b := range 256 {
+			for c := range 256 {
 				if n <= 0 {
 					return
 				}
@@ -225,9 +225,9 @@ func generateIPv4s(n int) (result []string) {
 }
 
 func generateIPv6s(n int) (result []string) {
-	for a := 0; a < 256; a++ {
-		for b := 0; b < 256; b++ {
-			for c := 0; c < 256; c++ {
+	for a := range 256 {
+		for b := range 256 {
+			for c := range 256 {
 				if n <= 0 {
 					return
 				}

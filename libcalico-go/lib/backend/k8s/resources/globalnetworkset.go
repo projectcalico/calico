@@ -29,8 +29,8 @@ func NewGlobalNetworkSetClient(r rest.Interface, group BackingAPIGroup) K8sResou
 	return &customResourceClient{
 		restClient:      r,
 		resource:        GlobalNetworkSetResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.GlobalNetworkSet{}),
-		k8sListType:     reflect.TypeOf(apiv3.GlobalNetworkSetList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.GlobalNetworkSet](),
+		k8sListType:     reflect.TypeFor[apiv3.GlobalNetworkSetList](),
 		kind:            apiv3.KindGlobalNetworkSet,
 		apiGroup:        group,
 	}

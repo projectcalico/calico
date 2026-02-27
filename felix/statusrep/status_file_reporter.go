@@ -43,7 +43,7 @@ const (
 //     an entry for each workload, when each workload's
 //     policy is programmed for the first time.
 type EndpointStatusFileReporter struct {
-	endpointUpdatesC        <-chan interface{}
+	endpointUpdatesC        <-chan any
 	endpointStatusDirPrefix string
 
 	// DeltaTracker for the Workload endpoint status.
@@ -90,7 +90,7 @@ type FileReporterOption func(*EndpointStatusFileReporter)
 
 // NewEndpointStatusFileReporter creates a new EndpointStatusFileReporter.
 func NewEndpointStatusFileReporter(
-	endpointUpdatesC <-chan interface{},
+	endpointUpdatesC <-chan any,
 	statusDirPath string,
 	opts ...FileReporterOption,
 ) *EndpointStatusFileReporter {
@@ -247,7 +247,7 @@ func (fr *EndpointStatusFileReporter) resetStoppedTimerOrInit(t *time.Timer, d t
 // A sub-call of SyncForever, not intended to be called outside the main loop.
 // Updates delta tracker state to match the received update.
 // Logs and discards errors generated from converting endpoint updates to endpoint keys.
-func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
+func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e any) {
 	switch m := e.(type) {
 	case *proto.WorkloadEndpointStatusUpdate:
 		if m.Id == nil {

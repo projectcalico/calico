@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -129,7 +129,7 @@ func createNetworkSetPolicies(c client.Interface, numPols, numRulesPerPol int) {
 	By("Creating network sets")
 	sizes := []int{1, 1, 1, 2, 3, 4, 5, 5, 5, 5, 5, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 100, 200, 1000}
 	numSets := numPols * numRulesPerPol
-	for i := 0; i < numSets; i++ {
+	for i := range numSets {
 		ns := api.NewGlobalNetworkSet()
 		ns.Name = fmt.Sprintf("netset-%d", i)
 		ns.Labels = map[string]string{
@@ -142,9 +142,9 @@ func createNetworkSetPolicies(c client.Interface, numPols, numRulesPerPol int) {
 
 	By("Creating policies with selectors")
 	// Make a policy that activates them
-	for i := 0; i < numPols; i++ {
+	for i := range numPols {
 		rules := make([]api.Rule, numRulesPerPol)
-		for j := 0; j < numRulesPerPol; j++ {
+		for j := range numRulesPerPol {
 			rules[j] = api.Rule{
 				Action: "Allow",
 				Source: api.EntityRule{

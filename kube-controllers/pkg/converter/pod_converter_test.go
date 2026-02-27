@@ -15,14 +15,14 @@
 package converter_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 )
 
 var _ = Describe("PodConverter", func() {
@@ -171,7 +171,7 @@ var _ = Describe("PodConverter", func() {
 			"key": "value",
 			"foo": "bar",
 		}
-		wep := api.NewWorkloadEndpoint()
+		wep := internalapi.NewWorkloadEndpoint()
 		wep.Name = "nodename-k8s-testwep-eth0"
 		wep.Namespace = "default"
 		wep.Spec.Pod = "testwep"

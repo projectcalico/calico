@@ -39,6 +39,8 @@ type CalicoNodeStatusList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:printcolumn:name="Node",type=string,JSONPath=".spec.node",description="The name of the node"
+// +kubebuilder:printcolumn:name="Classes",type=string,JSONPath=".spec.classes",description="The types of information to monitor for this calico/node"
 
 type CalicoNodeStatus struct {
 	metav1.TypeMeta   `json:",inline"`

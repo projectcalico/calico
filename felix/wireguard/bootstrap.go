@@ -29,7 +29,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/netlinkshim"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -429,8 +429,8 @@ func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient client
 	defer expBackoffMgr.Backoff().Stop()
 
 	var err error
-	var node *apiv3.Node
-	for r := 0; r < maxRetries; r++ {
+	var node *internalapi.Node
+	for range maxRetries {
 		cxt, cancel := context.WithTimeout(context.Background(), bootstrapK8sClientTimeout)
 		node, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
@@ -537,7 +537,7 @@ func removeWireguardDevice(
 	// Make a few attempts to delete the wireguard device.
 	var err error
 	var handle netlinkshim.Interface
-	for r := 0; r < bootstrapMaxRetries; r++ {
+	for range bootstrapMaxRetries {
 		if handle == nil {
 			if handle, err = getNetlinkHandle(); err != nil {
 				<-expBackoffMgr.Backoff().C()
@@ -585,8 +585,8 @@ func removeWireguardPublicKey(
 
 	// Make a few attempts to remove the public key from the datastore.
 	var err error
-	var thisNode *apiv3.Node
-	for r := 0; r < bootstrapMaxRetries; r++ {
+	var thisNode *internalapi.Node
+	for range bootstrapMaxRetries {
 		cxt, cancel := context.WithTimeout(context.Background(), bootstrapK8sClientTimeout)
 		thisNode, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()

@@ -107,7 +107,7 @@ func GetTimeouts(config map[string]string) Timeouts {
 
 	fields := make(log.Fields)
 
-	tt := reflect.TypeOf(t)
+	tt := reflect.TypeFor[Timeouts]()
 
 	for i := 0; i < v.NumField(); i++ {
 		fields[tt.Field(i).Name] = v.Field(i).Interface()

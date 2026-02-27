@@ -15,13 +15,13 @@
 package calc
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
-	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -105,8 +105,8 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 		// Add host update.
 		abp.OnUpdate(api.Update{
 			KVPair: model.KVPair{
-				Key: model.ResourceKey{Kind: libv3.KindNode, Name: hostname},
-				Value: &libv3.Node{
+				Key: model.ResourceKey{Kind: internalapi.KindNode, Name: hostname},
+				Value: &internalapi.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   hostname,
 						Labels: map[string]string{"host": "my-host"},
@@ -293,8 +293,8 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 		It("Should set correct bgp peer data on node labels update", func() {
 			abp.OnUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.ResourceKey{Kind: libv3.KindNode, Name: hostname},
-					Value: &libv3.Node{
+					Key: model.ResourceKey{Kind: internalapi.KindNode, Name: hostname},
+					Value: &internalapi.Node{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:   hostname,
 							Labels: map[string]string{"host": "other-host"},

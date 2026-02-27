@@ -67,7 +67,7 @@ func benchmarkSet(b *testing.B, factory func() set.Set[int], items int) {
 		var s set.Set[int]
 		for i := 0; i < b.N; i++ {
 			s = factory()
-			for j := 0; j < items; j++ {
+			for j := range items {
 				s.Add(j)
 			}
 		}
@@ -76,7 +76,7 @@ func benchmarkSet(b *testing.B, factory func() set.Set[int], items int) {
 	b.Run("Contains", func(b *testing.B) {
 		b.ReportAllocs()
 		s := factory()
-		for j := 0; j < items; j++ {
+		for j := range items {
 			s.Add(j)
 		}
 		var x bool
