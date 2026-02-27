@@ -715,7 +715,7 @@ fix-changed go-fmt-changed goimports-changed: hack/bin/parent-branch
 	if [ "$(SKIP_FIX_CHANGED)" != "true" ]; then \
 	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
 	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$(shell hack/bin/parent-branch) \
+	                -e parent_branch=$(shell $(REPO_DIR)/hack/bin/parent-branch) \
 	                $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh; \
 	fi
 
