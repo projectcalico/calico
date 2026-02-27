@@ -299,6 +299,11 @@ func mergeBaseStrategy(remote string) (string, error) {
 			bestCount = count
 			best = ref
 		}
+
+	}
+	if best == "" {
+		log.Errorf("No suitable remote branches found for %s", remote)
+		return "", fmt.Errorf("no suitable remote branches found for %s", remote)
 	}
 
 	log.Debugf("Found best result %s with a difference of %d", best, bestCount)
