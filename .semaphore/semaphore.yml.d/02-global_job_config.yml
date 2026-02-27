@@ -9,6 +9,8 @@ global_job_config:
       value: calico-transient-build-artifacts-europe-west3
     - name: BUILDKIT_PROGRESS
       value: plain
+    - name: SEMAPHORE_AGENT_UPLOAD_JOB_LOGS
+      value: when-trimmed
   prologue:
     commands:
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
