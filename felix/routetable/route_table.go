@@ -466,7 +466,7 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 	oldTargetsToCleanUp := r.ifaceToRoutes[routeClass][ifaceName]
 	newTargets := map[RouteKey]Target{}
 	for _, t := range targets {
-		routeKey := r.routeKeyForTarget(&t)
+		routeKey := r.normalizeRouteKey(t.RouteKey)
 		delete(oldTargetsToCleanUp, routeKey)
 		newTargets[routeKey] = t
 	}
@@ -514,7 +514,7 @@ func (r *RouteTable) RouteUpdate(routeClass RouteClass, ifaceName string, target
 		routesByCIDR = map[RouteKey]Target{}
 		r.ifaceToRoutes[routeClass][ifaceName] = routesByCIDR
 	}
-	routeKey := r.routeKeyForTarget(&target)
+	routeKey := r.normalizeRouteKey(target.RouteKey)
 	routesByCIDR[routeKey] = target
 	r.addOwningIface(routeClass, ifaceName, routeKey)
 	r.updatePermanentARP(ifaceName, routeKey.CIDR.Addr(), target.DestMAC)
@@ -529,6 +529,7 @@ func (r *RouteTable) RouteRemove(routeClass RouteClass, ifaceName string, routeK
 		return
 	}
 
+	routeKey = r.normalizeRouteKey(routeKey)
 	_, exists := r.ifaceToRoutes[routeClass][ifaceName][routeKey]
 	if !exists {
 		return
@@ -1123,7 +1124,7 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 	// Look for routes that the tracker says are there but are actually missing.
 	for _, ifaceToRoutes := range r.ifaceToRoutes {
 		for _, target := range ifaceToRoutes[ifaceName] {
-			routeKey := r.routeKeyForTarget(&target)
+			routeKey := r.normalizeRouteKey(target.RouteKey)
 			if seenRoutes.Contains(routeKey) {
 				// Route still there; handled above.
 				continue
@@ -1241,12 +1242,10 @@ func (r *RouteTable) refreshIfaceStateBestEffort(nl netlinkshim.Interface, iface
 	return nil
 }
 
-func (r *RouteTable) routeKeyForTarget(target *Target) RouteKey {
-	key := target.RouteKey
-
-	// If IPv6 and Priority is 0, set it to 1024. The kernel treats priority 0 as a sigil
-	// meaning "use the default value", which is 1024 for IPv6. We need to set
-	// an explicit priority so that routes round trip cleanly.
+// normalizeRouteKey normalizes a RouteKey for the current IP version. For IPv6,
+// the kernel treats priority 0 as a sigil meaning "use the default value",
+// which is 1024. We normalize here so that routes round trip cleanly.
+func (r *RouteTable) normalizeRouteKey(key RouteKey) RouteKey {
 	if r.ipVersion == 6 && key.Priority == 0 {
 		key.Priority = 1024
 	}
