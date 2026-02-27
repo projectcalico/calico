@@ -285,43 +285,16 @@ func (m Map) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m.RecomputeOriginalMap())
 }
 
-// UnmarshalJSON implements the json.Unmarshaler interface.
+// UnmarshalJSON implements the json.Unmarshaler interface.  Unmarshalling
+// goes through Make so that keys are registered in the global key table
+// and the cache is consulted.  This is important because UnmarshalJSON is
+// the main entry point when receiving data from Typha.
 func (m *Map) UnmarshalJSON(data []byte) error {
-	var hm handleMap
-	if err := json.Unmarshal(data, &hm); err != nil {
+	var raw map[string]string
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	if hm == nil {
-		*m = Nil
-		return nil
-	}
-	if len(hm) == 0 {
-		*m = Empty
-		return nil
-	}
-	// Try compact representation using already-known keys.
-	snap := globalKeyTable.currentSnap()
-	var bf uint64
-	allKnown := true
-	for k := range hm {
-		if pos, found := snap.byHandle[k]; found {
-			bf |= 1 << pos
-		} else {
-			allKnown = false
-			break
-		}
-	}
-	if allKnown {
-		vals := make([]uniquestr.Handle, bits.OnesCount64(bf))
-		for k, v := range hm {
-			pos := snap.byHandle[k]
-			arrayIdx := bits.OnesCount64(bf & ((1 << pos) - 1))
-			vals[arrayIdx] = v
-		}
-		*m = Map{ptr: allocCompact(bf|topBit, vals)}
-		return nil
-	}
-	*m = Map{ptr: unsafe.Pointer(&fallbackMap{m: hm})}
+	*m = Make(raw)
 	return nil
 }
 
