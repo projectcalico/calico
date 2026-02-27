@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -149,14 +149,14 @@ type RouteTable struct {
 	// ifaceToRoutes and cidrToIfaces are our inputs, updated
 	// eagerly when something in the manager layer tells us to change the
 	// routes.
-	ifaceToRoutes map[RouteClass]map[string]map[kernelRouteKey]Target
-	cidrToIfaces  map[RouteClass]map[kernelRouteKey]set.Set[string]
+	ifaceToRoutes map[RouteClass]map[string]map[RouteKey]Target
+	cidrToIfaces  map[RouteClass]map[RouteKey]set.Set[string]
 
 	// kernelRoutes tracks the relationship between the route that we want
 	// to program for a given CIDR (i.e. the route selected after conflict
 	// resolution if there are multiple routes) and the route that's actually
 	// in the kernel.
-	kernelRoutes  *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
+	kernelRoutes  *deltatracker.DeltaTracker[RouteKey, kernelRoute]
 	permanentARPs map[string]map[ip.Addr]net.HardwareAddr
 
 	ifaceNameToIndex      map[string]int
@@ -307,11 +307,11 @@ func New(
 		ifacesToARP:      set.New[string](),
 		ownershipPolicy:  ownershipPolicy,
 
-		ifaceToRoutes: map[RouteClass]map[string]map[kernelRouteKey]Target{},
-		cidrToIfaces:  map[RouteClass]map[kernelRouteKey]set.Set[string]{},
+		ifaceToRoutes: map[RouteClass]map[string]map[RouteKey]Target{},
+		cidrToIfaces:  map[RouteClass]map[RouteKey]set.Set[string]{},
 
 		kernelRoutes: deltatracker.New(
-			deltatracker.WithValuesEqualFn[kernelRouteKey](func(a, b kernelRoute) bool {
+			deltatracker.WithValuesEqualFn[RouteKey](func(a, b kernelRoute) bool {
 				return a.Equals(b)
 			}),
 		),
@@ -459,16 +459,16 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 	r.checkTargets(ifaceName, targets...)
 
 	if r.ifaceToRoutes[routeClass] == nil {
-		r.ifaceToRoutes[routeClass] = map[string]map[kernelRouteKey]Target{}
+		r.ifaceToRoutes[routeClass] = map[string]map[RouteKey]Target{}
 	}
 
 	// Figure out what has changed.
 	oldTargetsToCleanUp := r.ifaceToRoutes[routeClass][ifaceName]
-	newTargets := map[kernelRouteKey]Target{}
+	newTargets := map[RouteKey]Target{}
 	for _, t := range targets {
-		kernKey := r.routeKeyForTarget(&t)
-		delete(oldTargetsToCleanUp, kernKey)
-		newTargets[kernKey] = t
+		routeKey := r.routeKeyForTarget(&t)
+		delete(oldTargetsToCleanUp, routeKey)
+		newTargets[routeKey] = t
 	}
 
 	// Record the new desired state.
@@ -480,18 +480,18 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 	}
 
 	// Clean up the old CIDRs.
-	for kernKey := range oldTargetsToCleanUp {
-		r.logCxt.WithField("kernKey", kernKey).Debug("Cleaning up old route.")
+	for routeKey := range oldTargetsToCleanUp {
+		r.logCxt.WithField("routeKey", routeKey).Debug("Cleaning up old route.")
 		// removeOwningIface() calls recalculateDesiredKernelRoute.
-		r.removeOwningIface(routeClass, ifaceName, kernKey)
+		r.removeOwningIface(routeClass, ifaceName, routeKey)
 	}
 
 	// Clean out the pending ARP list, then recalculate it below.
 	delete(r.permanentARPs, ifaceName)
-	for kernKey, target := range newTargets {
+	for routeKey, target := range newTargets {
 		// addOwningIface() calls recalculateDesiredKernelRoute.
-		r.addOwningIface(routeClass, ifaceName, kernKey)
-		r.updatePermanentARP(ifaceName, kernKey.CIDR.Addr(), target.DestMAC)
+		r.addOwningIface(routeClass, ifaceName, routeKey)
+		r.updatePermanentARP(ifaceName, routeKey.CIDR.Addr(), target.DestMAC)
 	}
 }
 
@@ -506,40 +506,39 @@ func (r *RouteTable) RouteUpdate(routeClass RouteClass, ifaceName string, target
 	r.checkTargets(ifaceName, target)
 
 	if r.ifaceToRoutes[routeClass] == nil {
-		r.ifaceToRoutes[routeClass] = map[string]map[kernelRouteKey]Target{}
+		r.ifaceToRoutes[routeClass] = map[string]map[RouteKey]Target{}
 	}
 
 	routesByCIDR := r.ifaceToRoutes[routeClass][ifaceName]
 	if routesByCIDR == nil {
-		routesByCIDR = map[kernelRouteKey]Target{}
+		routesByCIDR = map[RouteKey]Target{}
 		r.ifaceToRoutes[routeClass][ifaceName] = routesByCIDR
 	}
-	kernKey := r.routeKeyForTarget(&target)
-	routesByCIDR[kernKey] = target
-	r.addOwningIface(routeClass, ifaceName, kernKey)
-	r.updatePermanentARP(ifaceName, kernKey.CIDR.Addr(), target.DestMAC)
+	routeKey := r.routeKeyForTarget(&target)
+	routesByCIDR[routeKey] = target
+	r.addOwningIface(routeClass, ifaceName, routeKey)
+	r.updatePermanentARP(ifaceName, routeKey.CIDR.Addr(), target.DestMAC)
 }
 
 // RouteRemove removes the route with the specified CIDR. These deltas will
 // be applied to any routes set using SetRoute.
-func (r *RouteTable) RouteRemove(routeClass RouteClass, ifaceName string, target Target) {
+func (r *RouteTable) RouteRemove(routeClass RouteClass, ifaceName string, routeKey RouteKey) {
 	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
 		r.logCxt.WithField("ifaceName", ifaceName).Error(
 			"Cannot set route for interface not managed by this routetable.")
 		return
 	}
 
-	kernKey := r.routeKeyForTarget(&target)
-	target, exists := r.ifaceToRoutes[routeClass][ifaceName][kernKey]
+	_, exists := r.ifaceToRoutes[routeClass][ifaceName][routeKey]
 	if !exists {
 		return
 	}
-	delete(r.ifaceToRoutes[routeClass][ifaceName], kernKey)
+	delete(r.ifaceToRoutes[routeClass][ifaceName], routeKey)
 	if len(r.ifaceToRoutes[routeClass][ifaceName]) == 0 {
 		delete(r.ifaceToRoutes[routeClass], ifaceName)
 	}
-	r.removeOwningIface(routeClass, ifaceName, kernKey)
-	r.removePermanentARP(ifaceName, kernKey.CIDR.Addr())
+	r.removeOwningIface(routeClass, ifaceName, routeKey)
+	r.removePermanentARP(ifaceName, routeKey.CIDR.Addr())
 }
 
 func (r *RouteTable) updatePermanentARP(ifaceName string, addr ip.Addr, mac net.HardwareAddr) {
@@ -569,42 +568,42 @@ func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
 	}
 }
 
-func (r *RouteTable) addOwningIface(class RouteClass, ifaceName string, kernKey kernelRouteKey) {
+func (r *RouteTable) addOwningIface(class RouteClass, ifaceName string, routeKey RouteKey) {
 	if r.cidrToIfaces[class] == nil {
-		r.cidrToIfaces[class] = map[kernelRouteKey]set.Set[string]{}
+		r.cidrToIfaces[class] = map[RouteKey]set.Set[string]{}
 	}
-	ifaceNames := r.cidrToIfaces[class][kernKey]
+	ifaceNames := r.cidrToIfaces[class][routeKey]
 	if ifaceNames == nil {
 		ifaceNames = set.New[string]()
-		r.cidrToIfaces[class][kernKey] = ifaceNames
+		r.cidrToIfaces[class][routeKey] = ifaceNames
 	}
 	ifaceNames.Add(ifaceName)
-	r.recalculateDesiredKernelRoute(kernKey)
+	r.recalculateDesiredKernelRoute(routeKey)
 }
 
-func (r *RouteTable) removeOwningIface(class RouteClass, ifaceName string, kernKey kernelRouteKey) {
-	ifaceNames, ok := r.cidrToIfaces[class][kernKey]
+func (r *RouteTable) removeOwningIface(class RouteClass, ifaceName string, routeKey RouteKey) {
+	ifaceNames, ok := r.cidrToIfaces[class][routeKey]
 	if !ok {
 		return
 	}
 	ifaceNames.Discard(ifaceName)
 	if ifaceNames.Len() == 0 {
-		delete(r.cidrToIfaces[class], kernKey)
+		delete(r.cidrToIfaces[class], routeKey)
 	}
-	r.recalculateDesiredKernelRoute(kernKey)
+	r.recalculateDesiredKernelRoute(routeKey)
 }
 
 // recheckRouteOwnershipsByIface reruns conflict resolution for all
 // the interface's routes.
 func (r *RouteTable) recheckRouteOwnershipsByIface(name string) {
-	seen := set.New[kernelRouteKey]()
+	seen := set.New[RouteKey]()
 	for _, ifaceToRoutes := range r.ifaceToRoutes {
-		for kernKey := range ifaceToRoutes[name] {
-			if seen.Contains(kernKey) {
+		for routeKey := range ifaceToRoutes[name] {
+			if seen.Contains(routeKey) {
 				continue
 			}
-			r.recalculateDesiredKernelRoute(kernKey)
-			seen.Add(kernKey)
+			r.recalculateDesiredKernelRoute(routeKey)
+			seen.Add(routeKey)
 		}
 	}
 }
@@ -632,9 +631,9 @@ func (r *RouteTable) ifaceNameForIndex(ifindex int) (string, bool) {
 	return name, ok
 }
 
-func (r *RouteTable) recalculateDesiredKernelRoute(kernKey kernelRouteKey) {
+func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 	defer r.updateGauges()
-	oldDesiredRoute, _ := r.kernelRoutes.Desired().Get(kernKey)
+	oldDesiredRoute, _ := r.kernelRoutes.Desired().Get(routeKey)
 
 	var bestTarget Target
 	bestRouteClass := RouteClassMax
@@ -643,7 +642,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(kernKey kernelRouteKey) {
 	var candidates []string
 
 	for routeClass, cidrToIface := range r.cidrToIfaces {
-		ifaces := cidrToIface[kernKey]
+		ifaces := cidrToIface[routeKey]
 		if ifaces == nil {
 			continue
 		}
@@ -661,11 +660,11 @@ func (r *RouteTable) recalculateDesiredKernelRoute(kernKey kernelRouteKey) {
 			}
 
 			someUp := false
-			target, ok := r.ifaceToRoutes[routeClass][ifaceName][kernKey]
+			target, ok := r.ifaceToRoutes[routeClass][ifaceName][routeKey]
 			if !ok {
 				log.WithFields(log.Fields{
 					"ifaceName": ifaceName,
-					"kernKey":   kernKey,
+					"routeKey":  routeKey,
 				}).Warn("Bug? No route for iface/CIDR (recalculateDesiredKernelRoute called too early?).")
 				continue
 			}
@@ -711,18 +710,18 @@ func (r *RouteTable) recalculateDesiredKernelRoute(kernKey kernelRouteKey) {
 	if bestIfaceIdx == -1 {
 		if len(candidates) == 0 {
 			r.logCxt.WithFields(log.Fields{
-				"kernKey": kernKey,
+				"routeKey": routeKey,
 			}).Debug("CIDR no longer has any associated routes.")
 		} else {
 			r.logCxt.WithFields(log.Fields{
-				"kernKey":    kernKey,
+				"routeKey":   routeKey,
 				"candidates": candidates,
 			}).Debug("No valid route for this CIDR (all candidate routes missing iface index).")
 		}
 
 		// Clean up the old entries.
-		r.kernelRoutes.Desired().Delete(kernKey)
-		r.conntrackTracker.RemoveCIDROwner(kernKey.CIDR)
+		r.kernelRoutes.Desired().Delete(routeKey)
+		r.conntrackTracker.RemoveCIDROwner(routeKey.CIDR)
 		return
 	}
 
@@ -761,21 +760,21 @@ func (r *RouteTable) recalculateDesiredKernelRoute(kernKey kernelRouteKey) {
 	}
 	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
 		r.logCxt.WithFields(log.Fields{
-			"dst":      kernKey,
+			"dst":      routeKey,
 			"oldRoute": oldDesiredRoute,
 			"newRoute": kernRoute,
 			"iface":    bestIface,
 		}).Debug("Preferred kernel route for this dest has changed.")
 	} else if log.IsLevelEnabled(log.DebugLevel) {
 		r.logCxt.WithFields(log.Fields{
-			"dst":   kernKey,
+			"dst":   routeKey,
 			"route": kernRoute,
 			"iface": bestIface,
 		}).Debug("Preferred kernel route for this dest still the same.")
 	}
 
-	r.kernelRoutes.Desired().Set(kernKey, kernRoute)
-	r.conntrackTracker.UpdateCIDROwner(kernKey.CIDR, bestIfaceIdx, bestRouteClass)
+	r.kernelRoutes.Desired().Set(routeKey, kernRoute)
+	r.conntrackTracker.UpdateCIDROwner(routeKey.CIDR, bestIfaceIdx, bestRouteClass)
 }
 
 func (r *RouteTable) QueueResync() {
@@ -801,16 +800,15 @@ func (r *RouteTable) ReadRoutesFromKernel(ifaceName string) ([]Target, error) {
 	}
 
 	var allTargets []Target
-	r.kernelRoutes.Dataplane().Iter(func(key kernelRouteKey, kernRoute kernelRoute) {
+	r.kernelRoutes.Dataplane().Iter(func(key RouteKey, kernRoute kernelRoute) {
 		if kernRoute.Ifindex != ifaceIndex {
 			return
 		}
 
 		target := Target{
-			CIDR:     key.CIDR,
+			RouteKey: key,
 			Src:      kernRoute.Src,
 			Protocol: kernRoute.Protocol,
-			Priority: key.Priority,
 		}
 
 		switch kernRoute.Type {
@@ -955,7 +953,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 	routeFilterFlags := netlink.RT_FILTER_TABLE
 
 	var err error
-	seenKeys := set.NewSize[kernelRouteKey](r.kernelRoutes.Dataplane().Len())
+	seenKeys := set.NewSize[RouteKey](r.kernelRoutes.Dataplane().Len())
 	for range routeListFilterAttempts {
 		// Using the Iter version here saves allocating a large slice of netlink.Route,
 		// which we immediately discard.
@@ -971,11 +969,11 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 				return true
 			}
 
-			kernKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute.Equals(kernRoute) {
-				r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
+			routeKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || oldRoute.Equals(kernRoute) {
+				r.kernelRoutes.Dataplane().Set(routeKey, kernRoute)
 			}
-			seenKeys.Add(kernKey)
+			seenKeys.Add(routeKey)
 			r.livenessCallback()
 			return true
 		})
@@ -998,10 +996,10 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 		return fmt.Errorf("failed to list all routes for resync: %w", err)
 	}
 
-	r.kernelRoutes.Dataplane().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) {
-		if !seenKeys.Contains(kernKey) {
-			r.kernelRoutes.Dataplane().Delete(kernKey)
-			r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, kernRoute.Ifindex)
+	r.kernelRoutes.Dataplane().Iter(func(routeKey RouteKey, kernRoute kernelRoute) {
+		if !seenKeys.Contains(routeKey) {
+			r.kernelRoutes.Dataplane().Delete(routeKey)
+			r.conntrackTracker.OnDataplaneRouteDeleted(routeKey.CIDR, kernRoute.Ifindex)
 		}
 		r.livenessCallback()
 	})
@@ -1066,7 +1064,7 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 	}
 	routeFilterFlags := netlink.RT_FILTER_OIF | netlink.RT_FILTER_TABLE
 
-	seenRoutes := set.New[kernelRouteKey]()
+	seenRoutes := set.New[RouteKey]()
 	for range routeListFilterAttempts {
 		// Using the Iter version here saves allocating a large slice of netlink.Route,
 		// which we immediately discard.
@@ -1081,11 +1079,11 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 				return true
 			}
 
-			kernKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute.Equals(kernRoute) {
-				r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
+			routeKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || oldRoute.Equals(kernRoute) {
+				r.kernelRoutes.Dataplane().Set(routeKey, kernRoute)
 			}
-			seenRoutes.Add(kernKey)
+			seenRoutes.Add(routeKey)
 			return true
 		})
 		if errors.Is(err, unix.EINTR) {
@@ -1125,18 +1123,18 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 	// Look for routes that the tracker says are there but are actually missing.
 	for _, ifaceToRoutes := range r.ifaceToRoutes {
 		for _, target := range ifaceToRoutes[ifaceName] {
-			kernKey := r.routeKeyForTarget(&target)
-			if seenRoutes.Contains(kernKey) {
+			routeKey := r.routeKeyForTarget(&target)
+			if seenRoutes.Contains(routeKey) {
 				// Route still there; handled above.
 				continue
 			}
-			desKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
+			desKernRoute, ok := r.kernelRoutes.Desired().Get(routeKey)
 			if !ok || desKernRoute.Ifindex != ifIndex {
 				// The interface we're syncing doesn't own this route
 				// so the fact that it's missing is expected.
 				continue
 			}
-			r.kernelRoutes.Dataplane().Delete(kernKey)
+			r.kernelRoutes.Dataplane().Delete(routeKey)
 		}
 	}
 	partialResyncTimeSummary.Observe(r.time.Since(startTime).Seconds())
@@ -1243,11 +1241,9 @@ func (r *RouteTable) refreshIfaceStateBestEffort(nl netlinkshim.Interface, iface
 	return nil
 }
 
-func (r *RouteTable) routeKeyForTarget(target *Target) kernelRouteKey {
-	key := kernelRouteKey{
-		CIDR:     target.CIDR,
-		Priority: target.Priority,
-	}
+func (r *RouteTable) routeKeyForTarget(target *Target) RouteKey {
+	key := target.RouteKey
+
 	// If IPv6 and Priority is 0, set it to 1024. The kernel treats priority 0 as a sigil
 	// meaning "use the default value", which is 1024 for IPv6. We need to set
 	// an explicit priority so that routes round trip cleanly.
@@ -1290,7 +1286,7 @@ func (r *RouteTable) routeIsOurs(route *netlink.Route) bool {
 	return true
 }
 
-func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute) {
+func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (routeKey RouteKey, kernRoute kernelRoute) {
 	// Defensive; recent versions of netlink always return a CIDR, but just
 	// in case that gets regressed...
 	cidr := ip.CIDRFromIPNet(route.Dst)
@@ -1302,7 +1298,7 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey ke
 		}
 	}
 
-	kernKey = kernelRouteKey{
+	routeKey = RouteKey{
 		CIDR:     cidr,
 		Priority: route.Priority,
 		TOS:      route.Tos,
@@ -1336,7 +1332,7 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey ke
 	if log.IsLevelEnabled(log.DebugLevel) {
 		r.logCxt.WithFields(log.Fields{
 			"kernRoute": kernRoute,
-			"kernKey":   kernKey,
+			"routeKey":  routeKey,
 		}).Debug("Loaded route from kernel.")
 	}
 	return
@@ -1376,45 +1372,45 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	}
 
 	// First clean up any old routes.
-	deletionErrs := map[kernelRouteKey]error{}
-	r.kernelRoutes.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
+	deletionErrs := map[RouteKey]error{}
+	r.kernelRoutes.PendingDeletions().Iter(func(routeKey RouteKey) deltatracker.IterAction {
 		r.livenessCallback()
-		kernRoute, _ := r.kernelRoutes.PendingDeletions().Get(kernKey)
+		kernRoute, _ := r.kernelRoutes.PendingDeletions().Get(routeKey)
 		if r.ifaceInGracePeriod(kernRoute.Ifindex) {
 			// Don't remove unexpected routes from interfaces created recently.
 			r.logCxt.WithFields(log.Fields{
 				"route": kernRoute,
-				"dest":  kernKey,
+				"dest":  routeKey,
 			}).Debug("Found unexpected route; ignoring due to grace period.")
 			return deltatracker.IterActionNoOp
 		}
 
-		err := r.deleteRoute(nl, kernKey)
+		err := r.deleteRoute(nl, routeKey)
 		if err != nil {
-			deletionErrs[kernKey] = err
+			deletionErrs[routeKey] = err
 			return deltatracker.IterActionNoOp
 		}
-		r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, kernRoute.Ifindex)
+		r.conntrackTracker.OnDataplaneRouteDeleted(routeKey.CIDR, kernRoute.Ifindex)
 
 		// Route is gone, clean up the dataplane side of the tracker.
-		r.logCxt.WithField("route", kernKey).Debug("Deleted route.")
+		r.logCxt.WithField("route", routeKey).Debug("Deleted route.")
 		return deltatracker.IterActionUpdateDataplane
 	})
 
 	// Now do a first pass of the routes that we want to create/update and
 	// trigger any necessary conntrack cleanups for moved routes.
-	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) deltatracker.IterAction {
+	r.kernelRoutes.PendingUpdates().Iter(func(routeKey RouteKey, kernRoute kernelRoute) deltatracker.IterAction {
 		r.livenessCallback()
-		cidr := kernKey.CIDR
-		dataplaneRoute, dataplaneExists := r.kernelRoutes.Dataplane().Get(kernKey)
+		cidr := routeKey.CIDR
+		dataplaneRoute, dataplaneExists := r.kernelRoutes.Dataplane().Get(routeKey)
 		if dataplaneExists && r.conntrackTracker.CIDRNeedsEarlyCleanup(cidr, dataplaneRoute.Ifindex) {
-			err := r.deleteRoute(nl, kernKey)
+			err := r.deleteRoute(nl, routeKey)
 			if err != nil {
-				deletionErrs[kernKey] = err
+				deletionErrs[routeKey] = err
 				return deltatracker.IterActionNoOp
 			}
 			// This will queue the route for conntrack cleanup.
-			r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, dataplaneRoute.Ifindex)
+			r.conntrackTracker.OnDataplaneRouteDeleted(routeKey.CIDR, dataplaneRoute.Ifindex)
 		}
 		return deltatracker.IterActionNoOp
 	})
@@ -1423,25 +1419,25 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	// time.
 	r.conntrackTracker.StartConntrackCleanupAndReset()
 
-	updateErrs := map[kernelRouteKey]error{}
-	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kRoute kernelRoute) deltatracker.IterAction {
+	updateErrs := map[RouteKey]error{}
+	r.kernelRoutes.PendingUpdates().Iter(func(routeKey RouteKey, kRoute kernelRoute) deltatracker.IterAction {
 		r.livenessCallback()
-		dst := kernKey.CIDR.ToIPNet()
+		dst := routeKey.CIDR.ToIPNet()
 		flags := 0
 		if kRoute.OnLink {
 			flags = unix.RTNH_F_ONLINK
 		}
 
 		// In case we're moving a route, wait for the cleanup to finish.
-		r.conntrackTracker.WaitForPendingDeletion(kernKey.CIDR)
+		r.conntrackTracker.WaitForPendingDeletion(routeKey.CIDR)
 
 		nlRoute := &netlink.Route{
 			Family: r.netlinkFamily,
 
 			Table:    r.tableIndex,
 			Dst:      &dst,
-			Tos:      kernKey.TOS,
-			Priority: int(kernKey.Priority),
+			Tos:      routeKey.TOS,
+			Priority: int(routeKey.Priority),
 
 			Type:      kRoute.Type,
 			Scope:     kRoute.Scope,
@@ -1461,7 +1457,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 		}
 		r.logCxt.WithFields(log.Fields{
 			"nlRoute":  nlRoute,
-			"ourKey":   kernKey,
+			"ourKey":   routeKey,
 			"ourRoute": kRoute,
 		}).Debug("Replacing route")
 		err := nl.RouteReplace(nlRoute)
@@ -1487,7 +1483,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 				err = fmt.Errorf("%v(%s): %w", kRoute, name, err)
 			}
 
-			updateErrs[kernKey] = err
+			updateErrs[routeKey] = err
 			return deltatracker.IterActionNoOp
 		}
 
@@ -1610,19 +1606,19 @@ func (r *RouteTable) ifaceInGracePeriod(ifindex int) bool {
 	return r.time.Since(graceInf.FirstSeen) < r.routeCleanupGracePeriod
 }
 
-func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKey) error {
+func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, routeKey RouteKey) error {
 	// Template route for deletion.  The family, table, TOS, Priority uniquely
 	// identify the route, but we also need to set some fields to their "wildcard"
 	// values (found via code reading the kernel and running "ip route del" under
 	// strace).
-	dst := kernKey.CIDR.ToIPNet()
+	dst := routeKey.CIDR.ToIPNet()
 	nlRoute := &netlink.Route{
 		Family: r.netlinkFamily,
 
 		Table:    r.tableIndex,
 		Dst:      &dst,
-		Tos:      kernKey.TOS,
-		Priority: kernKey.Priority,
+		Tos:      routeKey.TOS,
+		Priority: routeKey.Priority,
 
 		Protocol: unix.RTPROT_UNSPEC,    // Wildcard (but also zero value).
 		Scope:    unix.RT_SCOPE_NOWHERE, // Wildcard.  Note: non-zero value!
@@ -1630,7 +1626,7 @@ func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKe
 	}
 	err := nl.RouteDel(nlRoute)
 	if errors.Is(err, unix.ESRCH) {
-		r.logCxt.WithField("route", kernKey).Debug("Tried to delete route but it wasn't found.")
+		r.logCxt.WithField("route", routeKey).Debug("Tried to delete route but it wasn't found.")
 		err = nil // Already gone (we hope).
 	}
 	return err
@@ -1766,26 +1762,6 @@ func (r *RouteTable) checkTargets(ifaceName string, targets ...Target) {
 			}
 		}
 	}
-}
-
-// kernelRouteKey represents the kernel's FIB key.  The kernel allows routes
-// to coexist as long as they have different keys.
-type kernelRouteKey struct {
-	// Destination CIDR; route matches traffic to this destination.
-	CIDR ip.CIDR
-	// TOS is the Type-of-Service field.  For example, one app may mark its
-	// packets as "high importance" and that will take a different route to
-	// another app.
-	//
-	// Kernel uses the TOS=0 route if there isn't a more precise match.
-	TOS int
-	// Priority is the routing metric / distance.  Given two routes with the
-	// same CIDR, the kernel prefers the route with the _lower_ priority.
-	Priority int
-}
-
-func (k kernelRouteKey) String() string {
-	return fmt.Sprintf("%s(tos=%x metric=%d)", k.CIDR.String(), k.TOS, k.Priority)
 }
 
 // kernelRoute is our low-level representation of the parts of a route that

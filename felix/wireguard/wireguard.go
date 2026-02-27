@@ -1096,8 +1096,8 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 		// not programmed.
 		for cidr := range update.cidrsDeleted.All() {
 			w.logCtx.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
-			w.routetable.RouteRemove(w.interfaceName, routetable.Target{CIDR: cidr})
-			w.routetable.RouteRemove(routetable.InterfaceNone, routetable.Target{CIDR: cidr})
+			w.routetable.RouteRemove(w.interfaceName, routetable.RouteKey{CIDR: cidr})
+			w.routetable.RouteRemove(routetable.InterfaceNone, routetable.RouteKey{CIDR: cidr})
 		}
 	}
 
@@ -1147,12 +1147,12 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 				// information to decide which route we need to remove - however we have also had bugs related to state
 				// tracking so deleting both is reasonable - routetable ignores the one that is not programmed.
 				updateLogCtx.Debug("Wireguard routing has changed - delete previous route")
-				w.routetable.RouteRemove(routetable.InterfaceNone, routetable.Target{CIDR: cidr})
-				w.routetable.RouteRemove(w.interfaceName, routetable.Target{CIDR: cidr})
+				w.routetable.RouteRemove(routetable.InterfaceNone, routetable.RouteKey{CIDR: cidr})
+				w.routetable.RouteRemove(w.interfaceName, routetable.RouteKey{CIDR: cidr})
 			}
 			w.routetable.RouteUpdate(ifaceName, routetable.Target{
-				Type: targetType,
-				CIDR: cidr,
+				RouteKey: routetable.RouteKey{CIDR: cidr},
+				Type:     targetType,
 			})
 		}
 		node.routingToWireguard = shouldRouteToWireguard

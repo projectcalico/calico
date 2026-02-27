@@ -30,7 +30,7 @@ type SyncerInterface interface {
 type Interface interface {
 	SyncerInterface
 	SetRoutes(routeClass RouteClass, ifaceName string, targets []Target)
-	RouteRemove(routeClass RouteClass, ifaceName string, target Target)
+	RouteRemove(routeClass RouteClass, ifaceName string, routeKey RouteKey)
 	RouteUpdate(routeClass RouteClass, ifaceName string, target Target)
 	Index() int
 	QueueResyncIface(ifaceName string)
@@ -67,8 +67,8 @@ func (cv *ClassView) SetRoutes(ifaceName string, targets []Target) {
 	cv.routeTable.SetRoutes(cv.class, ifaceName, targets)
 }
 
-func (cv *ClassView) RouteRemove(ifaceName string, target Target) {
-	cv.routeTable.RouteRemove(cv.class, ifaceName, target)
+func (cv *ClassView) RouteRemove(ifaceName string, routeKey RouteKey) {
+	cv.routeTable.RouteRemove(cv.class, ifaceName, routeKey)
 }
 
 func (cv *ClassView) RouteUpdate(ifaceName string, target Target) {

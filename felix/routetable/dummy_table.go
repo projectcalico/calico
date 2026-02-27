@@ -23,7 +23,7 @@ func (*DummyTable) Apply() error {
 func (*DummyTable) SetRoutes(routeClass RouteClass, ifaceName string, targets []Target) {
 }
 
-func (*DummyTable) RouteRemove(routeClass RouteClass, ifaceName string, target Target) {
+func (*DummyTable) RouteRemove(routeClass RouteClass, ifaceName string, routeKey RouteKey) {
 }
 
 func (*DummyTable) RouteUpdate(routeClass RouteClass, ifaceName string, target Target) {
