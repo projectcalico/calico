@@ -198,6 +198,11 @@ func (in *BGPConfigurationSpec) DeepCopyInto(out *BGPConfigurationSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.ProgramClusterRoutes != nil {
+		in, out := &in.ProgramClusterRoutes, &out.ProgramClusterRoutes
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 

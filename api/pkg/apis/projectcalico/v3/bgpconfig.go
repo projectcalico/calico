@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -146,6 +146,13 @@ type BGPConfigurationSpec struct {
 	// It is recommended to use a link-local address.
 	// +optional
 	LocalWorkloadPeeringIPV6 string `json:"localWorkloadPeeringIPV6,omitempty" validate:"omitempty,ipv6"`
+
+	// ProgramClusterRoutes specifies whether BIRD or Felix should program cluster routes. When Enabled, Calico uses BGP
+	// to distribute route information between nodes. When disabled, Calico learns the necessary routing information
+	// from its IPAM database and running workloads on the cluster. Felix always programs VXLAN routes. [Default: Enabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +optional
+	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.
