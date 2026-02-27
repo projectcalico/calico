@@ -174,30 +174,18 @@ func (m matchCriteria) NotConntrackState(stateNames string) generictables.MatchC
 }
 
 func (m matchCriteria) Protocol(name string) generictables.MatchCriteria {
-	if len(name) == 0 {
-		return append(m, fmt.Sprint("-p all"))
-	}
 	return append(m, fmt.Sprintf("-p %s", name))
 }
 
 func (m matchCriteria) NotProtocol(name string) generictables.MatchCriteria {
-	if len(name) == 0 {
-		return append(m, fmt.Sprint("-p all"))
-	}
 	return append(m, fmt.Sprintf("! -p %s", name))
 }
 
 func (m matchCriteria) ProtocolNum(num uint8) generictables.MatchCriteria {
-	if num == 0 {
-		return append(m, fmt.Sprint("-p all"))
-	}
 	return append(m, fmt.Sprintf("-p %d", num))
 }
 
 func (m matchCriteria) NotProtocolNum(num uint8) generictables.MatchCriteria {
-	if num == 0 {
-		return append(m, fmt.Sprint("-p all"))
-	}
 	return append(m, fmt.Sprintf("! -p %d", num))
 }
 
