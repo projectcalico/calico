@@ -529,16 +529,15 @@ func TestCompactEqualsOptimization(t *testing.T) {
 }
 
 func TestUnmarshalJSONProducesCompact(t *testing.T) {
-	// First, ensure the keys are registered by calling Make.
-	_ = Make(map[string]string{"jk1": "a", "jk2": "b"})
-
+	// UnmarshalJSON goes through Make, which registers keys.
+	// No pre-registration needed.
 	data := []byte(`{"jk1":"x","jk2":"y"}`)
 	var m Map
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
 	if !m.isCompact() {
-		t.Error("UnmarshalJSON should produce compact map when keys are known")
+		t.Error("UnmarshalJSON should produce compact map")
 	}
 	if !m.EquivalentTo(map[string]string{"jk1": "x", "jk2": "y"}) {
 		t.Errorf("wrong content: %v", m)

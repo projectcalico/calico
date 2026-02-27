@@ -273,15 +273,6 @@ func (m Map) String() string {
 
 // MarshalJSON implements the json.Marshaler interface.
 func (m Map) MarshalJSON() ([]byte, error) {
-	if m.ptr == nil {
-		return []byte("null"), nil
-	}
-	header := *(*uint64)(m.ptr)
-	if header&topBit == 0 {
-		// Fallback: marshal the Go map directly (handles implement
-		// TextMarshaler).
-		return json.Marshal((*fallbackMap)(m.ptr).m)
-	}
 	return json.Marshal(m.RecomputeOriginalMap())
 }
 
