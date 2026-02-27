@@ -56,8 +56,8 @@ if ! command -v fv-tests-guru &>/dev/null; then
         release_url="https://api.github.com/repos/${FV_TESTS_GURU_REPO}/releases/tags/${FV_TESTS_GURU_VERSION}"
     fi
 
-    # Get the download URL for the linux-amd64 binary.
-    download_url=$(curl -sf \
+    # Get the download URL and asset name for the linux-amd64 binary.
+    asset_info=$(curl -sf \
         -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
         -H "Accept: application/vnd.github.v3+json" \
         "$release_url" \
@@ -66,26 +66,61 @@ import sys, json
 data = json.load(sys.stdin)
 for asset in data.get('assets', []):
     if 'linux' in asset['name'] and 'amd64' in asset['name']:
-        print(asset['url'])
+        print(asset['url'] + ' ' + asset['name'])
         break
 ") || true
+
+    download_url="${asset_info%% *}"
+    asset_name="${asset_info#* }"
 
     if [ -z "$download_url" ]; then
         echo "analyze-test-failures: Failed to find fv-tests-guru release asset, skipping."
         exit 0
     fi
 
-    if curl -sfL \
+    tmp_download=$(mktemp /tmp/fv-tests-guru-download-XXXXXX)
+
+    if ! curl -sfL \
         -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
         -H "Accept: application/octet-stream" \
         "$download_url" \
-        -o "$FV_TESTS_GURU_BIN"; then
-        chmod +x "$FV_TESTS_GURU_BIN"
-        echo "analyze-test-failures: Downloaded fv-tests-guru to $FV_TESTS_GURU_BIN"
-    else
-        echo "analyze-test-failures: Failed to download fv-tests-guru binary, skipping."
+        -o "$tmp_download"; then
+        echo "analyze-test-failures: Failed to download fv-tests-guru asset, skipping."
+        rm -f "$tmp_download"
         exit 0
     fi
+
+    # Handle .tar.gz / .tgz archives vs bare binaries.
+    case "$asset_name" in
+        *.tar.gz|*.tgz)
+            echo "analyze-test-failures: Extracting fv-tests-guru from archive ${asset_name}..."
+            tmp_extract=$(mktemp -d /tmp/fv-tests-guru-extract-XXXXXX)
+            if tar -xzf "$tmp_download" -C "$tmp_extract"; then
+                # Find the binary inside the archive.
+                extracted_bin=$(find "$tmp_extract" -name 'fv-tests-guru' -type f | head -1)
+                if [ -n "$extracted_bin" ]; then
+                    mv "$extracted_bin" "$FV_TESTS_GURU_BIN"
+                    chmod +x "$FV_TESTS_GURU_BIN"
+                else
+                    echo "analyze-test-failures: fv-tests-guru binary not found inside archive, skipping."
+                    rm -rf "$tmp_extract" "$tmp_download"
+                    exit 0
+                fi
+            else
+                echo "analyze-test-failures: Failed to extract archive, skipping."
+                rm -rf "$tmp_extract" "$tmp_download"
+                exit 0
+            fi
+            rm -rf "$tmp_extract"
+            ;;
+        *)
+            mv "$tmp_download" "$FV_TESTS_GURU_BIN"
+            chmod +x "$FV_TESTS_GURU_BIN"
+            ;;
+    esac
+
+    rm -f "$tmp_download"
+    echo "analyze-test-failures: Installed fv-tests-guru to $FV_TESTS_GURU_BIN"
 fi
 
 INJECT_SCRIPT="${SCRIPT_DIR}/inject-analysis-into-xml.py"
