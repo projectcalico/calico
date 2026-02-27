@@ -106,6 +106,22 @@ def find_matching_analysis(test_name, analyses, used_keys):
     return None, None
 
 
+def format_summary(failure):
+    """Extract a concise one-line summary for the failure message attribute."""
+    diagnosis = failure.get('diagnosis', '')
+    if not diagnosis:
+        return None
+    # Use the first non-empty line as the summary.
+    for line in diagnosis.splitlines():
+        line = line.strip()
+        if line:
+            # Truncate to 200 chars to fit in the message attribute.
+            if len(line) > 200:
+                return "[AI] " + line[:197] + "..."
+            return "[AI] " + line
+    return None
+
+
 def format_analysis_block(failure):
     """Format a failure entry with a clear header/footer."""
     header = "=" * 60
@@ -173,8 +189,13 @@ def inject_into_xml(json_path, xml_paths):
 
             used_keys.add(matched_key)
 
-            # Prepend analysis to failure element text so it appears
-            # first in the Semaphore test results view.
+            # Set a concise AI summary as the failure message attribute
+            # (always visible in Semaphore UI, never truncated).
+            summary = format_summary(failure_entry)
+            if summary:
+                failure_elem.set('message', summary)
+
+            # Prepend full analysis to failure element text.
             analysis_block = format_analysis_block(failure_entry)
 
             existing = failure_elem.text or ''
