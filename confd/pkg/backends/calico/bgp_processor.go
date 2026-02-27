@@ -755,13 +755,13 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		logCtx.WithError(localSubnetErr).Debug("Failed to get local host subnet")
 	}
 
-	programClusterRoutes := true // Default value defined in the BGPConfig CRD.
+	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
 	if c.globalBGPConfig != nil && c.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
 		*c.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
 		programClusterRoutes = false
-		logCtx.Debugf("Programming cluster routes is disabled.")
+		logCtx.Debug("Programming cluster routes is disabled.")
 	} else {
-		logCtx.Debugf("Programming cluster routes is enabled.")
+		logCtx.Debug("Programming cluster routes is enabled.")
 	}
 
 	for key, value := range kvPairs {
