@@ -204,7 +204,7 @@ for batch in "${batches[@]}"; do
   (
     # Redirect tail's stdin from /dev/null to prevent waiting
     # forever on reads in semaphore CI
-    tail -F "$log_file" < /dev/null | \
+    tail -f --retry "$log_file" < /dev/null | \
       grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
       sed 's/.*/'"${prefix}"' &/' | \
       grep --perl --line-buffered -v '^\[batch=[^\]]+\]\s+$';
@@ -229,7 +229,11 @@ for i in "${!batches[@]}"; do
     summary+=( "Test batch $batch SUCCEEDED" )
   else
     batch_formatted="$(format_batch_for_log "$batch")"
-    summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact $artifacts_dir/test-$batch_formatted-FAILED.log" )
+    failed_summary_log="$artifacts_dir/test-$batch_formatted-FAILED.log"
+    if [ ! -f "$failed_summary_log" ] && [ -f "$artifacts_dir/test-$batch_formatted.log" ]; then
+      failed_summary_log="$artifacts_dir/test-$batch_formatted.log"
+    fi
+    summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact $failed_summary_log" )
     final_result=1
   fi
 done
