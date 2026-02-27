@@ -11,9 +11,23 @@ import (
 
 type Protocol uint8
 
+func ProtocolFromModelProto(p numorstring.Protocol) Protocol {
+	switch {
+	case strings.ToLower(p.StrVal) == "tcp":
+		return ProtocolTCP
+	case strings.ToLower(p.StrVal) == "udp":
+		return ProtocolUDP
+	case strings.ToLower(p.StrVal) == "sctp":
+		return ProtocolSCTP
+	}
+	logrus.WithField("protocol", p).Panic("Unknown protocol")
+	return ProtocolNone
+}
+
 func (p Protocol) MatchesModelProtocol(protocol numorstring.Protocol) bool {
 	if protocol.Type == numorstring.NumOrStringNum {
 		if protocol.NumVal == 0 {
+			// TODO (mazdak)
 			// Special case: named ports default to TCP if protocol isn't specified.
 			return p == ProtocolTCP
 		}
@@ -39,6 +53,8 @@ func (p Protocol) String() string {
 		return "udp"
 	case ProtocolSCTP:
 		return "sctp"
+	case ProtocolAny:
+		return "any"
 	case ProtocolNone:
 		return "none"
 	default:
@@ -51,4 +67,5 @@ const (
 	ProtocolTCP  Protocol = 6
 	ProtocolUDP  Protocol = 17
 	ProtocolSCTP Protocol = 132
+	ProtocolAny  Protocol = 255
 )
