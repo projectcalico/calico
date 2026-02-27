@@ -46,7 +46,9 @@ if ! command -v fv-tests-guru &>/dev/null; then
 
     FV_TESTS_GURU_VERSION="${FV_TESTS_GURU_VERSION:-latest}"
     FV_TESTS_GURU_REPO="tigera/fv-tests-guru"
-    FV_TESTS_GURU_BIN="/usr/local/bin/fv-tests-guru"
+    FV_TESTS_GURU_BIN="${HOME}/bin/fv-tests-guru"
+    mkdir -p "${HOME}/bin"
+    export PATH="${HOME}/bin:${PATH}"
 
     echo "analyze-test-failures: Downloading fv-tests-guru (${FV_TESTS_GURU_VERSION}) from ${FV_TESTS_GURU_REPO}..."
 
@@ -98,9 +100,8 @@ for asset in data.get('assets', []):
             if tar -xzf "$tmp_download" -C "$tmp_extract"; then
                 # Find the binary inside the archive.
                 extracted_bin=$(find "$tmp_extract" -name 'fv-tests-guru' -type f | head -1)
-                if [ -n "$extracted_bin" ]; then
-                    mv "$extracted_bin" "$FV_TESTS_GURU_BIN"
-                    chmod +x "$FV_TESTS_GURU_BIN"
+                if [ -n "$extracted_bin" ] && mv "$extracted_bin" "$FV_TESTS_GURU_BIN" && chmod +x "$FV_TESTS_GURU_BIN"; then
+                    : # success
                 else
                     echo "analyze-test-failures: fv-tests-guru binary not found inside archive, skipping."
                     rm -rf "$tmp_extract" "$tmp_download"
@@ -114,8 +115,11 @@ for asset in data.get('assets', []):
             rm -rf "$tmp_extract"
             ;;
         *)
-            mv "$tmp_download" "$FV_TESTS_GURU_BIN"
-            chmod +x "$FV_TESTS_GURU_BIN"
+            if ! mv "$tmp_download" "$FV_TESTS_GURU_BIN" || ! chmod +x "$FV_TESTS_GURU_BIN"; then
+                echo "analyze-test-failures: Failed to install fv-tests-guru binary, skipping."
+                rm -f "$tmp_download"
+                exit 0
+            fi
             ;;
     esac
 
