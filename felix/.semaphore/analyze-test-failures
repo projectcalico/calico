@@ -231,9 +231,10 @@ else
 
     for batch in "${failed_batches[@]}"; do
         # Map batch name to log file.
+        guru_flags=()
         if [ "$batch" = "ut" ]; then
             log_file="$ARTIFACTS_DIR/test-ut.log"
-            guru_flags="-ut"
+            guru_flags=(-ut)
         else
             # Zero-pad numeric batch names to 3 digits to match run-tests-on-vms convention.
             if [[ "$batch" =~ ^[0-9]+$ ]]; then
@@ -242,7 +243,6 @@ else
                 formatted_batch="$batch"
             fi
             log_file="$ARTIFACTS_DIR/test-${formatted_batch}.log"
-            guru_flags=""
         fi
 
         if [ ! -f "$log_file" ]; then
@@ -250,14 +250,15 @@ else
             continue
         fi
 
-        json_output=$(mktemp /tmp/guru-${batch}-XXXXXX.json)
+        sanitized_batch="${batch//[^A-Za-z0-9_.-]/_}"
+        json_output=$(mktemp "/tmp/guru-${sanitized_batch}-XXXXXX.json")
         json_files+=("$json_output")
         batch_names+=("$batch")
 
         echo "analyze-test-failures: Running fv-tests-guru on batch $batch (log: $log_file)..."
         (
             timeout 600 fv-tests-guru \
-                $guru_flags \
+                "${guru_flags[@]}" \
                 -calico-repo "$CALICO_REPO" \
                 -ai-provider gemini \
                 -output-format json \
