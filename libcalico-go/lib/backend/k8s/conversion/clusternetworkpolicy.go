@@ -343,7 +343,10 @@ func unpackCNPProtocols(cnpProtocols []clusternetpol.ClusterNetworkPolicyProtoco
 			break
 		}
 
-		pStr := protocol.String()
+		pStr := "" // for named ports protocol is nil
+		if protocol != nil {
+			pStr = protocol.String()
+		}
 		// treat nil as 'all ports'
 		if calicoPort == nil {
 			protocolPorts[pStr] = nil
@@ -394,9 +397,10 @@ func k8sCNPPortToCalicoFields(cnpProto *clusternetpol.ClusterNetworkPolicyProtoc
 		return
 	}
 
-	// TODO: Add support for NamedPorts
 	if len(cnpProto.DestinationNamedPort) != 0 {
-		err = fmt.Errorf("named ports are not supported yet.")
+		var port numorstring.Port
+		port, err = numorstring.PortFromString(cnpProto.DestinationNamedPort)
+		dstPort = &port
 		return
 	}
 
