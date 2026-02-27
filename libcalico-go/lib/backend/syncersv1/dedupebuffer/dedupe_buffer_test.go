@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 func init() {
@@ -391,6 +392,84 @@ func TestDedupeBuffer_TyphaResyncNothingToDelete(t *testing.T) {
 	}))
 }
 
+// TestDedupeBuffer_NonComparableKeys tests dedupe and reconnection deletion
+// synthesis for key types that are not Go-comparable (e.g. BlockKey which
+// embeds net.IPNet containing a slice). These fall back to string-encoded
+// paths in the tracking maps.
+func TestDedupeBuffer_NonComparableKeys(t *testing.T) {
+	RegisterTestingT(t)
+	d := New()
+	rec := newGenericReceiver()
+
+	_, cidr1, _ := calinet.ParseCIDR("10.0.0.0/24")
+	_, cidr2, _ := calinet.ParseCIDR("10.0.1.0/24")
+	_, cidr3, _ := calinet.ParseCIDR("10.0.2.0/24")
+
+	blockUpdate := func(cidr calinet.IPNet, value string) api.Update {
+		u := api.Update{
+			KVPair: model.KVPair{
+				Key: model.BlockKey{CIDR: cidr},
+			},
+		}
+		if value != "" {
+			u.KVPair.Value = value
+		} else {
+			u.UpdateType = api.UpdateTypeKVDeleted
+		}
+		return u
+	}
+
+	// Initial state with three blocks.
+	d.OnStatusUpdated(api.ResyncInProgress)
+	d.OnUpdates([]api.Update{blockUpdate(*cidr1, "block1")})
+	d.OnUpdates([]api.Update{blockUpdate(*cidr2, "block2")})
+	d.OnUpdates([]api.Update{blockUpdate(*cidr3, "block3")})
+	d.OnStatusUpdated(api.InSync)
+	sendNextBatchToGeneric(d, rec)
+
+	Expect(rec.liveKeys()).To(HaveLen(3))
+	Expect(rec.syncState()).To(Equal(api.InSync))
+
+	cidr1Path, _ := model.KeyToDefaultPath(model.BlockKey{CIDR: *cidr1})
+	cidr3Path, _ := model.KeyToDefaultPath(model.BlockKey{CIDR: *cidr3})
+
+	// Dedupe: update cidr1 twice before flush — only second value should appear.
+	rec.resetUpdatesSeen()
+	d.OnUpdates([]api.Update{blockUpdate(*cidr1, "block1b")})
+	d.OnUpdates([]api.Update{blockUpdate(*cidr1, "block1c")})
+	sendNextBatchToGeneric(d, rec)
+
+	Expect(rec.liveKeys()).To(HaveKey(cidr1Path))
+	updates := rec.updatesSeen()
+	// Should only have one update for cidr1, with the final value.
+	Expect(updates).To(HaveLen(1))
+	Expect(updates[0].Value).To(Equal("block1c"))
+
+	// Reconnection: cidr3 disappears during resync.
+	rec.resetUpdatesSeen()
+	d.OnTyphaConnectionRestarted()
+	d.OnStatusUpdated(api.ResyncInProgress)
+	d.OnUpdates([]api.Update{blockUpdate(*cidr1, "block1c")})
+	d.OnUpdates([]api.Update{blockUpdate(*cidr2, "block2")})
+	// cidr3 not sent — should be synthesized as deletion.
+	d.OnStatusUpdated(api.InSync)
+	sendNextBatchToGeneric(d, rec)
+
+	Expect(rec.liveKeys()).To(HaveLen(2))
+	Expect(rec.liveKeys()).NotTo(HaveKey(cidr3Path))
+	Expect(rec.syncState()).To(Equal(api.InSync))
+
+	// Verify the deletion was synthesized for cidr3.
+	var deletionPaths []string
+	for _, u := range rec.updatesSeen() {
+		if u.Value == nil {
+			p, _ := model.KeyToDefaultPath(u.Key)
+			deletionPaths = append(deletionPaths, p)
+		}
+	}
+	Expect(deletionPaths).To(ConsistOf(cidr3Path))
+}
+
 func TestDedupeBuffer_Async(t *testing.T) {
 	RegisterTestingT(t)
 	d := New()
@@ -585,4 +664,74 @@ func (r *Receiver) Unblock() {
 	defer r.mutex.Unlock()
 	r.block = false
 	r.cond.Signal()
+}
+
+// genericReceiver is a test receiver that works with any model.Key type,
+// tracking updates by string-encoded path (since some key types are not
+// comparable and can't be used as Go map keys directly).
+type genericReceiver struct {
+	mutex          sync.Mutex
+	keys           map[string]any // path -> value
+	updates        []api.Update
+	finalSyncState api.SyncStatus
+}
+
+func newGenericReceiver() *genericReceiver {
+	return &genericReceiver{
+		keys: map[string]any{},
+	}
+}
+
+func (r *genericReceiver) OnStatusUpdated(status api.SyncStatus) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.finalSyncState = status
+}
+
+func (r *genericReceiver) OnUpdates(updates []api.Update) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	for _, u := range updates {
+		r.updates = append(r.updates, u)
+		path, _ := model.KeyToDefaultPath(u.Key)
+		if u.Value == nil {
+			delete(r.keys, path)
+		} else {
+			r.keys[path] = u.Value
+		}
+	}
+}
+
+func (r *genericReceiver) liveKeys() map[string]any {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	cp := make(map[string]any, len(r.keys))
+	for k, v := range r.keys {
+		cp[k] = v
+	}
+	return cp
+}
+
+func (r *genericReceiver) updatesSeen() []api.Update {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	cp := make([]api.Update, len(r.updates))
+	copy(cp, r.updates)
+	return cp
+}
+
+func (r *genericReceiver) resetUpdatesSeen() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.updates = nil
+}
+
+func (r *genericReceiver) syncState() api.SyncStatus {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	return r.finalSyncState
+}
+
+func sendNextBatchToGeneric(d *DedupeBuffer, r *genericReceiver) {
+	ExpectWithOffset(1, d.sendNextBatchToSinkNoBlock(r)).NotTo(HaveOccurred())
 }
