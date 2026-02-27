@@ -623,7 +623,7 @@ func validatePolicyType(fl validator.FieldLevel) bool {
 }
 
 func validateProtocol(structLevel validator.StructLevel) {
-	p := structLevel.Current().Interface().(numorstring.Protocol)
+	/*p := structLevel.Current().Interface().(numorstring.Protocol)
 	log.Debugf("Validate protocol: %v %s %d", p.Type, p.StrVal, p.NumVal)
 
 	// The protocol field may be an integer 1-255 (i.e. not 0), or one of the valid protocol
@@ -636,7 +636,7 @@ func validateProtocol(structLevel validator.StructLevel) {
 	} else if !protocolRegex.MatchString(p.String()) {
 		structLevel.ReportError(reflect.ValueOf(p.String()),
 			"Protocol", "", reason("protocol name invalid"), "")
-	}
+	}*/
 }
 
 // validateIPv4Network validates the field is a valid (strictly masked) IPv4 network.
@@ -1296,25 +1296,26 @@ func validateRule(structLevel validator.StructLevel) {
 
 	// If the protocol does not support ports check that the port values have not
 	// been specified.
-	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
-		if len(rule.Source.Ports) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-				"Source.Ports", "", reason(protocolPortsMsg), "")
-		}
-		if len(rule.Source.NotPorts) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-				"Source.NotPorts", "", reason(protocolPortsMsg), "")
-		}
+	/*
+		if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
+			if len(rule.Source.Ports) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
+					"Source.Ports", "", reason(protocolPortsMsg), "")
+			}
+			if len(rule.Source.NotPorts) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
+					"Source.NotPorts", "", reason(protocolPortsMsg), "")
+			}
 
-		if len(rule.Destination.Ports) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-				"Destination.Ports", "", reason(protocolPortsMsg), "")
-		}
-		if len(rule.Destination.NotPorts) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-				"Destination.NotPorts", "", reason(protocolPortsMsg), "")
-		}
-	}
+			if len(rule.Destination.Ports) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
+					"Destination.Ports", "", reason(protocolPortsMsg), "")
+			}
+			if len(rule.Destination.NotPorts) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
+					"Destination.NotPorts", "", reason(protocolPortsMsg), "")
+			}
+		}*/
 
 	// Check that HTTP must not use non-TCP protocols
 	if rule.HTTP != nil && rule.Protocol != nil {
