@@ -173,16 +173,12 @@ def inject_into_xml(json_path, xml_paths):
 
             used_keys.add(matched_key)
 
-            # Prepend analysis to system-out.
+            # Prepend analysis to failure element text so it appears
+            # first in the Semaphore test results view.
             analysis_block = format_analysis_block(failure_entry)
 
-            system_out = testcase.find('system-out')
-            if system_out is None:
-                system_out = ET.SubElement(testcase, 'system-out')
-                system_out.text = analysis_block
-            else:
-                existing = system_out.text or ''
-                system_out.text = analysis_block + existing
+            existing = failure_elem.text or ''
+            failure_elem.text = analysis_block + existing
 
             modified = True
             total_injected += 1
