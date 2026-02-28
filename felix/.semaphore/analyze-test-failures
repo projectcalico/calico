@@ -214,19 +214,24 @@ if [ "$UT_MODE" = true ]; then
     JSON_OUTPUT=$(mktemp /tmp/guru-ut-XXXXXX.json)
 
     echo "analyze-test-failures: Running fv-tests-guru on UT log..."
+    GURU_STDERR=$(mktemp /tmp/guru-stderr-ut-XXXXXX.log)
     timeout 600 fv-tests-guru \
         -ut \
         -calico-repo "$CALICO_REPO" \
         -ai-provider gemini \
         -output-format json \
         -debug-logfile "$LOG_FILE" \
-        > "$JSON_OUTPUT" 2>/dev/null || true
+        > "$JSON_OUTPUT" 2>"$GURU_STDERR" || true
 
     if [ -s "$JSON_OUTPUT" ]; then
         echo "analyze-test-failures: Injecting analysis into UT XML reports..."
         python3 "$INJECT_SCRIPT" "$JSON_OUTPUT" "${XML_FILES[@]}" || true
     else
         echo "analyze-test-failures: fv-tests-guru produced no output for UT, skipping injection."
+        if [ -s "$GURU_STDERR" ]; then
+            echo "analyze-test-failures: fv-tests-guru stderr:"
+            cat "$GURU_STDERR"
+        fi
     fi
 
     rm -f "$JSON_OUTPUT"
@@ -302,6 +307,7 @@ else
         json_files+=("$json_output")
         batch_names+=("$batch")
 
+        guru_stderr="/tmp/guru-stderr-${sanitized_batch}.log"
         echo "analyze-test-failures: Running fv-tests-guru on batch $batch (log: $log_file)..."
         (
             timeout 600 fv-tests-guru \
@@ -310,7 +316,7 @@ else
                 -ai-provider gemini \
                 -output-format json \
                 -debug-logfile "$log_file" \
-                > "$json_output" 2>/dev/null || true
+                > "$json_output" 2>"$guru_stderr" || true
         ) &
         pids+=($!)
         running=$((running + 1))
@@ -334,7 +340,13 @@ else
 
         if [ ! -s "$json_file" ]; then
             echo "analyze-test-failures: fv-tests-guru produced no output for batch $batch, skipping injection."
-            rm -f "$json_file"
+            sanitized_batch="${batch//[^A-Za-z0-9_.-]/_}"
+            guru_stderr="/tmp/guru-stderr-${sanitized_batch}.log"
+            if [ -s "$guru_stderr" ]; then
+                echo "analyze-test-failures: fv-tests-guru stderr for batch $batch:"
+                cat "$guru_stderr"
+            fi
+            rm -f "$json_file" "$guru_stderr"
             continue
         fi
 
