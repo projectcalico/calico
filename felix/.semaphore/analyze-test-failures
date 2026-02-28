@@ -215,7 +215,7 @@ if [ "$UT_MODE" = true ]; then
 
     echo "analyze-test-failures: Running fv-tests-guru on UT log..."
     GURU_STDERR=$(mktemp /tmp/guru-stderr-ut-XXXXXX.log)
-    timeout 600 fv-tests-guru \
+    timeout 600 fv-tests-guru -max-timeout 6m \
         -ut \
         -calico-repo "$CALICO_REPO" \
         -ai-provider gemini \
@@ -310,7 +310,7 @@ else
         guru_stderr="/tmp/guru-stderr-${sanitized_batch}.log"
         echo "analyze-test-failures: Running fv-tests-guru on batch $batch (log: $log_file)..."
         (
-            timeout 600 fv-tests-guru \
+            timeout 600 fv-tests-guru -max-timeout 6m \
                 "${guru_flags[@]}" \
                 -calico-repo "$CALICO_REPO" \
                 -ai-provider gemini \
