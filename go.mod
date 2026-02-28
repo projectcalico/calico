@@ -43,7 +43,6 @@ require (
 	github.com/ishidawataru/sctp v0.0.0-20250829011129-4b890084db30
 	github.com/jinzhu/copier v0.4.0
 	github.com/joho/godotenv v1.5.1
-	github.com/json-iterator/go v1.1.12
 	github.com/juju/clock v1.1.1
 	github.com/juju/errors v1.0.0
 	github.com/juju/mutex v0.0.0-20180619145857-d21b13acf4bf
@@ -259,6 +258,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/josharian/native v1.1.0 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/karrick/godirwalk v1.17.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
