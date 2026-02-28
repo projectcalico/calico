@@ -2,7 +2,7 @@
 This file contains the list of modules that this package depends on
 in order to trigger CI on changes
 
-go 1.25.7
+go 1.26.0
 github.com/BurntSushi/toml v1.5.0
 github.com/beorn7/perks v1.0.1
 github.com/cespare/xxhash/v2 v2.3.0
@@ -39,7 +39,6 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 github.com/openshift/custom-resource-status v1.1.2
-github.com/pkg/errors v0.9.1
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
 github.com/prometheus/client_golang v1.23.2
@@ -71,22 +70,22 @@ google.golang.org/genproto/googleapis/api v0.0.0-20250818200422-3122310a409c
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c
 google.golang.org/grpc v1.76.0
 google.golang.org/protobuf v1.36.10
-gopkg.in/evanphx/json-patch.v4 v4.12.0
+gopkg.in/evanphx/json-patch.v4 v4.13.0
 gopkg.in/go-playground/validator.v9 v9.30.2
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.34.3
-k8s.io/apiextensions-apiserver v0.34.3
-k8s.io/apimachinery v0.34.3
-k8s.io/client-go v0.34.3
+k8s.io/api v0.35.1
+k8s.io/apiextensions-apiserver v0.35.1
+k8s.io/apimachinery v0.35.1
+k8s.io/client-go v0.35.1
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
-k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
-k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
+k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
+k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 kubevirt.io/api v1.7.0
 kubevirt.io/containerized-data-importer-api v1.63.1
 kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90
-sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
+sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
 sigs.k8s.io/network-policy-api v0.1.8-0.20260212153203-412bf65729a5
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.0
