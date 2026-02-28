@@ -189,24 +189,14 @@ def inject_into_xml(json_path, xml_paths):
 
             used_keys.add(matched_key)
 
-            # Move original failure content to system-out so it's
-            # still accessible but doesn't crowd out the analysis.
-            original_failure = failure_elem.text or ''
-            if original_failure:
-                system_out = testcase.find('system-out')
-                if system_out is None:
-                    system_out = ET.SubElement(testcase, 'system-out')
-                    system_out.text = original_failure
-                else:
-                    system_out.text = (system_out.text or '') + original_failure
+            # Put the full analysis in a custom <ai-diags> element.
+            ai_diags = ET.SubElement(testcase, 'ai-diags')
+            ai_diags.text = format_analysis_block(failure_entry)
 
-            # Set the AI summary as the failure message (headline).
+            # Replace the failure body with the AI summary.
             summary = format_summary(failure_entry)
             if summary:
-                failure_elem.set('message', summary)
-
-            # Put the full analysis as the failure body.
-            failure_elem.text = format_analysis_block(failure_entry)
+                failure_elem.text = summary
 
             modified = True
             total_injected += 1
