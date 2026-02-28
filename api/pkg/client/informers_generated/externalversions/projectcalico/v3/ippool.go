@@ -42,7 +42,7 @@ func NewIPPoolInformer(client clientset.Interface, resyncPeriod time.Duration, i
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredIPPoolInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		&cache.ListWatch{
+		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
@@ -67,7 +67,7 @@ func NewFilteredIPPoolInformer(client clientset.Interface, resyncPeriod time.Dur
 				}
 				return client.ProjectcalicoV3().IPPools().Watch(ctx, options)
 			},
-		},
+		}, client),
 		&apisprojectcalicov3.IPPool{},
 		resyncPeriod,
 		indexers,
