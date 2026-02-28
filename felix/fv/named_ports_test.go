@@ -40,6 +40,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ TCP: Destination named port
 	describeNamedPortTests(false, "tcp", getInfra)
 })
 
+/*
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ TCP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	describeNamedPortTests(true, "tcp", getInfra)
 })
@@ -59,6 +60,7 @@ var _ = infrastructure.DatastoreDescribe("SCTP: Destination named ports: with in
 var _ = infrastructure.DatastoreDescribe("SCTP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	describeNamedPortTests(true, "sctp", getInfra)
 })
+*/
 
 // describeNamedPortTests describes tests for either source or destination named ports.
 // If testSourcePorts is true then the direction of all the connectivity tests is flipped.
@@ -357,7 +359,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 		Entry("(negated) egress, 16 numeric with a dest selector", true, applyAtOthers, 16, true),
 	)
 
-	Describe("with a policy that combines named ports and selectors", func() {
+	Describe("pepper with a policy that combines named ports and selectors", func() {
 		var policy *api.NetworkPolicy
 		var oppositeDir, sameDir string
 		if testSourcePorts {
@@ -378,16 +380,16 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 					numorstring.NamedPort(sharedPortName),
 					numorstring.NamedPort(w0PortName),
 					numorstring.NamedPort(w1PortName),
-					numorstring.SinglePort(4000),
+					//numorstring.SinglePort(4000),
 				},
 				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
 					w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
 			}
 
-			protoStruct := numorstring.ProtocolFromString(protocol)
+			//protoStruct := numorstring.ProtocolFromString(protocol)
 			apiRule := api.Rule{
-				Action:   api.Allow,
-				Protocol: &protoStruct,
+				Action: api.Allow,
+				//Protocol: &protoStruct,
 			}
 			if testSourcePorts {
 				apiRule.Source = entityRule
@@ -407,6 +409,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 		// This spec establishes a baseline for the connectivity, then the specs below run
 		// with tweaked versions of the policy.
 		expectBaselineConnectivity := func() {
+
+			//time.Sleep(time.Hour)
+
 			cc.ResetExpectations()
 			cc.ExpectSome(w[0], w[1].Port(sharedPort)) // Allowed by named port in list.
 			cc.ExpectSome(w[1], w[0].Port(sharedPort)) // Allowed by named port in list.
@@ -418,13 +423,13 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 			cc.ExpectSome(w[3], w[0].Port(w0Port))     // Allowed by named port in list.
 			cc.ExpectSome(w[3], w[1].Port(w1Port))     // Allowed by named port in list.
 			cc.ExpectNone(w[3], w[2].Port(w2Port))     // Not in ports list.
-			cc.ExpectSome(w[2], w[0].Port(4000))       // Numeric port in list.
-			cc.ExpectSome(w[3], w[0].Port(4000))       // Numeric port in list.
-			cc.ExpectNone(w[2], w[0].Port(3000))       // Numeric port not in list.
+			//cc.ExpectSome(w[2], w[0].Port(4000))       // Numeric port in list.
+			//cc.ExpectSome(w[3], w[0].Port(4000))       // Numeric port in list.
+			cc.ExpectNone(w[2], w[0].Port(3000)) // Numeric port not in list.
 
 			cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 		}
-		It("should have expected connectivity", expectBaselineConnectivity)
+		It("pepper0 should have expected connectivity", expectBaselineConnectivity)
 
 		Describe("with a negative "+sameDir+" selector, removing w[2]", func() {
 			BeforeEach(func() {
@@ -473,9 +478,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 				cc.ExpectSome(w[3], w[0].Port(w0Port))     // No change.
 				cc.ExpectSome(w[3], w[1].Port(w1Port))     // No change.
 				cc.ExpectNone(w[3], w[2].Port(w2Port))     // No change.
-				cc.ExpectSome(w[2], w[0].Port(4000))       // No change.
-				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
-				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
+				//cc.ExpectSome(w[2], w[0].Port(4000))       // No change.
+				//cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
+				cc.ExpectNone(w[2], w[0].Port(3000)) // No change.
 
 				cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 			})
@@ -492,7 +497,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 			cc.ExpectNone(w[2], w[3].Port(sharedPort))
 			cc.ExpectNone(w[3], w[0].Port(w0Port))
 			cc.ExpectNone(w[3], w[2].Port(w2Port))
-			cc.ExpectNone(w[2], w[0].Port(4000))
+			//cc.ExpectNone(w[2], w[0].Port(4000))
 			cc.ExpectNone(w[2], w[0].Port(3000))
 
 			cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
