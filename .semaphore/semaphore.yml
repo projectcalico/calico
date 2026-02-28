@@ -303,9 +303,10 @@ blocks:
       jobs:
         - name: Check language/Dockerfiles
           commands:
-            # Both of these are very quick grep checks so we combine them into one job.
+            # These are very quick grep checks so we combine them into one job.
             - make check-language
             - make check-dockerfiles
+            - make check-mockery-config
   - name: Check protobufs
     run:
       when: >-

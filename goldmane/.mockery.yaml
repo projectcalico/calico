@@ -1,4 +1,5 @@
-inpackage: False
+template: testify
+inpackage: false
 dir: "{{.InterfaceDir}}/mocks"
 filename: "{{.InterfaceName}}.go"
 packages:
@@ -12,5 +13,6 @@ packages:
     config:
       pkgname: "mocks"
       structname: "{{.InterfaceName}}"
+      include-auto-generated: true
     interfaces:
       Flows_StreamClient:
