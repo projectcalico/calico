@@ -562,11 +562,11 @@ var _ = Describe("Test the (Felix) Node update processor with USE_POD_CIDR=true"
 		c1 := net.MustParseCIDR("192.168.1.0/24")
 		aff := "host:mynode"
 		v1 := model.AllocationBlock{CIDR: c1, Affinity: &aff}
-		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: c1}, Value: &v1})
+		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(c1)}, Value: &v1})
 
 		c2 := net.MustParseCIDR("192.168.2.0/24")
 		v2 := model.AllocationBlock{CIDR: c2, Affinity: &aff}
-		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: c2}, Value: &v2})
+		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(c2)}, Value: &v2})
 
 		// Remove CIDR 2 and make sure we get a delete for it.
 		By("handling an update that removes a CIDR")
@@ -582,10 +582,10 @@ var _ = Describe("Test the (Felix) Node update processor with USE_POD_CIDR=true"
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert we get block 1
-		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: c1}, Value: &v1})
+		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(c1)}, Value: &v1})
 
 		// And a remove for block 2.
-		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: c2}, Value: nil})
+		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(c2)}, Value: nil})
 	})
 })
 

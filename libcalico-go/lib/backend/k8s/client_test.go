@@ -2632,7 +2632,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.0.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR:         cidr,
+					CIDR:         model.PrefixFromIPNet(cidr),
 					Host:         nodename,
 					AffinityType: string(ipam.AffinityTypeHost),
 				},
@@ -2646,7 +2646,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.1.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR:         cidr,
+					CIDR:         model.PrefixFromIPNet(cidr),
 					Host:         "othernode",
 					AffinityType: string(ipam.AffinityTypeHost),
 				},
@@ -3804,7 +3804,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			// Create a block affinity.
 			_, err = c.Create(ctx, &model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR:         net.MustParseCIDR("10.0.0.0/26"),
+					CIDR:         model.PrefixFromIPNet(net.MustParseCIDR("10.0.0.0/26")),
 					Host:         "test-hostname",
 					AffinityType: string(ipam.AffinityTypeHost),
 				},
@@ -3839,7 +3839,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			// Create a block.
 			_, err = c.Create(ctx, &model.KVPair{
 				Key: model.BlockKey{
-					CIDR: net.MustParseCIDR("10.0.0.0/26"),
+					CIDR: model.PrefixFromIPNet(net.MustParseCIDR("10.0.0.0/26")),
 				},
 				Value: &model.AllocationBlock{
 					Affinity:    nil,

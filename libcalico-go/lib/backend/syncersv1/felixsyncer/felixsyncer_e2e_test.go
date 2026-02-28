@@ -470,7 +470,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// The pool will add as single entry ( +1 )
 			expectedCacheSize += 1
 			syncTester.ExpectData(model.KVPair{
-				Key: model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")},
+				Key: model.IPPoolKey{CIDR: model.PrefixFromIPNet(net.MustParseCIDR("192.124.0.0/21"))},
 				Value: &model.IPPool{
 					CIDR:           poolCIDRNet,
 					IPIPInterface:  "tunl0",
@@ -626,7 +626,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			affinity := "host:127.0.0.1"
 			zero := 0
 			syncTester.ExpectData(model.KVPair{
-				Key: model.BlockKey{CIDR: *cidr},
+				Key: model.BlockKey{CIDR: model.PrefixFromIPNet(*cidr)},
 				Value: &model.AllocationBlock{
 					CIDR:        *cidr,
 					Affinity:    &affinity,
