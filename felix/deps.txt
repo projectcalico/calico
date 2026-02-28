@@ -334,7 +334,6 @@ local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
-local:libcalico-go/lib/json
 local:libcalico-go/lib/logutils
 local:libcalico-go/lib/metricsserver
 local:libcalico-go/lib/names
