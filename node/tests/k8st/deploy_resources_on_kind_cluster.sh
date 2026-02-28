@@ -44,7 +44,9 @@ function collect_diags() {
       echo "  -- Description --"
       ${kctl} describe pod -n "${ns}" "${name}" 2>&1 || true
       echo "  -- Logs --"
-      ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=100 2>&1 || true
+      ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=200 2>&1 || true
+      echo "  -- Previous Logs --"
+      ${kctl} logs -n "${ns}" "${name}" --all-containers --previous --tail=200 2>&1 || true
     fi
   done
 
@@ -59,7 +61,9 @@ function collect_diags() {
         echo "  -- Description --"
         ${kctl} describe pod -n "${ns}" "${name}" 2>&1 || true
         echo "  -- Logs --"
-        ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=100 2>&1 || true
+        ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=200 2>&1 || true
+        echo "  -- Previous Logs --"
+        ${kctl} logs -n "${ns}" "${name}" --all-containers --previous --tail=200 2>&1 || true
       fi
     fi
   done
