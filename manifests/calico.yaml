@@ -6414,6 +6414,16 @@ rules:
       - daemonsets
     verbs:
       - get
+  # Felix (inside calico-node) is watching KubeVirt live-migration objects to 
+  # determine when to drain nodes. 
+  # These permissions can be removed if not using KubeVirt or not using live migration.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # CNI cluster role
