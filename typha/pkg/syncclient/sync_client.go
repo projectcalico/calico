@@ -444,12 +444,12 @@ func (s *SyncerClient) logConnectionFailure(cxt context.Context, logCxt *log.Ent
 func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, connFinished *sync.WaitGroup) {
 	defer connFinished.Done()
 	defer cancelFn()
-
-	// Clean up any zstd reader from a previous connection.
-	if s.zstdReader != nil {
-		s.zstdReader.Close()
-		s.zstdReader = nil
-	}
+	defer func() {
+		if s.zstdReader != nil {
+			s.zstdReader.Close()
+			s.zstdReader = nil
+		}
+	}()
 
 	logCxt := s.logCxt.WithField("connection", s.connInfo)
 	logCxt.Info("Started Typha client main loop")
@@ -601,7 +601,7 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 	case syncproto.CompressionZstd:
 		logCxt.Info("Server selected zstd compression.")
 		if s.zstdReader == nil {
-			r, err := zstd.NewReader(s.connR)
+			r, err := zstd.NewReader(s.connR, zstd.WithDecoderConcurrency(1))
 			if err != nil {
 				logCxt.WithError(err).Error("Failed to create zstd reader")
 				return err
