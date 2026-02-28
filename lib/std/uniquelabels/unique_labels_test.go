@@ -845,10 +845,38 @@ func TestFallbackFallbackIntersect(t *testing.T) {
 		t.Fatal("expected both maps to be fallback")
 	}
 
-	out := IntersectAndFilter(a, b, nil).RecomputeOriginalMap()
+	// Keys were never registered (makeFallback bypasses the key table),
+	// so the intersection stays fallback.
+	result := IntersectAndFilter(a, b, nil)
+	if result.isCompact() {
+		t.Error("expected fallback result when keys are not in the key table")
+	}
 	expected := map[string]string{"b": "2"}
-	if !reflect.DeepEqual(out, expected) {
-		t.Errorf("fallback ∩ fallback = %v, want %v", out, expected)
+	if !result.EquivalentTo(expected) {
+		t.Errorf("fallback ∩ fallback = %v, want %v", result.RecomputeOriginalMap(), expected)
+	}
+}
+
+func TestFallbackIntersectProducesCompactWhenPossible(t *testing.T) {
+	unsafeTestOnlyReset()
+	// Register keys "a" and "b" in the key table via Make.
+	Make(map[string]string{"a": "x", "b": "x"})
+
+	// Build fallback maps that use those registered keys.
+	a := makeFallback(map[string]string{"a": "1", "b": "2", "c": "3"})
+	b := makeFallback(map[string]string{"a": "1", "c": "99"})
+	if a.isCompact() || b.isCompact() {
+		t.Fatal("expected both inputs to be fallback")
+	}
+
+	// Intersection is {"a": "1"}. Key "a" is in the table, so the
+	// result should be compact.
+	result := IntersectAndFilter(a, b, nil)
+	if !result.isCompact() {
+		t.Error("expected compact result when all intersection keys are in the key table")
+	}
+	if !result.EquivalentTo(map[string]string{"a": "1"}) {
+		t.Errorf("wrong content: %v", result)
 	}
 }
 

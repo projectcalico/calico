@@ -378,6 +378,30 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 	if len(intersection) == 0 {
 		return Empty
 	}
+	// Try to produce a compact result: if every key in the intersection
+	// is already in the key table, we can use the bitfield representation.
+	if len(intersection) <= maxKeyTableSize {
+		snap := globalKeyTable.currentSnap()
+		var bf uint64
+		allKnown := true
+		for k := range intersection {
+			pos, ok := snap.byHandle[k]
+			if !ok {
+				allKnown = false
+				break
+			}
+			bf |= uint64(1) << pos
+		}
+		if allKnown {
+			vals := make([]uniquestr.Handle, len(intersection))
+			for k, v := range intersection {
+				pos := snap.byHandle[k]
+				arrayIdx := bits.OnesCount64(bf & ((uint64(1) << pos) - 1))
+				vals[arrayIdx] = v
+			}
+			return Map{ptr: allocCompact(bf|topBit, vals)}
+		}
+	}
 	return Map{ptr: unsafe.Pointer(&fallbackMap{m: intersection})}
 }
 
