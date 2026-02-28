@@ -298,7 +298,7 @@ type testLogger interface {
 }
 
 func startBPFLogging() *exec.Cmd {
-	cmd := exec.Command("/usr/bin/bpftool", "prog", "tracelog")
+	cmd := exec.Command("/usr/sbin/bpftool", "prog", "tracelog")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Start()
