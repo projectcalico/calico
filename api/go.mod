@@ -1,16 +1,17 @@
 module github.com/projectcalico/api
 
-go 1.25.7
+go 1.26.1
 
 require (
 	github.com/jinzhu/copier v0.4.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	k8s.io/api v0.35.2
-	k8s.io/apiextensions-apiserver v0.0.0-00010101000000-000000000000
+	k8s.io/apiextensions-apiserver v0.35.2
 	k8s.io/apimachinery v0.35.2
 	k8s.io/client-go v0.35.2
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -56,7 +57,6 @@ require (
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
 
 replace (

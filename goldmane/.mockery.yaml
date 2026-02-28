@@ -11,6 +11,8 @@ packages:
   github.com/projectcalico/calico/goldmane/proto:
     config:
       pkgname: "mocks"
-      structname: "{{.InterfaceName}}"
     interfaces:
-      Flows_StreamClient:
+      Flows_StreamClientIface:
+        config:
+          structname: "Flows_StreamClient"
+          filename: "Flows_StreamClient.go"
