@@ -69,6 +69,9 @@ check-images-availability: bin/crane bin/yq
 check-language:
 	./hack/check-language.sh
 
+check-mockery-config:
+	./hack/check-mockery-config.sh
+
 check-ginkgo-v2:
 	./hack/check-ginkgo-v2.sh
 
