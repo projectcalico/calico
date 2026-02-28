@@ -108,14 +108,15 @@ func Make(m map[string]string) Map {
 }
 
 // makeInner builds a Map from a non-nil, non-empty map[string]string.
-// It tries the compact representation first; falls back to a Go map.
+// It interns all keys and values once, then tries the compact
+// representation; falls back to a Go map reusing the same handleMap.
 func makeInner(m map[string]string) Map {
-	if bf, vals, ok := globalKeyTable.registerKeys(m); ok {
-		return Map{ptr: allocCompact(bf, vals)}
-	}
 	hm := make(handleMap, len(m))
 	for k, v := range m {
 		hm[uniquestr.Make(k)] = uniquestr.Make(v)
+	}
+	if bf, vals, ok := globalKeyTable.registerKeys(hm); ok {
+		return Map{ptr: allocCompact(bf, vals)}
 	}
 	return Map{ptr: unsafe.Pointer(&fallbackMap{m: hm})}
 }
@@ -278,7 +279,21 @@ func (m Map) String() string {
 }
 
 // MarshalJSON implements the json.Marshaler interface.
+// For fallback maps, marshals the handle map directly (Handle implements
+// encoding.TextMarshaler), avoiding an intermediate map[string]string
+// allocation.
 func (m Map) MarshalJSON() ([]byte, error) {
+	if m.ptr == nil {
+		return []byte("null"), nil
+	}
+	header := *(*uint64)(m.ptr)
+	if header&topBit == 0 {
+		// Fallback: marshal the handle map directly; Handle
+		// implements encoding.TextMarshaler so the keys/values
+		// are serialised as strings without an intermediate map.
+		return json.Marshal((*fallbackMap)(m.ptr).m)
+	}
+	// Compact: build a temporary map for JSON encoding.
 	return json.Marshal(m.RecomputeOriginalMap())
 }
 

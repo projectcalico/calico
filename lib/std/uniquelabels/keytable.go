@@ -15,7 +15,6 @@
 package uniquelabels
 
 import (
-	"hash/maphash"
 	"math/bits"
 	"sync"
 	"sync/atomic"
@@ -98,27 +97,30 @@ func (t *keyTable) currentSnap() *keyTableSnap {
 	return t.snap.Load()
 }
 
-// registerKeys attempts to build a compact map from m.  On success it returns
-// (bitfield|topBit, values, true).  If the table is full and some keys can't
-// be registered, it returns (0, nil, false).
-func (t *keyTable) registerKeys(m map[string]string) (uint64, []uniquestr.Handle, bool) {
+// registerKeys attempts to build a compact map from the pre-interned
+// handleMap.  On success it returns (bitfield|topBit, values, true).
+// If the table is full and some keys can't be registered, it returns
+// (0, nil, false).
+//
+// The caller must intern keys/values into a handleMap before calling
+// this method so that uniquestr.Make is called at most once per key.
+func (t *keyTable) registerKeys(hm handleMap) (uint64, []uniquestr.Handle, bool) {
 	snap := t.snap.Load()
 
 	// Fast path (lock-free): all keys already known.
 	var bf uint64
-	for k := range m {
-		h := uniquestr.Make(k)
-		if pos, found := snap.byHandle[h]; found {
+	for k := range hm {
+		if pos, found := snap.byHandle[k]; found {
 			bf |= uint64(1) << pos
 		} else {
-			return t.registerKeysSlow(m)
+			return t.registerKeysSlow(hm)
 		}
 	}
-	return bf | topBit, buildValues(snap, bf, m), true
+	return bf | topBit, buildValues(snap, bf, hm), true
 }
 
 // registerKeysSlow is the mutex-protected path for registering new keys.
-func (t *keyTable) registerKeysSlow(m map[string]string) (uint64, []uniquestr.Handle, bool) {
+func (t *keyTable) registerKeysSlow(hm handleMap) (uint64, []uniquestr.Handle, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -126,18 +128,18 @@ func (t *keyTable) registerKeysSlow(m map[string]string) (uint64, []uniquestr.Ha
 
 	// Count unknown keys.
 	unknowns := 0
-	for k := range m {
-		if _, found := snap.byHandle[uniquestr.Make(k)]; !found {
+	for k := range hm {
+		if _, found := snap.byHandle[k]; !found {
 			unknowns++
 		}
 	}
 	if unknowns == 0 {
 		// All keys now known (registered by another goroutine).
 		var bf uint64
-		for k := range m {
-			bf |= uint64(1) << snap.byHandle[uniquestr.Make(k)]
+		for k := range hm {
+			bf |= uint64(1) << snap.byHandle[k]
 		}
-		return bf | topBit, buildValues(snap, bf, m), true
+		return bf | topBit, buildValues(snap, bf, hm), true
 	}
 	if snap.len+unknowns > maxKeyTableSize {
 		return 0, nil, false
@@ -146,47 +148,29 @@ func (t *keyTable) registerKeysSlow(m map[string]string) (uint64, []uniquestr.Ha
 	// Clone and register new keys.
 	snap = snap.clone()
 	var bf uint64
-	for k := range m {
-		h := uniquestr.Make(k)
-		if pos, found := snap.byHandle[h]; found {
+	for k := range hm {
+		if pos, found := snap.byHandle[k]; found {
 			bf |= uint64(1) << pos
 		} else {
 			pos := uint8(snap.len)
-			snap.byHandle[h] = pos
-			snap.byIndex[pos] = h
+			snap.byHandle[k] = pos
+			snap.byIndex[pos] = k
 			snap.len++
 			bf |= uint64(1) << pos
 		}
 	}
 	t.snap.Store(snap)
-	return bf | topBit, buildValues(snap, bf, m), true
+	return bf | topBit, buildValues(snap, bf, hm), true
 }
 
 // buildValues creates the compact value array ordered by bit position.
-func buildValues(snap *keyTableSnap, bf uint64, m map[string]string) []uniquestr.Handle {
+func buildValues(snap *keyTableSnap, bf uint64, hm handleMap) []uniquestr.Handle {
 	vals := make([]uniquestr.Handle, bits.OnesCount64(bf))
-	for k, v := range m {
-		pos := snap.byHandle[uniquestr.Make(k)]
+	for k, v := range hm {
+		pos := snap.byHandle[k]
 		arrayIdx := bits.OnesCount64(bf & ((uint64(1) << pos) - 1))
-		vals[arrayIdx] = uniquestr.Make(v)
+		vals[arrayIdx] = v
 	}
 	return vals
 }
 
-// unsafeTestOnlyReset resets the global key table and cache to their
-// initial (empty) state.  It must only be called from tests and is NOT
-// safe for concurrent use; the caller must ensure no other goroutine is
-// calling Make or reading Maps at the same time.
-//
-// Maps created before a reset become invalid: their compact bitfields
-// reference positions from the old key table, so read operations on those
-// Maps will return incorrect results.
-func unsafeTestOnlyReset() {
-	globalKeyTable = keyTable{}
-	globalKeyTable.snap.Store(&keyTableSnap{
-		byHandle: make(map[uniquestr.Handle]uint8),
-	})
-	recentCache = recentMapCache{
-		seed: maphash.MakeSeed(),
-	}
-}

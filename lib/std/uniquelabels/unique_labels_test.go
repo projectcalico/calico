@@ -27,6 +27,24 @@ import (
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
 
+// unsafeTestOnlyReset resets the global key table and cache to their
+// initial (empty) state.  It must only be called from tests and is NOT
+// safe for concurrent use; the caller must ensure no other goroutine is
+// calling Make or reading Maps at the same time.
+//
+// Maps created before a reset become invalid: their compact bitfields
+// reference positions from the old key table, so read operations on those
+// Maps will return incorrect results.
+func unsafeTestOnlyReset() {
+	globalKeyTable = keyTable{}
+	globalKeyTable.snap.Store(&keyTableSnap{
+		byHandle: make(map[uniquestr.Handle]uint8),
+	})
+	recentCache = recentMapCache{
+		seed: maphash.MakeSeed(),
+	}
+}
+
 func TestInternedLabelsJSONRoundTrip(t *testing.T) {
 	unsafeTestOnlyReset()
 	for _, m := range []map[string]string{
@@ -523,15 +541,22 @@ func TestIntersectAndFilterReturnsCompact(t *testing.T) {
 
 func TestCompactEqualsOptimization(t *testing.T) {
 	unsafeTestOnlyReset()
-	m1 := Make(map[string]string{"eq-a": "1", "eq-b": "2"})
-	m2 := Make(map[string]string{"eq-a": "1", "eq-b": "2"})
+	input := map[string]string{"eq-a": "1", "eq-b": "2"}
+	m1 := Make(input)
+	// Use makeInner to bypass the cache so m2 is a distinct allocation,
+	// ensuring the test exercises the compact value-comparison path
+	// rather than returning early via pointer equality.
+	m2 := makeInner(input)
 	m3 := Make(map[string]string{"eq-a": "1", "eq-b": "99"})
 	m4 := Make(map[string]string{"eq-a": "1"})
 	if !m1.isCompact() || !m2.isCompact() || !m3.isCompact() || !m4.isCompact() {
 		t.Fatal("expected compact representation after reset")
 	}
+	if m1.ptr == m2.ptr {
+		t.Fatal("m1 and m2 should be distinct allocations to test the compact comparison path")
+	}
 
-	// Same content → equal.
+	// Same content, distinct allocations → equal via compact comparison.
 	if !m1.Equals(m2) {
 		t.Error("identical compact maps should be equal")
 	}
