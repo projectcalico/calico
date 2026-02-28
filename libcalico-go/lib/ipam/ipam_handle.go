@@ -17,6 +17,7 @@ package ipam
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -78,17 +79,8 @@ func (h allocationHandle) totalCount() int {
 func (h allocationHandle) totalCountByVersion(version int) int {
 	total := 0
 	for blockCIDR, count := range h.Block {
-		// Parse the block CIDR to determine IP version
-		_, ipNet, err := cnet.ParseCIDR(blockCIDR)
-		if err != nil {
-			// Skip invalid CIDRs
-			continue
-		}
-
-		// Check if this block matches the requested IP version
-		if version == 4 && ipNet.IP.To4() != nil {
-			total += count
-		} else if version == 6 && ipNet.IP.To4() == nil {
+		isIPv6 := strings.Contains(blockCIDR, ":")
+		if (version == 4 && !isIPv6) || (version == 6 && isIPv6) {
 			total += count
 		}
 	}

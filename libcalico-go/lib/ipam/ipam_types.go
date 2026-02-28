@@ -58,10 +58,10 @@ type AssignIPArgs struct {
 	// The intended use for the IP address.  Used to determine the affinityType of the host.
 	IntendedUse v3.IPPoolAllowedUse
 
-	// MaxAllocPerIPVersion specifies the maximum number of IPs per IP version (IPv4/IPv6)
+	// MaxAllocToHandlePerIPVersion specifies the maximum number of IPs per IP version (IPv4/IPv6)
 	// that can be allocated for this handle. If 0, no limit is enforced.
 	// Used for KubeVirt VMI pods to ensure only one IP allocation per VMI per IP version.
-	MaxAllocPerIPVersion int
+	MaxAllocToHandlePerIPVersion int
 }
 
 // AutoAssignArgs defines the set of arguments for assigning one or more
@@ -107,10 +107,10 @@ type AutoAssignArgs struct {
 	// This field is required.
 	IntendedUse v3.IPPoolAllowedUse
 
-	// MaxAllocPerIPVersion specifies the maximum number of IPs per IP version (IPv4/IPv6)
+	// MaxAllocToHandlePerIPVersion specifies the maximum number of IPs per IP version (IPv4/IPv6)
 	// that can be allocated across all blocks for this handle. If 0, no limit is enforced.
 	// Used for KubeVirt VMI pods to ensure only one IP allocation per VMI per IP version.
-	MaxAllocPerIPVersion int
+	MaxAllocToHandlePerIPVersion int
 
 	// The namespace object for namespaceSelector support.
 	Namespace *corev1.Namespace
@@ -308,7 +308,7 @@ func (p *OwnerAttributePreconditions) expectedActiveOwner() *AttributeOwner {
 		return nil
 	}
 	if p.VerifyActiveOwnerEmpty {
-		return GetEmptyAttributeOwner()
+		return EmptyAttributeOwner()
 	}
 	return p.ExpectedActiveOwner
 }
@@ -320,7 +320,7 @@ func (p *OwnerAttributePreconditions) expectedAlternateOwner() *AttributeOwner {
 		return nil
 	}
 	if p.VerifyAlternateOwnerEmpty {
-		return GetEmptyAttributeOwner()
+		return EmptyAttributeOwner()
 	}
 	return p.ExpectedAlternateOwner
 }

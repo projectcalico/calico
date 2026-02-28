@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package kubevirt
+package fake
 
 import (
 	"context"
@@ -23,6 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 )
 
 // FakeVirtClient is a fake implementation of VirtClientInterface for testing.
@@ -43,7 +45,7 @@ func NewFakeVirtClient() *FakeVirtClient {
 }
 
 // VirtualMachineInstance implements VirtClientInterface.
-func (f *FakeVirtClient) VirtualMachineInstance(namespace string) VMIInterface {
+func (f *FakeVirtClient) VirtualMachineInstance(namespace string) kubevirt.VMIInterface {
 	return &fakeVMIInterface{
 		client:    f,
 		namespace: namespace,
@@ -51,7 +53,7 @@ func (f *FakeVirtClient) VirtualMachineInstance(namespace string) VMIInterface {
 }
 
 // VirtualMachine implements VirtClientInterface.
-func (f *FakeVirtClient) VirtualMachine(namespace string) VMInterface {
+func (f *FakeVirtClient) VirtualMachine(namespace string) kubevirt.VMInterface {
 	return &fakeVMInterface{
 		client:    f,
 		namespace: namespace,
@@ -59,7 +61,7 @@ func (f *FakeVirtClient) VirtualMachine(namespace string) VMInterface {
 }
 
 // VirtualMachineInstanceMigration implements VirtClientInterface.
-func (f *FakeVirtClient) VirtualMachineInstanceMigration(namespace string) VMIMInterface {
+func (f *FakeVirtClient) VirtualMachineInstanceMigration(namespace string) kubevirt.VMIMInterface {
 	return &fakeVMIMInterface{
 		client:    f,
 		namespace: namespace,

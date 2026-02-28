@@ -114,6 +114,23 @@ func (v *VMIResource) GetNamespace() string {
 	return v.Namespace
 }
 
+// FindVMIOwnerRef checks a pod's ownerReferences for a VirtualMachineInstance controller owner.
+// Returns the VMI ownerReference if found, nil otherwise.
+func FindVMIOwnerRef(pod *corev1.Pod) *metav1.OwnerReference {
+	if pod == nil {
+		return nil
+	}
+	for i := range pod.OwnerReferences {
+		owner := &pod.OwnerReferences[i]
+		if owner.APIVersion == VMIGroup+"/"+VMIVersion &&
+			owner.Kind == "VirtualMachineInstance" &&
+			owner.Controller != nil && *owner.Controller {
+			return owner
+		}
+	}
+	return nil
+}
+
 // GetPodVMIInfo determines if a pod is a KubeVirt virt-launcher pod by checking its
 // ownerReferences for a VirtualMachineInstance owner, then verifies it against the
 // actual VMI resource via the Kubernetes API.
@@ -122,23 +139,7 @@ func (v *VMIResource) GetNamespace() string {
 //   - (nil, nil) if the pod is not owned by a VMI (not a virt-launcher pod)
 //   - (nil, error) if verification fails or VMI query fails
 func GetPodVMIInfo(pod *corev1.Pod, virtClient VirtClientInterface) (*PodVMIInfo, error) {
-	if pod == nil {
-		return nil, nil
-	}
-
-	// Check ownerReferences to find VMI owner
-	// KubeVirt sets the VirtualMachineInstance as the controller owner of virt-launcher pods
-	var vmiOwner *metav1.OwnerReference
-	for i := range pod.OwnerReferences {
-		owner := &pod.OwnerReferences[i]
-		if owner.APIVersion == VMIGroup+"/"+VMIVersion &&
-			owner.Kind == "VirtualMachineInstance" &&
-			owner.Controller != nil && *owner.Controller {
-			vmiOwner = owner
-			break
-		}
-	}
-
+	vmiOwner := FindVMIOwnerRef(pod)
 	if vmiOwner == nil {
 		// Not a virt-launcher pod (no VMI owner)
 		return nil, nil

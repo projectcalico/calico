@@ -630,23 +630,27 @@ func (b *allocationBlock) setOwnerAttributes(ip cnet.IP, handleID string, update
 		return fmt.Errorf("IP %s is not assigned to handle %s", ip, handleID)
 	}
 
-	// Update ActiveOwnerAttrs if requested.
+	// Verify all preconditions before making any changes.
 	if updates.ActiveOwnerAttrs != nil || updates.ClearActiveOwner {
 		if err := verifyExpectedOwner(attr.ActiveOwnerAttrs, preconditions.expectedActiveOwner(), ip, "ActiveOwnerAttrs"); err != nil {
 			return err
 		}
+	}
+	if updates.AlternateOwnerAttrs != nil || updates.ClearAlternateOwner {
+		if err := verifyExpectedOwner(attr.AlternateOwnerAttrs, preconditions.expectedAlternateOwner(), ip, "AlternateOwnerAttrs"); err != nil {
+			return err
+		}
+	}
+
+	// Apply updates now that all preconditions are verified.
+	if updates.ActiveOwnerAttrs != nil || updates.ClearActiveOwner {
 		if updates.ClearActiveOwner {
 			attr.ActiveOwnerAttrs = nil
 		} else {
 			attr.ActiveOwnerAttrs = updates.ActiveOwnerAttrs
 		}
 	}
-
-	// Update AlternateOwnerAttrs if requested.
 	if updates.AlternateOwnerAttrs != nil || updates.ClearAlternateOwner {
-		if err := verifyExpectedOwner(attr.AlternateOwnerAttrs, preconditions.expectedAlternateOwner(), ip, "AlternateOwnerAttrs"); err != nil {
-			return err
-		}
 		if updates.ClearAlternateOwner {
 			attr.AlternateOwnerAttrs = nil
 		} else {
@@ -663,7 +667,7 @@ func verifyExpectedOwner(currentAttrs map[string]string, expectedOwner *Attribut
 	if expectedOwner == nil {
 		return nil
 	}
-	if MatchAttributeOwner(currentAttrs, expectedOwner) {
+	if expectedOwner.Matches(currentAttrs) {
 		return nil
 	}
 	var currentPod, currentNamespace string
