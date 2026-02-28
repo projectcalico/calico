@@ -408,7 +408,7 @@ func TestCompactEqualsRegular(t *testing.T) {
 	input := map[string]string{"p": "q", "r": "s"}
 	compact := Make(input)
 	if !compact.isCompact() {
-		t.Skip("map not compact (key table may be full)")
+		t.Fatal("expected compact representation after reset")
 	}
 
 	// Build a fallback map manually.
@@ -486,7 +486,7 @@ func TestIntersectAndFilterReturnsCompact(t *testing.T) {
 	a := Make(map[string]string{"x": "1", "y": "2", "z": "3"})
 	b := Make(map[string]string{"x": "1", "z": "3"})
 	if !a.isCompact() || !b.isCompact() {
-		t.Skip("inputs not compact")
+		t.Fatal("expected compact representation after reset")
 	}
 
 	// Intersection of a ∩ b should be {x:1, z:3} and compact.
@@ -528,7 +528,7 @@ func TestCompactEqualsOptimization(t *testing.T) {
 	m3 := Make(map[string]string{"eq-a": "1", "eq-b": "99"})
 	m4 := Make(map[string]string{"eq-a": "1"})
 	if !m1.isCompact() || !m2.isCompact() || !m3.isCompact() || !m4.isCompact() {
-		t.Skip("inputs not compact")
+		t.Fatal("expected compact representation after reset")
 	}
 
 	// Same content → equal.
@@ -584,4 +584,287 @@ func TestKeyTableConcurrent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// ---- Tests for fallback representation ----
+
+// fillKeyTable registers n unique dummy keys in the global key table,
+// returning the number actually registered (capped at maxKeyTableSize).
+func fillKeyTable(n int) int {
+	for i := range n {
+		m := map[string]string{fmt.Sprintf("fill-%d", i): "x"}
+		result := Make(m)
+		if !result.isCompact() {
+			return i
+		}
+	}
+	return min(n, maxKeyTableSize)
+}
+
+func TestFallbackMoreThan63Keys(t *testing.T) {
+	unsafeTestOnlyReset()
+	// A single map with 64 keys cannot fit in the 63-bit bitfield.
+	input := make(map[string]string, 64)
+	for i := range 64 {
+		input[fmt.Sprintf("k%d", i)] = fmt.Sprintf("v%d", i)
+	}
+	m := Make(input)
+	if m.isCompact() {
+		t.Fatal("64-key map should use fallback representation")
+	}
+	if m.Len() != 64 {
+		t.Errorf("Len() = %d, want 64", m.Len())
+	}
+	if !m.EquivalentTo(input) {
+		t.Error("fallback map content mismatch")
+	}
+}
+
+func TestFallbackTableFull(t *testing.T) {
+	unsafeTestOnlyReset()
+	// Fill all 63 slots with known keys.
+	fillKeyTable(maxKeyTableSize)
+
+	// A small map whose keys are all new should fall back because
+	// there are no slots left.
+	input := map[string]string{"brand-new-a": "1", "brand-new-b": "2"}
+	m := Make(input)
+	if m.isCompact() {
+		t.Fatal("expected fallback when key table is full and keys are new")
+	}
+	if !m.EquivalentTo(input) {
+		t.Error("fallback map content mismatch")
+	}
+}
+
+func TestFallbackTableFullOneNewKey(t *testing.T) {
+	unsafeTestOnlyReset()
+	// Fill all 63 slots.
+	fillKeyTable(maxKeyTableSize)
+
+	// Build a map where one key is already known and one is not.
+	// The unknown key can't be registered, so the whole map falls back.
+	input := map[string]string{"fill-0": "reused", "never-seen": "new"}
+	m := Make(input)
+	if m.isCompact() {
+		t.Fatal("expected fallback when table is full and map has one unknown key")
+	}
+	if !m.EquivalentTo(input) {
+		t.Error("fallback map content mismatch")
+	}
+
+	// A map using only already-known keys should still be compact.
+	known := map[string]string{"fill-0": "a", "fill-1": "b"}
+	mk := Make(known)
+	if !mk.isCompact() {
+		t.Fatal("expected compact for map using only known keys")
+	}
+	if !mk.EquivalentTo(known) {
+		t.Error("compact map content mismatch")
+	}
+}
+
+func TestFallbackReadOperations(t *testing.T) {
+	unsafeTestOnlyReset()
+	// Force a fallback by exceeding 63 keys.
+	input := make(map[string]string, 64)
+	for i := range 64 {
+		input[fmt.Sprintf("fb-%d", i)] = fmt.Sprintf("v%d", i)
+	}
+	m := Make(input)
+	if m.isCompact() {
+		t.Fatal("expected fallback representation")
+	}
+
+	// GetString
+	v, ok := m.GetString("fb-0")
+	if !ok || v != "v0" {
+		t.Errorf("GetString(fb-0) = %q, %v; want v0, true", v, ok)
+	}
+	_, ok = m.GetString("nonexistent")
+	if ok {
+		t.Error("GetString(nonexistent) should return false")
+	}
+
+	// AllStrings round-trip
+	seen := make(map[string]string, m.Len())
+	for k, v := range m.AllStrings() {
+		seen[k] = v
+	}
+	if !reflect.DeepEqual(seen, input) {
+		t.Error("AllStrings round-trip mismatch for fallback map")
+	}
+}
+
+// ---- Cross-type (compact vs fallback) tests ----
+
+// makeFallback creates a fallback Map by building a handleMap manually.
+func makeFallback(m map[string]string) Map {
+	if m == nil {
+		return Nil
+	}
+	if len(m) == 0 {
+		return Empty
+	}
+	hm := make(handleMap, len(m))
+	for k, v := range m {
+		hm[uniquestr.Make(k)] = uniquestr.Make(v)
+	}
+	return Map{ptr: unsafe.Pointer(&fallbackMap{m: hm})}
+}
+
+func TestCrossTypeEquals(t *testing.T) {
+	unsafeTestOnlyReset()
+	for _, tc := range []struct {
+		name string
+		a, b map[string]string
+		want bool
+	}{
+		{"same content", map[string]string{"a": "1", "b": "2"}, map[string]string{"a": "1", "b": "2"}, true},
+		{"different values", map[string]string{"a": "1"}, map[string]string{"a": "99"}, false},
+		{"different keys", map[string]string{"a": "1"}, map[string]string{"z": "1"}, false},
+		{"subset", map[string]string{"a": "1"}, map[string]string{"a": "1", "b": "2"}, false},
+		{"superset", map[string]string{"a": "1", "b": "2"}, map[string]string{"a": "1"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			compact := Make(tc.a)
+			fallback := makeFallback(tc.b)
+			if compact.isCompact() == fallback.isCompact() {
+				t.Fatalf("test setup error: both maps have the same representation (compact=%v)", compact.isCompact())
+			}
+			if got := compact.Equals(fallback); got != tc.want {
+				t.Errorf("compact.Equals(fallback) = %v, want %v", got, tc.want)
+			}
+			if got := fallback.Equals(compact); got != tc.want {
+				t.Errorf("fallback.Equals(compact) = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCrossTypeIntersectAndFilter(t *testing.T) {
+	unsafeTestOnlyReset()
+	for _, tc := range []struct {
+		name         string
+		a, b         map[string]string
+		expected     map[string]string
+		filter       func(uniquestr.Handle, uniquestr.Handle) bool
+		aType, bType string // "compact" or "fallback"
+	}{
+		{
+			name:     "compact ∩ fallback, full overlap",
+			a:        map[string]string{"a": "1", "b": "2"},
+			b:        map[string]string{"a": "1", "b": "2"},
+			expected: map[string]string{"a": "1", "b": "2"},
+			aType:    "compact", bType: "fallback",
+		},
+		{
+			name:     "compact ∩ fallback, partial overlap",
+			a:        map[string]string{"a": "1", "b": "2"},
+			b:        map[string]string{"a": "1", "c": "3"},
+			expected: map[string]string{"a": "1"},
+			aType:    "compact", bType: "fallback",
+		},
+		{
+			name:     "compact ∩ fallback, no overlap",
+			a:        map[string]string{"a": "1"},
+			b:        map[string]string{"z": "9"},
+			expected: map[string]string{},
+			aType:    "compact", bType: "fallback",
+		},
+		{
+			name:     "fallback ∩ compact, full overlap",
+			a:        map[string]string{"x": "10", "y": "20"},
+			b:        map[string]string{"x": "10", "y": "20"},
+			expected: map[string]string{"x": "10", "y": "20"},
+			aType:    "fallback", bType: "compact",
+		},
+		{
+			name:     "fallback ∩ compact, with filter",
+			a:        map[string]string{"f1": "v1", "f2": "v2"},
+			b:        map[string]string{"f1": "v1", "f2": "v2"},
+			expected: map[string]string{"f1": "v1"},
+			aType:    "fallback", bType: "compact",
+			filter: func(k uniquestr.Handle, _ uniquestr.Handle) bool {
+				return k.Value() == "f1"
+			},
+		},
+		{
+			name:     "compact ∩ fallback, same keys different values",
+			a:        map[string]string{"k": "compact-val"},
+			b:        map[string]string{"k": "fallback-val"},
+			expected: map[string]string{},
+			aType:    "compact", bType: "fallback",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var a, b Map
+			if tc.aType == "compact" {
+				a = Make(tc.a)
+			} else {
+				a = makeFallback(tc.a)
+			}
+			if tc.bType == "compact" {
+				b = Make(tc.b)
+			} else {
+				b = makeFallback(tc.b)
+			}
+
+			// Verify types are as expected.
+			if tc.aType == "compact" && !a.isCompact() {
+				t.Fatal("expected a to be compact")
+			}
+			if tc.aType == "fallback" && a.isCompact() {
+				t.Fatal("expected a to be fallback")
+			}
+			if tc.bType == "compact" && !b.isCompact() {
+				t.Fatal("expected b to be compact")
+			}
+			if tc.bType == "fallback" && b.isCompact() {
+				t.Fatal("expected b to be fallback")
+			}
+
+			out := IntersectAndFilter(a, b, tc.filter).RecomputeOriginalMap()
+			if !reflect.DeepEqual(out, tc.expected) {
+				t.Errorf("IntersectAndFilter(a,b) = %v, want %v", out, tc.expected)
+			}
+			// Reversed order should give the same result.
+			out = IntersectAndFilter(b, a, tc.filter).RecomputeOriginalMap()
+			if !reflect.DeepEqual(out, tc.expected) {
+				t.Errorf("IntersectAndFilter(b,a) = %v, want %v", out, tc.expected)
+			}
+		})
+	}
+}
+
+func TestFallbackFallbackIntersect(t *testing.T) {
+	unsafeTestOnlyReset()
+	a := makeFallback(map[string]string{"a": "1", "b": "2", "c": "3"})
+	b := makeFallback(map[string]string{"b": "2", "c": "99", "d": "4"})
+	if a.isCompact() || b.isCompact() {
+		t.Fatal("expected both maps to be fallback")
+	}
+
+	out := IntersectAndFilter(a, b, nil).RecomputeOriginalMap()
+	expected := map[string]string{"b": "2"}
+	if !reflect.DeepEqual(out, expected) {
+		t.Errorf("fallback ∩ fallback = %v, want %v", out, expected)
+	}
+}
+
+func TestFallbackFallbackEquals(t *testing.T) {
+	unsafeTestOnlyReset()
+	a := makeFallback(map[string]string{"x": "1", "y": "2"})
+	b := makeFallback(map[string]string{"x": "1", "y": "2"})
+	c := makeFallback(map[string]string{"x": "1", "y": "99"})
+	if a.isCompact() || b.isCompact() || c.isCompact() {
+		t.Fatal("expected fallback representations")
+	}
+
+	if !a.Equals(b) {
+		t.Error("identical fallback maps should be equal")
+	}
+	if a.Equals(c) {
+		t.Error("fallback maps with different values should not be equal")
+	}
 }
