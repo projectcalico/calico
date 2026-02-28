@@ -13,4 +13,4 @@ packages:
       pkgname: "mocks"
       structname: "{{.InterfaceName}}"
     interfaces:
-      Flows_StreamClient:
+      FlowsStreamClient:
