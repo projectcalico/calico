@@ -136,7 +136,6 @@ local:libcalico-go/lib/clientv3
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
 local:libcalico-go/lib/ipam
-local:libcalico-go/lib/json
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
