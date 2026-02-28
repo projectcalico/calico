@@ -52,8 +52,12 @@ func readKeyBits(ptr unsafe.Pointer) uint64 {
 	return *(*uint64)(ptr) &^ topBit
 }
 
+// valuesOffset is the byte offset from the start of a compact struct to its
+// values array.  Derived from compact1 but identical for all compactN types.
+var valuesOffset = unsafe.Offsetof(compact1{}.values)
+
 func readValueAt(ptr unsafe.Pointer, arrayIdx int) uniquestr.Handle {
-	return *(*uniquestr.Handle)(unsafe.Add(ptr, 8+uintptr(arrayIdx)*handleSize))
+	return *(*uniquestr.Handle)(unsafe.Add(ptr, valuesOffset+uintptr(arrayIdx)*handleSize))
 }
 
 // ---- key table ----
