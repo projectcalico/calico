@@ -18,6 +18,7 @@ import (
 	"crypto/sha3"
 	"encoding/base32"
 	"fmt"
+	"net/netip"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -29,7 +30,6 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var (
@@ -46,9 +46,9 @@ const (
 )
 
 type BlockAffinityKey struct {
-	CIDR         net.IPNet `json:"-" validate:"required,name"`
-	Host         string    `json:"-"`
-	AffinityType string    `json:"-"`
+	CIDR         netip.Prefix `json:"-" validate:"required,name"`
+	Host         string       `json:"-"`
+	AffinityType string       `json:"-"`
 }
 
 type BlockAffinity struct {
@@ -57,7 +57,7 @@ type BlockAffinity struct {
 }
 
 func (key BlockAffinityKey) defaultPath() (string, error) {
-	if key.CIDR.IP == nil || key.Host == "" {
+	if !key.CIDR.IsValid() || key.Host == "" {
 		return "", errors.ErrorInsufficientIdentifiers{}
 	}
 
@@ -67,7 +67,7 @@ func (key BlockAffinityKey) defaultPath() (string, error) {
 	}
 
 	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/ipam/v2/%s/%s/ipv%d/block/%s", affinityType, key.Host, key.CIDR.Version(), c)
+	e := fmt.Sprintf("/calico/ipam/v2/%s/%s/ipv%d/block/%s", affinityType, key.Host, prefixVersion(key.CIDR), c)
 	return e, nil
 }
 
@@ -129,11 +129,12 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][3], "-", "/", 1)
-	_, cidr, _ := net.ParseCIDR(cidrStr)
-	if cidr == nil {
+	prefix, err := netip.ParsePrefix(cidrStr)
+	if err != nil {
 		log.Debugf("Failed to parse CIDR in block affinity path: %q", path)
 		return nil
 	}
+	prefix = prefix.Masked()
 	host := r[0][2]
 	affinityType := r[0][1]
 
@@ -141,12 +142,12 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match hostname: %s != %s", options.Host, host)
 		return nil
 	}
-	if options.IPVersion != 0 && options.IPVersion != cidr.Version() {
-		log.Debugf("Didn't match IP version. %d != %d", options.IPVersion, cidr.Version())
+	if options.IPVersion != 0 && options.IPVersion != prefixVersion(prefix) {
+		log.Debugf("Didn't match IP version. %d != %d", options.IPVersion, prefixVersion(prefix))
 		return nil
 	}
 	return BlockAffinityKey{
-		CIDR:         *cidr,
+		CIDR:         prefix,
 		Host:         host,
 		AffinityType: affinityType,
 	}
