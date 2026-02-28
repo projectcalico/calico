@@ -47,16 +47,93 @@ type fallbackMap struct {
 
 // ---- reading helpers (work with any compact struct type) ----
 
-func readKeyBits(ptr unsafe.Pointer) uint64 {
-	return *(*uint64)(ptr) &^ topBit
-}
-
 // valuesOffset is the byte offset from the start of a compact struct to its
 // values array.  Derived from compact1 but identical for all compactN types.
 var valuesOffset = unsafe.Offsetof(compact1{}.values)
 
 func readValueAt(ptr unsafe.Pointer, arrayIdx int) uniquestr.Handle {
 	return *(*uniquestr.Handle)(unsafe.Add(ptr, valuesOffset+uintptr(arrayIdx)*handleSize))
+}
+
+// ---- compactMap: read-only view of a compact bitfield-encoded map ----
+
+// compactMap wraps an unsafe.Pointer to a compactN allocation together with the
+// pre-extracted key bitfield.  Methods on compactMap implement the read
+// operations that Map dispatches to.
+type compactMap struct {
+	ptr     unsafe.Pointer
+	keyBits uint64 // bitfield with topBit stripped
+}
+
+func (cm compactMap) len() int {
+	return bits.OnesCount64(cm.keyBits)
+}
+
+func (cm compactMap) getHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
+	if cm.keyBits == 0 {
+		return uniquestr.Handle{}, false
+	}
+	snap := globalKeyTable.currentSnap()
+	pos, ok := snap.byHandle[h]
+	if !ok {
+		return uniquestr.Handle{}, false
+	}
+	if cm.keyBits&(uint64(1)<<pos) == 0 {
+		return uniquestr.Handle{}, false
+	}
+	arrayIdx := bits.OnesCount64(cm.keyBits & ((uint64(1) << pos) - 1))
+	return readValueAt(cm.ptr, arrayIdx), true
+}
+
+func (cm compactMap) allHandles(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
+	if cm.keyBits == 0 {
+		return
+	}
+	snap := globalKeyTable.currentSnap()
+	bf := cm.keyBits
+	arrayIdx := 0
+	for bf != 0 {
+		pos := bits.TrailingZeros64(bf)
+		key := snap.byIndex[pos]
+		val := readValueAt(cm.ptr, arrayIdx)
+		if !yield(key, val) {
+			return
+		}
+		bf &= bf - 1
+		arrayIdx++
+	}
+}
+
+func (cm compactMap) equals(other compactMap) bool {
+	if cm.keyBits != other.keyBits {
+		return false
+	}
+	n := bits.OnesCount64(cm.keyBits)
+	for i := range n {
+		if readValueAt(cm.ptr, i) != readValueAt(other.ptr, i) {
+			return false
+		}
+	}
+	return true
+}
+
+// ---- fallbackMap read methods ----
+
+func (fm *fallbackMap) len() int {
+	return len(fm.m)
+}
+
+func (fm *fallbackMap) getHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
+	v, ok := fm.m[h]
+	return v, ok
+}
+
+func (fm *fallbackMap) allHandles(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
+	for k, v := range fm.m {
+		if !yield(k, v) {
+			return
+		}
+	}
 }
 
 // ---- key table ----

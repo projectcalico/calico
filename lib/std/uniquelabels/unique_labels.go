@@ -59,9 +59,29 @@ type Map struct {
 	ptr unsafe.Pointer // -> compact* or *fallbackMap; nil for Nil.
 }
 
+// compact returns the compact view if this Map uses the bitfield
+// representation.  Must not be called when m.ptr is nil.
+func (m Map) compact() (compactMap, bool) {
+	header := *(*uint64)(m.ptr)
+	if header&topBit != 0 {
+		return compactMap{ptr: m.ptr, keyBits: header &^ topBit}, true
+	}
+	return compactMap{}, false
+}
+
+// asFallback returns the fallback view.  Must only be called when m.ptr is
+// non-nil and compact() returned false.
+func (m Map) asFallback() *fallbackMap {
+	return (*fallbackMap)(m.ptr)
+}
+
 // isCompact reports whether this Map uses the compact bitfield representation.
 func (m Map) isCompact() bool {
-	return m.ptr != nil && *(*uint64)(m.ptr)&topBit != 0
+	if m.ptr == nil {
+		return false
+	}
+	_, ok := m.compact()
+	return ok
 }
 
 // IsNil reports whether the map is the nil representation.
@@ -74,11 +94,10 @@ func (m Map) Len() int {
 	if m.ptr == nil {
 		return 0
 	}
-	header := *(*uint64)(m.ptr)
-	if header&topBit != 0 {
-		return bits.OnesCount64(header &^ topBit)
+	if cm, ok := m.compact(); ok {
+		return cm.len()
 	}
-	return len((*fallbackMap)(m.ptr).m)
+	return m.asFallback().len()
 }
 
 // Make makes an interned copy of the given map.  In order to benefit from
@@ -136,21 +155,10 @@ func (m Map) Equals(other Map) bool {
 		// Nil equals Empty by contract.
 		return m.Len() == 0 && other.Len() == 0
 	}
-	mH := *(*uint64)(m.ptr)
-	oH := *(*uint64)(other.ptr)
-	if mH&topBit != 0 && oH&topBit != 0 {
-		// Both compact.  Different bitfields ⇒ different key sets.
-		if mH != oH {
-			return false
-		}
-		// Same keys — compare value arrays directly.
-		n := bits.OnesCount64(mH &^ topBit)
-		for i := range n {
-			if readValueAt(m.ptr, i) != readValueAt(other.ptr, i) {
-				return false
-			}
-		}
-		return true
+	cm, mCompact := m.compact()
+	co, oCompact := other.compact()
+	if mCompact && oCompact {
+		return cm.equals(co)
 	}
 	// Mixed or both fallback: generic comparison.
 	if m.Len() != other.Len() {
@@ -196,25 +204,10 @@ func (m Map) GetHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
 	if m.ptr == nil {
 		return uniquestr.Handle{}, false
 	}
-	header := *(*uint64)(m.ptr)
-	if header&topBit != 0 {
-		keyBits := header &^ topBit
-		if keyBits == 0 {
-			return uniquestr.Handle{}, false
-		}
-		snap := globalKeyTable.currentSnap()
-		pos, ok := snap.byHandle[h]
-		if !ok {
-			return uniquestr.Handle{}, false
-		}
-		if keyBits&(uint64(1)<<pos) == 0 {
-			return uniquestr.Handle{}, false
-		}
-		arrayIdx := bits.OnesCount64(keyBits & ((uint64(1) << pos) - 1))
-		return readValueAt(m.ptr, arrayIdx), true
+	if cm, ok := m.compact(); ok {
+		return cm.getHandle(h)
 	}
-	v, ok := (*fallbackMap)(m.ptr).m[h]
-	return v, ok
+	return m.asFallback().getHandle(h)
 }
 
 // AllHandles returns an iterator over key/value handle pairs.
@@ -223,30 +216,10 @@ func (m Map) AllHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
 		if m.ptr == nil {
 			return
 		}
-		header := *(*uint64)(m.ptr)
-		if header&topBit != 0 {
-			bf := header &^ topBit
-			if bf == 0 {
-				return
-			}
-			snap := globalKeyTable.currentSnap()
-			arrayIdx := 0
-			for bf != 0 {
-				pos := bits.TrailingZeros64(bf)
-				key := snap.byIndex[pos]
-				val := readValueAt(m.ptr, arrayIdx)
-				if !yield(key, val) {
-					return
-				}
-				bf &= bf - 1 // Clear lowest set bit.
-				arrayIdx++
-			}
+		if cm, ok := m.compact(); ok {
+			cm.allHandles(yield)
 		} else {
-			for k, v := range (*fallbackMap)(m.ptr).m {
-				if !yield(k, v) {
-					return
-				}
-			}
+			m.asFallback().allHandles(yield)
 		}
 	}
 }
@@ -354,17 +327,16 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 	// We _do_ need to make a new map, re-do the calculation.
 	// If a is compact, build a compact result (the intersection's keys
 	// are a subset of a's keys, which are all in the key table).
-	if a.isCompact() {
+	if cm, ok := a.compact(); ok {
 		snap := globalKeyTable.currentSnap()
-		aBf := readKeyBits(a.ptr)
 		var resultBf uint64
 		var vals []uniquestr.Handle
-		remaining := aBf
+		remaining := cm.keyBits
 		aIdx := 0
 		for remaining != 0 {
 			pos := uint(bits.TrailingZeros64(remaining))
 			key := snap.byIndex[pos]
-			val := readValueAt(a.ptr, aIdx)
+			val := readValueAt(cm.ptr, aIdx)
 			if include(key, val) {
 				if otherV, ok := b.GetHandle(key); ok && otherV == val {
 					resultBf |= uint64(1) << pos
