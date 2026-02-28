@@ -144,7 +144,7 @@ var _ = Describe("Test the NetworkSet update processor", func() {
 		}))
 		_, err = up.Process(&model.KVPair{
 			Key: model.GlobalBGPPeerKey{
-				PeerIP: net.MustParseIP("1.2.3.4"),
+				PeerIP: model.AddrFromIP(net.MustParseIP("1.2.3.4")),
 			},
 			Value:    res,
 			Revision: "abcde",

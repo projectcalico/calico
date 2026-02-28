@@ -823,15 +823,15 @@ var remoteHostVXLANV6TunnelMACConfigKey = model.HostConfigKey{
 }
 
 var ipPoolKey = model.IPPoolKey{
-	CIDR: mustParseNet("10.0.0.0/16"),
+	CIDR: mustParsePrefix("10.0.0.0/16"),
 }
 
 var ipPoolKey2 = model.IPPoolKey{
-	CIDR: mustParseNet("11.0.0.0/16"),
+	CIDR: mustParsePrefix("11.0.0.0/16"),
 }
 
 var hostCoveringIPPoolKey = model.IPPoolKey{
-	CIDR: mustParseNet("192.168.0.0/24"),
+	CIDR: mustParsePrefix("192.168.0.0/24"),
 }
 
 var hostCoveringIPPool = model.IPPool{
@@ -846,7 +846,7 @@ var ipPoolWithIPIP = model.IPPool{
 }
 
 var v6IPPoolKey = model.IPPoolKey{
-	CIDR: mustParseNet("feed:beef::/64"),
+	CIDR: mustParsePrefix("feed:beef::/64"),
 }
 
 var v6IPPool = model.IPPool{
@@ -886,19 +886,19 @@ var ipPoolWithVXLANCrossSubnet = model.IPPool{
 }
 
 var remoteIPAMBlockKey = model.BlockKey{
-	CIDR: mustParseNet("10.0.1.0/29"),
+	CIDR: mustParsePrefix("10.0.1.0/29"),
 }
 
 var remoteIPAMSlash32BlockKey = model.BlockKey{
-	CIDR: mustParseNet("10.0.0.0/32"),
+	CIDR: mustParsePrefix("10.0.0.0/32"),
 }
 
 var remotev6IPAMBlockKey = model.BlockKey{
-	CIDR: mustParseNet("feed:beef:0:0:1::/96"),
+	CIDR: mustParsePrefix("feed:beef:0:0:1::/96"),
 }
 
 var localIPAMBlockKey = model.BlockKey{
-	CIDR: mustParseNet("10.0.0.0/29"),
+	CIDR: mustParsePrefix("10.0.0.0/29"),
 }
 
 var (

@@ -16,9 +16,11 @@ package calc_test
 
 import (
 	net2 "net"
+	"net/netip"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -41,4 +43,8 @@ func mustParseNet(n string) net.IPNet {
 func mustParseIP(s string) net.IP {
 	ip := net2.ParseIP(s)
 	return net.IP{IP: ip}
+}
+
+func mustParsePrefix(s string) netip.Prefix {
+	return model.PrefixFromIPNet(mustParseNet(s))
 }

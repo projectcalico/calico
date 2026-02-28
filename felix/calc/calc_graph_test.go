@@ -108,7 +108,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		Expect(err).To(BeNil())
 	},
 	Entry("IPPool",
-		model.IPPoolKey{CIDR: mustParseNet("10.0.0.0/16")},
+		model.IPPoolKey{CIDR: mustParsePrefix("10.0.0.0/16")},
 		&model.IPPool{
 			CIDR: mustParseNet("10.0.0.0/16"),
 		},
@@ -123,7 +123,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			Id: "10.0.0.0-16",
 		}),
 	Entry("IPPool masquerade",
-		model.IPPoolKey{CIDR: mustParseNet("10.0.0.0/16")},
+		model.IPPoolKey{CIDR: mustParsePrefix("10.0.0.0/16")},
 		&model.IPPool{
 			CIDR:       mustParseNet("10.0.0.0/16"),
 			Masquerade: true,

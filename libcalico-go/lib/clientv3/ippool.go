@@ -92,9 +92,10 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		// supported with host-local IPAM on KDD.
 		for _, b := range blocks.KVPairs {
 			k := b.Key.(model.BlockKey)
-			ones, _ := k.CIDR.Mask.Size()
+			kCIDR := model.IPNetFromPrefix(k.CIDR)
+			ones, _ := kCIDR.Mask.Size()
 			// Check if this block has a different size to the pool, and that it overlaps with the pool.
-			if ones != poolBlockSize && k.CIDR.IsNetOverlap(*poolCIDR) {
+			if ones != poolBlockSize && kCIDR.IsNetOverlap(*poolCIDR) {
 				return nil, cerrors.ErrorValidation{
 					ErroredFields: []cerrors.ErroredField{{
 						Name:   "IPPool.Spec.BlockSize",

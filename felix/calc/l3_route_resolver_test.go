@@ -72,7 +72,7 @@ var _ = Describe("L3RouteResolver", func() {
 
 			l3RR.OnPoolUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key:   model.IPPoolKey{CIDR: v1Pool.CIDR},
+					Key:   model.IPPoolKey{CIDR: model.PrefixFromIPNet(v1Pool.CIDR)},
 					Value: &v1Pool,
 				},
 			})

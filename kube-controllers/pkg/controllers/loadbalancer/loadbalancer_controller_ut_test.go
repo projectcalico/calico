@@ -212,7 +212,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		Expect(c.allocationTracker.ipsByService[*svcKey]).To(BeEmpty())
 
 		cidr := cnet.MustParseCIDR("10.0.0.4/30")
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		aff := "virtual:load-balancer"
 		idx0 := 0
 		idx1 := 1
@@ -293,7 +293,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 
 	It("should not panic on handleBlockUpdate with nil *AllocationBlock", func() {
 		cidr := cnet.MustParseCIDR("10.0.0.4/30")
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 
 		// A nil *AllocationBlock wrapped in a non-nil interface passes the
 		// "kvp.Value == nil" check but causes a nil-pointer dereference on

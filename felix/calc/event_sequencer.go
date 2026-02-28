@@ -751,7 +751,7 @@ func (buf *EventSequencer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPoo
 		"key":  key,
 		"pool": pool,
 	}).Debug("IPPool update")
-	cidr := ip.CIDRFromCalicoNet(key.CIDR)
+	cidr := ip.CIDRFromPrefix(key.CIDR)
 	buf.pendingIPPoolDeletes.Discard(cidr)
 	buf.pendingIPPoolUpdates[cidr] = pool
 }
@@ -823,7 +823,7 @@ func (buf *EventSequencer) flushHostWireguardUpdates() {
 
 func (buf *EventSequencer) OnIPPoolRemove(key model.IPPoolKey) {
 	log.WithField("key", key).Debug("IPPool removed")
-	cidr := ip.CIDRFromCalicoNet(key.CIDR)
+	cidr := ip.CIDRFromPrefix(key.CIDR)
 	delete(buf.pendingIPPoolUpdates, cidr)
 	if buf.sentIPPools.Contains(cidr) {
 		buf.pendingIPPoolDeletes.Add(cidr)

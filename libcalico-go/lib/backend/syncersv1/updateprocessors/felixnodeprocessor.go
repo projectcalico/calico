@@ -305,7 +305,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 				continue
 			}
 			kvps = append(kvps, &model.KVPair{
-				Key:      model.BlockKey{CIDR: *cidr},
+				Key:      model.BlockKey{CIDR: model.PrefixFromIPNet(*cidr)},
 				Value:    nil,
 				Revision: kvp.Revision,
 			})
@@ -321,7 +321,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 
 			aff := fmt.Sprintf("host:%s", name)
 			kvps = append(kvps, &model.KVPair{
-				Key:      model.BlockKey{CIDR: *cidr},
+				Key:      model.BlockKey{CIDR: model.PrefixFromIPNet(*cidr)},
 				Value:    &model.AllocationBlock{CIDR: *cidr, Affinity: &aff},
 				Revision: kvp.Revision,
 			})

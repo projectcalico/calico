@@ -689,12 +689,12 @@ func (c *client) updatePeersV1() {
 			for _, peer := range peers {
 				log.Debugf("Peer: %#v", peer)
 				if globalPass {
-					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP, Port: peer.Port}
+					key := model.GlobalBGPPeerKey{PeerIP: model.AddrFromIP(peer.PeerIP), Port: peer.Port}
 					emit(key, peer)
 				} else {
 					for _, localNodeName := range localNodeNames {
 						log.Debugf("Local node name: %#v", localNodeName)
-						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
+						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: model.AddrFromIP(peer.PeerIP), Port: peer.Port}
 						emit(key, peer)
 					}
 				}
@@ -766,7 +766,7 @@ func (c *client) updatePeersV1() {
 
 		for _, peer := range peers {
 			for _, localNodeName := range localNodeNames {
-				key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
+				key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: model.AddrFromIP(peer.PeerIP), Port: peer.Port}
 				emit(key, peer)
 			}
 		}

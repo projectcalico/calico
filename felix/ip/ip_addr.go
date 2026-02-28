@@ -27,6 +27,7 @@ import (
 	"math/big"
 	"math/bits"
 	"net"
+	"net/netip"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -356,6 +357,24 @@ func CIDRFromString(cidrStr string) (CIDR, error) {
 
 func CIDRFromCalicoNet(ipNet calinet.IPNet) CIDR {
 	return CIDRFromIPNet(&ipNet.IPNet)
+}
+
+// CIDRFromPrefix converts a netip.Prefix to a CIDR.
+func CIDRFromPrefix(p netip.Prefix) CIDR {
+	addr := p.Addr()
+	bits := p.Bits()
+	if addr.Is4() {
+		raw := addr.As4()
+		return V4CIDR{
+			addr:   V4Addr(raw),
+			prefix: uint8(bits),
+		}
+	}
+	raw := addr.As16()
+	return V6CIDR{
+		addr:   V6Addr(raw),
+		prefix: uint8(bits),
+	}
 }
 
 func CIDRsFromCalicoNets(ipNets []calinet.IPNet) []CIDR {
