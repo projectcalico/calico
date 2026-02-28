@@ -350,19 +350,22 @@ func init() {
 
 // ParseCompressionAlgorithms parses a comma-separated string of compression
 // algorithm names (e.g. "zstd,snappy") into a slice of CompressionAlgorithm.
-// Unknown algorithm names are silently skipped.  Returns nil if the input
-// is empty or contains no valid algorithms.
+// Unknown algorithm names are logged as warnings and skipped.  Returns nil
+// if the input is empty or contains no valid algorithms.
 func ParseCompressionAlgorithms(s string) []CompressionAlgorithm {
 	if s == "" {
 		return nil
 	}
 	var result []CompressionAlgorithm
 	for part := range strings.SplitSeq(s, ",") {
-		switch strings.TrimSpace(strings.ToLower(part)) {
+		name := strings.TrimSpace(strings.ToLower(part))
+		switch name {
 		case "snappy":
 			result = append(result, CompressionSnappy)
 		case "zstd":
 			result = append(result, CompressionZstd)
+		default:
+			log.WithField("algorithm", name).Warn("Unknown compression algorithm in configuration, ignoring.")
 		}
 	}
 	return result
