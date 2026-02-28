@@ -380,12 +380,15 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 
 	// Named ports on our endpoints have a protocol attached but our rules have the protocol at
 	// the top level.  Convert that to a protocol that we can use with the IP set calculation logic.
-	namedPortProto := ipsetmember.ProtocolTCP
+	namedPortProto := ipsetmember.ProtocolAny
 	if rule.Protocol != nil {
-		if ipsetmember.ProtocolUDP.MatchesModelProtocol(*rule.Protocol) {
+		switch {
+		case ipsetmember.ProtocolUDP.MatchesModelProtocol(*rule.Protocol):
 			namedPortProto = ipsetmember.ProtocolUDP
-		} else if ipsetmember.ProtocolSCTP.MatchesModelProtocol(*rule.Protocol) {
+		case ipsetmember.ProtocolSCTP.MatchesModelProtocol(*rule.Protocol):
 			namedPortProto = ipsetmember.ProtocolSCTP
+		default:
+			namedPortProto = ipsetmember.ProtocolTCP
 		}
 	}
 
