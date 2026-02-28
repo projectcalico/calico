@@ -243,9 +243,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Attrs:    attrs,
 		}
 
-		// For VMI pods with persistence enabled, set MaxAllocPerIPVersion=1 to ensure only one IP per IP version per VMI.
+		// For VMI pods with persistence enabled, set MaxAllocToHandlePerIPVersion=1 to ensure only one IP per IP version per VMI.
 		if ipPersistenceEnabledForVM {
-			assignArgs.MaxAllocPerIPVersion = 1
+			assignArgs.MaxAllocToHandlePerIPVersion = 1
 		}
 
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
@@ -358,10 +358,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Namespace:        namespaceObj,
 		}
 
-		// For VMI pods with persistence enabled, set MaxAllocPerIPVersion=1 to ensure only one IP per IP version per VMI.
+		// For VMI pods with persistence enabled, set MaxAllocToHandlePerIPVersion=1 to ensure only one IP per IP version per VMI.
 		// The IPAM library will automatically handle IP reuse if the handle already has an allocation.
 		if ipPersistenceEnabledForVM {
-			assignArgs.MaxAllocPerIPVersion = 1
+			assignArgs.MaxAllocToHandlePerIPVersion = 1
 		}
 
 		if runtime.GOOS == "windows" {
@@ -577,6 +577,12 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 		return nil, err
 	}
 
+	// Check ownerReferences before creating the KubeVirt client.
+	// This avoids errors when KubeVirt is not installed but a pod happens to have the virt-launcher- prefix.
+	if kubevirt.FindVMIOwnerRef(pod) == nil {
+		return nil, nil
+	}
+
 	// Create KubeVirt client for VMI verification
 	virtClient, err := k8s.NewKubeVirtClient(conf, logger)
 	if err != nil {
@@ -733,9 +739,9 @@ func cmdDel(args *skel.CmdArgs) error {
 				continue
 			}
 
-			// Check which attribute owner matches this pod using MatchAttributeOwner
-			activeMatches := ipam.MatchAttributeOwner(attr.ActiveOwnerAttrs, expectedOwner)
-			alternateMatches := ipam.MatchAttributeOwner(attr.AlternateOwnerAttrs, expectedOwner)
+			// Check which attribute owner matches this pod
+			activeMatches := expectedOwner.Matches(attr.ActiveOwnerAttrs)
+			alternateMatches := expectedOwner.Matches(attr.AlternateOwnerAttrs)
 
 			// Prepare updates and preconditions based on which owner type matches
 			var updates *ipam.OwnerAttributeUpdates
@@ -791,6 +797,11 @@ func cmdDel(args *skel.CmdArgs) error {
 		for _, ip := range ips {
 			attr, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, ip)
 			if err != nil {
+				if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+					// IP was already released by someone else, treat as no attributes remaining.
+					logger.WithField("ip", ip).Info("IP already released during cleanup, skipping")
+					continue
+				}
 				logger.WithError(err).WithField("ip", ip).Error("Failed to get assignment attributes for post-cleanup check")
 				return fmt.Errorf("failed to verify owner attributes after cleanup for IP %s: %w", ip, err)
 			}
@@ -897,20 +908,21 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 	defer cancel()
 
 	existingIPs, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
-	if err != nil || len(existingIPs) == 0 {
+	if err != nil {
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+			// Communication or unexpected error - don't fall through to new allocation.
+			logger.WithError(err).Error("Failed to get existing IPs for VM handle")
+			return false, fmt.Errorf("failed to get existing IPs for VM handle %s: %w", handleID, err)
+		}
+	}
+	if len(existingIPs) == 0 {
 		if isMigrationTarget {
-			// Migration target requires existing IPs allocated by the source pod
-			if err != nil {
-				logger.WithError(err).Error("Failed to get existing IPs for migration target")
-				return false, fmt.Errorf("migration target pod but no IP allocated to VM handle %s: %w", handleID, err)
-			}
+			// Migration target requires existing IPs allocated by the source pod.
 			logger.Error("Migration target pod but VM handle has no allocated IPs")
 			return false, fmt.Errorf("migration target pod but no IP allocated to VM handle %s", handleID)
 		}
-		// Source pod with no existing IPs - fall through to normal AutoAssign
-		if err != nil {
-			logger.WithError(err).Debug("No existing IPs for VM handle, proceeding with new allocation")
-		}
+		// Source pod with no existing IPs - fall through to normal AutoAssign.
+		logger.WithError(err).Info("No existing IPs for VM handle, proceeding with new allocation")
 		return false, nil
 	}
 
@@ -932,7 +944,11 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 			Address: net.IPNet{IP: ip.IP, Mask: mask},
 		})
 
-		// Source pod: set ActiveOwnerAttrs; Migration target: set AlternateOwnerAttrs
+		// Source pod: set ActiveOwnerAttrs; Migration target: set AlternateOwnerAttrs.
+		// No preconditions are used here because the attributes may already be non-empty:
+		// - ActiveOwnerAttrs: a previous virt-launcher pod may be stuck in deletion while a new one starts.
+		// - AlternateOwnerAttrs: a previous migration may have failed, leaving stale alternate attributes.
+		// In both cases, the new pod must overwrite the existing attributes.
 		var updates *ipam.OwnerAttributeUpdates
 		if isMigrationTarget {
 			updates = &ipam.OwnerAttributeUpdates{

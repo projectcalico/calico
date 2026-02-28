@@ -23,11 +23,12 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
+	fakekubevirt "github.com/projectcalico/calico/libcalico-go/lib/kubevirt/fake"
 )
 
 // TestGetPodVMIInfo_NotVirtLauncherPod tests that non-virt-launcher pods return nil.
 func TestGetPodVMIInfo_NotVirtLauncherPod(t *testing.T) {
-	fakeClient := kubevirt.NewFakeVirtClient()
+	fakeClient := fakekubevirt.NewFakeVirtClient()
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -48,7 +49,7 @@ func TestGetPodVMIInfo_NotVirtLauncherPod(t *testing.T) {
 
 // TestGetPodVMIInfo_VirtLauncherPod tests that virt-launcher pods are correctly identified.
 func TestGetPodVMIInfo_VirtLauncherPod(t *testing.T) {
-	fakeClient := kubevirt.NewFakeVirtClient()
+	fakeClient := fakekubevirt.NewFakeVirtClient()
 
 	vmiUID := "vmi-12345"
 	vmiName := "test-vmi"
@@ -56,7 +57,7 @@ func TestGetPodVMIInfo_VirtLauncherPod(t *testing.T) {
 	namespace := "default"
 
 	// Create a VMI
-	vmi := kubevirt.NewVMIBuilder(vmiName, namespace, vmiUID).
+	vmi := fakekubevirt.NewVMIBuilder(vmiName, namespace, vmiUID).
 		WithActivePod(podUID, "node1").
 		Build()
 	fakeClient.AddVMI(vmi)
@@ -104,7 +105,7 @@ func TestGetPodVMIInfo_VirtLauncherPod(t *testing.T) {
 
 // TestGetPodVMIInfo_MigrationTargetPod tests migration target pod detection.
 func TestGetPodVMIInfo_MigrationTargetPod(t *testing.T) {
-	fakeClient := kubevirt.NewFakeVirtClient()
+	fakeClient := fakekubevirt.NewFakeVirtClient()
 
 	vmiUID := "vmi-12345"
 	vmiName := "test-vmi"
@@ -116,7 +117,7 @@ func TestGetPodVMIInfo_MigrationTargetPod(t *testing.T) {
 	namespace := "default"
 
 	// Create a VMI with migration in progress
-	vmi := kubevirt.NewVMIBuilder(vmiName, namespace, vmiUID).
+	vmi := fakekubevirt.NewVMIBuilder(vmiName, namespace, vmiUID).
 		WithActivePod(sourcePodUID, "node1").
 		WithActivePod(targetPodUID, "node2").
 		WithMigration(migrationUID, "virt-launcher-test-vmi-source", targetPodName).
@@ -176,7 +177,7 @@ func TestGetPodVMIInfo_MigrationTargetPod(t *testing.T) {
 
 // TestGetPodVMIInfo_VMIBeingDeleted tests VMI deletion detection.
 func TestGetPodVMIInfo_VMIBeingDeleted(t *testing.T) {
-	fakeClient := kubevirt.NewFakeVirtClient()
+	fakeClient := fakekubevirt.NewFakeVirtClient()
 
 	vmiUID := "vmi-12345"
 	vmiName := "test-vmi"
@@ -200,7 +201,7 @@ func TestGetPodVMIInfo_VMIBeingDeleted(t *testing.T) {
 	// Create a VMI with ownerReference to the VM
 	controllerTrue := true
 	blockOwnerDeletion := true
-	vmi := kubevirt.NewVMIBuilder(vmiName, namespace, vmiUID).
+	vmi := fakekubevirt.NewVMIBuilder(vmiName, namespace, vmiUID).
 		WithActivePod(podUID, "node1").
 		Build()
 	vmi.OwnerReferences = []metav1.OwnerReference{

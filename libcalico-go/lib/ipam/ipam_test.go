@@ -1303,7 +1303,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 		})
 
-		Context("IP assignment with MaxAllocPerIPVersion", func() {
+		Context("IP assignment with MaxAllocToHandlePerIPVersion", func() {
 			var hostname string
 			var handle string
 
@@ -1318,19 +1318,19 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				applyNode(bc, kc, hostname, nil)
 			})
 
-			It("should reuse existing IPs when MaxAllocPerIPVersion is reached on a second AutoAssign with the same handle", func() {
+			It("should reuse existing IPs when MaxAllocToHandlePerIPVersion is reached on a second AutoAssign with the same handle", func() {
 				ctx := context.Background()
 
 				var firstV4IP, firstV6IP cnet.IPNet
 
-				By("first AutoAssign: allocating 1 IPv4 + 1 IPv6 with MaxAllocPerIPVersion=1", func() {
+				By("first AutoAssign: allocating 1 IPv4 + 1 IPv6 with MaxAllocToHandlePerIPVersion=1", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						Num6:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
-						MaxAllocPerIPVersion: 1,
+						Num4:                         1,
+						Num6:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
+						MaxAllocToHandlePerIPVersion: 1,
 					}
 					v4ia, v6ia, err := ic.AutoAssign(ctx, args)
 					Expect(err).NotTo(HaveOccurred())
@@ -1349,14 +1349,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					Expect(ips).To(HaveLen(2))
 				})
 
-				By("second AutoAssign with the same handle and MaxAllocPerIPVersion=1: should reuse existing IPs", func() {
+				By("second AutoAssign with the same handle and MaxAllocToHandlePerIPVersion=1: should reuse existing IPs", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						Num6:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
-						MaxAllocPerIPVersion: 1,
+						Num4:                         1,
+						Num6:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
+						MaxAllocToHandlePerIPVersion: 1,
 					}
 					v4ia, v6ia, err := ic.AutoAssign(ctx, args)
 					Expect(err).NotTo(HaveOccurred())
@@ -1389,18 +1389,18 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				})
 			})
 
-			It("should reuse existing IP when MaxAllocPerIPVersion is reached on a second AssignIP with the same handle", func() {
+			It("should reuse existing IP when MaxAllocToHandlePerIPVersion is reached on a second AssignIP with the same handle", func() {
 				ctx := context.Background()
 
 				requestedIP := cnet.MustParseIP("10.0.0.1")
 
-				By("first AssignIP: assigning a specific IP with MaxAllocPerIPVersion=1", func() {
+				By("first AssignIP: assigning a specific IP with MaxAllocToHandlePerIPVersion=1", func() {
 					err := ic.AssignIP(ctx, AssignIPArgs{
-						IP:                   requestedIP,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						Attrs:                map[string]string{"pod": "source-pod"},
-						MaxAllocPerIPVersion: 1,
+						IP:                           requestedIP,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						Attrs:                        map[string]string{"pod": "source-pod"},
+						MaxAllocToHandlePerIPVersion: 1,
 					})
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -1412,13 +1412,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					Expect(ips[0].IP.Equal(requestedIP.IP)).To(BeTrue())
 				})
 
-				By("second AssignIP with the same handle, same IP, and MaxAllocPerIPVersion=1: should succeed (idempotent)", func() {
+				By("second AssignIP with the same handle, same IP, and MaxAllocToHandlePerIPVersion=1: should succeed (idempotent)", func() {
 					err := ic.AssignIP(ctx, AssignIPArgs{
-						IP:                   requestedIP,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						Attrs:                map[string]string{"pod": "target-pod"},
-						MaxAllocPerIPVersion: 1,
+						IP:                           requestedIP,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						Attrs:                        map[string]string{"pod": "target-pod"},
+						MaxAllocToHandlePerIPVersion: 1,
 					})
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -1430,14 +1430,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					Expect(ips[0].IP.Equal(requestedIP.IP)).To(BeTrue())
 				})
 
-				By("second AssignIP with the same handle but a DIFFERENT IP and MaxAllocPerIPVersion=1: should fail", func() {
+				By("second AssignIP with the same handle but a DIFFERENT IP and MaxAllocToHandlePerIPVersion=1: should fail", func() {
 					differentIP := cnet.MustParseIP("10.0.0.2")
 					err := ic.AssignIP(ctx, AssignIPArgs{
-						IP:                   differentIP,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						Attrs:                map[string]string{"pod": "target-pod"},
-						MaxAllocPerIPVersion: 1,
+						IP:                           differentIP,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						Attrs:                        map[string]string{"pod": "target-pod"},
+						MaxAllocToHandlePerIPVersion: 1,
 					})
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("already has IP(s) allocated"))
@@ -1449,18 +1449,18 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				})
 			})
 
-			It("should allow two AutoAssigns and reuse on third when MaxAllocPerIPVersion is 2", func() {
+			It("should allow two AutoAssigns and reuse on third when MaxAllocToHandlePerIPVersion is 2", func() {
 				ctx := context.Background()
 
 				var firstV4IP, secondV4IP cnet.IPNet
 
-				By("first AutoAssign: allocating 1 IPv4 with MaxAllocPerIPVersion=2", func() {
+				By("first AutoAssign: allocating 1 IPv4 with MaxAllocToHandlePerIPVersion=2", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
-						MaxAllocPerIPVersion: 2,
+						Num4:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
+						MaxAllocToHandlePerIPVersion: 2,
 					}
 					v4ia, _, err := ic.AutoAssign(ctx, args)
 					Expect(err).NotTo(HaveOccurred())
@@ -1476,13 +1476,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					Expect(ips).To(HaveLen(1))
 				})
 
-				By("second AutoAssign: allocating another IPv4 with MaxAllocPerIPVersion=2 - should succeed", func() {
+				By("second AutoAssign: allocating another IPv4 with MaxAllocToHandlePerIPVersion=2 - should succeed", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
-						MaxAllocPerIPVersion: 2,
+						Num4:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
+						MaxAllocToHandlePerIPVersion: 2,
 					}
 					v4ia, _, err := ic.AutoAssign(ctx, args)
 					Expect(err).NotTo(HaveOccurred())
@@ -1501,13 +1501,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					Expect(ips).To(HaveLen(2))
 				})
 
-				By("third AutoAssign with MaxAllocPerIPVersion=2: should hit limit and reuse existing IPs", func() {
+				By("third AutoAssign with MaxAllocToHandlePerIPVersion=2: should hit limit and reuse existing IPs", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
-						MaxAllocPerIPVersion: 2,
+						Num4:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
+						MaxAllocToHandlePerIPVersion: 2,
 					}
 					v4ia, _, err := ic.AutoAssign(ctx, args)
 					Expect(err).NotTo(HaveOccurred())
@@ -2318,7 +2318,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 		})
 
-		Context("VerifyAndSwapOwnerAttributeForVM", func() {
+		Context("EnsureActiveVMOwnerAttrs", func() {
 			var hostname string
 			var handle string
 			var allocatedIPs []cnet.IP
@@ -2371,7 +2371,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			It("should promote target to active owner on all IPs", func() {
 				ctx := context.Background()
 
-				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
 				Expect(err).NotTo(HaveOccurred())
 
 				for _, ip := range allocatedIPs {
@@ -2388,11 +2388,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			It("should be idempotent - second call succeeds when target is already active", func() {
 				ctx := context.Background()
 
-				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Call again - should succeed (idempotent)
-				err = VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				err = EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
 				Expect(err).NotTo(HaveOccurred())
 
 				for _, ip := range allocatedIPs {
@@ -2413,7 +2413,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					Expect(err).NotTo(HaveOccurred())
 				}
 
-				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
 				Expect(err).To(HaveOccurred())
 				Expect(errors.Is(err, ErrAlternateOwnerEmpty)).To(BeTrue(),
 					fmt.Sprintf("Expected ErrAlternateOwnerEmpty, got: %v", err))
@@ -2433,7 +2433,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					Expect(err).NotTo(HaveOccurred())
 				}
 
-				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
 				Expect(err).To(HaveOccurred())
 				Expect(errors.Is(err, ErrAlternateOwnerMismatch)).To(BeTrue(),
 					fmt.Sprintf("Expected ErrAlternateOwnerMismatch, got: %v", err))
@@ -2446,7 +2446,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				err := ic.ReleaseByHandle(ctx, handle)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				err = EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get IPs for handle"))
 			})
@@ -2463,7 +2463,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				}
 
 				// Swap should still succeed - it only verifies alternate
-				err := VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
 				Expect(err).NotTo(HaveOccurred())
 
 				for _, ip := range allocatedIPs {
@@ -2502,7 +2502,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				}, nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = VerifyAndSwapOwnerAttributeForVM(ctx, ic, "multus-net1", "test-ns", "test-vm", "virt-launcher-target")
+				err = EnsureActiveVMOwnerAttrs(ctx, ic, "multus-net1", "test-ns", "test-vm", "virt-launcher-target")
 				Expect(err).NotTo(HaveOccurred())
 
 				allocAttr, err := ic.GetAssignmentAttributes(ctx, customIP)
@@ -2528,7 +2528,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(err).NotTo(HaveOccurred())
 
 				// Now call the function - first IP should be skipped, second IP should be swapped
-				err = VerifyAndSwapOwnerAttributeForVM(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
+				err = EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Both IPs should now have target as active

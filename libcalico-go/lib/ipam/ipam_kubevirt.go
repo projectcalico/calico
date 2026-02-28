@@ -21,12 +21,12 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-// Error types for VerifyAndSwapOwnerAttributeForVM
+// Error types for EnsureActiveVMOwnerAttrs
 var (
 	// ErrAlternateOwnerEmpty is returned when AlternateOwnerAttrs is empty,
 	// indicating the target pod was deleted before the promotion could complete.
@@ -61,8 +61,11 @@ func CreateVMHandleID(networkName, namespace, vmName string) string {
 		networkName = "k8s-pod-network"
 	}
 
-	// Create suffix from namespace and VM name
-	// Use dot separator instead of slash to ensure valid Kubernetes resource name
+	// Create suffix from namespace and VM name.
+	// Use dot separator instead of slash to ensure valid Kubernetes resource name.
+	// Kubernetes namespace names follow RFC 1123 DNS label rules which do not allow dots,
+	// so the first '.' after 'vmi.' is always the namespace/vmName boundary.
+	// We don't need to escape dots in vmName.
 	suffix := fmt.Sprintf("%s.%s", namespace, vmName)
 
 	// Build prefix: networkName.vmi.
@@ -73,7 +76,7 @@ func CreateVMHandleID(networkName, namespace, vmName string) string {
 	return hash.GetLengthLimitedID(prefix, suffix, 128)
 }
 
-// VerifyAndSwapOwnerAttributeForVM atomically verifies the target pod is in AlternateOwnerAttrs
+// EnsureActiveVMOwnerAttrs atomically verifies the target pod is in AlternateOwnerAttrs
 // and promotes it to ActiveOwnerAttrs for all IPs allocated to a migrated VMI.
 //
 // This is called by Felix when KubeVirt live migration completes to transfer
@@ -105,7 +108,7 @@ func CreateVMHandleID(networkName, namespace, vmName string) string {
 // After a successful operation, the L3 route resolver will automatically update
 // IPIP/VXLAN routes based on the new ActiveOwnerAttrs, directing traffic to the
 // target node.
-func VerifyAndSwapOwnerAttributeForVM(
+func EnsureActiveVMOwnerAttrs(
 	ctx context.Context,
 	ipamClient Interface,
 	networkName string,
@@ -133,32 +136,8 @@ func VerifyAndSwapOwnerAttributeForVM(
 	}
 
 	var lastErr error
-	skippedCount := 0
-
 	for _, ip := range ips {
-		// Get current attributes to check if already correct
-		allocAttr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to get assignment attributes for IP %s: %w", ip, err)
-			log.WithError(lastErr).WithField("ip", ip).Warning("Failed to get attributes for IP")
-			continue
-		}
-
-		if allocAttr == nil {
-			lastErr = fmt.Errorf("IP %s is not assigned", ip)
-			log.WithError(lastErr).WithField("ip", ip).Warning("IP not assigned")
-			continue
-		}
-
-		// IDEMPOTENCY CHECK: If target is already the active owner, skip this IP
-		if MatchAttributeOwner(allocAttr.ActiveOwnerAttrs, expectedTargetOwner) {
-			log.WithField("ip", ip).Debug("Target is already active owner, skipping swap")
-			skippedCount++
-			continue
-		}
-
-		// Perform the swap for this IP
-		if err := verifyAndSwapSingleIP(ctx, ipamClient, ip, handleID, allocAttr, expectedTargetOwner); err != nil {
+		if err := verifyAndSwapSingleIP(ctx, ipamClient, ip, handleID, expectedTargetOwner); err != nil {
 			lastErr = err
 			log.WithError(err).WithField("ip", ip).Warning("Failed to swap owner for IP")
 
@@ -170,72 +149,93 @@ func VerifyAndSwapOwnerAttributeForVM(
 		}
 	}
 
-	// If all IPs were already correct, that's success
-	if skippedCount == len(ips) {
-		log.WithField("count", skippedCount).Info("All IPs already have target as active owner")
-		return nil
-	}
-
 	// If we had any transient errors, return the last one for retry
 	// On retry, already-swapped IPs will be detected as already correct and skipped
 	return lastErr
 }
 
-// verifyAndSwapSingleIP performs the verify and swap operation for a single IP address.
-// It takes the pre-fetched allocAttr to avoid redundant GetAssignmentAttributes calls.
+const swapRetries = 5
+
+// verifyAndSwapSingleIP reads the current owner attributes, verifies the target is
+// in AlternateOwnerAttrs, and atomically promotes it to ActiveOwnerAttrs.
+//
+// Both active and alternate owners are verified as preconditions to prevent
+// resurrecting a deleted owner due to races (e.g., source pod deleted between
+// our read and the CAS write). If a precondition fails, the function re-reads
+// the current state and retries with updated preconditions.
 func verifyAndSwapSingleIP(
 	ctx context.Context,
 	ipamClient Interface,
 	ip cnet.IP,
 	handleID string,
-	allocAttr *model.AllocationAttribute,
 	expectedTargetOwner *AttributeOwner,
 ) error {
-	// Verify handle ID matches
-	if allocAttr.HandleID == nil || *allocAttr.HandleID != handleID {
-		return fmt.Errorf("IP %s is not assigned to handle %s (current handle: %v)",
-			ip, handleID, allocAttr.HandleID)
-	}
+	for attempt := 0; attempt < swapRetries; attempt++ {
+		allocAttr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
+		if err != nil {
+			return fmt.Errorf("failed to get assignment attributes for IP %s: %w", ip, err)
+		}
+		if allocAttr == nil {
+			return fmt.Errorf("IP %s is not assigned", ip)
+		}
 
-	// Check if AlternateOwnerAttrs is empty
-	if len(allocAttr.AlternateOwnerAttrs) == 0 {
-		// Target pod was deleted before we could promote it
-		return fmt.Errorf("%w for IP %s", ErrAlternateOwnerEmpty, ip)
-	}
+		// Verify handle ID matches
+		if allocAttr.HandleID == nil || *allocAttr.HandleID != handleID {
+			return fmt.Errorf("IP %s is not assigned to handle %s (current handle: %v)",
+				ip, handleID, allocAttr.HandleID)
+		}
 
-	// Verify AlternateOwnerAttrs matches expected target owner
-	if !MatchAttributeOwner(allocAttr.AlternateOwnerAttrs, expectedTargetOwner) {
-		// AlternateOwnerAttrs contains a different pod than expected
-		return fmt.Errorf("%w: expected %v, got namespace=%s pod=%s for IP %s",
-			ErrAlternateOwnerMismatch,
-			expectedTargetOwner,
-			allocAttr.AlternateOwnerAttrs[AttributeNamespace],
-			allocAttr.AlternateOwnerAttrs[AttributePod],
-			ip)
-	}
+		// IDEMPOTENCY: If target is already the active owner, nothing to do
+		if expectedTargetOwner.Matches(allocAttr.ActiveOwnerAttrs) {
+			return nil
+		}
 
-	// Promote alternate to active
-	// Move alternate (target) to active, move active (source or empty) to alternate
-	// The L3 route resolver will use the new ActiveOwnerAttrs to update IPIP/VXLAN routes
-	updates := &OwnerAttributeUpdates{
-		ActiveOwnerAttrs: allocAttr.AlternateOwnerAttrs, // Target becomes active
-	}
-	if len(allocAttr.ActiveOwnerAttrs) > 0 {
-		updates.AlternateOwnerAttrs = allocAttr.ActiveOwnerAttrs // Source becomes alternate
-	} else {
-		updates.ClearAlternateOwner = true // No source to swap in, clear alternate
-	}
+		// Check if AlternateOwnerAttrs is empty
+		if len(allocAttr.AlternateOwnerAttrs) == 0 {
+			return fmt.Errorf("%w for IP %s", ErrAlternateOwnerEmpty, ip)
+		}
 
-	// Only verify the target is still in alternate position
-	// Don't verify ActiveOwnerAttrs - source may have been deleted already
-	preconditions := &OwnerAttributePreconditions{
-		ExpectedAlternateOwner: expectedTargetOwner, // Verify target is still alternate
-	}
+		// Verify AlternateOwnerAttrs matches expected target owner
+		if !expectedTargetOwner.Matches(allocAttr.AlternateOwnerAttrs) {
+			return fmt.Errorf("%w: expected %v, got namespace=%s pod=%s for IP %s",
+				ErrAlternateOwnerMismatch,
+				expectedTargetOwner,
+				allocAttr.AlternateOwnerAttrs[AttributeNamespace],
+				allocAttr.AlternateOwnerAttrs[AttributePod],
+				ip)
+		}
 
-	err := ipamClient.SetOwnerAttributes(ctx, ip, handleID, updates, preconditions)
-	if err != nil {
-		return fmt.Errorf("failed to promote target to active owner for IP %s: %w", ip, err)
-	}
+		// Build updates and preconditions based on the current state.
+		// Both active and alternate are verified to prevent resurrecting a deleted owner.
+		updates := &OwnerAttributeUpdates{
+			ActiveOwnerAttrs: allocAttr.AlternateOwnerAttrs, // Target becomes active
+		}
+		preconditions := &OwnerAttributePreconditions{
+			ExpectedAlternateOwner: expectedTargetOwner,
+		}
 
-	return nil
+		// ActiveOwnerAttrs may be empty if the source pod was already deleted and its
+		// attributes were cleared by CNI cleanup before this swap runs.
+		if len(allocAttr.ActiveOwnerAttrs) > 0 {
+			updates.AlternateOwnerAttrs = allocAttr.ActiveOwnerAttrs // Source becomes alternate
+			preconditions.ExpectedActiveOwner = &AttributeOwner{
+				Namespace: allocAttr.ActiveOwnerAttrs[AttributeNamespace],
+				Name:      allocAttr.ActiveOwnerAttrs[AttributePod],
+			}
+		} else {
+			updates.ClearAlternateOwner = true // No source to swap in, clear alternate
+			preconditions.VerifyActiveOwnerEmpty = true
+		}
+
+		err = ipamClient.SetOwnerAttributes(ctx, ip, handleID, updates, preconditions)
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				log.WithField("ip", ip).Debug("Precondition conflict during swap, retrying")
+				continue
+			}
+			return fmt.Errorf("failed to promote target to active owner for IP %s: %w", ip, err)
+		}
+		return nil
+	}
+	return fmt.Errorf("max retries (%d) exceeded for IP %s", swapRetries, ip)
 }
