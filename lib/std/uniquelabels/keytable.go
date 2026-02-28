@@ -250,4 +250,3 @@ func buildValues(snap *keyTableSnap, bf uint64, hm handleMap) []uniquestr.Handle
 	}
 	return vals
 }
-
