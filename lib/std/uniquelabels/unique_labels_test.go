@@ -18,14 +18,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/maphash"
 	"reflect"
 	"sync"
 	"testing"
+	"unsafe"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
 
 func TestInternedLabelsJSONRoundTrip(t *testing.T) {
+	unsafeTestOnlyReset()
 	for _, m := range []map[string]string{
 		nil,
 		{},
@@ -68,6 +71,7 @@ func TestUnmarshalBadJSON(t *testing.T) {
 }
 
 func TestGetString(t *testing.T) {
+	unsafeTestOnlyReset()
 	m := Make(map[string]string{"a": "b", "c": "d"})
 
 	v, ok := m.GetString("a")
@@ -85,6 +89,7 @@ func TestGetString(t *testing.T) {
 }
 
 func TestAllStrings(t *testing.T) {
+	unsafeTestOnlyReset()
 	input := map[string]string{"a": "b", "c": "d"}
 	m := Make(input)
 	seen := map[string]string{}
@@ -105,6 +110,7 @@ func TestAllStrings(t *testing.T) {
 }
 
 func TestAllHandles(t *testing.T) {
+	unsafeTestOnlyReset()
 	input := map[string]string{"a": "b", "c": "d"}
 	m := Make(input)
 	seen := map[string]string{}
@@ -125,22 +131,24 @@ func TestAllHandles(t *testing.T) {
 }
 
 func sameUnderlyingMap(a, b Map) bool {
-	return reflect.ValueOf(a.m).UnsafePointer() == reflect.ValueOf(b.m).UnsafePointer()
+	return a.ptr == b.ptr
 }
 
 func TestMakeCacheHit(t *testing.T) {
+	unsafeTestOnlyReset()
 	input := map[string]string{"a": "b", "c": "d"}
 
 	m1 := Make(input)
 	m2 := Make(input)
 
-	// Both calls should return the same underlying handleMap from the cache.
+	// Both calls should return the same underlying allocation from the cache.
 	if !sameUnderlyingMap(m1, m2) {
-		t.Errorf("expected Make to return cached handleMap on repeat call")
+		t.Errorf("expected Make to return cached Map on repeat call")
 	}
 }
 
 func TestMakeCacheMiss(t *testing.T) {
+	unsafeTestOnlyReset()
 	m1 := Make(map[string]string{"a": "b"})
 	m2 := Make(map[string]string{"x": "y"})
 
@@ -150,8 +158,9 @@ func TestMakeCacheMiss(t *testing.T) {
 }
 
 func TestMakeCacheEviction(t *testing.T) {
+	unsafeTestOnlyReset()
 	// Use a private cache so we don't interfere with other tests.
-	c := recentMapCache{seed: recentCache.seed}
+	c := recentMapCache{seed: maphash.MakeSeed()}
 
 	input1 := map[string]string{"a": "b"}
 	input2 := map[string]string{"x": "y"}
@@ -188,6 +197,7 @@ func TestMakeCacheEviction(t *testing.T) {
 }
 
 func TestMakeCacheHashCollision(t *testing.T) {
+	unsafeTestOnlyReset()
 	// Two different inputs that are forced into the same cache slot
 	// should still return correct (different) results from Make.
 	// We can't easily force a natural collision, but we can verify
@@ -212,6 +222,7 @@ func TestMakeCacheHashCollision(t *testing.T) {
 }
 
 func TestMakeCacheConcurrent(t *testing.T) {
+	unsafeTestOnlyReset()
 	const goroutines = 16
 	const iterations = 1000
 	inputs := []map[string]string{
@@ -240,6 +251,7 @@ func TestMakeCacheConcurrent(t *testing.T) {
 }
 
 func TestEquivalentTo(t *testing.T) {
+	unsafeTestOnlyReset()
 	for _, tc := range []struct {
 		name     string
 		mapInput map[string]string
@@ -268,6 +280,7 @@ func TestEquivalentTo(t *testing.T) {
 }
 
 func TestIntersectAndFilter(t *testing.T) {
+	unsafeTestOnlyReset()
 	for _, tc := range []struct {
 		description      string
 		m1, m2, expected map[string]string
@@ -350,4 +363,225 @@ func TestIntersectAndFilter(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---- Tests specific to the compact representation ----
+
+func TestCompactRepresentation(t *testing.T) {
+	unsafeTestOnlyReset()
+	// Make should use the compact representation for maps whose keys
+	// fit in the global key table.
+	m := Make(map[string]string{"alpha": "1", "beta": "2"})
+	if !m.isCompact() {
+		t.Fatal("expected compact representation")
+	}
+	if m.Len() != 2 {
+		t.Errorf("Len() = %d, want 2", m.Len())
+	}
+	v, ok := m.GetString("alpha")
+	if !ok || v != "1" {
+		t.Errorf("GetString(alpha) = %q, %v; want 1, true", v, ok)
+	}
+	v, ok = m.GetString("beta")
+	if !ok || v != "2" {
+		t.Errorf("GetString(beta) = %q, %v; want 2, true", v, ok)
+	}
+	_, ok = m.GetString("gamma")
+	if ok {
+		t.Error("GetString(gamma) should return false")
+	}
+}
+
+func TestCompactEmptyIsCompact(t *testing.T) {
+	if !Empty.isCompact() {
+		t.Error("Empty should use compact representation")
+	}
+	if Empty.Len() != 0 {
+		t.Errorf("Empty.Len() = %d, want 0", Empty.Len())
+	}
+}
+
+func TestCompactEqualsRegular(t *testing.T) {
+	unsafeTestOnlyReset()
+	// A compact map and a fallback map with the same content should be
+	// equal.
+	input := map[string]string{"p": "q", "r": "s"}
+	compact := Make(input)
+	if !compact.isCompact() {
+		t.Skip("map not compact (key table may be full)")
+	}
+
+	// Build a fallback map manually.
+	hm := make(handleMap, len(input))
+	for k, v := range input {
+		hm[uniquestr.Make(k)] = uniquestr.Make(v)
+	}
+	fb := Map{ptr: unsafeFallback(hm)}
+
+	if !compact.Equals(fb) {
+		t.Error("compact and fallback with same content should be equal")
+	}
+	if !fb.Equals(compact) {
+		t.Error("fallback and compact with same content should be equal")
+	}
+}
+
+// unsafeFallback is a test helper to create a fallback Map's data pointer.
+func unsafeFallback(hm handleMap) unsafe.Pointer {
+	return unsafe.Pointer(&fallbackMap{m: hm})
+}
+
+func TestCompactManyKeys(t *testing.T) {
+	unsafeTestOnlyReset()
+	// Create a map with many keys and verify the compact representation.
+	input := make(map[string]string, 30)
+	for i := range 30 {
+		input[fmt.Sprintf("key-%d", i)] = fmt.Sprintf("val-%d", i)
+	}
+	m := Make(input)
+	if !m.isCompact() {
+		t.Fatal("expected compact representation for 30-key map")
+	}
+	if m.Len() != 30 {
+		t.Errorf("Len() = %d, want 30", m.Len())
+	}
+	if !m.EquivalentTo(input) {
+		t.Errorf("map content mismatch")
+	}
+}
+
+func TestNilAndEmptySemantics(t *testing.T) {
+	if !Nil.IsNil() {
+		t.Error("Nil.IsNil() should be true")
+	}
+	if Empty.IsNil() {
+		t.Error("Empty.IsNil() should be false")
+	}
+	if Nil.Len() != 0 {
+		t.Errorf("Nil.Len() = %d, want 0", Nil.Len())
+	}
+	if Empty.Len() != 0 {
+		t.Errorf("Empty.Len() = %d, want 0", Empty.Len())
+	}
+
+	// Nil and Empty should compare equal (matches maps.Equal behavior).
+	if !Nil.Equals(Empty) {
+		t.Error("Nil should equal Empty")
+	}
+	if !Empty.Equals(Nil) {
+		t.Error("Empty should equal Nil")
+	}
+
+	// But EquivalentTo distinguishes nil from empty.
+	if Nil.EquivalentTo(map[string]string{}) {
+		t.Error("Nil should not be equivalent to empty map")
+	}
+	if Empty.EquivalentTo(nil) {
+		t.Error("Empty should not be equivalent to nil")
+	}
+}
+
+func TestIntersectAndFilterReturnsCompact(t *testing.T) {
+	unsafeTestOnlyReset()
+	a := Make(map[string]string{"x": "1", "y": "2", "z": "3"})
+	b := Make(map[string]string{"x": "1", "z": "3"})
+	if !a.isCompact() || !b.isCompact() {
+		t.Skip("inputs not compact")
+	}
+
+	// Intersection of a ∩ b should be {x:1, z:3} and compact.
+	result := IntersectAndFilter(a, b, nil)
+	if !result.isCompact() {
+		t.Error("IntersectAndFilter should return compact map when input is compact")
+	}
+	if !result.EquivalentTo(map[string]string{"x": "1", "z": "3"}) {
+		t.Errorf("wrong content: %v", result)
+	}
+
+	// With a filter that excludes "x", result should be {z:3} and compact.
+	result = IntersectAndFilter(a, b, func(k uniquestr.Handle, _ uniquestr.Handle) bool {
+		return k.Value() != "x"
+	})
+	if !result.isCompact() {
+		t.Error("filtered IntersectAndFilter should return compact map")
+	}
+	if !result.EquivalentTo(map[string]string{"z": "3"}) {
+		t.Errorf("wrong content: %v", result)
+	}
+
+	// Intersection that yields empty should return Empty (compact).
+	result = IntersectAndFilter(a, b, func(uniquestr.Handle, uniquestr.Handle) bool {
+		return false
+	})
+	if !result.isCompact() {
+		t.Error("empty IntersectAndFilter result should be compact (Empty)")
+	}
+	if result.Len() != 0 {
+		t.Error("expected empty result")
+	}
+}
+
+func TestCompactEqualsOptimization(t *testing.T) {
+	unsafeTestOnlyReset()
+	m1 := Make(map[string]string{"eq-a": "1", "eq-b": "2"})
+	m2 := Make(map[string]string{"eq-a": "1", "eq-b": "2"})
+	m3 := Make(map[string]string{"eq-a": "1", "eq-b": "99"})
+	m4 := Make(map[string]string{"eq-a": "1"})
+	if !m1.isCompact() || !m2.isCompact() || !m3.isCompact() || !m4.isCompact() {
+		t.Skip("inputs not compact")
+	}
+
+	// Same content → equal.
+	if !m1.Equals(m2) {
+		t.Error("identical compact maps should be equal")
+	}
+	// Same keys, different values → not equal.
+	if m1.Equals(m3) {
+		t.Error("compact maps with different values should not be equal")
+	}
+	// Different key sets → not equal (bitfield mismatch).
+	if m1.Equals(m4) {
+		t.Error("compact maps with different key sets should not be equal")
+	}
+}
+
+func TestUnmarshalJSONProducesCompact(t *testing.T) {
+	unsafeTestOnlyReset()
+	// UnmarshalJSON goes through Make, which registers keys.
+	// No pre-registration needed.
+	data := []byte(`{"jk1":"x","jk2":"y"}`)
+	var m Map
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	if !m.isCompact() {
+		t.Error("UnmarshalJSON should produce compact map")
+	}
+	if !m.EquivalentTo(map[string]string{"jk1": "x", "jk2": "y"}) {
+		t.Errorf("wrong content: %v", m)
+	}
+}
+
+func TestKeyTableConcurrent(t *testing.T) {
+	unsafeTestOnlyReset()
+	// Concurrent Make calls with new keys should not race.
+	const goroutines = 8
+	const keysPerGoroutine = 5
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := range goroutines {
+		go func() {
+			defer wg.Done()
+			input := make(map[string]string, keysPerGoroutine)
+			for k := range keysPerGoroutine {
+				input[fmt.Sprintf("conc-g%d-k%d", g, k)] = fmt.Sprintf("v%d", k)
+			}
+			m := Make(input)
+			if !m.EquivalentTo(input) {
+				t.Errorf("goroutine %d: Make returned wrong content", g)
+			}
+		}()
+	}
+	wg.Wait()
 }
