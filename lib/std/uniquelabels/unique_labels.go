@@ -106,15 +106,28 @@ func (i Map) Equals(other Map) bool {
 // MarshalJSON implements the json.Marshaler interface. Must be defined on the
 // value receiver so that Map can be embedded in other structs.
 func (i Map) MarshalJSON() ([]byte, error) {
-	return json.Marshal(i.m)
+	// Convert to map[string]string before marshaling to avoid a panic in
+	// Go 1.26's encoding/json mapEncoder when encoding map keys of type
+	// uniquestr.Handle (which wraps unique.Handle[string]).
+	return json.Marshal(i.RecomputeOriginalMap())
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.  Must be defined on
 // the pointer receiver so that it can have side effects.
 func (i *Map) UnmarshalJSON(data []byte) error {
-	var hm handleMap
-	if err := json.Unmarshal(data, &hm); err != nil {
+	// Unmarshal via map[string]string to avoid Go 1.26 encoding/json issues
+	// with unique.Handle[string]-based map keys.
+	var sm map[string]string
+	if err := json.Unmarshal(data, &sm); err != nil {
 		return err
+	}
+	if sm == nil {
+		i.m = nil
+		return nil
+	}
+	hm := make(handleMap, len(sm))
+	for k, v := range sm {
+		hm[uniquestr.Make(k)] = uniquestr.Make(v)
 	}
 	i.m = hm
 	return nil
