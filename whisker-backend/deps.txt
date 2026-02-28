@@ -99,7 +99,6 @@ local:libcalico-go/lib/apis/internalapi
 local:libcalico-go/lib/backend/encap
 local:libcalico-go/lib/backend/model
 local:libcalico-go/lib/errors
-local:libcalico-go/lib/json
 local:libcalico-go/lib/logutils
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
