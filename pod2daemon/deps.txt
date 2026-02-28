@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.25.7
+go 1.26.1
 github.com/beorn7/perks v1.0.1
 github.com/cespare/xxhash/v2 v2.3.0
 github.com/container-storage-interface/spec v1.9.0
