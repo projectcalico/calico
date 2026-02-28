@@ -71,7 +71,7 @@ func (rw blockReaderWriter) getAffineBlocks(
 	// Iterate through and extract the block CIDRs.
 	for _, o := range datastoreObjs.KVPairs {
 		k := o.Key.(model.BlockAffinityKey)
-		blocks = append(blocks, k.CIDR)
+		blocks = append(blocks, model.IPNetFromPrefix(k.CIDR))
 	}
 	return
 }
@@ -159,7 +159,7 @@ func (rw blockReaderWriter) findUsableBlock(
 		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{
 			numFree:     numFree,
 			affinityCfg: bAffinityCfg,
-			cidr:        e.Key.(model.BlockKey).CIDR,
+			cidr:        model.IPNetFromPrefix(e.Key.(model.BlockKey).CIDR),
 			empty:       block.empty(),
 			claimTime:   block.affinityClaimTime(),
 			seqNo:       block.SequenceNumber,
@@ -252,7 +252,7 @@ func (rw blockReaderWriter) getPendingAffinity(ctx context.Context, affinityCfg 
 	logCtx := log.WithFields(log.Fields{string(affinityCfg.AffinityType): affinityCfg.Host, "subnet": subnet})
 	logCtx.Info("Trying to create affinity in pending state")
 	obj := model.KVPair{
-		Key:   model.BlockAffinityKey{Host: affinityCfg.Host, AffinityType: string(affinityCfg.AffinityType), CIDR: subnet},
+		Key:   model.BlockAffinityKey{Host: affinityCfg.Host, AffinityType: string(affinityCfg.AffinityType), CIDR: model.PrefixFromIPNet(subnet)},
 		Value: &model.BlockAffinity{State: model.StatePending},
 	}
 	aff, err := rw.client.Create(ctx, &obj)
@@ -288,7 +288,7 @@ func (rw blockReaderWriter) getPendingAffinity(ctx context.Context, affinityCfg 
 // steals the block, claimAffineBlock will attempt to delete the provided pending affinity.
 func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVPair, config IPAMConfig, rsvdAttr *HostReservedAttr, affinityCfg AffinityConfig) (*model.KVPair, error) {
 	// Pull out relevant fields.
-	subnet := aff.Key.(model.BlockAffinityKey).CIDR
+	subnet := model.IPNetFromPrefix(aff.Key.(model.BlockAffinityKey).CIDR)
 	host := aff.Key.(model.BlockAffinityKey).Host
 	logCtx := log.WithFields(log.Fields{"affinityType": affinityCfg.AffinityType, "host": host, "subnet": subnet})
 
@@ -300,7 +300,7 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 
 	// Create the new block in the datastore.
 	o := model.KVPair{
-		Key:   model.BlockKey{CIDR: block.CIDR},
+		Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(block.CIDR)},
 		Value: block.AllocationBlock,
 	}
 	logCtx.Info("Attempting to create a new block")
@@ -353,7 +353,7 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 
 func (rw blockReaderWriter) confirmAffinity(ctx context.Context, aff *model.KVPair) (*model.KVPair, error) {
 	host := aff.Key.(model.BlockAffinityKey).Host
-	cidr := aff.Key.(model.BlockAffinityKey).CIDR
+	cidr := model.IPNetFromPrefix(aff.Key.(model.BlockAffinityKey).CIDR)
 	affinityType := aff.Key.(model.BlockAffinityKey).AffinityType
 	affinityCfg := AffinityConfig{
 		AffinityType: AffinityType(affinityType),
@@ -495,7 +495,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(
 
 // queryAffinity gets an affinity for the given host + CIDR key.
 func (rw blockReaderWriter) queryAffinity(ctx context.Context, affinityCfg AffinityConfig, cidr cnet.IPNet, revision string) (*model.KVPair, error) {
-	return rw.client.Get(ctx, model.BlockAffinityKey{Host: affinityCfg.Host, AffinityType: string(affinityCfg.AffinityType), CIDR: cidr}, revision)
+	return rw.client.Get(ctx, model.BlockAffinityKey{Host: affinityCfg.Host, AffinityType: string(affinityCfg.AffinityType), CIDR: model.PrefixFromIPNet(cidr)}, revision)
 }
 
 // updateAffinity updates the given affinity.
@@ -511,7 +511,7 @@ func (rw blockReaderWriter) deleteAffinity(ctx context.Context, aff *model.KVPai
 
 // queryBlock gets a block for the given block CIDR key.
 func (rw blockReaderWriter) queryBlock(ctx context.Context, blockCIDR cnet.IPNet, revision string) (*model.KVPair, error) {
-	return rw.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, revision)
+	return rw.client.Get(ctx, model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)}, revision)
 }
 
 func (rw blockReaderWriter) listBlocks(ctx context.Context, revision string) (*model.KVPairList, error) {
@@ -721,9 +721,10 @@ func (rw blockReaderWriter) getBlockForIP(ctx context.Context, ip cnet.IP, cache
 	// Iterate through and extract the block CIDRs.
 	for _, o := range datastoreObjs.KVPairs {
 		k := o.Key.(model.BlockKey)
-		if k.CIDR.IPNet.Contains(ip.IP) {
+		kCIDR := model.IPNetFromPrefix(k.CIDR)
+		if kCIDR.IPNet.Contains(ip.IP) {
 			log.Debugf("Found IP %s in block %s", ip.String(), k.String())
-			return &k.CIDR, datastoreObjs, nil
+			return &kCIDR, datastoreObjs, nil
 		}
 	}
 

@@ -336,7 +336,8 @@ func validateCalicoIPAM(fc *testutils.FlannelCluster, client client.Interface, b
 		var blocks []*net.IPNet
 		for _, o := range datastoreObjs.KVPairs {
 			k := o.Key.(model.BlockAffinityKey)
-			cidr := net.IPNet{IP: k.CIDR.IP, Mask: k.CIDR.Mask}
+			kCIDR := model.IPNetFromPrefix(k.CIDR)
+			cidr := net.IPNet(kCIDR.IPNet)
 			blocks = append(blocks, &cidr)
 		}
 		Expect(len(blocks)).To(Equal(4))
