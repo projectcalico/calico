@@ -61,8 +61,11 @@ func CreateVMHandleID(networkName, namespace, vmName string) string {
 		networkName = "k8s-pod-network"
 	}
 
-	// Create suffix from namespace and VM name
-	// Use dot separator instead of slash to ensure valid Kubernetes resource name
+	// Create suffix from namespace and VM name.
+	// Use dot separator instead of slash to ensure valid Kubernetes resource name.
+	// Kubernetes namespace names follow RFC 1123 DNS label rules which do not allow dots,
+	// so the first '.' after 'vmi.' is always the namespace/vmName boundary.
+	// We don't need to escape dots in vmName.
 	suffix := fmt.Sprintf("%s.%s", namespace, vmName)
 
 	// Build prefix: networkName.vmi.
@@ -151,7 +154,7 @@ func VerifyAndSwapOwnerAttributeForVM(
 		}
 
 		// IDEMPOTENCY CHECK: If target is already the active owner, skip this IP
-		if MatchAttributeOwner(allocAttr.ActiveOwnerAttrs, expectedTargetOwner) {
+		if expectedTargetOwner.Matches(allocAttr.ActiveOwnerAttrs) {
 			log.WithField("ip", ip).Debug("Target is already active owner, skipping swap")
 			skippedCount++
 			continue
@@ -204,7 +207,7 @@ func verifyAndSwapSingleIP(
 	}
 
 	// Verify AlternateOwnerAttrs matches expected target owner
-	if !MatchAttributeOwner(allocAttr.AlternateOwnerAttrs, expectedTargetOwner) {
+	if !expectedTargetOwner.Matches(allocAttr.AlternateOwnerAttrs) {
 		// AlternateOwnerAttrs contains a different pod than expected
 		return fmt.Errorf("%w: expected %v, got namespace=%s pod=%s for IP %s",
 			ErrAlternateOwnerMismatch,

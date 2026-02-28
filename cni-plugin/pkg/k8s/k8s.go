@@ -972,6 +972,7 @@ func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 }
 
 // NewKubeVirtClient creates a KubeVirt client from the CNI network configuration.
+// Note: This will return an error if KubeVirt is not installed in the cluster.
 func NewKubeVirtClient(conf types.NetConf, logger *logrus.Entry) (kubevirt.VirtClientInterface, error) {
 	// Get the Kubernetes REST config
 	config, err := getK8sRestConfig(conf)
