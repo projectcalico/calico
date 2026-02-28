@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -50,8 +51,8 @@ func init() {
 		felixHost = "localhost"
 	}
 
-	felixReadinessEp = "http://" + felixHost + ":" + felixPort + "/readiness"
-	felixLivenessEp = "http://" + felixHost + ":" + felixPort + "/liveness"
+	felixReadinessEp = "http://" + net.JoinHostPort(felixHost, felixPort) + "/readiness"
+	felixLivenessEp = "http://" + net.JoinHostPort(felixHost, felixPort) + "/liveness"
 }
 
 func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thresholdTime time.Duration) {

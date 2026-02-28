@@ -16,7 +16,7 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
+	"net"
 	"os"
 
 	"github.com/kelseyhightower/envconfig"
@@ -56,7 +56,7 @@ func (cfg *Config) String() string {
 }
 
 func (cfg *Config) HostAddr() string {
-	return fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
+	return net.JoinHostPort(cfg.Host, cfg.Port)
 }
 
 func (cfg *Config) ConfigureLogging() {
