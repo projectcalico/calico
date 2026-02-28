@@ -44,7 +44,7 @@ if ! command -v fv-tests-guru &>/dev/null; then
         exit 0
     fi
 
-    FV_TESTS_GURU_VERSION="${FV_TESTS_GURU_VERSION:-v0.1.1}"
+    FV_TESTS_GURU_VERSION="${FV_TESTS_GURU_VERSION:-latest}"
     FV_TESTS_GURU_REPO="tigera/fv-tests-guru"
     FV_TESTS_GURU_BIN="${HOME}/bin/fv-tests-guru"
     mkdir -p "${HOME}/bin"

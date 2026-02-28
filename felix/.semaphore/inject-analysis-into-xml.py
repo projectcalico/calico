@@ -189,17 +189,24 @@ def inject_into_xml(json_path, xml_paths):
 
             used_keys.add(matched_key)
 
-            # Set a concise AI summary as the failure message attribute
-            # (always visible in Semaphore UI, never truncated).
+            # Move original failure content to system-out so it's
+            # still accessible but doesn't crowd out the analysis.
+            original_failure = failure_elem.text or ''
+            if original_failure:
+                system_out = testcase.find('system-out')
+                if system_out is None:
+                    system_out = ET.SubElement(testcase, 'system-out')
+                    system_out.text = original_failure
+                else:
+                    system_out.text = (system_out.text or '') + original_failure
+
+            # Set the AI summary as the failure message (headline).
             summary = format_summary(failure_entry)
             if summary:
                 failure_elem.set('message', summary)
 
-            # Prepend full analysis to failure element text.
-            analysis_block = format_analysis_block(failure_entry)
-
-            existing = failure_elem.text or ''
-            failure_elem.text = analysis_block + existing
+            # Put the full analysis as the failure body.
+            failure_elem.text = format_analysis_block(failure_entry)
 
             modified = True
             total_injected += 1
