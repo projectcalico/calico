@@ -58,7 +58,7 @@ var _ = Describe("EncapsulationCalculator", func() {
 					Expect(err).To(Not(HaveOccurred()))
 					p := model.KVPair{
 						Key: model.IPPoolKey{
-							CIDR: *cidr,
+							CIDR: model.PrefixFromIPNet(*cidr),
 						},
 						Value: nil,
 					}
@@ -399,7 +399,7 @@ func addPoolUpdate(cidr net.IPNet, ipipMode, vxlanMode encap.Mode) api.Update {
 	return api.Update{
 		KVPair: model.KVPair{
 			Key: model.IPPoolKey{
-				CIDR: cidr,
+				CIDR: model.PrefixFromIPNet(cidr),
 			},
 			Value: &model.IPPool{
 				CIDR:      cidr,
@@ -415,7 +415,7 @@ func removePoolUpdate(cidr net.IPNet) api.Update {
 	return api.Update{
 		KVPair: model.KVPair{
 			Key: model.IPPoolKey{
-				CIDR: cidr,
+				CIDR: model.PrefixFromIPNet(cidr),
 			},
 			Value: nil,
 		},
@@ -442,7 +442,7 @@ func getModelPool(cidr string, ipipMode, vxlanMode encap.Mode) *model.KVPair {
 	}
 	return &model.KVPair{
 		Key: model.IPPoolKey{
-			CIDR: *parsedCidr,
+			CIDR: model.PrefixFromIPNet(*parsedCidr),
 		},
 		Value: &model.IPPool{
 			CIDR:      *parsedCidr,

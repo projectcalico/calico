@@ -665,7 +665,7 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 		for _, a := range standardBlockAffinities {
 			_, err := bc.Apply(ctx, &model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: mustParseCIDR(a.cidr),
+					CIDR: model.PrefixFromIPNet(mustParseCIDR(a.cidr)),
 					Host: a.host,
 				},
 				Value: &model.BlockAffinity{
@@ -677,7 +677,7 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 		return func() {
 			for _, a := range standardBlockAffinities {
 				_, _ = bc.Delete(ctx, model.BlockAffinityKey{
-					CIDR: mustParseCIDR(a.cidr),
+					CIDR: model.PrefixFromIPNet(mustParseCIDR(a.cidr)),
 					Host: a.host,
 				}, "")
 			}
