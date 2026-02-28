@@ -640,6 +640,103 @@ var _ = Describe("With explicit compression algorithm", func() {
 	)
 })
 
+var _ = Describe("With compression algorithm negotiation", func() {
+	It("should use the client's only algorithm when the server supports both", func() {
+		// Client only advertises zstd, server prefers snappy,zstd.
+		// Server should pick zstd since that's the only one the client supports.
+		log.SetLevel(log.DebugLevel)
+		h := NewHarness()
+		h.Config.PreferredCompressionAlgorithmOrder = []syncproto.CompressionAlgorithm{
+			syncproto.CompressionSnappy, syncproto.CompressionZstd,
+		}
+		h.Start()
+		defer h.Stop()
+
+		h.CreateClientWithOptions(0, syncclient.Options{
+			SyncerType: syncproto.SyncerTypeFelix,
+			PreferredCompressionAlgorithmOrder: []syncproto.CompressionAlgorithm{
+				syncproto.CompressionZstd,
+			},
+		})
+		recorder := h.ClientStates[0].recorder
+
+		h.Decoupler.OnStatusUpdated(api.ResyncInProgress)
+		h.Decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+		h.Decoupler.OnStatusUpdated(api.InSync)
+		Eventually(recorder.Status).Should(Equal(api.InSync))
+		Eventually(recorder.KVs).Should(Equal(map[string]api.Update{
+			"/calico/v1/config/foobar": configFoobarBazzBiff,
+		}))
+	})
+
+	It("should fall back to no compression when there is no algorithm overlap", func() {
+		// Client only advertises zstd, server only supports snappy.
+		// No overlap, so chosenCompression stays empty => uncompressed streaming.
+		log.SetLevel(log.DebugLevel)
+		h := NewHarness()
+		h.Config.PreferredCompressionAlgorithmOrder = []syncproto.CompressionAlgorithm{
+			syncproto.CompressionSnappy,
+		}
+		h.Start()
+		defer h.Stop()
+
+		h.CreateClientWithOptions(0, syncclient.Options{
+			SyncerType: syncproto.SyncerTypeFelix,
+			PreferredCompressionAlgorithmOrder: []syncproto.CompressionAlgorithm{
+				syncproto.CompressionZstd,
+			},
+		})
+		recorder := h.ClientStates[0].recorder
+
+		h.Decoupler.OnStatusUpdated(api.ResyncInProgress)
+		h.Decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+		h.Decoupler.OnStatusUpdated(api.InSync)
+		Eventually(recorder.Status).Should(Equal(api.InSync))
+		Eventually(recorder.KVs).Should(Equal(map[string]api.Update{
+			"/calico/v1/config/foobar": configFoobarBazzBiff,
+		}))
+	})
+
+	It("should fall back to no compression with DisableDecoderRestart and zstd-only server", func() {
+		// Server only supports zstd, but client has DisableDecoderRestart.
+		// Compression requires decoder restart, so should fall back to uncompressed.
+		log.SetLevel(log.DebugLevel)
+		h := NewHarness()
+		h.Config.PreferredCompressionAlgorithmOrder = []syncproto.CompressionAlgorithm{
+			syncproto.CompressionZstd,
+		}
+		h.Start()
+		defer h.Stop()
+
+		h.CreateClientNoDecodeRestart(0, syncproto.SyncerTypeFelix)
+		recorder := h.ClientStates[0].recorder
+
+		h.Decoupler.OnStatusUpdated(api.ResyncInProgress)
+		h.Decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+		h.Decoupler.OnStatusUpdated(api.InSync)
+		Eventually(recorder.Status).Should(Equal(api.InSync))
+		Eventually(recorder.KVs).Should(Equal(map[string]api.Update{
+			"/calico/v1/config/foobar": configFoobarBazzBiff,
+		}))
+	})
+
+	It("should handle many KVs when client restricts to zstd only", func() {
+		log.SetLevel(log.InfoLevel)
+		h := NewHarness()
+		h.Start()
+		defer h.Stop()
+
+		h.CreateClientWithOptions(0, syncclient.Options{
+			SyncerType: syncproto.SyncerTypeFelix,
+			PreferredCompressionAlgorithmOrder: []syncproto.CompressionAlgorithm{
+				syncproto.CompressionZstd,
+			},
+		})
+		expectedEndState := h.SendInitialSnapshotPods(1000)
+		h.ExpectAllClientsToReachState(api.InSync, expectedEndState)
+	})
+})
+
 var _ = Describe("with no client connections", func() {
 	var h *ServerHarness
 
