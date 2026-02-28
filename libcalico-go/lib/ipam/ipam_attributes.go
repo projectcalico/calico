@@ -49,23 +49,23 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (
 	return block.allocationAttributesForIP(addr)
 }
 
-// GetEmptyAttributeOwner returns an AttributeOwner with empty namespace and name.
-// This can be used with MatchAttributeOwner to check if attributes are empty.
-func GetEmptyAttributeOwner() *AttributeOwner {
+// EmptyAttributeOwner returns an AttributeOwner with empty namespace and name.
+// This can be used with Matches to check if attributes are empty.
+func EmptyAttributeOwner() *AttributeOwner {
 	return &AttributeOwner{
 		Namespace: "",
 		Name:      "",
 	}
 }
 
-// MatchAttributeOwner checks if the given attributes match the expected owner.
-func MatchAttributeOwner(attrs map[string]string, expectedOwner *AttributeOwner) bool {
-	if expectedOwner == nil {
-		log.Panic("MatchAttributeOwner called with nil expectedOwner")
+// Matches checks if the given attributes match this owner.
+func (o *AttributeOwner) Matches(attrs map[string]string) bool {
+	if o == nil {
+		log.Panic("Matches called on nil AttributeOwner")
 	}
 
-	// If expectedOwner is the empty owner, match if attrs is empty
-	if expectedOwner.Namespace == "" && expectedOwner.Name == "" {
+	// If this is the empty owner, match if attrs is empty
+	if o.Namespace == "" && o.Name == "" {
 		return attrs == nil || len(attrs) == 0
 	}
 
@@ -77,7 +77,7 @@ func MatchAttributeOwner(attrs map[string]string, expectedOwner *AttributeOwner)
 	actualPod, podExists := attrs[AttributePod]
 	actualNamespace, nsExists := attrs[AttributeNamespace]
 
-	return podExists && nsExists && actualPod == expectedOwner.Name && actualNamespace == expectedOwner.Namespace
+	return podExists && nsExists && actualPod == o.Name && actualNamespace == o.Namespace
 }
 
 // SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.

@@ -227,9 +227,13 @@ remove-kubevirt-crds:
 
 
 ## Run the unit tests.
-ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico install-kubevirt-crds
+## Mainline tests run without KubeVirt CRDs to ensure non-KubeVirt code paths don't depend on them.
+## KubeVirt-specific tests run separately with CRDs installed.
+ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
+	$(MAKE) install-kubevirt-crds
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
 
 ut-datastore:
 	# The tests need to run as root
