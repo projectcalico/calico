@@ -17,6 +17,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"reflect"
 	"strings"
 	"time"
@@ -27,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/namespace"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 const (
@@ -79,6 +79,14 @@ type Key interface {
 	// String returns a unique string representation of this key.  The string
 	// returned by this method must uniquely identify this Key.
 	String() string
+}
+
+// ComparableKey is a Key that is also comparable, meaning it can be used as a
+// Go map key or compared with ==.  All Key implementations in this package
+// satisfy this constraint.
+type ComparableKey interface {
+	Key
+	comparable
 }
 
 // Interface used to perform datastore lookups.
@@ -133,7 +141,7 @@ type KVPairList struct {
 // order to support datastores that do not support storing data at non-leaf
 // nodes in the hierarchy (such as etcd v3), the path returned for a "parent"
 // key, is not a direct ancestor of its children.
-func KeyToDefaultPath(key Key) (string, error) {
+func KeyToDefaultPath[K ComparableKey](key K) (string, error) {
 	return key.defaultPath()
 }
 
@@ -161,7 +169,7 @@ func KeyToDefaultPath(key Key) (string, error) {
 // and KeyToDefaultPath(PolicyKey{Kind: "NetworkPolicy", Namespace: "default", Name: "b"}):
 //
 //	"/calico/v1/policy/NetworkPolicy/default/b"
-func KeyToDefaultDeletePath(key Key) (string, error) {
+func KeyToDefaultDeletePath[K ComparableKey](key K) (string, error) {
 	return key.defaultDeletePath()
 }
 
@@ -191,7 +199,7 @@ func KeyToDefaultDeletePath(key Key) (string, error) {
 // indicating that these paths should also be deleted when they are empty.
 // In this example it is equivalent to deleting the workload when there are
 // no more endpoints in the workload.
-func KeyToDefaultDeleteParentPaths(key Key) ([]string, error) {
+func KeyToDefaultDeleteParentPaths[K ComparableKey](key K) ([]string, error) {
 	return key.defaultDeleteParentPaths()
 }
 
@@ -562,11 +570,11 @@ func OldKeyFromDefaultPath(path string) Key {
 		log.Debugf("Path is a pool: %v", path)
 		mungedCIDR := m[1]
 		cidr := strings.Replace(mungedCIDR, "-", "/", 1)
-		_, c, err := net.ParseCIDR(cidr)
+		prefix, err := netip.ParsePrefix(cidr)
 		if err != nil {
 			log.WithError(err).Warningf("Failed to parse CIDR %s", cidr)
 		} else {
-			return IPPoolKey{CIDR: *c}
+			return IPPoolKey{CIDR: prefix.Masked()}
 		}
 	} else if m := matchGlobalConfig.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a global felix config: %v", path)
@@ -639,7 +647,7 @@ func parseJSONPointer[V any](key Key, rawData []byte) (*V, error) {
 // our value structs, according to the type of key.  I.e. if passed a
 // PolicyKey as the first parameter, it will try to parse rawData into a
 // Policy struct.
-func ParseValue(key Key, rawData []byte) (any, error) {
+func ParseValue[K ComparableKey](key K, rawData []byte) (any, error) {
 	return key.parseValue(rawData)
 }
 
