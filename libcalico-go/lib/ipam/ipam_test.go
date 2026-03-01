@@ -1325,11 +1325,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 				By("first AutoAssign: allocating 1 IPv4 + 1 IPv6 with MaxAllocToHandlePerIPVersion=1", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						Num6:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						Num4:                         1,
+						Num6:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
 						MaxAllocToHandlePerIPVersion: 1,
 					}
 					v4ia, v6ia, err := ic.AutoAssign(ctx, args)
@@ -1351,11 +1351,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 				By("second AutoAssign with the same handle and MaxAllocToHandlePerIPVersion=1: should reuse existing IPs", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						Num6:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						Num4:                         1,
+						Num6:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
 						MaxAllocToHandlePerIPVersion: 1,
 					}
 					v4ia, v6ia, err := ic.AutoAssign(ctx, args)
@@ -1396,10 +1396,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 				By("first AssignIP: assigning a specific IP with MaxAllocToHandlePerIPVersion=1", func() {
 					err := ic.AssignIP(ctx, AssignIPArgs{
-						IP:                   requestedIP,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						Attrs:                map[string]string{"pod": "source-pod"},
+						IP:                           requestedIP,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						Attrs:                        map[string]string{"pod": "source-pod"},
 						MaxAllocToHandlePerIPVersion: 1,
 					})
 					Expect(err).NotTo(HaveOccurred())
@@ -1414,10 +1414,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 				By("second AssignIP with the same handle, same IP, and MaxAllocToHandlePerIPVersion=1: should succeed (idempotent)", func() {
 					err := ic.AssignIP(ctx, AssignIPArgs{
-						IP:                   requestedIP,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						Attrs:                map[string]string{"pod": "target-pod"},
+						IP:                           requestedIP,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						Attrs:                        map[string]string{"pod": "target-pod"},
 						MaxAllocToHandlePerIPVersion: 1,
 					})
 					Expect(err).NotTo(HaveOccurred())
@@ -1433,10 +1433,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				By("second AssignIP with the same handle but a DIFFERENT IP and MaxAllocToHandlePerIPVersion=1: should fail", func() {
 					differentIP := cnet.MustParseIP("10.0.0.2")
 					err := ic.AssignIP(ctx, AssignIPArgs{
-						IP:                   differentIP,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						Attrs:                map[string]string{"pod": "target-pod"},
+						IP:                           differentIP,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						Attrs:                        map[string]string{"pod": "target-pod"},
 						MaxAllocToHandlePerIPVersion: 1,
 					})
 					Expect(err).To(HaveOccurred())
@@ -1456,10 +1456,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 				By("first AutoAssign: allocating 1 IPv4 with MaxAllocToHandlePerIPVersion=2", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						Num4:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
 						MaxAllocToHandlePerIPVersion: 2,
 					}
 					v4ia, _, err := ic.AutoAssign(ctx, args)
@@ -1478,10 +1478,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 				By("second AutoAssign: allocating another IPv4 with MaxAllocToHandlePerIPVersion=2 - should succeed", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						Num4:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
 						MaxAllocToHandlePerIPVersion: 2,
 					}
 					v4ia, _, err := ic.AutoAssign(ctx, args)
@@ -1503,10 +1503,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 				By("third AutoAssign with MaxAllocToHandlePerIPVersion=2: should hit limit and reuse existing IPs", func() {
 					args := AutoAssignArgs{
-						Num4:                 1,
-						HandleID:             &handle,
-						Hostname:             hostname,
-						IntendedUse:          v3.IPPoolAllowedUseWorkload,
+						Num4:                         1,
+						HandleID:                     &handle,
+						Hostname:                     hostname,
+						IntendedUse:                  v3.IPPoolAllowedUseWorkload,
 						MaxAllocToHandlePerIPVersion: 2,
 					}
 					v4ia, _, err := ic.AutoAssign(ctx, args)
