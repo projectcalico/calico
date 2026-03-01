@@ -132,8 +132,8 @@ require (
 
 require (
 	golang.org/x/crypto v0.47.0 // indirect
-	kubevirt.io/api v1.7.0
-	kubevirt.io/client-go v1.7.0
+	kubevirt.io/api v1.8.0-alpha.0
+	kubevirt.io/client-go v1.8.0-alpha.0
 )
 
 require (
