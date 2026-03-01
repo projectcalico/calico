@@ -539,6 +539,44 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		Expect(cli.IPAMUpgradeCallCount()).To(Equal(2))
 	})
 
+	It("should recognize spec.loadBalancerIP as calico-managed in RequestedServicesOnly mode", func() {
+		// With no annotations and no spec.loadBalancerIP, not managed in RequestedServicesOnly mode.
+		managed := IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		Expect(managed).To(BeFalse())
+
+		// Setting spec.loadBalancerIP should make it calico-managed (user is requesting a specific IP).
+		svc.Spec.LoadBalancerIP = "10.0.0.5"
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		Expect(managed).To(BeTrue())
+
+		// Should still be managed in AllServices mode.
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
+		Expect(managed).To(BeTrue())
+	})
+
+	It("should reflect spec.externalIPs in service status without IPAM allocation", func() {
+		svc.Spec.ExternalIPs = []string{"10.99.99.99"}
+
+		// Create the service in the fake clientset and add it to the informer store
+		// so that syncService can find it via the serviceLister.
+		createdSvc, err := c.clientSet.CoreV1().Services(svc.Namespace).Create(context.Background(), &svc, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		err = c.serviceInformer.GetStore().Add(createdSvc)
+		Expect(err).ToNot(HaveOccurred())
+
+		svcKey, err := serviceKeyFromService(&svc)
+		Expect(err).ToNot(HaveOccurred())
+
+		// No IPPools configured — externalIPs should bypass IPAM entirely
+		// and be reflected directly in service status.
+		c.syncService(*svcKey)
+
+		updatedSvc, err := c.clientSet.CoreV1().Services(svc.Namespace).Get(context.Background(), svc.Name, metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(updatedSvc.Status.LoadBalancer.Ingress).To(HaveLen(1))
+		Expect(updatedSvc.Status.LoadBalancer.Ingress[0].IP).To(Equal("10.99.99.99"))
+	})
+
 	It("should handle invalid IP addresses in allocation tracker without panicking", func() {
 		svcKey, err := serviceKeyFromService(&svc)
 		Expect(err).ToNot(HaveOccurred())
