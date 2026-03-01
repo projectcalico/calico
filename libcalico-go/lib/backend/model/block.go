@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,8 +41,23 @@ const (
 	IPAMBlockAttributeTypeWireguard   = "wireguardTunnelAddress"
 	IPAMBlockAttributeTypeWireguardV6 = "wireguardV6TunnelAddress"
 	IPAMBlockAttributeTimestamp       = "timestamp"
-	IPAMAffinityTypeHost              = "host"
-	IPAMAffinityTypeVirtual           = "virtual"
+
+	// KubeVirt VM pod attributes
+
+	// Name of the VMI object (also the name of the VM object if VM is present, as they share the same name)
+	IPAMBlockAttributeVMIName = "vmi-name"
+
+	// UID of the VMI object
+	IPAMBlockAttributeVMIUID = "vmi-uid"
+
+	// UID of the VM object (only present if VMI is owned by a VM)
+	IPAMBlockAttributeVMUID = "vm-uid"
+
+	// UID of the VirtualMachineInstanceMigration object (only present on migration target pods)
+	IPAMBlockAttributeVMIMUID = "vmim-uid"
+
+	IPAMAffinityTypeHost    = "host"
+	IPAMAffinityTypeVirtual = "virtual"
 )
 
 var (
