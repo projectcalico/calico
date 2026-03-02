@@ -31,7 +31,6 @@ type TcGlobalData struct {
 	VxlanPort       uint16
 	PSNatStart      uint16
 	PSNatLen        uint16
-	HostTunnelIPv4  [16]byte
 	Flags           uint32
 	WgPort          uint16
 	Wg6Port         uint16
@@ -42,10 +41,9 @@ type TcGlobalData struct {
 	LogFilterJmp    uint32
 	Jumps           [40]uint32
 
-	HostIPv6       [16]byte
-	IntfIPv6       [16]byte
-	HostTunnelIPv6 [16]byte
-	JumpsV6        [40]uint32
+	HostIPv6 [16]byte
+	IntfIPv6 [16]byte
+	JumpsV6  [40]uint32
 
 	DSCP          int8
 	MaglevLUTSize uint32
