@@ -90,6 +90,32 @@ blocks:
             - name: ENCAPSULATION_TYPE
               value: "VXLAN"
 
+        - name: Native v3 CRDs (GCP)
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: "gcp-kubeadm"
+            - name: K8S_VERSION
+              value: "stable"
+            - name: USE_API_SERVER
+              value: "false"
+
+        - name: Native v3 CRDs (AWS)
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-kubeadm"
+            - name: K8S_VERSION
+              value: "stable-3"
+            - name: USE_API_SERVER
+              value: "false"
+
   - name: Nftables mode, EKS
     dependencies: []
     task:
@@ -173,26 +199,6 @@ blocks:
               value: ipv6
             - name: ENCAPSULATION_TYPE_V6
               value: "None"
-
-  - name: Native v3 CRDs
-    dependencies: []
-    task:
-      jobs:
-        - name: Native v3 CRDs
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: PROVISIONER
-              values: ["gcp-kubeadm", "aws-kubeadm"]
-          env_vars:
-            - name: USE_API_SERVER
-              value: "false"
-            - name: K8S_VERSION
-              value: "stable"
-            - name: INSTALLER
-              value: "operator"
 
 promotions:
   - name: Cleanup jobs

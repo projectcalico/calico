@@ -279,6 +279,8 @@ blocks:
               value: gcp-kubeadm
             - name: KUBE_PROXY_MODE
               value: ipvs
+            - name: USE_API_SERVER
+              value: "false"
 
   - name: usage reporting
     dependencies: []
@@ -518,6 +520,8 @@ blocks:
               value: "10.0.0.0/29"
             - name: PROVISIONER
               value: "aws-kubeadm"
+            - name: USE_API_SERVER
+              value: "false"
 
         - name: AKS w AKS CNI + Overlay
           execution_time_limit:
@@ -765,26 +769,6 @@ blocks:
               value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
             - name: USE_HASH_RELEASE
               value: "true"
-
-  - name: Native v3 CRDs
-    dependencies: []
-    task:
-      jobs:
-        - name: Native v3 CRDs
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: PROVISIONER
-              values: ["gcp-kubeadm", "aws-kubeadm"]
-          env_vars:
-            - name: USE_API_SERVER
-              value: "false"
-            - name: K8S_VERSION
-              value: "stable"
-            - name: INSTALLER
-              value: "operator"
 
 promotions:
   - name: Cleanup jobs
