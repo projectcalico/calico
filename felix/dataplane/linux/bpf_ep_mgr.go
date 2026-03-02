@@ -4635,7 +4635,6 @@ func (m *bpfEndpointManager) updateAllowSourceSets(wlID types.WorkloadEndpointID
 			m.removeAllowSourceSets(wlID, wl, existingPrefix)
 		}
 	}
-
 }
 
 func (m *bpfEndpointManager) addAllowSourcePrefix(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint, prefix string) {
@@ -4656,7 +4655,6 @@ func (m *bpfEndpointManager) addAllowSourcePrefix(wlID types.WorkloadEndpointID,
 		return
 	}
 	m.setAllowedSourcesPerWorkload(wlID, prefix)
-
 	logrus.WithField("wep", wlID).WithField("cidr", prefix).Debug("Successfully added allowed source CIDR")
 }
 
@@ -4665,7 +4663,6 @@ func (m *bpfEndpointManager) cleanAllowSourceSetPerWorkload(wlID types.WorkloadE
 	if !exists {
 		return
 	}
-
 	for wlPrefix := range wlPrefixes.All() {
 		m.removeAllowSourceSets(wlID, wl, wlPrefix)
 	}
@@ -4688,9 +4685,7 @@ func (m *bpfEndpointManager) removeAllowSourceSets(wlID types.WorkloadEndpointID
 		logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(mapDelError).Warn("Failed to remove allowed source CIDR")
 		return
 	}
-
 	m.discardFromAllowedSourcesPerWorkload(wlID, prefix)
-
 	logrus.WithField("wep", wlID).WithField("cidr", prefix).Debug("Successfully removed allowed source CIDR")
 }
 
@@ -4717,7 +4712,6 @@ func (m *bpfEndpointManager) changeAllowedSource(prefix string, ifindex int, isA
 	} else {
 		err = managerDataplane.AllowSourcesMap.Delete(entry.AsBytes())
 	}
-
 	return err
 }
 

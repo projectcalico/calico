@@ -2899,7 +2899,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		JustBeforeEach(func() {
 			ifaceName = "cali12345"
 			cidrString = "192.192.192.192/32"
-
 			newBpfEpMgr(false)
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 			genWLUpdateWithSpoofedSource("cali12345", []string{cidrString})()
@@ -2911,7 +2910,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 		It("should contain allowed source prefixes from annotation", func() {
 			// initial genWLUpdate should add the prefix to the map
-
 			ifindex := bpfEpMgr.nameToIface[ifaceName].info.ifIndex
 			expectedEbpfEntry := allowsources.NewKey(cidr, ifindex)
 			_, err := bpfEpMgr.v4.AllowSourcesMap.Get(expectedEbpfEntry.AsBytes())
@@ -2950,9 +2948,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should remove prefix from the map upon removal", func() {
 			// the following prefix should be removed from the map once WLUpdateEpRemove runs
 			genWLUpdateEpRemove("cali12345")()
-
 			ifindex := bpfEpMgr.nameToIface[ifaceName].info.ifIndex
-
 			expectedEntry := allowsources.NewKey(cidr, ifindex)
 			value, err := bpfEpMgr.v4.AllowSourcesMap.Get(expectedEntry.AsBytes())
 			Expect(err).To(HaveOccurred())
