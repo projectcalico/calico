@@ -243,7 +243,7 @@ skip_redir_ifindex:
 			flags |= BPF_F_TUNINFO_IPV6;
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
-			key.local_ipv4 = HOST_IP;
+			key.local_ipv4 = bpf_htonl(HOST_IP);
 			flags |= BPF_F_ZERO_CSUM_TX;
 #endif
 			size = sizeof(struct bpf_tunnel_key);
@@ -292,7 +292,7 @@ skip_redir_ifindex:
 			flags |= BPF_F_TUNINFO_IPV6;
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
-			key.local_ipv4 = HOST_IP;
+			key.local_ipv4 = bpf_htonl(HOST_IP);
 			flags |= BPF_F_ZERO_CSUM_TX;
 #endif
 			size = sizeof(struct bpf_tunnel_key);
