@@ -170,6 +170,7 @@ func init() {
 		Entry("protocol udp supports ports", numorstring.ProtocolFromString("TCP"), true),
 		Entry("protocol foo does not support ports", numorstring.ProtocolFromString("foo"), false),
 		Entry("protocol 2 does not support ports", numorstring.ProtocolFromInt(2), false),
+		Entry("protocol any does not support ports", numorstring.ProtocolFromString("any"), false),
 	)
 
 	// Perform tests of Protocols FromString method.
@@ -181,6 +182,8 @@ func init() {
 		Entry("protocol udp -> UDP", "udp", "UDP"),
 		Entry("protocol tcp -> TCP", "tcp", "TCP"),
 		Entry("protocol updlite -> UDPLite", "udplite", "UDPLite"),
+		Entry("protocol any -> any", "ANY", "any"),
+		Entry("protocol any lowercase -> any", "any", "any"),
 		Entry("unknown protocol xxxXXX", "xxxXXX", "xxxXXX"),
 	)
 

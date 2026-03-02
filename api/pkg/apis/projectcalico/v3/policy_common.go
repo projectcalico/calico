@@ -47,7 +47,7 @@ type Rule struct {
 	// a specific IP protocol. Required if any of the EntityRules contain Ports
 	// (because ports only apply to certain protocols).
 	//
-	// Must be one of these string values: "TCP", "UDP", "ICMP", "ICMPv6", "SCTP", "UDPLite"
+	// Must be one of these string values: "TCP", "UDP", "ICMP", "ICMPv6", "SCTP", "UDPLite", "any"
 	// or an integer in the range 1-255.
 	Protocol *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
 
