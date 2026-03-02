@@ -2031,6 +2031,193 @@ var _ = Describe("RouteTable with multiple priorities", func() {
 			Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(lowKey))
 			Expect(dataplane.RouteKeyToRoute).To(HaveKey(highKey))
 		})
+
+		Describe("live migration: source host", func() {
+			// Simulates the sequence of events when a VM is live-migrated
+			// AWAY from this host. Felix manages the local workload route
+			// on cali1; BIRD programs a remote route on eth0 that Felix
+			// should not touch.
+
+			const (
+				normalPriority   = 200 // Normal routing priority.
+				elevatedPriority = 100 // Lower number = higher kernel preference.
+				birdProto        = 12  // RTPROT_BIRD
+				vmCIDR           = "10.0.0.42/32"
+			)
+
+			var eth0 *mocknetlink.MockLink
+
+			BeforeEach(func() {
+				eth0 = dataplane.AddIface(10, "eth0", true, true)
+			})
+
+			It("should handle the full migration sequence", func() {
+				// Step 1: Felix programs a local route for the VM at normal priority.
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP(vmCIDR),
+						Priority: normalPriority,
+					},
+				}})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				felixKey := routeKeyStr(254, vmCIDR, normalPriority)
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(felixKey))
+
+				// Step 2: BIRD programs a remote route at elevated priority via eth0.
+				birdRoute := netlink.Route{
+					Family:    unix.AF_INET,
+					LinkIndex: eth0.LinkAttrs.Index,
+					Dst:       mustParseCIDR(vmCIDR),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  birdProto,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					Table:     unix.RT_TABLE_MAIN,
+					Priority:  elevatedPriority,
+				}
+				dataplane.AddMockRoute(&birdRoute)
+				birdKey := routeKeyStr(254, vmCIDR, elevatedPriority)
+
+				// Resync: Felix should see the BIRD route but leave it alone.
+				rt.QueueResync()
+				dataplane.ResetDeltas()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(felixKey))
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(birdKey))
+				Expect(dataplane.DeletedRouteKeys).NotTo(HaveKey(birdKey))
+
+				// Step 3: Source cleanup — Felix removes the local route.
+				rt.RouteRemove(RouteClassLocalWorkload, "cali1", RouteKey{
+					CIDR:     ip.MustParseCIDROrIP(vmCIDR),
+					Priority: normalPriority,
+				})
+				dataplane.ResetDeltas()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(felixKey))
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(birdKey))
+				Expect(dataplane.DeletedRouteKeys).To(HaveKey(felixKey))
+				Expect(dataplane.DeletedRouteKeys).NotTo(HaveKey(birdKey))
+
+				// Step 4: BIRD updates its route to normal priority.
+				dataplane.RemoveMockRoute(&birdRoute)
+				birdRouteNormal := netlink.Route{
+					Family:    unix.AF_INET,
+					LinkIndex: eth0.LinkAttrs.Index,
+					Dst:       mustParseCIDR(vmCIDR),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  birdProto,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					Table:     unix.RT_TABLE_MAIN,
+					Priority:  normalPriority,
+				}
+				dataplane.AddMockRoute(&birdRouteNormal)
+				birdNormalKey := routeKeyStr(254, vmCIDR, normalPriority)
+
+				// Resync: Felix should leave BIRD's route at the new priority alone.
+				rt.QueueResync()
+				dataplane.ResetDeltas()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(birdNormalKey))
+				Expect(dataplane.DeletedRouteKeys).NotTo(HaveKey(birdNormalKey))
+			})
+		})
+
+		Describe("live migration: destination host", func() {
+			// Simulates the sequence of events when a VM is live-migrated
+			// TO this host. BIRD has a remote route for the VM on eth0;
+			// Felix then programs a local workload route on cali1 with
+			// elevated priority.
+
+			const (
+				normalPriority   = 200 // Normal routing priority.
+				elevatedPriority = 100 // Lower number = higher kernel preference.
+				birdProto        = 12  // RTPROT_BIRD
+				vmCIDR           = "10.0.0.42/32"
+			)
+
+			var eth0 *mocknetlink.MockLink
+
+			BeforeEach(func() {
+				eth0 = dataplane.AddIface(10, "eth0", true, true)
+			})
+
+			It("should handle the full migration sequence", func() {
+				// Step 1: BIRD remote route exists at normal priority.
+				birdRoute := netlink.Route{
+					Family:    unix.AF_INET,
+					LinkIndex: eth0.LinkAttrs.Index,
+					Dst:       mustParseCIDR(vmCIDR),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  birdProto,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					Table:     unix.RT_TABLE_MAIN,
+					Priority:  normalPriority,
+				}
+				dataplane.AddMockRoute(&birdRoute)
+				birdKey := routeKeyStr(254, vmCIDR, normalPriority)
+
+				// Initial resync: BIRD route should be left alone.
+				rt.QueueResync()
+				dataplane.ResetDeltas()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(birdKey))
+				Expect(dataplane.DeletedRouteKeys).NotTo(HaveKey(birdKey))
+
+				// Step 2: VM is now live on this host — Felix programs a
+				// local route with elevated priority.
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP(vmCIDR),
+						Priority: elevatedPriority,
+					},
+				}})
+				dataplane.ResetDeltas()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				felixKey := routeKeyStr(254, vmCIDR, elevatedPriority)
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(felixKey))
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(birdKey))
+
+				// Step 3: Source cleanup — BIRD removes the remote route.
+				dataplane.RemoveMockRoute(&birdRoute)
+
+				// Resync: Felix route should survive, BIRD route gone.
+				rt.QueueResync()
+				dataplane.ResetDeltas()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(felixKey))
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(birdKey))
+
+				// Step 4: Reversion to normal — Felix updates its route
+				// to normal priority.
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP(vmCIDR),
+						Priority: normalPriority,
+					},
+				}})
+				dataplane.ResetDeltas()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				normalKey := routeKeyStr(254, vmCIDR, normalPriority)
+				Expect(dataplane.RouteKeyToRoute).To(HaveKey(normalKey))
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey(felixKey))
+				Expect(dataplane.DeletedRouteKeys).To(HaveKey(felixKey))
+			})
+		})
 	})
 })
 
