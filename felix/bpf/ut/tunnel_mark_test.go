@@ -37,7 +37,7 @@ func TestTunnelMarkSet(t *testing.T) {
 	// Create a dummy device to simulate the tunnel device so bpf_fib_lookup
 	// can resolve the destination and return an ifindex.
 	dummy := createHostIf("tunl_test0")
-	defer netlink.LinkDel(dummy)
+	defer func() { _ = netlink.LinkDel(dummy) }()
 
 	// Bring the device up (createHostIf sets the flag but we need the kernel
 	// to actually transition it).
