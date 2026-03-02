@@ -6396,6 +6396,14 @@ rules:
     verbs:
       - create
       - update
+  # For monitoring KubeVirt live migration.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # CNI cluster role
