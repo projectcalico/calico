@@ -330,6 +330,9 @@ func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error)
 
 	if m.dpConfig.BPFEnabled && bpfutils.BTFEnabled {
 		vxlan.FlowBased = true
+		// BPF dataplane handles encap/decap and source IP selection itself,
+		// so it doesn't need an IP assigned to the overlay device.
+		addr = ""
 	} else {
 		vxlan.VxlanId = m.vxlanID
 		vxlan.VtepDevIndex = parent.Attrs().Index
