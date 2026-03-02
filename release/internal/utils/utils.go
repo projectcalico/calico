@@ -52,6 +52,9 @@ const (
 	// TigeraOrg is the name of the Tigera organization.
 	TigeraOrg = "tigera"
 
+	// TigeraCompany is the short-form human-facing name of the company, for freeform text fields or branding
+	TigeraCompany = "Tigera"
+
 	// TigeraOperatorChart is the name of the Tigera Operator Helm chart.
 	TigeraOperatorChart = "tigera-operator"
 

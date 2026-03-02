@@ -44,6 +44,7 @@ const (
 	rbacNoTierGetUser = "e2e-rbac-no-tier-get"
 	rbacNoPolicyUser  = "e2e-rbac-no-policy-access"
 	rbacOtherTierUser = "e2e-rbac-other-tier-admin"
+	rbacReadOnlyUser  = "e2e-rbac-read-only"
 
 	// Common prefix for RBAC resources created by these tests.
 	rbacResourcePrefix = "e2e-tiered-rbac-"
@@ -220,6 +221,58 @@ var _ = describe.CalicoDescribe(
 				cli := newImpersonatedClient(rbacTierAdminUser)
 				Expect(cli.Delete(ctx, np)).To(Succeed())
 			})
+
+			// Verifies that the update verb is checked through the same tier RBAC
+			// authorization path as create and delete.
+			It("should allow update by a user with full tier RBAC", func() {
+				By("Creating a policy with the admin client")
+				np := v3.NewNetworkPolicy()
+				np.Name = "rbac-test-allow-update"
+				np.Namespace = f.Namespace.Name
+				np.Spec.Tier = rbacTestTier
+				np.Spec.Order = ptr.To(100.0)
+				np.Spec.Selector = "all()"
+				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, np)).To(Succeed(), "admin failed to create policy for update test")
+
+				By("Updating the policy as the tier admin user")
+				cli := newImpersonatedClient(rbacTierAdminUser)
+				Expect(cli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), np)).To(
+					Succeed(), "tier admin failed to get policy",
+				)
+				np.Spec.Order = ptr.To(200.0)
+				Expect(cli.Update(ctx, np)).To(Succeed(), "tier admin should be able to update policy")
+
+				Expect(adminCli.Delete(ctx, np)).To(Succeed())
+			})
+
+			// Verifies that update is denied when the user lacks tier GET access,
+			// even though they have update permission on tier.networkpolicies.
+			It("should deny update by a user without tier GET access", func() {
+				By("Creating a policy with the admin client")
+				np := v3.NewNetworkPolicy()
+				np.Name = "rbac-test-deny-update"
+				np.Namespace = f.Namespace.Name
+				np.Spec.Tier = rbacTestTier
+				np.Spec.Order = ptr.To(100.0)
+				np.Spec.Selector = "all()"
+				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, np)).To(Succeed(), "admin failed to create policy for update test")
+
+				By("Fetching the policy as admin to get the resource version")
+				Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), np)).To(
+					Succeed(), "admin failed to get policy",
+				)
+
+				By("Attempting to update the policy without tier GET access")
+				np.Spec.Order = ptr.To(200.0)
+				cli := newImpersonatedClient(rbacNoTierGetUser)
+				err := cli.Update(ctx, np)
+				Expect(err).To(HaveOccurred(), "update should be denied without tier GET access")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+
+				Expect(adminCli.Delete(ctx, np)).To(Succeed())
+			})
 		})
 
 		Context("GlobalNetworkPolicy", func() {
@@ -286,6 +339,115 @@ var _ = describe.CalicoDescribe(
 				Expect(err.Error()).To(ContainSubstring("tier"))
 			})
 		})
+
+		// The default tier is a built-in resource that must remain immutable.
+		// Even an admin cannot update or delete it. Each test includes a
+		// DeferCleanup safety net that restores the default tier if the
+		// operation unexpectedly succeeds, so we don't leave the cluster broken.
+		Context("default tier", func() {
+			// restoreDefaultTier is a safety net for default tier tests. If the
+			// tier was modified (ResourceVersion changed) it restores the saved
+			// spec; if it was deleted it recreates it.
+			restoreDefaultTier := func(saved *v3.Tier) {
+				current := v3.NewTier()
+				current.Name = "default"
+				if err := adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(current), current); err != nil {
+					// Tier was deleted, recreate it.
+					restore := v3.NewTier()
+					restore.Name = "default"
+					restore.Spec = saved.Spec
+					if err := adminCli.Create(ctx, restore); err != nil {
+						logrus.WithError(err).Error("CRITICAL: failed to recreate deleted default tier")
+					}
+					return
+				}
+				if current.ResourceVersion != saved.ResourceVersion {
+					current.Spec = saved.Spec
+					if err := adminCli.Update(ctx, current); err != nil {
+						logrus.WithError(err).Warn("Failed to restore default tier")
+					}
+				}
+			}
+
+			It("should not allow updating the default tier", func() {
+				tier := v3.NewTier()
+				tier.Name = "default"
+				Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(tier), tier)).To(
+					Succeed(), "failed to get default tier",
+				)
+
+				savedTier := tier.DeepCopy()
+				DeferCleanup(func() { restoreDefaultTier(savedTier) })
+
+				tier.Spec.Order = ptr.To(999.0)
+				err := adminCli.Update(ctx, tier)
+				Expect(err).To(HaveOccurred(), "default tier should not be updatable")
+			})
+
+			It("should not allow deleting the default tier", func() {
+				tier := v3.NewTier()
+				tier.Name = "default"
+				Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(tier), tier)).To(
+					Succeed(), "failed to get default tier",
+				)
+
+				savedTier := tier.DeepCopy()
+				DeferCleanup(func() { restoreDefaultTier(savedTier) })
+
+				err := adminCli.Delete(ctx, tier)
+				Expect(err).To(HaveOccurred(), "default tier should not be deletable")
+			})
+		})
+
+		// Verifies that a user with read-only (get/list/watch) permissions on
+		// tier policies can get existing policies but cannot create, update,
+		// or delete them.
+		Context("read-only access", func() {
+			It("should allow reading but deny writing for a read-only user", func() {
+				By("Creating a policy with the admin client")
+				np := v3.NewNetworkPolicy()
+				np.Name = "rbac-test-read-only"
+				np.Namespace = f.Namespace.Name
+				np.Spec.Tier = rbacTestTier
+				np.Spec.Order = ptr.To(100.0)
+				np.Spec.Selector = "all()"
+				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, np)).To(Succeed(), "admin failed to create policy for read-only test")
+
+				cli := newImpersonatedClient(rbacReadOnlyUser)
+
+				By("Verifying the read-only user can get the policy")
+				readNP := v3.NewNetworkPolicy()
+				Expect(cli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), readNP)).To(
+					Succeed(), "read-only user should be able to get policy",
+				)
+
+				By("Verifying the read-only user cannot create a policy")
+				newNP := v3.NewNetworkPolicy()
+				newNP.Name = "rbac-test-read-only-create"
+				newNP.Namespace = f.Namespace.Name
+				newNP.Spec.Tier = rbacTestTier
+				newNP.Spec.Order = ptr.To(100.0)
+				newNP.Spec.Selector = "all()"
+				newNP.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				err := cli.Create(ctx, newNP)
+				Expect(err).To(HaveOccurred(), "read-only user should not be able to create policy")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+
+				By("Verifying the read-only user cannot update the policy")
+				readNP.Spec.Order = ptr.To(200.0)
+				err = cli.Update(ctx, readNP)
+				Expect(err).To(HaveOccurred(), "read-only user should not be able to update policy")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+
+				By("Verifying the read-only user cannot delete the policy")
+				err = cli.Delete(ctx, np)
+				Expect(err).To(HaveOccurred(), "read-only user should not be able to delete policy")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+
+				Expect(adminCli.Delete(ctx, np)).To(Succeed())
+			})
+		})
 	},
 )
 
@@ -303,6 +465,7 @@ type tieredRBACSetup struct {
 //   - rbacNoTierGetUser: has tier policy access but NO tier GET
 //   - rbacNoPolicyUser: has tier GET but NO tier policy access
 //   - rbacOtherTierUser: full access but only for a different tier
+//   - rbacReadOnlyUser: read-only access (get/list/watch) on tier policies
 func buildTieredRBACResources() tieredRBACSetup {
 	setup := tieredRBACSetup{}
 
@@ -393,6 +556,28 @@ func buildTieredRBACResources() tieredRBACSetup {
 			ResourceNames: []string{rbacOtherTier + ".*"},
 		},
 	))
+
+	// Read-only: has tier GET and read-only policy access (get/list/watch).
+	// Should be able to get/list/watch policies but not create, update, or delete.
+	addRoleAndBinding("read-only", rbacReadOnlyUser, []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies", "globalnetworkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tiers"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{rbacTestTier},
+		},
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
+			Verbs:         []string{"get", "list", "watch"},
+			ResourceNames: []string{rbacTestTier + ".*"},
+		},
+	})
 
 	return setup
 }
