@@ -347,60 +347,39 @@ func New(
 		handlemgr.WithSocketTimeout(netlinkTimeout),
 	)
 
-	// Interaction between conntrack cleanup and multiple route priorities
-	// ================================================================
+	// The conntrack tracker (ConntrackCleanupManager) cleans up conntrack state for a workload
+	// IP - i.e. for flows going to or from that IP, on this node - when Felix stops programming
+	// a local route for that workload.  The latter happens during live migration when the VM
+	// was originally on this node: a remote BIRD-programmed route appears for the IP, then
+	// Felix removes the old local route for the IP, which means that conntrack state for that
+	// IP is cleaned up; yet we want existing connections to the migrating IP to be impacted as
+	// little as possible.
 	//
-	// The conntrack tracker (ConntrackCleanupManager) tracks ownership of
-	// CIDRs for conntrack cleanup purposes.  It is keyed on ip.Addr (one
-	// owner per CIDR), whereas routes are keyed on RouteKey (CIDR + TOS +
-	// Priority).  recalculateDesiredKernelRoute is called per RouteKey and
-	// calls UpdateCIDROwner/RemoveCIDROwner on the tracker; when multiple
-	// RouteKeys share the same CIDR (i.e. different priorities), the last
-	// call wins.
+	// Note that this isn't related to Priority, so it's irrelevant that the conntrack tracker
+	// doesn't yet handle that.  We need the route table to handle Priority, to get the correct
+	// interaction between Felix- and BIRD-programmed routes with different priorities, and we
+	// include Priority in RouteKey because that matches what the kernel does.  But Felix itself
+	// doesn't program multiple routes with the same IP and different priorities; at least, not
+	// for live migration.
 	//
-	// The primary motivation for multiple priorities is VM live migration.
-	// During live migration, the kernel has two routes for the VM's IP at
-	// different priorities: one managed by Felix (the local workload route)
-	// and one managed by BIRD (the remote route via the network).  Only
-	// Felix's route passes through the RouteTable; BIRD's route is external
-	// and invisible to the tracker (it fails the routeIsOurs() check during
-	// resync because it has a non-Calico protocol on a non-workload
-	// interface).
+	// The conntrack issue is about moving an existing flow from one node to another.  The
+	// concerns are:
 	//
-	// Because of this, Felix only manages ONE route per CIDR at any given
-	// time, and the tracker's one-owner-per-CIDR model is sufficient:
+	// 1. If TCP loose is disabled (`nf_conntrack_tcp_loose`), a non-SYN packet on the new node
+	// will not be able to re-establish the conntrack state there.
 	//
-	//   - Source host (VM migrating away): Felix does RouteRemove of its
-	//     local workload route.  RemoveCIDROwner is called, and when the
-	//     route is deleted from the kernel, OnDataplaneRouteDeleted queues a
-	//     conntrack cleanup.  This is the right behaviour: the VM is leaving
-	//     this host, so conntrack entries for its IP are stale.  Calico uses
-	//     conntrack state to avoid re-evaluating policy for every packet in
-	//     an established flow; flushing forces re-evaluation, which is
-	//     appropriate because the return path may now traverse different
-	//     HostEndpoints or policies on a different host.  The downside is
-	//     minor: a return-path packet may be dropped, but TCP will
-	//     retransmit and UDP applications are typically tolerant of loss.
+	// 2. If the next packet on a migrated flow is in the reverse direction (i.e. from the
+	// original connection's destination IP), policy might not allow it, whereas it would allow
+	// a packet in the forwards direction.
 	//
-	//   - Destination host (VM arriving): Felix does RouteUpdate to add a
-	//     local workload route at elevated priority.  UpdateCIDROwner is
-	//     called.  BIRD's pre-existing remote route was never tracked (it's
-	//     not "ours"), so the tracker sees this as a brand new entry — no
-	//     previous owner, no cleanup triggered.  This is also correct: the
-	//     VM is arriving on this host, so there are no stale conntrack
-	//     entries to flush.
+	// 3. Re-evaluating policy for a migrated flow might require retransmitting a packet, and
+	// for UDP retransmission depends on application layer behaviour, instead of being baked
+	// into the protocol like with TCP; so that might not happen.
 	//
-	// Limitation: if we later add use cases where Felix programs TWO routes
-	// for the same CIDR at different priorities simultaneously (both managed
-	// by Felix, not one Felix + one BIRD), the tracker would give incorrect
-	// results.  Specifically, removing one priority's route would call
-	// RemoveCIDROwner for the CIDR, erasing the tracker's knowledge of the
-	// still-active route at the other priority.  OnDataplaneRouteDeleted
-	// would then see no desired owner and queue a spurious conntrack flush.
-	// Fixing this would require extending the tracker with reference
-	// counting or a lookup across all priorities for a given CIDR.  See
-	// also the comment on ConntrackCleanupManager in
-	// conntrack_owner_tracker.go.
+	// For the current increment of live migration support we have decided to live with these
+	// issues.  In future we may address them by migrating the conntrack state to the new node.
+	// For now, TCP loose is effectively required for (1), and we hope that (2) and (3) will not
+	// have significant impacts in practice.
 	if rt.conntrackCleanupEnabled {
 		rt.conntrackTracker = NewConntrackCleanupManager(ipVersion, rt.conntrack)
 	} else {
