@@ -176,6 +176,12 @@ rules:
       - update
       # watch for changes
       - watch
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - kubecontrollersconfigurations/status
+    verbs:
+      - get
+      - update
   # Needed for policy name migrator.
   - apiGroups: ["crd.projectcalico.org"]
     resources:

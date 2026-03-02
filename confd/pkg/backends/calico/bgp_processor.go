@@ -751,8 +751,8 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	}
 
 	localSubnet, localSubnetErr := c.localSubnet(ipVersion)
-	if err != nil {
-		logCtx.WithError(err).Debug("Failed to get local host subnet")
+	if localSubnetErr != nil {
+		logCtx.WithError(localSubnetErr).Debug("Failed to get local host subnet")
 	}
 
 	for key, value := range kvPairs {

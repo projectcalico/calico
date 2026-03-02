@@ -681,10 +681,10 @@ func isValidWindowsHandle(backend bapi.Client, ipPoolsWindows *ipPoolAccessor, i
 		attrs := block.Attributes[*attrIdx]
 		// If primary attribute is not nil then it must contain "windows-reserved-IPAM-handle"
 		// Primary attribute will be set only for reserved IPs.
-		if attrs.AttrPrimary == nil {
+		if attrs.HandleID == nil {
 			return false
 		}
-		if *attrs.AttrPrimary == "windows-reserved-ipam-handle" {
+		if *attrs.HandleID == "windows-reserved-ipam-handle" {
 			return true
 		}
 	}

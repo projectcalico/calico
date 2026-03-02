@@ -285,6 +285,26 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
+# Support for git worktrees.  In a worktree, .git is a file pointing to
+# <main-repo>/.git/worktrees/<name>.  When Docker containers need git access,
+# the main .git directory must also be mounted, and GIT_DIR / GIT_WORK_TREE
+# must be set so that git can find objects and the correct working tree.
+_GIT_DIR := $(shell git rev-parse --absolute-git-dir 2>/dev/null)
+_GIT_COMMON_DIR := $(realpath $(shell git rev-parse --git-common-dir 2>/dev/null))
+ifneq ($(_GIT_DIR),$(_GIT_COMMON_DIR))
+# Running in a git worktree: mount the main .git directory at its host path
+# so the worktree .git file pointer resolves inside the container.
+# DOCKER_GIT_WORK_TREE can be overridden by Makefiles that mount the repo at
+# a different container path (e.g. api/Makefile).
+DOCKER_GIT_WORK_TREE ?= /go/src/github.com/projectcalico/calico
+DOCKER_GIT_WORKTREE_ARGS := \
+	-v $(_GIT_COMMON_DIR):$(_GIT_COMMON_DIR):ro \
+	-e GIT_DIR=$(_GIT_DIR) \
+	-e GIT_WORK_TREE=$(DOCKER_GIT_WORK_TREE)
+else
+DOCKER_GIT_WORKTREE_ARGS :=
+endif
+
 # Configure the Calico API group to use. Projects importing this Makefile can override this variable
 # if they need to.
 # Supported values:
@@ -322,6 +342,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \

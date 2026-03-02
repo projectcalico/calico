@@ -943,10 +943,10 @@ var remoteIPAMBlockWithBorrows = model.AllocationBlock{
 	Unallocated: []int{3, 4, 5, 6, 7},
 	Attributes: []model.AllocationAttribute{
 		{},
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname,
 		}},
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname2,
 		}},
 	},
@@ -968,10 +968,10 @@ var remoteIPAMBlockWithBorrowsSwitched = model.AllocationBlock{
 	Unallocated: []int{3, 4, 5, 6, 7},
 	Attributes: []model.AllocationAttribute{
 		{},
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname2,
 		}},
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname,
 		}},
 	},
@@ -996,12 +996,12 @@ var localIPAMBlockWithBorrows = model.AllocationBlock{
 		{},
 
 		// 10.0.0.1 - assigned locally.
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: localHostname,
 		}},
 
 		// 10.0.0.2 - assigned to remoteHostname.
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname,
 		}},
 	},
