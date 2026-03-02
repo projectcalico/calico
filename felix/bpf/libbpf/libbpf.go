@@ -651,6 +651,7 @@ func (t *TcGlobalData) Set(m *Map) error {
 		&cJumpsV6[0],
 		C.short(t.DSCP),
 		C.uint(t.MaglevLUTSize),
+		C.uint(t.IPFragTimeout),
 	)
 
 	return err
