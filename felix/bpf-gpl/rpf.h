@@ -18,19 +18,16 @@
 
 static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt *r)
 {
-		bool allowsource_lookup = false;
-		if (WORKLOAD_SRC_SPOOFING_CONFIGURED) {
-			allowsource_lookup = cali_allowsource_lookup(&ctx->state->ip_src, ctx->skb->ifindex);
-		}
         CALI_DEBUG("Workload RPF check src=" IP_FMT " skb iface=%d.",
                         debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
-        if (!r && !allowsource_lookup) {
+        if (!r) {
+				if (WORKLOAD_SRC_SPOOFING_CONFIGURED && cali_allowsource_lookup(&ctx->state->ip_src, ctx->skb->ifindex)) {
+					CALI_INFO("Workload RPF bypass: allowing spoofed source IP");
+					ctx->state->flags |= CALI_ST_SUPPRESS_CT_STATE;
+					return RPF_RES_STRICT;
+				}
                 CALI_INFO("Workload RPF fail: missing route.");
                 return RPF_RES_FAIL;
-		} else if (!r) {
-				CALI_INFO("Workload RPF bypass: allowing spoofed source IP");
-				ctx->state->flags |= CALI_ST_SUPPRESS_CT_STATE;
-				return RPF_RES_STRICT;
 		}
 #ifdef IPVER6
 	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
