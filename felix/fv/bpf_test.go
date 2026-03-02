@@ -218,7 +218,6 @@ const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
 FELIX_0/32: local host idx -
-FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_1_TNL/32: remote host in-pool nat-out tunneled
 FELIX_2/32: remote host
@@ -247,7 +246,6 @@ const expectedRouteDumpWithTunnelAddrDSR = `10.65.0.0/16: remote in-pool nat-out
 111.222.2.1/32: remote host
 245.245.0.0/16: remote no-dsr
 FELIX_0/32: local host idx -
-FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_1_TNL/32: remote host in-pool nat-out tunneled
 FELIX_2/32: remote host
