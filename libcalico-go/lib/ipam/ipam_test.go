@@ -67,7 +67,6 @@ type testArgsClaimAff struct {
 	expError                    error
 }
 
-
 var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	// Create a new backend client and an IPAM Client using the IP Pools Accessor.
 	// Tests that need to ensure a clean datastore should invoke Clean() on the datastore at the start of the
@@ -4570,10 +4569,6 @@ func deletePool(cidr string) {
 
 func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) {
 	ipamtestutils.ApplyNode(c, kc, host, labels)
-}
-
-func tryApplyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) error {
-	return ipamtestutils.TryApplyNode(c, kc, host, labels)
 }
 
 func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
