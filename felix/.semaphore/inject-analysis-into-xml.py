@@ -168,28 +168,10 @@ def write_diags_log(json_path, output_path):
         lines.append(sep)
         lines.append("")
 
-        file_path = entry.get('file_path', '')
-        line_number = entry.get('line_number', '')
-        if file_path:
-            loc = file_path
-            if line_number:
-                loc += f":{line_number}"
-            lines.append(f"Location: {loc}")
-            lines.append("")
-
         diagnosis = entry.get('diagnosis', '')
         if diagnosis:
-            lines.append("Diagnosis:")
             lines.append(diagnosis)
             lines.append("")
-
-        error_message = entry.get('error_message', '')
-        if error_message:
-            lines.append("Error message:")
-            lines.append(error_message)
-            lines.append("")
-
-        lines.append("")
 
     with open(output_path, 'w') as f:
         f.write("\n".join(lines))
