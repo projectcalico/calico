@@ -296,9 +296,14 @@ func (t *allocationState) markDirty(node string, reason string) {
 	}
 }
 
-func (t *allocationState) syncComplete() {
-	for node := range t.dirtyNodes {
-		log.WithField("node", node).Debug("Node is no longer dirty")
+// markClean removes a single node from the dirty set after it has been
+// successfully processed. This replaces the old bulk syncComplete() approach,
+// ensuring that only nodes we actually handled get cleared. Nodes that were
+// never processed (e.g., due to an early error) or that failed cleanup remain
+// dirty and will be retried on the next sync.
+func (t *allocationState) markClean(node string, reason string) {
+	if _, ok := t.dirtyNodes[node]; ok {
+		log.WithFields(log.Fields{"node": node, "reason": reason}).Debug("Node is no longer dirty")
 		delete(t.dirtyNodes, node)
 	}
 }
