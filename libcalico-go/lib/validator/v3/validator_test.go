@@ -821,6 +821,7 @@ func init() {
 		Entry("should accept protocol ICMPv6", protocolFromString("ICMPv6"), true),
 		Entry("should accept protocol SCTP", protocolFromString("SCTP"), true),
 		Entry("should accept protocol UDPLite", protocolFromString("UDPLite"), true),
+		Entry("should accept protocol any", protocolFromString("any"), true),
 		Entry("should accept protocol 1 as int", protocolFromInt(1), true),
 		Entry("should accept protocol 255 as int", protocolFromInt(255), true),
 		Entry("should accept protocol 255 as string", protocolFromString("255"), true),

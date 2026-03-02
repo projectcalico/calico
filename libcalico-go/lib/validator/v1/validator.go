@@ -44,7 +44,7 @@ var (
 	interfaceRegex      = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	actionRegex         = regexp.MustCompile("^(allow|deny|log|pass)$")
 	backendActionRegex  = regexp.MustCompile("^(allow|deny|log|next-tier|)$")
-	protocolRegex       = regexp.MustCompile("^(tcp|udp|icmp|icmpv6|sctp|udplite)$")
+	protocolRegex       = regexp.MustCompile("^(tcp|udp|icmp|icmpv6|sctp|udplite|any)$")
 	ipipModeRegex       = regexp.MustCompile("^(always|cross-subnet|)$")
 	reasonString        = "Reason: "
 	poolSmallIPv4       = "IP pool size is too small (min /26) for use with Calico IPAM"
