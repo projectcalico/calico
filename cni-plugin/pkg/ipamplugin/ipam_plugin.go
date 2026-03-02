@@ -243,7 +243,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Attrs:    attrs,
 		}
 
-		// For VMI pods with persistence enabled, set MaxAllocToHandlePerIPVersion=1 to ensure only one IP per IP version per VMI.
+		// For VMI pods with persistence enabled, limit the IPs per handle so that parallel calls for the same VM don't over-allocate (instead one will fail and then the retry will go through the IP persistence path).
 		if ipPersistenceEnabledForVM {
 			assignArgs.MaxAllocToHandlePerIPVersion = 1
 		}
