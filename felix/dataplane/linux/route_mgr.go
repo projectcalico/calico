@@ -583,8 +583,10 @@ func (m *routeManager) configureTunnelDevice(
 	}
 
 	if m.maintainIPOnly {
-		if err := m.ensureAddressOnLink(addr, link); err != nil {
-			return fmt.Errorf("failed to ensure address of interface: %s", err)
+		if addr != "" {
+			if err := m.ensureAddressOnLink(addr, link); err != nil {
+				return fmt.Errorf("failed to ensure address of interface: %s", err)
+			}
 		}
 		return nil
 	}
@@ -623,9 +625,11 @@ func (m *routeManager) configureTunnelDevice(
 		}
 	}
 
-	// Make sure the IP address is configured.
-	if err := m.ensureAddressOnLink(addr, link); err != nil {
-		return fmt.Errorf("failed to ensure address of interface: %s", err)
+	// Make sure the IP address is configured (skip in BPF mode where addr is empty).
+	if addr != "" {
+		if err := m.ensureAddressOnLink(addr, link); err != nil {
+			return fmt.Errorf("failed to ensure address of interface: %s", err)
+		}
 	}
 
 	// If required, disable checksum offload.
