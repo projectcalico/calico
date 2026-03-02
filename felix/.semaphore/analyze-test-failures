@@ -225,7 +225,8 @@ if [ "$UT_MODE" = true ]; then
 
     if [ -s "$JSON_OUTPUT" ]; then
         echo "analyze-test-failures: Injecting analysis into UT XML reports..."
-        python3 "$INJECT_SCRIPT" "$JSON_OUTPUT" "${XML_FILES[@]}" || true
+        DIAGS_LOG="../artifacts/test-ut-DIAGS.log"
+        python3 "$INJECT_SCRIPT" --diags-log "$DIAGS_LOG" "$JSON_OUTPUT" "${XML_FILES[@]}" || true
     else
         echo "analyze-test-failures: fv-tests-guru produced no output for UT, skipping injection."
         if [ -s "$GURU_STDERR" ]; then
@@ -350,10 +351,23 @@ else
             continue
         fi
 
+        # Compute DIAGS.log path matching the FAILED.log naming convention.
+        diags_flags=()
+        if [[ "$batch" =~ ^[0-9]+$ ]]; then
+            diags_batch=$(printf "%03d" "$batch")
+        else
+            diags_batch="$batch"
+        fi
+        diags_log="$ARTIFACTS_DIR/test-${diags_batch}-DIAGS.log"
+        diags_flags=(--diags-log "$diags_log")
+
         xml_files=("$ARTIFACTS_DIR/$batch/report/"*.xml)
         if [ -f "${xml_files[0]}" ]; then
             echo "analyze-test-failures: Injecting analysis into XML reports for batch $batch..."
-            python3 "$INJECT_SCRIPT" "$json_file" "${xml_files[@]}" || true
+            python3 "$INJECT_SCRIPT" "${diags_flags[@]}" "$json_file" "${xml_files[@]}" || true
+        else
+            # No XML files but we still have JSON output; write DIAGS.log only.
+            python3 "$INJECT_SCRIPT" "${diags_flags[@]}" "$json_file" || true
         fi
 
         rm -f "$json_file"

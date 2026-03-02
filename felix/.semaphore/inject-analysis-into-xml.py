@@ -16,10 +16,14 @@
 
 """inject-analysis-into-xml.py - Inject fv-tests-guru analysis into JUnit XML.
 
-Usage: inject-analysis-into-xml.py <json-file> <xml-file> [<xml-file> ...]
+Usage: inject-analysis-into-xml.py [--diags-log <path>] <json-file> [<xml-file> ...]
 
 Reads fv-tests-guru JSON output and finds matching failed test cases in
 JUnit XML files, prepending the analysis into the <system-out> element.
+
+With --diags-log, also writes a human-readable diagnostics log file
+(test-NNN-DIAGS.log) that is pushed as a Semaphore artifact alongside
+the test-NNN-FAILED.log.
 
 Supports the fv-tests-guru output format:
   {"failures": [{"description": "TestName", "diagnosis": "...", ...}, ...]}
@@ -146,6 +150,53 @@ def format_analysis_block(failure):
     return "\n".join(parts)
 
 
+def write_diags_log(json_path, output_path):
+    """Write a human-readable diagnostics log from fv-tests-guru JSON output."""
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+
+    analyses = parse_analyses(data)
+    if not analyses:
+        print(f"inject-analysis: No failure analyses to write to {output_path}", file=sys.stderr)
+        return
+
+    sep = "=" * 60
+    lines = []
+    for desc, entry in analyses.items():
+        lines.append(sep)
+        lines.append(f"  Test: {desc}")
+        lines.append(sep)
+        lines.append("")
+
+        file_path = entry.get('file_path', '')
+        line_number = entry.get('line_number', '')
+        if file_path:
+            loc = file_path
+            if line_number:
+                loc += f":{line_number}"
+            lines.append(f"Location: {loc}")
+            lines.append("")
+
+        diagnosis = entry.get('diagnosis', '')
+        if diagnosis:
+            lines.append("Diagnosis:")
+            lines.append(diagnosis)
+            lines.append("")
+
+        error_message = entry.get('error_message', '')
+        if error_message:
+            lines.append("Error message:")
+            lines.append(error_message)
+            lines.append("")
+
+        lines.append("")
+
+    with open(output_path, 'w') as f:
+        f.write("\n".join(lines))
+
+    print(f"inject-analysis: Wrote diagnostics log to {output_path}")
+
+
 def inject_into_xml(json_path, xml_paths):
     """Inject analysis from JSON into matching failed tests in XML files."""
     with open(json_path, 'r') as f:
@@ -209,16 +260,34 @@ def inject_into_xml(json_path, xml_paths):
 
 
 def main():
-    if len(sys.argv) < 3:
+    args = sys.argv[1:]
+    diags_log_path = None
+
+    # Parse optional --diags-log <path> flag.
+    if '--diags-log' in args:
+        idx = args.index('--diags-log')
+        if idx + 1 < len(args):
+            diags_log_path = args[idx + 1]
+            args = args[:idx] + args[idx + 2:]
+        else:
+            print(f"Usage: --diags-log requires a path argument", file=sys.stderr)
+            sys.exit(1)
+
+    if len(args) < 1 or (len(args) < 2 and not diags_log_path):
         print(
-            f"Usage: {sys.argv[0]} <json-file> <xml-file> [<xml-file> ...]",
+            f"Usage: {sys.argv[0]} [--diags-log <path>] <json-file> [<xml-file> ...]",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    json_path = sys.argv[1]
-    xml_paths = sys.argv[2:]
-    inject_into_xml(json_path, xml_paths)
+    json_path = args[0]
+    xml_paths = args[1:]
+
+    if diags_log_path:
+        write_diags_log(json_path, diags_log_path)
+
+    if xml_paths:
+        inject_into_xml(json_path, xml_paths)
 
 
 if __name__ == '__main__':
