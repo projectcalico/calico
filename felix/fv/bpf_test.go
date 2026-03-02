@@ -3135,7 +3135,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
 							cc.ExpectNone(w[0][1], TargetIP(ip), port)
-							cc.ExpectNone(w[1][0], TargetIP(ip), port)
+							cc.ExpectSome(w[1][0], TargetIP(ip), port)
 							cc.ExpectNone(w[1][1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 
