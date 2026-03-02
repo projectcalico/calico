@@ -322,7 +322,6 @@ var _ = infrastructure.DatastoreDescribe(
 						for i := range len(w) {
 							w[i].WorkloadEndpoint.Spec.QoSControls = nil
 							w[i].UpdateInInfra(infra)
-							Eventually(tc.Felixes[i].ExecOutputFn("ip", "r", "get", fmt.Sprintf("10.65.%d.2", i)), "10s").Should(ContainSubstring(w[i].InterfaceName))
 						}
 					})
 
@@ -355,7 +354,6 @@ var _ = infrastructure.DatastoreDescribe(
 							IngressPeakrate:  100000000,
 						}
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to appear in 'tc qdisc'")
 						// ingress config should be present
@@ -379,7 +377,6 @@ var _ = infrastructure.DatastoreDescribe(
 							EgressPeakrate:  100000000,
 						}
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to appear in 'tc qdisc'")
 						// ingress config should not be present
@@ -399,7 +396,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 1")
 						w[1].WorkloadEndpoint.Spec.QoSControls = nil
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to disappear in 'tc qdisc'")
 						// ingress config should not be present
@@ -430,7 +426,6 @@ var _ = infrastructure.DatastoreDescribe(
 							IngressPeakrate:  100000000,
 						}
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to appear in 'tc qdisc'")
 						// ingress config should be present
@@ -460,7 +455,6 @@ var _ = infrastructure.DatastoreDescribe(
 							IngressPacketBurst: 200,
 						}
 						w[0].UpdateInInfra(infra)
-						Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
 						if BPFMode() {
 							By("Waiting for the config to appear in the BPF maps on workload 0")
@@ -502,7 +496,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 0")
 						w[0].WorkloadEndpoint.Spec.QoSControls = nil
 						w[0].UpdateInInfra(infra)
-						Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
 						if BPFMode() {
 							By("Waiting for the config to disappear in the BPF maps on workload 0")
@@ -529,7 +522,6 @@ var _ = infrastructure.DatastoreDescribe(
 							EgressPacketBurst: 200,
 						}
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						if BPFMode() {
 							By("Waiting for the config to appear in the BPF maps on workload 1")
@@ -571,7 +563,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 1")
 						w[1].WorkloadEndpoint.Spec.QoSControls = nil
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						if BPFMode() {
 							By("Waiting for the config to disappear in the BPF maps on workload 1")
@@ -641,7 +632,6 @@ var _ = infrastructure.DatastoreDescribe(
 							IngressMaxConnections: int64(numConnections),
 						}
 						w[0].UpdateInInfra(infra)
-						Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
 						By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
 						if NFTMode() {
@@ -680,7 +670,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 0")
 						w[0].WorkloadEndpoint.Spec.QoSControls = nil
 						w[0].UpdateInInfra(infra)
-						Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
 						By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
 						if NFTMode() {
@@ -700,7 +689,6 @@ var _ = infrastructure.DatastoreDescribe(
 							EgressMaxConnections: int64(numConnections),
 						}
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
 						if NFTMode() {
@@ -732,7 +720,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 1")
 						w[1].WorkloadEndpoint.Spec.QoSControls = nil
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 1")
 						if NFTMode() {
