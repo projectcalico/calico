@@ -17,6 +17,7 @@ package ipam
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
 
@@ -46,4 +47,105 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (
 	}
 	block := allocationBlock{obj.Value.(*model.AllocationBlock)}
 	return block.allocationAttributesForIP(addr)
+}
+
+// EmptyAttributeOwner returns an AttributeOwner with empty namespace and name.
+// This can be used with Matches to check if attributes are empty.
+func EmptyAttributeOwner() *AttributeOwner {
+	return &AttributeOwner{
+		Namespace: "",
+		Name:      "",
+	}
+}
+
+// Matches checks if the given attributes match this owner.
+func (o *AttributeOwner) Matches(attrs map[string]string) bool {
+	if o == nil {
+		log.Panic("Matches called on nil AttributeOwner")
+	}
+
+	// If this is the empty owner, match if attrs is empty
+	if o.Namespace == "" && o.Name == "" {
+		return attrs == nil || len(attrs) == 0
+	}
+
+	// Otherwise, compare pod and namespace
+	if attrs == nil || len(attrs) == 0 {
+		return false
+	}
+
+	actualPod, podExists := attrs[AttributePod]
+	actualNamespace, nsExists := attrs[AttributeNamespace]
+
+	return podExists && nsExists && actualPod == o.Name && actualNamespace == o.Namespace
+}
+
+// SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
+func (c ipamClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *OwnerAttributeUpdates, preconditions *OwnerAttributePreconditions) error {
+	if updates == nil {
+		return fmt.Errorf("updates cannot be nil")
+	}
+	if updates.ClearActiveOwner && updates.ActiveOwnerAttrs != nil {
+		return fmt.Errorf("cannot set both ClearActiveOwner=true and ActiveOwnerAttrs: these are mutually exclusive")
+	}
+	if updates.ClearAlternateOwner && updates.AlternateOwnerAttrs != nil {
+		return fmt.Errorf("cannot set both ClearAlternateOwner=true and AlternateOwnerAttrs: these are mutually exclusive")
+	}
+	if preconditions != nil {
+		if preconditions.ExpectedActiveOwner != nil && preconditions.VerifyActiveOwnerEmpty {
+			return fmt.Errorf("cannot set both ExpectedActiveOwner and VerifyActiveOwnerEmpty: these are mutually exclusive")
+		}
+		if preconditions.ExpectedAlternateOwner != nil && preconditions.VerifyAlternateOwnerEmpty {
+			return fmt.Errorf("cannot set both ExpectedAlternateOwner and VerifyAlternateOwnerEmpty: these are mutually exclusive")
+		}
+	}
+
+	logCtx := log.WithFields(log.Fields{
+		"ip":            ip,
+		"handleID":      handleID,
+		"updates":       updates,
+		"preconditions": preconditions,
+	})
+	logCtx.Info("Setting owner attributes")
+
+	pool, err := c.blockReaderWriter.getPoolForIP(ctx, ip, nil)
+	if err != nil {
+		return err
+	}
+	if pool == nil {
+		return fmt.Errorf("the provided IP address %s is not in a configured pool", ip)
+	}
+
+	blockCIDR := getBlockCIDRForAddress(ip, pool)
+	logCtx.Debugf("IP %s is in block '%s'", ip, blockCIDR)
+
+	for i := 0; i < datastoreRetries; i++ {
+		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
+		if err != nil {
+			logCtx.WithError(err).Error("Error getting block")
+			return err
+		}
+
+		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
+		err = block.setOwnerAttributes(ip, handleID, updates, preconditions)
+		if err != nil {
+			logCtx.WithError(err).Error("Failed to set owner attributes")
+			return err
+		}
+
+		_, err = c.blockReaderWriter.updateBlock(ctx, obj)
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				logCtx.WithError(err).Debug("CAS error setting owner attributes - retry")
+				continue
+			}
+			logCtx.WithError(err).Error("Failed to update block")
+			return err
+		}
+
+		logCtx.Info("Successfully set owner attributes")
+		return nil
+	}
+
+	return fmt.Errorf("max retries hit - excessive concurrent IPAM requests")
 }
