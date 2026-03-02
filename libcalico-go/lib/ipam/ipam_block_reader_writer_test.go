@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -171,8 +172,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			ctx          context.Context
 			hostA, hostB string
 			fc           *fakeClient
-			resv         *fakeReservations
-			pools        *ipPoolAccessor
+			resv         *ipamtestutils.FakeReservations
+			pools        *ipamtestutils.IPPoolAccessor
 			rw           blockReaderWriter
 			ic           *ipamClient
 			kc           *kubernetes.Clientset
@@ -191,14 +192,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				kc = bc.(*k8s.KubeClient).ClientSet
 			}
 
-			resv = &fakeReservations{}
+			resv = &ipamtestutils.FakeReservations{}
 
 			hostA = "host-a"
 			hostB = "host-b"
 			applyNode(bc, kc, hostA, nil)
 			applyNode(bc, kc, hostB, nil)
 
-			pools = &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/26": {enabled: true}}}
+			pools = &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/26": {Enabled: true}}}
 
 			ctx = context.Background()
 
@@ -209,7 +210,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 		It("should handle multiple racing block affinity claims from different hosts", func() {
 			By("setting up the client for the test", func() {
 				// Pool has room for 16 blocks.
-				pls := &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/22": {enabled: true}}}
+				pls := &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/22": {Enabled: true}}}
 				rw = blockReaderWriter{client: bc, pools: pls}
 				ic = &ipamClient{
 					reservations:      resv,
@@ -300,7 +301,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 		It("should handle multiple racing block affinity claims from the same host", func() {
 			By("setting up the client for the test", func() {
 				// Pool has room for 16 blocks.
-				pls := &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/25": {enabled: true}}}
+				pls := &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/25": {Enabled: true}}}
 				rw = blockReaderWriter{client: bc, pools: pls}
 				ic = &ipamClient{
 					client:            bc,
@@ -366,7 +367,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 		It("should handle multiple racing claims for the same affinity", func() {
 			By("setting up the client for the test", func() {
 				// Pool has room for 16 blocks.
-				pls := &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/22": {enabled: true}}}
+				pls := &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/22": {Enabled: true}}}
 				rw = blockReaderWriter{client: bc, pools: pls}
 				ic = &ipamClient{
 					client:            bc,
@@ -1017,7 +1018,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 	Context("test claiming / releasing affinities", func() {
 		var (
 			rw              blockReaderWriter
-			p               *ipPoolAccessor
+			p               *ipamtestutils.IPPoolAccessor
 			bc              api.Client
 			ctx             context.Context
 			host            string
@@ -1042,7 +1043,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client: bc,
 				pools:  p,
 			}
-			p = &ipPoolAccessor{pools: map[string]pool{}}
+			p = &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{}}
 			ctx = context.Background()
 
 			_, net, err = cnet.ParseCIDR("10.1.0.0/26")
@@ -1180,7 +1181,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 	Context("test block allocation with host reserves", func() {
 		var (
 			rw       blockReaderWriter
-			p        *ipPoolAccessor
+			p        *ipamtestutils.IPPoolAccessor
 			bc       api.Client
 			ctx      context.Context
 			host     string
@@ -1207,7 +1208,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client: bc,
 				pools:  p,
 			}
-			p = &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/30": {enabled: true, blockSize: 30, cidr: "10.0.0.0/30"}}}
+			p = &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/30": {Enabled: true, BlockSize: 30, CIDR: "10.0.0.0/30"}}}
 			ctx = context.Background()
 
 			_, net, err = cnet.ParseCIDR("10.0.0.0/30")
@@ -1245,7 +1246,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client:            bc,
 				pools:             p,
 				blockReaderWriter: rw,
-				reservations:      &fakeReservations{},
+				reservations:      &ipamtestutils.FakeReservations{},
 			}
 			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr, v3.IPPoolAllowedUseTunnel, nil, 0)
 			Expect(err).ShouldNot(HaveOccurred())

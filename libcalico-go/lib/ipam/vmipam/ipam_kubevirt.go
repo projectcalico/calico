@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipam
+package vmipam
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/hash"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -65,6 +66,7 @@ func CreateVMHandleID(networkName, namespace, vmName string) string {
 	// Use dot separator instead of slash to ensure valid Kubernetes resource name.
 	// Kubernetes namespace names follow RFC 1123 DNS label rules which do not allow dots,
 	// so the first '.' after 'vmi.' is always the namespace/vmName boundary.
+	// If the namespace itself is "vmi", the boundary is the second '.' after 'vmi.'.
 	// We don't need to escape dots in vmName.
 	suffix := fmt.Sprintf("%s.%s", namespace, vmName)
 
@@ -110,7 +112,7 @@ func CreateVMHandleID(networkName, namespace, vmName string) string {
 // target node.
 func EnsureActiveVMOwnerAttrs(
 	ctx context.Context,
-	ipamClient Interface,
+	ipamClient ipam.Interface,
 	networkName string,
 	namespace string,
 	vmiName string,
@@ -130,7 +132,7 @@ func EnsureActiveVMOwnerAttrs(
 	}
 
 	// Step 3: Build expected target owner
-	expectedTargetOwner := &AttributeOwner{
+	expectedTargetOwner := &ipam.AttributeOwner{
 		Namespace: namespace,
 		Name:      targetPodName,
 	}
@@ -165,10 +167,10 @@ const swapRetries = 5
 // the current state and retries with updated preconditions.
 func verifyAndSwapSingleIP(
 	ctx context.Context,
-	ipamClient Interface,
+	ipamClient ipam.Interface,
 	ip cnet.IP,
 	handleID string,
-	expectedTargetOwner *AttributeOwner,
+	expectedTargetOwner *ipam.AttributeOwner,
 ) error {
 	for attempt := 0; attempt < swapRetries; attempt++ {
 		allocAttr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
@@ -200,17 +202,17 @@ func verifyAndSwapSingleIP(
 			return fmt.Errorf("%w: expected %v, got namespace=%s pod=%s for IP %s",
 				ErrAlternateOwnerMismatch,
 				expectedTargetOwner,
-				allocAttr.AlternateOwnerAttrs[AttributeNamespace],
-				allocAttr.AlternateOwnerAttrs[AttributePod],
+				allocAttr.AlternateOwnerAttrs[ipam.AttributeNamespace],
+				allocAttr.AlternateOwnerAttrs[ipam.AttributePod],
 				ip)
 		}
 
 		// Build updates and preconditions based on the current state.
 		// Both active and alternate are verified to prevent resurrecting a deleted owner.
-		updates := &OwnerAttributeUpdates{
+		updates := &ipam.OwnerAttributeUpdates{
 			ActiveOwnerAttrs: allocAttr.AlternateOwnerAttrs, // Target becomes active
 		}
-		preconditions := &OwnerAttributePreconditions{
+		preconditions := &ipam.OwnerAttributePreconditions{
 			ExpectedAlternateOwner: expectedTargetOwner,
 		}
 
@@ -218,9 +220,9 @@ func verifyAndSwapSingleIP(
 		// attributes were cleared by CNI cleanup before this swap runs.
 		if len(allocAttr.ActiveOwnerAttrs) > 0 {
 			updates.AlternateOwnerAttrs = allocAttr.ActiveOwnerAttrs // Source becomes alternate
-			preconditions.ExpectedActiveOwner = &AttributeOwner{
-				Namespace: allocAttr.ActiveOwnerAttrs[AttributeNamespace],
-				Name:      allocAttr.ActiveOwnerAttrs[AttributePod],
+			preconditions.ExpectedActiveOwner = &ipam.AttributeOwner{
+				Namespace: allocAttr.ActiveOwnerAttrs[ipam.AttributeNamespace],
+				Name:      allocAttr.ActiveOwnerAttrs[ipam.AttributePod],
 			}
 		} else {
 			updates.ClearAlternateOwner = true // No source to swap in, clear alternate

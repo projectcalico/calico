@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
@@ -42,94 +41,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
-// Implement an IP pools accessor for the IPAM client.  This is a "mock" version
-// of the accessor that we populate directly, rather than requiring the pool
-// data to be persisted in etcd.
-type ipPoolAccessor struct {
-	pools map[string]pool
-}
-
-type pool struct {
-	cidr              string
-	blockSize         int
-	enabled           bool
-	nodeSelector      string
-	namespaceSelector string
-	allowedUses       []v3.IPPoolAllowedUse
-	assignmentMode    v3.AssignmentMode
-}
-
-func (i *ipPoolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
-	poolNames := make([]string, 0)
-	// Get a sorted list of pool CIDR strings.
-	for p := range i.pools {
-		poolNames = append(poolNames, p)
-	}
-	return i.getPools(poolNames, 0, "GetAllPools"), nil
-}
-
-func (i *ipPoolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
-	poolNames := make([]string, 0)
-	// Get a sorted list of enabled pool CIDR strings.
-	for p, e := range i.pools {
-		if e.enabled {
-			poolNames = append(poolNames, p)
-		}
-	}
-	return i.getPools(poolNames, ipVersion, "GetEnabledPools"), nil
-}
-
-func (i *ipPoolAccessor) getPools(poolNames []string, ipVersion int, caller string) []v3.IPPool {
-	// Return in sorted order for deterministic tests.
-	sort.Strings(poolNames)
-
-	// Convert to IPNets and sort out the correct IP versions.  Sorting the results
-	// mimics more closely the behavior of etcd and allows the tests to be
-	// deterministic.
-	pools := make([]v3.IPPool, 0)
-	automatic := v3.Automatic
-	var poolsToPrint []string
-	for _, p := range poolNames {
-		c := cnet.MustParseCIDR(p)
-		if (ipVersion == 0) || (c.Version() == ipVersion) {
-			pool := v3.IPPool{Spec: v3.IPPoolSpec{
-				CIDR:              p,
-				NodeSelector:      i.pools[p].nodeSelector,
-				NamespaceSelector: i.pools[p].namespaceSelector,
-				AllowedUses:       i.pools[p].allowedUses,
-				AssignmentMode:    &automatic,
-			}}
-			if len(pool.Spec.AllowedUses) == 0 {
-				pool.Spec.AllowedUses = []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel}
-			}
-			if i.pools[p].blockSize == 0 {
-				if c.Version() == 4 {
-					pool.Spec.BlockSize = 26
-				} else {
-					pool.Spec.BlockSize = 122
-				}
-			} else {
-				pool.Spec.BlockSize = i.pools[p].blockSize
-			}
-			pools = append(pools, pool)
-
-			// Compact string for printing so the log doesn't cost too much to print!
-			poolsToPrint = append(poolsToPrint, fmt.Sprintf("{%s(%v) %q %v}",
-				p, pool.Spec.BlockSize, pool.Spec.NodeSelector, i.pools[p].allowedUses))
-		}
-	}
-
-	log.Debugf("Mock %v returns: %v", caller, poolsToPrint)
-
-	return pools
-}
-
-var ipPools = &ipPoolAccessor{pools: map[string]pool{}}
+var ipPools = &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{}}
 
 // buildReleaseOptions is a helper function for the tests to easily
 // turn a slice of IPs into a slice of release options.
@@ -150,13 +67,6 @@ type testArgsClaimAff struct {
 	expError                    error
 }
 
-type fakeReservations struct {
-	Reservations []v3.IPReservation
-}
-
-func (f *fakeReservations) List(ctx context.Context, opts options.ListOptions) (*v3.IPReservationList, error) {
-	return &v3.IPReservationList{Items: f.Reservations}, nil
-}
 
 var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	// Create a new backend client and an IPAM Client using the IP Pools Accessor.
@@ -165,13 +75,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	var bc bapi.Client
 	var ic Interface
 	var kc *kubernetes.Clientset
-	var reservations *fakeReservations
+	var reservations *ipamtestutils.FakeReservations
 	BeforeEach(func() {
 		var err error
 		config.Spec.K8sClientQPS = 500
 		bc, err = backend.NewClient(config)
 		Expect(err).NotTo(HaveOccurred())
-		reservations = &fakeReservations{}
+		reservations = &ipamtestutils.FakeReservations{}
 		ic = NewIPAMClient(bc, ipPools, reservations)
 
 		// If running in KDD mode, extract the k8s clientset.
@@ -181,7 +91,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	})
 
 	Context("Measuring allocation performance", func() {
-		var pa *ipPoolAccessor
+		var pa *ipamtestutils.IPPoolAccessor
 		var hostname string
 		var err error
 		var pool20, pool32, pool26 []cnet.IPNet
@@ -201,27 +111,27 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			log.SetLevel(log.InfoLevel)
 
 			// Build a new pool accessor for these tests.
-			pa = &ipPoolAccessor{pools: map[string]pool{}}
+			pa = &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{}}
 
 			// Create many pools
 			pool26 = nil
 			for i := range 100 {
 				cidr := fmt.Sprintf("10.%d.0.0/16", i)
-				pa.pools[cidr] = pool{enabled: true, blockSize: 26}
+				pa.Pools[cidr] = ipamtestutils.Pool{Enabled: true, BlockSize: 26}
 				pool26 = append(pool26, cnet.MustParseCIDR(cidr))
 			}
 
 			pool32 = nil
 			for i := range 100 {
 				cidr := fmt.Sprintf("11.%d.0.0/16", i)
-				pa.pools[cidr] = pool{enabled: true, blockSize: 32}
+				pa.Pools[cidr] = ipamtestutils.Pool{Enabled: true, BlockSize: 32}
 				pool32 = append(pool32, cnet.MustParseCIDR(cidr))
 			}
 
 			pool20 = nil
 			for i := range 50 {
 				cidr := fmt.Sprintf("12.%d.0.0/16", i)
-				pa.pools[cidr] = pool{enabled: true, blockSize: 20}
+				pa.Pools[cidr] = ipamtestutils.Pool{Enabled: true, BlockSize: 20}
 				pool20 = append(pool20, cnet.MustParseCIDR(cidr))
 			}
 
@@ -246,7 +156,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa, &fakeReservations{})
+				ic = NewIPAMClient(bc, pa, &ipamtestutils.FakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool32, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -266,7 +176,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa, &fakeReservations{})
+				ic = NewIPAMClient(bc, pa, &ipamtestutils.FakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool26, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -286,7 +196,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa, &fakeReservations{})
+				ic = NewIPAMClient(bc, pa, &ipamtestutils.FakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool20, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -306,7 +216,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa, &fakeReservations{})
+				ic = NewIPAMClient(bc, pa, &ipamtestutils.FakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 64, IPv4Pools: pool20, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -359,7 +269,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 							if err != nil {
 								return err
 							}
-							ic = NewIPAMClient(bc, pa, &fakeReservations{})
+							ic = NewIPAMClient(bc, pa, &ipamtestutils.FakeReservations{})
 
 							v4ia, _, err := ic.AutoAssign(
 								context.Background(),
@@ -411,7 +321,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa, &fakeReservations{})
+				ic = NewIPAMClient(bc, pa, &ipamtestutils.FakeReservations{})
 
 				v4ia, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				v4IP := make([]ReleaseOptions, 0, 0)
@@ -2318,227 +2228,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 		})
 
-		Context("EnsureActiveVMOwnerAttrs", func() {
-			var hostname string
-			var handle string
-			var allocatedIPs []cnet.IP
-
-			BeforeEach(func() {
-				hostname = "test-host-swap"
-				handle = "k8s-pod-network.vmi.test-ns.test-vm"
-
-				Expect(bc.Clean()).To(Succeed())
-				deleteAllPools()
-				applyPool("10.0.0.0/24", true, "")
-				applyPool("fd80:24e2:f998:72d6::/120", true, "")
-				applyNode(bc, kc, hostname, nil)
-
-				ctx := context.Background()
-
-				// Allocate dual-stack IPs for the VMI handle
-				v4ia, v6ia, err := ic.AutoAssign(ctx, AutoAssignArgs{
-					Num4:        1,
-					Num6:        1,
-					HandleID:    &handle,
-					Hostname:    hostname,
-					IntendedUse: v3.IPPoolAllowedUseWorkload,
-				})
-				Expect(err).NotTo(HaveOccurred())
-				Expect(v4ia.IPs).To(HaveLen(1))
-				Expect(v6ia.IPs).To(HaveLen(1))
-
-				allocatedIPs = []cnet.IP{
-					{IP: v4ia.IPs[0].IP},
-					{IP: v6ia.IPs[0].IP},
-				}
-
-				// Set source pod as active owner and target pod as alternate owner on all IPs
-				for _, ip := range allocatedIPs {
-					err := ic.SetOwnerAttributes(ctx, ip, handle, &OwnerAttributeUpdates{
-						ActiveOwnerAttrs: map[string]string{
-							AttributePod:       "virt-launcher-source",
-							AttributeNamespace: "test-ns",
-						},
-						AlternateOwnerAttrs: map[string]string{
-							AttributePod:       "virt-launcher-target",
-							AttributeNamespace: "test-ns",
-						},
-					}, nil)
-					Expect(err).NotTo(HaveOccurred())
-				}
-			})
-
-			It("should promote target to active owner on all IPs", func() {
-				ctx := context.Background()
-
-				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-				Expect(err).NotTo(HaveOccurred())
-
-				for _, ip := range allocatedIPs {
-					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
-					Expect(allocAttr.ActiveOwnerAttrs[AttributeNamespace]).To(Equal("test-ns"))
-					// Source moves to alternate
-					Expect(allocAttr.AlternateOwnerAttrs[AttributePod]).To(Equal("virt-launcher-source"))
-					Expect(allocAttr.AlternateOwnerAttrs[AttributeNamespace]).To(Equal("test-ns"))
-				}
-			})
-
-			It("should be idempotent - second call succeeds when target is already active", func() {
-				ctx := context.Background()
-
-				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-				Expect(err).NotTo(HaveOccurred())
-
-				// Call again - should succeed (idempotent)
-				err = EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-				Expect(err).NotTo(HaveOccurred())
-
-				for _, ip := range allocatedIPs {
-					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
-				}
-			})
-
-			It("should return ErrAlternateOwnerEmpty when alternate is cleared before swap", func() {
-				ctx := context.Background()
-
-				// Clear alternate owner on all IPs (simulates target pod deleted before swap)
-				for _, ip := range allocatedIPs {
-					err := ic.SetOwnerAttributes(ctx, ip, handle, &OwnerAttributeUpdates{
-						ClearAlternateOwner: true,
-					}, nil)
-					Expect(err).NotTo(HaveOccurred())
-				}
-
-				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-				Expect(err).To(HaveOccurred())
-				Expect(errors.Is(err, ErrAlternateOwnerEmpty)).To(BeTrue(),
-					fmt.Sprintf("Expected ErrAlternateOwnerEmpty, got: %v", err))
-			})
-
-			It("should return ErrAlternateOwnerMismatch when alternate is a different pod", func() {
-				ctx := context.Background()
-
-				// Overwrite alternate with a different pod
-				for _, ip := range allocatedIPs {
-					err := ic.SetOwnerAttributes(ctx, ip, handle, &OwnerAttributeUpdates{
-						AlternateOwnerAttrs: map[string]string{
-							AttributePod:       "virt-launcher-unexpected",
-							AttributeNamespace: "test-ns",
-						},
-					}, nil)
-					Expect(err).NotTo(HaveOccurred())
-				}
-
-				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-				Expect(err).To(HaveOccurred())
-				Expect(errors.Is(err, ErrAlternateOwnerMismatch)).To(BeTrue(),
-					fmt.Sprintf("Expected ErrAlternateOwnerMismatch, got: %v", err))
-			})
-
-			It("should fail when no IPs are allocated to the handle", func() {
-				ctx := context.Background()
-
-				// Release all IPs
-				err := ic.ReleaseByHandle(ctx, handle)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to get IPs for handle"))
-			})
-
-			It("should succeed when source was already deleted but target is in alternate", func() {
-				ctx := context.Background()
-
-				// Clear active owner (simulates source pod deleted and its attrs cleared)
-				for _, ip := range allocatedIPs {
-					err := ic.SetOwnerAttributes(ctx, ip, handle, &OwnerAttributeUpdates{
-						ClearActiveOwner: true,
-					}, nil)
-					Expect(err).NotTo(HaveOccurred())
-				}
-
-				// Swap should still succeed - it only verifies alternate
-				err := EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-				Expect(err).NotTo(HaveOccurred())
-
-				for _, ip := range allocatedIPs {
-					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
-					// Active was empty, so alternate should now be empty (nil map swapped in)
-					Expect(allocAttr.AlternateOwnerAttrs).To(BeNil())
-				}
-			})
-
-			It("should work with custom network name", func() {
-				ctx := context.Background()
-
-				// Allocate IPs with a custom network handle
-				customHandle := "multus-net1.vmi.test-ns.test-vm"
-				v4ia, _, err := ic.AutoAssign(ctx, AutoAssignArgs{
-					Num4:        1,
-					HandleID:    &customHandle,
-					Hostname:    hostname,
-					IntendedUse: v3.IPPoolAllowedUseWorkload,
-				})
-				Expect(err).NotTo(HaveOccurred())
-				customIP := cnet.IP{IP: v4ia.IPs[0].IP}
-
-				// Set owners
-				err = ic.SetOwnerAttributes(ctx, customIP, customHandle, &OwnerAttributeUpdates{
-					ActiveOwnerAttrs: map[string]string{
-						AttributePod:       "virt-launcher-source",
-						AttributeNamespace: "test-ns",
-					},
-					AlternateOwnerAttrs: map[string]string{
-						AttributePod:       "virt-launcher-target",
-						AttributeNamespace: "test-ns",
-					},
-				}, nil)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = EnsureActiveVMOwnerAttrs(ctx, ic, "multus-net1", "test-ns", "test-vm", "virt-launcher-target")
-				Expect(err).NotTo(HaveOccurred())
-
-				allocAttr, err := ic.GetAssignmentAttributes(ctx, customIP)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
-			})
-
-			It("should handle partial success - already-swapped IPs are skipped on retry", func() {
-				ctx := context.Background()
-
-				// Manually swap only the first IP
-				firstIP := allocatedIPs[0]
-				err := ic.SetOwnerAttributes(ctx, firstIP, handle, &OwnerAttributeUpdates{
-					ActiveOwnerAttrs: map[string]string{
-						AttributePod:       "virt-launcher-target",
-						AttributeNamespace: "test-ns",
-					},
-					AlternateOwnerAttrs: map[string]string{
-						AttributePod:       "virt-launcher-source",
-						AttributeNamespace: "test-ns",
-					},
-				}, nil)
-				Expect(err).NotTo(HaveOccurred())
-
-				// Now call the function - first IP should be skipped, second IP should be swapped
-				err = EnsureActiveVMOwnerAttrs(ctx, ic, "", "test-ns", "test-vm", "virt-launcher-target")
-				Expect(err).NotTo(HaveOccurred())
-
-				// Both IPs should now have target as active
-				for _, ip := range allocatedIPs {
-					allocAttr, err := ic.GetAssignmentAttributes(ctx, ip)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(allocAttr.ActiveOwnerAttrs[AttributePod]).To(Equal("virt-launcher-target"))
-				}
-			})
-		})
 	})
 
 	Describe("IPAM IP borrowing", func() {
@@ -3736,7 +3425,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			applyPool(pool2.String(), true, "")
 			applyPool(pool3.String(), false, "")
 			applyPool(pool4_v6.String(), true, "")
-			ipPools.pools[pool_big_block_size.String()] = pool{enabled: true, nodeSelector: "", blockSize: 31}
+			ipPools.Pools[pool_big_block_size.String()] = ipamtestutils.Pool{Enabled: true, NodeSelector: "", BlockSize: 31}
 			_, _, outErr := ic.EnsureBlock(context.Background(), args)
 			Expect(outErr).To(HaveOccurred())
 		})
@@ -3836,7 +3525,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			applyNode(bc, kc, host, nil)
 			// ippool with 4 ips
-			ipPools.pools[pool1.String()] = pool{enabled: true, nodeSelector: "", blockSize: 30}
+			ipPools.Pools[pool1.String()] = ipamtestutils.Pool{Enabled: true, NodeSelector: "", BlockSize: 30}
 			pools, _ = ipPools.GetEnabledPools(context.Background(), 4)
 			Expect(len(pools)).To(Equal(1))
 
@@ -3986,7 +3675,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	})
 
 	DescribeTable("AutoAssign: requested IPs vs returned IPs",
-		func(host string, cleanEnv bool, pools []pool, usePool string, inv4, inv6 int, expv4ia, expv6ia *IPAMAssignments, blockLimit int, strictAffinity bool, expError error) {
+		func(host string, cleanEnv bool, pools []ipamtestutils.Pool, usePool string, inv4, inv6 int, expv4ia, expv6ia *IPAMAssignments, blockLimit int, strictAffinity bool, expError error) {
 			if cleanEnv {
 				Expect(bc.Clean()).To(Succeed())
 				deleteAllPools()
@@ -3995,7 +3684,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			defer deleteNode(bc, kc, host)
 
 			for _, v := range pools {
-				ipPools.pools[v.cidr] = pool{cidr: v.cidr, enabled: v.enabled, blockSize: v.blockSize, allowedUses: v.allowedUses}
+				ipPools.Pools[v.CIDR] = ipamtestutils.Pool{CIDR: v.CIDR, Enabled: v.Enabled, BlockSize: v.BlockSize, AllowedUses: v.AllowedUses}
 			}
 
 			parts := strings.Split(usePool, "+")
@@ -4070,9 +3759,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 		},
 
-		Entry("allowed use: requesting workload IP from tunnel pool should fail", "test-host", true, []pool{
-			{cidr: "192.168.2.0/24", blockSize: 32, enabled: true, allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}},
-			{cidr: "192.168.3.0/24", blockSize: 32, enabled: true, allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+		Entry("allowed use: requesting workload IP from tunnel pool should fail", "test-host", true, []ipamtestutils.Pool{
+			{CIDR: "192.168.2.0/24", BlockSize: 32, Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}},
+			{CIDR: "192.168.3.0/24", BlockSize: 32, Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
 		},
 			"192.168.3.0/24+workload",
 			1,
@@ -4081,9 +3770,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			0, false, ErrNoQualifiedPool,
 		),
 
-		Entry("allowed use: requesting workload IP from workload pool", "test-host", true, []pool{
-			{cidr: "192.168.2.0/24", blockSize: 32, enabled: true, allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}},
-			{cidr: "192.168.3.0/24", blockSize: 32, enabled: true, allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+		Entry("allowed use: requesting workload IP from workload pool", "test-host", true, []ipamtestutils.Pool{
+			{CIDR: "192.168.2.0/24", BlockSize: 32, Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}},
+			{CIDR: "192.168.3.0/24", BlockSize: 32, Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
 		},
 			"192.168.2.0/24+workload",
 			1,
@@ -4099,9 +3788,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			0, false, nil,
 		),
 
-		Entry("allowed use: requesting workload IP from any workload pool", "test-host", true, []pool{
-			{cidr: "192.168.2.0/24", blockSize: 32, enabled: true, allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}},
-			{cidr: "192.168.3.0/24", blockSize: 32, enabled: true, allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+		Entry("allowed use: requesting workload IP from any workload pool", "test-host", true, []ipamtestutils.Pool{
+			{CIDR: "192.168.2.0/24", BlockSize: 32, Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}},
+			{CIDR: "192.168.3.0/24", BlockSize: 32, Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
 		},
 			"any+workload",
 			1,
@@ -4117,8 +3806,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			0, false, nil,
 		),
 
-		Entry("allowed use: requesting workload IP from any workload pool when there are no workload pools", "test-host", true, []pool{
-			{cidr: "192.168.3.0/24", blockSize: 32, enabled: true, allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+		Entry("allowed use: requesting workload IP from any workload pool when there are no workload pools", "test-host", true, []ipamtestutils.Pool{
+			{CIDR: "192.168.3.0/24", BlockSize: 32, Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
 		},
 			"any+workload",
 			1,
@@ -4128,9 +3817,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			0, false, ErrNoQualifiedPool,
 		),
 
-		Entry("allowed use: tunnel IP from tunnel pool", "test-host", true, []pool{
-			{cidr: "192.168.2.0/24", blockSize: 32, enabled: true, allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}},
-			{cidr: "192.168.3.0/24", blockSize: 32, enabled: true, allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
+		Entry("allowed use: tunnel IP from tunnel pool", "test-host", true, []ipamtestutils.Pool{
+			{CIDR: "192.168.2.0/24", BlockSize: 32, Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}},
+			{CIDR: "192.168.3.0/24", BlockSize: 32, Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}},
 		},
 			"192.168.3.0/24+tunnel",
 			1,
@@ -4148,9 +3837,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 1a: AutoAssign 1 IPv4, 1 IPv6 with tiny block - expect one of each to be returned.
 		Entry("1 v4 1 v6 - tiny block", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/24", blockSize: 32, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 128, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/24", BlockSize: 32, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 128, Enabled: true},
 			},
 			"192.168.1.0/24", 1, 1,
 			&IPAMAssignments{
@@ -4171,9 +3860,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 1b: AutoAssign 1 IPv4, 1 IPv6 with massive block - expect one of each to be returned.
 		Entry("1 v4 1 v6 - big block", "test-host", true,
-			[]pool{
-				{cidr: "192.168.0.0/16", blockSize: 20, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/110", blockSize: 116, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.0.0/16", BlockSize: 20, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/110", BlockSize: 116, Enabled: true},
 			},
 			"192.168.0.0/16", 1, 1,
 			&IPAMAssignments{
@@ -4194,9 +3883,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 1c: AutoAssign 1 IPv4, 1 IPv6 with default block - expect one of each to be returned.
 		Entry("1 v4 1 v6 - default block", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 			},
 			"192.168.1.0/24", 1, 1,
 			&IPAMAssignments{
@@ -4217,9 +3906,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 2a: AutoAssign 256 IPv4, 256 IPv6 with default blocksize- expect 256 IPv4 + IPv6 addresses.
 		Entry("256 v4 256 v6", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 			},
 			"192.168.1.0/24", 256, 256,
 			&IPAMAssignments{
@@ -4239,9 +3928,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 2b: AutoAssign 256 IPv4, 256 IPv6 with small blocksize- expect 256 IPv4 + IPv6 addresses.
 		Entry("256 v4 256 v6 - small blocks", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/24", blockSize: 30, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 126, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/24", BlockSize: 30, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 126, Enabled: true},
 			},
 			"192.168.1.0/24", 256, 256,
 			&IPAMAssignments{
@@ -4262,9 +3951,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 2a: AutoAssign 256 IPv4, 256 IPv6 with num blocks limit expect 64 IPv4 + IPv6 addresses.
 		Entry("256 v4 0 v6 block limit", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 			},
 			"192.168.1.0/24", 256, 0,
 			&IPAMAssignments{
@@ -4276,9 +3965,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			},
 			nil, 1, false, ErrBlockLimit),
 		Entry("256 v4 0 v6 block limit 2", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 			},
 			"192.168.1.0/24", 256, 0,
 			&IPAMAssignments{
@@ -4290,9 +3979,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			},
 			nil, 2, false, ErrBlockLimit),
 		Entry("0 v4 256 v6 block limit", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 			},
 			"192.168.1.0/24", 0, 256, nil,
 			&IPAMAssignments{
@@ -4306,9 +3995,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 3: AutoAssign 257 IPv4, 0 IPv6 - expect 256 IPv4 addresses, no IPv6, and no error.
 		Entry("257 v4 0 v6", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 			},
 			"192.168.1.0/24", 257, 0,
 			&IPAMAssignments{
@@ -4322,9 +4011,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test 4: AutoAssign 0 IPv4, 257 IPv6 - expect 256 IPv6 addresses, no IPv6, and no error.
 		Entry("0 v4 257 v6", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 			},
 			"192.168.1.0/24", 0, 257, nil,
 			&IPAMAssignments{
@@ -4339,9 +4028,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		// Test 5: (use pool of size /25 so only two blocks are contained):
 		// - Assign 1 address on host A (Expect 1 address).
 		Entry("1 v4 0 v6 host-a", "host-a", true,
-			[]pool{
-				{cidr: "10.0.0.0/25", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/121", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "10.0.0.0/25", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/121", BlockSize: 122, Enabled: true},
 			},
 			"10.0.0.0/25", 1, 0,
 			&IPAMAssignments{
@@ -4355,9 +4044,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// - Assign 1 address on host B (Expect 1 address, different block).
 		Entry("1 v4 0 v6 host-b", "host-b", false,
-			[]pool{
-				{cidr: "10.0.0.0/25", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/121", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "10.0.0.0/25", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/121", BlockSize: 122, Enabled: true},
 			},
 			"10.0.0.0/25", 1, 0,
 			&IPAMAssignments{
@@ -4371,9 +4060,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block).
 		Entry("64 v4 0 v6 host-a", "host-a", false,
-			[]pool{
-				{cidr: "10.0.0.0/25", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/121", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "10.0.0.0/25", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/121", BlockSize: 122, Enabled: true},
 			},
 			"10.0.0.0/25", 64, 0,
 			&IPAMAssignments{
@@ -4386,10 +4075,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			nil, 0, false, nil),
 		// - Try to assign 256 addresses with strict affinity enabled, expect 64 addresses.
 		Entry("256 v4 0 v6 strict affinity", "test-host", true,
-			[]pool{
-				{cidr: "192.168.1.0/26", blockSize: 26, enabled: true},
-				{cidr: "192.168.1.64/26", blockSize: 26, enabled: true},
-				{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+			[]ipamtestutils.Pool{
+				{CIDR: "192.168.1.0/26", BlockSize: 26, Enabled: true},
+				{CIDR: "192.168.1.64/26", BlockSize: 26, Enabled: true},
+				{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 			},
 			"192.168.1.0/26", 256, 0,
 			&IPAMAssignments{
@@ -4693,13 +4382,13 @@ var (
 var _ = DescribeTable("determinePools tests IPV4",
 	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
 		// Seed data
-		ipPools.pools = map[string]pool{
-			v4Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector, assignmentMode: v3.Automatic},
-			v4Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector, assignmentMode: v3.Automatic},
+		ipPools.Pools = map[string]ipamtestutils.Pool{
+			v4Pool1CIDR: {Enabled: pool1Enabled, NodeSelector: pool1Selector, AssignmentMode: v3.Automatic},
+			v4Pool2CIDR: {Enabled: pool2Enabled, NodeSelector: pool2Selector, AssignmentMode: v3.Automatic},
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
-		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
+		ic := NewIPAMClient(nil, ipPools, &ipamtestutils.FakeReservations{})
 
 		// Create a node object for the test.
 		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
@@ -4762,13 +4451,13 @@ var (
 var _ = DescribeTable("determinePools tests IPV6",
 	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
 		// Seed data
-		ipPools.pools = map[string]pool{
-			v6Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector, assignmentMode: v3.Automatic},
-			v6Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector, assignmentMode: v3.Automatic},
+		ipPools.Pools = map[string]ipamtestutils.Pool{
+			v6Pool1CIDR: {Enabled: pool1Enabled, NodeSelector: pool1Selector, AssignmentMode: v3.Automatic},
+			v6Pool2CIDR: {Enabled: pool2Enabled, NodeSelector: pool2Selector, AssignmentMode: v3.Automatic},
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
-		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
+		ic := NewIPAMClient(nil, ipPools, &ipamtestutils.FakeReservations{})
 
 		// Create a node object for the test.
 		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
@@ -4860,73 +4549,31 @@ func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
 
 func deleteAllPools() {
 	log.Infof("Deleting all pools")
-	ipPools.pools = map[string]pool{}
+	ipPools.Pools = map[string]ipamtestutils.Pool{}
 }
 
 func applyPool(cidr string, enabled bool, nodeSelector string) {
-	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, assignmentMode: v3.Automatic}
+	ipPools.Pools[cidr] = ipamtestutils.Pool{Enabled: enabled, NodeSelector: nodeSelector, AssignmentMode: v3.Automatic}
 }
 
 func applyPoolWithUses(cidr string, enabled bool, nodeSelector string, uses []v3.IPPoolAllowedUse) {
-	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, allowedUses: uses, assignmentMode: v3.Automatic}
+	ipPools.Pools[cidr] = ipamtestutils.Pool{Enabled: enabled, NodeSelector: nodeSelector, AllowedUses: uses, AssignmentMode: v3.Automatic}
 }
 
 func applyPoolWithBlockSize(cidr string, enabled bool, nodeSelector string, blockSize int) {
-	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, blockSize: blockSize, assignmentMode: v3.Automatic}
+	ipPools.Pools[cidr] = ipamtestutils.Pool{Enabled: enabled, NodeSelector: nodeSelector, BlockSize: blockSize, AssignmentMode: v3.Automatic}
 }
 
 func deletePool(cidr string) {
-	delete(ipPools.pools, cidr)
+	delete(ipPools.Pools, cidr)
 }
 
 func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) {
-	ExpectWithOffset(1, tryApplyNode(c, kc, host, labels)).NotTo(HaveOccurred())
+	ipamtestutils.ApplyNode(c, kc, host, labels)
 }
 
 func tryApplyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) error {
-	if kc != nil {
-		// If a k8s clientset was provided, create the node in Kubernetes.
-		n := corev1.Node{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Node",
-				APIVersion: "v1",
-			},
-		}
-		n.Name = host
-		n.Labels = labels
-
-		// Create/Update the node
-		_, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
-		if err != nil {
-			if kerrors.IsAlreadyExists(err) {
-				oldNode, _ := kc.CoreV1().Nodes().Get(context.Background(), host, metav1.GetOptions{})
-				oldNode.Labels = labels
-
-				_, err = kc.CoreV1().Nodes().Update(context.Background(), oldNode, metav1.UpdateOptions{})
-				if err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
-		}
-		log.WithField("node", host).WithError(err).Info("node applied")
-	} else {
-		// Otherwise, create it in Calico.
-		_, err := c.Apply(context.Background(), &model.KVPair{
-			Key: model.ResourceKey{Name: host, Kind: internalapi.KindNode},
-			Value: internalapi.Node{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: internalapi.NodeSpec{OrchRefs: []internalapi.OrchRef{
-					{Orchestrator: "k8s", NodeName: host},
-				}},
-			},
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return ipamtestutils.TryApplyNode(c, kc, host, labels)
 }
 
 func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
@@ -5031,13 +4678,13 @@ var _ = Describe("determinePools with namespace selector", func() {
 	var (
 		ic       ipamClient
 		ctx      context.Context
-		accessor *ipPoolAccessor
+		accessor *ipamtestutils.IPPoolAccessor
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		accessor = &ipPoolAccessor{
-			pools: make(map[string]pool),
+		accessor = &ipamtestutils.IPPoolAccessor{
+			Pools: make(map[string]ipamtestutils.Pool),
 		}
 		ic = ipamClient{
 			pools: accessor,
@@ -5055,12 +4702,12 @@ var _ = Describe("determinePools with namespace selector", func() {
 			expectedMatch bool,
 			description string,
 		) {
-			accessor.pools[poolCIDR] = pool{
-				cidr:              poolCIDR,
-				enabled:           true,
-				nodeSelector:      poolNodeSelector,
-				namespaceSelector: poolNamespaceSelector,
-				blockSize:         26,
+			accessor.Pools[poolCIDR] = ipamtestutils.Pool{
+				CIDR:              poolCIDR,
+				Enabled:           true,
+				NodeSelector:      poolNodeSelector,
+				NamespaceSelector: poolNamespaceSelector,
+				BlockSize:         26,
 			}
 
 			node := internalapi.Node{
@@ -5182,26 +4829,26 @@ var _ = Describe("determinePools with namespace selector", func() {
 	)
 
 	It("should handle multiple pools with different namespace selectors", func() {
-		accessor.pools["10.0.0.0/24"] = pool{
-			cidr:              "10.0.0.0/24",
-			enabled:           true,
-			nodeSelector:      "",
-			namespaceSelector: "environment == 'production'",
-			blockSize:         26,
+		accessor.Pools["10.0.0.0/24"] = ipamtestutils.Pool{
+			CIDR:              "10.0.0.0/24",
+			Enabled:           true,
+			NodeSelector:      "",
+			NamespaceSelector: "environment == 'production'",
+			BlockSize:         26,
 		}
-		accessor.pools["10.1.0.0/24"] = pool{
-			cidr:              "10.1.0.0/24",
-			enabled:           true,
-			nodeSelector:      "",
-			namespaceSelector: "environment == 'development'",
-			blockSize:         26,
+		accessor.Pools["10.1.0.0/24"] = ipamtestutils.Pool{
+			CIDR:              "10.1.0.0/24",
+			Enabled:           true,
+			NodeSelector:      "",
+			NamespaceSelector: "environment == 'development'",
+			BlockSize:         26,
 		}
-		accessor.pools["10.2.0.0/24"] = pool{
-			cidr:              "10.2.0.0/24",
-			enabled:           true,
-			nodeSelector:      "",
-			namespaceSelector: "",
-			blockSize:         26,
+		accessor.Pools["10.2.0.0/24"] = ipamtestutils.Pool{
+			CIDR:              "10.2.0.0/24",
+			Enabled:           true,
+			NodeSelector:      "",
+			NamespaceSelector: "",
+			BlockSize:         26,
 		}
 
 		node := internalapi.Node{
@@ -5238,12 +4885,12 @@ var _ = Describe("determinePools with namespace selector", func() {
 	})
 
 	It("should handle invalid namespace selector syntax", func() {
-		accessor.pools["10.0.0.0/24"] = pool{
-			cidr:              "10.0.0.0/24",
-			enabled:           true,
-			nodeSelector:      "",
-			namespaceSelector: "invalid selector syntax [",
-			blockSize:         26,
+		accessor.Pools["10.0.0.0/24"] = ipamtestutils.Pool{
+			CIDR:              "10.0.0.0/24",
+			Enabled:           true,
+			NodeSelector:      "",
+			NamespaceSelector: "invalid selector syntax [",
+			BlockSize:         26,
 		}
 
 		node := internalapi.Node{
@@ -5272,12 +4919,12 @@ var _ = Describe("determinePools with namespace selector", func() {
 	})
 
 	It("should prioritize requested pools over namespace selectors", func() {
-		accessor.pools["10.0.0.0/24"] = pool{
-			cidr:              "10.0.0.0/24",
-			enabled:           true,
-			nodeSelector:      "",
-			namespaceSelector: "environment == 'production'",
-			blockSize:         26,
+		accessor.Pools["10.0.0.0/24"] = ipamtestutils.Pool{
+			CIDR:              "10.0.0.0/24",
+			Enabled:           true,
+			NodeSelector:      "",
+			NamespaceSelector: "environment == 'production'",
+			BlockSize:         26,
 		}
 
 		node := internalapi.Node{

@@ -26,6 +26,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -53,7 +54,7 @@ func verifyOwnerAttributes(
 	expectedVMIMUID string,
 ) {
 	ctx := context.Background()
-	handleID := ipam.CreateVMHandleID(networkName, namespace, vmName)
+	handleID := vmipam.CreateVMHandleID(networkName, namespace, vmName)
 
 	ips, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get IPs by handle %s", handleID)
@@ -124,7 +125,7 @@ func verifyOwnerAttributes(
 // Useful for comparing IPs across operations to verify persistence.
 func getIPsForVMHandle(calicoClient client.Interface, networkName, namespace, vmName string) []string {
 	ctx := context.Background()
-	handleID := ipam.CreateVMHandleID(networkName, namespace, vmName)
+	handleID := vmipam.CreateVMHandleID(networkName, namespace, vmName)
 
 	ips, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get IPs by handle %s", handleID)
@@ -141,7 +142,7 @@ func getIPsForVMHandle(calicoClient client.Interface, networkName, namespace, vm
 // are nil or empty for all IPs allocated to a VM handle. IPs must still be allocated.
 func verifyOwnerAttributesCleared(calicoClient client.Interface, networkName, namespace, vmName string) {
 	ctx := context.Background()
-	handleID := ipam.CreateVMHandleID(networkName, namespace, vmName)
+	handleID := vmipam.CreateVMHandleID(networkName, namespace, vmName)
 
 	ips, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get IPs by handle %s", handleID)
@@ -166,7 +167,7 @@ func verifyOwnerAttributesCleared(calicoClient client.Interface, networkName, na
 // verifyHandleReleased verifies that the VM handle has been released (no IPs allocated).
 func verifyHandleReleased(calicoClient client.Interface, networkName, namespace, vmName string) {
 	ctx := context.Background()
-	handleID := ipam.CreateVMHandleID(networkName, namespace, vmName)
+	handleID := vmipam.CreateVMHandleID(networkName, namespace, vmName)
 
 	ips, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
 	// After ReleaseByHandle, either IPsByHandle returns an error (handle not found)
@@ -755,7 +756,7 @@ var _ = Describe("KubeVirt VM-based handle ID", Label("KubeVirt"), func() {
 
 			netconf := getDualStackNetconf(cniVersion)
 			ctx := context.Background()
-			vmHandleID := ipam.CreateVMHandleID("net1", testNs, vmName)
+			vmHandleID := vmipam.CreateVMHandleID("net1", testNs, vmName)
 
 			// 1. Create first pod, save its IPs, verify no VM-based handle or owner attributes
 			firstPod := "virt-launcher-" + vmName + "-disabled-1"

@@ -45,6 +45,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -175,7 +176,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if ipPersistenceEnabledForVM {
 		// Use VM-based handle ID for IP stability across pod recreations/migrations.
 		// Handle ID is based on namespace/vmName which remains stable across VMI recreation.
-		handleID = ipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
+		handleID = vmipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
 		logger.WithFields(logrus.Fields{
 			"pod":               epIDs.Pod,
 			"namespace":         epIDs.Namespace,
@@ -664,7 +665,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	if ipPersistenceEnabledForVM {
 		// Use VM-based handle ID
 		// Handle ID is based on namespace/vmName which remains stable across VMI recreation
-		handleID = ipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
+		handleID = vmipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
 
 		// VMI deletion status is already available from embedded VMIResource
 		logger.WithFields(logrus.Fields{
