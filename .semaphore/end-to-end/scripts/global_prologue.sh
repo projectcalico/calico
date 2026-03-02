@@ -45,6 +45,9 @@ echo "[INFO] Installing jq..."
 sudo apt-get -o Acquire::Retries=5 update  -y
 sudo apt-get install -o Acquire::Retries=5 jq -y
 
+# If the job output is bigger than 16MB, this tells semaphore to save them as an artifact
+export SEMAPHORE_AGENT_UPLOAD_JOB_LOGS=when-trimmed
+
 echo "[INFO] exporting default env vars..."
 export SEMAPHORE_PIPELINE_STARTED_AT=$(date +%s)
 export PROVISIONER=${PROVISIONER:-"gcp-kubeadm"}
