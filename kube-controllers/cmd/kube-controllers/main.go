@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
+
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -107,7 +109,7 @@ func main() {
 	log.SetLevel(logLevel)
 
 	// Build clients to be used by the controllers.
-	k8sClientset, libcalicoClient, calicoClient, err := getClients(cfg.Kubeconfig)
+	k8sClientset, libcalicoClient, calicoClient, kubevirtClient, err := getClients(cfg.Kubeconfig)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to start")
 	}
@@ -191,7 +193,7 @@ func main() {
 
 		// any subsequent changes trigger a restart
 		controllerCtrl.restart = cCtrlr.ConfigChan()
-		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed)
+		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, kubevirtClient)
 	}
 
 	if cfg.DatastoreType == utils.Etcdv3 {
@@ -334,11 +336,11 @@ func startCompactor(ctx context.Context, interval time.Duration) {
 }
 
 // getClients builds and returns Kubernetes and Calico clients.
-func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, clientset.Interface, error) {
+func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, clientset.Interface, kubevirt.VirtClientInterface, error) {
 	// Get Calico client
 	config, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	// Increase the client QPS on the Calico client.
@@ -348,14 +350,14 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, cli
 
 	libcalicoClient, err := client.New(*config)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
 	}
 
 	// Now build the Kubernetes client, we support in-cluster config and kubeconfig
 	// as means of configuring the client.
 	k8sconfig, err := winutils.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
 	}
 
 	// Increase the QPS of the Kubernetes client as well. This is also used heavily by the IPAM GC controller
@@ -366,17 +368,22 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, cli
 	// Get Kubernetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
 	}
 
 	// Create a clientset for interacting with the projectcalico.org/v3 API.
 	var v3c clientset.Interface
 	v3c, err = clientset.NewForConfig(k8sconfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build Calico Kubernetes v3 client: %s", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to build Calico Kubernetes v3 client: %s", err)
 	}
 
-	return k8sClientset, libcalicoClient, v3c, nil
+	kubevirtClient, err := kubevirt.TryCreateVirtClient(k8sconfig)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create kubevirt client: %w", err)
+	}
+
+	return k8sClientset, libcalicoClient, v3c, kubevirtClient, nil
 }
 
 // Returns an etcdv3 client based on the environment. The client will be configured to
@@ -463,6 +470,7 @@ func (cc *controllerControl) InitControllers(
 	calicoClient client.Interface,
 	v3c clientset.Interface,
 	dataFeed *utils.DataFeed,
+	kubevirtClient kubevirt.VirtClientInterface,
 ) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
@@ -505,7 +513,7 @@ func (cc *controllerControl) InitControllers(
 		cc.controllers["NetworkPolicy"] = policyController
 	}
 	if cfg.Controllers.Node != nil {
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed)
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, kubevirtClient)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
 	}

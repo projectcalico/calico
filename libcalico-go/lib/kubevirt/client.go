@@ -18,6 +18,8 @@ package kubevirt
 import (
 	"fmt"
 
+	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
 )
@@ -36,6 +38,23 @@ type virtClientAdapter struct {
 	client kubevirtcorev1.KubevirtV1Interface
 }
 
+func IsKubeVirtInstalled(discoveryClient discovery.DiscoveryInterface) (bool, error) {
+	apiGroupList, err := discoveryClient.ServerGroups()
+	if err != nil {
+		log.Debugf("Cannot obtain API group list: %s", err)
+		return false, err
+	}
+
+	for _, group := range apiGroupList.Groups {
+		if group.Name == "kubevirt.io" {
+			return true, nil
+		}
+	}
+
+	log.Debugf("Kubevirt is not installed in the cluster")
+	return false, nil
+}
+
 // VirtualMachineInstance implements VirtClientInterface.
 func (v *virtClientAdapter) VirtualMachineInstance(namespace string) VMIInterface {
 	return v.client.VirtualMachineInstances(namespace)
@@ -49,4 +68,36 @@ func (v *virtClientAdapter) VirtualMachine(namespace string) VMInterface {
 // VirtualMachineInstanceMigration implements VirtClientInterface.
 func (v *virtClientAdapter) VirtualMachineInstanceMigration(namespace string) VMIMInterface {
 	return v.client.VirtualMachineInstanceMigrations(namespace)
+}
+
+// tryCreateVirtClient attempts to create a KubeVirt client.
+// Returns nil if KubeVirt is not available.
+func TryCreateVirtClient(restConfig *rest.Config) (VirtClientInterface, error) {
+	if restConfig == nil {
+		log.Debug("No REST config provided.")
+		return nil, fmt.Errorf("no REST config provided")
+	}
+	// Check if KubeVirt API group is available before attempting to create the client
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil {
+		log.WithError(err).Debug("Failed to create discovery client for kubevirt detection")
+		return nil, err
+	}
+	isKubevirtInstalled, err := IsKubeVirtInstalled(discoveryClient)
+	if err != nil {
+		log.WithError(err).Debug("Failed to detect kubevirt installation")
+	} else if !isKubevirtInstalled {
+		// KubeVirt is not installed, so we return nil without an error.
+		return nil, nil
+	}
+
+	// Attempt to create a KubeVirt client from the REST config
+	virtClient, err := NewVirtClient(restConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wrap the client with our interface adapter
+	log.Info("Successfully created KubeVirt client")
+	return virtClient, nil
 }

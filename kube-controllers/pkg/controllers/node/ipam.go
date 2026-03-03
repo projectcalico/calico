@@ -33,6 +33,7 @@ import (
 	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -44,8 +45,15 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+)
+
+const (
+	// vmRecreationGracePeriod is the time window to allow VM recreation.
+	// During this period, if a VM doesn't exist we assume the VM is being recreated (e.g., restart, etc.)
+	vmRecreationGracePeriod = 15 * time.Minute
 )
 
 var (
@@ -117,7 +125,7 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer) *IPAMController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, virtClient kubevirt.VirtClientInterface) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -146,9 +154,10 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 	)
 
 	return &IPAMController{
-		client:    c,
-		clientset: cs,
-		config:    cfg,
+		client:     c,
+		clientset:  cs,
+		config:     cfg,
+		virtClient: virtClient,
 
 		syncChan: syncChan,
 
@@ -191,6 +200,9 @@ type IPAMController struct {
 	podLister  v1lister.PodLister
 	nodeLister v1lister.NodeLister
 	config     config.NodeControllerConfig
+
+	// virtClient is an optional KubeVirt client for verifying VMI/VM resources.
+	virtClient kubevirt.VirtClientInterface
 
 	syncStatus bapi.SyncStatus
 
@@ -955,6 +967,11 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 		return a.knode != ""
 	}
 
+	// Handle VMI-based allocations
+	if a.isVMAllocation() {
+		return c.isVMOrStandaloneVMIExists(a)
+	}
+
 	if ns == "" || pod == "" {
 		// Allocation is either not a pod address, or it pre-dates the use of these
 		// attributes. Assume it's a valid allocation since we can't perform our
@@ -1045,6 +1062,88 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	}
 
 	logc.Debugf("Allocated IP no longer in-use by pod")
+	return false
+}
+
+// isVMOrStandaloneVMIExists validates a VMI-type IP allocation for IPAM GC by checking
+// whether the backing VM or standalone VMI still exists. If neither is found, the
+// allocation is preserved for vmRecreationGracePeriod to tolerate transient gaps
+// (restarts, migrations). Returns true (valid) on any error or missing data to avoid
+// incorrectly releasing in-use IPs.
+func (c *IPAMController) isVMOrStandaloneVMIExists(a *allocation) bool {
+	ns := a.attrs[ipam.AttributeNamespace]
+	vmName := a.attrs[ipam.AttributeVMIName]
+	logc := log.WithFields(a.fields())
+
+	// If we can't reason about it, don't GC it.
+	// (We can tighten this later once attrs are guaranteed.)
+	if ns == "" || vmName == "" || c.virtClient == nil {
+		logc.Debugf("Insufficient data to validate VMI allocation, assuming valid. Namespace = %s, vmName = %s", ns, vmName)
+		return true
+	}
+
+	vm, err := c.getVMByName(ns, vmName, logc)
+	if err != nil {
+		logc.WithError(err).Error("Failed to get VM resource. Assuming allocation is valid")
+		return true
+	}
+	if vm != nil {
+		return true
+	}
+
+	vmExists := false
+	vmiExists := false
+
+	// Checking if standalone VMI exists
+	vmi, err := kubevirt.GetVMIResourceByName(context.Background(), c.virtClient, ns, vmName)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			logc.WithError(err).Warnf("Failed to query VMI, skipping VMI existence check for %s/%s", ns, vmName)
+			return true
+		}
+	}
+	if vmi != nil {
+		vmiExists = true
+	}
+
+	if !vmExists && !vmiExists && !withinGracePeriod(a, logc) {
+		return false
+	}
+
+	return true
+}
+
+func (c *IPAMController) getVMByName(
+	ns, vmName string,
+	logc *log.Entry,
+) (*kubevirtv1.VirtualMachine, error) {
+	if vmName == "" || c.virtClient == nil {
+		return nil, fmt.Errorf("insufficient data to validate VMI allocation, cannot check VM existence. Namespace = %s, vmName = %s", ns, vmName)
+	}
+
+	vm, err := c.virtClient.VirtualMachine(ns).
+		Get(context.Background(), vmName, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logc.WithError(err).Warnf("VM is not found, vmName = %s, namespace = %s", vmName, ns)
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("failed to query VM, vmName = %s, namespace = %s: %w", vmName, ns, err)
+	}
+
+	return vm, nil
+}
+
+func withinGracePeriod(a *allocation, logc *log.Entry) bool {
+	if a.leakedAt == nil {
+		logc.Debug("VMI missing first time, starting grace period")
+		return true
+	}
+	if time.Since(*a.leakedAt) < vmRecreationGracePeriod {
+		logc.Debug("Within VM recreation grace period")
+		return true
+	}
 	return false
 }
 
