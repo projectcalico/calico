@@ -15,6 +15,7 @@
 package v3
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -29,6 +30,7 @@ import (
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"gopkg.in/go-playground/validator.v9"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -39,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	celvalidator "github.com/projectcalico/calico/libcalico-go/lib/validator/cel"
 )
 
 var validate *validator.Validate
@@ -145,10 +148,34 @@ var (
 // Validate is used to validate the supplied structure according to the
 // registered field and structure validators.
 func Validate(current any) error {
+	var verr errors.ErrorValidation
+
 	// Perform field-only validation first, that way the struct validators can assume
 	// individual fields are valid format.
 	if err := validate.Struct(current); err != nil {
-		return convertError(err)
+		verr = convertError(err)
+	}
+
+	// Also run CEL validation rules from the CRD schemas. In Kubernetes
+	// datastore mode, the API server enforces these rules via x-kubernetes-validations.
+	// In etcd mode there is no API server, so we enforce them here.
+	if rObj, ok := current.(runtime.Object); ok {
+		if celErrs := celvalidator.Validate(context.Background(), rObj, nil); len(celErrs) > 0 {
+			for _, e := range celErrs {
+				name := e.Field
+				if name == "" || name == "<nil>" {
+					name = rObj.GetObjectKind().GroupVersionKind().Kind
+				}
+				verr.ErroredFields = append(verr.ErroredFields, errors.ErroredField{
+					Name:   name,
+					Reason: e.Detail,
+				})
+			}
+		}
+	}
+
+	if len(verr.ErroredFields) > 0 {
+		return verr
 	}
 	return nil
 }
