@@ -1,3 +1,4 @@
+import { OmniFilterProps } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import {
     OmniFilterOption as ListOmniFilterOption,
     OperatorType,
@@ -10,16 +11,25 @@ import {
     QueryPage,
     FlowsFilterValue,
 } from '@/types/api';
+import { FilterHintValues, ReporterLabels } from '@/types/render';
 
 export enum FilterKey {
-    policy = 'policy',
+    // policy = 'policy',
     source_name = 'source_name',
     source_namespace = 'source_namespace',
     dest_name = 'dest_name',
     dest_namespace = 'dest_namespace',
     protocol = 'protocol',
     dest_port = 'dest_port',
+    policy = 'policy',
+    policyNamespace = 'policyNamespace',
+    policyTier = 'policyTier',
+    policyKind = 'policyKind',
+    reporter = 'reporter',
+    start_time = 'start_time',
     action = 'action',
+    staged_action = 'staged_action',
+    pending_action = 'pending_action',
 }
 
 export type FilterProperty = {
@@ -31,27 +41,84 @@ export type FilterProperty = {
 
 export const ListOmniFilterKeys: Omit<
     typeof FilterKey,
-    'action' | 'protocol' | 'dest_port'
+    | 'protocol'
+    | 'dest_port'
+    | 'policy'
+    | 'policyNamespace'
+    | 'policyTier'
+    | 'policyKind'
+    | 'start_time'
+    | 'action'
+    | 'staged_action'
+    | 'pending_action'
 > = {
-    [FilterKey.policy]: FilterKey.policy,
+    // [FilterKey.policy]: FilterKey.policy,
     [FilterKey.source_namespace]: FilterKey.source_namespace,
     [FilterKey.source_name]: FilterKey.source_name,
     [FilterKey.dest_namespace]: FilterKey.dest_namespace,
     [FilterKey.dest_name]: FilterKey.dest_name,
+    [FilterKey.reporter]: FilterKey.reporter,
 } as const;
 
-export type ListOmniFilterParam = keyof typeof ListOmniFilterKeys;
+export type DataListOmniFilterParam = keyof Omit<
+    typeof ListOmniFilterKeys,
+    'reporter'
+>;
 
-export const OmniFilterKeys: Omit<typeof FilterKey, 'action'> = {
+export const FilterHintKeys: Omit<
+    typeof FilterKey,
+    | 'protocol'
+    | 'dest_port'
+    | 'start_time'
+    | 'action'
+    | 'staged_action'
+    | 'pending_action'
+> = {
+    // [FilterKey.policy]: FilterKey.policy,
+    [FilterKey.source_namespace]: FilterKey.source_namespace,
+    [FilterKey.source_name]: FilterKey.source_name,
+    [FilterKey.dest_namespace]: FilterKey.dest_namespace,
+    [FilterKey.dest_name]: FilterKey.dest_name,
+    [FilterKey.policyTier]: FilterKey.policyTier,
+    [FilterKey.policyNamespace]: FilterKey.policyNamespace,
+    [FilterKey.policyKind]: FilterKey.policyKind,
+    [FilterKey.policy]: FilterKey.policy,
+    [FilterKey.reporter]: FilterKey.reporter,
+} as const;
+export type FilterHintKey = keyof typeof FilterHintKeys;
+
+export const StreamFilterKeys = {
+    [FilterKey.start_time]: FilterKey.start_time,
+} as const;
+
+export type StreamFilterKey = keyof typeof StreamFilterKeys;
+
+export const OmniFilterKeys = {
     ...ListOmniFilterKeys,
     [FilterKey.dest_port]: FilterKey.dest_port,
     [FilterKey.protocol]: FilterKey.protocol,
+    [FilterKey.policy]: FilterKey.policy,
+    [FilterKey.policyNamespace]: FilterKey.policyNamespace,
+    [FilterKey.policyTier]: FilterKey.policyTier,
+    [FilterKey.policyKind]: FilterKey.policyKind,
+    [FilterKey.reporter]: FilterKey.reporter,
+    [FilterKey.start_time]: FilterKey.start_time,
+    [FilterKey.action]: FilterKey.action,
+    [FilterKey.staged_action]: FilterKey.staged_action,
+    [FilterKey.pending_action]: FilterKey.pending_action,
 } as const;
 
 export type OmniFilterParam = keyof typeof OmniFilterKeys;
 
-export const CustomOmniFilterKeys: Pick<typeof FilterKey, 'dest_port'> = {
+export const CustomOmniFilterKeys: Pick<
+    typeof FilterKey,
+    'dest_port' | 'policy' | 'reporter' | 'start_time' | 'action'
+> = {
     [FilterKey.dest_port]: FilterKey.dest_port,
+    [FilterKey.policy]: FilterKey.policy,
+    [FilterKey.reporter]: FilterKey.reporter,
+    [FilterKey.start_time]: FilterKey.start_time,
+    [FilterKey.action]: FilterKey.action,
 } as const;
 
 export type CustomOmniFilterParam = keyof typeof CustomOmniFilterKeys;
@@ -79,23 +146,29 @@ const transformToListFilterSearchRequest = (
 ];
 
 export const transformToFlowsFilterQuery = (
-    omniFilterValues: Record<FilterKey, string[]>,
-    listFilterId?: ListOmniFilterParam,
+    omniFilterValues: FilterHintValues,
+    listFilterId?: DataListOmniFilterParam,
     searchInput?: string,
 ) => {
     const filterHintsQuery: FlowsFilter = Object.keys(omniFilterValues).reduce(
         (acc, filterKey) => {
-            const filterId = filterKey as FilterKey;
-            const key = FilterProperties[filterId].filterHintsKey;
+            if (
+                omniFilterValues[filterKey as FilterHintKey] === undefined ||
+                omniFilterValues[filterKey as FilterHintKey].length === 0
+            ) {
+                return acc;
+            }
 
+            const filterId = filterKey as FilterKey;
+            const key = OmniFilterProperties[filterId].filterHintsKey;
             return listFilterId === filterId
                 ? acc
                 : {
                       ...acc,
-                      [key]: FilterProperties[
+                      [key]: OmniFilterProperties[
                           filterId
-                      ].transformToFilterHintRequest(
-                          omniFilterValues[filterId],
+                      ]?.transformToFilterHintRequest(
+                          omniFilterValues[filterId as FilterHintKey],
                       ),
                   };
         },
@@ -118,57 +191,52 @@ export type FilterHintType =
     | 'DestName'
     | 'DestNamespace'
     | 'SourceNamespace'
-    | 'PolicyName';
+    | 'PolicyName'
+    | 'Policy'
+    | 'PolicyNamespace'
+    | 'PolicyTier'
+    | 'PolicyKind'
+    | 'Reporter';
 
-export const FilterHintTypes: Record<ListOmniFilterParam, FilterHintType> = {
-    [ListOmniFilterKeys.dest_name]: 'DestName',
-    [ListOmniFilterKeys.dest_namespace]: 'DestNamespace',
-    [ListOmniFilterKeys.source_name]: 'SourceName',
-    [ListOmniFilterKeys.source_namespace]: 'SourceNamespace',
-    [ListOmniFilterKeys.policy]: 'PolicyName',
+export const FilterHintTypes: Record<
+    keyof typeof FilterHintKeys,
+    FilterHintType
+> = {
+    [FilterKey.dest_name]: 'DestName',
+    [FilterKey.dest_namespace]: 'DestNamespace',
+    [FilterKey.source_name]: 'SourceName',
+    [FilterKey.source_namespace]: 'SourceNamespace',
+    [FilterKey.policy]: 'Policy',
+    [FilterKey.policyNamespace]: 'PolicyNamespace',
+    [FilterKey.policyTier]: 'PolicyTier',
+    [FilterKey.policyKind]: 'PolicyKind',
+    [FilterKey.reporter]: 'Reporter',
 };
 
+type OmniFilterProperty = {
+    selectOptions?: ListOmniFilterOption[];
+    defaultOperatorType?: OperatorType;
+    label: string;
+    limit?: number;
+    filterHintsKey: FlowsFilterKeys;
+    transformToFilterHintRequest: (
+        filters: string[],
+    ) => FlowsFilterQuery[] | undefined;
+    transformToFilterSearchRequest?: (search: string) =>
+        | FlowsFilterQuery[]
+        | {
+              name: FlowsFilterQuery;
+          }[];
+    filterComponentProps?: Partial<OmniFilterProps>;
+};
 export type OmniFilterPropertiesType = Record<
     OmniFilterParam,
-    {
-        selectOptions?: ListOmniFilterOption[];
-        defaultOperatorType?: OperatorType;
-        label: string;
-        limit?: number;
-        filterHintsKey: Exclude<FlowsFilterKeys, 'actions'>;
-        transformToFilterHintRequest: (
-            filters: string[],
-        ) => FlowsFilterQuery[] | undefined;
-        transformToFilterSearchRequest?: (search: string) =>
-            | FlowsFilterQuery[]
-            | {
-                  name: FlowsFilterQuery;
-              }[];
-    }
+    OmniFilterProperty
 >;
 
 const requestPageSize = 20;
 
 export const OmniFilterProperties: OmniFilterPropertiesType = {
-    policy: {
-        label: 'Policy',
-        limit: requestPageSize,
-        filterHintsKey: 'policies',
-        transformToFilterHintRequest: (values: string[]) =>
-            handleEmptyFilters(
-                values.map((value) => ({
-                    name: { type: 'Exact', value },
-                })),
-            ),
-        transformToFilterSearchRequest: (search) => [
-            {
-                name: {
-                    type: 'Fuzzy',
-                    value: search,
-                },
-            },
-        ],
-    },
     source_namespace: {
         label: 'Source Namespace',
         limit: requestPageSize,
@@ -213,18 +281,88 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         filterHintsKey: 'protocols',
         transformToFilterHintRequest: transformToListFilter,
     },
-};
+    reporter: {
+        label: 'Reporter',
+        filterHintsKey: 'reporters',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        filterComponentProps: {
+            filters: [
+                { label: ReporterLabels.Src, value: 'Src' },
+                { label: ReporterLabels.Dst, value: 'Dst' },
+            ],
+            listType: 'radio',
+            showSearch: false,
+            onReady: () => undefined,
+            width: '100px',
+            popoverContentProps: {
+                width: '175px',
+            },
+            formatSelectedLabel: (selectedFilters) => {
+                const [selectedFilter] = selectedFilters;
 
-export const FilterProperties: Record<FilterKey, FilterProperty> = {
-    ...OmniFilterProperties,
+                return selectedFilter
+                    ? ReporterLabels[
+                          selectedFilter.value as keyof typeof ReporterLabels
+                      ]
+                    : '';
+            },
+        },
+    },
+    policy: {
+        label: 'Policy',
+        filterHintsKey: 'policies',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
+    },
+    policyNamespace: {
+        label: 'Namespace',
+        filterHintsKey: 'policy_namespaces',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
+    },
+    policyTier: {
+        label: 'Tier',
+        filterHintsKey: 'policy_tiers',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
+    },
+    policyKind: {
+        label: 'Kind',
+        filterHintsKey: 'policy_kinds',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
+    },
+    start_time: {
+        label: 'Start Time',
+    } as OmniFilterProperty,
     action: {
+        label: 'Action',
         filterHintsKey: 'actions',
-        transformToFilterHintRequest: handleEmptyFilters,
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
+    },
+
+    staged_action: {
+        label: 'Staged Action',
+        filterHintsKey: 'staged_actions',
+        transformToFilterHintRequest: transformToListFilter,
+    },
+
+    pending_action: {
+        label: 'Pending Action',
+        filterHintsKey: 'pending_actions',
+        transformToFilterHintRequest: transformToListFilter,
     },
 };
 
 export type ListOmniFiltersData = Record<
-    ListOmniFilterParam,
+    DataListOmniFilterParam,
     ListOmniFilterData
 >;
 
@@ -239,7 +377,7 @@ export type SelectedOmniFilterData = Partial<ListOmniFiltersData>;
 export type SelectedOmniFilters = Partial<Record<OmniFilterParam, string[]>>;
 
 export type SelectedOmniFilterOptions = Record<
-    ListOmniFilterParam,
+    DataListOmniFilterParam,
     ListOmniFilterOption[]
 >;
 

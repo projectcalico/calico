@@ -14,12 +14,12 @@ export default {
             color: 'tigera-color-on-surface',
             bg: 'tigera-color-surface',
             fontSize: 'xs',
-            _hover: { bg: 'tigeraBlueMedium', color: 'tigeraWhite' },
             '&[aria-checked="true"]': {
                 fontWeight: 'bold',
             },
+            _focus: { bg: 'tigeraBlueMedium', color: 'tigeraWhite' },
             _dark: {
-                _hover: {
+                _focus: {
                     bg: 'tigeraGoldMedium40',
                     color: 'tigeraBlack',
                 },

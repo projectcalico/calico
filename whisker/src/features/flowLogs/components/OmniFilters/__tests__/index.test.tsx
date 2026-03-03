@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, within } from '@/test-utils/helper';
-import OmniFilters from '..';
+import { act, fireEvent, render, screen, within } from '@/test-utils/helper';
 import { OmniFilterKeys } from '@/utils/omniFilter';
+import OmniFilters from '..';
 
 jest.mock(
     '@/libs/tigera/ui-components/components/common/OmniFilter',
@@ -14,7 +14,7 @@ jest.mock(
             onRequestMore,
         }: any) => {
             return (
-                <div data-testId={filterLabel}>
+                <div data-testid={filterLabel}>
                     <div>{filterLabel}</div>
                     <span onClick={onClear}>on clear</span>
                     <button onClick={onReady}>on ready</button>
@@ -50,6 +50,26 @@ jest.mock(
                     {filterLabel} {port} {protocol}
                 </div>
             );
+        },
+);
+
+jest.mock(
+    '@/features/flowLogs/components/PolicyOmniFilter',
+    () =>
+        ({ filterLabel }: any) => {
+            return <div>{filterLabel} filter</div>;
+        },
+);
+
+const ActionOmniFilterMock = {
+    onChange: jest.fn(),
+};
+jest.mock(
+    '@/features/flowLogs/components/ActionOmniFilter',
+    () =>
+        ({ onChange }: any) => {
+            ActionOmniFilterMock.onChange = onChange;
+            return <div>Mock ActionOmniFilter</div>;
         },
 );
 
@@ -89,6 +109,7 @@ const defaultProps = {
     onRequestNextPage: jest.fn(),
     onMultiChange: jest.fn(),
     selectedValues: {},
+    startTime: 0,
 };
 
 jest.useFakeTimers();
@@ -98,11 +119,11 @@ describe('<OmniFilters />', () => {
         const mockOnChange = jest.fn();
         render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
 
-        const omniFilter = within(screen.getByTestId('Policy'));
+        const omniFilter = within(screen.getByTestId('Source'));
         fireEvent.click(omniFilter.getByText('on clear'));
 
         expect(mockOnChange).toHaveBeenCalledWith({
-            filterId: 'policy',
+            filterId: 'source_name',
             filterLabel: '',
             filters: [],
             operator: undefined,
@@ -117,16 +138,16 @@ describe('<OmniFilters />', () => {
                 onRequestFilterData={mockOnRequestFilterData}
                 omniFilterData={{
                     ...defaultProps.omniFilterData,
-                    policy: { filters: null, isLoading: false },
+                    source_name: { filters: null, isLoading: false },
                 }}
             />,
         );
 
-        const omniFilter = within(screen.getByTestId('Policy'));
+        const omniFilter = within(screen.getByTestId('Source'));
         fireEvent.click(omniFilter.getByText('on ready'));
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
-            filterParam: 'policy',
+            filterParam: 'source_name',
             searchOption: '',
         });
     });
@@ -140,16 +161,19 @@ describe('<OmniFilters />', () => {
             />,
         );
 
-        const omniFilter = within(screen.getByTestId('Policy'));
-        fireEvent.click(omniFilter.getByText('on search'));
+        const omniFilter = within(screen.getByTestId('Destination'));
+        act(() => {
+            fireEvent.click(omniFilter.getByText('on search'));
+            jest.advanceTimersByTime(1000);
+        });
 
-        jest.advanceTimersByTime(1000);
-        fireEvent.click(omniFilter.getByText('on search'));
-
-        jest.advanceTimersByTime(1000);
+        act(() => {
+            fireEvent.click(omniFilter.getByText('on search'));
+            jest.advanceTimersByTime(1000);
+        });
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
-            filterParam: 'policy',
+            filterParam: 'dest_name',
             searchOption: 'search-criteria',
         });
     });
@@ -163,11 +187,11 @@ describe('<OmniFilters />', () => {
             />,
         );
 
-        const omniFilter = within(screen.getByTestId('Policy'));
+        const omniFilter = within(screen.getByTestId('Destination'));
         fireEvent.click(omniFilter.getByText('on clear search'));
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
-            filterParam: 'policy',
+            filterParam: 'dest_name',
             searchOption: '',
         });
     });
@@ -181,10 +205,10 @@ describe('<OmniFilters />', () => {
             />,
         );
 
-        const omniFilter = within(screen.getByTestId('Policy'));
+        const omniFilter = within(screen.getByTestId('Source'));
         fireEvent.click(omniFilter.getByText('request more'));
 
-        expect(mockOnRequestNextPage).toHaveBeenCalledWith('policy');
+        expect(mockOnRequestNextPage).toHaveBeenCalledWith('source_name');
     });
 
     it('should call onMultiChange when port/ protocol changes', () => {
@@ -196,10 +220,10 @@ describe('<OmniFilters />', () => {
         const event = { port: 8080, protocol: 'proto' };
         PortOmniFilterMock.onChange(event);
 
-        expect(mockOnMultiChange).toHaveBeenCalledWith(
-            [OmniFilterKeys.protocol, OmniFilterKeys.dest_port],
-            [event.protocol, event.port],
-        );
+        expect(mockOnMultiChange).toHaveBeenCalledWith({
+            [OmniFilterKeys.protocol]: [event.protocol],
+            [OmniFilterKeys.dest_port]: [event.port],
+        });
     });
 
     it('should handle when port/ protocol values are provided', () => {
@@ -215,5 +239,55 @@ describe('<OmniFilters />', () => {
         );
 
         expect(screen.getByText(`Port ${port} ${protocol}`));
+    });
+
+    it('should handle when action values are provided', () => {
+        const mockOnMultiChange = jest.fn();
+        render(
+            <OmniFilters
+                {...defaultProps}
+                onMultiChange={mockOnMultiChange}
+                selectedValues={{}}
+            />,
+        );
+
+        act(() => {
+            ActionOmniFilterMock.onChange({
+                action: 'Allow',
+                staged_action: 'Deny',
+                pending_action: 'Allow',
+            });
+        });
+
+        expect(mockOnMultiChange).toHaveBeenCalledWith({
+            action: ['Allow'],
+            staged_action: ['Deny'],
+            pending_action: ['Allow'],
+        });
+    });
+
+    it('should handle when action values are cleared', () => {
+        const mockOnMultiChange = jest.fn();
+        render(
+            <OmniFilters
+                {...defaultProps}
+                onMultiChange={mockOnMultiChange}
+                selectedValues={{}}
+            />,
+        );
+
+        act(() => {
+            ActionOmniFilterMock.onChange({
+                action: '',
+                staged_action: '',
+                pending_action: '',
+            });
+        });
+
+        expect(mockOnMultiChange).toHaveBeenCalledWith({
+            action: [],
+            staged_action: [],
+            pending_action: [],
+        });
     });
 });

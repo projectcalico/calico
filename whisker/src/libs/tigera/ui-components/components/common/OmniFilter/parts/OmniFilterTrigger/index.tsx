@@ -1,14 +1,15 @@
 import { ChevronDownIcon } from '@chakra-ui/icons';
 import {
-    Badge,
     Button,
     ButtonProps,
+    Flex,
     PopoverTrigger,
     SystemStyleObject,
     Text,
 } from '@chakra-ui/react';
 import { OperatorType } from '../../types';
 import { useStyles } from '../OmniFilterContainer';
+import Badge from '../../components/Badge';
 
 type OmniFilterTriggerProps = Partial<{
     isOpen: boolean;
@@ -24,6 +25,7 @@ type OmniFilterTriggerProps = Partial<{
     isDisabled: boolean;
     testId: string;
     onClick: () => void;
+    customContent?: React.ReactNode;
 }>;
 
 export const OmniFilterTrigger = ({
@@ -40,6 +42,7 @@ export const OmniFilterTrigger = ({
     testId,
     onClick,
     isDisabled = false,
+    customContent,
 }: OmniFilterTriggerProps) => {
     const styles = useStyles();
 
@@ -61,26 +64,24 @@ export const OmniFilterTrigger = ({
                 {...(isActive && (styles.triggerActive as ButtonProps))}
                 isDisabled={isDisabled}
             >
-                {label}{' '}
-                {isActive && showSelectedValueLabel && (
-                    <>
-                        <Text
-                            isTruncated
-                            data-testid={`${testId}-button-text`}
-                            title={selectedValueTitle}
-                            sx={{
-                                ...styles.triggerText,
-                                ...valueSx,
-                            }}
-                        >
-                            {operator} {selectedValueLabel}
-                        </Text>
-                        {badgeLabel && (
-                            <Badge variant='rounded' ml={1}>
-                                +{badgeLabel}
-                            </Badge>
+                {customContent ?? (
+                    <Flex>
+                        {label}{' '}
+                        {isActive && showSelectedValueLabel && (
+                            <Text
+                                isTruncated
+                                data-testid={`${testId}-button-text`}
+                                title={selectedValueTitle}
+                                sx={{
+                                    ...styles.triggerText,
+                                    ...valueSx,
+                                }}
+                            >
+                                {operator} {selectedValueLabel}
+                            </Text>
                         )}
-                    </>
+                        {badgeLabel && <Badge ml={1}>{badgeLabel}</Badge>}
+                    </Flex>
                 )}
             </Button>
         </PopoverTrigger>
