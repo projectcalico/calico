@@ -1015,7 +1015,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 			match = match.NotICMPV6TypeAndCode(
 				uint8(icmp.NotIcmpTypeCode.Type), uint8(icmp.NotIcmpTypeCode.Code))
 		case *proto.Rule_NotIcmpType:
-			logCxt.WithField("icmpTypeCode", icmp).Debug("Adding negated ICMPv6 type-only match.")
+			logCxt.WithField("icmpType", icmp).Debug("Adding negated ICMPv6 type-only match.")
 			match = match.NotICMPV6Type(uint8(icmp.NotIcmpType))
 		}
 	}
