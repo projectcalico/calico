@@ -41,7 +41,7 @@ run_non_hcp_reports_and_diags() {
     upload_to_gcs "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "diags.tgz"
   fi
 
-  delete_artifacts; delete_calicoctl; delete_gcloud
+  delete_artifacts; delete_calicoctl
 
   REPORT_DIR=${REPORT_DIR:-"${BZ_LOCAL_DIR}/report/${TEST_TYPE}"}
   echo "[INFO] global_epilogue: pushing report artifacts"
@@ -73,6 +73,14 @@ upload_to_gcs() {
   fi
   echo "[INFO] bucket_upload: uploading ${dest_name} to gs://${GS_BUCKET}/${gcs_dir}/"
   gsutil cp "${src}" "gs://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
+}
+
+# Create a logs tarball and upload it to GCS.
+upload_logs_to_gcs() {
+  local logs_tgz="/tmp/logs-${SEMAPHORE_JOB_ID}.tgz"
+  tar czf "${logs_tgz}" -C "${BZ_LOGS_DIR}" . || true
+  upload_to_gcs "${logs_tgz}" "logs.tgz"
+  rm -f "${logs_tgz}" || true
 }
 
 echo "[INFO] starting global_epilogue"
@@ -142,17 +150,14 @@ if [[ "${HCP_ENABLED}" == "true" ]]; then
   echo "[INFO] publish new semaphore test results"
   test-results publish semaphore/test-results/junit.xml || true
 
-  delete_artifacts; delete_calicoctl; delete_gcloud
+  delete_artifacts; delete_calicoctl
 
   echo "[INFO] global_epilogue: hcp destroy"
   hcp-destroy.sh |& tee ${BZ_LOGS_DIR}/destroy.log || true
 
   echo "[INFO] global_epilogue: hcp: pushing log artifacts"
   artifact push job ${BZ_LOGS_DIR} --destination semaphore/logs || true
-  LOGS_TGZ="/tmp/logs-${SEMAPHORE_JOB_ID}.tgz"
-  tar czf "${LOGS_TGZ}" -C "${BZ_LOGS_DIR}" . || true
-  upload_to_gcs "${LOGS_TGZ}" "logs.tgz"
-  rm -f "${LOGS_TGZ}" || true
+  upload_logs_to_gcs
 else
   case "${HCP_STAGE:-}" in
     setup-hosting)
@@ -181,8 +186,7 @@ else
 
   echo "[INFO] global_epilogue: pushing log artifacts"
   artifact push job ${BZ_LOGS_DIR} --destination semaphore/logs || true
-  LOGS_TGZ="/tmp/logs-${SEMAPHORE_JOB_ID}.tgz"
-  tar czf "${LOGS_TGZ}" -C "${BZ_LOGS_DIR}" . || true
-  upload_to_gcs "${LOGS_TGZ}" "logs.tgz"
-  rm -f "${LOGS_TGZ}" || true
+  upload_logs_to_gcs
 fi
+
+delete_gcloud
