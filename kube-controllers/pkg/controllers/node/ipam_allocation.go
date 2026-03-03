@@ -296,9 +296,11 @@ func (t *allocationState) markDirty(node string, reason string) {
 	}
 }
 
-func (t *allocationState) syncComplete() {
-	for node := range t.dirtyNodes {
-		log.WithField("node", node).Debug("Node is no longer dirty")
+// markClean removes a single node from the dirty set after it has been
+// successfully processed.
+func (t *allocationState) markClean(node string, reason string) {
+	if _, ok := t.dirtyNodes[node]; ok {
+		log.WithFields(log.Fields{"node": node, "reason": reason}).Debug("Node is no longer dirty")
 		delete(t.dirtyNodes, node)
 	}
 }
