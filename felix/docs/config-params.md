@@ -1068,7 +1068,7 @@ like Application layer policy.
 
 ### `ProgramClusterRoutes` (config file) / `programClusterRoutes` (YAML)
 
-Specifies whether Felix should program IPIP routes instead of BIRD.
+Specifies whether Felix should program all cluster routes instead of BIRD.
 Felix always programs VXLAN routes.
 
 | Detail |   |
