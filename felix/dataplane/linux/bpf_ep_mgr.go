@@ -2623,6 +2623,7 @@ func mergeAttachPoints(ap4, ap6 attachPoint) attachPoint {
 			} else if aptcV4 != nil && aptcV6 != nil {
 				aptcV4.HostIPv6 = aptcV6.HostIPv6
 				aptcV4.IntfIPv6 = aptcV6.IntfIPv6
+				aptcV4.HostTunnelIPv6 = aptcV6.HostTunnelIPv6
 				aptcV4.HookLayoutV6 = aptcV6.HookLayoutV6
 				aptcV4.PolicyIdxV6 = aptcV6.PolicyIdxV6
 				return aptcV4
@@ -3116,6 +3117,15 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 }
 
 func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection PolDirection, ap *tc.AttachPoint, isDataIface bool) *tc.AttachPoint {
+	if ap.Type == tcdefs.EpTypeLO || ap.Type == tcdefs.EpTypeNAT || isDataIface {
+		if d.ipFamily == proto.IPVersion_IPV6 {
+			ap.HostTunnelIPv6 = d.tunnelIP
+		} else {
+			ap.HostTunnelIPv4 = d.tunnelIP
+		}
+		logrus.Debugf("Setting tunnel ip %s on ap %s", d.tunnelIP, ap.IfaceName())
+	}
+
 	if ap.Type == tcdefs.EpTypeWorkload {
 		// Policy direction is relative to the workload so, from the host namespace it's flipped.
 		if policyDirection == PolDirnIngress {

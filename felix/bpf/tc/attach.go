@@ -49,6 +49,8 @@ type AttachPoint struct {
 	HookLayoutV6                  hook.Layout
 	HostIPv4                      net.IP
 	HostIPv6                      net.IP
+	HostTunnelIPv4                net.IP
+	HostTunnelIPv6                net.IP
 	IntfIPv4                      net.IP
 	IntfIPv6                      net.IP
 	ToHostDrop                    bool
@@ -497,6 +499,13 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.UDPGSOLinearize {
 		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
+	}
+
+	if ap.HostTunnelIPv4 != nil {
+		copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
+	}
+	if ap.HostTunnelIPv6 != nil {
+		copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
 	}
 
 	for i := range len(globalData.Jumps) {

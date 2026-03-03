@@ -1559,6 +1559,18 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	state->ct_result.nat_sport = ct_ctx_nat->sport;
 	/* fall through as DNAT is now established */
 
+	if (!ip_void(HOST_TUNNEL_IP) &&
+			((CALI_F_TO_HOST && CALI_F_NAT_IF) || (CALI_F_TO_HEP && (CALI_F_LO || CALI_F_MAIN)))) {
+		struct cali_rt *r = cali_rt_lookup(&state->post_nat_ip_dst);
+		if (r && cali_rt_flags_remote_workload(r->flags) && cali_rt_is_tunneled(r)) {
+			CALI_DEBUG("remote wl " IP_FMT " tunneled via " IP_FMT "",
+					debug_ip(state->post_nat_ip_dst), debug_ip(HOST_TUNNEL_IP));
+			ct_ctx_nat->src = HOST_TUNNEL_IP;
+			state->ct_result.nat_sip = ct_ctx_nat->src;
+			state->ct_result.nat_sport = ct_ctx_nat->sport;
+		}
+	}
+
 	size_t l4_csum_off = 0;
 
 	switch (ctx->state->ip_proto) {
