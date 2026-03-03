@@ -1091,10 +1091,7 @@ func (c *IPAMController) isVMOrStandaloneVMIExists(a *allocation) bool {
 		return true
 	}
 
-	vmExists := false
-	vmiExists := false
-
-	// Checking if standalone VMI exists
+	// VM not found — check if a standalone VMI exists.
 	vmi, err := kubevirt.GetVMIResourceByName(context.Background(), c.virtClient, ns, vmName)
 	if err != nil {
 		if !errors.IsNotFound(err) {
@@ -1103,24 +1100,17 @@ func (c *IPAMController) isVMOrStandaloneVMIExists(a *allocation) bool {
 		}
 	}
 	if vmi != nil {
-		vmiExists = true
+		return true
 	}
 
-	if !vmExists && !vmiExists && !withinGracePeriod(a, logc) {
-		return false
-	}
-
-	return true
+	// Neither VM nor standalone VMI found. Allow a grace period for recreation (restarts, migrations).
+	return withinGracePeriod(a, logc)
 }
 
 func (c *IPAMController) getVMByName(
 	ns, vmName string,
 	logc *log.Entry,
 ) (*kubevirtv1.VirtualMachine, error) {
-	if vmName == "" || c.virtClient == nil {
-		return nil, fmt.Errorf("insufficient data to validate VMI allocation, cannot check VM existence. Namespace = %s, vmName = %s", ns, vmName)
-	}
-
 	vm, err := c.virtClient.VirtualMachine(ns).
 		Get(context.Background(), vmName, metav1.GetOptions{})
 	if err != nil {

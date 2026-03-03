@@ -378,9 +378,10 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, cli
 		return nil, nil, nil, nil, fmt.Errorf("failed to build Calico Kubernetes v3 client: %s", err)
 	}
 
+	// KubeVirt client is optional — log and continue without it on failure.
 	kubevirtClient, err := kubevirt.TryCreateVirtClient(k8sconfig)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to create kubevirt client: %w", err)
+		log.WithError(err).Warn("Failed to create kubevirt client, proceeding without KubeVirt IPAM GC support")
 	}
 
 	return k8sClientset, libcalicoClient, v3c, kubevirtClient, nil

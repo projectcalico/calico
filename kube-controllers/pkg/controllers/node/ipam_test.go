@@ -264,6 +264,14 @@ var _ = Describe("IPAM controller UTs", func() {
 			allocation := makeVMIAllocation("", "")
 			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
 		})
+
+		It("should treat allocation as valid if virtClient is nil (KubeVirt not installed)", func() {
+			c.virtClient = nil
+			c.Start(stopChan)
+
+			allocation := makeVMIAllocation("default", "some-vm")
+			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+		})
 	})
 
 	It("should handle node updates and maintain its node cache", func() {

@@ -85,9 +85,10 @@ func TryCreateVirtClient(restConfig *rest.Config) (VirtClientInterface, error) {
 	}
 	isKubevirtInstalled, err := IsKubeVirtInstalled(discoveryClient)
 	if err != nil {
-		log.WithError(err).Debug("Failed to detect kubevirt installation")
-	} else if !isKubevirtInstalled {
-		// KubeVirt is not installed, so we return nil without an error.
+		log.WithError(err).Warn("Failed to detect kubevirt installation, proceeding without KubeVirt support")
+		return nil, nil
+	}
+	if !isKubevirtInstalled {
 		return nil, nil
 	}
 
