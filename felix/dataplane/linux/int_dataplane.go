@@ -1154,6 +1154,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 		ifceHandlerV4 = nftablesV4RootTable.(nftables.InterfaceHandler)
+
+		// Tell the nftables table about overlay/tunnel devices so they can be
+		// included in the flowtable for connection offload.
+		var overlayDevicesV4 []string
+		if config.RulesConfig.VXLANEnabled {
+			overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.VXLANIfaceNameV4)
+		}
+		if config.RulesConfig.IPIPEnabled {
+			overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.IPIPIfaceName)
+		}
+		if config.RulesConfig.WireguardEnabled && len(config.RulesConfig.WireguardInterfaceName) > 0 {
+			overlayDevicesV4 = append(overlayDevicesV4, config.RulesConfig.WireguardInterfaceName)
+		}
+		nftablesV4RootTable.SetOverlayDevices(overlayDevicesV4)
 	}
 
 	// If the NFTablesSupported feature is enabled, create nftables ARP table for proxy ARP
@@ -1406,6 +1420,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if nftablesEnabled {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 			ifceHandlerV6 = nftablesV6RootTable.(nftables.InterfaceHandler)
+
+			var overlayDevicesV6 []string
+			if config.RulesConfig.VXLANEnabledV6 {
+				overlayDevicesV6 = append(overlayDevicesV6, dataplanedefs.VXLANIfaceNameV6)
+			}
+			if config.RulesConfig.WireguardEnabledV6 && len(config.RulesConfig.WireguardInterfaceNameV6) > 0 {
+				overlayDevicesV6 = append(overlayDevicesV6, config.RulesConfig.WireguardInterfaceNameV6)
+			}
+			nftablesV6RootTable.SetOverlayDevices(overlayDevicesV6)
 		}
 
 		var linkAddrsManagerV6 linkaddrs.Interface
