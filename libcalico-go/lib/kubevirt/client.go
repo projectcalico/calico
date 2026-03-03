@@ -70,7 +70,7 @@ func (v *virtClientAdapter) VirtualMachineInstanceMigration(namespace string) VM
 	return v.client.VirtualMachineInstanceMigrations(namespace)
 }
 
-// tryCreateVirtClient attempts to create a KubeVirt client.
+// TryCreateVirtClient attempts to create a KubeVirt client.
 // Returns nil if KubeVirt is not available.
 func TryCreateVirtClient(restConfig *rest.Config) (VirtClientInterface, error) {
 	if restConfig == nil {

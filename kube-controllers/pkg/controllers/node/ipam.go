@@ -51,9 +51,9 @@ import (
 )
 
 const (
-	// vmRecreationGracePeriod is the time window to allow VM recreation.
+	// defaultVMRecreationGracePeriod is the default time window to allow VM recreation.
 	// During this period, if a VM doesn't exist we assume the VM is being recreated (e.g., restart, etc.)
-	vmRecreationGracePeriod = 15 * time.Minute
+	defaultVMRecreationGracePeriod = 15 * time.Minute
 )
 
 var (
@@ -182,6 +182,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		poolManager:                 newPoolManager(),
 		datastoreReady:              true,
 		consolidationWindow:         1 * time.Second,
+		vmRecreationGracePeriod:     defaultVMRecreationGracePeriod,
 
 		// Track blocks which we might want to release.
 		blockReleaseTracker: newBlockReleaseTracker(leakGracePeriod),
@@ -253,6 +254,9 @@ type IPAMController struct {
 	// consolidationWindow is the time to wait for additional updates after receiving one before processing the updates
 	// received. This is to allow for multiple node deletion events to be consolidated into a single event.
 	consolidationWindow time.Duration
+
+	// vmRecreationGracePeriod is the time window to allow VM recreation before treating the allocation as a leak.
+	vmRecreationGracePeriod time.Duration
 
 	// For unit testing purposes.
 	pauseRequestChannel chan pauseRequest
@@ -916,6 +920,11 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 				// - The node the allocation belongs to no longer exists.
 				// - The pod owning this allocation no longer exists.
 				a.markConfirmedLeak()
+			} else if a.isVMAllocation() {
+				// VM/VMI allocation with no backing VM or standalone VMI.
+				// Use a dedicated grace period to tolerate transient gaps
+				// during VM restarts and migrations.
+				a.markLeak(c.vmRecreationGracePeriod)
 			} else if c.config.LeakGracePeriod != nil {
 				// The allocation is NOT valid, but the Kubernetes node still exists, so our confidence is lower.
 				// Mark as a candidate leak. If this state remains, it will switch
@@ -1065,11 +1074,9 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	return false
 }
 
-// isVMOrStandaloneVMIExists validates a VMI-type IP allocation for IPAM GC by checking
-// whether the backing VM or standalone VMI still exists. If neither is found, the
-// allocation is preserved for vmRecreationGracePeriod to tolerate transient gaps
-// (restarts, migrations). Returns true (valid) on any error or missing data to avoid
-// incorrectly releasing in-use IPs.
+// isVMOrStandaloneVMIExists checks whether the backing VM or standalone VMI for
+// a VMI-type IP allocation still exists. Returns true on any error or missing
+// data to avoid incorrectly releasing in-use IPs.
 func (c *IPAMController) isVMOrStandaloneVMIExists(a *allocation) bool {
 	ns := a.attrs[ipam.AttributeNamespace]
 	vmName := a.attrs[ipam.AttributeVMIName]
@@ -1103,8 +1110,9 @@ func (c *IPAMController) isVMOrStandaloneVMIExists(a *allocation) bool {
 		return true
 	}
 
-	// Neither VM nor standalone VMI found. Allow a grace period for recreation (restarts, migrations).
-	return withinGracePeriod(a, logc)
+	// Neither VM nor standalone VMI found.
+	logc.Debug("Neither VM nor standalone VMI found")
+	return false
 }
 
 func (c *IPAMController) getVMByName(
@@ -1115,7 +1123,7 @@ func (c *IPAMController) getVMByName(
 		Get(context.Background(), vmName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			logc.WithError(err).Warnf("VM is not found, vmName = %s, namespace = %s", vmName, ns)
+			logc.WithError(err).Debugf("VM is not found, vmName = %s, namespace = %s", vmName, ns)
 			return nil, nil
 		}
 
@@ -1123,18 +1131,6 @@ func (c *IPAMController) getVMByName(
 	}
 
 	return vm, nil
-}
-
-func withinGracePeriod(a *allocation, logc *log.Entry) bool {
-	if a.leakedAt == nil {
-		logc.Debug("VMI missing first time, starting grace period")
-		return true
-	}
-	if time.Since(*a.leakedAt) < vmRecreationGracePeriod {
-		logc.Debug("Within VM recreation grace period")
-		return true
-	}
-	return false
 }
 
 func (c *IPAMController) syncIPAM() error {

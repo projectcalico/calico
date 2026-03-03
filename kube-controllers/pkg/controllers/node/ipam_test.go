@@ -223,13 +223,11 @@ var _ = Describe("IPAM controller UTs", func() {
 			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
 		})
 
-		It("should treat allocation as invalid if VM not found and Grace Period is over", func() {
+		It("should treat allocation as invalid if VM not found", func() {
 			c.Start(stopChan)
 			namespace := "default"
 
 			allocation := makeVMIAllocation(namespace, "invalid-vm-name")
-			staleTime := time.Now().Add(-vmRecreationGracePeriod - time.Second)
-			allocation.leakedAt = &staleTime
 			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeFalse())
 		})
 
@@ -243,18 +241,6 @@ var _ = Describe("IPAM controller UTs", func() {
 			virtClient.AddVMI(vmi)
 
 			allocation := makeVMIAllocation(namespace, vmiName)
-			staleTime := time.Now().Add(-vmRecreationGracePeriod - time.Second)
-			allocation.leakedAt = &staleTime
-			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
-		})
-
-		It("should treat allocation as valid if VM not found by ns and name and within Grace Period", func() {
-			c.Start(stopChan)
-			namespace := "default"
-
-			allocation := makeVMIAllocation(namespace, "invalid-vm-name")
-			staleTime := time.Now().Add(-time.Second)
-			allocation.leakedAt = &staleTime
 			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
 		})
 
@@ -271,6 +257,166 @@ var _ = Describe("IPAM controller UTs", func() {
 
 			allocation := makeVMIAllocation("default", "some-vm")
 			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+		})
+	})
+
+	Describe("VM allocation GC through checkAllocations", func() {
+		var handle string
+		var blockCIDR string
+
+		// setupVMAllocation creates a Calico node, Kubernetes node, and a VM-type
+		// IPAM allocation block. The allocation has both Pod and VMIName attributes
+		// to match real KubeVirt allocations.
+		setupVMAllocation := func() {
+			n := internalapi.Node{}
+			n.Name = "cnode"
+			n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+			_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			kn := v1.Node{}
+			kn.Name = "kname"
+			_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			var node *v1.Node
+			Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+			handle = "vmi-handle"
+			idx := 0
+			cidr := net.MustParseCIDR("10.0.0.0/30")
+			aff := "host:cnode"
+			key := model.BlockKey{CIDR: cidr}
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{&idx, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes: []model.AllocationAttribute{
+					{
+						HandleID: &handle,
+						ActiveOwnerAttrs: map[string]string{
+							ipam.AttributeNode:      "cnode",
+							ipam.AttributePod:       "virt-launcher-test-vm-xxxxx",
+							ipam.AttributeNamespace: "default",
+							ipam.AttributeVMIName:   "test-vm",
+						},
+					},
+				},
+			}
+			kvp := model.KVPair{Key: key, Value: &b}
+			blockCIDR = kvp.Key.(model.BlockKey).CIDR.String()
+			update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+			c.onUpdate(update)
+		}
+
+		It("should GC VM allocation after grace period when VM is missing", func() {
+			// Use a short grace period for testing.
+			c.vmRecreationGracePeriod = gracePeriod
+
+			c.Start(stopChan)
+			setupVMAllocation()
+
+			// Wait for internal caches to update.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[blockCIDR]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			c.onStatusUpdate(bapi.InSync)
+
+			// VM does not exist in virtClient, so the allocation should eventually be GC'd
+			// after the grace period.
+			fakeClient := cli.IPAM().(*fakeIPAMClient)
+			Eventually(func() bool {
+				return fakeClient.handlesReleased[handle]
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+		})
+
+		It("should not GC VM allocation within grace period", func() {
+			// Use a very long grace period so it never expires during the test.
+			c.vmRecreationGracePeriod = 1 * time.Hour
+
+			c.Start(stopChan)
+			setupVMAllocation()
+
+			// Wait for internal caches to update.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[blockCIDR]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			c.onStatusUpdate(bapi.InSync)
+
+			// VM does not exist, but grace period is long.
+			// The allocation should be a candidate leak but NOT confirmed.
+			fakeClient := cli.IPAM().(*fakeIPAMClient)
+
+			// Wait for at least one GC cycle to run so the allocation is marked as a candidate.
+			allocID := fmt.Sprintf("%s/%s", handle, "10.0.0.0")
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode["cnode"][allocID]
+				return a != nil && a.leakedAt != nil
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be a candidate leak")
+
+			// The handle should NOT be released (grace period not expired).
+			Consistently(func() bool {
+				return fakeClient.handlesReleased[handle]
+			}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+		})
+
+		It("should stop GC when VM reappears during grace period", func() {
+			// Use a very long grace period so it never expires during the test.
+			c.vmRecreationGracePeriod = 1 * time.Hour
+
+			c.Start(stopChan)
+			setupVMAllocation()
+
+			// Wait for internal caches to update.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[blockCIDR]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			c.onStatusUpdate(bapi.InSync)
+
+			// Wait for the allocation to become a candidate leak.
+			allocID := fmt.Sprintf("%s/%s", handle, "10.0.0.0")
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode["cnode"][allocID]
+				return a != nil && a.leakedAt != nil
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be a candidate leak")
+
+			// Now create the VM so it exists.
+			runStrategy := kubevirtv1.RunStrategyAlways
+			vm := &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-vm",
+					Namespace: "default",
+					UID:       "vm-uid",
+				},
+				Spec: kubevirtv1.VirtualMachineSpec{
+					RunStrategy: &runStrategy,
+				},
+			}
+			virtClient.AddVM(vm)
+
+			// The allocation should be marked valid and leakedAt cleared.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode["cnode"][allocID]
+				return a != nil && a.leakedAt == nil && !a.confirmedLeak
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be marked valid after VM reappears")
 		})
 	})
 
