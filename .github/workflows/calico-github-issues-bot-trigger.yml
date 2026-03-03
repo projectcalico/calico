@@ -1,4 +1,4 @@
-name: Trigger Cali Bot
+name: Trigger Calico Github Issues Bot
 
 on:
   issues:
@@ -11,7 +11,7 @@ permissions:
   issues: read
 
 jobs:
-  trigger-cali-bot:
+  trigger-calico-github-issues-bot:
     runs-on: ubuntu-latest
 
     # Ignore PR comments and bot comments
@@ -31,7 +31,7 @@ jobs:
           echo "Comment ID:   ${{ github.event.comment.id }}"
           echo "Author:       ${{ github.event.comment.user.login }}"
 
-      - name: Trigger Cali Bot
+      - name: Trigger Calico Github Issues Bot
         env:
           CALI_BOT_PAT: ${{ secrets.CALI_BOT_PAT }}
         run: |
@@ -54,7 +54,7 @@ jobs:
             COMMENT_AUTHOR="${{ github.event.comment.user.login }}"
           fi
 
-          echo "Dispatching Cali Bot with event: $EVENT_TYPE"
+          echo "Dispatching Calico Github Issues Bot with event: $EVENT_TYPE"
 
           curl --fail --show-error --silent -X POST \
             -H "Accept: application/vnd.github+json" \
@@ -73,4 +73,4 @@ jobs:
           }
           EOF
 
-          echo "Cali Bot dispatch successful"
+          echo "Calico Github Issues Bot dispatch successful"
