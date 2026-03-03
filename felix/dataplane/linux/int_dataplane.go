@@ -251,7 +251,6 @@ type Config struct {
 	BPFAttachType                      apiv3.BPFAttachOption
 
 	BPFProfiling               string
-	BPFUDPGSOLinearize         string
 	KubeProxyMinSyncPeriod     time.Duration
 	KubeProxyHealtzPort        int
 	SidecarAccelerationEnabled bool
@@ -727,16 +726,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	dataplaneFeatures := featureDetector.GetFeatures()
-
-	if config.BPFUDPGSOLinearize == "Auto" {
-		if dataplaneFeatures.KernelHasUDPGSOFix {
-			config.BPFUDPGSOLinearize = "Disabled"
-		} else {
-			config.BPFUDPGSOLinearize = "Enabled"
-		}
-		log.WithField("resolved", config.BPFUDPGSOLinearize).Info(
-			"Auto-resolved BPFUDPGSOLinearize based on kernel version")
-	}
 
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option

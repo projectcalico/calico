@@ -2194,24 +2194,6 @@ As a result, packet‑capture tools on the host side of the workload device (for
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
-### `BPFUDPGSOLinearize` (config file) / `bpfUDPGSOLinearize` (YAML)
-
-Controls whether Felix fully linearizes UDP GSO packets
-after a partial bpf_skb_pull_data() to work around a kernel bug that causes
-crashes with GSO_FRAGLIST packets. The kernel fix is in 6.16+.
-When set to "Auto", Felix detects the kernel version and only enables
-linearization on kernels older than 6.16.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_BPFUDPGSOLinearize` |
-| Encoding (env var/config file) | One of: <code>Auto</code>, <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
-| Default value (above encoding) | `Auto` |
-| `FelixConfiguration` field | `bpfUDPGSOLinearize` (YAML) `BPFUDPGSOLinearize` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Disabled"</code>, <code>"Enabled"</code>. |
-| Default value (YAML) | `Auto` |
-| Notes | Required. | 
-
 ## <a id="dataplane-windows">Dataplane: Windows
 
 ### `WindowsManageFirewallRules` (config file) / `windowsManageFirewallRules` (YAML)
