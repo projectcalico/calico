@@ -26,10 +26,16 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	ipamlib "github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
 
-func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, enabled bool, maxBlocks *int) error {
+func updateIPAMConfig(
+	ctx context.Context,
+	ipamClient ipamlib.Interface,
+	enabled bool,
+	maxBlocks *int,
+	persistence *ipamlib.VMAddressPersistence,
+) error {
 	ipamConfig, err := ipamClient.GetIPAMConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("error: %v", err)
@@ -44,6 +50,11 @@ func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, en
 		ipamConfig.MaxBlocksPerHost = *maxBlocks
 	}
 
+	// Update KubeVirtVMAddressPersistence if specified
+	if persistence != nil {
+		ipamConfig.KubeVirtVMAddressPersistence = persistence
+	}
+
 	err = ipamClient.SetIPAMConfig(ctx, *ipamConfig)
 	if err != nil {
 		return fmt.Errorf("error: %v", err)
@@ -54,19 +65,44 @@ func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, en
 		fmt.Println("Successfully set MaxBlocksPerHost to:", *maxBlocks)
 	}
 
+	if persistence != nil {
+		fmt.Println("Successfully set KubeVirtVMAddressPersistence to:", *persistence)
+	}
+
 	return nil
+}
+
+// parsePersistence validates and converts CLI value to typed enum.
+func parsePersistence(val string) (*ipamlib.VMAddressPersistence, error) {
+	switch val {
+	case string(ipamlib.VMAddressPersistenceEnabled):
+		p := ipamlib.VMAddressPersistenceEnabled
+		return &p, nil
+	case string(ipamlib.VMAddressPersistenceDisabled):
+		p := ipamlib.VMAddressPersistenceDisabled
+		return &p, nil
+	default:
+		return nil, fmt.Errorf("invalid value for --kubevirt-ip-persistence. Use Enabled or Disabled")
+	}
 }
 
 // Configure IPAM.
 func Configure(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam configure --strictaffinity=<true/false> [--max-blocks-per-host=<number>] [--config=<CONFIG>] [--allow-version-mismatch]
+  <BINARY_NAME> ipam configure --strictaffinity=<true/false> 
+                               [--max-blocks-per-host=<number>] 
+                               [--kubevirt-ip-persistence=<Enabled|Disabled>]
+                               [--config=<CONFIG>] 
+                               [--allow-version-mismatch]
 
 Options:
   -h --help                        Show this screen.
      --strictaffinity=<true/false> Set StrictAffinity to true/false. When StrictAffinity
                                    is true, borrowing IP addresses is not allowed.
-     --max-blocks-per-host=<number>       Set the maximum number of blocks that can be affine to a host.
+     --max-blocks-per-host=<number> Set the maximum number of blocks that can be affine to a host.
+     --kubevirt-ip-persistence=<Enabled|Disabled>
+                                   Control whether KubeVirt VMs retain persistent IP addresses
+                                   across lifecycle events.
   -c --config=<CONFIG>             Path to the file containing connection configuration in
                                    YAML or JSON format.
                                    [default: ` + constants.DefaultConfigPath + `]
@@ -117,5 +153,14 @@ Description:
 		maxBlocks = &maxBlocksVal
 	}
 
-	return updateIPAMStrictAffinity(ctx, ipamClient, enabled, maxBlocks)
+	// Parse KubeVirtVMAddressPersistence
+	var persistence *ipamlib.VMAddressPersistence
+	if val, ok := parsedArgs["--kubevirt-ip-persistence"].(string); ok && val != "" {
+		persistence, err = parsePersistence(val)
+		if err != nil {
+			return err
+		}
+	}
+
+	return updateIPAMConfig(ctx, ipamClient, enabled, maxBlocks, persistence)
 }
