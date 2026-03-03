@@ -255,6 +255,7 @@ func init() {
 	registerStructValidator(validate, validateTier, api.Tier{})
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
 	registerStructValidator(validate, validateFelixConfigSpec, api.FelixConfigurationSpec{})
+	registerStructValidator(validate, validateFelixConfiguration, api.FelixConfiguration{})
 	registerStructValidator(validate, validateWorkloadEndpointSpec, internalapi.WorkloadEndpointSpec{})
 	registerStructValidator(validate, validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validate, validateRule, api.Rule{})
@@ -1030,6 +1031,26 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 	if c.RouteTableRanges != nil && c.RouteTableRanges.NumDesignatedTables() > int(routeTableRangeMaxTables) {
 		structLevel.ReportError(reflect.ValueOf(c.RouteTableRanges),
 			"RouteTableRanges", "", reason("targets too many tables"), "")
+	}
+}
+
+func validateFelixConfiguration(structLevel validator.StructLevel) {
+	c := structLevel.Current().Interface().(api.FelixConfiguration)
+
+	name := c.Name
+	hasNodeSelector := c.Spec.NodeSelector != ""
+
+	switch {
+	case name == "default":
+		if hasNodeSelector {
+			structLevel.ReportError(reflect.ValueOf(c.Spec.NodeSelector),
+				"NodeSelector", "", reason("nodeSelector must not be set on the 'default' FelixConfiguration"), "")
+		}
+	case strings.HasPrefix(name, "node."):
+		if hasNodeSelector {
+			structLevel.ReportError(reflect.ValueOf(c.Spec.NodeSelector),
+				"NodeSelector", "", reason("nodeSelector must not be set on per-node FelixConfiguration (name starts with 'node.')"), "")
+		}
 	}
 }
 
