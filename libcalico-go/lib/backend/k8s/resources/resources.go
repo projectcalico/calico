@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 const (
@@ -131,6 +130,9 @@ func SetCalicoMetadataFromK8sAnnotations(calicoRes Resource, k8sRes Resource) {
 	}
 }
 
+// ConvertCalicoResourceToK8sResource converts the given Resource from its projectcalico.org/v3 representation
+// to its crd.projectcalico.org/v1 representation.
+//
 // Store Calico Metadata in the k8s resource annotations for CRD backed resources.
 // This should store all Metadata except for those stored in Annotations and Labels and
 // store them in annotations.
@@ -189,27 +191,6 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
 
-	switch resKind {
-	// For NetworkPolicy and GlobalNetworkPolicy, we need to prefix the name with the tier name.
-	// This ensures two policies with the same name, but in different tiers, do not resolve to the same backing object.
-	case apiv3.KindGlobalNetworkPolicy:
-		policy := resIn.(*apiv3.GlobalNetworkPolicy)
-		backendName := names.TieredPolicyName(policy.Name)
-		meta.Name = backendName
-	case apiv3.KindNetworkPolicy:
-		policy := resIn.(*apiv3.NetworkPolicy)
-		backendName := names.TieredPolicyName(policy.Name)
-		meta.Name = backendName
-	case apiv3.KindStagedGlobalNetworkPolicy:
-		policy := resIn.(*apiv3.StagedGlobalNetworkPolicy)
-		backendName := names.TieredPolicyName(policy.Name)
-		meta.Name = backendName
-	case apiv3.KindStagedNetworkPolicy:
-		policy := resIn.(*apiv3.StagedNetworkPolicy)
-		backendName := names.TieredPolicyName(policy.Name)
-		meta.Name = backendName
-	}
-
 	// Explicitly nil out the labels on the underlying object so that they are not duplicated.
 	// We make an exception for projectcalico.org/ labels, which we own and may use on the v1 API.
 	var v1Labels map[string]string
@@ -249,6 +230,9 @@ func isOurs(k string) bool {
 	return strings.Contains(k, "projectcalico.org/") || strings.Contains(k, "operator.tigera.io/")
 }
 
+// ConvertK8sResourceToCalicoResource converts the given Resource from its crd.projectcalico.org/v1 representation
+// to its projectcalico.org/v3 representation.
+//
 // Retrieve all of the Calico Metadata from the k8s resource annotations for CRD backed
 // resources. This should remove the relevant Calico Metadata annotation when it has finished.
 func ConvertK8sResourceToCalicoResource(res Resource) error {

@@ -20,7 +20,10 @@ import (
 	"time"
 
 	"github.com/aws/smithy-go/ptr"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -38,6 +41,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("NetworkPolicy"),
 	describe.WithCategory(describe.Policy),
+	describe.WithWindows(),
 	"Calico NetworkPolicy",
 	func() {
 		// Define variables common across all tests.
@@ -90,11 +94,11 @@ var _ = describe.CalicoDescribe(
 		// - Creating a default-deny policy applied to both namespaces using a GlobalNetworkPolicy.
 		// - Isolating both namespaces with ingress and egress policies
 		// - Asserting only same namespace connectivity exists.
-		framework.ConformanceIt("should correctly isolate namespaces [RunsOnWindows]", func() {
+		framework.ConformanceIt("should correctly isolate namespaces", func() {
 			nsA := f.Namespace
 
 			By("Creating a second namespace B")
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 			nsB, err := f.CreateNamespace(ctx, f.BaseName+"-b", nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -218,12 +222,13 @@ var _ = describe.CalicoDescribe(
 
 		framework.ConformanceIt("should support service account selectors", func() {
 			ns := f.Namespace
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
 			By(fmt.Sprintf("Applying a default-deny policy to namespace %s", ns.Name))
-			defaultDeny := newDefaultDenyPolicy(ns.Name)
-			cli.Create(ctx, defaultDeny)
+			defaultDeny := newDefaultDenyIngressPolicy(ns.Name)
+			err = cli.Create(ctx, defaultDeny)
+			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				err := cli.Delete(ctx, defaultDeny)
 				Expect(err).NotTo(HaveOccurred())
@@ -236,7 +241,7 @@ var _ = describe.CalicoDescribe(
 			By("Allowing traffic through a service account selector")
 			sa, err := f.ClientSet.CoreV1().ServiceAccounts(ns.Name).Get(ctx, "default", metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			sa.ObjectMeta.Labels = map[string]string{"ns-name": ns.Name}
+			sa.Labels = map[string]string{"ns-name": ns.Name}
 			_, err = f.ClientSet.CoreV1().ServiceAccounts(ns.Name).Update(ctx, sa, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -282,11 +287,13 @@ var _ = describe.CalicoDescribe(
 
 		framework.ConformanceIt("should support namespace selectors", func() {
 			ns := f.Namespace
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
 
 			By(fmt.Sprintf("Applying a default-deny policy to namespace %s", ns.Name))
-			defaultDeny := newDefaultDenyPolicy(ns.Name)
-			cli.Create(ctx, defaultDeny)
+			defaultDeny := newDefaultDenyIngressPolicy(ns.Name)
+			err := cli.Create(ctx, defaultDeny)
+			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				err := cli.Delete(ctx, defaultDeny)
 				Expect(err).NotTo(HaveOccurred())
@@ -314,10 +321,18 @@ var _ = describe.CalicoDescribe(
 							},
 						},
 					},
+					Egress: []v3.Rule{
+						{
+							Action: "Allow",
+							Destination: v3.EntityRule{
+								NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", ns.Name),
+							},
+						},
+					},
 				},
 			}
 
-			err := cli.Create(ctx, np)
+			err = cli.Create(ctx, np)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				err := cli.Delete(ctx, np)
@@ -332,7 +347,7 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 
-		framework.ConformanceIt("should support a 'deny egress' policy [RunsOnWindows]", func() {
+		framework.ConformanceIt("should support a 'deny egress' policy", func() {
 			By("Creating calico egress policy which denies traffic within namespace.")
 			nsName := f.Namespace.Name
 			policyName := "deny-egress"
@@ -399,7 +414,7 @@ func newNamespaceIsolationPolicy(name, namespace, ingressSelector, egressSelecto
 	}
 }
 
-func newDefaultDenyPolicy(namespace string) *v3.NetworkPolicy {
+func newDefaultDenyIngressPolicy(namespace string) *v3.NetworkPolicy {
 	return &v3.NetworkPolicy{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "NetworkPolicy",
@@ -410,6 +425,7 @@ func newDefaultDenyPolicy(namespace string) *v3.NetworkPolicy {
 			Namespace: namespace,
 		},
 		Spec: v3.NetworkPolicySpec{
+			// If the spec.types field is not set, it defaults to "Ingress" only.
 			Order:    ptr.Float64(5000),
 			Selector: "all()",
 		},

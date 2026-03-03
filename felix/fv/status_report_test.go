@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -60,15 +58,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ openstack status-reporting"
 
 		w = workload.Run(tc.Felixes[0], "wl", "default", "10.65.0.2", "8088", "tcp")
 		w.ConfigureInInfra(infra)
-	})
-
-	AfterEach(func() {
-		w.Stop()
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 
 	Describe("With status-reporting writing to etcd", func() {

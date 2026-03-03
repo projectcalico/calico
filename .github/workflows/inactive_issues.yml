@@ -9,6 +9,8 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
+      # Grant write permission to actions to delete cache after a run (this is needed so that we don't leave certain issue states out of date and block them from being closed)
+      actions: write
     steps:
       # This step marks support issues and PRs as stale.
       - uses: actions/stale@v9

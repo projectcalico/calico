@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -24,16 +22,16 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -92,9 +90,8 @@ func (c netsetsConfig) workloadFullLengthCIDR(workloadIdx int, namespaced bool) 
 	return addr + "/128"
 }
 
-var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", func() {
+var _ = infrastructure.DatastoreDescribe("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers
 		felixPID int
 		client   client.Interface
@@ -103,25 +100,9 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		felixPID = tc.Felixes[0].GetFelixPID()
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	describeConnTests := func(c netsetsConfig) {
@@ -148,9 +129,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		BeforeEach(func() {
 			for ii := range w {
 				iiStr := strconv.Itoa(ii)
-				var ports string
-
-				ports = "3000"
+				ports := "3000"
 				w[ii] = workload.Run(
 					tc.Felixes[0],
 					"w"+iiStr,
@@ -205,8 +184,8 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		})
 
 		assertNoConnectivity := func() {
-			for i := 0; i < len(w); i++ {
-				for j := 0; j < len(w); j++ {
+			for i := range len(w) {
+				for j := range len(w) {
 					if i != j {
 						cc.ExpectNone(w[i], w[j])
 						cc.ExpectNone(nw[i], nw[j])
@@ -1054,15 +1033,6 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 				})
 			})
 		})
-
-		AfterEach(func() {
-			for ii := range w {
-				w[ii].Stop()
-			}
-			for ii := range nw {
-				nw[ii].Stop()
-			}
-		})
 	}
 
 	Context("_BPF-SAFE_ IPv4: Network sets tests with initialized Felix and etcd datastore", func() {
@@ -1104,7 +1074,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 			nw.Configure(client)
 
 			// Generate policies and network sets.
-			for i := 0; i < numPolicies; i++ {
+			for i := range numPolicies {
 				pol := api.NewGlobalNetworkPolicy()
 				pol.Name = fmt.Sprintf("policy-%d", i)
 				pol.Spec = api.GlobalNetworkPolicySpec{
@@ -1120,7 +1090,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 				}
 				policies = append(policies, pol)
 			}
-			for i := 0; i < numNetworkSets; i++ {
+			for i := range numNetworkSets {
 				ns := api.NewGlobalNetworkSet()
 				ns.Name = fmt.Sprintf("netset-%d", i)
 				ns.Labels = map[string]string{
@@ -1140,7 +1110,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		churnPolicies := func(iterations int) {
 			log.Info("Churning policies...")
 			created := false
-			for i := 0; i < iterations; i++ {
+			for range iterations {
 				if created {
 					for _, pol := range policies {
 						log.WithField("policy", pol.Name).Info("Deleting policy")
@@ -1170,7 +1140,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		churnNetworkSets := func(iterations int) {
 			log.Info("Churning network sets...")
 			created := false
-			for i := 0; i < iterations; i++ {
+			for range iterations {
 				if created {
 					for _, ns := range networkSets {
 						log.WithField("name", ns.Name).Info("Deleting network set")
@@ -1223,7 +1193,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 func generateNets(n int) []string {
 	var nets []string
-	for i := 0; i < n; i++ {
+	for range n {
 		a := rand.Intn(255)
 		b := rand.Intn(255)
 		pr := rand.Intn(16) + 16

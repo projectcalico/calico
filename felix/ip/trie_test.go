@@ -18,8 +18,7 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/ip"
@@ -97,7 +96,7 @@ var _ = Describe("CIDRTrie tests", func() {
 		return s
 	}
 
-	lpm := func(cidr string, expectedCidr string) interface{} {
+	lpm := func(cidr string, expectedCidr string) any {
 		cidrIn := ip.MustParseCIDROrIP(cidr)
 		cidrOut, data := trie.LPM(cidrIn)
 
@@ -438,7 +437,7 @@ var _ = Describe("CIDRTrie tests", func() {
 						update(c)
 					}
 					var expSlice []string
-					expected.Iter(func(cidr string) error {
+					for cidr := range expected.All() {
 						expSlice = append(expSlice, cidr)
 
 						path := lookup(cidr)
@@ -446,9 +445,7 @@ var _ = Describe("CIDRTrie tests", func() {
 							Expect(expected.Contains(c)).To(BeTrue(), fmt.Sprintf(
 								"Trie returned a path (%v) including a CIDR that wasn't supposed to be in the trie (%v)", path, c))
 						}
-
-						return nil
-					})
+					}
 					Expect(contents()).To(ConsistOf(expSlice),
 						fmt.Sprintf("Trie had incorrect contents with this sequence of CIDRs: %s", cidrs))
 				}

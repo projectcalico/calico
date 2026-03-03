@@ -68,11 +68,10 @@ rules:
     verbs:
       - watch
       - list
-  # Watch for changes to Kubernetes (Baseline)AdminNetworkPolicies.
+  # Watch for changes to Kubernetes ClusterNetworkPolicies.
   - apiGroups: ["policy.networking.k8s.io"]
     resources:
-      - adminnetworkpolicies
-      - baselineadminnetworkpolicies
+      - clusternetworkpolicies
     verbs:
       - watch
       - list
@@ -192,6 +191,14 @@ rules:
     verbs:
       - get
 {{- end }}
+  # For monitoring KubeVirt live migration.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
 {{- end }}
 
 ---

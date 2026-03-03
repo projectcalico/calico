@@ -88,7 +88,6 @@ func (p *watchProcessor) Process() {
 
 	// Start the individual watchers for each template.
 	for _, t := range ts {
-		t := t
 		p.wg.Add(1)
 		go p.monitorPrefix(t)
 	}

@@ -1,0 +1,273 @@
+version: v1.0
+
+name: banzai-calico vpp
+# This file contains e2e runs for VPP.
+
+agent:
+  machine:
+    type: c1-standard-1
+    os_image: ubuntu2204
+
+execution_time_limit:
+  hours: 12
+
+global_job_config:
+  prologue:
+    commands_file: ../scripts/global_prologue.sh
+  epilogue:
+    always:
+      commands:
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh || true
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+  env_vars:
+    - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+      value: "-e CLIENT_TYPE=k8s"
+    - name: K8S_VERSION
+      value: "stable-1"
+    - name: INSTALLER
+      value: operator
+    - name: ENABLE_CLOUD_PROVIDER
+      value: "false" # in-tree providers not supported in k8s 1.27+
+    - name: FUNCTIONAL_AREA
+      value: "vpp.yml"
+    - name: GS_BUCKET
+      value: "vpp-results"
+    - name: DATAPLANE
+      value: CalicoVPP
+    - name: K8S_E2E_FLAGS
+      value: --ginkgo.focus=(\[sig-calico\]|Dataplane:BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy)
+    - name: USE_LATEST_RELEASE
+      value: "false"
+    - name: ENABLE_EXTERNAL_NODE
+      value: "true"
+    - name: ENCAPSULATION_TYPE
+      value: "IPIP"
+    - name: IPV4_POD_CIDR
+      value: "192.168.0.0/16"
+    - name: BGP_STATUS
+      value: "Enabled"
+    - name: CNI_PLUGIN
+      value: "Calico"
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/"
+    - name: RELEASE_STREAM
+      value: "master"
+    - name: VPP_VERSION
+      value: "master"
+
+blocks:
+  - name: k8s-e2e ST
+    dependencies: []
+    task:
+      jobs:
+        - name: v3.28 regression test
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "gcp-kubeadm"
+            - env_var: VPP_MANIFEST_FILE
+              values:
+                - "calico-vpp-nohuge.yaml"
+            - env_var: RELEASE_STREAM
+              values: ["v3.28"]
+            - env_var: VPP_VERSION
+              values: ["v3.28.0"]
+
+        - name: VPP-kadm
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "gcp-kubeadm"
+                - "aws-kubeadm"
+            - env_var: VPP_MANIFEST_FILE
+              values:
+                - "calico-vpp-nohuge.yaml"
+
+        - name: VPP-openshift
+          execution_time_limit:
+            hours: 8
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "aws-openshift"
+
+        - name: VPP-kadm-Huge
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "gcp-kubeadm"
+                - "aws-kubeadm"
+            - env_var: VPP_MANIFEST_FILE
+              values:
+                - "calico-vpp-dpdk.yaml"
+          env_vars:
+            - name: ENABLE_HUGEPAGES
+              value: "true"
+
+        - name: VPP-kadm-VX-Huge
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "gcp-kubeadm"
+            - env_var: VPP_MANIFEST_FILE
+              values:
+                - "calico-vpp-dpdk.yaml"
+          env_vars:
+            - name: ENABLE_HUGEPAGES
+              value: "true"
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+            - name: BGP_STATUS
+              value: "Enabled"
+
+        - name: VPP-kadm-WG-Huge
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "gcp-kubeadm"
+            - env_var: VPP_MANIFEST_FILE
+              values:
+                - "calico-vpp-dpdk.yaml"
+          env_vars:
+            - name: ENABLE_HUGEPAGES
+              value: "true"
+            - name: ENABLE_WIREGUARD
+              value: "true"
+
+        - name: VPP-EKS
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: EKS_CNI
+              values:
+                - calico
+            - env_var: VPP_MANIFEST_FILE
+              values:
+                - calico-vpp-eks.yaml
+          env_vars:
+            - name: PROVISIONER
+              value: aws-eks
+            - name: IPV4_POD_CIDR
+              value: "172.16.0.0/16"
+            - name: FAILSAFE_443
+              value: "true"
+            # Skipping these upstream k8s tests since they are failing because EKS control plane nodes can't reach the pod net:
+            # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
+            # - [IT] "Proxy version v1 should proxy through a service and a pod"
+            # - [IT] "ReplicaSet should serve a basic image on each replica with a public image"
+            # - [IT] "ReplicationController should serve a basic image on each replica with a public image"
+            # - [It] "DNS should provide DNS for ExternalName services"
+            # - [It] "DNS should provide DNS for pods for Hostname"
+            # - [It] "DNS should provide DNS for pods for Subdomain"
+            # - [It] "DNS should provide DNS for services"
+            # - [It] "DNS should provide DNS for the cluster"
+            # - [It] "DNS should resolve DNS of partial qualified names for services"
+            # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.focus=(\[sig-calico\]|Dataplane-BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+
+        - name: VPP-EKS-dpdk
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: EKS_CNI
+              values:
+                - calico
+            - env_var: VPP_MANIFEST_FILE
+              values:
+                - calico-vpp-eks-dpdk.yaml
+          env_vars:
+            - name: PROVISIONER
+              value: aws-eks
+            - name: ENABLE_HUGEPAGES
+              value: "true"
+            - name: IPV4_POD_CIDR
+              value: "172.16.0.0/16"
+            - name: FAILSAFE_443
+              value: "true"
+            # Skipping these upstream k8s tests since they are failing because EKS control plane nodes can't reach the pod net:
+            # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
+            # - [IT] "Proxy version v1 should proxy through a service and a pod"
+            # - [IT] "ReplicaSet should serve a basic image on each replica with a public image"
+            # - [IT] "ReplicationController should serve a basic image on each replica with a public image"
+            # - [It] "DNS should provide DNS for ExternalName services"
+            # - [It] "DNS should provide DNS for pods for Hostname"
+            # - [It] "DNS should provide DNS for pods for Subdomain"
+            # - [It] "DNS should provide DNS for services"
+            # - [It] "DNS should provide DNS for the cluster"
+            # - [It] "DNS should resolve DNS of partial qualified names for services"
+            # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.focus=(\[sig-calico\]|Dataplane-BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+
+        - name: Iptables (Openshift)
+          execution_time_limit:
+            hours: 6
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "aws-openshift"
+          env_vars:
+            - name: DATAPLANE
+              value: "CalicoIptables"
+
+        - name: VPP-kadm-IPSec-Huge
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "aws-kubeadm"
+            - env_var: VPP_MANIFEST_FILE
+              values:
+                - "calico-vpp-dpdk.yaml"
+          env_vars:
+            - name: ENABLE_HUGEPAGES
+              value: "true"
+            - name: ENABLE_VPP_IPSEC
+              value: "true"
+
+promotions:
+  - name: Cleanup jobs
+    pipeline_file: cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+
+after_pipeline:
+  task:
+    jobs:
+      - name: Reports
+        commands:
+          - test-results gen-pipeline-report --force

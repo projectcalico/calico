@@ -42,7 +42,7 @@ COPY windows-packaging/CalicoWindows/libs/hns/hns.psm1 /CalicoWindows/libs/hns/h
 COPY windows-packaging/nssm.exe /nssm.exe
 COPY windows-packaging/CalicoWindows/uninstall-calico-hpc.ps1 /uninstall-calico.ps1
 
-ENV PATH=$PATH;/CalicoWindows
+ENV PATH="$PATH;C:\CalicoWindows;C:\Windows\System32;C:\Windows;C:\Windows\System32\WindowsPowerShell\v1.0;C:\Program Files\PowerShell"
 WORKDIR /CalicoWindows
 # The nanoserver image does not have powershell but this works because
 # this container will be running on the host.

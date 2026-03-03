@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	typeIPAMHost = reflect.TypeOf(IPAMHost{})
+	typeIPAMHost = reflect.TypeFor[IPAMHost]()
 )
 
 type IPAMHostKey struct {
@@ -48,6 +48,10 @@ func (key IPAMHostKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key IPAMHostKey) valueType() (reflect.Type, error) {
 	return typeIPAMHost, nil
+}
+
+func (key IPAMHostKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[IPAMHost](key, rawData)
 }
 
 func (key IPAMHostKey) String() string {

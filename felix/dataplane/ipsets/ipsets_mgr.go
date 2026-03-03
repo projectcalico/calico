@@ -84,7 +84,7 @@ func (m *IPSetsManager) GetIPSetMembers(setID string) (members set.Set[string], 
 	return
 }
 
-func (m *IPSetsManager) OnUpdate(msg interface{}) {
+func (m *IPSetsManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetDeltaUpdate:

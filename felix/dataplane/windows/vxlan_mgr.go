@@ -67,7 +67,7 @@ func newVXLANManager(hcn hcnInterface, hostname string, networkName *regexp.Rege
 	}
 }
 
-func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
+func (m *vxlanManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
 		if msg.Types&proto.RouteType_REMOTE_WORKLOAD != 0 && msg.IpPoolType == proto.IPPoolType_VXLAN {
@@ -206,32 +206,32 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 	}
 
 	// Remove routes that are no longer needed.
-	netPolsToRemove.Iter(func(polSetting hcn.RemoteSubnetRoutePolicySetting) error {
+	for polSetting := range netPolsToRemove.All() {
 		polReq := wrapPolSettings(polSetting)
 		if polReq == nil {
-			return nil
+			continue
 		}
 		err = network.RemovePolicy(*polReq)
 		if err != nil {
 			logrus.WithError(err).WithField("request", polSetting).Error("Failed to remove unwanted VXLAN route policy")
-			return nil
+			continue
 		}
-		return set.RemoveItem
-	})
+		netPolsToRemove.Discard(polSetting)
+	}
 
 	// Add new routes.
-	netPolsToAdd.Iter(func(item hcn.RemoteSubnetRoutePolicySetting) error {
+	for item := range netPolsToAdd.All() {
 		polReq := wrapPolSettings(item)
 		if polReq == nil {
-			return nil
+			continue
 		}
 		err = network.AddPolicy(*polReq)
 		if err != nil {
 			logrus.WithError(err).WithField("request", polReq).Error("Failed to add VXLAN route policy")
-			return nil
+			continue
 		}
-		return set.RemoveItem
-	})
+		netPolsToAdd.Discard(item)
+	}
 
 	// Wrap up and check for errors.
 	if netPolsToAdd.Len() == 0 && netPolsToRemove.Len() == 0 {

@@ -17,6 +17,7 @@ package errors
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,7 +27,7 @@ import (
 // Error indicating a problem connecting to the backend.
 type ErrorDatastoreError struct {
 	Err        error
-	Identifier interface{}
+	Identifier any
 }
 
 func (e ErrorDatastoreError) Unwrap() error {
@@ -58,7 +59,7 @@ func (e ErrorDatastoreError) Status() metav1.Status {
 // update a nonexistent resource.
 type ErrorResourceDoesNotExist struct {
 	Err        error
-	Identifier interface{}
+	Identifier any
 }
 
 func (e ErrorResourceDoesNotExist) Error() string {
@@ -72,7 +73,7 @@ func (e ErrorResourceDoesNotExist) Unwrap() error {
 // Error indicating an operation is not supported.
 type ErrorOperationNotSupported struct {
 	Operation  string
-	Identifier interface{}
+	Identifier any
 	Reason     string
 }
 
@@ -88,7 +89,7 @@ func (e ErrorOperationNotSupported) Error() string {
 // resource that already exists.
 type ErrorResourceAlreadyExists struct {
 	Err        error
-	Identifier interface{}
+	Identifier any
 }
 
 func (e ErrorResourceAlreadyExists) Unwrap() error {
@@ -119,7 +120,7 @@ type ErrorValidation struct {
 
 type ErroredField struct {
 	Name   string
-	Value  interface{}
+	Value  any
 	Reason string
 }
 
@@ -164,7 +165,7 @@ func (e ErrorInsufficientIdentifiers) Error() string {
 // Error indicating an atomic update attempt that failed due to a update conflict.
 type ErrorResourceUpdateConflict struct {
 	Err        error
-	Identifier interface{}
+	Identifier any
 }
 
 func (e ErrorResourceUpdateConflict) Unwrap() error {
@@ -212,7 +213,7 @@ func (e ErrorPartialFailure) Error() string {
 
 // UpdateErrorIdentifier modifies the supplied error to use the new resource
 // identifier.
-func UpdateErrorIdentifier(err error, id interface{}) error {
+func UpdateErrorIdentifier(err error, id any) error {
 	if err == nil {
 		return nil
 	}
@@ -248,48 +249,49 @@ func (e ErrorParsingDatastoreEntry) Error() string {
 	return fmt.Sprintf("failed to parse datastore entry key=%s; value=%s: %v", e.RawKey, e.RawValue, e.Err)
 }
 
-type ErrorAdminPolicyConversion struct {
+type ErrorClusterNetworkPolicyConversion struct {
 	PolicyName string
-	Rules      []ErrorAdminPolicyConversionRule
+	Rules      []ErrorClusterNetworkPolicyConversionRule
 }
 
-func (e *ErrorAdminPolicyConversion) BadEgressRule(rule any, reason string) {
-	e.Rules = append(e.Rules, ErrorAdminPolicyConversionRule{
+func (e *ErrorClusterNetworkPolicyConversion) BadEgressRule(rule any, reason string) {
+	e.Rules = append(e.Rules, ErrorClusterNetworkPolicyConversionRule{
 		EgressRule:  rule,
 		IngressRule: nil,
 		Reason:      reason,
 	})
 }
 
-func (e *ErrorAdminPolicyConversion) BadIngressRule(rule any, reason string) {
-	e.Rules = append(e.Rules, ErrorAdminPolicyConversionRule{
+func (e *ErrorClusterNetworkPolicyConversion) BadIngressRule(rule any, reason string) {
+	e.Rules = append(e.Rules, ErrorClusterNetworkPolicyConversionRule{
 		EgressRule:  nil,
 		IngressRule: rule,
 		Reason:      reason,
 	})
 }
 
-func (e ErrorAdminPolicyConversion) Error() string {
-	s := fmt.Sprintf("policy: %s", e.PolicyName)
+func (e ErrorClusterNetworkPolicyConversion) Error() string {
+	var s strings.Builder
+	s.WriteString(fmt.Sprintf("policy: %s", e.PolicyName))
 
 	switch {
 	case len(e.Rules) == 0:
-		s += ": unknown policy conversion error"
+		s.WriteString(": unknown policy conversion error")
 	case len(e.Rules) == 1:
 		f := e.Rules[0]
 
-		s += fmt.Sprintf(": error with rule %s", f)
+		s.WriteString(fmt.Sprintf(": error with rule %s", f))
 	default:
-		s += ": error with the following rules:\n"
+		s.WriteString(": error with the following rules:\n")
 		for _, f := range e.Rules {
-			s += fmt.Sprintf("-  %s\n", f)
+			s.WriteString(fmt.Sprintf("-  %s\n", f))
 		}
 	}
 
-	return s
+	return s.String()
 }
 
-func (e ErrorAdminPolicyConversion) GetError() error {
+func (e ErrorClusterNetworkPolicyConversion) GetError() error {
 	if len(e.Rules) == 0 {
 		return nil
 	}
@@ -297,13 +299,13 @@ func (e ErrorAdminPolicyConversion) GetError() error {
 	return e
 }
 
-type ErrorAdminPolicyConversionRule struct {
+type ErrorClusterNetworkPolicyConversionRule struct {
 	EgressRule  any
 	IngressRule any
 	Reason      string
 }
 
-func (e ErrorAdminPolicyConversionRule) String() string {
+func (e ErrorClusterNetworkPolicyConversionRule) String() string {
 	var fieldString string
 
 	switch {
@@ -376,23 +378,24 @@ func (e *ErrorPolicyConversion) BadIngressRule(
 }
 
 func (e ErrorPolicyConversion) Error() string {
-	s := fmt.Sprintf("policy: %s", e.PolicyName)
+	var s strings.Builder
+	s.WriteString(fmt.Sprintf("policy: %s", e.PolicyName))
 
 	switch {
 	case len(e.Rules) == 0:
-		s += ": unknown policy conversion error"
+		s.WriteString(": unknown policy conversion error")
 	case len(e.Rules) == 1:
 		f := e.Rules[0]
 
-		s += fmt.Sprintf(": error with rule %s", f)
+		s.WriteString(fmt.Sprintf(": error with rule %s", f))
 	default:
-		s += ": error with the following rules:\n"
+		s.WriteString(": error with the following rules:\n")
 		for _, f := range e.Rules {
-			s += fmt.Sprintf("-  %s\n", f)
+			s.WriteString(fmt.Sprintf("-  %s\n", f))
 		}
 	}
 
-	return s
+	return s.String()
 }
 
 func (e ErrorPolicyConversion) GetError() error {

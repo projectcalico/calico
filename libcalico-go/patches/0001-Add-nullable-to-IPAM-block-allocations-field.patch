@@ -11,7 +11,7 @@ diff --git a/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml b/lib
 index 288b068d1d..3c3a54b4a3 100644
 --- a/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml
 +++ b/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml
-@@ -31,6 +31,9 @@ spec:
+@@ -34,6 +34,9 @@ spec:
                  allocations:
                    items:
                      type: integer

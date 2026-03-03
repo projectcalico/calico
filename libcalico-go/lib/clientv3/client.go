@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,7 +65,6 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 
 // NewFromEnv loads the config from ENV variables and returns a connected client.
 func NewFromEnv() (Interface, error) {
-
 	config, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		return nil, err
@@ -181,13 +180,18 @@ func (c client) CalicoNodeStatus() CalicoNodeStatusInterface {
 }
 
 // IPAMConfig returns an interface for managing the IPAMConfig resource.
-func (c client) IPAMConfig() IPAMConfigInterface {
-	return IPAMConfigs{client: c}
+func (c client) IPAMConfiguration() IPAMConfigurationInterface {
+	return IPAMConfigurations{client: c}
 }
 
 // BlockAffinity returns an interface for viewing the IPAM block affinity resources.
 func (c client) BlockAffinities() BlockAffinityInterface {
 	return blockAffinities{client: c}
+}
+
+// LiveMigrations returns an interface for managing LiveMigration resources.
+func (c client) LiveMigrations() LiveMigrationInterface {
+	return liveMigrations{client: c}
 }
 
 // BGPFilter returns an interface for managing the BGPFilter resource.
@@ -208,6 +212,17 @@ func filterIPPool(pool *v3.IPPool, ipVersion int) bool {
 		log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
 		return false
 	}
+
+	if pool.Status != nil {
+		// Skip any pools that have been marked as unavailable for allocations by the IP pool controller in kube-controllers.
+		for _, condition := range pool.Status.Conditions {
+			if condition.Type == v3.IPPoolConditionAllocatable && condition.Status == metav1.ConditionFalse {
+				log.Debugf("Skipping IP pool (%s) with condition Allocatable=false", pool.Name)
+				return false
+			}
+		}
+	}
+
 	if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
 		log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
 		return true
@@ -276,15 +291,15 @@ func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterTyp
 		errs = append(errs, err)
 	}
 
-	err = c.ensureTierExists(ctx, names.AdminNetworkPolicyTierName, v3.Pass, v3.AdminNetworkPolicyTierOrder)
+	err = c.ensureTierExists(ctx, names.KubeAdminTierName, v3.Pass, v3.KubeAdminTierOrder)
 	if err != nil {
-		log.WithError(err).Info("Unable to initialize adminnetworkpolicy Tier")
+		log.WithError(err).Info("Unable to initialize kube-admin Tier")
 		errs = append(errs, err)
 	}
 
-	err = c.ensureTierExists(ctx, names.BaselineAdminNetworkPolicyTierName, v3.Pass, v3.BaselineAdminNetworkPolicyTierOrder)
+	err = c.ensureTierExists(ctx, names.KubeBaselineTierName, v3.Pass, v3.KubeBaselineTierOrder)
 	if err != nil {
-		log.WithError(err).Info("Unable to initialize baselineadminnetworkpolicy Tier")
+		log.WithError(err).Info("Unable to initialize kube-baseline Tier")
 		errs = append(errs, err)
 	}
 

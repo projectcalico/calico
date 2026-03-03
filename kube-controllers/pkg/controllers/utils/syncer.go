@@ -20,7 +20,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -31,14 +31,16 @@ const (
 	Etcdv3 = "etcdv3"
 )
 
-type UpdateHandler func(bapi.Update)
-type StatusHandler func(bapi.SyncStatus)
+type (
+	UpdateHandler func(bapi.Update)
+	StatusHandler func(bapi.SyncStatus)
+)
 
 func NewDataFeed(c client.Interface, dataStore string) *DataFeed {
 	// Kinds to register with on the syncer API.
 	resourceTypes := []watchersyncer.ResourceType{
 		{
-			ListInterface: model.ResourceListOptions{Kind: libapiv3.KindNode},
+			ListInterface: model.ResourceListOptions{Kind: internalapi.KindNode},
 		},
 		{
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindClusterInformation},
@@ -52,13 +54,27 @@ func NewDataFeed(c client.Interface, dataStore string) *DataFeed {
 		{
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
 		},
+
+		// Network policy types
+		{
+			ListInterface: model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy},
+		},
+		{
+			ListInterface: model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy},
+		},
+		{
+			ListInterface: model.ResourceListOptions{Kind: apiv3.KindStagedNetworkPolicy},
+		},
+		{
+			ListInterface: model.ResourceListOptions{Kind: apiv3.KindStagedGlobalNetworkPolicy},
+		},
 	}
 	type accessor interface {
 		Backend() bapi.Client
 	}
 
 	d := &DataFeed{
-		registrations:       map[interface{}][]UpdateHandler{},
+		registrations:       map[any][]UpdateHandler{},
 		statusRegistrations: []StatusHandler{},
 		dataStore:           dataStore,
 	}
@@ -70,12 +86,19 @@ type DataFeed struct {
 	syncer bapi.Syncer
 
 	// Registrations
-	registrations       map[interface{}][]UpdateHandler
+	registrations       map[any][]UpdateHandler
 	statusRegistrations []StatusHandler
 	dataStore           string
 }
 
 func (d *DataFeed) Start() {
+	// We can skip this if there are no registrations.
+	if len(d.registrations) == 0 && len(d.statusRegistrations) == 0 {
+		logrus.Info("No registrations for data feed, skipping start")
+		return
+	}
+
+	logrus.Info("Starting syncer")
 	d.syncer.Start()
 }
 
@@ -130,8 +153,8 @@ func (d *DataFeed) updateResourceVersion(update bapi.Update) {
 	switch key := update.Key.(type) {
 	case model.ResourceKey:
 		switch key.Kind {
-		case libapiv3.KindNode:
-			node := update.Value.(*libapiv3.Node)
+		case internalapi.KindNode:
+			node := update.Value.(*internalapi.Node)
 			node.ResourceVersion = update.Revision
 		case apiv3.KindClusterInformation:
 			clusterInformation := update.Value.(*apiv3.ClusterInformation)

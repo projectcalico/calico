@@ -33,22 +33,26 @@ func init() {
 	maps.SetSize(AffinityMapParameters.VersionedName(), AffinityMapParameters.MaxEntries)
 	maps.SetSize(SendRecvMsgMapParameters.VersionedName(), SendRecvMsgMapParameters.MaxEntries)
 	maps.SetSize(CTNATsMapParameters.VersionedName(), CTNATsMapParameters.MaxEntries)
+	maps.SetSize(MaglevMapParameters.VersionedName(), MaglevMapParameters.MaxEntries)
 
 	maps.SetSize(FrontendMapV6Parameters.VersionedName(), FrontendMapV6Parameters.MaxEntries)
 	maps.SetSize(BackendMapV6Parameters.VersionedName(), BackendMapV6Parameters.MaxEntries)
 	maps.SetSize(AffinityMapV6Parameters.VersionedName(), AffinityMapV6Parameters.MaxEntries)
 	maps.SetSize(SendRecvMsgMapV6Parameters.VersionedName(), SendRecvMsgMapV6Parameters.MaxEntries)
 	maps.SetSize(CTNATsMapV6Parameters.VersionedName(), CTNATsMapV6Parameters.MaxEntries)
+	maps.SetSize(MaglevMapV6Parameters.VersionedName(), MaglevMapV6Parameters.MaxEntries)
 }
 
-func SetMapSizes(fsize, bsize, asize int) {
+func SetMapSizes(fsize, bsize, asize, msize int) {
 	maps.SetSize(FrontendMapParameters.VersionedName(), fsize)
 	maps.SetSize(BackendMapParameters.VersionedName(), bsize)
 	maps.SetSize(AffinityMapParameters.VersionedName(), asize)
+	maps.SetSize(MaglevMapParameters.VersionedName(), msize)
 
 	maps.SetSize(FrontendMapV6Parameters.VersionedName(), fsize)
 	maps.SetSize(BackendMapV6Parameters.VersionedName(), bsize)
 	maps.SetSize(AffinityMapV6Parameters.VersionedName(), asize)
+	maps.SetSize(MaglevMapV6Parameters.VersionedName(), msize)
 }
 
 //	struct calico_nat_v4_key {
@@ -202,12 +206,14 @@ const (
 	NATFlgExternalLocal = 0x1
 	NATFlgInternalLocal = 0x2
 	NATFlgExclude       = 0x4
+	NATFlgMaglev        = 0x8
 )
 
 var flgTostr = map[int]string{
 	NATFlgExternalLocal: "external-local",
 	NATFlgInternalLocal: "internal-local",
 	NATFlgExclude:       "nat-exclude",
+	NATFlgMaglev:        "maglev",
 }
 
 type FrontendValue [frontendValueSize]byte
@@ -252,7 +258,7 @@ func (v FrontendValue) FlagsAsString() string {
 	flgs := v.Flags()
 	fstr := ""
 
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		flg := uint32(1 << i)
 		if flgs&flg != 0 {
 			fstr += flgTostr[int(flg)]
@@ -361,6 +367,127 @@ func BackendValueFromBytes(b []byte) BackendValueInterface {
 	var v BackendValue
 	copy(v[:], b)
 	return v
+}
+
+//	struct cali_maglev_key {
+//		__u32 svc_id;
+//		__u32 ordinal; // should always be a value of [0..M-1], where M is a very large prime number. -Alex
+//	};
+const MaglevBackendKeySize = 8
+
+type MaglevBackendKey [MaglevBackendKeySize]byte
+
+func NewMaglevBackendKey(svcID uint32, ordinal uint32) MaglevBackendKey {
+	var k MaglevBackendKey
+	binary.LittleEndian.PutUint32(k[0:4], svcID)
+	binary.LittleEndian.PutUint32(k[4:8], ordinal)
+	return k
+}
+
+type MaglevBackendKeyInterface interface {
+	SvcID() uint32
+	Ordinal() uint32
+	AsBytes() []byte
+}
+
+func NewMaglevBackendKeyIntf(svcID, ordinal uint32) MaglevBackendKeyInterface {
+	return NewMaglevBackendKey(svcID, uint32(ordinal))
+}
+
+func (k MaglevBackendKey) SvcID() uint32 {
+	return binary.LittleEndian.Uint32(k[0:4])
+}
+
+func (k MaglevBackendKey) Ordinal() uint32 {
+	return binary.LittleEndian.Uint32(k[4:8])
+}
+
+func (k MaglevBackendKey) AsBytes() []byte {
+	return k[:]
+}
+
+func (k MaglevBackendKey) String() string {
+	svcID := k.SvcID()
+	ord := k.Ordinal()
+	return fmt.Sprintf("MaglevBackendKey{SvcID: %d, Ordinal: %d}", svcID, ord)
+}
+
+func MaglevBackendKeyFromBytes(b []byte) MaglevBackendKeyInterface {
+	var k MaglevBackendKey
+	copy(k[:], b)
+	return k
+}
+
+var _ MaglevBackendKeyInterface = MaglevBackendKey{}
+
+const maglevBackendValueSize = backendValueSize
+
+var MaglevMapParameters = maps.MapParameters{
+	Type:       "hash",
+	KeySize:    MaglevBackendKeySize,
+	ValueSize:  maglevBackendValueSize,
+	MaxEntries: 1009,
+	Name:       "cali_v4_mglv",
+	Flags:      unix.BPF_F_NO_PREALLOC,
+	Version:    2,
+}
+
+func MaglevMap() maps.MapWithExistsCheck {
+	return maps.NewPinnedMap(MaglevMapParameters)
+}
+
+type MaglevMapMem map[MaglevBackendKey]BackendValue
+
+// Equal implements the comparable interface.
+func (m MaglevMapMem) Equal(cmp MaglevMapMem) bool {
+	if len(m) != len(cmp) {
+		return false
+	}
+
+	for k, v := range m {
+		if v2, ok := cmp[k]; !ok || v != v2 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// LoadMaglevMap loads the Maglev NAT map into a go map or returns an error
+func LoadMaglevMap(m maps.Map) (MaglevMapMem, error) {
+	ret := make(MaglevMapMem)
+
+	if err := m.Open(); err != nil {
+		return nil, err
+	}
+
+	iterFn := MaglevMapMemIter(ret)
+
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
+		iterFn(k, v)
+		return maps.IterNone
+	})
+	if err != nil {
+		ret = nil
+	}
+
+	return ret, err
+}
+
+// MaglevMapMemIter returns maps.MapIter that loads the provided MaglevMapMem
+func MaglevMapMemIter(m MaglevMapMem) func(k, v []byte) {
+	ks := len(MaglevBackendKey{})
+	vs := len(BackendValue{})
+
+	return func(k, v []byte) {
+		var key MaglevBackendKey
+		copy(key[:ks], k[:ks])
+
+		var val BackendValue
+		copy(val[:vs], v[:vs])
+
+		m[key] = val
+	}
 }
 
 var FrontendMapParameters = maps.MapParameters{

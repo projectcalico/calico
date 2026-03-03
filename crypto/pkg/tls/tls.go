@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -82,8 +83,8 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 	var result []uint16
 	supportedCiphers := supportedCipherMap()
 
-	cipherNames := strings.Split(ciphers, ",")
-	for _, name := range cipherNames {
+	cipherNames := strings.SplitSeq(ciphers, ",")
+	for name := range cipherNames {
 		name = strings.TrimSpace(name)
 		cipherValue, ok := supportedCiphers[name]
 		if !ok {
@@ -95,17 +96,36 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 	return result, nil
 }
 
+// ParseTLSVersion parses TLS version string and returns the corresponding tls version constant
+// Accepts: "1.2", "1.3", or empty string (defaults to "1.2")
+func ParseTLSVersion(version string) (uint16, error) {
+	switch version {
+	case "", "1.2":
+		return tls.VersionTLS12, nil
+	case "1.3":
+		return tls.VersionTLS13, nil
+	default:
+		return 0, fmt.Errorf("unsupported TLS version: %s (supported versions: 1.2, 1.3)", version)
+	}
+}
+
 // NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
 // boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
 func NewTLSConfig() (*tls.Config, error) {
-	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
 	env := os.Getenv("TLS_CIPHER_SUITES")
 	ciphers, err := ParseTLSCiphers(env)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
 	}
+
+	minVersion, err := ParseTLSVersion(os.Getenv("TLS_MIN_VERSION"))
+	if err != nil {
+		log.WithError(err).Warn("Invalid TLS_MIN_VERSION, defaulting to TLS 1.2")
+		minVersion = tls.VersionTLS12
+	}
+
 	return &tls.Config{
-		MinVersion:   tls.VersionTLS12,
+		MinVersion:   minVersion,
 		MaxVersion:   tls.VersionTLS13,
 		CipherSuites: ciphers,
 	}, nil
@@ -138,4 +158,19 @@ func NewMutualTLSConfig(cert, key, ca string) (*tls.Config, error) {
 	tlsCfg.ClientCAs = certPool
 
 	return tlsCfg, nil
+}
+
+func StringToTLSClientAuthType(clientAuthType string) (tls.ClientAuthType, error) {
+	switch clientAuthType {
+	case string(apiv3.RequireAndVerifyClientCert), "":
+		return tls.RequireAndVerifyClientCert, nil
+	case string(apiv3.RequireAnyClientCert):
+		return tls.RequireAnyClientCert, nil
+	case string(apiv3.VerifyClientCertIfGiven):
+		return tls.VerifyClientCertIfGiven, nil
+	case string(apiv3.NoClientCert):
+		return tls.NoClientCert, nil
+	default:
+		return tls.RequireAndVerifyClientCert, fmt.Errorf("invalid client authentication type: %s. Defaulting to RequireAndVerifyClientCert", clientAuthType)
+	}
 }

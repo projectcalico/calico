@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -21,7 +19,7 @@ import (
 	"net/http"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -87,14 +85,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Prometheus metrics tests", 
 			// Make sure we _can_ get the debug paths on the debug server...
 			Expect(get(debugServer, debugPath)).NotTo(HaveOccurred())
 			Expect(get(metricsServer, debugPath)).To(HaveOccurred())
-		})
-
-		AfterEach(func() {
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 	})
 })

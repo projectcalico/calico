@@ -13,8 +13,9 @@
 # limitations under the License.
 
 ARG CALICO_BASE
+ARG UBI_IMAGE
 
-FROM alpine:3 AS builder
+FROM ${UBI_IMAGE} AS builder
 
 # Make sure the status file is owned by our user.
 RUN mkdir /status
@@ -44,6 +45,14 @@ LABEL org.opencontainers.image.title="Calico Flannel migration controller"
 LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+LABEL description="Calico Flannel migration controller updates a flannel cluster to Calico"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico Flannel migration controller"
+LABEL release=1
+LABEL summary="Calico Flannel migration controller updates a flannel cluster to Calico"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
 
 COPY --from=source / /
 

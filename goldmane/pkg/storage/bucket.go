@@ -121,10 +121,9 @@ func (b *AggregationBucket) Reset(start, end int64) {
 		b.Flows = set.New[*DiachronicFlow]()
 	} else {
 		// Otherwise, use the existing set but clear it.
-		b.Flows.Iter(func(item *DiachronicFlow) error {
+		for item := range b.Flows.All() {
 			b.Flows.Discard(item)
-			return nil
-		})
+		}
 	}
 }
 
@@ -145,12 +144,11 @@ func (b *AggregationBucket) Iter(fn func(FlowBuilder) bool) {
 		return
 	}
 
-	b.Flows.Iter(func(d *DiachronicFlow) error {
+	for d := range b.Flows.All() {
 		if fn(NewDeferredFlowBuilder(d, b.StartTime, b.EndTime)) {
-			return set.StopIteration
+			break
 		}
-		return nil
-	})
+	}
 }
 
 func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {

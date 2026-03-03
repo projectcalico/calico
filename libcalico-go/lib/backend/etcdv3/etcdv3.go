@@ -34,10 +34,10 @@ import (
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
@@ -164,6 +164,10 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 		return nil, err
 	}
 
+	if err = prepForWrite(d); err != nil {
+		return nil, err
+	}
+
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -209,6 +213,9 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	d.Value = v
 	d.Revision = strconv.FormatInt(txnResp.Header.Revision, 10)
 
+	if err = prepForReturn(d); err != nil {
+		return nil, err
+	}
 	return d, nil
 }
 
@@ -224,6 +231,9 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 
 	err := defaultPolicyName(d)
 	if err != nil {
+		return nil, err
+	}
+	if err = prepForWrite(d); err != nil {
 		return nil, err
 	}
 
@@ -253,7 +263,6 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	).Else(
 		clientv3.OpGet(key),
 	).Commit()
-
 	if err != nil {
 		logCxt.WithError(err).Warning("Update failed")
 		return nil, cerrors.ErrorDatastoreError{Err: err}
@@ -279,6 +288,9 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	d.Value = v
 	d.Revision = strconv.FormatInt(txnResp.Header.Revision, 10)
 
+	if err = prepForReturn(d); err != nil {
+		return nil, err
+	}
 	return d, nil
 }
 
@@ -293,6 +305,9 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 
 	err := defaultPolicyName(d)
 	if err != nil {
+		return nil, err
+	}
+	if err = prepForWrite(d); err != nil {
 		return nil, err
 	}
 
@@ -318,6 +333,9 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 	d.Value = v
 	d.Revision = strconv.FormatInt(resp.Header.Revision, 10)
 
+	if err = prepForReturn(d); err != nil {
+		return nil, err
+	}
 	return d, nil
 }
 
@@ -331,8 +349,6 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	keyCopy := k
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
-
-	k = defaultPolicyKey(k)
 
 	key, err := model.KeyToDefaultDeletePath(k)
 	if err != nil {
@@ -399,8 +415,6 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 	keyCopy := k
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Get request")
-
-	k = defaultPolicyKey(k)
 
 	key, err := model.KeyToDefaultPath(k)
 	if err != nil {
@@ -469,6 +483,9 @@ func (c *etcdV3Client) List(ctx context.Context, l model.ListInterface, revision
 	list := []*model.KVPair{}
 	for _, p := range resp.Kvs {
 		if kv := convertListResponse(p, l); kv != nil {
+			if err = prepForReturn(kv); err != nil {
+				return nil, err
+			}
 			list = append(list, kv)
 		}
 	}
@@ -537,7 +554,7 @@ func calculateListKeyAndOptions(logCxt *log.Entry, l model.ListInterface) (strin
 // EnsureInitialized makes sure that the etcd data is initialized for use by
 // Calico.
 func (c *etcdV3Client) EnsureInitialized() error {
-	//TODO - still need to worry about ready flag.
+	// TODO - still need to worry about ready flag.
 	return nil
 }
 
@@ -547,7 +564,6 @@ func (c *etcdV3Client) Clean() error {
 	_, err := c.etcdClient.Txn(context.Background()).If().Then(
 		clientv3.OpDelete("/calico/", clientv3.WithPrefix()),
 	).Commit()
-
 	if err != nil {
 		return cerrors.ErrorDatastoreError{Err: err}
 	}
@@ -651,6 +667,52 @@ func storePolicyName(name string, annotations map[string]string) (map[string]str
 	return annotations, nil
 }
 
+func prepForWrite(d *model.KVPair) error {
+	// We receive v3 block affinity objects from the client, but they are stored as internalapi objects
+	// for historical reasons.
+	if _, ok := d.Value.(*apiv3.BlockAffinity); ok {
+		value := d.Value.(*apiv3.BlockAffinity)
+
+		// Convert the v3 API object to an internalapi object for storage.
+		v1Obj := internalapi.NewBlockAffinity()
+		v1Obj.ObjectMeta = value.ObjectMeta
+		v1Obj.Spec = internalapi.BlockAffinitySpec{
+			State:   string(value.Spec.State),
+			Node:    value.Spec.Node,
+			Type:    value.Spec.Type,
+			CIDR:    value.Spec.CIDR,
+			Deleted: fmt.Sprintf("%t", value.Spec.Deleted),
+		}
+		d.Value = v1Obj
+	}
+	return nil
+}
+
+func prepForReturn(d *model.KVPair) error {
+	// We store internalapi block affinity objects, but we return v3 API objects to the client.
+	// So convert them here.
+	if _, ok := d.Value.(*internalapi.BlockAffinity); ok {
+		value := d.Value.(*internalapi.BlockAffinity)
+
+		// Convert the internalapi object to a v3 API object for return.
+		v3Obj := apiv3.NewBlockAffinity()
+		v3Obj.ObjectMeta = value.ObjectMeta
+		deleted, err := strconv.ParseBool(value.Spec.Deleted)
+		if err != nil {
+			return fmt.Errorf("error parsing BlockAffinity.Spec.Deleted field: %w", err)
+		}
+		v3Obj.Spec = apiv3.BlockAffinitySpec{
+			State:   apiv3.BlockAffinityState(value.Spec.State),
+			Node:    value.Spec.Node,
+			Type:    value.Spec.Type,
+			CIDR:    value.Spec.CIDR,
+			Deleted: deleted,
+		}
+		d.Value = v3Obj
+	}
+	return nil
+}
+
 func defaultPolicyName(d *model.KVPair) error {
 	if _, ok := d.Value.(*apiv3.NetworkPolicy); ok {
 		value := d.Value.(*apiv3.NetworkPolicy)
@@ -663,14 +725,6 @@ func defaultPolicyName(d *model.KVPair) error {
 		}
 
 		value.Annotations = annotations
-
-		// Now that we've captured the original name, canonicalize the name for storage,
-		// adding the tier prefix to ensure policies with the same name in different tiers do not conflict.
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
 	}
 
 	if _, ok := d.Value.(*apiv3.GlobalNetworkPolicy); ok {
@@ -682,12 +736,6 @@ func defaultPolicyName(d *model.KVPair) error {
 		}
 
 		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
 	}
 
 	if _, ok := d.Value.(*apiv3.StagedNetworkPolicy); ok {
@@ -699,12 +747,6 @@ func defaultPolicyName(d *model.KVPair) error {
 		}
 
 		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
 	}
 
 	if _, ok := d.Value.(*apiv3.StagedGlobalNetworkPolicy); ok {
@@ -716,32 +758,7 @@ func defaultPolicyName(d *model.KVPair) error {
 		}
 
 		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
 	}
-
-	d.Key = defaultPolicyKey(d.Key)
 
 	return nil
-}
-
-func defaultPolicyKey(k model.Key) model.Key {
-	if _, ok := k.(model.ResourceKey); ok {
-		resourceKey := k.(model.ResourceKey)
-		if resourceKey.Kind == apiv3.KindNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindStagedNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindGlobalNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindStagedGlobalNetworkPolicy {
-			// To avoid conflicts all policies need to have the tier prefix added to the name to ensure they are unique
-			polName := names.TieredPolicyName(resourceKey.Name)
-			resourceKey.Name = polName
-
-			return resourceKey
-		}
-	}
-	return k
 }

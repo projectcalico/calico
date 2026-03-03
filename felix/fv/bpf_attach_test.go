@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
 	"encoding/json"
 	"os"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -59,15 +57,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 
 		err := infra.AddAllowToDatastore("host-endpoint=='true'")
 		Expect(err).NotTo(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("should clean up programs when BPFDataIfacePattern changes", func() {

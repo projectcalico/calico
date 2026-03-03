@@ -40,12 +40,17 @@ type HashreleaseMessageData struct {
 	ImageScanResultURL string
 }
 
+type MessageResponse struct {
+	Channel   string
+	Timestamp string
+}
+
 // PostHashreleaseAnnouncement sends a message to slack about a hashrelease being published.
-func PostHashreleaseAnnouncement(cfg *Config, msg *HashreleaseMessageData) error {
+func PostHashreleaseAnnouncement(cfg *Config, msg *HashreleaseMessageData) (*MessageResponse, error) {
 	message, err := renderMessage(publishedMessageTemplateData, msg)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to render message")
-		return err
+		return nil, err
 	}
 	return sendToSlack(cfg, message)
 }
@@ -69,15 +74,15 @@ func renderMessage(text string, data any) ([]slack.Block, error) {
 }
 
 // sendToSlack sends a message to slack.
-func sendToSlack(cfg *Config, message []slack.Block) error {
+func sendToSlack(cfg *Config, message []slack.Block) (*MessageResponse, error) {
 	if cfg == nil {
-		return fmt.Errorf("no configuration provided")
+		return nil, fmt.Errorf("no configuration provided")
 	}
 	if !cfg.Valid() {
-		return fmt.Errorf("invalid or missing configuration")
+		return nil, fmt.Errorf("invalid or missing configuration")
 	}
 
 	client := slack.New(cfg.Token, slack.OptionDebug(logrus.IsLevelEnabled(logrus.DebugLevel)))
-	_, _, err := client.PostMessage(cfg.Channel, slack.MsgOptionBlocks(message...))
-	return err
+	ch, ts, err := client.PostMessage(cfg.Channel, slack.MsgOptionBlocks(message...))
+	return &MessageResponse{Channel: ch, Timestamp: ts}, err
 }

@@ -16,6 +16,7 @@ package binder
 
 import (
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,8 +118,8 @@ func (p *pollWatcher) poll(events chan<- workloadEvent, stop <-chan bool) {
 }
 
 func parseFilename(name string) (isCred bool, uid string) {
-	if strings.HasSuffix(name, CredentialsExtension) {
-		return true, strings.TrimSuffix(name, CredentialsExtension)
+	if before, ok := strings.CutSuffix(name, CredentialsExtension); ok {
+		return true, before
 	} else {
 		return false, ""
 	}
@@ -126,8 +127,6 @@ func parseFilename(name string) (isCred bool, uid string) {
 
 func copyStringSet(original map[string]bool) map[string]bool {
 	n := make(map[string]bool)
-	for k, v := range original {
-		n[k] = v
-	}
+	maps.Copy(n, original)
 	return n
 }

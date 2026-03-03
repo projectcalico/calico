@@ -7,6 +7,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/go-github/v53/github"
 
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -54,35 +56,27 @@ func TestGitHubRelease(t *testing.T) {
 	t.Run("check release assets", func(t *testing.T) {
 		expectedAssets := append(calicoctlBinaryList(),
 			metadataFileName,
-			"install-calicoctl-windows.ps1",
+			"install-calico-windows.ps1",
 			fmt.Sprintf("calico-windows-%s.zip", releaseVersion),
 			fmt.Sprintf("release-%s.tgz", releaseVersion),
 			fmt.Sprintf("tigera-operator-%s.tgz", releaseVersion),
 			"SHA256SUMS",
 			"ocp.tgz",
+			"LICENSE",
 		)
-		if release.Assets == nil {
-			t.Fatalf("%s release has no assets", releaseVersion)
-		}
-		var diff []string
-		for _, asset := range expectedAssets {
-			if !isAssetPresent(release.Assets, asset) {
-				diff = append(diff, asset)
-			}
-		}
-		if len(diff) > 0 {
-			t.Errorf("release %s is missing the following assets: %v", releaseVersion, diff)
+		actualAssets := getAssets(release)
+		if diff := cmp.Diff(expectedAssets, actualAssets, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+			t.Errorf("release assets mismatch (-expected +actual):\n%s", diff)
 		}
 	})
 }
 
-func isAssetPresent(assets []*github.ReleaseAsset, name string) bool {
-	for _, asset := range assets {
-		if asset.GetName() == name {
-			return true
-		}
+func getAssets(release *github.RepositoryRelease) []string {
+	var assets []string
+	for _, asset := range release.Assets {
+		assets = append(assets, asset.GetName())
 	}
-	return false
+	return assets
 }
 
 func TestGitHubReleaseNotes(t *testing.T) {

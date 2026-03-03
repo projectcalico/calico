@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -22,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -180,24 +178,6 @@ var _ = infrastructure.DatastoreDescribe("policy grouping tests", []apiconfig.Da
 				}
 			}
 		}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					_ = felix.ExecMayFail("iptables-save", "-c")
-					_ = felix.ExecMayFail("ipset", "list")
-				}
-			}
-		}
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 })
 

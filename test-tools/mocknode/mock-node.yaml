@@ -28,7 +28,7 @@ spec:
                   fieldPath: metadata.namespace
             - name: FIPS_MODE_ENABLED
               value: "false"
-          image: calico/mock-node:master
+          image: quay.io/calico/mock-node:master
           imagePullPolicy: IfNotPresent
           name: mock-calico-node
           volumeMounts:

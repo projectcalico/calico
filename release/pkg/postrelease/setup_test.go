@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 var (
@@ -45,5 +46,10 @@ func checkImages(t testing.TB, images string) {
 	list := strings.Split(images, " ")
 	if len(list) == 0 {
 		t.Fatal("No images provided")
+	}
+	for _, image := range list {
+		if strings.Contains(image, operator.DefaultImage) {
+			t.Fatal("Operator images are checked separately, do not include in list of images to check")
+		}
 	}
 }

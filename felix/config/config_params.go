@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,13 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net"
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/consistenthash"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -53,7 +56,8 @@ var (
 	StringRegexp             = regexp.MustCompile(`^.*$`)
 	IfaceParamRegexp         = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
-	HostAddressRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
+	HostAddressRegexp   = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
+	LogActionRateRegexp = regexp.MustCompile(`^([1-9]\d{0,3}/(?:second|minute|hour|day))?$`)
 )
 
 // Source of a config value.  Values from higher-numbered sources override
@@ -180,7 +184,7 @@ type Config struct {
 	WireguardThreadingEnabled      bool          `config:"bool;false"`
 
 	// nftables configuration.
-	NFTablesMode string `config:"oneof(Enabled,Disabled);Disabled"`
+	NFTablesMode string `config:"oneof(Enabled,Disabled,Auto);Auto"`
 
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`
@@ -201,8 +205,7 @@ type Config struct {
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool              `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration     `config:"seconds;1"`
-	BPFKubeProxyHealtzPort             int               `config:"int;10256;non-zero"`
-	BPFKubeProxyEndpointSlicesEnabled  bool              `config:"bool;true"`
+	BPFKubeProxyHealthzPort            int               `config:"int;10256;non-zero"`
 	BPFExtToServiceConnmark            int               `config:"int;0"`
 	BPFPSNATPorts                      numorstring.Port  `config:"portrange;20000:29999"`
 	BPFMapSizeNATFrontend              int               `config:"int;65536;non-zero"`
@@ -221,7 +224,7 @@ type Config struct {
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
-	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);L2Only;non-zero"`
+	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);Enabled;non-zero"`
 	BPFAttachType                      string            `config:"oneof(TCX,TC);TCX;non-zero"`
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
@@ -304,8 +307,6 @@ type Config struct {
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
-	IptablesLockFilePath               string            `config:"file;/run/xtables.lock"`
-	IptablesLockTimeoutSecs            time.Duration     `config:"seconds;0"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	FeatureDetectOverride              map[string]string `config:"keyvaluelist;;"`
 	FeatureGates                       map[string]string `config:"keyvaluelist;;"`
@@ -331,6 +332,8 @@ type Config struct {
 	IptablesMangleAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
 	IptablesFilterDenyAction    string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
 	LogPrefix                   string `config:"string;calico-packet"`
+	LogActionRateLimit          string `config:"log-rate;"`
+	LogActionRateLimitBurst     int    `config:"int(0,9999);5"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
@@ -406,6 +409,11 @@ type Config struct {
 	PrometheusGoMetricsEnabled        bool   `config:"bool;true"`
 	PrometheusProcessMetricsEnabled   bool   `config:"bool;true"`
 	PrometheusWireGuardMetricsEnabled bool   `config:"bool;true"`
+
+	PrometheusMetricsCAFile     string `config:"string;"`
+	PrometheusMetricsCertFile   string `config:"string;"`
+	PrometheusMetricsKeyFile    string `config:"string;"`
+	PrometheusMetricsClientAuth string `config:"oneof(RequireAndVerifyClientCert,RequireAnyClientCert,VerifyClientCertIfGiven,NoClientCert);RequireAndVerifyClientCert"`
 
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
@@ -506,6 +514,17 @@ type Config struct {
 	useNodeResourceUpdates bool
 
 	RequireMTUFile bool `config:"bool;false"`
+
+	// BPFMaglevMaxEndpointsPerService is the maximum number of endpoints
+	// expected to be part of a single Maglev-enabled service.
+	//
+	// Influences the size of the per-service Maglev lookup-tables generated by Felix
+	// and thus the amount of memory reserved.
+	BPFMaglevMaxEndpointsPerService int `config:"int(1:3000);100"`
+
+	// BPFMaglevMaxServices is the maximum number of expected Maglev-enabled
+	// services that Felix will allocate lookup-tables for.
+	BPFMaglevMaxServices int `config:"int(1:3000);100"`
 }
 
 func (config *Config) FilterAllowAction() string {
@@ -564,22 +583,16 @@ func (config *Config) Copy() *Config {
 
 	// Copy the internal state over as a deep copy.
 	cp.internalOverrides = map[string]string{}
-	for k, v := range config.internalOverrides {
-		cp.internalOverrides[k] = v
-	}
+	maps.Copy(cp.internalOverrides, config.internalOverrides)
 
 	cp.sourceToRawConfig = map[Source]map[string]string{}
 	for k, v := range config.sourceToRawConfig {
 		cp.sourceToRawConfig[k] = map[string]string{}
-		for k2, v2 := range v {
-			cp.sourceToRawConfig[k][k2] = v2
-		}
+		maps.Copy(cp.sourceToRawConfig[k], v)
 	}
 
 	cp.rawValues = map[string]string{}
-	for k, v := range config.rawValues {
-		cp.rawValues[k] = v
-	}
+	maps.Copy(cp.rawValues, config.rawValues)
 
 	return &cp
 }
@@ -599,9 +612,7 @@ func (config *Config) ToConfigUpdate() *proto.ConfigUpdate {
 	buf.SourceToRawConfig = map[uint32]*proto.RawConfig{}
 	for source, c := range config.sourceToRawConfig {
 		kvs := map[string]string{}
-		for k, v := range c {
-			kvs[k] = v
-		}
+		maps.Copy(kvs, c)
 		buf.SourceToRawConfig[uint32(source)] = &proto.RawConfig{
 			Source: source.String(),
 			Config: kvs,
@@ -609,9 +620,7 @@ func (config *Config) ToConfigUpdate() *proto.ConfigUpdate {
 	}
 
 	buf.Config = map[string]string{}
-	for k, v := range config.rawValues {
-		buf.Config[k] = v
-	}
+	maps.Copy(buf.Config, config.rawValues)
 
 	return &buf
 }
@@ -622,9 +631,7 @@ func (config *Config) UpdateFromConfigUpdate(configUpdate *proto.ConfigUpdate) (
 	for sourceInt, c := range configUpdate.GetSourceToRawConfig() {
 		source := Source(sourceInt)
 		config.sourceToRawConfig[source] = map[string]string{}
-		for k, v := range c.GetConfig() {
-			config.sourceToRawConfig[source][k] = v
-		}
+		maps.Copy(config.sourceToRawConfig[source], c.GetConfig())
 	}
 	// Note: the ConfigUpdate also carries the rawValues, but we recalculate those by calling resolve(),
 	// which tells us if anything changed as a result.
@@ -685,11 +692,9 @@ func (config *Config) OpenstackActive() bool {
 		log.Debug("OpenStack metadata port set to non-default, assuming OpenStack active")
 		return true
 	}
-	for _, prefix := range config.InterfacePrefixes() {
-		if prefix == "tap" {
-			log.Debug("Interface prefix list contains 'tap', assuming OpenStack")
-			return true
-		}
+	if slices.Contains(config.InterfacePrefixes(), "tap") {
+		log.Debug("Interface prefix list contains 'tap', assuming OpenStack")
+		return true
 	}
 	log.Debug("No evidence this is an OpenStack deployment; disabling OpenStack special-cases")
 	return false
@@ -698,8 +703,8 @@ func (config *Config) OpenstackActive() bool {
 // KubernetesProvider attempts to parse the kubernetes provider, e.g. AKS out of the ClusterType.
 // The ClusterType is a string which contains a set of comma-separated values in no particular order.
 func (config *Config) KubernetesProvider() Provider {
-	settings := strings.Split(config.ClusterType, ",")
-	for _, s := range settings {
+	settings := strings.SplitSeq(config.ClusterType, ",")
+	for s := range settings {
 		p, err := newProvider(s)
 		if err == nil {
 			log.WithFields(log.Fields{"clusterType": config.ClusterType, "provider": p}).Debug(
@@ -711,6 +716,14 @@ func (config *Config) KubernetesProvider() Provider {
 	log.WithField("clusterType", config.ClusterType).Debug(
 		"failed to detect a known kubernetes provider, defaulting to none")
 	return ProviderNone
+}
+
+func (config *Config) BPFLUTSizeMaglev() int {
+	return int(consistenthash.NextPrimeUint16(config.BPFMaglevMaxEndpointsPerService * consistenthash.MaglevEndpointLUTFactor))
+}
+
+func (config *Config) BPFMapSizeMaglev() int {
+	return int(config.BPFLUTSizeMaglev()) * config.BPFMaglevMaxServices
 }
 
 func (config *Config) applyDefaults() {
@@ -768,7 +781,7 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 
 			log.Infof("Parsing value for %v: %v (from %v)",
 				name, rawValue, source)
-			var value interface{}
+			var value any
 			if strings.ToLower(rawValue) == "none" {
 				// Special case: we allow a value of "none" to force the value to
 				// the zero value for a field.  The zero value often differs from
@@ -818,7 +831,7 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 	}
 
 	changedFields = set.New[string]()
-	kind := reflect.TypeOf(Config{})
+	kind := reflect.TypeFor[Config]()
 	for ii := 0; ii < kind.NumField(); ii++ {
 		field := kind.Field(ii)
 		tag := field.Tag.Get("config")
@@ -858,7 +871,7 @@ func SafeParamsEqual(a any, b any) bool {
 		if len(a) != len(b) {
 			return false
 		}
-		for i := 0; i < len(a); i++ {
+		for i := range a {
 			if (a[i] == nil) || (b[i] == nil) {
 				if a[i] == b[i] {
 					continue
@@ -1004,7 +1017,7 @@ func Params() map[string]Param {
 func loadParams() {
 	knownParams = make(map[string]Param)
 	config := Config{}
-	kind := reflect.TypeOf(config)
+	kind := reflect.TypeFor[Config]()
 	metaRegexp := regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
 		`([^;]*)(?:;` +
 		`([^;]*))?$`)
@@ -1034,7 +1047,7 @@ func loadParams() {
 			paramMin := math.MinInt
 			paramMax := math.MaxInt
 			if kindParams != "" {
-				for _, r := range strings.Split(kindParams, ",") {
+				for r := range strings.SplitSeq(kindParams, ",") {
 					minAndMax := strings.Split(r, ":")
 					paramMin = mustParseOptionalInt(minAndMax[0], math.MinInt, field.Name)
 					if len(minAndMax) == 2 {
@@ -1082,6 +1095,11 @@ func loadParams() {
 				Delimiter:           ",",
 				Msg:                 "list contains invalid Linux interface name or regex pattern",
 				Schema:              "Comma-delimited list of Linux interface names/regex patterns. Regex patterns must start/end with `/`.",
+			}
+		case "log-rate":
+			param = &RegexpParam{
+				Regexp: LogActionRateRegexp,
+				Msg:    "invalid log rate limit",
 			}
 		case "regexp":
 			param = &RegexpPatternParam{
@@ -1221,9 +1239,7 @@ func (config *Config) UseNodeResourceUpdates() bool {
 
 func (config *Config) RawValues() map[string]string {
 	cp := map[string]string{}
-	for k, v := range config.rawValues {
-		cp[k] = v
-	}
+	maps.Copy(cp, config.rawValues)
 	return cp
 }
 
@@ -1281,7 +1297,7 @@ func New() *Config {
 
 type Param interface {
 	GetMetadata() *Metadata
-	Parse(raw string) (result interface{}, err error)
+	Parse(raw string) (result any, err error)
 	setDefault(*Config)
 	SchemaDescription() string
 }

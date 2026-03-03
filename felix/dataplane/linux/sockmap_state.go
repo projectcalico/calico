@@ -96,43 +96,39 @@ func (s *sockmapState) processWorkloadUpdates(desired set.Set[string]) error {
 	toAdd := setDifference[string](desired, current)
 	toDrop := setDifference[string](current, desired)
 
-	toDrop.Iter(func(cidr string) error {
+	for cidr := range toDrop.All() {
 		logCxt := log.WithField("cidr", cidr)
 
 		ip, mask, err := bpf.MemberToIPMask(cidr)
 		if err != nil {
 			logCxt.WithError(err).Error("failed to convert cidr to ip and mask")
-			return set.StopIteration
+			break
 		}
 
 		if err := s.bpfLib.RemoveItemSockmapEndpointsMap(*ip, mask); err != nil {
 			logCxt.WithError(err).Error("failed to remove item from endpoints map")
-			return set.StopIteration
+			break
 		}
 
 		log.Infof("[SOCKMAP] removed %v", cidr)
+	}
 
-		return nil
-	})
-
-	toAdd.Iter(func(cidr string) error {
+	for cidr := range toAdd.All() {
 		logCxt := log.WithField("cidr", cidr)
 
 		ip, mask, err := bpf.MemberToIPMask(cidr)
 		if err != nil {
 			logCxt.WithError(err).Error("failed to convert cidr to ip and mask")
-			return set.StopIteration
+			break
 		}
 
 		if err := s.bpfLib.UpdateSockmapEndpoints(*ip, mask); err != nil {
 			logCxt.WithError(err).Error("failed to update item on endpoints map")
-			return set.StopIteration
+			break
 		}
 
 		log.Infof("[SOCKMAP] added %v", cidr)
-
-		return nil
-	})
+	}
 
 	return nil
 }

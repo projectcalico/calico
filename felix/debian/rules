@@ -28,12 +28,9 @@ override_dh_install:
 	install -m 644 bpf-apache/bin/*.o bpf-gpl/bin/*.o debian/tmp/usr/lib/calico/bpf/
 	dh_install
 
-# We need to decompress the debug sections in order for dh_dwz to do its thing
-# without error.
-# See Debian bug https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=931891
 override_dh_dwz:
-	objcopy --decompress-debug-sections debian/calico-felix/usr/bin/calico-felix
-	dh_dwz
+	# dwz only slightly compresses the debug sections and is not fully compatible with DWARF5,
+	# used by Golang 1.25+, so skip this.
 
 # Hide the 'useless dependency' warnings, which are just about libc libs anyway
 override_dh_shlibdeps:

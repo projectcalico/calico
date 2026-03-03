@@ -122,7 +122,7 @@ func CleanDatastore(cli client.Client) error {
 // errorRetry is a local helper for retrying a function on error.
 func errorRetry(desc string, f func() error) error {
 	var err error
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if err = f(); err != nil {
 			logrus.WithError(err).Infof("Retrying function (%s) after error", desc)
 			continue

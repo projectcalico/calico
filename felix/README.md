@@ -42,7 +42,7 @@ your contribution.
 
 ## How do I build Felix?
 
-Felix mostly uses Docker for builds.  We develop on Ubuntu 16.04 but other
+Felix mostly uses Docker for builds.  We develop on Ubuntu 24.04 but other
 Linux distributions should work (there are known `Makefile` issues that prevent building on OS X).  
 To build Felix, you will need:
 
@@ -153,10 +153,6 @@ Ginkgo will re-run tests as files are modified and saved.
 
     - **Working Directory:** Set the working directory to: `/{path to the project root}/felix/fv`
 
-    - **GO tool arguments:** `-tags=fvtests`     
-
-    - Check **[x]**`Use all custom build tags` checkbox.
-
     - **Program arguments:** `-ginkgo.v`
 
     - Add **Before Launch** instructions
@@ -199,14 +195,10 @@ Ginkgo will re-run tests as files are modified and saved.
               "request": "launch",
               "mode": "test",
               "program": "${workspaceFolder}/felix/fv",
-              "env": {
-                  "GOFLAGS": "-tags=fvtests"
-              },
               "args": [
                   "-test.v",
                   "-ginkgo.v"
               ],
-              "buildFlags": "-tags=fvtests",
               "cwd": "${workspaceFolder}/felix/fv",
               "preLaunchTask": "Build and Prepare Felix",
               "console": "integratedTerminal"

@@ -17,9 +17,8 @@ package flowlog
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -33,7 +32,8 @@ func init() {
 }
 
 func TestFlowlogs(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/flowlogs_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Flow logs Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/felix_collector_flowlog_suite.xml"
+	ginkgo.RunSpecs(t, "UT: felix/collector/flowlog", suiteConfig, reporterConfig)
 }

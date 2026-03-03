@@ -1,5 +1,5 @@
 # Project Calico BPF dataplane build scripts.
-# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 # Disable implicit rules.
@@ -58,6 +58,7 @@ LD := llc
 UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 UT_OBJS+=ut/ip_parse_test_v6.o
+UT_OBJS+=ut/tcp_rst_v6.o
 
 XDP_MAP_HEADERS := jump.h
 COMMON_MAP_HEADERS := counters.h ifstate.h perf_types.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
@@ -65,7 +66,7 @@ IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_typ
 IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
 
-MAP_OBJS := $(addprefix bin/, common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
+MAP_OBJS := $(addprefix bin/, common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o common_map_stub_ing.o)
 
 # Map stub ojbs cannot have '-emit-llvm' in flags
 MAP_CFLAGS := $(subst -emit-llvm,,$(CFLAGS))
@@ -96,6 +97,9 @@ xdp_map_stub.c: $(XDP_MAP_HEADERS)
 bin/common_map_stub.o bin/ipv4_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -c $< -o $@
 
+bin/common_map_stub_ing.o: bin/%.o: common_map_stub.c common_map_stub.d | bin
+	$(CC) $(MAP_CFLAGS) -DCALI_COMPILE_FLAGS=2 -c $< -o $@
+
 bin/ipv6_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -DIPVER6 -c $< -o $@
 
@@ -104,10 +108,12 @@ bin/xdp_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
 OBJS:=$(shell ./list-objs)
-OBJS+=bin/tc_preamble.o
+OBJS+=bin/tc_preamble_ingress.o
+OBJS+=bin/tc_preamble_egress.o
 OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
-OBJS+=bin/policy_default.o
+OBJS+=bin/policy_default_ingress.o
+OBJS+=bin/policy_default_egress.o
 OBJS+=$(MAP_OBJS)
 C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
@@ -144,17 +150,20 @@ ut/%.ll: ut/%.c ut/ut.h
 
 ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
 
-tc_preamble.ll: tc_preamble.c tc_preamble.d
-	$(CC) $(CFLAGS) -c $< -o $@
-
+tc_preamble_ingress.ll: tc_preamble.c tc_preamble.d
+	$(COMPILE)
+tc_preamble_egress.ll: tc_preamble.c tc_preamble.d
+	$(COMPILE)
 tcx_test.ll: tcx_test.c tcx_test.d
 	$(CC) $(CFLAGS) -c $< -o $@
 
 xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
 	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
-policy_default.ll: policy_default.c policy_default.d
-	$(CC) $(CFLAGS) -c $< -o $@
+policy_default_ingress.ll: policy_default.c policy_default.d
+	$(COMPILE)
+policy_default_egress.ll: policy_default.c policy_default.d
+	$(COMPILE)
 
 # Production and UT versions of the main binaries.
 # Combining the targets into one rule causes make to fail to rebuild the .ll files.  Not sure why.
@@ -186,13 +195,17 @@ xdp_v6.d: xdp.c
 
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
-bin/tc_preamble.o: tc_preamble.ll | bin
+bin/tc_preamble_ingress.o: tc_preamble_ingress.ll | bin
+	$(LINK)
+bin/tc_preamble_egress.o: tc_preamble_egress.ll | bin
 	$(LINK)
 bin/tcx_test.o: tcx_test.ll | bin
 	$(LINK)
 bin/xdp_preamble.o: xdp_preamble.ll | bin
 	$(LINK)
-bin/policy_default.o: policy_default.ll | bin
+bin/policy_default_ingress.o: policy_default_ingress.ll | bin
+	$(LINK)
+bin/policy_default_egress.o: policy_default_egress.ll | bin
 	$(LINK)
 bin/to%.o: to%.ll | bin
 	$(LINK)
@@ -207,6 +220,10 @@ ut/%.o: ut/%.ll
 ut/ip_parse_test_v6.ll: ut/ip_parse_test.c
 	$(CC) $(UT_CFLAGS) $(CFLAGS) -DIPVER6 -c $< -o $@
 ut/ip_parse_test_v6.o: ut/ip_parse_test_v6.ll
+	$(LINK)
+ut/tcp_rst_v6.ll: ut/tcp_rst.c
+	$(CC) $(UT_CFLAGS) $(CFLAGS) -DIPVER6 -c $< -o $@
+ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
 	$(LINK)
 
 %_v4.ll: %.c %.d calculate-flags
@@ -302,7 +319,7 @@ COMPILE_DEPS=set -e; rm -f $@; \
 
 ifneq ($(MAKECMDGOALS),clean)
   ifneq ($(MAKECMDGOALS), libbpf)
-    include $(shell ls *.d)
+    include $(wildcard *.d)
   endif
 endif
 

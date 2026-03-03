@@ -20,6 +20,9 @@
 #include <ctype.h>
 #include <sys/syscall.h>
 
+#include "bpf.h"
+#include "libbpf.h"
+
 union bpf_attr *bpf_attr_alloc() {
    union bpf_attr *attr = malloc(sizeof(union bpf_attr));
    memset(attr, 0, sizeof(union bpf_attr));
@@ -48,55 +51,33 @@ void bpf_attr_setup_obj_pin(union bpf_attr *attr, char *path, __u32 fd, __u32 fl
    attr->file_flags = flags;
 }
 
-// bpf_attr_setup_load_prog sets up the bpf_attr union for use with BPF_PROG_LOAD.
-// A C function makes this easier because unions aren't easy to access from Go.
-void bpf_attr_setup_load_prog(union bpf_attr *attr,
-			      const char *name,
-			      __u32 prog_type,
-			      __u32 insn_count,
-			      void *insns,
-			      char *license,
-			      __u32 log_level,
-			      __u32 log_size,
-			      void *log_buf)
+int bpf_load_prog(char *name, __u32 prog_type, __u32 attach_type,
+		  void *insns, __u32 insn_count,
+		  char *license, __u32 log_level,
+		  __u32 log_size, void *log_buf)
 {
-   attr->prog_type = prog_type;
-   attr->insn_cnt = insn_count;
-   attr->insns = (__u64)(unsigned long)insns;
-   attr->license = (__u64)(unsigned long)license;
-   attr->log_level = log_level;
-   attr->log_size = log_size;
-   attr->log_buf = (__u64)(unsigned long)log_buf;
-   attr->kern_version = 0;
+	DECLARE_LIBBPF_OPTS(bpf_prog_load_opts, opts,
+		.log_level = log_level,
+		.log_size = log_size,
+		.log_buf = log_buf,
+		.kern_version = 0,
+		.expected_attach_type = attach_type,
+	);
+	if (name) {
+		for (int i = 0; i < BPF_OBJ_NAME_LEN; i++) {
+			if (name[i] == '\0') {
+				break;
+			}
+			if (isalnum(name[i]) || name[i] == '_' || name[i] == '.')
+				continue;
+			name[i] = '_';
+		}
+	}
 
-   if (log_size > 0) {
-	   ((char *)log_buf)[0] = 0;
-   }
-
-   if (name) {
-	   int sz = sizeof(attr->prog_name);
-
-	   int i;
-	   for (i = 0; i < sz; i++) {
-		   if (name[i] == '\0') {
-			   attr->prog_name[i] = '\0';
-			   break;
-		   }
-		   /* Kernel only accepts alphanum chars and '_' and '.'. In bpf program
-		    * names. So we sanitize any other characters like the '-' in
-		    * wg-v6.cali.
-		    */
-		   if (isalnum(name[i]) || name[i] == '_' || name[i] == '.')
-			   attr->prog_name[i] = name[i];
-		   else {
-			   attr->prog_name[i] = '_';
-		   }
-	   }
-
-	   if (i == sz) {
-		   attr->prog_name[sz - 1] = '\0';
-	   }
-   }
+	int fd = bpf_prog_load(prog_type, name, license, insns, insn_count, &opts);
+	if (fd < 0)
+		errno = -fd;
+	return fd;
 }
 
 // bpf_attr_setup_prog_run sets up the bpf_attr union for use with BPF_PROG_TEST_RUN.

@@ -17,6 +17,7 @@ package labelindex
 import (
 	"iter"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -91,12 +92,7 @@ func (d *endpointData) RemoveMatchingIPSetID(id string) {
 }
 
 func (d *endpointData) HasParent(parent *npParentData) bool {
-	for _, p := range d.parents {
-		if p == parent {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(d.parents, parent)
 }
 
 func (d *endpointData) LookupNamedPorts(name string, proto ipsetmember.Protocol) []uint16 {
@@ -670,7 +666,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 
 	// Iterate over potential new matches and incref any members that
 	// that produces.  (This may temporarily over count.)
-	idx.selectorCandidatesIdx.IterPotentialMatches(epData, func(ipSetID string, _ *selector.Selector) {
+	for ipSetID := range idx.selectorCandidatesIdx.AllPotentialMatches(epData) {
 		// Make sure we don't appear non-live if there are a lot of IP sets to get through.
 		idx.maybeReportLive()
 
@@ -698,7 +694,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 				ipSetData.memberToRefCount[newMember] = newRefCount
 			}
 		}
-	})
+	}
 
 	// Decref all the old matches, emitting events if we drop to zero.
 	for ipSetID, oldMembers := range oldIPSetContributions {
@@ -783,7 +779,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, rawLab
 }
 
 func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, applyUpdate, revertUpdate func()) {
-	parentData.IterEndpointIDs(func(id interface{}) error {
+	parentData.IterEndpointIDs(func(id any) error {
 		epData, _ := idx.endpointKVIdx.Get(id)
 		// This endpoint matches this parent, calculate its old contribution.  (The revert function
 		// is a no-op on the first loop but keeping it here, rather than at the bottom of the loop
@@ -843,14 +839,13 @@ func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpoint
 		return nil
 	}
 	contrib := map[string][]ipsetmember.IPSetMember{}
-	epData.cachedMatchingIPSetIDs.Iter(func(ipSetID string) error {
+	for ipSetID := range epData.cachedMatchingIPSetIDs.All() {
 		ipSetData := idx.ipSetDataByID[ipSetID]
 		if ipSetData == nil {
 			log.WithField("ipSetID", ipSetID).Panic("Endpoint cachedMatchingIPSetIDs refers to nonexistent IP set.")
 		}
 		contrib[ipSetID] = idx.CalculateEndpointContribution(epData, ipSetData)
-		return nil
-	})
+	}
 	return contrib
 }
 
@@ -902,7 +897,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	bestParentStrategy := labelnamevalueindex.ScanStrategy[string](nil)
 	bestParentEndpointEstimate := math.MaxInt
 
-	for k, r := range restrictions {
+	for k, r := range restrictions.All() {
 		epStrat := idx.endpointKVIdx.StrategyFor(k, r)
 		parentStrat := idx.parentKVIdx.StrategyFor(k, r)
 		epsToScan := epStrat.EstimatedItemsToScan()

@@ -23,7 +23,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // NewStagedKubernetesNetworkPolicyUpdateProcessor create a new SyncerUpdateProcessor to sync StagedKubernetesNetworkPolicy data in v1 format for
@@ -41,20 +40,14 @@ func ConvertStagedKubernetesNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (mod
 		return model.PolicyKey{}, errors.New("Missing Name or Namespace field to create a v1 StagedKubernetesNetworkPolicy Key")
 	}
 
-	c := conversion.NewConverter()
-	name := c.StagedKubernetesNetworkPolicyToStagedName(v3key.Name)
-
-	tier, err := names.TierFromPolicyName(name)
-	if err != nil {
-		return model.PolicyKey{}, err
-	}
 	return model.PolicyKey{
-		Name: v3key.Namespace + "/" + model.PolicyNamePrefixStaged + name,
-		Tier: tier,
+		Name:      v3key.Name,
+		Namespace: v3key.Namespace,
+		Kind:      apiv3.KindStagedKubernetesNetworkPolicy,
 	}, nil
 }
 
-func ConvertStagedKubernetesNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
+func ConvertStagedKubernetesNetworkPolicyV3ToV1Value(val any) (any, error) {
 	staged, ok := val.(*apiv3.StagedKubernetesNetworkPolicy)
 	if !ok {
 		return nil, errors.New("Value is not a valid StagedKubernetesNetworkPolicy resource value")

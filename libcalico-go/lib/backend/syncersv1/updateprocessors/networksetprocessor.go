@@ -16,6 +16,7 @@ package updateprocessors
 
 import (
 	"errors"
+	"maps"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -29,7 +30,11 @@ import (
 
 // Create a new SyncerUpdateProcessor to sync NetworkSet data in v1 format for consumption by Felix.
 func NewNetworkSetUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewSimpleUpdateProcessor(apiv3.KindNetworkSet, convertNetworkSetV2ToV1Key, convertNetworkSetV2ToV1Value)
+	return NewSimpleUpdateProcessor(
+		apiv3.KindNetworkSet,
+		convertNetworkSetV2ToV1Key,
+		convertNetworkSetV2ToV1Value,
+	)
 }
 
 func convertNetworkSetV2ToV1Key(v3key model.ResourceKey) (model.Key, error) {
@@ -41,7 +46,7 @@ func convertNetworkSetV2ToV1Key(v3key model.ResourceKey) (model.Key, error) {
 	}, nil
 }
 
-func convertNetworkSetV2ToV1Value(val interface{}) (interface{}, error) {
+func convertNetworkSetV2ToV1Value(val any) (any, error) {
 	v3res, ok := val.(*apiv3.NetworkSet)
 	if !ok {
 		return nil, errors.New("Value is not a valid NetworkSet resource value")
@@ -49,7 +54,7 @@ func convertNetworkSetV2ToV1Value(val interface{}) (interface{}, error) {
 
 	var addrs []cnet.IPNet
 	for _, cidrString := range v3res.Spec.Nets {
-		_, ipNet, err := cnet.ParseCIDROrIP(cidrString)
+		_, ipNet, err := cnet.ParseCIDROrIP(string(cidrString))
 		if err != nil {
 			log.WithError(err).WithFields(log.Fields{
 				"CIDR":       cidrString,
@@ -61,9 +66,7 @@ func convertNetworkSetV2ToV1Value(val interface{}) (interface{}, error) {
 
 	// Add in the Calico namespace label for storage purposes.
 	labelsWithCalicoNamespace := make(map[string]string, len(v3res.GetLabels())+1)
-	for k, v := range v3res.GetLabels() {
-		labelsWithCalicoNamespace[k] = v
-	}
+	maps.Copy(labelsWithCalicoNamespace, v3res.GetLabels())
 	labelsWithCalicoNamespace[apiv3.LabelNamespace] = v3res.Namespace
 
 	// Also include the namespace profile in the profile IDs so that we get namespace label inheritance.

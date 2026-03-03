@@ -5,7 +5,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 CNI_PLUGIN_IMAGE ?=cni
-WINDOWS_IMAGE ?=cni-windows
+WINDOWS_IMAGE ?=$(CNI_PLUGIN_IMAGE)-windows
 BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 
 ###############################################################################
@@ -201,10 +201,40 @@ build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 ###############################################################################
 # Unit Tests
 ###############################################################################
+
+fv:
+	@echo "No FV tests for CNI plugin"
+
+
+## Install KubeVirt CRDs for testing (without operator/controllers)
+.PHONY: install-kubevirt-crds
+install-kubevirt-crds:
+	@echo "Installing KubeVirt CRDs for testing..."
+	@while ! docker exec calico-local-apiserver kubectl \
+		apply -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml; \
+		do echo "Waiting to install KubeVirt CRDs..."; \
+		sleep 1; \
+		done
+	@echo "KubeVirt CRDs installed successfully"
+
+## Remove KubeVirt CRDs
+.PHONY: remove-kubevirt-crds
+remove-kubevirt-crds:
+	@echo "Removing KubeVirt CRDs..."
+	@docker exec calico-local-apiserver kubectl \
+		delete -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml 2>/dev/null || \
+		echo "KubeVirt CRDs already removed or not present"
+
+
 ## Run the unit tests.
+## Mainline tests run without KubeVirt CRDs to ensure non-KubeVirt code paths don't depend on them.
+## KubeVirt-specific tests run separately with CRDs installed.
 ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
+	$(MAKE) remove-kubevirt-crds
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
+	$(MAKE) install-kubevirt-crds
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
 
 ut-datastore:
 	# The tests need to run as root
@@ -218,12 +248,13 @@ ut-datastore:
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 	-e KUBECONFIG=/home/user/certs/kubeconfig \
 	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
+			ginkgo -cover -r -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
@@ -318,4 +349,4 @@ release-publish-latest: release-prereqs
 ## Run the unit tests, watching for changes.
 test-watch: $(BIN)/install run-etcd run-k8s-apiserver
 	# The tests need to run as root
-	CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch -skipPackage pkg/install
+	CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) ginkgo watch -skip-package pkg/install

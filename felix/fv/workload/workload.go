@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -39,7 +39,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -57,11 +57,11 @@ type Workload struct {
 	outPipe               io.ReadCloser
 	errPipe               io.ReadCloser
 	namespacePath         string
-	WorkloadEndpoint      *api.WorkloadEndpoint
+	WorkloadEndpoint      *internalapi.WorkloadEndpoint
 	Protocol              string // "tcp" or "udp"
 	SpoofInterfaceName    string
 	SpoofName             string
-	SpoofWorkloadEndpoint *api.WorkloadEndpoint
+	SpoofWorkloadEndpoint *internalapi.WorkloadEndpoint
 	MTU                   int
 	isRunning             bool
 	isSpoofing            bool
@@ -100,32 +100,49 @@ const defaultMTU = 1440 /* wiregueard mtu */
 func (w *Workload) Stop() {
 	if w == nil {
 		log.Info("Stop no-op because nil workload")
-	} else {
-		log.WithField("workload", w.Name).Info("Stop")
-		_ = w.C.ExecMayFail("sh", "-c", fmt.Sprintf("kill -9 %s & ip link del %s & ip netns del %s & wait", w.pid, w.InterfaceName, w.NamespaceID()))
-		// Killing the process inside the container should cause our long-running
-		// docker exec command to exit.  Do the Wait on a background goroutine,
-		// so we can time it out, just in case.
-		waitDone := make(chan struct{})
-		go func() {
-			defer close(waitDone)
-			_, err := w.runCmd.Process.Wait()
-			if err != nil {
-				log.WithField("workload", w.Name).Error("Failed to wait for docker exec, attempting to kill it.")
-				_ = w.runCmd.Process.Kill()
-			}
-		}()
+		return
+	}
+	log.WithField("workload", w.Name).Info("Stop")
+	if !w.isRunning {
+		log.WithField("workload", w.Name).Info("Workload already stopped")
+		return
+	}
 
-		select {
-		case <-waitDone:
-			log.WithField("workload", w.Name).Info("Workload stopped")
-		case <-time.After(10 * time.Second):
-			log.WithField("workload", w.Name).Error("Workload docker exec failed to exit?  Killing it.")
+	cleanupCmds := []string{
+		fmt.Sprintf("kill -9 %s", w.pid),
+	}
+	if w.InterfaceName != "" {
+		// Only try to delete the veth if we created one.
+		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip link del %s", w.InterfaceName))
+	}
+	if w.NamespaceID() != "" {
+		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip netns del %s", w.NamespaceID()))
+	}
+	cleanupCmds = append(cleanupCmds, "wait")
+
+	_ = w.C.ExecMayFail("sh", "-c", strings.Join(cleanupCmds, " & "))
+	// Killing the process inside the container should cause our long-running
+	// docker exec command to exit.  Do the Wait on a background goroutine,
+	// so we can time it out, just in case.
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+		_, err := w.runCmd.Process.Wait()
+		if err != nil {
+			log.WithField("workload", w.Name).Error("Failed to wait for docker exec, attempting to kill it.")
 			_ = w.runCmd.Process.Kill()
 		}
+	}()
 
-		w.isRunning = false
+	select {
+	case <-waitDone:
+		log.WithField("workload", w.Name).Info("Workload stopped")
+	case <-time.After(10 * time.Second):
+		log.WithField("workload", w.Name).Error("Workload docker exec failed to exit?  Killing it.")
+		_ = w.runCmd.Process.Kill()
 	}
+
+	w.isRunning = false
 }
 
 func Run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) (w *Workload) {
@@ -180,7 +197,7 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 	// Build unique workload name and struct.
 	workloadIdx++
 
-	wep := api.NewWorkloadEndpoint()
+	wep := internalapi.NewWorkloadEndpoint()
 	wep.Labels = map[string]string{"name": n}
 	wep.Spec.Node = c.Hostname
 	wep.Spec.Orchestrator = "felixfv"
@@ -221,10 +238,18 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 
 func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) (w *Workload, err error) {
 	w = New(c, name, profile, ip, ports, protocol, opts...)
-	return w, w.Start()
+	err = w.Start(c)
+	if err != nil {
+		return w, err
+	}
+	return w, nil
 }
 
-func (w *Workload) Start() error {
+type CleanupProvider interface {
+	AddCleanup(func())
+}
+
+func (w *Workload) Start(cleanupProvider CleanupProvider) error {
 	var err error
 
 	// Start the workload.
@@ -267,14 +292,15 @@ func (w *Workload) Start() error {
 		return fmt.Errorf("runCmd Start failed: %v", err)
 	}
 
+	// Make sure we get stopped.
+	cleanupProvider.AddCleanup(w.Stop)
+
 	// Read the workload's namespace path, which it writes to its standard output.
 	stdoutReader := bufio.NewReader(w.outPipe)
 	stderrReader := bufio.NewReader(w.errPipe)
 
 	var errDone sync.WaitGroup
-	errDone.Add(1)
-	go func() {
-		defer errDone.Done()
+	errDone.Go(func() {
 		for {
 			line, err := stderrReader.ReadString('\n')
 			if err != nil {
@@ -283,7 +309,7 @@ func (w *Workload) Start() error {
 			}
 			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stderr] %v", w.Name, line)
 		}
-	}()
+	})
 
 	pid, err := stdoutReader.ReadString('\n')
 	if err != nil {
@@ -707,8 +733,8 @@ func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 const nsprefix = "/var/run/netns/"
 
 func (w *Workload) netns() string {
-	if strings.HasPrefix(w.namespacePath, nsprefix) {
-		return strings.TrimPrefix(w.namespacePath, nsprefix)
+	if after, ok := strings.CutPrefix(w.namespacePath, nsprefix); ok {
+		return after
 	}
 
 	return ""
@@ -875,7 +901,7 @@ func (w *Workload) InterfaceIndex() int {
 func (w *Workload) RenameInterface(from, to string) {
 	var err error
 	sleep := 100 * time.Millisecond
-	for try := 0; try < 40; try++ {
+	for range 40 {
 		// Can fail with EBUSY.
 		err = w.C.ExecMayFail("ip", "link", "set", from, "name", to)
 		if err == nil {

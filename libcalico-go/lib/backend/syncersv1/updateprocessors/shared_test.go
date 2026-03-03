@@ -11,23 +11,27 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var srcSelector string = "mylabel == selector1"
-var dstSelector string = "mylabel == selector2"
-var notSrcSelector string = "has(label1)"
-var notDstSelector string = "has(label2)"
+var (
+	srcSelector    string = "mylabel == selector1"
+	dstSelector    string = "mylabel == selector2"
+	notSrcSelector string = "has(label1)"
+	notDstSelector string = "has(label2)"
+)
 
 // v1 and v3 ingress rule.
-var v4 = 4
-var itype = 1
-var intype = 3
-var icode = 4
-var incode = 6
-var ProtocolTCPV1 = numorstring.ProtocolFromStringV1("tcp")
-var ProtocolUDPV1 = numorstring.ProtocolFromStringV1("udp")
-var port80 = numorstring.SinglePort(uint16(80))
-var Port443 = numorstring.SinglePort(uint16(443))
-var ProtocolTCPv3 = numorstring.ProtocolFromString("TCP")
-var ProtocolUDPv3 = numorstring.ProtocolFromString("UDP")
+var (
+	v4            = 4
+	itype         = 1
+	intype        = 3
+	icode         = 4
+	incode        = 6
+	ProtocolTCPV1 = numorstring.ProtocolFromStringV1("tcp")
+	ProtocolUDPV1 = numorstring.ProtocolFromStringV1("udp")
+	port80        = numorstring.SinglePort(uint16(80))
+	Port443       = numorstring.SinglePort(uint16(443))
+	ProtocolTCPv3 = numorstring.ProtocolFromString("TCP")
+	ProtocolUDPv3 = numorstring.ProtocolFromString("UDP")
+)
 
 var v1TestIngressRule = model.Rule{
 	Action:      "allow",
@@ -85,12 +89,14 @@ var v3TestIngressRule = apiv3.Rule{
 }
 
 // v1 and v3 egress rule.
-var etype = 2
-var entype = 7
-var ecode = 5
-var encode = 8
-var eproto = numorstring.ProtocolFromInt(uint8(30))
-var enproto = numorstring.ProtocolFromInt(uint8(62))
+var (
+	etype   = 2
+	entype  = 7
+	ecode   = 5
+	encode  = 8
+	eproto  = numorstring.ProtocolFromInt(uint8(30))
+	enproto = numorstring.ProtocolFromInt(uint8(62))
+)
 
 var v1TestEgressRule = model.Rule{
 	Action:      "allow",
@@ -153,8 +159,10 @@ var v3TestEgressRule = apiv3.Rule{
 	},
 }
 
-var testPolicyOrder101 = float64(101)
-var testDefaultPolicyOrder = float64(1000)
+var (
+	testPolicyOrder101     = float64(101)
+	testDefaultPolicyOrder = float64(1000)
+)
 
 // v3 model.KVPair revision
 var testRev string = "1234"
@@ -167,6 +175,7 @@ func mustParseCIDR(cidr string) *cnet.IPNet {
 // fullGNPv1 returns a v1 GNP with all fields filled out.
 func fullGNPv1() (p model.Policy) {
 	return model.Policy{
+		Tier:           "default",
 		Order:          &testPolicyOrder101,
 		DoNotTrack:     true,
 		InboundRules:   []model.Rule{v1TestIngressRule},
@@ -204,6 +213,7 @@ func fullNPv1(namespace string) (p model.Policy) {
 	}
 
 	return model.Policy{
+		Tier:           "default",
 		Namespace:      namespace,
 		Order:          &testPolicyOrder101,
 		InboundRules:   []model.Rule{ir},

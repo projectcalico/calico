@@ -17,7 +17,9 @@ package common
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"sort"
@@ -25,10 +27,9 @@ import (
 	"text/tabwriter"
 
 	"github.com/google/safetext/yamltemplate"
-	"github.com/projectcalico/go-json/json"
-	"github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -45,8 +46,12 @@ type ResourcePrinter interface {
 type ResourcePrinterJSON struct{}
 
 func (r ResourcePrinterJSON) Print(client client.Interface, resources []runtime.Object) error {
+	return r.FPrint(os.Stdout, client, resources)
+}
+
+func (r ResourcePrinterJSON) FPrint(w io.Writer, client client.Interface, resources []runtime.Object) error {
 	// If the results contain a single entry then extract the only value.
-	var rs interface{}
+	var rs any
 	if len(resources) == 1 {
 		rs = resources[0]
 	} else {
@@ -55,9 +60,9 @@ func (r ResourcePrinterJSON) Print(client client.Interface, resources []runtime.
 	if output, err := json.MarshalIndent(rs, "", "  "); err != nil {
 		return err
 	} else {
-		fmt.Printf("%s\n", string(output))
+		_, err := w.Write(output)
+		return err
 	}
-	return nil
 }
 
 // ResourcePrinterYAML implements the ResourcePrinter interface and is used to display
@@ -65,8 +70,12 @@ func (r ResourcePrinterJSON) Print(client client.Interface, resources []runtime.
 type ResourcePrinterYAML struct{}
 
 func (r ResourcePrinterYAML) Print(client client.Interface, resources []runtime.Object) error {
+	return r.FPrint(os.Stdout, client, resources)
+}
+
+func (r ResourcePrinterYAML) FPrint(w io.Writer, client client.Interface, resources []runtime.Object) error {
 	// If the results contain a single entry then extract the only value.
-	var rs interface{}
+	var rs any
 	if len(resources) == 1 {
 		rs = resources[0]
 	} else {
@@ -75,9 +84,9 @@ func (r ResourcePrinterYAML) Print(client client.Interface, resources []runtime.
 	if output, err := yaml.Marshal(rs); err != nil {
 		return err
 	} else {
-		fmt.Printf("%s", string(output))
+		_, err := w.Write(output)
+		return err
 	}
-	return nil
 }
 
 // ResourcePrinterTable implements the ResourcePrinter interface and is used to display
@@ -186,14 +195,14 @@ func (r ResourcePrinterTemplate) Print(client client.Interface, resources []runt
 // join is similar to strings.Join() but takes an arbitrary slice of interfaces and converts
 // each to its string representation and joins them together with the provided separator
 // string.
-func join(items interface{}, separator string) string {
+func join(items any, separator string) string {
 	return joinAndTruncate(items, separator, 0)
 }
 
 // joinAndTruncate is similar to strings.Join() but takes an arbitrary slice of interfaces and converts
 // each to its string representation, joins them together with the provided separator
 // string and (if maxLen is >0) truncates the output at the given maximum length.
-func joinAndTruncate(items interface{}, separator string, maxLen int) string {
+func joinAndTruncate(items any, separator string, maxLen int) string {
 	// Nil types.
 	if items == nil {
 		return ""
@@ -216,7 +225,7 @@ func joinAndTruncate(items interface{}, separator string, maxLen int) string {
 	if reflect.TypeOf(items).Kind() != reflect.Slice {
 		// Input wasn't a slice, convert it to one so we can take advantage of shared
 		// buffer/truncation logic...
-		items = []interface{}{items}
+		items = []any{items}
 	}
 
 	slice := reflect.ValueOf(items)

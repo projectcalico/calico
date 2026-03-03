@@ -24,13 +24,14 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -40,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/stacktrace"
 )
 
 type Container struct {
@@ -63,6 +65,7 @@ type Container struct {
 	logFinished      sync.WaitGroup
 	dropAllLogs      bool
 	ignoreEmptyLines bool
+	logLimitBytes    int
 }
 
 type watch struct {
@@ -192,6 +195,7 @@ type RunOpts struct {
 	SameNamespace    *Container
 	StopTimeoutSecs  int
 	StopSignal       string
+	LogLimitBytes    int
 }
 
 func NextContainerIndex() int {
@@ -214,6 +218,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	c = &Container{
 		Name:             name,
 		ignoreEmptyLines: opts.IgnoreEmptyLines,
+		logLimitBytes:    opts.LogLimitBytes,
 	}
 
 	// Prep command to run the container.
@@ -257,6 +262,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
+
 	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
 	go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches, nil)
 
@@ -337,10 +343,21 @@ func (c *Container) Start() {
 // is stopped.
 func (c *Container) Remove() {
 	c.runCmd = utils.Command("docker", "rm", "-f", c.Name)
+	log.WithField("container", c).Info("Removing... container.")
+	// Do the deletion in the background so we don't hold things up.
 	err := c.runCmd.Start()
+	cmd := c.runCmd
 	Expect(err).NotTo(HaveOccurred())
 
-	log.WithField("container", c).Info("Removed container.")
+	// Make sure we wait on the deletion process.
+	go func() {
+		err := cmd.Wait()
+		if err != nil {
+			log.WithError(err).Infof("Error from docker rm -f %s.", c.Name)
+		} else {
+			log.Infof("Container removed: %s.", c.Name)
+		}
+	}()
 }
 
 func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *sync.WaitGroup, watches *[]*watch, extraWriter io.Writer) {
@@ -371,6 +388,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log (close).")
 	}()
 
+	bytesSeen := 0
 	for scanner.Scan() {
 		line := scanner.Text()
 		if extraWriter != nil {
@@ -388,6 +406,19 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		c.mutex.Lock()
 		droppingLogs := c.dropAllLogs
 		c.mutex.Unlock()
+
+		// Or because we hit the limit.
+		wasDropping := c.logLimitBytes > 0 && bytesSeen > c.logLimitBytes
+		bytesSeen += len(line)
+		nowDropping := c.logLimitBytes > 0 && bytesSeen > c.logLimitBytes
+		if nowDropping {
+			if !wasDropping {
+				// We just hit the limit.
+				fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, "...truncated...")
+			}
+			droppingLogs = true
+		}
+
 		if !droppingLogs {
 			fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, line)
 		}
@@ -395,7 +426,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		// Capture data race warnings and log to file.
 		if strings.Contains(line, "WARNING: DATA RACE") {
 			_, err := fmt.Fprintf(dataRaceFile, "Detected data race (in %s) while running test: %s\n",
-				c.Name, ginkgo.CurrentGinkgoTestDescription().FullTestText)
+				c.Name, ginkgo.CurrentSpecReport().FullText())
 			Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log.")
 			foundDataRace = true
 		}
@@ -509,7 +540,7 @@ func (c *Container) GetPIDs(processName string) []int {
 		return nil
 	}
 	var pids []int
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if line == "" {
 			continue
 		}
@@ -534,7 +565,7 @@ func (c *Container) GetProcInfo(processName string) []ProcInfo {
 		return nil
 	}
 	var pids []ProcInfo
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		log.WithField("line", line).Debug("Parsing ps line")
 		matches := psRegexp.FindStringSubmatch(line)
 		if len(matches) == 0 {
@@ -651,23 +682,35 @@ func (c *Container) FileExists(path string) bool {
 }
 
 func (c *Container) Exec(cmd ...string) {
-	log.WithField("container", c.Name).WithField("command", cmd).Info("Running command")
+	log.WithField("container", c.Name).WithFields(log.Fields{"command": cmd, "stack": miniStackTrace()}).Info("Exec: Running command")
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
 	utils.Run("docker", arg...)
 }
 
 func (c *Container) ExecWithInput(input []byte, cmd ...string) {
-	log.WithField("container", c.Name).WithField("command", cmd).Info("Running command")
+	log.WithField("container", c.Name).WithFields(log.Fields{"command": cmd, "stack": miniStackTrace()}).Info("ExecWithInput: Running command")
 	arg := []string{"exec", "-i", c.Name}
 	arg = append(arg, cmd...)
 	utils.RunWithInput(input, "docker", arg...)
 }
 
 func (c *Container) ExecMayFail(cmd ...string) error {
+	log.WithField("container", c.Name).WithFields(log.Fields{"command": cmd, "stack": miniStackTrace()}).Info("ExecMayFail: Running command")
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
 	return utils.RunMayFail("docker", arg...)
+}
+
+func (c *Container) ExecBestEffort(cmd ...string) {
+	err := c.ExecMayFail(cmd...)
+	if err != nil {
+		log.WithError(err).Errorf("Command (%s) failed, ignoring.", strings.Join(cmd, " "))
+	}
+}
+
+func miniStackTrace() string {
+	return stacktrace.MiniStackStrace("/containers/")
 }
 
 func (c *Container) ExecOutput(args ...string) (string, error) {
@@ -759,7 +802,7 @@ func (c *Container) IPSetSizes() map[string]int {
 	currentName := ""
 	membersSeen := false
 	log.WithField("ipsets", ipsetsOutput).Info("IP sets state")
-	for _, line := range strings.Split(ipsetsOutput, "\n") {
+	for line := range strings.SplitSeq(ipsetsOutput, "\n") {
 		log.WithField("line", line).Debug("Parsing line")
 		if strings.HasPrefix(line, "Name:") {
 			currentName = strings.Split(line, " ")[1]
@@ -809,19 +852,19 @@ func (c *Container) NumNFTSetMembers(ipVersion int, setName string) int {
 	}
 
 	type nftResp struct {
-		Nftables []map[string]interface{} `json:"nftables"`
+		Nftables []map[string]any `json:"nftables"`
 	}
 	var resp nftResp
 	Expect(json.Unmarshal([]byte(out), &resp)).NotTo(HaveOccurred(), fmt.Sprintf("Failed to unmarshal JSON: %s", out))
 	for _, obj := range resp.Nftables {
 		if obj["set"] != nil {
-			setObj, ok := obj["set"].(map[string]interface{})
+			setObj, ok := obj["set"].(map[string]any)
 			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse set: %v", obj))
 			if _, ok := setObj["elem"]; !ok {
 				// No elements.
 				return 0
 			}
-			elems, ok := setObj["elem"].([]interface{})
+			elems, ok := setObj["elem"].([]any)
 			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse elem: %v", setObj))
 			return len(elems)
 		}
@@ -854,7 +897,7 @@ func (c *Container) nftablesSetNamesForVersion(ver string) []string {
 	out, err := c.ExecOutput("nft", "list", "sets", ver)
 	Expect(err).NotTo(HaveOccurred(), out)
 	var names []string
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "set ") {
 			// set <name> {
@@ -981,24 +1024,12 @@ func (c *Container) BPFNATDump(ipv6 bool) map[string][]string {
 // BPFNATHasBackendForService returns true is the given service has the given backend programmed in NAT tables
 func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int, ip string, port int) bool {
 	front := fmt.Sprintf("%s port %d proto %d", svcIP, svcPort, proto)
-	fmtStr := "%s:%d"
-	ipv6 := false
-	ipAddr := net.ParseIP(ip)
-	if ipAddr.To4() == nil {
-		fmtStr = "[%s]:%d"
-		ipv6 = true
-	}
-	back := fmt.Sprintf(fmtStr, ip, port)
+	back := net.JoinHostPort(ip, fmt.Sprint(port))
 
+	ipv6 := net.ParseIP(ip).To4() == nil
 	nat := c.BPFNATDump(ipv6)
 	if natBack, ok := nat[front]; ok {
-		found := false
-		for _, b := range natBack {
-			if b == back {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(natBack, back)
 		if !found {
 			return false
 		}

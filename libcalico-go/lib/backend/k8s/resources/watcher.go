@@ -117,6 +117,7 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 			}
 
 			for _, e := range events {
+				crw.logCxt.Debugf("Sending event: %s", e)
 				select {
 				case crw.resultChan <- *e:
 					crw.logCxt.Debug("Kubernetes event converted and sent to backend watcher")
@@ -183,7 +184,6 @@ func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) []*api.WatchEv
 			Error: fmt.Errorf("unhandled Kubernetes watcher event type: %v", kevent.Type),
 		}}
 	}
-
 }
 
 func (crw *k8sWatcherConverter) buildEventsFromKVPs(kvps []*model.KVPair, t kwatch.EventType) []*api.WatchEvent {

@@ -22,7 +22,7 @@ from unittest import TestCase
 from deepdiff import DeepDiff
 from kubernetes import client, config
 
-from utils.utils import retry_until_success, run, kubectl
+from tests.k8st.utils.utils import retry_until_success, run, kubectl
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ class TestBase(TestCase):
             try:
                 cleanup()
             except Exception as e:
+                logger.error("Error during cleanup: %s", e)
                 errors.append(e)
         super(TestBase, self).tearDown()
         if errors:
@@ -66,7 +67,7 @@ class TestBase(TestCase):
         Compares two things.  Debug logs the differences between them before
         asserting that they are the same.
         """
-        assert cmp(thing1, thing2) == 0, \
+        assert thing1 == thing2, \
             "Items are not the same.  Difference is:\n %s" % \
             pformat(DeepDiff(thing1, thing2), indent=2)
 
@@ -92,8 +93,8 @@ class TestBase(TestCase):
         if first_log_time is None:
             first_log_time = time_now
         time_now -= first_log_time
-        elapsed_hms = "%02d:%02d:%02d " % (time_now / 3600,
-                                           (time_now % 3600) / 60,
+        elapsed_hms = "%02d:%02d:%02d " % (time_now // 3600,
+                                           (time_now % 3600) // 60,
                                            time_now % 60)
 
         level = kwargs.pop("level", logging.INFO)
@@ -121,7 +122,7 @@ class TestBase(TestCase):
     def create_namespace(self, ns_name):
         self.cluster.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns_name)))
 
-    def deploy(self, image, name, ns, port, replicas=1, svc_type="NodePort", traffic_policy="Local", cluster_ip=None, ipv6=False):
+    def deploy(self, image, name, ns, port, replicas=1, svc_type="NodePort", traffic_policy="Local", cluster_ip=None, ext_ip=None, ipv6=False):
         """
         Creates a deployment and corresponding service with the given
         parameters.
@@ -166,7 +167,7 @@ class TestBase(TestCase):
 
         # Create a service called <name> whose endpoints are the pods
         # with "app": <name>; i.e. those just created above.
-        self.create_service(name, name, ns, port, svc_type, traffic_policy, ipv6=ipv6)
+        self.create_service(name, name, ns, port, svc_type, traffic_policy, ext_ip=ext_ip, ipv6=ipv6)
 
     def wait_for_deployment(self, name, ns):
         """
@@ -176,7 +177,7 @@ class TestBase(TestCase):
         kubectl("-n %s rollout status deployment/%s" % (ns, name))
         kubectl("get pods -n %s -o wide" % ns)
 
-    def create_service(self, name, app, ns, port, svc_type="NodePort", traffic_policy="Local", cluster_ip=None, ipv6=False):
+    def create_service(self, name, app, ns, port, svc_type="NodePort", traffic_policy="Local", cluster_ip=None, ext_ip=None, ipv6=False):
         service = client.V1Service(
             metadata=client.V1ObjectMeta(
                 name=name,
@@ -191,6 +192,8 @@ class TestBase(TestCase):
         )
         if cluster_ip:
           service.spec["clusterIP"] = cluster_ip
+        if ext_ip:
+          service.spec["externalIPs"] = [ext_ip]
         if ipv6:
           service.spec["ipFamilies"] = ["IPv6"]
 

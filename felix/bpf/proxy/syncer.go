@@ -17,6 +17,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"net"
 	"reflect"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/consistenthash"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -114,9 +116,10 @@ type stickyFrontend struct {
 type Syncer struct {
 	ipFamily int
 
-	bpfSvcs *cachingmap.CachingMap[nat.FrontendKeyInterface, nat.FrontendValue]
-	bpfEps  *cachingmap.CachingMap[nat.BackendKey, nat.BackendValueInterface]
-	bpfAff  maps.Map
+	bpfSvcs      *cachingmap.CachingMap[nat.FrontendKeyInterface, nat.FrontendValue]
+	bpfEps       *cachingmap.CachingMap[nat.BackendKey, nat.BackendValueInterface]
+	bpfMaglevEps *cachingmap.CachingMap[nat.MaglevBackendKeyInterface, nat.BackendValueInterface]
+	bpfAff       maps.Map
 
 	nextSvcID uint32
 
@@ -130,6 +133,9 @@ type Syncer struct {
 	newEpsMap  k8sp.EndpointsMap
 	prevSvcMap map[svcKey]svcInfo
 	prevEpsMap k8sp.EndpointsMap
+
+	maglevLUTSize int
+
 	// active Maps contain all active svcs endpoints at the end of an iteration
 	activeSvcsMap map[ipPortProto]uint32
 	activeEpsMap  map[uint32]map[ipPort]struct{}
@@ -156,6 +162,7 @@ type Syncer struct {
 	newFrontendKey         func(addr net.IP, port uint16, protocol uint8) nat.FrontendKeyInterface
 	newFrontendKeySrc      func(addr net.IP, port uint16, protocol uint8, cidr ip.CIDR) nat.FrontendKeyInterface
 	newBackendValue        func(addr net.IP, port uint16) nat.BackendValueInterface
+	newMaglevKey           func(svcID, ordinal uint32) nat.MaglevBackendKeyInterface
 	affinityKeyFromBytes   func([]byte) nat.AffinityKeyInterface
 	affinityValueFromBytes func([]byte) nat.AffinityValueInterface
 
@@ -211,9 +218,10 @@ func uniqueIPs(ips []net.IP) []net.IP {
 
 // NewSyncer returns a new Syncer
 func NewSyncer(family int, nodePortIPs []net.IP,
-	frontendMap maps.MapWithExistsCheck, backendMap maps.MapWithExistsCheck,
+	frontendMap, backendMap, maglevMap maps.MapWithExistsCheck,
 	affmap maps.Map, rt Routes,
 	excludedCIDRs *ip.CIDRTrie,
+	maglevLUTSize int,
 ) (*Syncer, error) {
 
 	s := &Syncer{
@@ -225,6 +233,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 		prevEpsMap:    make(k8sp.EndpointsMap),
 		stop:          make(chan struct{}),
 		excludedCIDRs: excludedCIDRs,
+		maglevLUTSize: maglevLUTSize,
 	}
 
 	switch family {
@@ -237,9 +246,14 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 				backendMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes,
 			))
+		s.bpfMaglevEps = cachingmap.New[nat.MaglevBackendKeyInterface, nat.BackendValueInterface](maglevMap.GetName(),
+			maps.NewTypedMap[nat.MaglevBackendKeyInterface, nat.BackendValueInterface](
+				maglevMap, nat.MaglevBackendKeyFromBytes, nat.BackendValueFromBytes,
+			))
 		s.newFrontendKey = nat.NewNATKeyIntf
 		s.newFrontendKeySrc = nat.NewNATKeySrcIntf
 		s.newBackendValue = nat.NewNATBackendValueIntf
+		s.newMaglevKey = nat.NewMaglevBackendKeyIntf
 		s.affinityKeyFromBytes = nat.AffinityKeyIntfFromBytes
 		s.affinityValueFromBytes = nat.AffinityValueIntfFromBytes
 	case 6:
@@ -251,9 +265,14 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 				backendMap, nat.BackendKeyFromBytes, nat.BackendValueV6FromBytes,
 			))
+		s.bpfMaglevEps = cachingmap.New[nat.MaglevBackendKeyInterface, nat.BackendValueInterface](maglevMap.GetName(),
+			maps.NewTypedMap[nat.MaglevBackendKeyInterface, nat.BackendValueInterface](
+				maglevMap, nat.MaglevBackendKeyV6FromBytes, nat.BackendValueV6FromBytes,
+			))
 		s.newFrontendKey = nat.NewNATKeyV6Intf
 		s.newFrontendKeySrc = nat.NewNATKeyV6SrcIntf
 		s.newBackendValue = nat.NewNATBackendValueV6Intf
+		s.newMaglevKey = nat.NewMaglevBackendKeyV6Intf
 		s.affinityKeyFromBytes = nat.AffinityKeyV6IntfFromBytes
 		s.affinityValueFromBytes = nat.AffinityValueV6IntfFromBytes
 	default:
@@ -269,6 +288,11 @@ func (s *Syncer) loadOrigs() error {
 		return err
 	}
 	err = s.bpfSvcs.LoadCacheFromDataplane()
+	if err != nil {
+		return err
+	}
+
+	err = s.bpfMaglevEps.LoadCacheFromDataplane()
 	if err != nil {
 		return err
 	}
@@ -358,7 +382,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 		if count > 0 {
 			s.prevEpsMap[svckey.sname] = make([]k8sp.Endpoint, 0, count)
 		}
-		for i := 0; i < count; i++ {
+		for i := range count {
 			epk := nat.NewNATBackendKey(id, uint32(i))
 			ep, ok := s.bpfEps.Dataplane().Get(epk)
 			if !ok {
@@ -395,7 +419,7 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 	return nil
 }
 
-func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error {
+func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint, maglevEPs []k8sp.Endpoint) error {
 	var id uint32
 
 	old, exists := s.prevSvcMap[skey]
@@ -404,11 +428,10 @@ func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error
 	} else {
 		id = s.newSvcID()
 	}
-	count, local, err := s.updateService(skey, sinfo, id, eps)
+	count, local, err := s.updateService(skey, sinfo, id, eps, maglevEPs)
 	if err != nil {
 		return err
 	}
-
 	s.newSvcMap[skey] = svcInfo{
 		id:         id,
 		count:      count,
@@ -448,12 +471,13 @@ func (s *Syncer) addActiveEps(id uint32, svc Service, eps []k8sp.Endpoint) {
 
 func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
 	eps []k8sp.Endpoint, node ip.Addr, nport int) error {
+
 	skey := getSvcKey(sname, getSvcKeyExtra(svcTypeNodePortRemote, node.AsNetIP()))
 	si := serviceInfoFromK8sServicePort(sinfo)
 	si.clusterIP = node.AsNetIP()
 	si.port = nport
 
-	if err := s.applySvc(skey, si, eps); err != nil {
+	if err := s.applySvc(skey, si, eps, nil); err != nil {
 		return fmt.Errorf("apply NodePortRemote for %s node %s", sname, node)
 	}
 
@@ -539,6 +563,14 @@ func (s *Syncer) applyDerived(
 
 	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP()))
 	flags := uint32(0)
+	if sinfo.UseMaglev() {
+		switch t {
+		case svcTypeNodePort, svcTypeNodePortRemote:
+			log.WithField("service", sname).Warn("Refusing to mark service of type: NodePort with Maglev flag")
+		default:
+			flags |= nat.NATFlgMaglev
+		}
+	}
 
 	switch t {
 	case svcTypeNodePort, svcTypeLoadBalancer, svcTypeNodePortRemote:
@@ -590,6 +622,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	s.newSvcMap = make(map[svcKey]svcInfo, len(state.SvcMap))
 	s.newEpsMap = make(k8sp.EndpointsMap, len(state.EpsMap))
 	nodeZone := state.NodeZone
+	nodeName := state.Hostname
 
 	var expNPMisses []*expandMiss
 
@@ -597,30 +630,37 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	// let CachingMap calculate deltas...
 	s.bpfSvcs.Desired().DeleteAll()
 	s.bpfEps.Desired().DeleteAll()
+	s.bpfMaglevEps.Desired().DeleteAll()
 
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
 		svc := sinfo.(Service)
-
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
+		topologyMode := svc.TopologyMode()
 
-		eps := make([]k8sp.Endpoint, 0, len(state.EpsMap[sname]))
-		for _, ep := range state.EpsMap[sname] {
-			zoneHints := ep.ZoneHints()
-			if ep.IsReady() || ep.IsTerminating() {
-				if ShouldAppendTopologyAwareEndpoint(nodeZone, "", zoneHints) {
-					eps = append(eps, ep)
-				} else {
-					log.Debugf("Topology Aware Hints: for Endpoint: '%s' however Zone: '%s' does not match Zone Hints: '%v'\n",
-						ep.IP(),
-						nodeZone,
-						zoneHints)
-				}
-			}
+		// Topology Aware Routing has precedence over Traffic Distribution.
+		eps, topologyAwareApplied := FilterEpsByTopologyAwareRouting(state.EpsMap[sname], topologyMode, nodeZone)
+		if !topologyAwareApplied {
+			log.Debugf("Topology Aware Routing not applied for service %s, mode %s. Trying Traffic Distribution...", sname, topologyMode)
+			// If Traffic Distribution can't be applied, it will return the original endpoints (cluster-wide).
+			eps = FilterEpsByTrafficDistribution(state.EpsMap[sname], nodeName, nodeZone)
+		} else {
+			log.Debugf("Topology Aware Routing applied for service %s, mode %s.", sname, topologyMode)
 		}
 
-		err := s.applySvc(skey, svc, eps)
+		var maglevEPs []k8sp.Endpoint
+		if svc.UseMaglev() {
+			ch := s.newConsistentHash()
+			for _, ep := range eps {
+				if ep.IsReady() {
+					ch.AddBackend(ep)
+				}
+			}
+			maglevEPs = ch.Generate()
+		}
+
+		err := s.applySvc(skey, svc, eps, maglevEPs)
 		if err != nil {
 			return err
 		}
@@ -637,6 +677,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				log.Debugf("LB status IP %s", lbIP)
 			}
 		}
+
 		// N.B. we assume that k8s provide us with no duplicities
 		for _, extIP := range svc.ExternalIPs() {
 			extInfo := serviceInfoFromK8sServicePort(svc)
@@ -683,7 +724,10 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	if err != nil {
 		return err
 	}
-	// Update the frontends, after this is done we should be handling packets correctly.
+	err = s.bpfMaglevEps.ApplyAllChanges()
+	if err != nil {
+		return err
+	}
 	err = s.bpfSvcs.ApplyUpdatesOnly()
 	if err != nil {
 		return err
@@ -747,9 +791,8 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 	return s.cleanupSticky()
 }
 
-func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp.Endpoint) (int, int, error) {
+func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp.Endpoint, maglevEPs []k8sp.Endpoint) (int, int, error) {
 	cpEps := make([]k8sp.Endpoint, 0, len(eps))
-
 	cnt := 0
 	local := 0
 
@@ -797,6 +840,11 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 		flags |= nat.NATFlgInternalLocal
 	}
 
+	if sinfo.UseMaglev() && maglevEPs != nil {
+		flags |= nat.NATFlgMaglev
+		s.writeMaglevSvcBackends(id, skey, maglevEPs)
+	}
+
 	if err := s.writeSvc(sinfo, id, cnt, local, flags); err != nil {
 		return 0, 0, err
 	}
@@ -814,6 +862,23 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	}
 
 	return cnt, local, nil
+}
+
+func (s *Syncer) newConsistentHash() *consistenthash.ConsistentHash {
+	return consistenthash.New(
+		s.maglevLUTSize,
+		fnv.New32(), fnv.New32(),
+	)
+}
+
+// writeMaglevBackends takes frontend info, and a pre-populated CH module (backends already programmed).
+func (s *Syncer) writeMaglevSvcBackends(sID uint32, skey svcKey, maglevEPs []k8sp.Endpoint) {
+	for i, b := range maglevEPs {
+		mKey := s.newMaglevKey(sID, uint32(i))
+		mVal := s.newBackendValue(net.ParseIP(b.IP()), uint16(b.Port()))
+		s.bpfMaglevEps.Desired().Set(mKey, mVal)
+	}
+	log.WithFields(log.Fields{"service": skey.sname, "id": sID}).Info("Wrote Maglev service backends to LUT")
 }
 
 func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) error {
@@ -1442,7 +1507,7 @@ func (info *serviceInfo) InternalPolicyLocal() bool {
 }
 
 // K8sServicePortOption defines options for NewK8sServicePort
-type K8sServicePortOption func(interface{})
+type K8sServicePortOption func(any)
 
 // NewK8sServicePort creates a new k8s ServicePort
 func NewK8sServicePort(clusterIP net.IP, port int, proto v1.Protocol,
@@ -1511,35 +1576,35 @@ func cidrEqual[T ip.IPOrIPNet](a, b []T) bool {
 
 // K8sSvcWithLoadBalancerIPs set LoadBalancerIPStrings
 func K8sSvcWithLoadBalancerIPs(ips []net.IP) K8sServicePortOption {
-	return func(s interface{}) {
+	return func(s any) {
 		s.(*servicePort).ServicePort.(*serviceInfo).loadBalancerVIPs = ips
 	}
 }
 
 // K8sSvcWithLBSourceRangeIPs sets LBSourcePortRangeIPs
 func K8sSvcWithLBSourceRangeIPs(ips []*net.IPNet) K8sServicePortOption {
-	return func(s interface{}) {
+	return func(s any) {
 		s.(*servicePort).ServicePort.(*serviceInfo).loadBalancerSourceRanges = ips
 	}
 }
 
 // K8sSvcWithExternalIPs sets ExternalIPs
 func K8sSvcWithExternalIPs(ips []net.IP) K8sServicePortOption {
-	return func(s interface{}) {
+	return func(s any) {
 		s.(*servicePort).ServicePort.(*serviceInfo).externalIPs = ips
 	}
 }
 
 // K8sSvcWithNodePort sets the nodeport
 func K8sSvcWithNodePort(np int) K8sServicePortOption {
-	return func(s interface{}) {
+	return func(s any) {
 		s.(*servicePort).ServicePort.(*serviceInfo).nodePort = np
 	}
 }
 
 // K8sSvcWithLocalOnly sets OnlyNodeLocalEndpoints=true
 func K8sSvcWithLocalOnly() K8sServicePortOption {
-	return func(s interface{}) {
+	return func(s any) {
 		s.(*servicePort).ServicePort.(*serviceInfo).nodeLocalExternal = true
 		s.(*servicePort).ServicePort.(*serviceInfo).nodeLocalInternal = true
 	}
@@ -1547,14 +1612,20 @@ func K8sSvcWithLocalOnly() K8sServicePortOption {
 
 // K8sSvcWithStickyClientIP sets ServiceAffinityClientIP to seconds
 func K8sSvcWithStickyClientIP(seconds int) K8sServicePortOption {
-	return func(s interface{}) {
+	return func(s any) {
 		s.(*servicePort).ServicePort.(*serviceInfo).stickyMaxAgeSeconds = seconds
 		s.(*servicePort).ServicePort.(*serviceInfo).sessionAffinityType = v1.ServiceAffinityClientIP
 	}
 }
 
 func K8sSvcWithReapTerminatingUDP() K8sServicePortOption {
-	return func(s interface{}) {
+	return func(s any) {
 		s.(*servicePort).reapTerminatingUDP = true
+	}
+}
+
+func K8sSvcWithTopologyMode(value string) K8sServicePortOption {
+	return func(s any) {
+		s.(*servicePort).topologyMode = value
 	}
 }

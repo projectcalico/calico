@@ -53,7 +53,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 
 	// Aggregate the relevant DiachronicFlows across the time range.
 	flowsByKey := map[types.FlowKey]*types.Flow{}
-	keys.Iter(func(d *DiachronicFlow) error {
+	for d := range keys.All() {
 		logCtx := logrus.WithField("id", d.ID)
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			// Unpacking the key is a bit expensive, so only do it in debug mode.
@@ -68,8 +68,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 				flowsByKey[*flow.Key] = flow
 			}
 		}
-		return nil
-	})
+	}
 
 	// Convert the map to a slice.
 	flows := []*types.Flow{}
@@ -134,7 +133,7 @@ func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts
 	// Aggregate the relevant DiachronicFlows across the time range.
 	var values []string
 	seen := set.New[string]()
-	keys.Iter(func(d *DiachronicFlow) error {
+	for d := range keys.All() {
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			logrus.WithFields(d.Key.Fields()).
 				WithFields(logrus.Fields{"filter": opts.filter}).
@@ -156,8 +155,7 @@ func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts
 				}
 			}
 		}
-		return nil
-	})
+	}
 
 	// Sort the values alphanumerically.
 	sort.Strings(values)

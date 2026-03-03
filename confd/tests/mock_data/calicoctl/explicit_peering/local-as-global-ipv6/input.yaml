@@ -15,6 +15,7 @@ metadata:
 spec:
   peerIP: 2001::102
   asNumber: 64567
+  localASNumber: 64567
   sourceAddress: None
 
 ---

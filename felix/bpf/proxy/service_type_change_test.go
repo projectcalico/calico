@@ -18,7 +18,7 @@ import (
 	"context"
 	"net"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/ip"
+	felixproto "github.com/projectcalico/calico/felix/proto"
 )
 
 var _ = Describe("BPF service type change", func() {
@@ -87,6 +88,7 @@ var _ = Describe("BPF service type change", func() {
 	bpfMaps := &bpfmap.IPMaps{}
 	bpfMaps.FrontendMap = newMockNATMap()
 	bpfMaps.BackendMap = newMockNATBackendMap()
+	bpfMaps.MaglevMap = newMockMaglevMap()
 	bpfMaps.AffinityMap = newMockAffinityMap()
 	bpfMaps.CtMap = mock.NewMockMap(conntrack.MapParams)
 	front := bpfMaps.FrontendMap.(*mockNATMap)
@@ -99,7 +101,10 @@ var _ = Describe("BPF service type change", func() {
 	var p *proxy.KubeProxy
 
 	BeforeEach(func() {
-		p, _ = proxy.StartKubeProxy(k8s, "test-node", bpfMaps, proxy.WithImmediateSync())
+		p, _ = proxy.StartKubeProxy(k8s, "test-node", bpfMaps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSize(maglevLUTSize))
+		// Unblock start(), which blocks on the initial host metadata update.
+		p.OnUpdate(&felixproto.HostMetadataV4V6Update{Hostname: "dummy"})
+		Expect(p.CompleteDeferredWork()).To(Succeed())
 		p.OnHostIPsUpdate([]net.IP{initIP})
 	})
 

@@ -28,8 +28,8 @@ func TestPolicyID_String(t *testing.T) {
 		p    PolicyID
 		want string
 	}{
-		{"empty", PolicyID{}, "{Tier: , Name: }"},
-		{"non-empty", PolicyID{"foo", "bar"}, "{Tier: foo, Name: bar}"},
+		{"empty", PolicyID{}, "{Name: , Namespace: , Kind: }"},
+		{"non-empty", PolicyID{"foo", "bar", "baz"}, "{Name: foo, Namespace: bar, Kind: baz}"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -47,7 +47,11 @@ func TestProtoToPolicyID(t *testing.T) {
 		want PolicyID
 	}{
 		{"empty", nil, PolicyID{}},
-		{"non-empty", &proto.PolicyID{Tier: "foo", Name: "bar"}, PolicyID{Tier: "foo", Name: "bar"}},
+		{
+			"non-empty",
+			&proto.PolicyID{Name: "bar", Namespace: "baz", Kind: "foo"},
+			PolicyID{Name: "bar", Namespace: "baz", Kind: "foo"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -65,7 +69,11 @@ func TestPolicyIDToProto(t *testing.T) {
 		want *proto.PolicyID
 	}{
 		{"empty", PolicyID{}, &proto.PolicyID{}},
-		{"non-empty", PolicyID{Tier: "foo", Name: "bar"}, &proto.PolicyID{Tier: "foo", Name: "bar"}},
+		{
+			"non-empty",
+			PolicyID{Name: "foo", Namespace: "bar", Kind: "bar"},
+			&proto.PolicyID{Name: "foo", Namespace: "bar", Kind: "bar"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

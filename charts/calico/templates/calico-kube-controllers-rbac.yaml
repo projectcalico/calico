@@ -36,6 +36,28 @@ rules:
     verbs:
       - watch
       - list
+  # Needed for policy name migrator.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - networkpolicies
+      - stagednetworkpolicies
+      - globalnetworkpolicies
+      - stagedglobalnetworkpolicies
+    verbs:
+      - watch
+      - list
+      - get
+      - create
+      - update
+      - delete
+  # Needed for policy name migrator to check calico/node daemonset status.
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+    verbs:
+      - get
+    resourceNames:
+      - calico-node
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -154,6 +176,34 @@ rules:
       - update
       # watch for changes
       - watch
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - kubecontrollersconfigurations/status
+    verbs:
+      - get
+      - update
+  # Needed for policy name migrator.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - networkpolicies
+      - stagednetworkpolicies
+      - globalnetworkpolicies
+      - stagedglobalnetworkpolicies
+    verbs:
+      - watch
+      - list
+      - get
+      - create
+      - update
+      - delete
+  # Needed for policy name migrator to check calico/node daemonset status.
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+    verbs:
+      - get
+    resourceNames:
+      - calico-node
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

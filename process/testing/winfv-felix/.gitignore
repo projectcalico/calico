@@ -1,2 +1,2 @@
-run-cni-fv.ps1
-run-felix-fv.ps1
+pod-logs/
+windows/run-fv.ps1

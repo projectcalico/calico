@@ -20,8 +20,8 @@ import (
 	"strconv"
 
 	"github.com/docopt/docopt-go"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
@@ -252,6 +252,16 @@ func main() {
 
 		if err != nil || s < 0 {
 			log.WithError(err).Fatal("failed to create UDP socket")
+		}
+
+		if sport != 0 {
+			laddr := &unix.SockaddrInet4{
+				Port: int(sport), // Your specific source port
+				Addr: [4]byte{0, 0, 0, 0},
+			}
+			if err := unix.Bind(s, laddr); err != nil {
+				log.WithError(err).Fatal("failed to bind to source port")
+			}
 		}
 
 		if !ipDNF {

@@ -28,7 +28,7 @@ import (
 
 var (
 	matchHostEndpoint = regexp.MustCompile("^/?calico/v1/host/([^/]+)/endpoint/([^/]+)$")
-	typeHostEndpoint  = reflect.TypeOf(HostEndpoint{})
+	typeHostEndpoint  = reflect.TypeFor[HostEndpoint]()
 )
 
 type HostEndpointKey struct {
@@ -64,6 +64,10 @@ func (key HostEndpointKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key HostEndpointKey) valueType() (reflect.Type, error) {
 	return typeHostEndpoint, nil
+}
+
+func (key HostEndpointKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[HostEndpoint](key, rawData)
 }
 
 func (key HostEndpointKey) String() string {
@@ -114,7 +118,7 @@ type HostEndpoint struct {
 	Name              string           `json:"name,omitempty" validate:"omitempty,interface"`
 	ExpectedIPv4Addrs []net.IP         `json:"expected_ipv4_addrs,omitempty" validate:"omitempty,dive,ipv4"`
 	ExpectedIPv6Addrs []net.IP         `json:"expected_ipv6_addrs,omitempty" validate:"omitempty,dive,ipv6"`
-	Labels            uniquelabels.Map `json:"labels,omitempty" validate:"omitempty,labels"`
+	Labels            uniquelabels.Map `json:"labels" validate:"omitempty,labels"`
 	ProfileIDs        []string         `json:"profile_ids,omitempty" validate:"omitempty,dive,name"`
 	Ports             []EndpointPort   `json:"ports,omitempty" validate:"dive"`
 	QoSControls       *QoSControls     `json:"qosControls,omitempty"`

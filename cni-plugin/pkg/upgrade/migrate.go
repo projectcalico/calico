@@ -29,7 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -43,12 +43,10 @@ const (
 	ipAllocPath = "/var/lib/cni/networks/k8s-pod-network"
 )
 
-var (
-	binariesToDisable = []string{
-		"/host/opt/cni/bin/calico",
-		"/host/opt/cni/bin/host-local",
-	}
-)
+var binariesToDisable = []string{
+	"/host/opt/cni/bin/calico",
+	"/host/opt/cni/bin/host-local",
+}
 
 type accessor interface {
 	Backend() bapi.Client
@@ -116,13 +114,13 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 
 			// Implemented retry on conflict, because we get stuck if the upgrade-ipam
 			// container fails here and retries assigning an IP which is already assigned
-			for i := uint(0); i < 5; i++ {
+			for range uint(5) {
 				node, err := c.Nodes().Get(ctxt, nodename, options.GetOptions{})
 				if err != nil {
 					return fmt.Errorf("failed to get calico node resource: %s", err)
 				}
 				if node.Spec.BGP == nil {
-					node.Spec.BGP = &libapiv3.NodeBGPSpec{}
+					node.Spec.BGP = &internalapi.NodeBGPSpec{}
 				}
 				node.Spec.BGP.IPv4IPIPTunnelAddr = tunIp.String()
 				if _, err = c.Nodes().Update(ctxt, node, options.SetOptions{}); err != nil {
@@ -176,7 +174,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	// Disable cni by setting DatastoreReady to false.
 	log.Info("setting datastore readiness to false")
 	var clusterInfo *apiv3.ClusterInformation
-	for i := uint(0); i < 5; i++ {
+	for range uint(5) {
 		clusterInfo, err = c.ClusterInformation().Get(ctxt, "default", options.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to fetch cluster information: %s", err)

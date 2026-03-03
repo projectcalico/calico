@@ -31,6 +31,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -345,8 +346,8 @@ func (b *BPFLib) ListCIDRMaps(family IPFamily) ([]string, error) {
 	suffix := fmt.Sprintf("_%s_%s_blacklist", family, cidrMapVersion)
 	for _, m := range maps {
 		name := m.Name()
-		if strings.HasSuffix(name, suffix) {
-			ifName := strings.TrimSuffix(name, suffix)
+		if before, ok := strings.CutSuffix(name, suffix); ok {
+			ifName := before
 			ifNames = append(ifNames, ifName)
 		}
 	}
@@ -1205,10 +1206,8 @@ func (b *BPFLib) GetXDPMode(ifName string) (XDPMode, error) {
 		{"xdpoffload", XDPOffload},
 		{"xdp", XDPDriver}, // We write "xdpdrv" but read back "xdp"
 	} {
-		for _, f := range s {
-			if f == modeMapping.String {
-				return modeMapping.Mode, nil
-			}
+		if slices.Contains(s, modeMapping.String) {
+			return modeMapping.Mode, nil
 		}
 	}
 
@@ -2398,13 +2397,13 @@ func loadObject(obj *libbpf.Obj, data libbpf.GlobalData, mapsToBePinned ...strin
 		// userspace before the program is loaded.
 		mapName := m.Name()
 		if m.IsMapInternal() {
-			if strings.HasPrefix(mapName, ".rodata") {
+			if !strings.HasSuffix(mapName, ".rodata") {
 				continue
 			}
 
 			if data != nil {
 				if err := data.Set(m); err != nil {
-					return nil, fmt.Errorf("failed to configure %s: %w", obj.Filename(), err)
+					return nil, fmt.Errorf("failed to configure %s map %s: %w", obj.Filename(), mapName, err)
 				}
 			}
 			continue

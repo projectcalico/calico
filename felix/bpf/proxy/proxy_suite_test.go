@@ -17,11 +17,13 @@ package proxy_test
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 )
 
 func TestProxy(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "BPF Proxy Suite")
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/felix_bpf_proxy_suite.xml"
+	ginkgo.RunSpecs(t, "UT: felix/bpf/proxy", suiteConfig, reporterConfig)
 }

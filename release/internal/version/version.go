@@ -37,7 +37,7 @@ type Versions interface {
 	ReleaseBranch(releaseBranchPrefix string) string
 }
 
-func NewHashreleaseVersions(calico Version, operator string) Versions {
+func NewHashreleaseVersions(calico Version, operator string) *HashreleaseVersions {
 	return &HashreleaseVersions{
 		calico:   calico,
 		operator: operator,
@@ -289,8 +289,8 @@ func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
 		return "", fmt.Errorf("failed to grep for image in manifest %s: %s", manifest, err)
 	}
 
-	imgs := strings.Split(out, "\n")
-	for _, i := range imgs {
+	imgs := strings.SplitSeq(out, "\n")
+	for i := range imgs {
 		if strings.Contains(i, imgMatch) {
 			splits := strings.SplitAfter(i, ":")
 			ver := splits[len(splits)-1]

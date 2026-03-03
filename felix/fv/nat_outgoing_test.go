@@ -1,5 +1,3 @@
-//go:build fvtests
-
 // Copyright (c) 2019,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,12 +18,10 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -34,18 +30,15 @@ import (
 
 var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		infra          infrastructure.DatastoreInfra
-		tc             infrastructure.TopologyContainers
-		client         client.Interface
-		dumpedDiags    bool
-		externalClient *containers.Container
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
 	)
 
 	BeforeEach(func() {
 		var err error
 		infra = getInfra()
 
-		dumpedDiags = false
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.IPIPMode = api.IPIPModeNever
 		opts.EnableIPv6 = true
@@ -69,32 +62,6 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	// Utility function to dump diags if the test failed.  Should be called in the inner-most
-	// AfterEach() to dump diags before the test is torn down.  Only the first call for a given
-	// test has any effect.
-	dumpDiags := func() {
-		if !CurrentGinkgoTestDescription().Failed || dumpedDiags {
-			return
-		}
-		if NFTMode() {
-			logNFTDiags(tc.Felixes[0])
-		} else {
-			iptSave, err := tc.Felixes[0].ExecOutput("iptables-save", "-c")
-			if err == nil {
-				log.Info("iptables-save:\n" + iptSave)
-			}
-		}
-		dumpedDiags = true
-		infra.DumpErrorData()
-	}
-
-	AfterEach(func() {
-		dumpDiags()
-		tc.Stop()
-		infra.Stop()
-		externalClient.Stop()
-	})
-
 	It("should have expected restriction on the nat outgoing rule", func() {
 		if NFTMode() {
 			Eventually(func() string {
@@ -106,6 +73,50 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "nat")
 				return output
 			}, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp("-A cali-nat-outgoing .*-o eth\\+ "))
+		}
+	})
+})
+
+var _ = infrastructure.DatastoreDescribe("NATPortRange rendering test", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	var (
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
+	)
+
+	BeforeEach(func() {
+		var err error
+		infra = getInfra()
+
+		opts := infrastructure.DefaultTopologyOptions()
+		opts.IPIPMode = api.IPIPModeNever
+		opts.EnableIPv6 = true
+
+		opts.ExtraEnvVars = map[string]string{
+			"FELIX_NATPortRange": "32768:65535",
+		}
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
+
+		ctx := context.Background()
+		ippool := api.NewIPPool()
+		ippool.Name = "nat-pool"
+		ippool.Spec.CIDR = "10.244.255.0/24"
+		ippool.Spec.NATOutgoing = true
+		ippool, err = client.IPPools().Create(ctx, ippool, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should have expected rendering", func() {
+		if NFTMode() {
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "nat-cali-nat-outgoing")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("32768-65535"))
+		} else {
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "nat")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("32768-65535"))
 		}
 	})
 })

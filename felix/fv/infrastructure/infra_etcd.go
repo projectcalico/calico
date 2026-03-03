@@ -21,50 +21,86 @@ import (
 	"net"
 	"os"
 
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/utils"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 type EtcdDatastoreInfra struct {
-	etcdContainer *containers.Container
+	EtcdContainer *containers.Container
 	bpfLog        *containers.Container
 	client        client.Interface
 
 	Endpoint    string
 	BadEndpoint string
+
+	cleanups cleanupStack
+	felixes  []*Felix
+
+	bpfLogByteLimit int
 }
 
 func createEtcdDatastoreInfra(opts ...CreateOption) DatastoreInfra {
-	infra, err := GetEtcdDatastoreInfra()
+	infra, err := GetEtcdDatastoreInfra(opts...)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return infra
 }
 
-func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
+func GetEtcdDatastoreInfra(opts ...CreateOption) (_ *EtcdDatastoreInfra, err error) {
 	eds := &EtcdDatastoreInfra{}
+	defer func() {
+		if err != nil {
+			log.Warn("Failed to get etcd datastore infra, running cleanups.")
+			eds.Stop()
+		}
+	}()
+
+	for _, opt := range opts {
+		opt(eds)
+	}
 
 	// Start etcd.
-	eds.etcdContainer = RunEtcd()
-	if eds.etcdContainer == nil {
+	eds.EtcdContainer = RunEtcd()
+	if eds.EtcdContainer == nil {
 		return nil, errors.New("failed to create etcd container")
 	}
+	// Ensure etcd is stopped via cleanup stack.
+	eds.AddCleanup(func() {
+		if eds.EtcdContainer != nil {
+			eds.EtcdContainer.StopLogs()
+			eds.EtcdContainer.Stop()
+		}
+	})
 
 	// In BPF mode, start BPF logging.
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		eds.bpfLog = RunBPFLog()
+		eds.bpfLog = RunBPFLog(eds, eds.bpfLogByteLimit)
 	}
 
-	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.etcdContainer.IP)
-	eds.BadEndpoint = fmt.Sprintf("https://%s:1234", eds.etcdContainer.IP)
+	// Ensure client is closed via cleanup stack (if it was created).
+	eds.AddCleanup(func() {
+		if eds.client != nil {
+			if err := eds.client.Close(); err != nil {
+				log.WithError(err).Warn("Client Close() returned an error.  Ignoring.")
+			}
+		}
+	})
+
+	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.EtcdContainer.IP)
+	eds.BadEndpoint = fmt.Sprintf("https://%s:1234", eds.EtcdContainer.IP)
 
 	return eds, nil
+}
+
+func (eds *EtcdDatastoreInfra) setBPFLogByteLimit(limit int) {
+	eds.bpfLogByteLimit = limit
 }
 
 func (eds *EtcdDatastoreInfra) GetDockerArgs() []string {
@@ -72,8 +108,8 @@ func (eds *EtcdDatastoreInfra) GetDockerArgs() []string {
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
 		"-e", "FELIX_DATASTORETYPE=etcdv3",
 		"-e", "TYPHA_DATASTORETYPE=etcdv3",
-		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.etcdContainer.IP + ":2379",
-		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.etcdContainer.IP + ":2379",
+		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.EtcdContainer.IP + ":2379",
+		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.EtcdContainer.IP + ":2379",
 	}
 }
 
@@ -82,16 +118,20 @@ func (eds *EtcdDatastoreInfra) GetBadEndpointDockerArgs() []string {
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
 		"-e", "FELIX_DATASTORETYPE=etcdv3",
 		"-e", "TYPHA_DATASTORETYPE=etcdv3",
-		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.etcdContainer.IP + ":2379",
-		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.etcdContainer.IP + ":1234",
+		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.EtcdContainer.IP + ":2379",
+		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.EtcdContainer.IP + ":1234",
 	}
 }
 
 func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
 	if eds.client == nil {
-		eds.client = utils.GetEtcdClient(eds.etcdContainer.IP)
+		eds.client = utils.GetEtcdClient(eds.EtcdContainer.IP)
 	}
 	return eds.client
+}
+
+func (eds *EtcdDatastoreInfra) UseProjectCalicoV3API() bool {
+	return false
 }
 
 func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
@@ -137,7 +177,7 @@ func (eds *EtcdDatastoreInfra) RemoveNodeAddresses(felix *Felix) {
 	if err != nil {
 		panic(err)
 	}
-	node.Spec.Addresses = []libapi.NodeAddress{}
+	node.Spec.Addresses = []internalapi.NodeAddress{}
 	_, err = eds.GetCalicoClient().Nodes().Update(utils.Ctx, node, utils.NoOptions)
 	if err != nil {
 		panic(err)
@@ -145,12 +185,12 @@ func (eds *EtcdDatastoreInfra) RemoveNodeAddresses(felix *Felix) {
 }
 
 func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *net.IPNet, idx int, needBGP bool) {
-	felixNode := libapi.NewNode()
+	felixNode := internalapi.NewNode()
 	felixNode.Name = felix.Hostname
 	felixNode.Spec.IPv4VXLANTunnelAddr = felix.ExpectedVXLANTunnelAddr
 	felixNode.Spec.IPv6VXLANTunnelAddr = felix.ExpectedVXLANV6TunnelAddr
 	if needBGP {
-		felixNode.Spec.BGP = &libapi.NodeBGPSpec{
+		felixNode.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address:        fmt.Sprintf("%s/%s", felix.IP, felix.IPPrefix),
 			IPv4IPIPTunnelAddr: felix.ExpectedIPIPTunnelAddr,
 		}
@@ -158,10 +198,10 @@ func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *
 			felixNode.Spec.BGP.IPv6Address = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
 		}
 	}
-	nodeAddress := libapi.NodeAddress{Address: felix.IP, Type: libapi.InternalIP}
+	nodeAddress := internalapi.NodeAddress{Address: felix.IP, Type: internalapi.InternalIP}
 	felixNode.Spec.Addresses = append(felixNode.Spec.Addresses, nodeAddress)
 	if len(felix.IPv6) > 0 {
-		nodeAddressV6 := libapi.NodeAddress{Address: felix.IPv6, Type: libapi.InternalIP}
+		nodeAddressV6 := internalapi.NodeAddress{Address: felix.IPv6, Type: internalapi.InternalIP}
 		felixNode.Spec.Addresses = append(felixNode.Spec.Addresses, nodeAddressV6)
 	}
 	gomega.Eventually(func() error {
@@ -173,7 +213,7 @@ func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *
 	}, "10s", "500ms").ShouldNot(gomega.HaveOccurred())
 }
 
-func (eds *EtcdDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+func (eds *EtcdDatastoreInfra) AddWorkload(wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error) {
 	return eds.GetCalicoClient().WorkloadEndpoints().Create(utils.Ctx, wep, utils.NoOptions)
 }
 
@@ -182,7 +222,7 @@ func (eds *EtcdDatastoreInfra) RemoveWorkload(ns string, name string) error {
 	return err
 }
 
-func (eds *EtcdDatastoreInfra) UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+func (eds *EtcdDatastoreInfra) UpdateWorkload(wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error) {
 	return eds.GetCalicoClient().WorkloadEndpoints().Update(utils.Ctx, wep, options.SetOptions{})
 }
 
@@ -195,7 +235,7 @@ func (eds *EtcdDatastoreInfra) AddAllowToDatastore(selector string) error {
 	policy.Spec.Egress = []api.Rule{{
 		Action: api.Allow,
 		Destination: api.EntityRule{
-			Nets: []string{eds.etcdContainer.IP + "/32"},
+			Nets: []string{eds.EtcdContainer.IP + "/32"},
 		},
 	}}
 	_, err := eds.GetCalicoClient().GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
@@ -218,14 +258,35 @@ func (eds *EtcdDatastoreInfra) AddDefaultDeny() error {
 }
 
 func (eds *EtcdDatastoreInfra) DumpErrorData() {
-	eds.etcdContainer.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
+	// Per-Felix diagnostics first for context.
+	for _, f := range eds.felixes {
+		if f != nil {
+			dumpFelixDiags(f)
+		}
+	}
+	// Etcd datastore contents (keys only) for quick overview.
+	eds.EtcdContainer.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 }
 
 func (eds *EtcdDatastoreInfra) Stop() {
-	eds.bpfLog.StopLogs()
-	eds.etcdContainer.StopLogs()
-	eds.bpfLog.Stop()
-	err := eds.client.Close()
-	log.WithError(err).Warn("Client Close() returned an error.  Ignoring.")
-	eds.etcdContainer.Stop()
+	// Collect diagnostics first, before tearing anything down.
+	log.Info("Stopping etcd infra.")
+	if ginkgo.CurrentSpecReport().Failed() {
+		// Queue up the diags dump so that the cleanupStack will handle any
+		// panic from it.
+		eds.AddCleanup(eds.DumpErrorData)
+	}
+	// Run registered teardowns (reverse order). Do not suppress panics.
+	eds.cleanups.Run()
+}
+
+func (eds *EtcdDatastoreInfra) AddCleanup(f func()) {
+	eds.cleanups.Add(f)
+}
+
+func (eds *EtcdDatastoreInfra) RegisterFelix(f *Felix) {
+	if f == nil {
+		return
+	}
+	eds.felixes = append(eds.felixes, f)
 }

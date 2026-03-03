@@ -26,7 +26,7 @@
 
 #ifdef BPF_CORE_SUPPORTED
 #define bpf_log(__fmt, ...) do { \
-		char fmt[] = IPVER_PFX __fmt; \
+		__attribute__((section(".rodata.cali_debug"))) static const char fmt[] = IPVER_PFX __fmt; \
 		bpf_trace_printk(fmt, sizeof(fmt), ## __VA_ARGS__); \
 } while (0)
 #else

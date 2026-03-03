@@ -30,7 +30,7 @@ import (
 
 var (
 	matchIPPool = regexp.MustCompile("^/?calico/v1/ipam/v./pool/([^/]+)$")
-	typeIPPool  = reflect.TypeOf(IPPool{})
+	typeIPPool  = reflect.TypeFor[IPPool]()
 )
 
 type IPPoolKey struct {
@@ -56,6 +56,10 @@ func (key IPPoolKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key IPPoolKey) valueType() (reflect.Type, error) {
 	return typeIPPool, nil
+}
+
+func (key IPPoolKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[IPPool](key, rawData)
 }
 
 func (key IPPoolKey) String() string {

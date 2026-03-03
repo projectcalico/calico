@@ -1,0 +1,6 @@
+name: 2026-01-06-v3-32-vertigo
+hash: v3.32.0-0.dev-527-g92e0cd84e375-v1.42.0-0.dev-16-g3a924017cc9f
+stream: master
+version: v3.32.0-0.dev-527-g92e0cd84e375
+operator: v1.42.0-0.dev-16-g3a924017cc9f
+url: https://2026-01-06-v3-32-vertigo.docs.eng.tigera.net

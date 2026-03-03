@@ -101,7 +101,7 @@ func (pup *profileUpdateProcessor) OnSyncerStarting() {
 	// Do nothing
 }
 
-func convertProfileV2ToV1Value(val interface{}) (*model.Profile, error) {
+func convertProfileV2ToV1Value(val any) (*model.Profile, error) {
 	v3res, ok := val.(*apiv3.Profile)
 	if !ok {
 		return nil, errors.New("Value is not a valid Profile resource value")

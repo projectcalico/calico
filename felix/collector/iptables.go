@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 // Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
@@ -76,11 +75,9 @@ func (r *NFLogReader) Start() error {
 		return nil
 	}
 
-	r.wg.Add(1)
-	go func() {
-		defer r.wg.Done()
+	r.wg.Go(func() {
 		r.run()
-	}()
+	})
 
 	return nil
 }
@@ -240,11 +237,9 @@ func NewNetLinkConntrackReader(period time.Duration) *NetLinkConntrackReader {
 }
 
 func (r *NetLinkConntrackReader) Start() error {
-	r.wg.Add(1)
-	go func() {
-		defer r.wg.Done()
+	r.wg.Go(func() {
 		r.run()
-	}()
+	})
 	return nil
 }
 

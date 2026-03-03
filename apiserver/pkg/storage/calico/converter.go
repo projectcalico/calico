@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage"
 
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
@@ -119,13 +118,11 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		aapi := &v3.CalicoNodeStatus{}
 		CalicoNodeStatusConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *libapi.IPAMConfig:
+	case *v3.IPAMConfiguration:
 		aapi := &v3.IPAMConfiguration{}
 		IPAMConfigConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	// BlockAffinity works off of the libapi objects since
-	// the v3 client is used for mostly internal operations.
-	case *libapi.BlockAffinity:
+	case *v3.BlockAffinity:
 		aapi := &v3.BlockAffinity{}
 		BlockAffinityConverter{}.convertToAAPI(obj, aapi)
 		return aapi

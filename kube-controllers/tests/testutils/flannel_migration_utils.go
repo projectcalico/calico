@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"time"
 
@@ -44,6 +45,7 @@ func RunFlannelMigrationController(kconfigfile string, nodeName, subnetEnv strin
 		"-e", "ENABLED_CONTROLLERS=flannelmigration",
 		"-e", "LOG_LEVEL=debug",
 		"-e", "FLANNEL_DAEMONSET_NAMESPACE=kube-system",
+		"-e", "FV_TEST=true", // Indicate that this is an FV test run, enabling some test hooks.
 		"-e", fmt.Sprintf("POD_NODE_NAME=%s", nodeName),
 		"-e", fmt.Sprintf("FLANNEL_SUBNET_ENV=%s", subnetEnv),
 		"-e", fmt.Sprintf("DEBUG_WAIT_BEFORE_START=%d", waitBeforeStart),
@@ -114,9 +116,7 @@ func (f *FlannelCluster) AddFlannelNode(nodeName, podCidr, backend, mac, ip stri
 		defaultLabels["node-role.kubernetes.io/master"] = ""
 		defaultLabels["node-role.kubernetes.io/control-plane"] = ""
 	}
-	for k, v := range labels {
-		defaultLabels[k] = v
-	}
+	maps.Copy(defaultLabels, labels)
 
 	flannelNode := newFlannelNode(podCidr, backend, mac, ip)
 

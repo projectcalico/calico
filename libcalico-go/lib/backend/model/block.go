@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -40,13 +41,28 @@ const (
 	IPAMBlockAttributeTypeWireguard   = "wireguardTunnelAddress"
 	IPAMBlockAttributeTypeWireguardV6 = "wireguardV6TunnelAddress"
 	IPAMBlockAttributeTimestamp       = "timestamp"
-	IPAMAffinityTypeHost              = "host"
-	IPAMAffinityTypeVirtual           = "virtual"
+
+	// KubeVirt VM pod attributes
+
+	// Name of the VMI object (also the name of the VM object if VM is present, as they share the same name)
+	IPAMBlockAttributeVMIName = "vmi-name"
+
+	// UID of the VMI object
+	IPAMBlockAttributeVMIUID = "vmi-uid"
+
+	// UID of the VM object (only present if VMI is owned by a VM)
+	IPAMBlockAttributeVMUID = "vm-uid"
+
+	// UID of the VirtualMachineInstanceMigration object (only present on migration target pods)
+	IPAMBlockAttributeVMIMUID = "vmim-uid"
+
+	IPAMAffinityTypeHost    = "host"
+	IPAMAffinityTypeVirtual = "virtual"
 )
 
 var (
 	matchBlock = regexp.MustCompile("^/?calico/ipam/v2/assignment/ipv./block/([^/]+)$")
-	typeBlock  = reflect.TypeOf(AllocationBlock{})
+	typeBlock  = reflect.TypeFor[AllocationBlock]()
 )
 
 type BlockKey struct {
@@ -72,6 +88,10 @@ func (key BlockKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key BlockKey) valueType() (reflect.Type, error) {
 	return typeBlock, nil
+}
+
+func (key BlockKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[AllocationBlock](key, rawData)
 }
 
 func (key BlockKey) String() string {
@@ -113,6 +133,10 @@ type AllocationBlock struct {
 	// Affinity of the block, if this block has one. If set, it will be of the form
 	// "host:<hostname>". If not set, this block is not affine to a host.
 	Affinity *string `json:"affinity"`
+
+	// Time the affinity was claimed; may be zero for old blocks that predate
+	// this field.
+	AffinityClaimTime *metav1.Time `json:"affinity_claim_time,omitempty"`
 
 	// Array of allocations in-use within this block. nil entries mean the allocation is free.
 	// For non-nil entries at index i, the index is the ordinal of the allocation within this block
@@ -209,7 +233,7 @@ func (b *AllocationBlock) NonAffineAllocations() []Allocation {
 			continue
 		}
 		attrs := b.Attributes[*attrIdx]
-		host := attrs.AttrSecondary[IPAMBlockAttributeNode]
+		host := attrs.ActiveOwnerAttrs[IPAMBlockAttributeNode]
 		if myHost != "" && host == myHost {
 			continue // Skip allocations that are affine to this block.
 		}
@@ -246,6 +270,11 @@ func (b *AllocationBlock) OrdinalToIP(ord int) net.IP {
 }
 
 type AllocationAttribute struct {
-	AttrPrimary   *string           `json:"handle_id"`
-	AttrSecondary map[string]string `json:"secondary"`
+	// HandleID is the primary identifier for the allocation.
+	HandleID *string `json:"handle_id,omitempty"`
+	// ActiveOwnerAttrs contains attributes of the active owner (the pod currently using the IP).
+	ActiveOwnerAttrs map[string]string `json:"secondary,omitempty"`
+	// AlternateOwnerAttrs contains attributes of the previous or potential owner
+	// (used during live migration to track the source or target pod).
+	AlternateOwnerAttrs map[string]string `json:"alternate,omitempty"`
 }

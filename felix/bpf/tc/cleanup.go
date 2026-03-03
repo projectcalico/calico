@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -81,12 +82,9 @@ func CleanUpProgramsAndPins() {
 				calicoProgIDs.Add(p.ID)
 				continue
 			}
-			for _, id := range p.Maps {
-				if calicoMapIDs.Contains(id) {
-					log.WithField("id", p.ID).Debug("Found calico program (by reference to calico map)")
-					calicoProgIDs.Add(p.ID)
-					break
-				}
+			if slices.ContainsFunc(p.Maps, calicoMapIDs.Contains) {
+				log.WithField("id", p.ID).Debug("Found calico program (by reference to calico map)")
+				calicoProgIDs.Add(p.ID)
 			}
 		}
 	}

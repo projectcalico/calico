@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -21,21 +19,20 @@ import (
 	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Context("_IPSets_ Tests for IPset rendering", func() {
+var _ = infrastructure.DatastoreDescribe("_IPSets_ Tests for IPset rendering", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers
 		felixPID int
 		client   client.Interface
@@ -55,21 +52,11 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 			}
 		}
 		logrus.SetLevel(logrus.InfoLevel)
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		felixPID = tc.Felixes[0].GetFelixPID()
 		_ = felixPID
 		w = workload.Run(tc.Felixes[0], "w", "default", "10.65.0.2", "8085", "tcp")
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-
-		w.Stop()
-		tc.Stop()
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	It("should handle thousands of IP sets flapping", func() {
@@ -87,7 +74,7 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 
 		By("Creating a workload, activating the policies")
 		// Create a workload that uses the policy.
-		baseNumSets := tc.Felixes[0].Container.NumIPSets()
+		baseNumSets := tc.Felixes[0].NumIPSets()
 		wep := w.WorkloadEndpoint.DeepCopy()
 		w.ConfigureInInfra(infra)
 		startTime := time.Now()
@@ -142,7 +129,7 @@ func createNetworkSetPolicies(c client.Interface, numPols, numRulesPerPol int) {
 	By("Creating network sets")
 	sizes := []int{1, 1, 1, 2, 3, 4, 5, 5, 5, 5, 5, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 100, 200, 1000}
 	numSets := numPols * numRulesPerPol
-	for i := 0; i < numSets; i++ {
+	for i := range numSets {
 		ns := api.NewGlobalNetworkSet()
 		ns.Name = fmt.Sprintf("netset-%d", i)
 		ns.Labels = map[string]string{
@@ -155,9 +142,9 @@ func createNetworkSetPolicies(c client.Interface, numPols, numRulesPerPol int) {
 
 	By("Creating policies with selectors")
 	// Make a policy that activates them
-	for i := 0; i < numPols; i++ {
+	for i := range numPols {
 		rules := make([]api.Rule, numRulesPerPol)
-		for j := 0; j < numRulesPerPol; j++ {
+		for j := range numRulesPerPol {
 			rules[j] = api.Rule{
 				Action: "Allow",
 				Source: api.EntityRule{

@@ -1,0 +1,17 @@
+# This MutatingAdmissionPolicyBinding binds the tier label mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-tier-label-binding
+spec:
+  policyName: tierlabel.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies

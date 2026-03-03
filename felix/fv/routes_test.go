@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -23,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -60,26 +58,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 
 		tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				felix.Exec("ip", "r")
-			}
-		}
-
-		for _, wls := range w {
-			for _, wl := range wls {
-				wl.Stop()
-			}
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 
 	Describe("with a workload", func() {
@@ -165,7 +143,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 	Describe("with locally conflicting IPs", func() {
 		BeforeEach(func() {
 			// Start two local workloads with the same IP >:)
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				w[0][i] = workload.Run(tc.Felixes[0], fmt.Sprintf("w%d", i), "default", "10.65.0.2", "8088", "tcp")
 				w[0][i].ConfigureInInfra(infra)
 
@@ -211,7 +189,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 	Describe("with local/remote conflicting IPs", func() {
 		BeforeEach(func() {
 			// One local, one remote workload with same IP >:)
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				w[i][0] = workload.Run(tc.Felixes[i], fmt.Sprintf("w%d", i), "default", "10.65.0.2", "8088", "tcp")
 				w[i][0].ConfigureInInfra(infra)
 			}

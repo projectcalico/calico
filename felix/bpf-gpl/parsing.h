@@ -177,6 +177,28 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 				}
 			}
 		}
+		if (ctx->state->dport == WG_PORT) {
+			/* Wireguard packet. Allow if to/from known Calico host. */
+			if (CALI_F_FROM_HEP) {
+				if (rt_addr_is_remote_host(&ctx->state->ip_src)) {
+					CALI_DEBUG("Wireguard packet from known Calico host, allow.");
+					goto allow;
+				} else {
+					CALI_DEBUG("Wireguard packet from unknown source, drop.");
+					deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
+					goto deny;
+				}
+			} else if (CALI_F_TO_HEP && !CALI_F_L3_DEV) {
+				if (rt_addr_is_remote_host(&ctx->state->ip_dst)) {
+					CALI_DEBUG("Wireguard packet to known Calico host, allow.");
+					goto allow;
+				} else {
+					CALI_DEBUG("Wireguard packet to unknown dest, drop.");
+					deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
+					goto deny;
+				}
+			}
+		}
 		break;
 #ifdef IPVER6
 	case IPPROTO_ICMPV6:

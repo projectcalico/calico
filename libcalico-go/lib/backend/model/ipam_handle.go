@@ -26,7 +26,7 @@ import (
 
 var (
 	matchHandle = regexp.MustCompile("^/?calico/ipam/v2/handle/([^/]+)$")
-	typeHandle  = reflect.TypeOf(IPAMHandle{})
+	typeHandle  = reflect.TypeFor[IPAMHandle]()
 )
 
 type IPAMHandleKey struct {
@@ -51,6 +51,10 @@ func (key IPAMHandleKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key IPAMHandleKey) valueType() (reflect.Type, error) {
 	return typeHandle, nil
+}
+
+func (key IPAMHandleKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[IPAMHandle](key, rawData)
 }
 
 func (key IPAMHandleKey) String() string {

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -21,15 +19,14 @@ import (
 	"errors"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/metrics"
-	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -40,41 +37,20 @@ const (
 	kubeProxyModeIptables = "iptables"
 )
 
-var _ = Context("Config update tests, after starting felix", func() {
+var _ = infrastructure.DatastoreDescribe("Config update tests, after starting felix", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd          *containers.Container
 		tc            infrastructure.TopologyContainers
 		felixPID      int
 		client        client.Interface
 		infra         infrastructure.DatastoreInfra
-		w             [3]*workload.Workload
 		cfgChangeTime time.Time
 	)
 
 	BeforeEach(func() {
-		if NFTMode() {
-			Skip("TODO: Implement for NFT")
-		}
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
+		_ = infra
 		felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
-			tc.Felixes[0].Exec("ip", "r")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	shouldStayUp := func() {
@@ -231,6 +207,46 @@ var _ = Context("Config update tests, after starting felix", func() {
 				cfgChangeTime = time.Now()
 				err = proxy.switchToMode(kubeProxyModeIptables)
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should exit after a delay", shouldExitAfterADelay)
+		})
+	})
+
+	Context("after switching kube-proxy mode to nftables that should trigger a restart", func() {
+		shouldExitAfterADelay := func() {
+			// Felix checks every 15s, so wait with enough buffer.
+			Eventually(tc.Felixes[0].GetFelixPIDs, "30s", "100ms").ShouldNot(ContainElement(felixPID))
+
+			// Update felix pid after restart.
+			felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
+		}
+
+		BeforeEach(func() {
+			if NFTMode() {
+				Skip("Skipping auto-detection tests when felix is already explicitly in nftables mode")
+			}
+
+			cfgChangeTime = time.Now()
+
+			// Create nftables rules in the "kube-proxy" table, which should trigger felix restart.
+			tc.Felixes[0].Exec("nft", "add", "table", "ip", "kube-proxy")
+			tc.Felixes[0].Exec("nft", "add", "chain", "ip", "kube-proxy", "KUBE-TEST", "{ type filter hook forward priority 0 ; }")
+		})
+
+		It("should exit after a delay", shouldExitAfterADelay)
+
+		Context("after removing nftables rules that should trigger a restart", func() {
+			BeforeEach(func() {
+				// Wait felix in sync again.
+				shouldExitAfterADelay()
+				waitForFelixInSync(tc.Felixes[0])
+
+				// Track the current time and then make the config change back to iptables mode.
+				cfgChangeTime = time.Now()
+
+				// Remove the nftables rules in the "kube-proxy" table, which should trigger felix restart.
+				tc.Felixes[0].Exec("nft", "delete", "table", "ip", "kube-proxy")
 			})
 
 			It("should exit after a delay", shouldExitAfterADelay)

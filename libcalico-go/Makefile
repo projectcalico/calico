@@ -6,10 +6,13 @@ LOCAL_CHECKS = check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
-NETPOL_TAG = v0.1.5
-NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/experimental
-NETPOL_ANP_CRD = policy.networking.k8s.io_adminnetworkpolicies.yaml
-NETPOL_BANP_CRD = policy.networking.k8s.io_baselineadminnetworkpolicies.yaml
+# For a branch/tag use this format:
+# NETPOL_CNP_REF = refs/heads/main
+# For a commit, just use the commit ID:
+# NETPOL_CNP_REF = <commit ID>
+NETPOL_CNP_REF = 412bf65729a56bc9f0569a5e5a95685ac22350d9
+NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/$(NETPOL_CNP_REF)/config/crd/standard
+NETPOL_CNP_CRD = policy.networking.k8s.io_clusternetworkpolicies.yaml
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -23,23 +26,18 @@ include ../lib.Makefile
 BINDIR?=bin
 
 # Create a list of files upon which the generated file depends, skip the generated file itself
-UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go, \
-                             $(wildcard ./lib/upgrade/migrator/clients/v1/k8s/custom/*.go))
-
-# Create a list of files upon which the generated file depends, skip the generated file itself
-APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
+APIS_SRCS := $(filter-out ./lib/apis/internalapi/zz_generated.deepcopy.go, $(wildcard ./lib/apis/internalapi/*.go))
 
 .PHONY: clean
 clean:
 	rm -rf $(BINDIR) checkouts
-	find . -name '*.coverprofile' -type f -delete
+	find . -name 'coverprofile.out' -type f -delete
 
 ###############################################################################
 # Building the binary
 ###############################################################################
-GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
-	./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go \
-	./lib/apis/v3/generated.openapi.go \
+GENERATED_FILES:=./lib/apis/internalapi/zz_generated.deepcopy.go \
+	./lib/apis/internalapi/generated.openapi.go \
 	./lib/apis/v1/generated.openapi.go \
 	./lib/selector/tokenizer/kind_string.go
 
@@ -65,39 +63,30 @@ gen-crds:
 	rm -f config/crd/_nodes.yaml
 	# Remove the first yaml separator line.
 	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
-	# Add K8S AdminNetworkPolicy CRD
-	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
-	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_BANP_CRD) -o ./config/crd/$(NETPOL_BANP_CRD)
+	# Add K8S ClusterNetworkPolicy CRD
+	curl -sSfL --retry 3 $(NETPOL_CNP_CRD_URL)/$(NETPOL_CNP_CRD) -o ./config/crd/$(NETPOL_CNP_CRD)
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
 	# Patch in manual tweaks to the generated CRDs.
 	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
 
-./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS)
+./lib/apis/internalapi/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
 		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
 		--output-file zz_generated.deepcopy.go \
-		"$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom"'
-
-./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS)
-	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
-		--v 1 --logtostderr \
-		--go-header-file "./docs/boilerplate.go.txt" \
-		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
-		--output-file zz_generated.deepcopy.go \
-		"$(PACKAGE_NAME)/lib/apis/v3"'
+		"$(PACKAGE_NAME)/lib/apis/internalapi"'
 
 # Generate OpenAPI spec
-./lib/apis/v3/generated.openapi.go: $(APIS_SRCS)
+./lib/apis/internalapi/generated.openapi.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) \
            sh -c 'openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
-				--output-dir "./lib/apis/v3" \
-                --output-pkg "$(PACKAGE_NAME)/lib/apis/v3" \
-                "$(PACKAGE_NAME)/lib/apis/v3" \
+				--output-dir "./lib/apis/internalapi" \
+                --output-pkg "$(PACKAGE_NAME)/lib/apis/internalapi" \
+                "$(PACKAGE_NAME)/lib/apis/internalapi" \
 				"$(PACKAGE_NAME)/lib/apis/v1"'
 
 	$(DOCKER_GO_BUILD) \
@@ -142,6 +131,7 @@ ut-cover:
 
 WHAT?=.
 GINKGO_FOCUS?=.*
+GINKGO_SKIP?=
 
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
@@ -152,11 +142,7 @@ ut:
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
 fv: fv-setup
-	$(DOCKER_RUN) --privileged \
-		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
-		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
+	$(MAKE) fv-fast
 	$(MAKE) fv-teardown
 
 ## Run the setup required to run the FVs, but don't run any FVs.
@@ -171,9 +157,10 @@ fv-teardown: stop-etcd stop-etcd-tls kind-cluster-destroy stop-coredns
 fv-fast:
 	$(DOCKER_RUN) --privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
+		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip "$(GINKGO_SKIP)" -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 
 # Create a kind cluster, and deploy some resources required for the libcalico-go tests.
 # TODO: Remove the need for this extra target, these should be created by the tests that need them.

@@ -17,9 +17,8 @@ package nftables
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -29,7 +28,8 @@ func init() {
 }
 
 func TestNftablesUT(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/nftables_ut_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "nftables Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/felix_nftables_suite.xml"
+	ginkgo.RunSpecs(t, "UT: felix/nftables", suiteConfig, reporterConfig)
 }

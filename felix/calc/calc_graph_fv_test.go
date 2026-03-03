@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
@@ -144,6 +144,12 @@ var baseTests = []StateList{
 		localEp1WithPolicyAndTier,
 		localEp1WithTiersAlpha2,
 		localEpsWithProfile,
+	},
+
+	// Test movement of policy1 from the default tier to a non-default tier and back.
+	{
+		localEp1WithPolicy,
+		localEp1WithPolicyAndTier,
 	},
 
 	// Host endpoint tests.
@@ -685,7 +691,6 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 		for _, expander := range testExpanders() {
 			expanderDesc, expandedTests := expander(baseTest)
 			for _, test := range expandedTests {
-				test := test
 				It("should handle: "+baseTest.String()+" "+expanderDesc, func() {
 					// Create the calculation graph.
 					conf := config.New()
@@ -693,10 +698,10 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf.BPFEnabled = true
 					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					conf.RouteSource = test.RouteSource()
-					outputChan := make(chan interface{})
+					outputChan := make(chan any)
 					conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
 					lookupsCache := NewLookupsCache()
-					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil, lookupsCache)
+					asyncGraph := NewAsyncCalcGraph(conf, []chan<- any{outputChan}, nil, lookupsCache)
 					// And a validation filter, with a channel between it
 					// and the async graph.
 					validator := NewValidationFilter(asyncGraph, conf)
@@ -818,10 +823,9 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 
 func stringifyRoutes(routes set.Set[types.RouteUpdate]) []string {
 	out := make([]string, 0, routes.Len())
-	routes.Iter(func(item types.RouteUpdate) error {
+	for item := range routes.All() {
 		out = append(out, fmt.Sprintf("%+v", item))
-		return nil
-	})
+	}
 	sort.Strings(out)
 	return out
 }
@@ -950,11 +954,11 @@ var _ = Describe("calc graph with health state", func() {
 		// Create the calculation graph.
 		conf := config.New()
 		conf.FelixHostname = localHostname
-		outputChan := make(chan interface{})
+		outputChan := make(chan any)
 		healthAggregator := health.NewHealthAggregator()
 		lookupsCache := NewLookupsCache()
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator, lookupsCache)
+		asyncGraph := NewAsyncCalcGraph(conf, []chan<- any{outputChan}, healthAggregator, lookupsCache)
 		Expect(asyncGraph).NotTo(BeNil())
 	})
 })

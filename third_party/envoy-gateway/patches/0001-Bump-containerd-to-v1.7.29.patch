@@ -1,0 +1,41 @@
+From 43de629ad1ebeec479e9c4e4b3cd0dd9d5ae2f6b Mon Sep 17 00:00:00 2001
+From: Nell Jerram <nell@tigera.io>
+Date: Fri, 12 Dec 2025 16:26:08 +0000
+Subject: [PATCH] Bump containerd to v1.7.29
+
+---
+ go.mod | 2 +-
+ go.sum | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/go.mod b/go.mod
+index f7e18a6d2..20ddad105 100644
+--- a/go.mod
++++ b/go.mod
+@@ -180,7 +180,7 @@ require (
+ 	github.com/cilium/ebpf v0.19.0 // indirect
+ 	github.com/ckaznocha/intrange v0.3.1 // indirect
+ 	github.com/containerd/cgroups/v3 v3.0.5 // indirect
+-	github.com/containerd/containerd v1.7.27 // indirect
++	github.com/containerd/containerd v1.7.29 // indirect
+ 	github.com/containerd/errdefs v1.0.0 // indirect
+ 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
+ 	github.com/containerd/log v0.1.0 // indirect
+diff --git a/go.sum b/go.sum
+index 1e681262a..a4eebbafb 100644
+--- a/go.sum
++++ b/go.sum
+@@ -223,8 +223,8 @@ github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 h1:aQ3y1lwWyqYPiWZThqv
+ github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443/go.mod h1:W+zGtBO5Y1IgJhy4+A9GOqVhqLpfZi+vwmdNXUehLA8=
+ github.com/containerd/cgroups/v3 v3.0.5 h1:44na7Ud+VwyE7LIoJ8JTNQOa549a8543BmzaJHo6Bzo=
+ github.com/containerd/cgroups/v3 v3.0.5/go.mod h1:SA5DLYnXO8pTGYiAHXz94qvLQTKfVM5GEVisn4jpins=
+-github.com/containerd/containerd v1.7.27 h1:yFyEyojddO3MIGVER2xJLWoCIn+Up4GaHFquP7hsFII=
+-github.com/containerd/containerd v1.7.27/go.mod h1:xZmPnl75Vc+BLGt4MIfu6bp+fy03gdHAn9bz+FreFR0=
++github.com/containerd/containerd v1.7.29 h1:90fWABQsaN9mJhGkoVnuzEY+o1XDPbg9BTC9QTAHnuE=
++github.com/containerd/containerd v1.7.29/go.mod h1:azUkWcOvHrWvaiUjSQH0fjzuHIwSPg1WL5PshGP4Szs=
+ github.com/containerd/errdefs v1.0.0 h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI=
+ github.com/containerd/errdefs v1.0.0/go.mod h1:+YBYIdtsnF4Iw6nWZhJcqGSg/dwvV7tyJ/kCkyJ2k+M=
+ github.com/containerd/errdefs/pkg v0.3.0 h1:9IKJ06FvyNlexW690DXuQNx2KA2cUJXx151Xdx3ZPPE=
+-- 
+2.43.0
+

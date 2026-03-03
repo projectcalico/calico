@@ -14,6 +14,7 @@ package set
 import (
 	"errors"
 	"fmt"
+	"iter"
 )
 
 type Set[T any] interface {
@@ -25,6 +26,9 @@ type Set[T any] interface {
 	Clear()
 	Contains(T) bool
 	Iter(func(item T) error)
+	// All returns an iterator for use with Go's range-over-func feature.
+	// The iterator supports deletion from the set during iteration without panicking.
+	All() iter.Seq[T]
 	Copy() Set[T]
 	Equals(Set[T]) bool
 	ContainsAll(Set[T]) bool

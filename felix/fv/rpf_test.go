@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -21,7 +19,7 @@ import (
 	"os"
 	"regexp"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -105,7 +103,7 @@ var _ = infrastructure.DatastoreDescribe(
 					InterfaceName: "eth20",
 					MTU:           1500, // Need to match host MTU or felix will restart.
 				}
-				err := external.Start()
+				err := external.Start(infra)
 				Expect(err).NotTo(HaveOccurred())
 
 				// assign address to eth20 and add route to the .20 network
@@ -126,32 +124,6 @@ var _ = infrastructure.DatastoreDescribe(
 			})
 		})
 
-		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				for _, felix := range tc.Felixes {
-					if NFTMode() {
-						logNFTDiags(felix)
-					} else {
-						felix.Exec("iptables-save", "-c")
-					}
-					felix.Exec("ip", "link")
-					felix.Exec("ip", "addr")
-					felix.Exec("ip", "rule")
-					felix.Exec("ip", "route")
-				}
-			}
-		})
-
-		AfterEach(func() {
-			log.Info("AfterEach starting")
-			for _, f := range tc.Felixes {
-				f.Exec("calico-bpf", "connect-time", "clean")
-				f.Stop()
-			}
-			infra.Stop()
-			log.Info("AfterEach done")
-		})
-
 		Context("With BPFEnforceRPF=Disabled", func() {
 			BeforeEach(func() {
 				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Disabled"
@@ -164,15 +136,13 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpHEP.SetLogEnabled(true)
 				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
-				tcpdumpHEP.Start()
-				defer tcpdumpHEP.Stop()
+				tcpdumpHEP.Start(infra)
 
 				tcpdumpWl := w.AttachTCPDump()
 				tcpdumpWl.SetLogEnabled(true)
 				matcherWl := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpWl.AddMatcher("UDP-30446", regexp.MustCompile(matcherWl))
-				tcpdumpWl.Start()
-				defer tcpdumpWl.Stop()
+				tcpdumpWl.Start(infra)
 
 				_, err := external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
 					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
@@ -200,15 +170,13 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpHEP.SetLogEnabled(true)
 				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
-				tcpdumpHEP.Start()
-				defer tcpdumpHEP.Stop()
+				tcpdumpHEP.Start(infra)
 
 				tcpdumpWl := w.AttachTCPDump()
 				tcpdumpWl.SetLogEnabled(true)
 				matcherWl := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpWl.AddMatcher("UDP-30446", regexp.MustCompile(matcherWl))
-				tcpdumpWl.Start()
-				defer tcpdumpWl.Stop()
+				tcpdumpWl.Start(infra)
 
 				_, err := external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
 					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")
@@ -234,15 +202,13 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpHEP.SetLogEnabled(true)
 				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
-				tcpdumpHEP.Start()
-				defer tcpdumpHEP.Stop()
+				tcpdumpHEP.Start(infra)
 
 				tcpdumpWl := w.AttachTCPDump()
 				tcpdumpWl.SetLogEnabled(true)
 				matcherWl := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpWl.AddMatcher("UDP-30446", regexp.MustCompile(matcherWl))
-				tcpdumpWl.Start()
-				defer tcpdumpWl.Stop()
+				tcpdumpWl.Start(infra)
 
 				_, err := external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",
 					"--port-src", "30446", "--port-dst", "30446", "--ip-id", "666")

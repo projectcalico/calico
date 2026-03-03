@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
 
@@ -142,7 +142,7 @@ func init() {
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
-				tcpRevKey: conntrack.NewValueNATReverse(Now-59*time.Minute, v3.FlagNATFwdDsr,
+				tcpRevKey: conntrack.NewValueNATReverse(Now-59*time.Minute, v4.FlagNATFwdDsr,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: false, AckSeen: false},
 					nil, nil, 5555),
 			},
@@ -154,7 +154,7 @@ func init() {
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
-				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, v3.FlagNATFwdDsr,
+				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, v4.FlagNATFwdDsr,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: false, AckSeen: false},
 					nil, nil, 5555),
 			},

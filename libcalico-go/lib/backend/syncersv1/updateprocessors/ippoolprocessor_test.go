@@ -1,4 +1,4 @@
-// Copyright (c) 2019,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 package updateprocessors_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,7 +63,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 			Key: v1PoolKeyCidr1,
 			Value: &model.IPPool{
 				CIDR:             v1PoolKeyCidr1.CIDR,
-				IPIPMode:         encap.Undefined,
+				IPIPMode:         encap.Never,
 				Masquerade:       false,
 				IPAM:             true,
 				Disabled:         false,
@@ -118,7 +118,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 				Value: &model.IPPool{
 					CIDR:             v1PoolKeyCidr2.CIDR,
 					IPIPInterface:    "",
-					IPIPMode:         encap.Undefined,
+					IPIPMode:         encap.Never,
 					Masquerade:       false,
 					IPAM:             true,
 					Disabled:         false,
@@ -146,7 +146,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 				Value: &model.IPPool{
 					CIDR:             v1PoolKeyCidr2.CIDR,
 					IPIPInterface:    "",
-					IPIPMode:         encap.Undefined,
+					IPIPMode:         encap.Never,
 					Masquerade:       false,
 					IPAM:             true,
 					Disabled:         false,
@@ -203,7 +203,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 			Key: v1PoolKeyCidr1,
 			Value: &model.IPPool{
 				CIDR:             v1PoolKeyCidr1.CIDR,
-				IPIPMode:         encap.Undefined,
+				IPIPMode:         encap.Never,
 				Masquerade:       false,
 				IPAM:             true,
 				Disabled:         false,

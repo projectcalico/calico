@@ -22,13 +22,14 @@ import (
 	"io"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	log "github.com/sirupsen/logrus"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -298,26 +299,26 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 
 var defaultConnectivityTimeout = 10 * time.Second
 
-func (c *Checker) CheckConnectivityOffset(offset int, opts ...interface{}) {
+func (c *Checker) CheckConnectivityOffset(offset int, opts ...any) {
 	c.CheckConnectivityWithTimeoutOffset(offset+2, defaultConnectivityTimeout, opts...)
 }
 
-func (c *Checker) CheckConnectivity(opts ...interface{}) {
+func (c *Checker) CheckConnectivity(opts ...any) {
 	c.CheckConnectivityWithTimeoutOffset(2, defaultConnectivityTimeout, opts...)
 }
 
-func (c *Checker) CheckConnectivityPacketLoss(opts ...interface{}) {
+func (c *Checker) CheckConnectivityPacketLoss(opts ...any) {
 	// Timeout is not used for packet loss test because there is no retry.
 	c.CheckConnectivityWithTimeoutOffset(2, 0*time.Second, opts...)
 }
 
-func (c *Checker) CheckConnectivityWithTimeout(timeout time.Duration, opts ...interface{}) {
+func (c *Checker) CheckConnectivityWithTimeout(timeout time.Duration, opts ...any) {
 	Expect(timeout).To(BeNumerically(">", 100*time.Millisecond),
 		"Very low timeout, did you mean to multiply by time.<Unit>?")
 	c.CheckConnectivityWithTimeoutOffset(2, timeout, opts...)
 }
 
-func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, opts ...interface{}) {
+func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, opts ...any) {
 	log.Info("Starting connectivity check...")
 	for _, o := range opts {
 		switch v := o.(type) {
@@ -497,19 +498,19 @@ type ConnectionSource interface {
 	SourceIPs() []string
 }
 
-func (m *Matcher) Match(actual interface{}) (success bool, err error) {
+func (m *Matcher) Match(actual any) (success bool, err error) {
 	actual.(ConnectionSource).PreRetryCleanup(m.IP, m.Port, m.Protocol)
 	success = actual.(ConnectionSource).CanConnectTo(m.IP, m.Port, m.Protocol) != nil
 	return
 }
 
-func (m *Matcher) FailureMessage(actual interface{}) (message string) {
+func (m *Matcher) FailureMessage(actual any) (message string) {
 	src := actual.(ConnectionSource)
 	message = fmt.Sprintf("Expected %v\n\t%+v\nto have connectivity to %v\n\t%v:%v\nbut it does not", src.SourceName(), src, m.TargetName, m.IP, m.Port)
 	return
 }
 
-func (m *Matcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (m *Matcher) NegatedFailureMessage(actual any) (message string) {
 	src := actual.(ConnectionSource)
 	message = fmt.Sprintf("Expected %v\n\t%+v\nnot to have connectivity to %v\n\t%v:%v\nbut it does", src.SourceName(), src, m.TargetName, m.IP, m.Port)
 	return
@@ -632,13 +633,7 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 		}
 
 		if checkSNAT {
-			match := false
-			for _, src := range e.ExpSrcIPs {
-				if src == response.LastResponse.SourceIP() {
-					match = true
-					break
-				}
-			}
+			match := slices.Contains(e.ExpSrcIPs, response.LastResponse.SourceIP())
 			if !match {
 				return false
 			}
@@ -945,17 +940,19 @@ type Runtime interface {
 type PersistentConnection struct {
 	sync.Mutex
 
-	RuntimeName         string
-	Runtime             Runtime
-	Name                string
-	Protocol            string
-	IP                  string
-	Port                int
-	SourcePort          int
-	MonitorConnectivity bool
-	NamespacePath       string
-	Timeout             time.Duration
-	Sleep               time.Duration
+	RuntimeName          string
+	Runtime              Runtime
+	Name                 string
+	Protocol             string
+	IP                   string
+	Port                 int
+	SourcePort           int
+	MonitorConnectivity  bool
+	NamespacePath        string
+	Timeout              time.Duration
+	Sleep                time.Duration
+	ProbeLoopFileTimeout time.Duration
+	connectionReset      bool
 
 	loopFile string
 	runCmd   *exec.Cmd
@@ -1043,6 +1040,7 @@ func (pc *PersistentConnection) Start() error {
 			line, err := stdoutReader.ReadString('\n')
 			if err != nil {
 				log.WithError(err).Info("End of permanent connection stdout")
+				pc.connectionReset = true
 				return
 			}
 			line = strings.TrimSpace(string(line))
@@ -1063,6 +1061,7 @@ func (pc *PersistentConnection) Start() error {
 			line, err := stderrReader.ReadString('\n')
 			if err != nil {
 				log.WithError(err).Info("End of permanent connection stderr")
+				pc.connectionReset = true
 				return
 			}
 			line = strings.TrimSpace(string(line))
@@ -1073,23 +1072,27 @@ func (pc *PersistentConnection) Start() error {
 		return fmt.Errorf("failed to start a permanent connection: %v", err)
 	}
 
-	loopFileGone := false
-	for range 5 {
+	timeout := 5 * time.Second
+	if pc.ProbeLoopFileTimeout > 0 {
+		timeout = pc.ProbeLoopFileTimeout
+	}
+
+	timedOut := time.After(timeout)
+	for {
 		err = pc.Runtime.ExecMayFail("stat", loopFile)
 		if err != nil {
-			loopFileGone = true
 			break
 		}
-		time.Sleep(time.Second)
+		select {
+		case <-timedOut:
+			return fmt.Errorf("failed to wait for test-connection to be ready, the loop file did not disappear")
+		case <-time.After(time.Second):
+		}
 	}
 
 	pc.loopFile = loopFile
 	pc.runCmd = runCmd
 	pc.Name = n
-
-	if !loopFileGone {
-		return fmt.Errorf("failed to wait for test-connection to be ready, the loop file did not disappear")
-	}
 
 	return nil
 }
@@ -1109,4 +1112,8 @@ func (pc *PersistentConnection) PongCount() int {
 	defer pc.Unlock()
 	log.WithField("name", pc.Name).Infof("pong count %d", pc.pongCount)
 	return pc.pongCount
+}
+
+func (pc *PersistentConnection) IsConnectionReset() bool {
+	return pc.connectionReset
 }

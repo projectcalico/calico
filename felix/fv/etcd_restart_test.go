@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build fvtests
-
 package fv_test
 
 import (
@@ -24,7 +22,7 @@ import (
 	"syscall"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -36,11 +34,12 @@ import (
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
-var _ = Context("etcd connection interruption", func() {
+var _ = infrastructure.DatastoreDescribe("etcd connection interruption", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -54,7 +53,9 @@ var _ = Context("etcd connection interruption", func() {
 		if NFTMode() {
 			Skip("Test is dataplane independent, skip for nftables")
 		}
-		tc, etcd, client, infra = infrastructure.StartNNodeEtcdTopology(2, infrastructure.DefaultTopologyOptions())
+		infra = getInfra()
+		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
+		etcd = infra.(*infrastructure.EtcdDatastoreInfra).EtcdContainer
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "")
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
 		// into the kernel.
@@ -80,32 +81,12 @@ var _ = Context("etcd connection interruption", func() {
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
 			wName := fmt.Sprintf("w%d", ii)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, client)
 			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].Configure(client)
 		}
 
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-			}
-		}
-
-		for _, wl := range w {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	It("shouldn't use excessive CPU when etcd is stopped", func() {
@@ -148,7 +129,7 @@ var _ = Context("etcd connection interruption", func() {
 				Expect(err).NotTo(HaveOccurred())
 				logrus.WithField("output", out).WithError(err).Info("Conntrack entries")
 				found := false
-				for _, line := range strings.Split(out, "\n") {
+				for line := range strings.SplitSeq(out, "\n") {
 					matches := portRegexp.FindStringSubmatch(line)
 					if len(matches) < 2 {
 						continue

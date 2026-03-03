@@ -26,19 +26,14 @@ COPY --from=ubi /lib64/libaudit.so.1 /lib64/libaudit.so.1
 COPY --from=ubi /lib64/libbz2.so.1 /lib64/libbz2.so.1
 COPY --from=ubi /lib64/libcap-ng.so.0 /lib64/libcap-ng.so.0
 COPY --from=ubi /lib64/libcap.so.2 /lib64/libcap.so.2
-COPY --from=ubi /lib64/libdl.so.2 /lib64/libdl.so.2
-COPY --from=ubi /lib64/libm.so.6 /lib64/libm.so.6
 COPY --from=ubi /lib64/libpcre2-8.so.0 /lib64/libpcre2-8.so.0
-COPY --from=ubi /lib64/librt.so.1 /lib64/librt.so.1
 COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
 COPY --from=ubi /lib64/libsemanage.so.2 /lib64/libsemanage.so.2
 COPY --from=ubi /lib64/libsepol.so.2 /lib64/libsepol.so.2
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
 
-COPY --from=envoybinary --chown=0:0 --chmod=644 \
-    /etc/envoy/envoy.yaml /etc/envoy/envoy.yaml
-COPY --from=envoybinary --chown=0:0 --chmod=755 \
-    /usr/local/bin/envoy /usr/local/bin/envoy
+COPY --from=envoybinary /etc/envoy/envoy.yaml /etc/envoy/envoy.yaml
+COPY --from=envoybinary --chmod=755 /usr/local/bin/envoy /usr/local/bin/envoy
 
 FROM ${CALICO_BASE}
 

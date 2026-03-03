@@ -1,4 +1,4 @@
-- name: lib
+- name: Libraries (lib)
   run:
     when: "${FORCE_RUN} or change_in(['/lib/'], {pipeline_file: 'ignore'})"
   execution_time_limit:
@@ -10,6 +10,6 @@
       commands:
         - cd lib
     jobs:
-      - name: make ci
+      - name: "Libraries: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci

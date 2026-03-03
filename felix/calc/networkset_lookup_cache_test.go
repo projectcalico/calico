@@ -17,8 +17,7 @@ package calc_test
 import (
 	"net"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/calc"
@@ -113,8 +112,22 @@ var _ = Describe("NetworkSetLookupsCache IP tests", func() {
 
 		By("verifying networkset2 is in the mapping")
 		// This check validates that netSet2 is found since one subnet is outside the range of netSet1's subnets.
-		for _, cidr = range netSet2.Nets {
-			verifyIpToNetworkset(netSet2Key, cidr.IP, true, netSet2Labels)
+		for _, cidr := range netSet2.Nets {
+			// For overlapping CIDRs (12.0.0.0/24), lowest-lexicographic-name-wins applies
+			// netSet1 ("netset-1") comes before netSet2 ("netset-2") lexicographically, so netSet1 wins
+			// For unique CIDRs (13.1.0.0/24), netSet2 should still be returned
+			var expectedKey model.Key
+			var expectedLabels map[string]string
+			if cidr.String() == "12.0.0.0/24" {
+				// This overlaps with netSet1, so netSet1 should win due to lexicographic ordering
+				expectedKey = netSet1Key
+				expectedLabels = origNetSetLabels
+			} else {
+				// This is unique to netSet2
+				expectedKey = netSet2Key
+				expectedLabels = netSet2Labels
+			}
+			verifyIpToNetworkset(expectedKey, cidr.IP, true, expectedLabels)
 		}
 
 		By("deleting networkset2")

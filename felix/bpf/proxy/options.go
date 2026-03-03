@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 
 	"github.com/projectcalico/calico/felix/ip"
 )
@@ -59,6 +58,14 @@ func WithMinSyncPeriod(min time.Duration) Option {
 	})
 }
 
+func WithMaxSyncPeriod(max time.Duration) Option {
+	return makeOption(func(p *proxy) error {
+		p.maxDPSyncPeriod = max
+		log.Infof("proxy.WithMaxSyncPeriod(%s)", max)
+		return nil
+	})
+}
+
 // WithImmediateSync triggers sync with dataplane on immediately on every update
 func WithImmediateSync() Option {
 	return WithMinSyncPeriod(0)
@@ -83,6 +90,18 @@ func WithTopologyNodeZone(nodeZone string) Option {
 func WithIPFamily(ipFamily int) Option {
 	return func(p Proxy) error {
 		p.setIpFamily(ipFamily)
+		return nil
+	}
+}
+
+func WithMaglevLUTSize(size int) Option {
+	return func(P Proxy) error {
+		p, ok := P.(*KubeProxy)
+		if !ok {
+			return nil
+		}
+
+		p.maglevLUTSize = size
 		return nil
 	}
 }
@@ -114,9 +133,11 @@ func WithExcludedCIDRs(cidrs []string) Option {
 	})
 }
 
-func WithHealthzServer(hs *healthcheck.ProxyHealthServer) Option {
+func WithHealthCheck(hc Healthcheck) Option {
 	return makeOption(func(p *proxy) error {
-		p.healthzServer = hs
+		if hc != nil {
+			p.healthzServer = hc
+		}
 		return nil
 	})
 }

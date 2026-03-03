@@ -205,10 +205,10 @@ func (c *ConntrackCleanupManager) CIDRNeedsEarlyCleanup(cidr ip.CIDR, oldIface i
 // StartConntrackCleanupAndReset starts all pending conntrack cleanups and
 // resets the tracker to prepare for the next round of updates.
 func (c *ConntrackCleanupManager) StartConntrackCleanupAndReset() {
-	c.addrsToCleanUp.Iter(func(addr ip.Addr) error {
+	for addr := range c.addrsToCleanUp.All() {
 		c.startDeletion(addr)
-		return set.RemoveItem
-	})
+		c.addrsToCleanUp.Discard(addr)
+	}
 
 	// Reset the tracker; we assume that the RouteTable has now implemented
 	// its planned actions, and it'll tell us if any routes change.

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,8 +39,9 @@ type Interface interface {
 	ClusterInformationClient
 	KubeControllersConfigurationClient
 	CalicoNodeStatusClient
-	IPAMConfigClient
+	IPAMConfigurationClient
 	BlockAffinitiesClient
+	LiveMigrationsClient
 	// Tiers returns an interface for managing tier resources.
 	Tiers() TierInterface
 	// StagedGlobalNetworkPolicies returns an interface for managing staged global network policy resources.
@@ -148,14 +149,19 @@ type CalicoNodeStatusClient interface {
 	CalicoNodeStatus() CalicoNodeStatusInterface
 }
 
-type IPAMConfigClient interface {
+type IPAMConfigurationClient interface {
 	// IPAMConfig returns an interface for managing IPAMConfig resources.
-	IPAMConfig() IPAMConfigInterface
+	IPAMConfiguration() IPAMConfigurationInterface
 }
 
 type BlockAffinitiesClient interface {
 	// BlockAffinities returns an interface for viewing IPAM block affinity resources.
 	BlockAffinities() BlockAffinityInterface
+}
+
+type LiveMigrationsClient interface {
+	// LiveMigrations returns an interface for managing LiveMigration resources.
+	LiveMigrations() LiveMigrationInterface
 }
 
 type BGPFilterClient interface {

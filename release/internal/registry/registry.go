@@ -14,11 +14,17 @@
 
 package registry
 
+const DefaultCalicoRegistry = "quay.io/calico"
+
 var DefaultCalicoRegistries = []string{
 	"docker.io/calico",
-	"quay.io/calico",
+	DefaultCalicoRegistry,
 	"gcr.io/projectcalico-org",
 	"eu.gcr.io/projectcalico-org",
 	"asia.gcr.io/projectcalico-org",
 	"us.gcr.io/projectcalico-org",
+}
+
+var DefaultHelmRegistries = []string{
+	"quay.io/calico/charts",
 }

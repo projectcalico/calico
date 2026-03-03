@@ -32,8 +32,8 @@ import (
 const MaxMembersPerMessage = 82200
 
 type Processor struct {
-	Updates            <-chan interface{}
-	JoinUpdates        chan interface{}
+	Updates            <-chan any
+	JoinUpdates        chan any
 	endpointsByID      map[types.WorkloadEndpointID]*EndpointInfo
 	policyByID         map[types.PolicyID]*policyInfo
 	profileByID        map[types.ProfileID]*profileInfo
@@ -73,12 +73,12 @@ type LeaveRequest struct {
 	JoinMetadata
 }
 
-func NewProcessor(updates <-chan interface{}) *Processor {
+func NewProcessor(updates <-chan any) *Processor {
 	return &Processor{
 		// Updates from the calculation graph.
 		Updates: updates,
 		// JoinUpdates from the new servers that have started.
-		JoinUpdates:        make(chan interface{}, 10),
+		JoinUpdates:        make(chan any, 10),
 		endpointsByID:      make(map[types.WorkloadEndpointID]*EndpointInfo),
 		policyByID:         make(map[types.PolicyID]*policyInfo),
 		profileByID:        make(map[types.ProfileID]*profileInfo),
@@ -145,7 +145,8 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	if p.receivedInSync {
 		log.WithField("channel", ei.output).Debug("Already in sync with the datastore, sending in-sync message to client")
 		ei.output <- &proto.ToDataplane{
-			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
+			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}},
+		}
 	}
 	logCxt.Debug("Done with join")
 }
@@ -177,7 +178,7 @@ func (p *Processor) handleLeave(leaveReq LeaveRequest) {
 	ei.currentJoinUID = 0
 }
 
-func (p *Processor) handleDataplane(update interface{}) {
+func (p *Processor) handleDataplane(update any) {
 	log.WithFields(log.Fields{"update": update, "type": reflect.TypeOf(update)}).Debug("Dataplane update")
 	switch update := update.(type) {
 	case *proto.InSync:
@@ -224,7 +225,8 @@ func (p *Processor) handleInSync(update *proto.InSync) {
 	p.receivedInSync = true
 	for _, ei := range p.updateableEndpoints() {
 		ei.output <- &proto.ToDataplane{
-			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
+			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}},
+		}
 	}
 }
 
@@ -263,7 +265,8 @@ func (p *Processor) maybeSyncEndpoint(ei *EndpointInfo) {
 	p.syncAddedPolicies(ei)
 	p.syncAddedProfiles(ei)
 	ei.output <- &proto.ToDataplane{
-		Payload: &proto.ToDataplane_WorkloadEndpointUpdate{WorkloadEndpointUpdate: ei.endpointUpd}}
+		Payload: &proto.ToDataplane_WorkloadEndpointUpdate{WorkloadEndpointUpdate: ei.endpointUpd},
+	}
 	p.syncRemovedPolicies(ei)
 	p.syncRemovedProfiles(ei)
 	doDel()
@@ -567,7 +570,7 @@ func (p *Processor) updateableEndpoints() []*EndpointInfo {
 
 // referencesIPSet determines whether the endpoint's policies or profiles reference a given IPSet
 func (p *Processor) referencesIPSet(ei *EndpointInfo, id string) bool {
-	var found = false
+	found := false
 	ei.iterateProfiles(func(pid types.ProfileID) bool {
 		pi := p.profileByID[pid]
 		if pi.referencesIPSet(id) {
@@ -651,20 +654,18 @@ func (p *Processor) sendIPSetRemove(ei *EndpointInfo, id string) {
 
 // Perform the action on every policy on the Endpoint, breaking if the action returns true.
 func (ei *EndpointInfo) iteratePolicies(action func(id types.PolicyID) (stop bool)) {
-	var pId types.PolicyID
 	seen := make(map[types.PolicyID]bool)
 	for _, tier := range ei.endpointUpd.GetEndpoint().GetTiers() {
-		pId.Tier = tier.Name
-		for _, name := range tier.GetIngressPolicies() {
-			pId.Name = name
+		for _, pol := range tier.GetIngressPolicies() {
 			// No need to check seen since we trust Calc graph to only list a policy once per tier.
+			pId := types.ProtoToPolicyID(pol)
 			seen[pId] = true
 			if action(pId) {
 				return
 			}
 		}
-		for _, name := range tier.GetEgressPolicies() {
-			pId.Name = name
+		for _, pol := range tier.GetEgressPolicies() {
+			pId := types.ProtoToPolicyID(pol)
 			if !seen[pId] {
 				seen[pId] = true
 				if action(pId) {
@@ -721,7 +722,8 @@ func splitIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) []*proto.ToDataplane 
 	var out []*proto.ToDataplane
 	for len(adds)+len(dels) > 0 {
 		msg := &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetDeltaUpdate{
-			IpsetDeltaUpdate: &proto.IPSetDeltaUpdate{Id: update.GetId()}}}
+			IpsetDeltaUpdate: &proto.IPSetDeltaUpdate{Id: update.GetId()},
+		}}
 		out = append(out, msg)
 		update := msg.GetIpsetDeltaUpdate()
 		if len(adds) > 0 {
@@ -758,10 +760,7 @@ func splitMembers(members []string) [][]string {
 	}
 
 	for remains > 0 {
-		numThis := MaxMembersPerMessage
-		if remains < numThis {
-			numThis = remains
-		}
+		numThis := min(remains, MaxMembersPerMessage)
 		end := first + numThis
 		sliceThis := members[first:end]
 		out = append(out, sliceThis)

@@ -19,11 +19,13 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -32,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -45,6 +48,17 @@ func newFakeClient() *fakeClient {
 		deleteFuncs:    map[string]func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error){},
 		listFuncs:      map[string]func(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error){},
 	}
+}
+
+func newFakeClientWithPassThru(client api.Client) *fakeClient {
+	fc := newFakeClient()
+	fc.createFuncs["default"] = client.Create
+	fc.updateFuncs["default"] = client.Update
+	fc.getFuncs["default"] = client.Get
+	fc.deleteKVPFuncs["default"] = client.DeleteKVP
+	fc.deleteFuncs["default"] = client.Delete
+	fc.listFuncs["default"] = client.List
+	return fc
 }
 
 // fakeClient implements the backend api.Client interface.
@@ -68,6 +82,7 @@ func (c *fakeClient) Create(ctx context.Context, object *model.KVPair) (*model.K
 
 	panic(fmt.Sprintf("Create called on unexpected object: %+v", object))
 }
+
 func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	if f, ok := c.updateFuncs[object.Key.String()]; ok {
 		return f(ctx, object)
@@ -75,8 +90,8 @@ func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.K
 		return f(ctx, object)
 	}
 	panic(fmt.Sprintf("Update called on unexpected object: %+v", object))
-
 }
+
 func (c *fakeClient) Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	panic("should not be called")
 }
@@ -102,9 +117,12 @@ func (c *fakeClient) Delete(ctx context.Context, key model.Key, revision string)
 }
 
 func (c *fakeClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
-	if f, ok := c.getFuncs[key.String()]; ok {
+	lookupKey := key.String()
+	if f, ok := c.getFuncs[lookupKey]; ok {
+		log.Infof("FAKE CLIENT: Get(ctx, %q, %q): custom shim function", lookupKey, revision)
 		return f(ctx, key, revision)
 	} else if f, ok := c.getFuncs["default"]; ok {
+		log.Infof("FAKE CLIENT: Get(ctx, %q, %q): default", lookupKey, revision)
 		return f(ctx, key, revision)
 	}
 	panic(fmt.Sprintf("Get called on unexpected object: %+v", key))
@@ -145,19 +163,17 @@ type backendClientAccessor interface {
 }
 
 var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	log.SetLevel(log.DebugLevel)
 
 	Context("IPAM block allocation race conditions", func() {
-
 		var (
 			bc           api.Client
 			net          *cnet.IPNet
 			ctx          context.Context
 			hostA, hostB string
 			fc           *fakeClient
-			resv         *fakeReservations
-			pools        *ipPoolAccessor
+			resv         *ipamtestutils.FakeReservations
+			pools        *ipamtestutils.IPPoolAccessor
 			rw           blockReaderWriter
 			ic           *ipamClient
 			kc           *kubernetes.Clientset
@@ -169,21 +185,21 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// Make the client and clean the data store.
 			bc, err = backend.NewClient(config)
 			Expect(err).NotTo(HaveOccurred())
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 
 			// If running in KDD mode, extract the k8s clientset.
 			if config.Spec.DatastoreType == "kubernetes" {
 				kc = bc.(*k8s.KubeClient).ClientSet
 			}
 
-			resv = &fakeReservations{}
+			resv = &ipamtestutils.FakeReservations{}
 
 			hostA = "host-a"
 			hostB = "host-b"
 			applyNode(bc, kc, hostA, nil)
 			applyNode(bc, kc, hostB, nil)
 
-			pools = &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/26": {enabled: true}}}
+			pools = &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/26": {Enabled: true}}}
 
 			ctx = context.Background()
 
@@ -194,7 +210,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 		It("should handle multiple racing block affinity claims from different hosts", func() {
 			By("setting up the client for the test", func() {
 				// Pool has room for 16 blocks.
-				pls := &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/22": {enabled: true}}}
+				pls := &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/22": {Enabled: true}}}
 				rw = blockReaderWriter{client: bc, pools: pls}
 				ic = &ipamClient{
 					reservations:      resv,
@@ -208,7 +224,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
-				for i := 0; i < 32; i++ {
+				for i := range 32 {
 					wg.Add(1)
 					j := i
 					go func() {
@@ -219,7 +235,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						applyNode(bc, kc, testhost, nil)
 						defer deleteNode(bc, kc, testhost)
 
-						ia, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+						ia, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -262,7 +278,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			By("checking each allocated IP is within the correct block for that host", func() {
 				// Iterate through all the hosts. If the host has an affine block,
 				// make sure the IPs assigned to that host are within the block.
-				for i := 0; i < 32; i++ {
+				for i := range 32 {
 					hostname := fmt.Sprintf("host-%d", i)
 					affs, err := bc.List(ctx, model.BlockAffinityListOptions{Host: hostname, AffinityType: string(AffinityTypeHost)}, "")
 					Expect(err).NotTo(HaveOccurred())
@@ -285,7 +301,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 		It("should handle multiple racing block affinity claims from the same host", func() {
 			By("setting up the client for the test", func() {
 				// Pool has room for 16 blocks.
-				pls := &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/25": {enabled: true}}}
+				pls := &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/25": {Enabled: true}}}
 				rw = blockReaderWriter{client: bc, pools: pls}
 				ic = &ipamClient{
 					client:            bc,
@@ -301,13 +317,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 				testhost := "single-host"
 				applyNode(bc, kc, testhost, nil)
-				for i := 0; i < 4; i++ {
+				for range 4 {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
 						defer wg.Done()
 
-						ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+						ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -351,7 +367,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 		It("should handle multiple racing claims for the same affinity", func() {
 			By("setting up the client for the test", func() {
 				// Pool has room for 16 blocks.
-				pls := &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/22": {enabled: true}}}
+				pls := &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/22": {Enabled: true}}}
 				rw = blockReaderWriter{client: bc, pools: pls}
 				ic = &ipamClient{
 					client:            bc,
@@ -369,7 +385,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
-				for i := 0; i < 4; i++ {
+				for range 4 {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
@@ -423,7 +439,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
-				for i := 0; i < 4; i++ {
+				for range 4 {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
@@ -435,7 +451,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							log.WithError(err).Errorf("Failed to release affinity for host %s", testhost)
 							testErr = err
 						}
-
 					}()
 				}
 
@@ -533,9 +548,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// - hostA proc2 creates the block.
 			// - hostA proc1 tries to delete the affinity.
 
-			var (
-				blockKVP, affinityKVP model.KVPair
-			)
+			var blockKVP, affinityKVP model.KVPair
 
 			By("setting up the client for the test", func() {
 				b := newBlock(*net, nil)
@@ -607,7 +620,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("attempting to release the block", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, false)
+				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, releaseAffinityOpts{})
 				Expect(err).NotTo(BeNil())
 
 				// Should hit a resource update conflict.
@@ -649,6 +662,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// was already taken by another host.
 			b := newBlock(*net, nil)
 			b.Affinity = &affStrA
+			now := metav1.NewTime(time.Now())
+			b.AffinityClaimTime = &now
 			blockKVP := &model.KVPair{
 				Key:   model.BlockKey{CIDR: *net},
 				Value: b.AllocationBlock,
@@ -656,6 +671,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			b2 := newBlock(*net, nil)
 			b2.Affinity = &affStrB
+			b2.AffinityClaimTime = &now
 			blockKVP2 := &model.KVPair{
 				Key:   model.BlockKey{CIDR: *net},
 				Value: b2.AllocationBlock,
@@ -727,7 +743,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			}
 
 			By("attempting to claim the block on multiple hosts at the same time", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
@@ -757,7 +773,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("attempting to claim another address", func() {
-				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
@@ -774,6 +790,137 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 				// Should be a single block affinity, assigned to the other host.
 				Expect(len(objs.KVPairs)).To(Equal(0))
+			})
+		})
+
+		ageTheBlock := func() {
+			block, err := bc.Get(ctx, model.BlockKey{CIDR: *net}, "")
+			Expect(err).NotTo(HaveOccurred())
+			overAMinuteAgo := metav1.NewTime(time.Now().Add(-61 * time.Second))
+			block.Value.(*model.AllocationBlock).AffinityClaimTime = &overAMinuteAgo
+			_, err = bc.Update(ctx, block)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		It("should reclaim an empty block", func() {
+			// Create the block reader / writer which will simulate the failure scenario.
+			rw = blockReaderWriter{client: bc, pools: pools}
+			ic = &ipamClient{
+				client:            bc,
+				pools:             pools,
+				blockReaderWriter: rw,
+				reservations:      resv,
+			}
+
+			By("enabling strict affinity", func() {
+				kv := model.KVPair{
+					Key: model.IPAMConfigKey{},
+					Value: &model.IPAMConfig{
+						AutoAllocateBlocks: true,
+						StrictAffinity:     true,
+					},
+				}
+				_, err := bc.Create(ctx, &kv)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			var theIP string
+			By("claiming a block on one host", func() {
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(ia.IPs)).To(Equal(1))
+				theIP = ia.IPs[0].IP.String()
+			})
+
+			By("trying to claim the block on another host while it is non-empty", func() {
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
+				Expect(err).NotTo(HaveOccurred(), "expected no error when pool full")
+				Expect(ia.IPs).To(HaveLen(0), "shouldn't get any IPs returned")
+			})
+
+			By("freeing the IP so the block is empty", func() {
+				_, _, err := ic.ReleaseIPs(ctx, ReleaseOptions{
+					Address: theIP,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("trying to claim the block on another host now that it is empty (but still recently claimed)", func() {
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
+				Expect(err).NotTo(HaveOccurred(), "expected no error when pool full")
+				Expect(ia.IPs).To(HaveLen(0), "shouldn't get any IPs returned")
+			})
+
+			By("artificially aging the block", ageTheBlock)
+
+			By("trying to claim the block on another host now that it is empty and old enough to be reclaimed", func() {
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
+				Expect(err).NotTo(HaveOccurred(), "allocation should succeed via block reclaim")
+				Expect(len(ia.IPs)).To(Equal(1))
+			})
+		})
+
+		It("should handle failure to reclaim a block", func() {
+			fc := newFakeClientWithPassThru(bc)
+			// Create the block reader / writer which will simulate the failure scenario.
+			rw = blockReaderWriter{client: fc, pools: pools}
+			ic = &ipamClient{
+				client:            fc,
+				pools:             pools,
+				blockReaderWriter: rw,
+				reservations:      resv,
+			}
+
+			By("enabling strict affinity", func() {
+				kv := model.KVPair{
+					Key: model.IPAMConfigKey{},
+					Value: &model.IPAMConfig{
+						AutoAllocateBlocks: true,
+						StrictAffinity:     true,
+					},
+				}
+				_, err := bc.Create(ctx, &kv)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			var theIP string
+			By("claiming a block on one host", func() {
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(ia.IPs)).To(Equal(1))
+				theIP = ia.IPs[0].IP.String()
+			})
+
+			By("freeing the IP so the block is empty", func() {
+				_, _, err := ic.ReleaseIPs(ctx, ReleaseOptions{
+					Address: theIP,
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("artificially aging the block", ageTheBlock)
+
+			By("trying to claim the reclaimable block, with a delete error queued", func() {
+				f := fc.deleteKVPFuncs["default"]
+				fc.deleteKVPFuncs["default"] = func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+					return nil, errors.New("expected error")
+				}
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(ia.IPs)).To(Equal(0), "expected no IPs returned due to failure to free affinity")
+				fc.deleteKVPFuncs["default"] = f
+			})
+
+			By("trying to claim the reclaimable block, with a context error queued", func() {
+				subCtx, cancel := context.WithCancel(ctx)
+				defer cancel()
+				fc.getFuncs[model.BlockKey{CIDR: *net}.String()] = func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+					cancel()
+					return nil, subCtx.Err()
+				}
+				ia, err := ic.autoAssign(subCtx, 1, nil, nil, nil, 4, hostB, 0, nil, v3.IPPoolAllowedUseWorkload, nil, 0)
+				Expect(err).To(Equal(subCtx.Err()))
+				Expect(len(ia.IPs)).To(Equal(0), "expected no IPs returned due to context failure")
 			})
 		})
 
@@ -871,7 +1018,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 	Context("test claiming / releasing affinities", func() {
 		var (
 			rw              blockReaderWriter
-			p               *ipPoolAccessor
+			p               *ipamtestutils.IPPoolAccessor
 			bc              api.Client
 			ctx             context.Context
 			host            string
@@ -896,7 +1043,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client: bc,
 				pools:  p,
 			}
-			p = &ipPoolAccessor{pools: map[string]pool{}}
+			p = &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{}}
 			ctx = context.Background()
 
 			_, net, err = cnet.ParseCIDR("10.1.0.0/26")
@@ -979,13 +1126,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("releasing the affinity", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, false)
+				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, releaseAffinityOpts{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			By("releasing the virtual affinity", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, false)
+				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -1015,7 +1162,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("releasing the affinity again", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, false)
+				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, releaseAffinityOpts{})
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 				Expect(ok).To(BeTrue())
@@ -1023,7 +1170,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("releasing the virtual affinity again", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, false)
+				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 				Expect(ok).To(BeTrue())
@@ -1034,7 +1181,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 	Context("test block allocation with host reserves", func() {
 		var (
 			rw       blockReaderWriter
-			p        *ipPoolAccessor
+			p        *ipamtestutils.IPPoolAccessor
 			bc       api.Client
 			ctx      context.Context
 			host     string
@@ -1061,7 +1208,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client: bc,
 				pools:  p,
 			}
-			p = &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/30": {enabled: true, blockSize: 30, cidr: "10.0.0.0/30"}}}
+			p = &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{"10.0.0.0/30": {Enabled: true, BlockSize: 30, CIDR: "10.0.0.0/30"}}}
 			ctx = context.Background()
 
 			_, net, err = cnet.ParseCIDR("10.0.0.0/30")
@@ -1090,9 +1237,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			Expect(b.Allocations[2]).To(BeNil())
 			Expect(*b.Allocations[3]).To(Equal(0))
 			// Attributes[0] should be the reservation attribute.
-			Expect(*b.Attributes[0].AttrPrimary).To(Equal("test-handle"))
-			Expect(b.Attributes[0].AttrSecondary["note"]).To(Equal("ipam ut"))
-
+			Expect(*b.Attributes[0].HandleID).To(Equal("test-handle"))
+			Expect(b.Attributes[0].ActiveOwnerAttrs["note"]).To(Equal("ipam ut"))
 		})
 
 		It("should allocate one ip", func() {
@@ -1100,9 +1246,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client:            bc,
 				pools:             p,
 				blockReaderWriter: rw,
-				reservations:      &fakeReservations{},
+				reservations:      &ipamtestutils.FakeReservations{},
 			}
-			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr, v3.IPPoolAllowedUseTunnel, nil)
+			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr, v3.IPPoolAllowedUseTunnel, nil, 0)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(len(ia.IPs)).To(Equal(1))
 			Expect(ia.IPs[0].String()).To(Equal("10.0.0.2/30"))
@@ -1111,7 +1257,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 })
 
 var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd only)", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
-
 	var (
 		bc  api.Client
 		net *cnet.IPNet
@@ -1206,5 +1351,4 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd 
 		_, err = bc.DeleteKVP(ctx, kvpb)
 		Expect(err).NotTo(HaveOccurred())
 	})
-
 })

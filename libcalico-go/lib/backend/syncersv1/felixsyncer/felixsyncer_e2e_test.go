@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ package felixsyncer_test
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -27,7 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -80,8 +80,8 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 			expected = append(expected, *cnodekv)
 
 			if node.Name == controlPlaneNodeName {
-				for _, ip := range cnodekv.Value.(*libapiv3.Node).Spec.Addresses {
-					if ip.Type == libapiv3.InternalIP {
+				for _, ip := range cnodekv.Value.(*internalapi.Node).Spec.Addresses {
+					if ip.Type == internalapi.InternalIP {
 						expected = append(expected, model.KVPair{
 							Key: model.HostIPKey{
 								Hostname: node.Name,
@@ -290,19 +290,19 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// Verify our cache size is correct.
 			syncTester.ExpectCacheSize(expectedCacheSize)
 
-			var node *libapiv3.Node
+			var node *internalapi.Node
 			wip := net.MustParseIP("192.168.12.34")
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				// For Kubernetes, update the existing node config to have some BGP configuration.
 				By("Configuring a node with an IP address and tunnel MAC address")
 				var (
 					oldValuesSaved        bool
-					oldBGPSpec            *libapiv3.NodeBGPSpec
+					oldBGPSpec            *internalapi.NodeBGPSpec
 					oldVXLANTunnelMACAddr string
-					oldWireguardSpec      *libapiv3.NodeWireguardSpec
+					oldWireguardSpec      *internalapi.NodeWireguardSpec
 					oldWireguardPublicKey string
 				)
-				for i := 0; i < 5; i++ {
+				for range 5 {
 					// This can fail due to an update conflict, so we allow a few retries.
 					node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
@@ -323,16 +323,16 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						oldWireguardPublicKey = node.Status.WireguardPublicKey
 						oldValuesSaved = true
 					}
-					node.Spec.BGP = &libapiv3.NodeBGPSpec{
+					node.Spec.BGP = &internalapi.NodeBGPSpec{
 						IPv4Address:        "1.2.3.4/24",
 						IPv6Address:        "aa:bb::cc/120",
 						IPv4IPIPTunnelAddr: "192.168.0.1",
 					}
 					node.Spec.VXLANTunnelMACAddr = "66:cf:23:df:22:07"
-					node.Spec.Wireguard = &libapiv3.NodeWireguardSpec{
+					node.Spec.Wireguard = &internalapi.NodeWireguardSpec{
 						InterfaceIPv4Address: "192.168.12.34",
 					}
-					node.Status = libapiv3.NodeStatus{
+					node.Status = internalapi.NodeStatus{
 						WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
 					}
 					node, err = c.Nodes().Update(ctx, node, options.SetOptions{})
@@ -342,7 +342,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				}
 				Expect(err).NotTo(HaveOccurred())
 				addCleanup(func() {
-					for i := 0; i < 5; i++ {
+					for range 5 {
 						// This can fail due to an update conflict, so we allow a few retries.
 						node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
@@ -375,20 +375,20 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				By("Creating a node with an IP address")
 				node, err = c.Nodes().Create(
 					ctx,
-					&libapiv3.Node{
+					&internalapi.Node{
 						ObjectMeta: metav1.ObjectMeta{Name: "127.0.0.1"},
-						Spec: libapiv3.NodeSpec{
-							BGP: &libapiv3.NodeBGPSpec{
+						Spec: internalapi.NodeSpec{
+							BGP: &internalapi.NodeBGPSpec{
 								IPv4Address:        "1.2.3.4/24",
 								IPv6Address:        "aa:bb::cc/120",
 								IPv4IPIPTunnelAddr: "192.168.0.1",
 							},
 							VXLANTunnelMACAddr: "66:cf:23:df:22:07",
-							Wireguard: &libapiv3.NodeWireguardSpec{
+							Wireguard: &internalapi.NodeWireguardSpec{
 								InterfaceIPv4Address: "192.168.12.34",
 							},
 						},
-						Status: libapiv3.NodeStatus{
+						Status: internalapi.NodeStatus{
 							WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
 						},
 					},
@@ -408,21 +408,21 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					model.GlobalConfigKey{Name: "ClusterGUID"},
 					MatchRegexp("[a-f0-9]{32}"),
 				)
-				// Creating the node also creates default and adminnetworkpolicy tiers.
+				// Creating the node also creates default, kube-admin, and kube-baseline tiers.
 				order := apiv3.DefaultTierOrder
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.TierKey{Name: "default"},
 					Value: &model.Tier{Order: &order, DefaultAction: apiv3.Deny},
 				})
-				anpOrder := apiv3.AdminNetworkPolicyTierOrder
+				adminTierOrder := apiv3.KubeAdminTierOrder
 				syncTester.ExpectData(model.KVPair{
-					Key:   model.TierKey{Name: names.AdminNetworkPolicyTierName},
-					Value: &model.Tier{Order: &anpOrder, DefaultAction: apiv3.Pass},
+					Key:   model.TierKey{Name: names.KubeAdminTierName},
+					Value: &model.Tier{Order: &adminTierOrder, DefaultAction: apiv3.Pass},
 				})
-				banpOrder := apiv3.BaselineAdminNetworkPolicyTierOrder
+				baselineTierOrder := apiv3.KubeBaselineTierOrder
 				syncTester.ExpectData(model.KVPair{
-					Key:   model.TierKey{Name: names.BaselineAdminNetworkPolicyTierName},
-					Value: &model.Tier{Order: &banpOrder, DefaultAction: apiv3.Pass},
+					Key:   model.TierKey{Name: names.KubeBaselineTierName},
+					Value: &model.Tier{Order: &baselineTierOrder, DefaultAction: apiv3.Pass},
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},

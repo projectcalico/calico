@@ -66,6 +66,53 @@ const backendKeyV6Size = 8
 //	};
 const backendValueV6Size = 20
 
+//	struct cali_maglev_key {
+//		__u32 svc_id;
+//		__u32 ordinal; // should always be a value of [0..M-1], where M is a very large prime number. -Alex
+//	};
+const maglevBackendKeyV6Size = 8
+
+const maglevBackendValueV6Size = backendValueV6Size
+
+type MaglevBackendKeyV6 [maglevBackendKeyV6Size]byte
+
+var _ MaglevBackendKeyInterface = MaglevBackendKeyV6{}
+
+func NewMaglevBackendKeyV6(svcID, ordinal uint32) MaglevBackendKeyV6 {
+	var k MaglevBackendKeyV6
+	binary.LittleEndian.PutUint32(k[0:4], svcID)
+	binary.LittleEndian.PutUint32(k[4:8], ordinal)
+	return k
+}
+
+func NewMaglevBackendKeyV6Intf(svcID, ordinal uint32) MaglevBackendKeyInterface {
+	return NewMaglevBackendKeyV6(svcID, ordinal)
+}
+
+func (k MaglevBackendKeyV6) SvcID() uint32 {
+	return binary.LittleEndian.Uint32(k[0:4])
+}
+
+func (k MaglevBackendKeyV6) Ordinal() uint32 {
+	return binary.LittleEndian.Uint32(k[4:8])
+}
+
+func (k MaglevBackendKeyV6) AsBytes() []byte {
+	return k[:]
+}
+
+func (k MaglevBackendKeyV6) String() string {
+	svcID := k.SvcID()
+	ord := k.Ordinal()
+	return fmt.Sprintf("MaglevBackendKeyV6{%d:%d}", svcID, ord)
+}
+
+func MaglevBackendKeyV6FromBytes(b []byte) MaglevBackendKeyInterface {
+	var k MaglevBackendKeyV6
+	copy(k[:], b)
+	return k
+}
+
 // (sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
 const ZeroCIDRV6PrefixLen = (16 + 2 + 1) * 8
 
@@ -243,6 +290,73 @@ var BackendMapV6Parameters = maps.MapParameters{
 
 func BackendMapV6() maps.MapWithExistsCheck {
 	return maps.NewPinnedMap(BackendMapV6Parameters)
+}
+
+var MaglevMapV6Parameters = maps.MapParameters{
+	Type:       "hash",
+	KeySize:    maglevBackendKeyV6Size,
+	ValueSize:  maglevBackendValueV6Size,
+	MaxEntries: 1009,
+	Name:       "cali_v6_mglv",
+	Flags:      unix.BPF_F_NO_PREALLOC,
+	Version:    2,
+}
+
+func MaglevMapV6() maps.MapWithExistsCheck {
+	return maps.NewPinnedMap(MaglevMapV6Parameters)
+}
+
+type MaglevMapMemV6 map[MaglevBackendKeyV6]BackendValueV6
+
+func (m MaglevMapMemV6) Equal(cmp MaglevMapMemV6) bool {
+	if len(m) != len(cmp) {
+		return false
+	}
+
+	for k, v := range m {
+		if v2, ok := cmp[k]; !ok || v != v2 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// LoadMaglevMapV6 loads the CH NAT map into a go map or returns an error
+func LoadMaglevMapV6(m maps.Map) (MaglevMapMemV6, error) {
+	ret := make(MaglevMapMemV6)
+
+	if err := m.Open(); err != nil {
+		return nil, err
+	}
+
+	iterFn := MaglevMapMemV6Iter(ret)
+
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
+		iterFn(k, v)
+		return maps.IterNone
+	})
+	if err != nil {
+		ret = nil
+	}
+
+	return ret, err
+}
+
+// MaglevMapMemV6Iter returns maps.MapIter that loads the provided MaglevMapMemV6
+func MaglevMapMemV6Iter(m MaglevMapMemV6) func(k, v []byte) {
+	ks := len(MaglevBackendKeyV6{})
+	vs := len(BackendValueV6{})
+
+	return func(k, v []byte) {
+		var key MaglevBackendKeyV6
+		copy(key[:ks], k[:ks])
+
+		var val BackendValueV6
+		copy(val[:vs], v[:vs])
+
+		m[key] = val
+	}
 }
 
 // NATMapMem represents FrontendMap loaded into memory

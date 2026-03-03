@@ -18,11 +18,12 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -82,12 +83,27 @@ func (key WorkloadEndpointKey) defaultDeleteParentPaths() ([]string, error) {
 }
 
 func (key WorkloadEndpointKey) valueType() (reflect.Type, error) {
-	return reflect.TypeOf(WorkloadEndpoint{}), nil
+	return reflect.TypeFor[WorkloadEndpoint](), nil
+}
+
+func (key WorkloadEndpointKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[WorkloadEndpoint](key, rawData)
 }
 
 func (key WorkloadEndpointKey) String() string {
 	return fmt.Sprintf("WorkloadEndpoint(node=%s, orchestrator=%s, workload=%s, name=%s)",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)
+}
+
+// GetNamespace extracts and returns the namespace from the WorkloadID.
+// WorkloadID is expected to be in the format "namespace/name".
+// Returns an empty string if the WorkloadID doesn't contain a namespace.
+func (key WorkloadEndpointKey) GetNamespace() string {
+	parts := strings.SplitN(key.WorkloadID, "/", 2)
+	if len(parts) == 2 {
+		return parts[0]
+	}
+	return ""
 }
 
 var _ EndpointKey = WorkloadEndpointKey{}
@@ -165,7 +181,7 @@ type WorkloadEndpoint struct {
 	IPv6Nets                   []net.IPNet       `json:"ipv6_nets"`
 	IPv4NAT                    []IPNAT           `json:"ipv4_nat,omitempty"`
 	IPv6NAT                    []IPNAT           `json:"ipv6_nat,omitempty"`
-	Labels                     uniquelabels.Map  `json:"labels,omitempty"`
+	Labels                     uniquelabels.Map  `json:"labels"`
 	IPv4Gateway                *net.IP           `json:"ipv4_gateway,omitempty" validate:"omitempty,ipv4"`
 	IPv6Gateway                *net.IP           `json:"ipv6_gateway,omitempty" validate:"omitempty,ipv6"`
 	Ports                      []EndpointPort    `json:"ports,omitempty" validate:"dive"`
@@ -201,4 +217,4 @@ type IPNAT struct {
 	ExtIP net.IP `json:"ext_ip" validate:"ip"`
 }
 
-type QoSControls = v3.QoSControls
+type QoSControls = internalapi.QoSControls

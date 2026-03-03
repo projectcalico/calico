@@ -86,7 +86,7 @@ func (r tiers) Update(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 
 // Delete takes name of the Tier and deletes it. Returns an error if one occurs.
 func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.Tier, error) {
-	if name == names.DefaultTierName || name == names.AdminNetworkPolicyTierName {
+	if names.TierIsStatic(name) {
 		return nil, cerrors.ErrorOperationNotSupported{
 			Identifier: name,
 			Operation:  "Delete",
@@ -94,13 +94,8 @@ func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		}
 	}
 
-	// List the (Staged)NetworkPolicy and (Staged)GlobalNetworkPolicy resources that are prefixed with this tier name.
-	// Note that a prefix matching may return additional results that are not actually in this tier,
-	// so we also need to check the spec field to be certain.
-	policyListOptions := options.ListOptions{
-		Prefix: true,
-		Name:   name + ".",
-	}
+	// List all policies, and checks none of them reference this tier.
+	policyListOptions := options.ListOptions{}
 
 	// Check NetworkPolicy resources.
 	if npList, err := r.client.NetworkPolicies().List(ctx, policyListOptions); err != nil {

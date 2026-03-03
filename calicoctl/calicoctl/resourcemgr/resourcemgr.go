@@ -26,13 +26,13 @@ import (
 	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
@@ -249,7 +249,7 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 	// If the resourceVersion is not specified then we do a Get to get
 	// the latest resourceVersion and then do an Update with it.
 	// We retry only if we get an update conflict.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		// Get the resource to get the resourceVersion.
 		ro, err := rh.get(ctx, client, resource)
 		if err != nil {
@@ -348,7 +348,7 @@ func GetResourceManager(resource runtime.Object) ResourceManager {
 // This function also inserts resource name, namespace if specified.
 // Example "calicoctl get bgppeer peer123" will return
 // a BGPPeer resource with name field populated to "peer123".
-func GetResourcesFromArgs(args map[string]interface{}) ([]ResourceObject, error) {
+func GetResourcesFromArgs(args map[string]any) ([]ResourceObject, error) {
 	kind := args["<KIND>"].(string)
 	argname := "<NAME>"
 

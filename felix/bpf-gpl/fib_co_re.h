@@ -6,25 +6,51 @@
 #define __CALI_FIB_CO_RE_H__
 
 #include "profiling.h"
-
+#ifndef IPVER6
+#include "ip_v4_fragment.h"
+#endif
 #include <linux/if_packet.h>
+
+static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
+{
+	int rc = bpf_skb_change_head(ctx->skb, ETH_HLEN, 0);
+	if (rc < 0) {
+		CALI_DEBUG("bpf_skb_change_head failed %d.", rc);
+		return rc;
+	}
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		CALI_DEBUG("Too short");
+		return -1;
+	}
+#ifdef IPVER6
+	eth_hdr(ctx)->h_proto = bpf_htons(ETH_P_IPV6);
+#else
+	eth_hdr(ctx)->h_proto = bpf_htons(ETH_P_IP);
+#endif
+	return 0;
+}
 
 static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 {
 	struct cali_tc_state *state = ctx->state;
+	int rc = 0;
 	bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
-
 	if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
-		int rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
+		if (CALI_F_L3_DEV) {
+			rc = make_room_for_l2_header(ctx);
+			if (rc < 0) {
+				return TC_ACT_UNSPEC;
+			}
+		}
+		rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 		if (rc == TC_ACT_REDIRECT) {
 			counter_inc(ctx, CALI_REDIRECT_PEER);
 			CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
 			return rc;
 		}
 	}
-
 	return TC_ACT_UNSPEC;
 }
 
@@ -41,13 +67,36 @@ static CALI_BPF_INLINE void fib_error_log(struct cali_tc_ctx *ctx,int rc)
 
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
-	int rc = ctx->fwd.res;
+	int rc = ctx->state->fwd.res;
 	struct cali_tc_state *state = ctx->state;
+	__u32 fib_flags = 0;
 
 	if (rc == TC_ACT_SHOT) {
 		goto deny;
 	}
 
+	if (!bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
+		if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK && ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
+			/* needs to go via routing in netfilter unless we have access
+			 * to BPF_FIB_LOOKUP_MARK in kernel 6.10+
+			 */
+			goto skip_fib;
+		}
+	} else {
+		fib_flags = BPF_FIB_LOOKUP_MARK;
+	}
+
+#ifndef IPVER6
+        if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && (ctx->state->flags & CALI_ST_FIRST_FRAG)) {
+		/* Revalidate the access to the packet */
+		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+			deny_reason(ctx, CALI_REASON_SHORT);
+			CALI_DEBUG("Too short");
+			goto deny;
+		}
+		frags4_record_ct(ctx);
+	}
+#endif
 	if (ctx->state->flags & CALI_ST_SKIP_REDIR_ONCE) {
 		goto skip_fib;
 	}
@@ -130,7 +179,7 @@ skip_redir_ifindex:
 		if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 			goto skip_fib;
 		}
-	} else if (CALI_F_FROM_WEP && fwd_fib(&ctx->fwd)) {
+	} else if (CALI_F_FROM_WEP && fwd_fib(&ctx->state->fwd)) {
 		struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
 		if (dest_rt == NULL) {
 			CALI_DEBUG("No route for " IP_FMT " to forward from WEP", &ctx->state->ip_dst);
@@ -153,6 +202,11 @@ skip_redir_ifindex:
 				.ifindex = ctx->skb->ifindex,
 				.l4_protocol = state->ip_proto,
 			};
+
+			if (bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
+				fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+			}
+
 #ifdef IPVER6
 			ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_src, &state->ip_src);
 			ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_dst, &state->ip_dst);
@@ -161,15 +215,22 @@ skip_redir_ifindex:
 			fib_params(ctx)->ipv4_dst = state->ip_dst;
 #endif
 
-			rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), 0);
-			state->ct_result.ifindex_fwd = fib_params(ctx)->ifindex;
+			rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), fib_flags);
+			switch (rc) {
+			case 0:
+			case BPF_FIB_LKUP_RET_NO_NEIGH:
+				state->ct_result.ifindex_fwd = fib_params(ctx)->ifindex;
+				break;
+			default:
+				goto try_fib_external;
+			}
 		}
 
 		if (cali_rt_flags_local_workload(dest_rt->flags)) {
 			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if (cali_rt_is_vxlan(dest_rt) && !(cali_rt_is_same_subnet(dest_rt))) {
+		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt))) {
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
@@ -187,7 +248,7 @@ skip_redir_ifindex:
 
 			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
 			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
-			ctx->fwd.mark |= CALI_SKB_MARK_TUNNEL_KEY_SET;
+			ctx->state->fwd.mark |= CALI_SKB_MARK_TUNNEL_KEY_SET;
 
 			rc = bpf_redirect(state->ct_result.ifindex_fwd, 0);
 			if (rc == TC_ACT_REDIRECT) {
@@ -197,7 +258,7 @@ skip_redir_ifindex:
 				goto skip_fib;
 			}
 		}
-	} else if (CALI_F_VXLAN && CALI_F_TO_HEP) {
+	} else if (CALI_F_TUNNEL && CALI_F_TO_HEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN) ||
 			!skb_mark_equals(ctx->skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET)) {
 			/* packet to vxlan from the host, needs to set tunnel key. Either
@@ -206,12 +267,14 @@ skip_redir_ifindex:
 			 */
 			struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
 			if (dest_rt == NULL) {
-				CALI_DEBUG("No route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
+				CALI_DEBUG("No route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
 				goto deny;
 			}
-			if (!cali_rt_is_vxlan(dest_rt)) {
-				CALI_DEBUG("Not a vxlan route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
-				goto deny;
+			if (!cali_rt_is_tunneled(dest_rt)) {
+				CALI_DEBUG("Not a tunnel route for " IP_FMT " at tunnel device", &ctx->state->ip_dst);
+				// We dont have a tunnel route, so nothing to do here.
+				// Better to leave it to the tunnel device to handle it.
+				goto skip_fib;
 			}
 
 			struct bpf_tunnel_key key = {
@@ -232,7 +295,7 @@ skip_redir_ifindex:
 
 			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
 			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
-			ctx->fwd.mark |= CALI_SKB_MARK_TUNNEL_KEY_SET;
+			ctx->state->fwd.mark |= CALI_SKB_MARK_TUNNEL_KEY_SET;
 		}
 	}
 
@@ -244,7 +307,7 @@ try_fib_external:
 	}
 
 	// Try a short-circuit FIB lookup.
-	if (fwd_fib(&ctx->fwd)) {
+	if (fwd_fib(&ctx->state->fwd)) {
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
@@ -275,6 +338,12 @@ try_fib_external:
 				nh_params.nh_family = 2 /* AF_INET */;
 				nh_params.ipv4_nh = state->ip_dst;
 #endif
+				if (CALI_F_L3_DEV) {
+					rc = make_room_for_l2_header(ctx);
+					if (rc < 0) {
+						goto cancel_fib;
+					}
+				}
 				rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, &nh_params, sizeof(nh_params), 0);
 				if (rc == TC_ACT_REDIRECT) {
 					counter_inc(ctx, CALI_REDIRECT_NEIGH);
@@ -282,15 +351,7 @@ try_fib_external:
 							state->ct_result.ifindex_fwd);
 					goto no_fib_redirect;
 				}
-				CALI_DEBUG("Fall through to redirect without fib lookup rc %d", rc);
 			}
-			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
-			if (rc == TC_ACT_REDIRECT) {
-				counter_inc(ctx, CALI_REDIRECT_NEIGH);
-				CALI_DEBUG("Redirect to host dev %d without fib lookup", state->ct_result.ifindex_fwd);
-				goto no_fib_redirect;
-			}
-			CALI_DEBUG("Fall through to full FIB lookup rc %d", rc);
 		}
 
 		*fib_params(ctx) = (struct bpf_fib_lookup) {
@@ -303,6 +364,11 @@ try_fib_external:
 			.ifindex = ctx->skb->ifindex,
 			.l4_protocol = state->ip_proto,
 		};
+
+		if (bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
+			fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+			CALI_DEBUG("FIB mark=0x%d", fib_params(ctx)->mark);
+		}
 
 		if (state->ip_proto != IPPROTO_ICMP_46) {
 			fib_params(ctx)->sport = bpf_htons(state->sport);
@@ -327,14 +393,16 @@ try_fib_external:
 		CALI_DEBUG("FIB sport=%d", bpf_ntohs(fib_params(ctx)->sport));
 		CALI_DEBUG("FIB dport=%d", bpf_ntohs(fib_params(ctx)->dport));
 #ifdef IPVER6
+		CALI_DEBUG("FIB ipv6_src=" IP_FMT, &fib_params(ctx)->ipv6_src);
+		CALI_DEBUG("FIB ipv6_dst="IP_FMT, &fib_params(ctx)->ipv6_dst);
 #else
-		CALI_DEBUG("FIB ipv4_src=%x", bpf_ntohl(fib_params(ctx)->ipv4_src));
-		CALI_DEBUG("FIB ipv4_dst=%x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+		CALI_DEBUG("FIB ipv4_src=" IP_FMT, &fib_params(ctx)->ipv4_src);
+		CALI_DEBUG("FIB ipv4_dst="IP_FMT, &fib_params(ctx)->ipv4_dst);
 #endif
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup");
 		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup),
-				ctx->fwd.fib_flags | BPF_FIB_LOOKUP_SKIP_NEIGH);
+				ctx->state->fwd.fib_flags | BPF_FIB_LOOKUP_SKIP_NEIGH | fib_flags);
 		switch (rc) {
 		case BPF_FIB_LKUP_RET_FRAG_NEEDED:
 			/* We are not asking for an MTU check, but we may still get
@@ -366,7 +434,7 @@ try_fib_external:
 #endif
 
 			if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
-				ctx->fwd.reason = CALI_REASON_WEP_NOT_READY;
+				ctx->state->fwd.reason = CALI_REASON_WEP_NOT_READY;
 				goto deny;
 			}
 
@@ -380,6 +448,13 @@ try_fib_external:
 #endif
 
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
+
+			if (CALI_F_L3_DEV) {
+				rc = make_room_for_l2_header(ctx);
+				if (rc < 0) {
+					goto cancel_fib;
+				}
+			}
 			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
 			break;
 		default:
@@ -417,7 +492,7 @@ cancel_fib:
 
 			struct arp_value *arpv = cali_arp_lookup_elem(&arpk);
 			if (!arpv) {
-				ctx->fwd.reason = CALI_REASON_NATIFACE;
+				ctx->state->fwd.reason = CALI_REASON_NATIFACE;
 				CALI_DEBUG("ARP lookup failed for " IP_FMT " dev %d",
 						debug_ip(state->ip_dst), iface);
 				goto deny;
@@ -426,7 +501,7 @@ cancel_fib:
 			/* Revalidate the access to the packet */
 			skb_refresh_start_end(ctx);
 			if (ctx->data_start + sizeof(struct ethhdr) > ctx->data_end) {
-				ctx->fwd.reason = CALI_REASON_SHORT;
+				ctx->state->fwd.reason = CALI_REASON_SHORT;
 				CALI_DEBUG("Too short");
 				goto deny;
 			}
@@ -438,7 +513,7 @@ cancel_fib:
 
 			rc = bpf_redirect(iface, 0);
 			if (rc != TC_ACT_REDIRECT) {
-				ctx->fwd.reason = CALI_REASON_NATIFACE;
+				ctx->state->fwd.reason = CALI_REASON_NATIFACE;
 				CALI_DEBUG("Redirect directly to bpfnatin failed.");
 				goto deny;
 			}
@@ -462,16 +537,10 @@ skip_fib:
 		/* Packet is towards host namespace, mark it so that downstream
 		 * programs know that they're not the first to see the packet.
 		 */
-		ctx->fwd.mark |=  CALI_SKB_MARK_SEEN;
+		ctx->state->fwd.mark |=  CALI_SKB_MARK_SEEN;
 		if (ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
 			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL");
-			ctx->fwd.mark |= EXT_TO_SVC_MARK;
-			if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK) {
-				/* needs to go via normal routing unless we have access
-				 * to BPF_FIB_LOOKUP_MARK in kernel 6.10+
-				 */
-				rc = TC_ACT_UNSPEC;
-			}
+			ctx->state->fwd.mark |= EXT_TO_SVC_MARK;
 		}
 
 		if (CALI_F_NAT_IF) {
@@ -479,23 +548,23 @@ skip_fib:
 			 * bpfnatout - if it gets (S)NATed, a new connection is created
 			 * and we know that returning packets must go via bpfnatout again.
 			 */
-			ctx->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
+			ctx->state->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
 			CALI_DEBUG("marking CALI_SKB_MARK_FROM_NAT_IFACE_OUT");
 		}
 
 		if (ct_result_is_related(state->ct_result.rc)) {
 			CALI_DEBUG("Related traffic, marking with CALI_SKB_MARK_RELATED_RESOLVED");
-			ctx->fwd.mark |= CALI_SKB_MARK_RELATED_RESOLVED;
+			ctx->state->fwd.mark |= CALI_SKB_MARK_RELATED_RESOLVED;
 		}
 
-		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.", ctx->fwd.mark);
+		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.", ctx->state->fwd.mark);
 
 		/* FIXME: this ignores the mask that we should be using.
 		 * However, if we mask off the bits, then clang spots that it
 		 * can do a 16-bit store instead of a 32-bit load/modify/store,
 		 * which trips up the validator.
 		 */
-		skb_set_mark(ctx->skb, ctx->fwd.mark); /* make sure that each pkt has SEEN mark */
+		skb_set_mark(ctx->skb, ctx->state->fwd.mark); /* make sure that each pkt has SEEN mark */
 	}
 
 	goto allow;
@@ -516,7 +585,7 @@ allow:
 
 		if (rc ==  TC_ACT_SHOT) {
 			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
-					ctx->fwd.reason, prog_end_time-state->prog_start_time);
+					ctx->state->fwd.reason, prog_end_time-state->prog_start_time);
 		} else {
 			if (CALI_F_VXLAN && CALI_F_TO_HOST) {
 				bpf_skb_change_type(ctx->skb, PACKET_HOST);

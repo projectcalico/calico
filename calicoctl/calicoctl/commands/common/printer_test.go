@@ -15,15 +15,16 @@
 package common
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -34,11 +35,11 @@ var nilSlice []int
 var nilMap map[string]string
 
 var _ = DescribeTable("Testing joinAndTruncate",
-	func(items interface{}, separator string, maxLength int, expected string) {
+	func(items any, separator string, maxLength int, expected string) {
 		result := joinAndTruncate(items, separator, maxLength)
 		Expect(result).To(Equal(expected))
 	},
-	Entry("nil interface", interface{}(nil), ",", 0, ""),
+	Entry("nil interface", any(nil), ",", 0, ""),
 	Entry("nil map", nilMap, ",", 0, ""),
 	Entry("empty map", make(map[string]string), ",", 0, ""),
 	Entry("map with one kv", map[string]string{"a": "b"}, ",", 0, "a=b"),
@@ -97,6 +98,67 @@ var _ = Describe("Testing printer config()", func() {
 	It("prints 'unknown' when there is an error getting the default BGPConfig", func() {
 		client.throwError = true
 		Expect(config(client)("asnumber")).To(Equal("unknown"))
+	})
+})
+
+var _ = Describe("ResourcePrinterYAML tests", func() {
+	It("should omit zero fields with the omitzero tag", func() {
+		rp := ResourcePrinterYAML{}
+		var buf bytes.Buffer
+		gnp := apiv3.NewGlobalNetworkPolicy()
+		gnp.Name = "foo"
+		gnp.Spec.Ingress = []apiv3.Rule{
+			{
+				Action: "Allow",
+			},
+		}
+		err := rp.FPrint(&buf, nil, []runtime.Object{gnp})
+		Expect(err).NotTo(HaveOccurred())
+
+		// The source/destination fields of apiv3.Rule use omitzero.
+		Expect(buf.String()).To(MatchYAML(
+			`apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: foo
+spec:
+  ingress:
+  - action: Allow
+`,
+		))
+	})
+})
+
+var _ = Describe("ResourcePrinterJSON tests", func() {
+	It("should omit zero fields with the omitzero tag", func() {
+		rp := ResourcePrinterJSON{}
+		var buf bytes.Buffer
+		gnp := apiv3.NewGlobalNetworkPolicy()
+		gnp.Name = "foo"
+		gnp.Spec.Ingress = []apiv3.Rule{
+			{
+				Action: "Allow",
+			},
+		}
+		err := rp.FPrint(&buf, nil, []runtime.Object{gnp})
+		Expect(err).NotTo(HaveOccurred())
+
+		// The source/destination fields of apiv3.Rule use omitzero.
+		Expect(buf.String()).To(MatchJSON(
+			`{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "GlobalNetworkPolicy",
+  "metadata": {
+    "name": "foo"
+  },
+  "spec": {
+    "ingress":[
+      {"action": "Allow"}
+    ]
+  }
+}
+`,
+		))
 	})
 })
 

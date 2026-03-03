@@ -24,16 +24,6 @@ import (
 
 const TigeraOperatorImage = "tigera/operator"
 
-// ImageMap maps the image name to the repository.
-var ImageMap = map[string]string{
-	"typha":                     "calico/typha",
-	"calicoctl":                 "calico/ctl",
-	"flannel":                   "coreos/flannel",
-	"flexvol":                   "calico/pod2daemon-flexvol",
-	"key-cert-provisioner":      "calico/key-cert-provisioner",
-	"csi-node-driver-registrar": "calico/node-driver-registrar",
-}
-
 func CheckImage(image string) (bool, error) {
 	ref, err := name.ParseReference(image)
 	if err != nil {

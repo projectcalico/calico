@@ -15,7 +15,7 @@
 package labelindex_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/labelindex"
@@ -26,16 +26,16 @@ import (
 
 type update struct {
 	op      string
-	labelId interface{}
-	selId   interface{}
+	labelId any
+	selId   any
 }
 
 var _ = Describe("Keys", func() {
 	It("should work as a map key", func() {
-		key1 := model.KeyFromDefaultPath("/calico/v1/policy/tier/tier1/policy/policy1")
-		key2 := model.KeyFromDefaultPath("calico/v1/policy/tier/tier1/policy/policy1")
-		key3 := model.KeyFromDefaultPath("/calico/v1/policy/tier/tier1/policy/policy2")
-		m := make(map[interface{}]bool)
+		key1 := model.KeyFromDefaultPath("/calico/v1/policy/NetworkPolicy/kube-system/policy1")
+		key2 := model.KeyFromDefaultPath("calico/v1/policy/NetworkPolicy/kube-system/policy1")
+		key3 := model.KeyFromDefaultPath("/calico/v1/policy/NetworkPolicy/kube-system/policy2")
+		m := make(map[any]bool)
 		m[key1] = true
 		Expect(m[key2]).To(BeTrue())
 		Expect(m[key3]).To(BeFalse())
@@ -52,17 +52,21 @@ var _ = Describe("Index", func() {
 		err     error
 	)
 
-	onMatchStart := func(selId, labelId interface{}) {
+	onMatchStart := func(selId, labelId any) {
 		updates = append(updates,
-			update{op: "start",
+			update{
+				op:      "start",
 				labelId: labelId,
-				selId:   selId})
+				selId:   selId,
+			})
 	}
-	onMatchStop := func(selId, labelId interface{}) {
+	onMatchStop := func(selId, labelId any) {
 		updates = append(updates,
-			update{op: "stop",
+			update{
+				op:      "stop",
 				labelId: labelId,
-				selId:   selId})
+				selId:   selId,
+			})
 	}
 
 	BeforeEach(func() {

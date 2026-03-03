@@ -278,7 +278,8 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint log_filter_jmp,
 			uint *jumps,
 			uint *jumps6,
-			short dscp)
+			short dscp,
+			uint maglev_lut_size)
 {
 	struct cali_tc_global_data v4 = {
 		.tunnel_mtu = tmtu,
@@ -294,6 +295,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.overlay_tunnel_id = overlay_tunnel_id,
 		.log_filter_jmp = log_filter_jmp,
 		.dscp = dscp,
+		.maglev_lut_size = maglev_lut_size,
 	};
 
 	strncpy(v4.iface_name, iface_name, sizeof(v4.iface_name));
@@ -514,4 +516,17 @@ int create_bpf_map(enum bpf_map_type type, unsigned int key_size, unsigned int v
 		printf("libbpf warn: Error in bpf_map_create(%s):%s(%d).\n", name, cp, err);
 	}
 	return fd;
+}
+
+void bpf_set_program_autoload(struct bpf_object *obj, const char *progName, bool autoload)
+{
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, progName);
+	if (prog == NULL) {
+		errno = ENOENT;
+		return;
+	}
+	int ret = bpf_program__set_autoload(prog, autoload);
+	if (ret) {
+		set_errno(ret);
+	}
 }

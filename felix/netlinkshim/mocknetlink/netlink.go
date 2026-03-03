@@ -17,6 +17,7 @@ package mocknetlink
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"reflect"
 	"strings"
@@ -25,7 +26,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -98,8 +99,8 @@ func init() {
 	}
 
 	// First check that our struct matches the netlink one...
-	nlType := reflect.TypeOf(ErrLinkNotFound)
-	ourType := reflect.TypeOf(myLinkNotFoundError{})
+	nlType := reflect.TypeFor[netlink.LinkNotFoundError]()
+	ourType := reflect.TypeFor[myLinkNotFoundError]()
 	if nlType.NumField() != ourType.NumField() {
 		panic("netlink.LinkNotFoundError structure appears to have changed (different number of fields)")
 	}
@@ -375,10 +376,9 @@ func (d *MockNetlinkDataplane) GetDeletedConntrackEntries() []net.IP {
 	defer ginkgo.GinkgoRecover()
 
 	cpy := make([]net.IP, 0, d.deletedConntrackEntries.Len())
-	d.deletedConntrackEntries.Iter(func(addr ip.Addr) error {
+	for addr := range d.deletedConntrackEntries.All() {
 		cpy = append(cpy, addr.AsNetIP())
-		return nil
-	})
+	}
 	return cpy
 }
 
@@ -951,9 +951,28 @@ func (d *MockNetlinkDataplane) AddNeighs(family int, neighs ...netlink.Neigh) {
 
 func addNeighs(family int, neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
 	for _, neigh := range neighs {
-		neigh := neigh
 		nk := NeighKeyForFamily(family, neigh.LinkIndex, neigh.HardwareAddr, ip.FromNetIP(neigh.IP))
 		neighMap[nk] = &neigh
+	}
+}
+
+// RemoveNeighs allows test code to remove neighbours from the mock dataplane
+// without going through the netlink API.
+func (d *MockNetlinkDataplane) RemoveNeighs(family int, neighs ...netlink.Neigh) {
+	err := d.checkNeighFamily(family)
+	if err != nil {
+		panic(err)
+	}
+	if d.NeighsByFamily[family] == nil {
+		return
+	}
+	removeNeighs(family, d.NeighsByFamily[family], neighs)
+}
+
+func removeNeighs(family int, neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
+	for _, neigh := range neighs {
+		nk := NeighKeyForFamily(family, neigh.LinkIndex, neigh.HardwareAddr, ip.FromNetIP(neigh.IP))
+		delete(neighMap, nk)
 	}
 }
 
@@ -1144,7 +1163,7 @@ func KeyForRoute(route *netlink.Route) string {
 	if table == 0 {
 		table = unix.RT_TABLE_MAIN
 	}
-	key := fmt.Sprintf("%v-%v", table, route.Dst)
+	key := fmt.Sprintf("%v-%v-%v", table, route.Dst, route.Priority)
 	log.WithField("routeKey", key).Debug("Calculated route key")
 	return key
 }
@@ -1179,9 +1198,7 @@ func (l *MockLink) copy() *MockLink {
 	var wgPeersCopy map[wgtypes.Key]wgtypes.Peer
 	if l.WireguardPeers != nil {
 		wgPeersCopy = map[wgtypes.Key]wgtypes.Peer{}
-		for k, v := range l.WireguardPeers {
-			wgPeersCopy[k] = v
-		}
+		maps.Copy(wgPeersCopy, l.WireguardPeers)
 	}
 
 	return &MockLink{

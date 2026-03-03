@@ -109,27 +109,6 @@ func TestNetworkPolicyCreateWithKeyExist(t *testing.T) {
 	}
 }
 
-func TestNetworkPolicyCreateDisallowK8sPrefix(t *testing.T) {
-	ctx, store, gnpStore := testSetup(t)
-	defer testCleanup(t, ctx, store, gnpStore)
-	name := "knp.default.foo"
-	ns := "default"
-
-	key := fmt.Sprintf("projectcalico.org/networkpolicies/%s/%s", ns, name)
-	out := &v3.NetworkPolicy{}
-	obj := &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name}}
-
-	libcPolicy, _ := store.client.NetworkPolicies().Get(ctx, ns, name, options.GetOptions{})
-	if libcPolicy != nil {
-		t.Fatalf("expecting empty result on key: %s", key)
-	}
-
-	err := store.Create(ctx, key, obj, out, 0)
-	if err == nil {
-		t.Fatalf("Expected Create of a policy with prefix 'knp.default.' to fail")
-	}
-}
-
 func TestNetworkPolicyGet(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
@@ -247,20 +226,6 @@ func TestNetworkPolicyConditionalDelete(t *testing.T) {
 			t.Errorf("#%d: pod want=%#v, get=%#v", i, storedObj, out)
 		}
 		key, storedObj = testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.foo", UID: "A"}})
-	}
-}
-
-func TestNetworkPolicyDeleteDisallowK8sPrefix(t *testing.T) {
-	ctx, store, gnpStore := testSetup(t)
-	defer testCleanup(t, ctx, store, gnpStore)
-	name := "knp.default.foo"
-	ns := "default"
-
-	key := fmt.Sprintf("projectcalico.org/networkpolicies/%s/%s", ns, name)
-	out := &v3.NetworkPolicy{}
-	err := store.Delete(ctx, key, out, nil, nil, nil, storage.DeleteOptions{})
-	if err == nil {
-		t.Fatalf("Expected deleting a k8s network policy to error")
 	}
 }
 

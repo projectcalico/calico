@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,11 @@ package proxy_test
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -33,7 +34,7 @@ import (
 )
 
 var _ = Describe("BPF Proxy healthCheckNodeport", func() {
-	var p proxy.Proxy
+	var p proxy.ProxyFrontend
 	k8s := fake.NewClientset()
 
 	testNodeName := "testnode"
@@ -43,9 +44,10 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		By("creating proxy with fake client and mock syncer", func() {
 			var err error
 
-			p, err = proxy.New(k8s, &mockDummySyncer{},
-				testNodeName, proxy.WithMinSyncPeriod(200*time.Millisecond))
+			p, err = proxy.New(k8s, &mockDummySyncer{}, testNodeName,
+				proxy.WithMinSyncPeriod(200*time.Millisecond), proxy.WithMaxSyncPeriod(1*time.Second))
 			Expect(err).NotTo(HaveOccurred())
+			p.SetHostIPs([]net.IP{net.ParseIP("127.0.0.1")})
 		})
 	})
 
@@ -126,7 +128,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.StatusCode).Should(Equal(503))
 
-			var status map[string]interface{}
+			var status map[string]any
 
 			decoder := json.NewDecoder(result.Body)
 			err = decoder.Decode(&status)
@@ -180,7 +182,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 					return fmt.Errorf("Unexpected status code %d; expected 200", result.StatusCode)
 				}
 
-				var status map[string]interface{}
+				var status map[string]any
 
 				decoder := json.NewDecoder(result.Body)
 				err = decoder.Decode(&status)
@@ -239,7 +241,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 						return fmt.Errorf("Unexpected status code %d; expected 200", result.StatusCode)
 					}
 
-					var status map[string]interface{}
+					var status map[string]any
 
 					decoder := json.NewDecoder(result.Body)
 					err = decoder.Decode(&status)

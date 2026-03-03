@@ -23,7 +23,7 @@ import (
 	"syscall"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -270,7 +270,7 @@ func (nl *netlinkTest) ListLocalRoutes(link netlink.Link, family int) ([]netlink
 	model, prs := nl.links[name]
 	var routes []netlink.Route
 	if prs {
-		model.addrs.Iter(func(addr string) error {
+		for addr := range model.addrs.All() {
 			net, err := netlink.ParseIPNet(addr)
 			if err != nil {
 				panic("Address parsing failed")
@@ -290,8 +290,7 @@ func (nl *netlinkTest) ListLocalRoutes(link netlink.Link, family int) ([]netlink
 					})
 				}
 			}
-			return nil
-		})
+		}
 	}
 	return routes, nil
 }
@@ -303,7 +302,7 @@ func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, 
 	model, prs := nl.links[name]
 	addrs := []netlink.Addr{}
 	if prs {
-		model.addrs.Iter(func(addr string) error {
+		for addr := range model.addrs.All() {
 			net, err := netlink.ParseIPNet(addr)
 			if err != nil {
 				panic("Address parsing failed")
@@ -321,8 +320,7 @@ func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, 
 					})
 				}
 			}
-			return nil
-		})
+		}
 	}
 	return addrs, nil
 }
@@ -558,7 +556,7 @@ var _ = Describe("ifacemonitor", func() {
 		}
 
 		// Repeat for 3 different interfaces (to test regexp of interface excludes)
-		for index := 0; index < 3; index++ {
+		for index := range 3 {
 			interfaceName := fmt.Sprintf("kube-ipvs%d", index)
 			netlinkUpdates(interfaceName)
 		}

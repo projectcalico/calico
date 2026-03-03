@@ -16,6 +16,7 @@ package conncheck
 
 import (
 	"fmt"
+	"strings"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -31,9 +32,10 @@ func NewServer(name string, ns *v1.Namespace, opts ...ServerOption) *Server {
 		framework.Fail(msg, 1)
 	}
 	s := &Server{
-		name:      name,
-		namespace: ns,
-		ports:     []int{80},
+		name:          name,
+		namespace:     ns,
+		ports:         []int{80},
+		autoCreateSvc: true,
 	}
 	for _, opt := range opts {
 		_ = opt(s)
@@ -42,14 +44,41 @@ func NewServer(name string, ns *v1.Namespace, opts ...ServerOption) *Server {
 }
 
 type Server struct {
-	name          string
-	namespace     *v1.Namespace
-	ports         []int
-	labels        map[string]string
-	pod           *v1.Pod
-	service       *v1.Service
-	podCustomizer func(*v1.Pod)
-	svcCustomizer func(*v1.Service)
+	name           string
+	namespace      *v1.Namespace
+	ports          []int
+	labels         map[string]string
+	pod            *v1.Pod
+	service        *v1.Service
+	podCustomizers []func(*v1.Pod)
+	svcCustomizers []func(*v1.Service)
+	autoCreateSvc  bool
+}
+
+// composedPodCustomizer returns a single customizer function that applies all
+// registered pod customizers in order, or nil if none are registered.
+func (s *Server) composedPodCustomizer() func(*v1.Pod) {
+	if len(s.podCustomizers) == 0 {
+		return nil
+	}
+	return func(pod *v1.Pod) {
+		for _, c := range s.podCustomizers {
+			c(pod)
+		}
+	}
+}
+
+// composedSvcCustomizer returns a single customizer function that applies all
+// registered service customizers in order, or nil if none are registered.
+func (s *Server) composedSvcCustomizer() func(*v1.Service) {
+	if len(s.svcCustomizers) == 0 {
+		return nil
+	}
+	return func(svc *v1.Service) {
+		for _, c := range s.svcCustomizers {
+			c(svc)
+		}
+	}
 }
 
 func (s *Server) ID() string {
@@ -113,6 +142,52 @@ func (s *Server) ClusterIP(opts ...TargetOption) Target {
 		}
 	}
 	return t
+}
+
+func (s *Server) ClusterIPv4(opts ...TargetOption) Target {
+	for _, ip := range s.Service().Spec.ClusterIPs {
+		if strings.Contains(ip, ":") {
+			continue
+		}
+		t := &target{
+			server:      s,
+			targetType:  TypeClusterIP,
+			destination: ip,
+			protocol:    TCP,
+		}
+		for _, opt := range opts {
+			if err := opt(t); err != nil {
+				framework.ExpectNoError(err)
+			}
+		}
+		return t
+	}
+	msg := fmt.Sprintf("No IPv4 ClusterIP found for server %s/%s", s.namespace.Name, s.name)
+	framework.Fail(msg, 1)
+	return nil
+}
+
+func (s *Server) ClusterIPv6(opts ...TargetOption) Target {
+	for _, ip := range s.Service().Spec.ClusterIPs {
+		if !strings.Contains(ip, ":") {
+			continue
+		}
+		t := &target{
+			server:      s,
+			targetType:  TypeClusterIP,
+			destination: ip,
+			protocol:    TCP,
+		}
+		for _, opt := range opts {
+			if err := opt(t); err != nil {
+				framework.ExpectNoError(err)
+			}
+		}
+		return t
+	}
+	msg := fmt.Sprintf("No IPv6 ClusterIP found for server %s/%s", s.namespace.Name, s.name)
+	framework.Fail(msg, 1)
+	return nil
 }
 
 // HostPorts returns a list of targets that can be used to connect to the pod's host IPs on the given port.
@@ -191,32 +266,23 @@ func WithServerLabels(labels map[string]string) ServerOption {
 
 func WithHostNetworking() ServerOption {
 	return func(c *Server) error {
-		if c.podCustomizer != nil {
-			return fmt.Errorf("Customizer already set")
-		}
-		c.podCustomizer = func(pod *v1.Pod) {
+		c.podCustomizers = append(c.podCustomizers, func(pod *v1.Pod) {
 			pod.Spec.HostNetwork = true
-		}
+		})
 		return nil
 	}
 }
 
 func WithServerPodCustomizer(customizer func(*v1.Pod)) ServerOption {
 	return func(c *Server) error {
-		if c.podCustomizer != nil {
-			return fmt.Errorf("Pod customizer already set")
-		}
-		c.podCustomizer = customizer
+		c.podCustomizers = append(c.podCustomizers, customizer)
 		return nil
 	}
 }
 
 func WithServerSvcCustomizer(customizer func(*v1.Service)) ServerOption {
 	return func(c *Server) error {
-		if c.svcCustomizer != nil {
-			return fmt.Errorf("Service customizer already set")
-		}
-		c.svcCustomizer = customizer
+		c.svcCustomizers = append(c.svcCustomizers, customizer)
 		return nil
 	}
 }
@@ -224,6 +290,13 @@ func WithServerSvcCustomizer(customizer func(*v1.Service)) ServerOption {
 func WithPorts(ports ...int) ServerOption {
 	return func(c *Server) error {
 		c.ports = ports
+		return nil
+	}
+}
+
+func WithAutoCreateService(autoCreate bool) ServerOption {
+	return func(c *Server) error {
+		c.autoCreateSvc = autoCreate
 		return nil
 	}
 }

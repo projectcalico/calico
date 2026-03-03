@@ -26,7 +26,7 @@ import (
 
 var (
 	matchHostEndpointStatus = regexp.MustCompile("^/?calico/felix/v1/host/([^/]+)/endpoint/([^/]+)$")
-	typeHostEndpointStatus  = reflect.TypeOf(HostEndpointStatus{})
+	typeHostEndpointStatus  = reflect.TypeFor[HostEndpointStatus]()
 )
 
 type HostEndpointStatusKey struct {
@@ -56,6 +56,10 @@ func (key HostEndpointStatusKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key HostEndpointStatusKey) valueType() (reflect.Type, error) {
 	return typeHostEndpointStatus, nil
+}
+
+func (key HostEndpointStatusKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[HostEndpointStatus](key, rawData)
 }
 
 func (key HostEndpointStatusKey) String() string {

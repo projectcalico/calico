@@ -1,0 +1,122 @@
+version: v1.0
+
+name: banzai-calico Windows
+
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  hours: 12
+
+global_job_config:
+  prologue:
+    commands_file: ../scripts/global_prologue.sh
+  epilogue:
+    always:
+      commands:
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+  env_vars:
+    - name: CREATE_WINDOWS_NODES
+      value: "true"
+    - name: K8S_E2E_FLAGS
+      value: --ginkgo.focus=(\[sig-calico\].*\[RunsOnWindows\]) --ginkgo.skip=(\[LinuxOnly\])
+    - name: FUNCTIONAL_AREA
+      value: "windows.yml"
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/"
+    - name: INSTALLER
+      value: "operator"
+    - name: RUN_LOCAL_TESTS # run e2e tests from locally built binary
+      value: "true"
+
+# Dimensions
+# Provisioners: azr-aso, azr-aks
+# Installer: operator
+# Windows OS: Windows Server 2022
+# k8s Versions: stable-1, stable
+# linux dataplane: bpf, iptables, nftables
+# encapsulation: vxlan, no-encap
+# CNI: Calico, Azure CNI
+
+# Runs:
+# azr-aso, 2022, stable, bpf, vxlan
+# azr-aso, 2022, stable-1, nftables, vxlan
+# azr-aks, 2022, stable-1, iptables, no-encap, azure CNI
+
+blocks:
+  - name: Calico Windows
+    dependencies: []
+    task:
+      jobs:
+        - name: "azr-aso, 2022, stable, bpf, vxlan"
+          execution_time_limit:
+            hours: 5
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: azr-aso
+            - name: K8S_VERSION
+              value: stable-1
+            - name: DATAPLANE
+              value: CalicoBPF
+            - name: ENCAPSULATION_TYPE
+              value: VXLAN
+            - name: WINDOWS_OS
+              value: "2022"
+
+        - name: "azr-aso, 2022, stable-1, nftables, vxlan"
+          execution_time_limit:
+            hours: 5
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: azr-aso
+            - name: K8S_VERSION
+              value: stable-1
+            - name: DATAPLANE
+              value: CalicoNftables
+            - name: ENCAPSULATION_TYPE
+              value: VXLAN
+            - name: WINDOWS_OS
+              value: "2022"
+
+        - name: "azr-aks, 2022, stable-1, iptables, no encap, azure CNI"
+          execution_time_limit:
+            hours: 5
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: azr-aks
+            - name: K8S_VERSION
+              value: stable-1
+            - name: DATAPLANE
+              value: CalicoIptables
+            - name: ENCAPSULATION_TYPE
+              value: "None"
+            - name: WINDOWS_OS
+              value: "2022"
+            - name: USE_VENDORED_CNI
+              value: "true"
+
+promotions:
+  - name: Cleanup jobs
+    pipeline_file: cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+
+after_pipeline:
+  task:
+    jobs:
+      - name: Reports
+        commands:
+          - test-results gen-pipeline-report --force

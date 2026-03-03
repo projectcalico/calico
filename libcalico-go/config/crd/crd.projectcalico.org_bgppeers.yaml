@@ -45,15 +45,10 @@ spec:
                 maxRestartTime:
                   type: string
                 nextHopMode:
-                  allOf:
-                    - enum:
-                        - Auto
-                        - Self
-                        - Keep
-                    - enum:
-                        - Auto
-                        - Self
-                        - Keep
+                  enum:
+                    - Auto
+                    - Self
+                    - Keep
                   type: string
                 node:
                   type: string
@@ -85,11 +80,18 @@ spec:
                 reachableBy:
                   type: string
                 reversePeering:
-                  enum:
-                    - Auto
-                    - Manual
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Manual
+                    - enum:
+                        - Auto
+                        - Manual
                   type: string
                 sourceAddress:
+                  enum:
+                    - UseNodeIP
+                    - None
                   type: string
                 ttlSecurity:
                   type: integer

@@ -17,10 +17,9 @@ package loadbalancer
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
@@ -160,19 +159,13 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, err := os.CreateTemp("", "ginkgo-loadbalancercontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
+		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
+		defer cancel()
 
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+		loadbalancercontroller = testutils.RunLoadBalancerController(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
 
-		loadbalancercontroller = testutils.RunLoadBalancerController(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
-
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		var err error
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -304,8 +297,8 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Expect(serviceSpecific.Status.LoadBalancer.Ingress[0].IP).Should(Equal(v4poolManualSpecifcIP))
 
 			// Update the service type to NodePort, LoadBalancer controller should release the IP
-			svcPatch := map[string]interface{}{}
-			spec := map[string]interface{}{}
+			svcPatch := map[string]any{}
+			spec := map[string]any{}
 			svcPatch["spec"] = spec
 			spec["type"] = v1.ServiceTypeNodePort
 			patch, err := json.Marshal(svcPatch)
@@ -477,8 +470,8 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 
 			service, err = k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(service.Status.LoadBalancer.Ingress).NotTo(BeEmpty(), "saw service.Status.LoadBalancer.Ingress non-empty and then empty again!")
 			Expect(service.Status.LoadBalancer.Ingress[0].IP).Should(Equal(specificIpFromAutomaticPool))
-
 		})
 	})
 })

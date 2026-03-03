@@ -15,6 +15,8 @@
 package calc
 
 import (
+	"maps"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -113,12 +115,8 @@ func (cb *ConfigBatcher) maybeSendCachedConfig() {
 		cb.globalConfig, cb.hostConfig)
 	globalConfigCopy := make(map[string]string)
 	hostConfigCopy := make(map[string]string)
-	for k, v := range cb.globalConfig {
-		globalConfigCopy[k] = v
-	}
-	for k, v := range cb.hostConfig {
-		hostConfigCopy[k] = v
-	}
+	maps.Copy(globalConfigCopy, cb.globalConfig)
+	maps.Copy(hostConfigCopy, cb.hostConfig)
 	if !cb.datastoreReady {
 		cb.callbacks.OnDatastoreNotReady()
 	}
