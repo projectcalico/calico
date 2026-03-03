@@ -68,6 +68,7 @@ type Source uint8
 const (
 	Default Source = iota
 	DatastoreGlobal
+	DatastorePerSelector
 	DatastorePerHost
 	ConfigFile
 	EnvironmentVariable
@@ -82,7 +83,7 @@ const (
 	DefaultConntrackPollingInterval = time.Duration(5) * time.Second
 )
 
-var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastoreGlobal}
+var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastorePerSelector, DatastoreGlobal}
 
 func (source Source) String() string {
 	switch source {
@@ -90,6 +91,8 @@ func (source Source) String() string {
 		return "<default>"
 	case DatastoreGlobal:
 		return "datastore (global)"
+	case DatastorePerSelector:
+		return "datastore (per-node-selector)"
 	case DatastorePerHost:
 		return "datastore (per-host)"
 	case ConfigFile:
