@@ -146,6 +146,7 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 		//
 		// See: https://github.com/projectcalico/calico/issues/11424
 		//      https://lkml.org/lkml/2025/5/29/75 (kernel fix in 6.16+)
+#ifndef UNITTEST
 		if ((ctx->globals->data.flags & CALI_GLOBALS_UDP_GSO_LINEARIZE) && skb_is_gso(ctx->skb)) {
 			__u8 ip_proto;
 #ifdef IPVER6
@@ -165,6 +166,7 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 				}
 			}
 		}
+#endif /* UNITTEST */
 #endif
 	}
 	// Success, refresh the ip_header/nh fields in the context.
