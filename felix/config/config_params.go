@@ -1014,10 +1014,11 @@ func Params() map[string]Param {
 	return knownParams
 }
 
+var metaRegexp = regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
+	`([^;]*)(?:;` +
+	`([^;]*))?$`)
+
 func ParamForField(fieldName string, tag string) (param Param, defaultStr, flags string) {
-	metaRegexp := regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
-		`([^;]*)(?:;` +
-		`([^;]*))?$`)
 	captures := metaRegexp.FindStringSubmatch(tag)
 	if len(captures) == 0 {
 		log.Panicf("Failed to parse metadata for config param %v", fieldName)
@@ -1034,19 +1035,14 @@ func ParamForField(fieldName string, tag string) (param Param, defaultStr, flags
 		param = &BoolPtrParam{}
 	case "int":
 		intParam := &IntParam{}
-		paramMin := math.MinInt
-		paramMax := math.MaxInt
-		if kindParams != "" {
-			for r := range strings.SplitSeq(kindParams, ",") {
-				minAndMax := strings.Split(r, ":")
-				paramMin = mustParseOptionalInt(minAndMax[0], math.MinInt, fieldName)
-				if len(minAndMax) == 2 {
-					paramMax = mustParseOptionalInt(minAndMax[1], math.MinInt, fieldName)
-				}
-				intParam.Ranges = append(intParam.Ranges, MinMax{Min: paramMin, Max: paramMax})
+		for r := range strings.SplitSeq(kindParams, ",") {
+			minAndMax := strings.Split(r, ":")
+			paramMin := mustParseOptionalInt(minAndMax[0], math.MinInt, fieldName)
+			paramMax := math.MaxInt
+			if len(minAndMax) == 2 {
+				paramMax = mustParseOptionalInt(minAndMax[1], math.MaxInt, fieldName)
 			}
-		} else {
-			intParam.Ranges = []MinMax{{Min: paramMin, Max: paramMax}}
+			intParam.Ranges = append(intParam.Ranges, MinMax{Min: paramMin, Max: paramMax})
 		}
 		param = intParam
 	case "int32":
