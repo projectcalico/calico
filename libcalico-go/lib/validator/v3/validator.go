@@ -1295,55 +1295,57 @@ func validateICMPFields(structLevel validator.StructLevel) {
 func validateRule(structLevel validator.StructLevel) {
 	rule := structLevel.Current().Interface().(api.Rule)
 
-	allPortsAreNamed := func(ports []numorstring.Port) bool {
-		for _, p := range ports {
-			if len(p.PortName) == 0 {
-				return false
+	/*
+		allPortsAreNamed := func(ports []numorstring.Port) bool {
+			for _, p := range ports {
+				if len(p.PortName) == 0 {
+					return false
+				}
 			}
+			return true
 		}
-		return true
-	}
 
-	// If the protocol does not support ports check that the port values have not
-	// been specified.
-	if rule.Protocol == nil {
-		if !allPortsAreNamed(rule.Source.Ports) {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-				"SrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
-		}
-		if !allPortsAreNamed(rule.Source.NotPorts) {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-				"NotSrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
-		}
-		if !allPortsAreNamed(rule.Destination.Ports) {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-				"DstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
-		}
-		if !allPortsAreNamed(rule.Destination.NotPorts) {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-				"NotDstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
-		}
-	} else { // Protocol != nil
-		if !rule.Protocol.SupportsPorts() {
-			if len(rule.Source.Ports) > 0 {
+		// If the protocol does not support ports check that the port values have not
+		// been specified.
+		if rule.Protocol == nil {
+			if !allPortsAreNamed(rule.Source.Ports) {
 				structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-					"Source.Ports", "", reason(protocolPortsMsg), "")
+					"SrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 			}
-			if len(rule.Source.NotPorts) > 0 {
+			if !allPortsAreNamed(rule.Source.NotPorts) {
 				structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-					"Source.NotPorts", "", reason(protocolPortsMsg), "")
+					"NotSrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 			}
-
-			if len(rule.Destination.Ports) > 0 {
+			if !allPortsAreNamed(rule.Destination.Ports) {
 				structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-					"Destination.Ports", "", reason(protocolPortsMsg), "")
+					"DstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 			}
-			if len(rule.Destination.NotPorts) > 0 {
+			if !allPortsAreNamed(rule.Destination.NotPorts) {
 				structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-					"Destination.NotPorts", "", reason(protocolPortsMsg), "")
+					"NotDstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+			}
+		} else { // Protocol != nil
+			if !rule.Protocol.SupportsPorts() {
+				if len(rule.Source.Ports) > 0 {
+					structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
+						"Source.Ports", "", reason(protocolPortsMsg), "")
+				}
+				if len(rule.Source.NotPorts) > 0 {
+					structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
+						"Source.NotPorts", "", reason(protocolPortsMsg), "")
+				}
+
+				if len(rule.Destination.Ports) > 0 {
+					structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
+						"Destination.Ports", "", reason(protocolPortsMsg), "")
+				}
+				if len(rule.Destination.NotPorts) > 0 {
+					structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
+						"Destination.NotPorts", "", reason(protocolPortsMsg), "")
+				}
 			}
 		}
-	}
+	*/
 
 	// Check that HTTP must not use non-TCP protocols
 	if rule.HTTP != nil && rule.Protocol != nil {

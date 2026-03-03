@@ -380,7 +380,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 					numorstring.NamedPort(sharedPortName),
 					numorstring.NamedPort(w0PortName),
 					numorstring.NamedPort(w1PortName),
-					//numorstring.SinglePort(4000),
+					numorstring.SinglePort(4000),
 				},
 				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
 					w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
