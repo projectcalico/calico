@@ -2203,10 +2203,16 @@ func (c ipamClient) SetIPAMConfig(ctx context.Context, cfg IPAMConfig) error {
 }
 
 func (c ipamClient) convertIPAMConfigToBackend(cfg *IPAMConfig) *model.IPAMConfig {
+	var persistence *string
+	if cfg.KubeVirtVMAddressPersistence != nil {
+		s := string(*cfg.KubeVirtVMAddressPersistence)
+		persistence = &s
+	}
 	return &model.IPAMConfig{
-		StrictAffinity:     cfg.StrictAffinity,
-		AutoAllocateBlocks: cfg.AutoAllocateBlocks,
-		MaxBlocksPerHost:   cfg.MaxBlocksPerHost,
+		StrictAffinity:               cfg.StrictAffinity,
+		AutoAllocateBlocks:           cfg.AutoAllocateBlocks,
+		MaxBlocksPerHost:             cfg.MaxBlocksPerHost,
+		KubeVirtVMAddressPersistence: persistence,
 	}
 }
 
