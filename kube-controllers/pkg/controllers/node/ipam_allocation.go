@@ -159,6 +159,14 @@ func (a *allocation) fields() log.Fields {
 		f["pod"] = fmt.Sprintf("%s/%s", ns, pod)
 	}
 
+	if a.isVMAllocation() {
+		ns := a.attrs[ipam.AttributeNamespace]
+		vmi := a.attrs[ipam.AttributeVMIName]
+		if ns != "" && vmi != "" {
+			f["vmi"] = fmt.Sprintf("%s/%s", ns, vmi)
+		}
+	}
+
 	return f
 }
 
@@ -220,6 +228,11 @@ func (a *allocation) isPodIP() bool {
 	pod := a.attrs[ipam.AttributePod]
 
 	return ns != "" && pod != ""
+}
+
+func (a *allocation) isVMAllocation() bool {
+	_, ok := a.attrs[ipam.AttributeVMIName]
+	return ok
 }
 
 func (a *allocation) isTunnelAddress() bool {
