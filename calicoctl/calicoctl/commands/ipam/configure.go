@@ -32,7 +32,7 @@ import (
 func updateIPAMConfig(
 	ctx context.Context,
 	ipamClient ipamlib.Interface,
-	enabled bool,
+	strictAffinity *bool,
 	maxBlocks *int,
 	persistence *ipamlib.VMAddressPersistence,
 ) error {
@@ -41,16 +41,17 @@ func updateIPAMConfig(
 		return fmt.Errorf("error: %v", err)
 	}
 
-	// If StrictAffinity == true => an address from a block can only be assigned by
-	// host with block affinity.
-	ipamConfig.StrictAffinity = enabled
+	// Update StrictAffinity if specified.
+	if strictAffinity != nil {
+		ipamConfig.StrictAffinity = *strictAffinity
+	}
 
-	// Set MaxBlocksPerHost if specified
+	// Set MaxBlocksPerHost if specified.
 	if maxBlocks != nil {
 		ipamConfig.MaxBlocksPerHost = *maxBlocks
 	}
 
-	// Update KubeVirtVMAddressPersistence if specified
+	// Update KubeVirtVMAddressPersistence if specified.
 	if persistence != nil {
 		ipamConfig.KubeVirtVMAddressPersistence = persistence
 	}
@@ -60,11 +61,12 @@ func updateIPAMConfig(
 		return fmt.Errorf("error: %v", err)
 	}
 
-	fmt.Println("Successfully set StrictAffinity to:", enabled)
+	if strictAffinity != nil {
+		fmt.Println("Successfully set StrictAffinity to:", *strictAffinity)
+	}
 	if maxBlocks != nil {
 		fmt.Println("Successfully set MaxBlocksPerHost to:", *maxBlocks)
 	}
-
 	if persistence != nil {
 		fmt.Println("Successfully set KubeVirtVMAddressPersistence to:", *persistence)
 	}
@@ -89,24 +91,24 @@ func parsePersistence(val string) (*ipamlib.VMAddressPersistence, error) {
 // Configure IPAM.
 func Configure(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam configure --strictaffinity=<true/false> 
-                               [--max-blocks-per-host=<number>] 
+  <BINARY_NAME> ipam configure [--strictaffinity=<true/false>]
+                               [--max-blocks-per-host=<number>]
                                [--kubevirt-ip-persistence=<Enabled|Disabled>]
-                               [--config=<CONFIG>] 
+                               [--config=<CONFIG>]
                                [--allow-version-mismatch]
 
 Options:
   -h --help                        Show this screen.
-     --strictaffinity=<true/false> Set StrictAffinity to true/false. When StrictAffinity
-                                   is true, borrowing IP addresses is not allowed.
+     --strictaffinity=<true/false>  Set StrictAffinity to true/false. When StrictAffinity
+                                    is true, borrowing IP addresses is not allowed.
      --max-blocks-per-host=<number> Set the maximum number of blocks that can be affine to a host.
      --kubevirt-ip-persistence=<Enabled|Disabled>
-                                   Control whether KubeVirt VMs retain persistent IP addresses
-                                   across lifecycle events.
-  -c --config=<CONFIG>             Path to the file containing connection configuration in
-                                   YAML or JSON format.
-                                   [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch      Allow client and cluster versions mismatch.
+                                    Control whether KubeVirt VMs retain persistent IP addresses
+                                    across lifecycle events.
+  -c --config=<CONFIG>              Path to the file containing connection configuration in
+                                    YAML or JSON format.
+                                    [default: ` + constants.DefaultConfigPath + `]
+     --allow-version-mismatch       Allow client and cluster versions mismatch.
 
 Description:
  Modify configuration for Calico IP address management.
@@ -138,12 +140,18 @@ Description:
 	}
 
 	ipamClient := client.IPAM()
-	passedValue := parsedArgs["--strictaffinity"].(string)
-	enabled, err := strconv.ParseBool(passedValue)
-	if err != nil {
-		return fmt.Errorf("invalid value. Use true or false to set strictaffinity")
+
+	// Parse StrictAffinity (optional).
+	var strictAffinity *bool
+	if passedValue, ok := parsedArgs["--strictaffinity"].(string); ok && passedValue != "" {
+		enabled, err := strconv.ParseBool(passedValue)
+		if err != nil {
+			return fmt.Errorf("invalid value. Use true or false to set strictaffinity")
+		}
+		strictAffinity = &enabled
 	}
 
+	// Parse MaxBlocksPerHost (optional).
 	var maxBlocks *int
 	if maxBlockStr, ok := parsedArgs["--max-blocks-per-host"].(string); ok && maxBlockStr != "" {
 		maxBlocksVal, err := strconv.Atoi(maxBlockStr)
@@ -153,7 +161,7 @@ Description:
 		maxBlocks = &maxBlocksVal
 	}
 
-	// Parse KubeVirtVMAddressPersistence
+	// Parse KubeVirtVMAddressPersistence (optional).
 	var persistence *ipamlib.VMAddressPersistence
 	if val, ok := parsedArgs["--kubevirt-ip-persistence"].(string); ok && val != "" {
 		persistence, err = parsePersistence(val)
@@ -162,5 +170,9 @@ Description:
 		}
 	}
 
-	return updateIPAMConfig(ctx, ipamClient, enabled, maxBlocks, persistence)
+	if strictAffinity == nil && maxBlocks == nil && persistence == nil {
+		return fmt.Errorf("at least one configuration option must be specified")
+	}
+
+	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence)
 }

@@ -20,6 +20,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 
 	docopt "github.com/docopt/docopt-go"
@@ -198,10 +199,16 @@ func formatOwnerAttrs(title string, attrs map[string]string) string {
 		return ""
 	}
 
+	keys := make([]string, 0, len(attrs))
+	for k := range attrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("%s:\n", title))
-	for k, v := range attrs {
-		b.WriteString(fmt.Sprintf("  %v: %v\n", k, v))
+	for _, k := range keys {
+		b.WriteString(fmt.Sprintf("  %v: %v\n", k, attrs[k]))
 	}
 	return b.String()
 }
