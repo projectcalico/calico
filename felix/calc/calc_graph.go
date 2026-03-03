@@ -63,7 +63,7 @@ type endpointCallbacks interface {
 }
 
 type configCallbacks interface {
-	OnConfigUpdate(globalConfig, hostConfig map[string]string)
+	OnConfigUpdate(globalConfig, selectorConfig, hostConfig map[string]string)
 	OnDatastoreNotReady()
 }
 
