@@ -39,7 +39,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	kubevirtfake "github.com/projectcalico/calico/libcalico-go/lib/kubevirt/fake"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -113,7 +112,8 @@ var _ = Describe("IPAM controller UTs", func() {
 	var c *IPAMController
 	var cli client.Interface
 	var cs kubernetes.Interface
-	var virtClient *kubevirtfake.FakeVirtClient
+	var vmIndexer cache.Indexer
+	var vmiIndexer cache.Indexer
 	var stopChan chan struct{}
 	var pods chan *v1.Pod
 	var nodes chan *v1.Node
@@ -125,7 +125,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Create a fake Calico client.
 		cli = NewFakeCalicoClient()
 
-		virtClient = kubevirtfake.NewFakeVirtClient()
+		vmIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		vmiIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 
 		// Create a node indexer with the fake clientset
 		factory := informers.NewSharedInformerFactory(cs, 0)
@@ -171,7 +172,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), virtClient)
+		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), vmIndexer, vmiIndexer)
 
 		// For testing, speed up update batching.
 		c.consolidationWindow = 1 * time.Millisecond
@@ -217,10 +218,10 @@ var _ = Describe("IPAM controller UTs", func() {
 				},
 			}
 
-			virtClient.AddVM(vm)
+			Expect(vmIndexer.Add(vm)).NotTo(HaveOccurred())
 
 			allocation := makeVMIAllocation(namespace, vmName)
-			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+			Expect(c.isVMAllocationValid(allocation)).To(BeTrue())
 		})
 
 		It("should treat allocation as invalid if VM not found", func() {
@@ -228,7 +229,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			namespace := "default"
 
 			allocation := makeVMIAllocation(namespace, "invalid-vm-name")
-			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeFalse())
+			Expect(c.isVMAllocationValid(allocation)).To(BeFalse())
 		})
 
 		It("should treat allocation as valid if VM not found but Standalone VMI exist", func() {
@@ -237,26 +238,62 @@ var _ = Describe("IPAM controller UTs", func() {
 			vmiName := "test-vm"
 			vmiUID := "vmi-uid"
 
-			vmi := kubevirtfake.NewVMIBuilder(vmiName, namespace, vmiUID).Build()
-			virtClient.AddVMI(vmi)
+			vmi := &kubevirtv1.VirtualMachineInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      vmiName,
+					Namespace: namespace,
+					UID:       types.UID(vmiUID),
+				},
+			}
+			Expect(vmiIndexer.Add(vmi)).NotTo(HaveOccurred())
 
 			allocation := makeVMIAllocation(namespace, vmiName)
-			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+			Expect(c.isVMAllocationValid(allocation)).To(BeTrue())
+		})
+
+		It("should treat allocation as invalid if VMI exists but is owned by a deleted VM", func() {
+			c.Start(stopChan)
+			namespace := "default"
+			vmiName := "test-vm"
+			vmiUID := "vmi-uid"
+			isController := true
+
+			// VMI with a VM ownerReference — but the VM is not in the cache.
+			vmi := &kubevirtv1.VirtualMachineInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      vmiName,
+					Namespace: namespace,
+					UID:       types.UID(vmiUID),
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "kubevirt.io/v1",
+							Kind:       "VirtualMachine",
+							Name:       vmiName,
+							Controller: &isController,
+						},
+					},
+				},
+			}
+			Expect(vmiIndexer.Add(vmi)).NotTo(HaveOccurred())
+
+			allocation := makeVMIAllocation(namespace, vmiName)
+			Expect(c.isVMAllocationValid(allocation)).To(BeFalse())
 		})
 
 		It("should treat allocation as valid if namespace or vmName attributes are missing", func() {
 			c.Start(stopChan)
 
 			allocation := makeVMIAllocation("", "")
-			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+			Expect(c.isVMAllocationValid(allocation)).To(BeTrue())
 		})
 
-		It("should treat allocation as valid if virtClient is nil (KubeVirt not installed)", func() {
-			c.virtClient = nil
+		It("should treat allocation as valid if KubeVirt indexers are nil (KubeVirt not installed)", func() {
+			c.vmIndexer = nil
+			c.vmiIndexer = nil
 			c.Start(stopChan)
 
 			allocation := makeVMIAllocation("default", "some-vm")
-			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+			Expect(c.isVMAllocationValid(allocation)).To(BeTrue())
 		})
 	})
 
@@ -408,7 +445,7 @@ var _ = Describe("IPAM controller UTs", func() {
 					RunStrategy: &runStrategy,
 				},
 			}
-			virtClient.AddVM(vm)
+			Expect(vmIndexer.Add(vm)).NotTo(HaveOccurred())
 
 			// The allocation should be marked valid and leakedAt cleared.
 			Eventually(func() bool {

@@ -45,15 +45,8 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-)
-
-const (
-	// defaultVMRecreationGracePeriod is the default time window to allow VM recreation.
-	// During this period, if a VM doesn't exist we assume the VM is being recreated (e.g., restart, etc.)
-	defaultVMRecreationGracePeriod = 15 * time.Minute
 )
 
 var (
@@ -79,6 +72,14 @@ const (
 
 	// key for ratelimited sync retries.
 	retryKey = "ipamSyncRetry"
+
+	// defaultVMRecreationGracePeriod is the default time window to allow VM recreation
+	// before treating the allocation as a leak.
+	//
+	// This is separate from the configurable LeakGracePeriod (which applies to pod IP allocations)
+	// because VM recreation (e.g., restart, live migration) can take significantly longer than pod
+	// rescheduling. During this window, if a VM doesn't exist we assume it is being recreated.
+	defaultVMRecreationGracePeriod = 15 * time.Minute
 )
 
 func init() {
@@ -125,7 +126,7 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, virtClient kubevirt.VirtClientInterface) *IPAMController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, vmIndexer, vmiIndexer cache.Indexer) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -157,7 +158,8 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		client:     c,
 		clientset:  cs,
 		config:     cfg,
-		virtClient: virtClient,
+		vmIndexer:  vmIndexer,
+		vmiIndexer: vmiIndexer,
 
 		syncChan: syncChan,
 
@@ -202,8 +204,10 @@ type IPAMController struct {
 	nodeLister v1lister.NodeLister
 	config     config.NodeControllerConfig
 
-	// virtClient is an optional KubeVirt client for verifying VMI/VM resources.
-	virtClient kubevirt.VirtClientInterface
+	// vmIndexer and vmiIndexer are optional KubeVirt cache indexers for verifying
+	// VM/VMI resources. Nil if KubeVirt is not installed.
+	vmIndexer  cache.Indexer
+	vmiIndexer cache.Indexer
 
 	syncStatus bapi.SyncStatus
 
@@ -978,7 +982,7 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 
 	// Handle VMI-based allocations
 	if a.isVMAllocation() {
-		return c.isVMOrStandaloneVMIExists(a)
+		return c.isVMAllocationValid(a)
 	}
 
 	if ns == "" || pod == "" {
@@ -1074,63 +1078,68 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	return false
 }
 
-// isVMOrStandaloneVMIExists checks whether the backing VM or standalone VMI for
+// isVMAllocationValid checks whether the backing VM or standalone VMI for
 // a VMI-type IP allocation still exists. Returns true on any error or missing
 // data to avoid incorrectly releasing in-use IPs.
-func (c *IPAMController) isVMOrStandaloneVMIExists(a *allocation) bool {
+func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
 	ns := a.attrs[ipam.AttributeNamespace]
 	vmName := a.attrs[ipam.AttributeVMIName]
 	logc := log.WithFields(a.fields())
 
 	// If we can't reason about it, don't GC it.
 	// (We can tighten this later once attrs are guaranteed.)
-	if ns == "" || vmName == "" || c.virtClient == nil {
-		logc.Debugf("Insufficient data to validate VMI allocation, assuming valid. Namespace = %s, vmName = %s", ns, vmName)
+	if ns == "" || vmName == "" || c.vmIndexer == nil {
+		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
 		return true
 	}
 
-	vm, err := c.getVMByName(ns, vmName, logc)
+	// Build the cache key using the same format as cache.MetaNamespaceKeyFunc.
+	key := cache.NewObjectName(ns, vmName).String()
+
+	// Check if the VM exists in the informer cache.
+	_, vmExists, err := c.vmIndexer.GetByKey(key)
 	if err != nil {
-		logc.WithError(err).Error("Failed to get VM resource. Assuming allocation is valid")
+		logc.WithError(err).Error("Failed to look up VM in cache, assuming allocation is valid")
 		return true
 	}
-	if vm != nil {
+	if vmExists {
+		logc.Debug("VM found, allocation is valid")
 		return true
 	}
 
-	// VM not found — check if a standalone VMI exists.
-	vmi, err := kubevirt.GetVMIResourceByName(context.Background(), c.virtClient, ns, vmName)
+	// VM not found — check if a standalone VMI (not owned by a VM) exists.
+	// If the VMI has a VM ownerReference but the VM is already gone, the VMI
+	// is just awaiting garbage collection and is not evidence of a valid allocation.
+	obj, vmiExists, err := c.vmiIndexer.GetByKey(key)
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			logc.WithError(err).Warnf("Failed to query VMI, skipping VMI existence check for %s/%s", ns, vmName)
+		logc.WithError(err).Warn("Failed to look up VMI in cache, assuming allocation is valid")
+		return true
+	}
+	if vmiExists {
+		vmi, ok := obj.(*kubevirtv1.VirtualMachineInstance)
+		if !ok {
+			logc.Warn("Unexpected object type in VMI cache, assuming allocation is valid")
 			return true
 		}
-	}
-	if vmi != nil {
-		return true
+		if !hasVMOwner(vmi) {
+			logc.Debug("Standalone VMI found, allocation is valid")
+			return true
+		}
+		logc.Debug("VMI found but owned by a deleted VM, not treating as valid")
 	}
 
-	// Neither VM nor standalone VMI found.
 	logc.Debug("Neither VM nor standalone VMI found")
 	return false
 }
 
-func (c *IPAMController) getVMByName(
-	ns, vmName string,
-	logc *log.Entry,
-) (*kubevirtv1.VirtualMachine, error) {
-	vm, err := c.virtClient.VirtualMachine(ns).
-		Get(context.Background(), vmName, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			logc.WithError(err).Debugf("VM is not found, vmName = %s, namespace = %s", vmName, ns)
-			return nil, nil
+// hasVMOwner returns true if the VMI has an ownerReference pointing to a VirtualMachine.
+func hasVMOwner(vmi *kubevirtv1.VirtualMachineInstance) bool {
+	for i := range vmi.OwnerReferences {
+		if vmi.OwnerReferences[i].Kind == "VirtualMachine" {
+			return true
 		}
-
-		return nil, fmt.Errorf("failed to query VM, vmName = %s, namespace = %s: %w", vmName, ns, err)
 	}
-
-	return vm, nil
+	return false
 }
 
 func (c *IPAMController) syncIPAM() error {

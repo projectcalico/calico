@@ -33,6 +33,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -108,9 +109,17 @@ func main() {
 	log.SetLevel(logLevel)
 
 	// Build clients to be used by the controllers.
-	k8sClientset, libcalicoClient, calicoClient, kubevirtClient, err := getClients(cfg.Kubeconfig)
+	k8sClientset, libcalicoClient, calicoClient, k8sconfig, err := getClients(cfg.Kubeconfig)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to start")
+	}
+
+	// KubeVirt informers are optional — only created if KubeVirt is installed.
+	// NOTE: KubeVirt detection only runs at startup. If KubeVirt CRDs are added
+	// to a running cluster, this pod must be restarted to pick them up.
+	vmInformer, vmiInformer, err := kubevirt.TryCreateInformers(k8sconfig, 5*time.Minute)
+	if err != nil {
+		log.WithError(err).Warn("Failed to create KubeVirt informers, proceeding without KubeVirt IPAM GC support")
 	}
 
 	stop := make(chan struct{})
@@ -192,7 +201,7 @@ func main() {
 
 		// any subsequent changes trigger a restart
 		controllerCtrl.restart = cCtrlr.ConfigChan()
-		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, kubevirtClient)
+		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, vmInformer, vmiInformer)
 	}
 
 	if cfg.DatastoreType == utils.Etcdv3 {
@@ -334,8 +343,9 @@ func startCompactor(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// getClients builds and returns Kubernetes and Calico clients.
-func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, clientset.Interface, kubevirt.VirtClientInterface, error) {
+// getClients builds and returns Kubernetes and Calico clients, along with the
+// Kubernetes REST config for use in creating additional informers.
+func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, clientset.Interface, *rest.Config, error) {
 	// Get Calico client
 	config, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
@@ -377,13 +387,7 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, cli
 		return nil, nil, nil, nil, fmt.Errorf("failed to build Calico Kubernetes v3 client: %s", err)
 	}
 
-	// KubeVirt client is optional — log and continue without it on failure.
-	kubevirtClient, err := kubevirt.TryCreateVirtClient(k8sconfig)
-	if err != nil {
-		log.WithError(err).Warn("Failed to create kubevirt client, proceeding without KubeVirt IPAM GC support")
-	}
-
-	return k8sClientset, libcalicoClient, v3c, kubevirtClient, nil
+	return k8sClientset, libcalicoClient, v3c, k8sconfig, nil
 }
 
 // Returns an etcdv3 client based on the environment. The client will be configured to
@@ -470,7 +474,7 @@ func (cc *controllerControl) InitControllers(
 	calicoClient client.Interface,
 	v3c clientset.Interface,
 	dataFeed *utils.DataFeed,
-	kubevirtClient kubevirt.VirtClientInterface,
+	vmInformer, vmiInformer cache.SharedIndexInformer,
 ) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
@@ -513,9 +517,12 @@ func (cc *controllerControl) InitControllers(
 		cc.controllers["NetworkPolicy"] = policyController
 	}
 	if cfg.Controllers.Node != nil {
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, kubevirtClient)
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, vmInformer, vmiInformer)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
+		if vmInformer != nil {
+			cc.registerInformers(vmInformer, vmiInformer)
+		}
 	}
 	if cfg.Controllers.ServiceAccount != nil {
 		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)
