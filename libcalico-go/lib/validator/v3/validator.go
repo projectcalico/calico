@@ -82,43 +82,44 @@ var (
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 
-	interfaceRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
-	bgpFilterInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	bgpFilterPrefixLengthV4 = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
-	bgpFilterPrefixLengthV6 = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$")
-	ignoredInterfaceRegex   = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	ifaceFilterRegex        = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
-	actionRegex             = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
-	protocolRegex           = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
-	ipipModeRegex           = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	assignmentModeRegex     = regexp.MustCompile("^(Automatic|Manual)$")
-	assignIPsRegex          = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
-	logLevelRegex           = regexp.MustCompile("^(Trace|Debug|Info|Warning|Error|Fatal)$")
-	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
-	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
-	bpfCTLBRegex            = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
-	bpfHostNatRegex         = regexp.MustCompile("^(Disabled|Enabled)$")
-	datastoreType           = regexp.MustCompile("^(etcdv3|kubernetes)$")
-	routeSource             = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
-	dropAcceptReturnRegex   = regexp.MustCompile("^(Drop|Accept|Return)$")
-	acceptReturnRegex       = regexp.MustCompile("^(Accept|Return)$")
-	dropRejectRegex         = regexp.MustCompile("^(Drop|Reject)$")
-	ipTypeRegex             = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
-	standardCommunity       = regexp.MustCompile(`^(\d+):(\d+)$`)
-	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
-	number                  = regexp.MustCompile(`(\d+)`)
-	IPv4PortFormat          = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
-	IPv6PortFormat          = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
-	reasonString            = "Reason: "
-	poolUnstictCIDR         = "IP pool CIDR is not strictly masked"
-	overlapsV4LinkLocal     = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
-	overlapsV6LinkLocal     = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
-	protocolPortsMsg        = "rules that specify ports must set protocol to TCP or UDP or SCTP"
-	protocolIcmpMsg         = "rules that specify ICMP fields must set protocol to ICMP"
-	protocolAndHTTPMsg      = "rules that specify HTTP fields must set protocol to TCP or empty"
-	globalSelectorEntRule   = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
-	globalSelectorOnly      = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
+	interfaceRegex                = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
+	bgpFilterInterfaceRegex       = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	bgpFilterPrefixLengthV4       = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
+	bgpFilterPrefixLengthV6       = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$")
+	ignoredInterfaceRegex         = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	ifaceFilterRegex              = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
+	actionRegex                   = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
+	protocolRegex                 = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
+	ipipModeRegex                 = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	vxlanModeRegex                = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	assignmentModeRegex           = regexp.MustCompile("^(Automatic|Manual)$")
+	assignIPsRegex                = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
+	logLevelRegex                 = regexp.MustCompile("^(Trace|Debug|Info|Warning|Error|Fatal)$")
+	bpfLogLevelRegex              = regexp.MustCompile("^(Debug|Info|Off)$")
+	bpfServiceModeRegex           = regexp.MustCompile("^(Tunnel|DSR)$")
+	bpfCTLBRegex                  = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
+	bpfHostNatRegex               = regexp.MustCompile("^(Disabled|Enabled)$")
+	datastoreType                 = regexp.MustCompile("^(etcdv3|kubernetes)$")
+	routeSource                   = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
+	dropAcceptReturnRegex         = regexp.MustCompile("^(Drop|Accept|Return)$")
+	acceptReturnRegex             = regexp.MustCompile("^(Accept|Return)$")
+	dropRejectRegex               = regexp.MustCompile("^(Drop|Reject)$")
+	ipTypeRegex                   = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
+	standardCommunity             = regexp.MustCompile(`^(\d+):(\d+)$`)
+	largeCommunity                = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	number                        = regexp.MustCompile(`(\d+)`)
+	IPv4PortFormat                = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
+	IPv6PortFormat                = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
+	reasonString                  = "Reason: "
+	poolUnstictCIDR               = "IP pool CIDR is not strictly masked"
+	overlapsV4LinkLocal           = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
+	overlapsV6LinkLocal           = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
+	protocolPortsMsg              = "rules that specify ports must set protocol to TCP or UDP or SCTP"
+	protocolSingleOrRangePortsMsg = "rules with single port or port range must set protocol to TCP or UDP or SCTP"
+	protocolIcmpMsg               = "rules that specify ICMP fields must set protocol to ICMP"
+	protocolAndHTTPMsg            = "rules that specify HTTP fields must set protocol to TCP or empty"
+	globalSelectorEntRule         = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
+	globalSelectorOnly            = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
 
@@ -1294,27 +1295,57 @@ func validateICMPFields(structLevel validator.StructLevel) {
 func validateRule(structLevel validator.StructLevel) {
 	rule := structLevel.Current().Interface().(api.Rule)
 
-	// If the protocol does not support ports check that the port values have not
-	// been specified.
-	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
-		if len(rule.Source.Ports) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-				"Source.Ports", "", reason(protocolPortsMsg), "")
-		}
-		if len(rule.Source.NotPorts) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-				"Source.NotPorts", "", reason(protocolPortsMsg), "")
+	/*
+		allPortsAreNamed := func(ports []numorstring.Port) bool {
+			for _, p := range ports {
+				if len(p.PortName) == 0 {
+					return false
+				}
+			}
+			return true
 		}
 
-		if len(rule.Destination.Ports) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-				"Destination.Ports", "", reason(protocolPortsMsg), "")
+		// If the protocol does not support ports check that the port values have not
+		// been specified.
+		if rule.Protocol == nil {
+			if !allPortsAreNamed(rule.Source.Ports) {
+				structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
+					"SrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+			}
+			if !allPortsAreNamed(rule.Source.NotPorts) {
+				structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
+					"NotSrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+			}
+			if !allPortsAreNamed(rule.Destination.Ports) {
+				structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
+					"DstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+			}
+			if !allPortsAreNamed(rule.Destination.NotPorts) {
+				structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
+					"NotDstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+			}
+		} else { // Protocol != nil
+			if !rule.Protocol.SupportsPorts() {
+				if len(rule.Source.Ports) > 0 {
+					structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
+						"Source.Ports", "", reason(protocolPortsMsg), "")
+				}
+				if len(rule.Source.NotPorts) > 0 {
+					structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
+						"Source.NotPorts", "", reason(protocolPortsMsg), "")
+				}
+
+				if len(rule.Destination.Ports) > 0 {
+					structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
+						"Destination.Ports", "", reason(protocolPortsMsg), "")
+				}
+				if len(rule.Destination.NotPorts) > 0 {
+					structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
+						"Destination.NotPorts", "", reason(protocolPortsMsg), "")
+				}
+			}
 		}
-		if len(rule.Destination.NotPorts) > 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-				"Destination.NotPorts", "", reason(protocolPortsMsg), "")
-		}
-	}
+	*/
 
 	// Check that HTTP must not use non-TCP protocols
 	if rule.HTTP != nil && rule.Protocol != nil {
