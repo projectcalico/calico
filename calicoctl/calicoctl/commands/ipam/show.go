@@ -93,15 +93,14 @@ func getBorrowedIPs(ctx context.Context, ippoolClient clientv3.IPPoolInterface, 
 						bIP := borrowedIP{block: b.CIDR.IPNet.String(), blockOwner: blockOwner, borrowingNode: borrowingNode}
 						bIP.addr = b.OrdinalToIP(i).String()
 
-						if attributes.HandleID != nil {
-							bIP.allocatedTo = *attributes.HandleID
-						}
-
-						// Determine allocation type
-						if _, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeVMIName]; ok {
+						// Determine allocation type and human-readable allocatedTo.
+						ns := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeNamespace]
+						if vmiName, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeVMIName]; ok {
 							bIP.allocationType = "vmi"
-						} else if _, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributePod]; ok {
+							bIP.allocatedTo = fmt.Sprintf("%s/%s", ns, vmiName)
+						} else if podName, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributePod]; ok {
 							bIP.allocationType = model.IPAMBlockAttributePod
+							bIP.allocatedTo = fmt.Sprintf("%s/%s", ns, podName)
 						} else if t, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeType]; ok {
 							bIP.allocationType = t
 						}

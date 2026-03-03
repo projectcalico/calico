@@ -26,15 +26,15 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
-	ipamlib "github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
 
 func updateIPAMConfig(
 	ctx context.Context,
-	ipamClient ipamlib.Interface,
+	ipamClient ipam.Interface,
 	strictAffinity *bool,
 	maxBlocks *int,
-	persistence *ipamlib.VMAddressPersistence,
+	persistence *ipam.VMAddressPersistence,
 ) error {
 	ipamConfig, err := ipamClient.GetIPAMConfig(ctx)
 	if err != nil {
@@ -75,13 +75,13 @@ func updateIPAMConfig(
 }
 
 // parsePersistence validates and converts CLI value to typed enum.
-func parsePersistence(val string) (*ipamlib.VMAddressPersistence, error) {
+func parsePersistence(val string) (*ipam.VMAddressPersistence, error) {
 	switch val {
-	case string(ipamlib.VMAddressPersistenceEnabled):
-		p := ipamlib.VMAddressPersistenceEnabled
+	case string(ipam.VMAddressPersistenceEnabled):
+		p := ipam.VMAddressPersistenceEnabled
 		return &p, nil
-	case string(ipamlib.VMAddressPersistenceDisabled):
-		p := ipamlib.VMAddressPersistenceDisabled
+	case string(ipam.VMAddressPersistenceDisabled):
+		p := ipam.VMAddressPersistenceDisabled
 		return &p, nil
 	default:
 		return nil, fmt.Errorf("invalid value for --kubevirt-ip-persistence. Use Enabled or Disabled")
@@ -162,7 +162,7 @@ Description:
 	}
 
 	// Parse KubeVirtVMAddressPersistence (optional).
-	var persistence *ipamlib.VMAddressPersistence
+	var persistence *ipam.VMAddressPersistence
 	if val, ok := parsedArgs["--kubevirt-ip-persistence"].(string); ok && val != "" {
 		persistence, err = parsePersistence(val)
 		if err != nil {
