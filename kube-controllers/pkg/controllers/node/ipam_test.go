@@ -22,13 +22,16 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	kubevirtfake "github.com/projectcalico/calico/libcalico-go/lib/kubevirt/fake"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
+	fake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
@@ -110,6 +113,7 @@ var _ = Describe("IPAM controller UTs", func() {
 	var c *IPAMController
 	var cli client.Interface
 	var cs kubernetes.Interface
+	var virtClient *kubevirtfake.FakeVirtClient
 	var stopChan chan struct{}
 	var pods chan *v1.Pod
 	var nodes chan *v1.Node
@@ -120,6 +124,8 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a fake Calico client.
 		cli = NewFakeCalicoClient()
+
+		virtClient = kubevirtfake.NewFakeVirtClient()
 
 		// Create a node indexer with the fake clientset
 		factory := informers.NewSharedInformerFactory(cs, 0)
@@ -165,7 +171,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer())
+		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), virtClient)
 
 		// For testing, speed up update batching.
 		c.consolidationWindow = 1 * time.Millisecond
@@ -177,6 +183,95 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Stop the controller.
 		close(stopChan)
+	})
+
+	Describe("VMI allocation validation", func() {
+		makeVMIAllocation := func(ns, vmName string) *allocation {
+			return &allocation{
+				ip:     "10.0.0.1",
+				handle: "vmi-handle",
+				attrs: map[string]string{
+					ipam.AttributeNamespace: ns,
+					ipam.AttributeVMIName:   vmName,
+				},
+			}
+		}
+
+		It("should treat matching VM allocation as valid", func() {
+			c.Start(stopChan)
+			resume := c.pause()
+			defer resume()
+
+			namespace := "default"
+			vmName := "test-vm"
+			vmUID := "vm-uid"
+			runStrategy := kubevirtv1.RunStrategyAlways
+			vm := &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      vmName,
+					Namespace: namespace,
+					UID:       types.UID(vmUID),
+				},
+				Spec: kubevirtv1.VirtualMachineSpec{
+					RunStrategy: &runStrategy,
+				},
+			}
+
+			virtClient.AddVM(vm)
+
+			allocation := makeVMIAllocation(namespace, vmName)
+			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+		})
+
+		It("should treat allocation as invalid if VM not found and Grace Period is over", func() {
+			c.Start(stopChan)
+			namespace := "default"
+
+			allocation := makeVMIAllocation(namespace, "invalid-vm-name")
+			staleTime := time.Now().Add(-vmRecreationGracePeriod - time.Second)
+			allocation.leakedAt = &staleTime
+			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeFalse())
+		})
+
+		It("should treat allocation as valid if VM not found but Standalone VMI exist", func() {
+			c.Start(stopChan)
+			namespace := "default"
+			vmiName := "test-vm"
+			vmiUID := "vmi-uid"
+
+			vmi := kubevirtfake.NewVMIBuilder(vmiName, namespace, vmiUID).Build()
+			virtClient.AddVMI(vmi)
+
+			allocation := makeVMIAllocation(namespace, vmiName)
+			staleTime := time.Now().Add(-vmRecreationGracePeriod - time.Second)
+			allocation.leakedAt = &staleTime
+			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+		})
+
+		It("should treat allocation as valid if VM not found by ns and name and within Grace Period", func() {
+			c.Start(stopChan)
+			namespace := "default"
+
+			allocation := makeVMIAllocation(namespace, "invalid-vm-name")
+			staleTime := time.Now().Add(-time.Second)
+			allocation.leakedAt = &staleTime
+			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+		})
+
+		It("should treat allocation as valid if namespace or vmName attributes are missing", func() {
+			c.Start(stopChan)
+
+			allocation := makeVMIAllocation("", "")
+			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+		})
+
+		It("should treat allocation as valid if virtClient is nil (KubeVirt not installed)", func() {
+			c.virtClient = nil
+			c.Start(stopChan)
+
+			allocation := makeVMIAllocation("default", "some-vm")
+			Expect(c.isVMOrStandaloneVMIExists(allocation)).To(BeTrue())
+		})
 	})
 
 	It("should handle node updates and maintain its node cache", func() {
