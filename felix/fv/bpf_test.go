@@ -223,6 +223,25 @@ FELIX_1_TNL/32: remote host in-pool nat-out tunneled
 FELIX_2/32: remote host
 FELIX_2_TNL/32: remote host in-pool nat-out tunneled`
 
+// expectedRouteDumpWithWireguardTunnelAddr includes a local tunnel route for the
+// WireGuard interface IP. Unlike IPIP/VXLAN (where BPF handles encap directly and
+// no device IP is needed), WireGuard relies on the kernel module and keeps its
+// tunnel IP for SNAT conflict resolution via HOST_TUNNEL_IP.
+const expectedRouteDumpWithWireguardTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
+10.65.0.2/32: local workload in-pool nat-out idx -
+10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.1.0/26: remote workload in-pool nat-out tunneled nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out tunneled nh FELIX_2
+111.222.0.1/32: local host
+111.222.1.1/32: remote host
+111.222.2.1/32: remote host
+FELIX_0/32: local host idx -
+FELIX_0_TNL/32: local host
+FELIX_1/32: remote host
+FELIX_1_TNL/32: remote host in-pool nat-out tunneled
+FELIX_2/32: remote host
+FELIX_2_TNL/32: remote host in-pool nat-out tunneled`
+
 const expectedRouteDumpDSR = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
@@ -246,6 +265,22 @@ const expectedRouteDumpWithTunnelAddrDSR = `10.65.0.0/16: remote in-pool nat-out
 111.222.2.1/32: remote host
 245.245.0.0/16: remote no-dsr
 FELIX_0/32: local host idx -
+FELIX_1/32: remote host
+FELIX_1_TNL/32: remote host in-pool nat-out tunneled
+FELIX_2/32: remote host
+FELIX_2_TNL/32: remote host in-pool nat-out tunneled`
+
+const expectedRouteDumpWithWireguardTunnelAddrDSR = `10.65.0.0/16: remote in-pool nat-out
+10.65.0.2/32: local workload in-pool nat-out idx -
+10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.1.0/26: remote workload in-pool nat-out tunneled nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out tunneled nh FELIX_2
+111.222.0.1/32: local host
+111.222.1.1/32: remote host
+111.222.2.1/32: remote host
+245.245.0.0/16: remote no-dsr
+FELIX_0/32: local host idx -
+FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_1_TNL/32: remote host in-pool nat-out tunneled
 FELIX_2/32: remote host
@@ -1500,6 +1535,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				tunnelAddr := ""
 				tunnelAddrFelix1 := ""
 				tunnelAddrFelix2 := ""
+				isWireguard := false
 				expectedRoutes := expectedRouteDump
 				if testOpts.dsr {
 					expectedRoutes = expectedRouteDumpDSR
@@ -1514,6 +1550,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						tunnelAddr = tc.Felixes[0].ExpectedWireguardV6TunnelAddr
 						tunnelAddrFelix1 = tc.Felixes[1].ExpectedWireguardV6TunnelAddr
 						tunnelAddrFelix2 = tc.Felixes[2].ExpectedWireguardV6TunnelAddr
+						isWireguard = true
 					}
 					expectedRoutes = expectedRouteDumpV6
 					if testOpts.dsr {
@@ -1533,13 +1570,24 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						tunnelAddr = tc.Felixes[0].ExpectedWireguardTunnelAddr
 						tunnelAddrFelix1 = tc.Felixes[1].ExpectedWireguardTunnelAddr
 						tunnelAddrFelix2 = tc.Felixes[2].ExpectedWireguardTunnelAddr
+						isWireguard = true
 					}
 				}
 
 				if tunnelAddr != "" {
-					expectedRoutes = expectedRouteDumpWithTunnelAddr
-					if testOpts.dsr {
-						expectedRoutes = expectedRouteDumpWithTunnelAddrDSR
+					if isWireguard {
+						// WireGuard keeps its tunnel IP on the interface (unlike
+						// IPIP/VXLAN) because the BPF program needs HOST_TUNNEL_IP
+						// for SNAT conflict resolution with the kernel WireGuard module.
+						expectedRoutes = expectedRouteDumpWithWireguardTunnelAddr
+						if testOpts.dsr {
+							expectedRoutes = expectedRouteDumpWithWireguardTunnelAddrDSR
+						}
+					} else {
+						expectedRoutes = expectedRouteDumpWithTunnelAddr
+						if testOpts.dsr {
+							expectedRoutes = expectedRouteDumpWithTunnelAddrDSR
+						}
 					}
 				}
 
