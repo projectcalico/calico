@@ -73,13 +73,11 @@ const (
 	// key for ratelimited sync retries.
 	retryKey = "ipamSyncRetry"
 
-	// defaultVMRecreationGracePeriod is the default time window to allow VM recreation
-	// before treating the allocation as a leak.
-	//
-	// This is separate from the configurable LeakGracePeriod (which applies to pod IP allocations)
-	// because VM recreation (e.g., restart, live migration) can take significantly longer than pod
-	// rescheduling. During this window, if a VM doesn't exist we assume it is being recreated.
-	defaultVMRecreationGracePeriod = 15 * time.Minute
+	// defaultVMRecreationGracePeriod is the time window to allow VM recreation
+	// (e.g., restart, live migration) before treating the allocation as a leak.
+	// This is separate from the configurable LeakGracePeriod which applies to
+	// pod IP allocations.
+	defaultVMRecreationGracePeriod = 5 * time.Minute
 )
 
 func init() {
