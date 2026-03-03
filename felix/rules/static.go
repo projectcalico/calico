@@ -618,17 +618,6 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 	// Packets will be accepted if they passed through both workload and host endpoint policy
 	// and were returned.
 
-	if r.NFTables {
-		// Send established connections to our flowtable.
-		// TODO: Limit to Calico traffic only
-		rules = append(rules,
-			generictables.Rule{
-				Match:  r.NewMatch().ConntrackState("ESTABLISHED"),
-				Action: r.FlowOffload("calico"),
-			},
-		)
-	}
-
 	// Jump to from-host-endpoint dispatch chains.
 	rules = append(rules,
 		generictables.Rule{
@@ -684,8 +673,23 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 // StaticFilterForwardAppendRules returns rules which should be statically appended to the end of the filter
 // table's forward chain.
 func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.Rule {
-	return []generictables.Rule{
-		{
+	var rules []generictables.Rule
+
+	if r.nft {
+		// Offload established connections that were accepted by Calico policy to the
+		// flowtable for hardware/software fast-path forwarding. Placed before the final
+		// accept so only Calico-managed traffic is offloaded.
+		rules = append(rules,
+			generictables.Rule{
+				Match:   r.NewMatch().MarkSingleBitSet(r.MarkAccept).ConntrackState("ESTABLISHED"),
+				Action:  r.FlowOffload("calico"),
+				Comment: []string{"Offload established Calico flows."},
+			},
+		)
+	}
+
+	rules = append(rules,
+		generictables.Rule{
 			Match:   r.NewMatch().MarkSingleBitSet(r.MarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: []string{"Policy explicitly accepted packet."},
@@ -693,10 +697,12 @@ func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.R
 
 		// Set IptablesMarkAccept bit here, to indicate to our mangle-POSTROUTING chain that this is
 		// forwarded traffic and should not be subject to normal host endpoint policy.
-		{
+		generictables.Rule{
 			Action: r.SetMark(r.MarkAccept),
 		},
-	}
+	)
+
+	return rules
 }
 
 func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*generictables.Chain {

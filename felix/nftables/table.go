@@ -44,7 +44,9 @@ const (
 )
 
 type InterfaceHandler interface {
-	SetInterfaces(ifces []string)
+	// SetWorkloadInterfaces updates the set of active workload interfaces. These are combined
+	// with any overlay device names to form the flowtable device list.
+	SetWorkloadInterfaces(ifces []string)
 }
 
 var (
@@ -211,8 +213,20 @@ type NftablesTable struct {
 
 	inSyncWithDataPlane bool
 
-	// allInterfaces is all interfaces we care about, specifically used for flowtables.
-	allInterfaces []string
+	// overlayDevices contains the names of tunnel/overlay devices (e.g., vxlan.calico, tunl0)
+	// that should be included in the flowtable device list.
+	overlayDevices []string
+
+	// workloadInterfaces contains the names of active workload interfaces, updated by the
+	// endpoint manager via SetWorkloadInterfaces.
+	workloadInterfaces []string
+
+	// flowtableDevices is the combined, sorted list of all devices for the flowtable.
+	// Updated when either overlayDevices or workloadInterfaces changes.
+	flowtableDevices []string
+
+	// flowtableDirty is true when flowtableDevices has changed and needs to be programmed.
+	flowtableDirty bool
 
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
 	// it is updated when we write to the dataplane but it can also be read back and compared
@@ -422,34 +436,32 @@ func (n *NftablesTable) IPVersion() uint8 {
 	return n.ipVersion
 }
 
-func (n *NftablesTable) chainExists(chainName string) (bool, error) {
-	if !n.inSyncWithDataPlane {
-		n.loadDataplaneState()
-	}
-	_, exists := n.chainToDataplaneHashes[chainName]
-	return exists, nil
+// SetOverlayDevices sets the overlay/tunnel device names that should be included in the
+// flowtable device list. Called during initialization from int_dataplane.go.
+func (t *NftablesTable) SetOverlayDevices(devices []string) {
+	t.overlayDevices = devices
+	t.recalcFlowtableDevices()
 }
 
-func (t *NftablesTable) SetInterfaces(ifces []string) {
-	sort.Strings(ifces)
-	cur := t.allInterfaces
-	t.allInterfaces = ifces
-	if !reflect.DeepEqual(cur, ifces) {
-		// Need to update flowtable. Do this inline for now, but
-		// we should probably move this to Apply().
-		ftPriority := knftables.FilterIngressPriority
-		tx := t.nft.NewTransaction()
-		tx.Add(&knftables.Flowtable{
-			Name:     "calico",
-			Priority: &ftPriority,
-			Devices:  t.allInterfaces,
-		})
-		if err := t.runTransaction(tx); err != nil {
-			t.logCxt.WithError(err).Fatal("Failed to update flowtable")
-		}
-	}
+// SetWorkloadInterfaces updates the set of active workload interfaces for the flowtable.
+// Called by the endpoint manager when workload endpoints change.
+func (t *NftablesTable) SetWorkloadInterfaces(ifces []string) {
+	t.workloadInterfaces = ifces
+	t.recalcFlowtableDevices()
 }
 
+// recalcFlowtableDevices combines overlay and workload interfaces into a sorted device list.
+// If the list changed, it marks the flowtable as dirty for the next Apply().
+func (t *NftablesTable) recalcFlowtableDevices() {
+	combined := make([]string, 0, len(t.overlayDevices)+len(t.workloadInterfaces))
+	combined = append(combined, t.overlayDevices...)
+	combined = append(combined, t.workloadInterfaces...)
+	sort.Strings(combined)
+	if !reflect.DeepEqual(t.flowtableDevices, combined) {
+		t.flowtableDevices = combined
+		t.flowtableDirty = true
+	}
+}
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
 // to the given base chain (depending on the chain insert mode).  See
@@ -840,6 +852,10 @@ func (t *NftablesTable) InvalidateDataplaneCache(reason string) {
 	logCxt.Debug("Invalidating dataplane cache")
 	t.inSyncWithDataPlane = false
 	t.reason = reason
+	// Also mark the flowtable as dirty so it gets re-programmed if needed.
+	if len(t.flowtableDevices) > 0 {
+		t.flowtableDirty = true
+	}
 }
 
 func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
@@ -972,6 +988,22 @@ func (t *NftablesTable) applyUpdates() error {
 				// Chain doesn't exist in dataplane, mark it for creation.
 				tx.Add(&baseChain)
 			}
+		}
+	}
+
+	// Program the flowtable if it has changed. We use Add which acts as create-or-update.
+	// The flowtable must exist before any rules that reference it via "flow offload @calico".
+	if t.flowtableDirty {
+		if len(t.flowtableDevices) > 0 {
+			prio := knftables.FilterIngressPriority
+			tx.Add(&knftables.Flowtable{
+				Name:     "calico",
+				Priority: &prio,
+				Devices:  t.flowtableDevices,
+			})
+		} else {
+			// No devices — delete the flowtable if it exists.
+			tx.Delete(&knftables.Flowtable{Name: "calico"})
 		}
 	}
 
@@ -1176,6 +1208,7 @@ func (t *NftablesTable) applyUpdates() error {
 	// was actually a no-op update.
 	t.dirtyChains = set.New[string]()
 	t.dirtyBaseChains = set.New[string]()
+	t.flowtableDirty = false
 
 	// Store off the updates.
 	for chainName, hashes := range newHashes {

@@ -895,13 +895,12 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
 
 			if m.ifceHandler != nil {
-				// Also update the interface handler to be aware of all local interfaces.
-				// TODO: these should be detected not hardcoded.
-				ifces := []string{"ens4", "vxlan.calico"}
+				// Update the flowtable handler with the current set of workload interfaces.
+				wlIfces := make([]string, 0, len(fromMappings))
 				for i := range fromMappings {
-					ifces = append(ifces, i)
+					wlIfces = append(wlIfces, i)
 				}
-				m.ifceHandler.SetInterfaces(ifces)
+				m.ifceHandler.SetWorkloadInterfaces(wlIfces)
 			}
 		}
 
