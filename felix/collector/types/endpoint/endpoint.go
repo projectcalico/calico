@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strings"
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/utils"
@@ -79,9 +78,9 @@ func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
 	key := ed.Key()
 	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
-		ns, name, err := deconstructNamespaceAndNameFromWepName(k.WorkloadID)
-		if err != nil {
-			return Metadata{}, err
+		ns, name := k.GetNameAndNamespace()
+		if ns == "" {
+			return Metadata{}, fmt.Errorf("WEP '%v' has no namespace", k.WorkloadID)
 		}
 		var aggName string
 		gn := ed.GenerateName()
@@ -130,12 +129,4 @@ func getSubnetType(addrBytes [16]byte) subnetType {
 		return PrivateNet
 	}
 	return PublicNet
-}
-
-func deconstructNamespaceAndNameFromWepName(wepName string) (string, string, error) {
-	parts := strings.Split(wepName, "/")
-	if len(parts) == 2 {
-		return parts[0], parts[1], nil
-	}
-	return "", "", fmt.Errorf("could not parse name %v", wepName)
 }
