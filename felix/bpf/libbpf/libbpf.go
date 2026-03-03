@@ -634,6 +634,8 @@ func (t *TcGlobalData) Set(m *Map) error {
 		(*C.char)(unsafe.Pointer(&t.IntfIPv4[0])),
 		(*C.char)(unsafe.Pointer(&t.HostIPv6[0])),
 		(*C.char)(unsafe.Pointer(&t.IntfIPv6[0])),
+		(*C.char)(unsafe.Pointer(&t.HostTunnelIPv4[0])),
+		(*C.char)(unsafe.Pointer(&t.HostTunnelIPv6[0])),
 		C.uint(t.ExtToSvcMark),
 		C.ushort(t.Tmtu),
 		C.ushort(t.VxlanPort),
