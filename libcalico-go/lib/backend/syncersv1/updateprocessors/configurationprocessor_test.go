@@ -45,8 +45,21 @@ const (
 )
 
 var (
-	numBaseFelixConfigs = reflect.TypeFor[apiv3.FelixConfigurationSpec]().NumField()
+	// numBaseFelixConfigs is the number of FelixConfigurationSpec fields that are
+	// converted to config KVPairs. Fields tagged with confignamev1:"-" (like
+	// NodeSelector) are excluded.
+	numBaseFelixConfigs = countConfigFields(reflect.TypeFor[apiv3.FelixConfigurationSpec]())
 )
+
+func countConfigFields(t reflect.Type) int {
+	count := 0
+	for i := 0; i < t.NumField(); i++ {
+		if t.Field(i).Tag.Get("confignamev1") != "-" {
+			count++
+		}
+	}
+	return count
+}
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
 	// Define some common values
@@ -167,18 +180,22 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		})
 		Expect(err).To(HaveOccurred())
 
-		By("Testing incorrect name structure on Process with add/mod")
-		_, err = cc.Process(&model.KVPair{
+		By("Testing selector-scoped name passes through on Process with add/mod")
+		selectorKvps, err := cc.Process(&model.KVPair{
 			Key:   invalidFelixKey,
 			Value: apiv3.NewFelixConfiguration(),
 		})
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(selectorKvps).To(HaveLen(1))
+		Expect(selectorKvps[0].Key).To(Equal(invalidFelixKey))
 
-		By("Testing incorrect name structure on Process with delete")
-		_, err = cc.Process(&model.KVPair{
+		By("Testing selector-scoped name passes through on Process with delete")
+		selectorKvps, err = cc.Process(&model.KVPair{
 			Key: invalidFelixKey,
 		})
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(selectorKvps).To(HaveLen(1))
+		Expect(selectorKvps[0].Key).To(Equal(invalidFelixKey))
 	})
 
 	It("should handle different field types being assigned", func() {
