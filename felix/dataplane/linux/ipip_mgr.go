@@ -192,8 +192,14 @@ func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {
 	ipip := &netlink.Iptun{
 		LinkAttrs: la,
 	}
-	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 
+	if m.dpConfig.BPFEnabled {
+		// BPF dataplane handles encap/decap and source IP selection itself,
+		// so it doesn't need an IP assigned to the tunnel device.
+		return ipip, "", nil
+	}
+
+	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 	if len(address) == 0 {
 		return nil, "", fmt.Errorf("address is not set")
 	}

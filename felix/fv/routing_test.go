@@ -696,16 +696,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					ipsetLen := allHostsIPSetSize(felixes, ipipMode)
 					for _, f := range felixes {
 						if BPFMode() {
-							// one host and one host tunnel routes per node
-							expectedNumRoutes := len(felixes) * 2
+							// Each remote node contributes 2 "host" routes when tunneling is
+							// enabled (remote host + remote host tunneled), or 1 route when not.
+							// The local node always contributes 1 "host" route (its node IP;
+							// no tunnel device IP in BPF mode).
+							expectedNumRoutes := 1 + (len(felixes)-1)*2
 							if ipipMode == api.IPIPModeNever {
-								// one host routes per node
+								// one host route per node (no tunneled routes)
 								expectedNumRoutes = len(felixes)
 							}
 							Eventually(func() int {
 								return strings.Count(f.BPFRoutes(), "host")
 							}).Should(Equal(expectedNumRoutes),
-								fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, f.BPFRoutes()))
+								fmt.Sprintf("Expected %v host route(s), not: %v", expectedNumRoutes, f.BPFRoutes()))
 						} else if NFTMode() {
 							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 						} else {
@@ -732,16 +735,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
 					ipsetLen := allHostsIPSetSize(felixes, ipipMode)
 					if BPFMode() {
-						// one host and one host tunnel routes per node
-						expectedNumRoutes := (len(felixes) - 1) * 2
+						// After removing the third node: 1 local host route + 2 routes per remaining remote node.
+						expectedNumRoutes := 1 + (len(felixes)-2)*2
 						if ipipMode == api.IPIPModeNever {
-							// one host routes per node
+							// one host route per remaining node (no tunneled routes)
 							expectedNumRoutes = (len(felixes) - 1)
 						}
 						Eventually(func() int {
 							return strings.Count(felixes[0].BPFRoutes(), "host")
 						}).Should(Equal(expectedNumRoutes),
-							fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, felixes[0].BPFRoutes()))
+							fmt.Sprintf("Expected %v host route(s), not: %v", expectedNumRoutes, felixes[0].BPFRoutes()))
 					} else if NFTMode() {
 						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 					} else {
