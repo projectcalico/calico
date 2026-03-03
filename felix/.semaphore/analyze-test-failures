@@ -63,7 +63,7 @@ import sys, json
 data = json.load(sys.stdin)
 for asset in data.get('assets', []):
     name = asset['name']
-    if 'sem-integration' in name and 'linux' in name and 'amd64' in name:
+    if 'linux' in name and 'amd64' in name:
         print(asset['url'] + ' ' + name)
         break
 " 2>/dev/null) || true
