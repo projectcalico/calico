@@ -17,7 +17,10 @@ package utils
 import (
 	"context"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -31,6 +34,40 @@ func GetInstallation(cli ctrlclient.Client) *operatorv1.Installation {
 		return nil
 	}
 	return installation
+}
+
+// GetLinuxDataplane detects the active Linux dataplane by inspecting cluster resources.
+// It first checks the operator Installation resource, then falls back to the default
+// FelixConfiguration. Returns operatorv1.LinuxDataplaneIptables if detection fails.
+func GetLinuxDataplane(cli ctrlclient.Client) operatorv1.LinuxDataplaneOption {
+	// Try the Installation resource first (operator-managed installs).
+	installation := GetInstallation(cli)
+	if installation != nil &&
+		installation.Spec.CalicoNetwork != nil &&
+		installation.Spec.CalicoNetwork.LinuxDataplane != nil {
+		dp := *installation.Spec.CalicoNetwork.LinuxDataplane
+		logrus.Infof("Detected Linux dataplane from Installation: %s", dp)
+		return dp
+	}
+
+	// Fall back to the default FelixConfiguration (manifest-based installs).
+	felixConfig := v3.NewFelixConfiguration()
+	err := cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
+	if err == nil {
+		if felixConfig.Spec.BPFEnabled != nil && *felixConfig.Spec.BPFEnabled {
+			logrus.Info("Detected Linux dataplane from FelixConfiguration: BPF")
+			return operatorv1.LinuxDataplaneBPF
+		}
+		if felixConfig.Spec.NFTablesMode != nil && *felixConfig.Spec.NFTablesMode == v3.NFTablesModeEnabled {
+			logrus.Info("Detected Linux dataplane from FelixConfiguration: Nftables")
+			return operatorv1.LinuxDataplaneNftables
+		}
+		logrus.Info("Detected Linux dataplane from FelixConfiguration: Iptables (default)")
+		return operatorv1.LinuxDataplaneIptables
+	}
+
+	logrus.WithError(err).Info("Could not detect Linux dataplane, defaulting to Iptables")
+	return operatorv1.LinuxDataplaneIptables
 }
 
 // UsesCalicoIPAM reports whether the cluster uses Calico IPAM. If the operator
