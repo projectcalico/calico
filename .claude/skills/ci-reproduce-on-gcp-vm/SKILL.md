@@ -38,12 +38,12 @@ gcloud --quiet compute instances create "${vm_name}" \
   --zone=${zone} \
   --image-family=${image_family} \
   --image-project=ubuntu-os-cloud \
-  --machine-type=n4-standard-4 \
-  --boot-disk-size=50G \
+  --machine-type=n4-highcpu-4 \
+  --boot-disk-size=20G \
   --boot-disk-type=hyperdisk-balanced
 ```
 
-Use `n4-highcpu-4` to match CI more closely (CI uses this for Felix FV).
+The machine type and disk size above match CI defaults (see `felix/.semaphore/fv-prologue`).
 
 ## Step 3: Wait for SSH and Install Dependencies
 
@@ -61,9 +61,9 @@ done
 # Install prerequisites
 ${ssh_cmd} "sudo apt-get update -y && sudo apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common"
 
-# Add Docker repo (auto-detect codename)
-${ssh_cmd} "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
-${ssh_cmd} "ubuntu_codename=\$(. /etc/os-release && echo \"\${UBUNTU_CODENAME:-\$VERSION_CODENAME}\") && echo \"deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \$ubuntu_codename stable\" | sudo tee /etc/apt/sources.list.d/docker.list"
+# Add Docker repo (DEB822 format, matching .semaphore/vms/vm-bootstrap.sh)
+${ssh_cmd} "sudo install -d -m 0755 /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /tmp/docker.gpg && sudo mv /tmp/docker.gpg /etc/apt/keyrings/docker.asc && sudo chmod 0644 /etc/apt/keyrings/docker.asc"
+${ssh_cmd} "ubuntu_codename=\$(. /etc/os-release && echo \"\${UBUNTU_CODENAME:-\$VERSION_CODENAME}\") && printf '%s\n' 'Types: deb' 'URIs: https://download.docker.com/linux/ubuntu' \"Suites: \${ubuntu_codename}\" 'Components: stable' 'Architectures: amd64' 'Signed-By: /etc/apt/keyrings/docker.asc' | sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null"
 ${ssh_cmd} "sudo apt-get update -y"
 
 # Install Docker and tools — pin versions to match CI (see .semaphore/vms/vm-bootstrap.sh)
