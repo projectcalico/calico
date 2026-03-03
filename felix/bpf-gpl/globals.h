@@ -16,6 +16,7 @@ struct name {                              \
 	__be32 ext_to_svc_mark;                \
 	__be16 psnat_start;                    \
 	__be16 psnat_len;                      \
+	ip_t host_tunnel_ip;                   \
 	__be32 flags;                          \
 	__be16 wg_port;                        \
 	__be16 profiling;                      \

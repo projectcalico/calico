@@ -335,6 +335,7 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define PSNAT_START	CALI_CONFIGURABLE(psnat_start)
 #define PSNAT_LEN	CALI_CONFIGURABLE(psnat_len)
 #define GLOBAL_FLAGS 	CALI_CONFIGURABLE(flags)
+#define HOST_TUNNEL_IP	CALI_CONFIGURABLE_IP(host_tunnel_ip)
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 #define PROFILING	CALI_CONFIGURABLE(profiling)
