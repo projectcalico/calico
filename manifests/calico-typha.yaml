@@ -1318,18 +1318,6 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
-                bpfUDPGSOLinearize:
-                  description: |-
-                    BPFUDPGSOLinearize controls whether Felix fully linearizes UDP GSO packets
-                    after a partial bpf_skb_pull_data() to work around a kernel bug that causes
-                    crashes with GSO_FRAGLIST packets. The kernel fix is in 6.16+.
-                    When set to "Auto", Felix detects the kernel version and only enables
-                    linearization on kernels older than 6.16. [Default: Auto]
-                  enum:
-                    - Enabled
-                    - Disabled
-                    - Auto
-                  type: string
                 cgroupV2Path:
                   description:
                     CgroupV2Path overrides the default location where to

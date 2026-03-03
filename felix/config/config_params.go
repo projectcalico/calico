@@ -228,7 +228,6 @@ type Config struct {
 	BPFAttachType                      string            `config:"oneof(TCX,TC);TCX;non-zero"`
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
-	BPFUDPGSOLinearize                 string            `config:"oneof(Enabled,Disabled,Auto);Auto;non-zero"`
 
 	// CgroupV2Path is not used by Felix, but its init container
 	CgroupV2Path string `config:"string;;"`

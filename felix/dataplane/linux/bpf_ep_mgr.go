@@ -522,7 +522,7 @@ func NewBPFEndpointManager(
 		healthAggregator:   healthAggregator,
 		features:           dataplanefeatures,
 		profiling:          config.BPFProfiling,
-		bpfUDPGSOLinearize: config.BPFUDPGSOLinearize == "Enabled",
+		bpfUDPGSOLinearize: !dataplanefeatures.KernelHasUDPGSOFix,
 		bpfAttachType:      config.BPFAttachType,
 
 		QoSMap:        bpfmaps.CommonMaps.QoSMap,
