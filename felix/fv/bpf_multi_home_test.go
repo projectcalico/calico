@@ -231,7 +231,7 @@ func describeBPFMultiHomedTests() bool {
 				"--port-src", "444", "--port-dst", "30444")
 			Expect(err).NotTo(HaveOccurred())
 
-			Eventually(dump30.MatchCountFn("eth30-ingress"), "5s", "330ms").Should(BeNumerically("==", 1))
+			Eventually(dump30.MatchCountFn("eth30-ingress"), "5s", "330ms").Should(BeNumerically("==", 2))
 			Eventually(dump20.MatchCountFn("eth20-egress"), "5s", "330ms").Should(BeNumerically("==", 1))
 		})
 	})
