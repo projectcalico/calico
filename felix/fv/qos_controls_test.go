@@ -452,7 +452,7 @@ var _ = infrastructure.DatastoreDescribe(
 						Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc noqueue 8001: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+`))
 
 						By("Setting 10Mbps limit and 100Mbps peakrate for ingress on workload 1")
-						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+						w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 							IngressBandwidth: 10000000,
 							IngressBurst:     300000000,
 							IngressPeakrate:  100000000,
