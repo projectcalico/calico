@@ -83,7 +83,6 @@ Every PR needs one `release-note-*` label.
 
 Other optional labels:
 
-- `cherry-pick-candidate`: This PR should be cherry-picked to an earlier release. For bug fixes only.
 - `needs-operator-pr`: This PR is related to install and requires a corresponding change to the operator.
 
 ## Contributor Agreements
