@@ -39,7 +39,9 @@ func mustCreate(t *testing.T, obj client.Object) {
 		t.Fatalf("expected creation to succeed but got: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = testClient.Delete(context.Background(), obj)
+		if err := testClient.Delete(context.Background(), obj); err != nil {
+			t.Errorf("failed to clean up object: %v", err)
+		}
 	})
 }
 
@@ -49,7 +51,9 @@ func expectCreateFails(t *testing.T, obj client.Object, msgSubstring string) {
 	ctx := context.Background()
 	err := testClient.Create(ctx, obj)
 	if err == nil {
-		_ = testClient.Delete(ctx, obj)
+		if deleteErr := testClient.Delete(ctx, obj); deleteErr != nil {
+			t.Errorf("failed to clean up object that should not have been created: %v", deleteErr)
+		}
 		t.Fatalf("expected creation to fail with %q, but it succeeded", msgSubstring)
 	}
 	if !strings.Contains(err.Error(), msgSubstring) {
@@ -64,5 +68,7 @@ func expectCreateSucceeds(t *testing.T, obj client.Object) {
 	if err := testClient.Create(ctx, obj); err != nil {
 		t.Fatalf("expected creation to succeed but got: %v", err)
 	}
-	_ = testClient.Delete(ctx, obj)
+	if err := testClient.Delete(ctx, obj); err != nil {
+		t.Fatalf("failed to clean up object: %v", err)
+	}
 }
