@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -41,6 +42,10 @@ const (
 	MaxChainNameLength = knftables.NameLengthMax
 	defaultTimeout     = 30 * time.Second
 )
+
+type InterfaceHandler interface {
+	SetInterfaces(ifces []string)
+}
 
 var (
 	// Define the top-level chains for each table.
@@ -205,6 +210,9 @@ type NftablesTable struct {
 	dirtyChains    set.Set[string]
 
 	inSyncWithDataPlane bool
+
+	// allInterfaces is all interfaces we care about, specifically used for flowtables.
+	allInterfaces []string
 
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
 	// it is updated when we write to the dataplane but it can also be read back and compared
@@ -413,6 +421,35 @@ func (n *NftablesTable) Name() string {
 func (n *NftablesTable) IPVersion() uint8 {
 	return n.ipVersion
 }
+
+func (n *NftablesTable) chainExists(chainName string) (bool, error) {
+	if !n.inSyncWithDataPlane {
+		n.loadDataplaneState()
+	}
+	_, exists := n.chainToDataplaneHashes[chainName]
+	return exists, nil
+}
+
+func (t *NftablesTable) SetInterfaces(ifces []string) {
+	sort.Strings(ifces)
+	cur := t.allInterfaces
+	t.allInterfaces = ifces
+	if !reflect.DeepEqual(cur, ifces) {
+		// Need to update flowtable. Do this inline for now, but
+		// we should probably move this to Apply().
+		ftPriority := knftables.FilterIngressPriority
+		tx := t.nft.NewTransaction()
+		tx.Add(&knftables.Flowtable{
+			Name:     "calico",
+			Priority: &ftPriority,
+			Devices:  t.allInterfaces,
+		})
+		if err := t.runTransaction(tx); err != nil {
+			t.logCxt.WithError(err).Fatal("Failed to update flowtable")
+		}
+	}
+}
+
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
 // to the given base chain (depending on the chain insert mode).  See
