@@ -3165,7 +3165,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"programClusterRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ProgramClusterRoutes specifies whether Felix should program all cluster routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
+							Description: "ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node, when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled, confd and BIRD program that route. When ProgramClusterRoutes is Enabled, Felix will program that route. Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
