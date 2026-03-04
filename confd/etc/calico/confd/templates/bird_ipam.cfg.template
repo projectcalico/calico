@@ -9,6 +9,9 @@ function reject_tunnel_routes () {
         reject;
      }
   }
+{{- range $line := $config.BGPExportFilterForInternalPeers }}
+{{ $line }}
+{{- end}}
 }
 
 function reject_local_routes () {
