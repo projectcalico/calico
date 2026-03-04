@@ -17,6 +17,7 @@ package binder
 import (
 	"context"
 	"errors"
+	"maps"
 	"net"
 	"sync"
 
@@ -63,9 +64,7 @@ func (s *workloadStore) Clone() credentials.TransportCredentials {
 	other := make(map[string]workload)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for k, v := range s.creds {
-		other[k] = v
-	}
+	maps.Copy(other, s.creds)
 	return &workloadStore{creds: other}
 }
 

@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -169,13 +169,13 @@ func (h *ServerHarness) Stop() {
 	}
 }
 
-func (h *ServerHarness) CreateNoOpClient(id interface{}, syncType syncproto.SyncerType) *ClientState {
+func (h *ServerHarness) CreateNoOpClient(id any, syncType syncproto.SyncerType) *ClientState {
 	c := h.createClient(id, syncclient.Options{SyncerType: syncType, DebugDiscardKVUpdates: true}, NoOpCallbacks{})
 	h.NoOpClientStates = append(h.ClientStates, c)
 	return c
 }
 
-func (h *ServerHarness) CreateClient(id interface{}, syncType syncproto.SyncerType) *ClientState {
+func (h *ServerHarness) CreateClient(id any, syncType syncproto.SyncerType) *ClientState {
 	recorder := NewRecorder()
 	c := h.createClient(id, syncclient.Options{SyncerType: syncType}, recorder)
 	c.recorder = recorder
@@ -184,7 +184,7 @@ func (h *ServerHarness) CreateClient(id interface{}, syncType syncproto.SyncerTy
 	return c
 }
 
-func (h *ServerHarness) CreateClientNoDecodeRestart(id interface{}, syncType syncproto.SyncerType) *ClientState {
+func (h *ServerHarness) CreateClientNoDecodeRestart(id any, syncType syncproto.SyncerType) *ClientState {
 	recorder := NewRecorder()
 	c := h.createClient(id, syncclient.Options{SyncerType: syncType, DisableDecoderRestart: true}, recorder)
 	c.recorder = recorder
@@ -193,7 +193,7 @@ func (h *ServerHarness) CreateClientNoDecodeRestart(id interface{}, syncType syn
 	return c
 }
 
-func (h *ServerHarness) CreateNoOpClientNoDecodeRestart(id interface{}, syncType syncproto.SyncerType) *ClientState {
+func (h *ServerHarness) CreateNoOpClientNoDecodeRestart(id any, syncType syncproto.SyncerType) *ClientState {
 	c := h.createClient(id, syncclient.Options{SyncerType: syncType, DisableDecoderRestart: true, DebugDiscardKVUpdates: true}, NoOpCallbacks{})
 	h.NoOpClientStates = append(h.ClientStates, c)
 	return c
@@ -214,7 +214,7 @@ func (h *ServerHarness) ExpectAllClientsToReachState(status api.SyncStatus, kvs 
 	wg.Wait()
 }
 
-func (h *ServerHarness) createClient(id interface{}, options syncclient.Options, callbacks api.SyncerCallbacks) *ClientState {
+func (h *ServerHarness) createClient(id any, options syncclient.Options, callbacks api.SyncerCallbacks) *ClientState {
 	client := syncclient.New(
 		discovery.New(discovery.WithAddrOverride(h.Addr())),
 		"test-version",
@@ -241,19 +241,19 @@ func (h *ServerHarness) createClient(id interface{}, options syncclient.Options,
 }
 
 func (h *ServerHarness) CreateNoOpClients(n int) {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.CreateNoOpClient(i, syncproto.SyncerTypeFelix)
 	}
 }
 
 func (h *ServerHarness) CreateNoOpClientsNoDecodeRestart(n int) {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.CreateNoOpClientNoDecodeRestart(i, syncproto.SyncerTypeFelix)
 	}
 }
 
 func (h *ServerHarness) CreateClients(n int) {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h.CreateClient(i, syncproto.SyncerTypeFelix)
 	}
 }
@@ -277,7 +277,7 @@ func (h *ServerHarness) SendInitialSnapshotPodsNoInSync(numPods int) map[string]
 func (h *ServerHarness) SendPodUpdates(numPods int) map[string]api.Update {
 	expectedEndState := map[string]api.Update{}
 	conv := conversion.NewConverter()
-	for i := 0; i < numPods; i++ {
+	for range numPods {
 		pod := generatePod(h.updIdx)
 		h.updIdx++
 		weps, err := conv.PodToWorkloadEndpoints(pod)
@@ -308,7 +308,7 @@ func (h *ServerHarness) SendInitialSnapshotConfigsNoInSync(numConfigs int) map[s
 
 func (h *ServerHarness) SendConfigUpdates(n int) map[string]api.Update {
 	expectedEndState := map[string]api.Update{}
-	for i := 0; i < n; i++ {
+	for range n {
 		update := api.Update{
 			KVPair: model.KVPair{
 				Key: model.GlobalConfigKey{

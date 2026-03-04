@@ -1,14 +1,15 @@
-.go-pkg-cache/
-report/
-bin/
 *.created*
 *.pyc
+.go-pkg-cache/
 .idea
 .vscode
-vendor/
 artifacts/
-postrelease-checks.xml
+bin/
+coverprofile.out
 crypto/tmp
+postrelease-checks.xml
+report/
+vendor/
 venv/
 
 /* Produced as part of release */

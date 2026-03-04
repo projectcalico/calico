@@ -29,8 +29,8 @@ func NewNetworkPolicyClient(r rest.Interface, group BackingAPIGroup) K8sResource
 	return &customResourceClient{
 		restClient:      r,
 		resource:        NetworkPolicyResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.NetworkPolicy{}),
-		k8sListType:     reflect.TypeOf(apiv3.NetworkPolicyList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.NetworkPolicy](),
+		k8sListType:     reflect.TypeFor[apiv3.NetworkPolicyList](),
 		kind:            apiv3.KindNetworkPolicy,
 		namespaced:      true,
 		apiGroup:        group,

@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -395,6 +395,9 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		cfg, err = apiconfig.LoadClientConfigFromEnvironment()
 		Expect(err).NotTo(HaveOccurred())
 		useV3CRDs := k8s.UsingV3CRDs(&cfg.Spec)
+		if useV3CRDs {
+			Skip("policy name migration does not apply to projectcalico.org/v3 CRDs")
+		}
 
 		// Run apiserver.
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
@@ -410,11 +413,7 @@ var _ = Describe("policy name migration tests (kdd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Register Calico CRD types with the scheme.
-		if useV3CRDs {
-			Expect(v3.AddToGlobalScheme()).NotTo(HaveOccurred())
-		} else {
-			v1scheme.AddCalicoResourcesToGlobalScheme()
-		}
+		v1scheme.AddCalicoResourcesToGlobalScheme()
 
 		// Create a client for interacting with CRDs directly.
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)

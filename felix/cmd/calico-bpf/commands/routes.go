@@ -121,7 +121,7 @@ func sortCIDRs(cidrs []ip.CIDR) {
 	sort.Slice(cidrs, func(i, j int) bool {
 		addrA := cidrs[i].Addr().(ip.V4Addr)
 		addrB := cidrs[j].Addr().(ip.V4Addr)
-		for byteIdx := 0; byteIdx < 4; byteIdx++ {
+		for byteIdx := range 4 {
 			if addrA[byteIdx] < addrB[byteIdx] {
 				return true
 			}
@@ -137,7 +137,7 @@ func sortCIDRsV6(cidrs []ip.CIDR) {
 	sort.Slice(cidrs, func(i, j int) bool {
 		addrA := cidrs[i].Addr().(ip.V6Addr)
 		addrB := cidrs[j].Addr().(ip.V6Addr)
-		for byteIdx := 0; byteIdx < 16; byteIdx++ {
+		for byteIdx := range 16 {
 			if addrA[byteIdx] < addrB[byteIdx] {
 				return true
 			}

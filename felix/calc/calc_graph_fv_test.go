@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
@@ -698,10 +698,10 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf.BPFEnabled = true
 					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					conf.RouteSource = test.RouteSource()
-					outputChan := make(chan interface{})
+					outputChan := make(chan any)
 					conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
 					lookupsCache := NewLookupsCache()
-					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil, lookupsCache)
+					asyncGraph := NewAsyncCalcGraph(conf, []chan<- any{outputChan}, nil, lookupsCache)
 					// And a validation filter, with a channel between it
 					// and the async graph.
 					validator := NewValidationFilter(asyncGraph, conf)
@@ -954,11 +954,11 @@ var _ = Describe("calc graph with health state", func() {
 		// Create the calculation graph.
 		conf := config.New()
 		conf.FelixHostname = localHostname
-		outputChan := make(chan interface{})
+		outputChan := make(chan any)
 		healthAggregator := health.NewHealthAggregator()
 		lookupsCache := NewLookupsCache()
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator, lookupsCache)
+		asyncGraph := NewAsyncCalcGraph(conf, []chan<- any{outputChan}, healthAggregator, lookupsCache)
 		Expect(asyncGraph).NotTo(BeNil())
 	})
 })

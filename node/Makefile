@@ -28,6 +28,9 @@ REMOTE_DEPS = $(LIBBPF_A) \
 	      filesystem/etc/calico/confd/conf.d \
 	      filesystem/etc/calico/confd/templates
 
+# Run these tests against the projectcalico.org/v3 API group by default.
+CALICO_API_GROUP ?= projectcalico.org/v3
+
 ###############################################################################
 # Include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -66,10 +69,6 @@ BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.xz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
-
-# Versions and locations of dependencies used in tests.
-TEST_CONTAINER_NAME_VER?=latest
-TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
 
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
@@ -131,7 +130,7 @@ MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/
 # Variables used by the tests
 ST_TO_RUN?=tests/st/
 K8ST_TO_RUN?=tests/
-# Can exclude the slower tests with "-a '!slow'"
+# Can exclude the slower tests with "-m 'not slow'"
 ST_OPTIONS?=
 
 K8ST_REPORT_FILENAME ?= k8s-tests.xml
@@ -303,6 +302,7 @@ K8ST_IMAGE_TARS=calico-node.tar \
 	calicoctl.tar \
 	kube-controllers.tar \
 	operator.tar \
+	webhook.tar \
 	whisker.tar \
 	whisker-backend.tar \
 	goldmane.tar
@@ -425,6 +425,11 @@ goldmane.tar: ../go.mod $(shell find ../goldmane -name '*.go')
 	docker tag calico/goldmane:latest-$(ARCH) calico/goldmane:$(TEST_BUILD_TAG)
 	docker save --output $@ calico/goldmane:$(TEST_BUILD_TAG)
 
+webhook.tar: ../go.mod $(shell find ../webhooks -name '*.go') $(shell find ../libcalico-go -name '*.go')
+	make -C ../webhooks image
+	docker tag calico/webhooks:latest-$(ARCH) calico/webhooks:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/webhooks:$(TEST_BUILD_TAG)
+
 whisker.tar: ../go.mod $(shell find ../whisker)
 	make -C ../whisker image
 	docker tag calico/whisker:latest-$(ARCH) calico/whisker:$(TEST_BUILD_TAG)
@@ -471,7 +476,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    --net host \
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
-	     cd /code/tests/k8st && nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/$(K8ST_REPORT_FILENAME)" --with-timer'
+	     cd /code/tests/k8st && pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
 
 .PHONY: kind-k8st-cleanup
 kind-k8st-cleanup: kind-cluster-destroy

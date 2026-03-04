@@ -85,6 +85,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPool":                             schema_pkg_apis_projectcalico_v3_IPPool(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolList":                         schema_pkg_apis_projectcalico_v3_IPPoolList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolSpec":                         schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolStatus":                       schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservation":                      schema_pkg_apis_projectcalico_v3_IPReservation(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationList":                  schema_pkg_apis_projectcalico_v3_IPReservationList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationSpec":                  schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref),
@@ -477,6 +478,21 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 						},
 					},
 					"secondary": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"alternate": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
@@ -3149,7 +3165,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"programClusterRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
+							Description: "ProgramClusterRoutes specifies whether Felix should program all cluster routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4833,6 +4849,13 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.Reference
 							Format:      "",
 						},
 					},
+					"kubeVirtVMAddressPersistence": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction). When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses when their underlying pods are recreated during VM operations. When Disabled, VMs receive new IP addresses whenever their pods are recreated. Defaults to Enabled if not specified.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"strictAffinity", "autoAllocateBlocks"},
 			},
@@ -5031,12 +5054,17 @@ func schema_pkg_apis_projectcalico_v3_IPPool(ref common.ReferenceCallback) commo
 							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolSpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolStatus"),
+						},
+					},
 				},
 				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolSpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -5191,6 +5219,33 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 				Required: []string{"cidr"},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
 	}
 }
 

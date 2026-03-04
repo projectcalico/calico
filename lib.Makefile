@@ -285,6 +285,26 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
+# Support for git worktrees.  In a worktree, .git is a file pointing to
+# <main-repo>/.git/worktrees/<name>.  When Docker containers need git access,
+# the main .git directory must also be mounted, and GIT_DIR / GIT_WORK_TREE
+# must be set so that git can find objects and the correct working tree.
+_GIT_DIR := $(shell git rev-parse --absolute-git-dir 2>/dev/null)
+_GIT_COMMON_DIR := $(realpath $(shell git rev-parse --git-common-dir 2>/dev/null))
+ifneq ($(_GIT_DIR),$(_GIT_COMMON_DIR))
+# Running in a git worktree: mount the main .git directory at its host path
+# so the worktree .git file pointer resolves inside the container.
+# DOCKER_GIT_WORK_TREE can be overridden by Makefiles that mount the repo at
+# a different container path (e.g. api/Makefile).
+DOCKER_GIT_WORK_TREE ?= /go/src/github.com/projectcalico/calico
+DOCKER_GIT_WORKTREE_ARGS := \
+	-v $(_GIT_COMMON_DIR):$(_GIT_COMMON_DIR):ro \
+	-e GIT_DIR=$(_GIT_DIR) \
+	-e GIT_WORK_TREE=$(DOCKER_GIT_WORK_TREE)
+else
+DOCKER_GIT_WORKTREE_ARGS :=
+endif
+
 # Configure the Calico API group to use. Projects importing this Makefile can override this variable
 # if they need to.
 # Supported values:
@@ -322,6 +342,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
@@ -330,7 +351,6 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		-e GOOS=$(BUILDOS) \
 		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e "GOFLAGS=$(GOFLAGS)" \
-		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
@@ -1405,6 +1425,10 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 
 	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_clusternetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
+
+	# Install mutating admission policies.
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/; do echo "Waiting for mutating admission policies to be created"; sleep 2; done
+
 	touch $@
 
 kind-cluster-destroy: $(KIND) $(KUBECTL)
@@ -1654,3 +1678,8 @@ release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIE
 	for registry in $(DEV_REGISTRIES); do \
 		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$${describe_tag} $${registry}/$(WINDOWS_IMAGE):$${release_tag}; \
 	done;
+
+# Name of a test image that is used by both "node" and "calicoctl", so defined here.  This image is
+# built by node/Makefile.
+TEST_CONTAINER_NAME_VER?=latest
+TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)

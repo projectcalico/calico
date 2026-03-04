@@ -57,6 +57,7 @@ type rulesUpdateCallbacks interface {
 type endpointCallbacks interface {
 	OnEndpointTierUpdate(endpointKey model.EndpointKey,
 		endpoint model.Endpoint,
+		computedData []EndpointComputedData,
 		peerData *EndpointBGPPeer,
 		filteredTiers []TierInfo)
 }

@@ -69,7 +69,7 @@ func newDSCPManager(
 	}
 }
 
-func (m *dscpManager) OnUpdate(msg interface{}) {
+func (m *dscpManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
 	case *proto.HostEndpointUpdate:
 		m.handleHEPUpdates(msg.GetId(), msg)

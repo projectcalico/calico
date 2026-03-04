@@ -18,19 +18,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -280,7 +281,7 @@ func (st *SyncerTester) ExpectData(kvp model.KVPair) {
 
 // ExpectPath verifies that a KVPair with a specified path is in the cache. This will mark the cache entry as "Seen".
 func (st *SyncerTester) ExpectPath(path string) {
-	kv := func() interface{} {
+	kv := func() any {
 		return st.GetCacheKVPair(path)
 	}
 	EventuallyWithOffset(1, kv, "6s", "20ms").ShouldNot(BeNil())
@@ -292,7 +293,7 @@ func (st *SyncerTester) ExpectValueMatches(k model.Key, match gomegatypes.Gomega
 	key, err := model.KeyToDefaultPath(k)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-	value := func() interface{} {
+	value := func() any {
 		return st.GetCacheValue(key)
 	}
 
@@ -323,7 +324,7 @@ func (st *SyncerTester) GetCacheKVPair(k string) *model.KVPair {
 }
 
 // GetCacheValue returns the value of the KVPair from the cache or nil if not present.
-func (st *SyncerTester) GetCacheValue(k string) interface{} {
+func (st *SyncerTester) GetCacheValue(k string) any {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	return st.cache[k].Value
@@ -334,9 +335,7 @@ func (st *SyncerTester) CacheSnapshot() map[string]CacheEntry {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	cacheCopy := map[string]CacheEntry{}
-	for k, v := range st.cache {
-		cacheCopy[k] = v
-	}
+	maps.Copy(cacheCopy, st.cache)
 	return cacheCopy
 }
 
@@ -418,11 +417,8 @@ func (st *SyncerTester) hasUpdates(expectedUpdates []api.Update, checkOrder bool
 
 	// If we need to check the order, let's do that now - failing at the first miss.
 	if checkOrder {
-		num := len(actualUpdates)
-		if len(expectedUpdates) < num {
-			num = len(expectedUpdates)
-		}
-		for i := 0; i < num; i++ {
+		num := min(len(expectedUpdates), len(actualUpdates))
+		for i := range num {
 			if !updatesEqual(actualUpdates[i], expectedUpdates[i]) {
 				errs = append(errs, fmt.Sprintf(
 					"Incorrect order of updates at index %d;\nExpected:\n%v;\nReceived:\n%v",
@@ -585,7 +581,7 @@ func isExternallyControlled(key model.Key) bool {
 		return true
 	case model.ResourceKey:
 		switch key.(model.ResourceKey).Kind {
-		case libapiv3.KindNode, model.KindKubernetesEndpointSlice, model.KindKubernetesService:
+		case internalapi.KindNode, model.KindKubernetesEndpointSlice, model.KindKubernetesService:
 			return true
 		}
 	}

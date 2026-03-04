@@ -17,8 +17,7 @@ package parser_test
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
@@ -280,7 +279,6 @@ var _ = Describe("Parser", func() {
 	})
 
 	for _, test := range canonicalisationTests {
-		test := test
 		It(fmt.Sprintf("should canonicalise %v as %v with UID %v and round-trip",
 			test.input, test.expected, test.expectedUid), func() {
 			sel, err := parser.Parse(test.input)
@@ -296,7 +294,6 @@ var _ = Describe("Parser", func() {
 	}
 
 	for _, test := range canonicalisationTests {
-		test := test
 		if test.expectedUid == "" {
 			continue
 		}

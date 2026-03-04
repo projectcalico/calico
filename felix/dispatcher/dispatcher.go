@@ -62,7 +62,7 @@ func NewDispatcher() *Dispatcher {
 
 func (d *Dispatcher) Register(keyExample model.Key, receiver UpdateHandler) {
 	keyType := reflect.TypeOf(keyExample)
-	if keyType.Kind() == reflect.Ptr {
+	if keyType.Kind() == reflect.Pointer {
 		panic("Register expects a non-pointer")
 	}
 	log.Infof("Registering listener for type %v: %#v", keyType, receiver)

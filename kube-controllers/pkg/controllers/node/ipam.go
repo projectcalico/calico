@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -123,7 +123,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
 	}
 
-	syncChan := make(chan interface{}, 1)
+	syncChan := make(chan any, 1)
 
 	// Create a rate limited that compares two distinct limiters and uses the max. This rate limiter is used
 	// only to control the retry rate of whole IPAM sync executions.
@@ -159,7 +159,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		podDeletionChan:  make(chan *v1.Pod, utils.BatchUpdateSize),
 
 		// Buffered channels for potentially bursty channels.
-		syncerUpdates: make(chan interface{}, utils.BatchUpdateSize),
+		syncerUpdates: make(chan any, utils.BatchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
@@ -198,10 +198,10 @@ type IPAMController struct {
 	kubernetesNodesByCalicoName map[string]string
 
 	// syncChan triggers processing in response to an update.
-	syncChan chan interface{}
+	syncChan chan any
 
 	// For update / deletion events from the syncer.
-	syncerUpdates chan interface{}
+	syncerUpdates chan any
 
 	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
@@ -270,7 +270,7 @@ func (c *IPAMController) onUpdate(update bapi.Update) {
 	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case libapiv3.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
+		case internalapi.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
@@ -370,7 +370,7 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 
 // handleUpdate fans out proper handling of the update depending on the
 // information in the update.
-func (c *IPAMController) handleUpdate(upd interface{}) {
+func (c *IPAMController) handleUpdate(upd any) {
 	switch upd := upd.(type) {
 	case bapi.SyncStatus:
 		c.syncStatus = upd
@@ -384,7 +384,7 @@ func (c *IPAMController) handleUpdate(upd interface{}) {
 		switch upd.Key.(type) {
 		case model.ResourceKey:
 			switch upd.Key.(model.ResourceKey).Kind {
-			case libapiv3.KindNode:
+			case internalapi.KindNode:
 				c.handleNodeUpdate(upd)
 				return
 			case apiv3.KindIPPool:
@@ -414,7 +414,7 @@ func (c *IPAMController) handleBlockUpdate(kvp model.KVPair) {
 // handleNodeUpdate wraps up the logic to execute when receiving a node update.
 func (c *IPAMController) handleNodeUpdate(kvp model.KVPair) {
 	if kvp.Value != nil {
-		n := kvp.Value.(*libapiv3.Node)
+		n := kvp.Value.(*internalapi.Node)
 		kn, err := getK8sNodeName(*n)
 		if err != nil {
 			log.WithError(err).Info("Unable to get corresponding k8s node name")
@@ -473,8 +473,8 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 	// release their affinity if needed.
 	var n string
 	if b.Affinity != nil {
-		if strings.HasPrefix(*b.Affinity, "host:") {
-			n = strings.TrimPrefix(*b.Affinity, "host:")
+		if after, ok := strings.CutPrefix(*b.Affinity, "host:"); ok {
+			n = after
 			c.nodesByBlock[blockCIDR] = n
 			if _, ok := c.blocksByNode[n]; !ok {
 				c.blocksByNode[n] = map[string]bool{}
@@ -502,15 +502,15 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 
 		// If there is no handle, then skip this IP. We need the handle
 		// in order to release the IP below.
-		if attr.AttrPrimary == nil {
+		if attr.HandleID == nil {
 			continue
 		}
-		handle := *attr.AttrPrimary
+		handle := *attr.HandleID
 
 		alloc := allocation{
 			ip:             ordinalToIP(b, ord).String(),
 			handle:         handle,
-			attrs:          attr.AttrSecondary,
+			attrs:          attr.ActiveOwnerAttrs,
 			sequenceNumber: b.GetSequenceNumberForOrdinal(ord),
 			block:          blockCIDR,
 		}
@@ -836,6 +836,7 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 			} else {
 				log.WithError(err).Warnf("Failed to lookup corresponding node, skipping %s", cnode)
 			}
+			c.allocationState.markClean(cnode, "node lookup skipped")
 			continue
 		}
 		logc := log.WithFields(log.Fields{"calicoNode": cnode, "k8sNode": knode})
@@ -925,19 +926,24 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 			if !canDelete {
 				// There are still valid allocations on the node.
 				logc.Infof("Can't cleanup node yet - IPs still in use on this node")
+				c.allocationState.markClean(cnode, "allocations still in use")
 				continue
 			}
 
-			// Mark the node's tunnel addresses for GC.
+			// Mark the node's tunnel addresses as confirmed leaks for GC.
 			for _, a := range tunnelAddresses {
 				a.markConfirmedLeak()
 				c.confirmedLeaks[a.id()] = a
 			}
 
-			// The node is ready have its IPAM affinities released. It exists in Calico IPAM, but
+			// The node is ready to have its IPAM affinities released. It exists in Calico IPAM, but
 			// not in the Kubernetes API. Additionally, we've checked that there are no
-			// outstanding valid allocations on the node.
+			// outstanding valid allocations on the node. Leave the node dirty — it will be
+			// marked clean by releaseNodes once cleanup succeeds.
 			nodesToRelease = append(nodesToRelease, cnode)
+		} else {
+			// Node still exists in Kubernetes, we've finished checking it.
+			c.allocationState.markClean(cnode, "node still exists in Kubernetes")
 		}
 	}
 	return nodesToRelease, nil
@@ -1023,7 +1029,7 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 			logc.Warn("Pod converted to nil WorkloadEndpoint")
 			continue
 		}
-		wep := kvp.Value.(*libapiv3.WorkloadEndpoint)
+		wep := kvp.Value.(*internalapi.WorkloadEndpoint)
 		for _, nw := range wep.Spec.IPNetworks {
 			ip, _, err := net.ParseCIDR(nw)
 			if err != nil {
@@ -1065,7 +1071,9 @@ func (c *IPAMController) syncIPAM() error {
 	log.Debug("Synchronizing IPAM data")
 
 	// Scan known allocations, determining if there are any IP address leaks
-	// or nodes that should have their block affinities released.
+	// or nodes that should have their block affinities released. Each node is
+	// individually marked clean in the dirty set as it is processed, so an early
+	// return here only leaves unprocessed nodes dirty for retry.
 	nodesToRelease, err := c.checkAllocations()
 	if err != nil {
 		return err
@@ -1087,18 +1095,15 @@ func (c *IPAMController) syncIPAM() error {
 
 	// Delete any nodes that we determined can be removed in checkAllocations. These
 	// nodes are no longer in the Kubernetes API, and have no valid allocations, so can be cleaned up entirely
-	// from Calico IPAM.
-	if err = c.releaseNodes(nodesToRelease); err != nil {
-		return err
-	}
-
-	c.allocationState.syncComplete()
+	// from Calico IPAM. Successfully released nodes are marked clean inside releaseNodes;
+	// failed nodes remain dirty and will be retried on the next sync.
+	failedNodes := c.releaseNodes(nodesToRelease)
 	log.Debug("IPAM sync completed")
 
-	// If there is still dirty state, then we need to do another pass.
-	if len(c.confirmedLeaks) > 0 {
-		log.WithField("num", len(c.confirmedLeaks)).Info("Confirmed leaks still exist, scheduling another pass")
-		kick(c.syncChan)
+	// If there is remaining work, return an error so the retry controller schedules
+	// the next sync with exponential backoff, avoiding tight-loop retries.
+	if len(failedNodes) > 0 || len(c.confirmedLeaks) > 0 {
+		return fmt.Errorf("work remaining: %d nodes, %d confirmed leaks", len(failedNodes), len(c.confirmedLeaks))
 	}
 	return nil
 }
@@ -1186,25 +1191,26 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	return nil
 }
 
-func (c *IPAMController) releaseNodes(nodes []string) error {
+// releaseNodes attempts to release IPAM affinities for the given nodes. Returns the
+// list of nodes that failed cleanup so they can be retried on the next sync.
+func (c *IPAMController) releaseNodes(nodes []string) []string {
 	if len(nodes) == 0 {
 		return nil
 	}
 
 	log.WithField("num", len(nodes)).Info("Found a batch of nodes to release")
-	var storedErr error
+	var failedNodes []string
 	for _, cnode := range nodes {
 		logc := log.WithField("node", cnode)
-
-		// Potentially rate limit node cleanup.
 		logc.Info("Cleaning up IPAM affinities for deleted node")
 		if err := c.cleanupNode(cnode); err != nil {
-			// Store the error, but continue. Storing the error ensures we'll retry.
-			logc.WithError(err).Warnf("Error cleaning up node")
-			storedErr = err
+			logc.WithError(err).Warnf("Error cleaning up node, will retry on next sync")
+			failedNodes = append(failedNodes, cnode)
+		} else {
+			c.allocationState.markClean(cnode, "node released successfully")
 		}
 	}
-	return storedErr
+	return failedNodes
 }
 
 func (c *IPAMController) cleanupNode(cnode string) error {
@@ -1217,7 +1223,6 @@ func (c *IPAMController) cleanupNode(cnode string) error {
 		Host:         cnode,
 	}
 
-	// Release the affinities for this node, requiring that the blocks are empty.
 	if err := c.client.IPAM().ReleaseHostAffinities(context.TODO(), affinityCfg, true); err != nil {
 		logc.WithError(err).Errorf("Failed to release block affinities for node")
 		return err

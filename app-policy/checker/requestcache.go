@@ -16,6 +16,7 @@ package checker
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"sync"
 
@@ -116,9 +117,7 @@ func (r *requestCache) initNamespace(name string) *namespace {
 	msg, ok := r.store.NamespaceByID[types.ProtoToNamespaceID(&id)]
 	if ok {
 		ns.Labels = make(map[string]string)
-		for k, v := range msg.GetLabels() {
-			ns.Labels[k] = v
-		}
+		maps.Copy(ns.Labels, msg.GetLabels())
 	}
 	return ns
 }
@@ -132,15 +131,11 @@ func (r *requestCache) initPeer(principal string, labels map[string]string) *pee
 		return nil
 	}
 	peer.Labels = make(map[string]string)
-	for k, v := range labels {
-		peer.Labels[k] = v
-	}
+	maps.Copy(peer.Labels, labels)
 	id := proto.ServiceAccountID{Name: peer.Name, Namespace: peer.Namespace}
 	msg, ok := r.store.ServiceAccountByID[types.ProtoToServiceAccountID(&id)]
 	if ok {
-		for k, v := range msg.GetLabels() {
-			peer.Labels[k] = v
-		}
+		maps.Copy(peer.Labels, msg.GetLabels())
 	}
 	return &peer
 }

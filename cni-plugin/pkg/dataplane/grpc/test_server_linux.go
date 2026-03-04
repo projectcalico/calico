@@ -35,7 +35,7 @@ type TestServer struct {
 
 	retval   bool
 	contMac  string
-	Received chan interface{}
+	Received chan any
 
 	lis        net.Listener
 	grpcServer *grpc.Server
@@ -111,7 +111,7 @@ func StartTestServer(socket string, retval bool, contMac string) (s *TestServer,
 	s = &TestServer{
 		retval:     retval,
 		contMac:    contMac,
-		Received:   make(chan interface{}, 1),
+		Received:   make(chan any, 1),
 		grpcServer: grpc.NewServer(),
 	}
 

@@ -151,7 +151,7 @@ echo "Wait for Calico to be ready on Linux nodes..."
 timeout --foreground 300 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Linux nodes"
 
-if [[ ${CALICO_LINUX_DATAPLANE} == 'BPF' ]]; then
+if [[ ${ASO_LINUX_DATAPLANE} == 'BPF' ]]; then
     echo "Disabling kube-proxy since Calico is running on the BPF dataplane"
     ${KUBECTL} patch ds -n kube-system kube-proxy -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": "true"}}}}}'
 fi

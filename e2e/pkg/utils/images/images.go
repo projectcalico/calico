@@ -26,6 +26,7 @@ const (
 	TestWebserver = "gcr.io/kubernetes-e2e-test-images/test-webserver:1.0"
 	Agnhost       = "registry.k8s.io/e2e-test-images/agnhost:2.47"
 	RapidClient   = "quay.io/tigeradev/rapidclient"
+	Iperf3        = "docker.io/networkstatic/iperf3:latest"
 )
 
 // Get client image and powershell command based on windows OS version

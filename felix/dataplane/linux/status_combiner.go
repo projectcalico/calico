@@ -25,35 +25,35 @@ import (
 // endpointStatusCombiner combines the status reports of endpoints from the IPv4 and IPv6
 // endpoint managers.  Where conflicts occur, it reports the "worse" status.
 type endpointStatusCombiner struct {
-	ipVersionToStatuses map[uint8]map[interface{}]string
+	ipVersionToStatuses map[uint8]map[any]string
 	dirtyIDs            set.Set[any] /* FIXME HEP or WEP ID */
-	fromDataplane       chan interface{}
+	fromDataplane       chan any
 	activeWlEndpoints   map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 }
 
-func newEndpointStatusCombiner(fromDataplane chan interface{}, ipv6Enabled bool) *endpointStatusCombiner {
+func newEndpointStatusCombiner(fromDataplane chan any, ipv6Enabled bool) *endpointStatusCombiner {
 	e := &endpointStatusCombiner{
-		ipVersionToStatuses: map[uint8]map[interface{}]string{},
+		ipVersionToStatuses: map[uint8]map[any]string{},
 		dirtyIDs:            set.New[any](),
 		fromDataplane:       fromDataplane,
 		activeWlEndpoints:   map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 	}
 
 	// IPv4 is always enabled.
-	e.ipVersionToStatuses[4] = map[interface{}]string{}
+	e.ipVersionToStatuses[4] = map[any]string{}
 	if ipv6Enabled {
 		// If IPv6 is enabled, track the IPv6 state too.  We use the presence of this
 		// extra map to trigger merging.
-		e.ipVersionToStatuses[6] = map[interface{}]string{}
+		e.ipVersionToStatuses[6] = map[any]string{}
 	}
 	return e
 }
 
 func (e *endpointStatusCombiner) OnEndpointStatusUpdate(
 	ipVersion uint8,
-	id interface{}, // types.HostEndpointID or types.WorkloadEndpointID
+	id any, // types.HostEndpointID or types.WorkloadEndpointID
 	status string,
-	extraInfo interface{}, // WorkloadEndpoint or nil
+	extraInfo any, // WorkloadEndpoint or nil
 ) {
 	log.WithFields(log.Fields{
 		"ipVersion": ipVersion,

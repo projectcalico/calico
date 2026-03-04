@@ -18,9 +18,10 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -33,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/ptr"
 )
 
-func log(format string, a ...interface{}) {
+func log(format string, a ...any) {
 	fmt.Fprintf(GinkgoWriter, format, a...)
 }
 
@@ -712,14 +713,14 @@ func (s *mockSyncer) checkState(f func(proxy.DPSyncerState)) {
 		case <-tickC:
 			_, file, line, _ := runtime.Caller(1)
 
-			var msg string
+			var msg strings.Builder
 			for _, f := range fails {
-				msg += "\n" + f
+				msg.WriteString("\n" + f)
 			}
 
 			Fail(fmt.Sprintf(
 				"checkState timed out at File: %s Line: %d, last failed expectations: %s",
-				file, line, msg,
+				file, line, msg.String(),
 			))
 		}
 	}

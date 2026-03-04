@@ -25,6 +25,8 @@ global_job_config:
       value: calico-transient-build-artifacts-europe-west3
     - name: BUILDKIT_PROGRESS
       value: plain
+    - name: SEMAPHORE_AGENT_UPLOAD_JOB_LOGS
+      value: when-trimmed
   prologue:
     commands:
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
@@ -266,6 +268,7 @@ blocks:
             - name: STORE_BUILD_CACHE
               value: "true"
           commands:
+            - make check-ginkgo-v2
             - make check-go-mod
             - make verify-go-mods
             - make gen-deps-files
@@ -540,19 +543,6 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-  - name: Crypto
-    run:
-      when: "true"
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - cd crypto
-      jobs:
-        - name: "Crypto: CI"
-          commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
   - name: E2E script & pipeline validations
     run:
       when: "true or change_in(['/.semaphore/end-to-end/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -673,6 +663,8 @@ blocks:
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
       jobs:
         - name: "Felix: Build and cache FV prerequisites"
           priority:
@@ -718,6 +710,7 @@ blocks:
       epilogue:
         always:
           commands:
+            - ./.semaphore/analyze-test-failures --ut || true
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "Felix: multi-arch build"
     run:
@@ -833,6 +826,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: nftables tests on Ubuntu 22.04"
     run:
       when: "true"
@@ -856,6 +851,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
     run:
       when: "true"
@@ -879,6 +876,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
     run:
       when: "true"
@@ -906,6 +905,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: BPF program-loading check on 25.10 (nftables)"
     run:
       when: "true"
@@ -932,6 +933,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
     run:
       when: "true"
@@ -959,6 +962,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: Goldmane
     run:
       when: "true"
@@ -1042,6 +1047,15 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+        # Run a subset of the kube-controllers CI tests that use the projectcalico.org/v3 API group for CRDs.
+        - name: "kube-controllers: CI (projectcalico.org/v3)"
+          commands:
+            - ../.semaphore/run-and-monitor ut.log make image ut
+          env_vars:
+            - name: CALICO_API_GROUP
+              value: "projectcalico.org/v3"
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: Libraries (lib)
     run:
       when: "true or change_in(['/lib/'], {pipeline_file: 'ignore'})"
@@ -1070,12 +1084,23 @@ blocks:
         commands:
           - cd libcalico-go
       jobs:
-        - name: "libcalico-go: CI"
+        # Run the tests twice, once for each backing API version.
+        - name: "libcalico-go: CI (crd.projectcalico.org/v1)"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+        - name: "libcalico-go: CI (projectcalico.org/v3)"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
+            - name: CALICO_API_GROUP
+              value: projectcalico.org/v3
+            - name: GINKGO_SKIP
+              value: "etcdv3 backend"
   - name: "Node: Build"
     run:
       when: "true"
@@ -1243,6 +1268,25 @@ blocks:
         always:
           commands:
             - 'test-results publish --ignore-missing ./report/*.xml ../felix/report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Typha" || true'
+  - name: webhooks
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "webhooks"
+      prologue:
+        commands:
+          - cd webhooks
+      jobs:
+        - name: "webhooks: CI"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
   - name: Whisker backend
     run:
       when: "true"

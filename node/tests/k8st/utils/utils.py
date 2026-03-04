@@ -212,6 +212,8 @@ def run(command, logerr=True, allow_fail=False, allow_codes=[], returnerr=False)
 
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = process.communicate()
+    out = out.decode()
+    err = err.decode()
     _log.info("Out:\n%s", out)
     _log.info("Err:\n%s", err)
 

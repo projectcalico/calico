@@ -140,6 +140,7 @@ for batch in "${batches[@]}"; do
   vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
   batch_formatted="$(format_batch_for_log "$batch")"
   log_file="$artifacts_dir/test-$batch_formatted.log"
+  failed_log_file="$artifacts_dir/test-$batch_formatted-FAILED.log"
   ssh_cmd=( env "VM_NAME=$vm_name" "ZONE=$zone" "$my_dir/on-test-vm" )
   prefix="[batch=${batch}]"
   touch "$log_file"
@@ -164,7 +165,15 @@ for batch in "${batches[@]}"; do
     if [ $rc = 0 ]; then
       echo "$prefix Test batch $batch SUCCEEDED."
     else
-      echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $log_file."
+      mv "$log_file" "$failed_log_file"
+      echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $failed_log_file."
+      if [ -n "${GCS_WORKFLOW_DIR:-}" ] && [ -n "${COMPONENT:-}" ]; then
+        failed_log_upload_dir="${GCS_WORKFLOW_DIR}/${COMPONENT}/failed-fv-logs"
+        if [ -n "${JOB_TAG:-}" ]; then
+          failed_log_upload_dir="${failed_log_upload_dir}/${JOB_TAG}"
+        fi
+        gcloud storage cp "$failed_log_file" "${failed_log_upload_dir}/" || true
+      fi
     fi
 
     collect_log_file="$artifacts_dir/collect-artifacts-$batch_formatted.log"
@@ -195,7 +204,7 @@ for batch in "${batches[@]}"; do
   (
     # Redirect tail's stdin from /dev/null to prevent waiting
     # forever on reads in semaphore CI
-    tail -F "$log_file" < /dev/null | \
+    tail -f --retry "$log_file" < /dev/null | \
       grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
       sed 's/.*/'"${prefix}"' &/' | \
       grep --perl --line-buffered -v '^\[batch=[^\]]+\]\s+$';
@@ -219,7 +228,12 @@ for i in "${!batches[@]}"; do
   if wait "$pid"; then
     summary+=( "Test batch $batch SUCCEEDED" )
   else
-    summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact ${log_files[$i]}" )
+    batch_formatted="$(format_batch_for_log "$batch")"
+    failed_summary_log="$artifacts_dir/test-$batch_formatted-FAILED.log"
+    if [ ! -f "$failed_summary_log" ] && [ -f "$artifacts_dir/test-$batch_formatted.log" ]; then
+      failed_summary_log="$artifacts_dir/test-$batch_formatted.log"
+    fi
+    summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact $failed_summary_log" )
     final_result=1
   fi
 done

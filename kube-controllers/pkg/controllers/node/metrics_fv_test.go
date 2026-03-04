@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
@@ -729,7 +729,7 @@ func deletePodWithIP(pod string, ip string, k8sClient *kubernetes.Clientset, cal
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 
-func validateExpectedAndUnexpectedMetrics(expectedMetrics []string, notExpectedMetrics []string, host string, intervals ...interface{}) {
+func validateExpectedAndUnexpectedMetrics(expectedMetrics []string, notExpectedMetrics []string, host string, intervals ...any) {
 	EventuallyWithOffset(1, func() error {
 		out, err := getMetrics(fmt.Sprintf("http://%s:9094/metrics", host))
 		Expect(err).NotTo(HaveOccurred())

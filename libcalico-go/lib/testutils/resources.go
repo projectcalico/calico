@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -37,15 +37,15 @@ const ExpectNoNamespace = ""
 
 type resourceMatcher struct {
 	kind, namespace, name string
-	spec                  interface{}
-	status                interface{}
+	spec                  any
+	status                any
 }
 
-func Resource(kind, namespace, name string, spec interface{}, optionalDescription ...interface{}) *resourceMatcher {
+func Resource(kind, namespace, name string, spec any, optionalDescription ...any) *resourceMatcher {
 	return &resourceMatcher{kind, namespace, name, spec, nil}
 }
 
-func ResourceWithStatus(kind, namespace, name string, spec, status interface{}, optionalDescription ...interface{}) *resourceMatcher {
+func ResourceWithStatus(kind, namespace, name string, spec, status any, optionalDescription ...any) *resourceMatcher {
 	return &resourceMatcher{kind, namespace, name, spec, status}
 }
 
@@ -55,7 +55,7 @@ var (
 	MatchResourceWithStatus = ResourceWithStatus
 )
 
-func (m *resourceMatcher) Match(actual interface{}) (success bool, err error) {
+func (m *resourceMatcher) Match(actual any) (success bool, err error) {
 	// 'actual' here may be a resource struct like v3.HostEndpoint, or a pointer to a resource
 	// struct.  If it's a pointer we can immediately convert it to runtime.Object.
 	res, ok := actual.(runtime.Object)
@@ -103,12 +103,12 @@ func (m *resourceMatcher) Match(actual interface{}) (success bool, err error) {
 	return
 }
 
-func (m *resourceMatcher) FailureMessage(actual interface{}) (message string) {
+func (m *resourceMatcher) FailureMessage(actual any) (message string) {
 	message = fmt.Sprintf("Expected\n\t%#v\nto match\n\t%#v", actual, m)
 	return
 }
 
-func (m *resourceMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (m *resourceMatcher) NegatedFailureMessage(actual any) (message string) {
 	message = fmt.Sprintf("Expected\n\t%#v\nnot to match\n\t%#v", actual, m)
 	return
 }
@@ -381,7 +381,7 @@ func (t *testResourceWatcher) sortEvents(events []watch.Event) []watch.Event {
 }
 
 // getSpec returns the Spec structure from the supplied resource.
-func getSpec(res runtime.Object) interface{} {
+func getSpec(res runtime.Object) any {
 	v, err := conversion.EnforcePtr(res)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -393,7 +393,7 @@ func getSpec(res runtime.Object) interface{} {
 }
 
 // getStatus returns the Status structure from the supplied resource.
-func getStatus(res runtime.Object) interface{} {
+func getStatus(res runtime.Object) any {
 	v, err := conversion.EnforcePtr(res)
 	Expect(err).NotTo(HaveOccurred())
 

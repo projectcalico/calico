@@ -27,7 +27,7 @@ import (
 
 var (
 	matchProfile = regexp.MustCompile("^/?calico/v1/policy/profile/([^/]+)/(rules|labels)$")
-	typeProfile  = reflect.TypeOf(Profile{})
+	typeProfile  = reflect.TypeFor[Profile]()
 )
 
 // The profile key actually returns the common parent of the three separate entries.
@@ -76,7 +76,7 @@ func (key ProfileRulesKey) defaultPath() (string, error) {
 }
 
 func (key ProfileRulesKey) valueType() (reflect.Type, error) {
-	return reflect.TypeOf(ProfileRules{}), nil
+	return reflect.TypeFor[ProfileRules](), nil
 }
 
 func (key ProfileRulesKey) parseValue(rawData []byte) (any, error) {
@@ -98,7 +98,7 @@ func (key ProfileLabelsKey) defaultPath() (string, error) {
 }
 
 func (key ProfileLabelsKey) valueType() (reflect.Type, error) {
-	return reflect.TypeOf(map[string]string{}), nil
+	return reflect.TypeFor[map[string]string](), nil
 }
 
 func (key ProfileLabelsKey) parseValue(rawData []byte) (any, error) {

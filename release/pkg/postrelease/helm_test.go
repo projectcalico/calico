@@ -57,7 +57,6 @@ func TestHelmChart(t *testing.T) {
 		t.Parallel()
 
 		for _, reg := range registry.DefaultHelmRegistries {
-			reg := reg
 			t.Run(reg, func(t *testing.T) {
 				t.Parallel()
 

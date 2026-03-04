@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# Turn off the annoying ginkgo warning.
-# TODO: We should actually upgrade ginkgo!
-export ACK_GINKGO_RC=true
-
 if [ -z "$1" ]; then
 	echo "No packages need to be tested"
 	exit 0

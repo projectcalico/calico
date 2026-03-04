@@ -29,8 +29,8 @@ func NewNetworkSetClient(r rest.Interface, group BackingAPIGroup) K8sResourceCli
 	return &customResourceClient{
 		restClient:      r,
 		resource:        NetworkSetResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.NetworkSet{}),
-		k8sListType:     reflect.TypeOf(apiv3.NetworkSetList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.NetworkSet](),
+		k8sListType:     reflect.TypeFor[apiv3.NetworkSetList](),
 		kind:            apiv3.KindNetworkSet,
 		namespaced:      true,
 		apiGroup:        group,

@@ -1,16 +1,16 @@
-# This MutatingAdmissionPolicy performs defaulting for Calico policy types.
+# This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingAdmissionPolicy
 metadata:
-  name: "policy.projectcalico.org"
+  name: "policytypes.policy.projectcalico.org"
 spec:
   paramKind:
     kind: NetworkPolicy
     apiVersion: projectcalico.org/v3
   matchConditions:
-    # Apply this mutation only if the 'types' field is missing.
+    # Apply this mutation only if the 'types' field is missing (or policyTypes for stagednetworkpolicies).
     - name: missing-types
-      expression: "!has(object.spec.types)"
+      expression: "!has(object.spec.types) && !has(object.spec.policyTypes)"
   matchConstraints:
     resourceRules:
       - apiGroups: ["projectcalico.org"]
@@ -53,7 +53,6 @@ spec:
           [
             JSONPatch{
               op: "add",
-              path: "/spec/types",
               path: object.kind == "StagedKubernetesNetworkPolicy" ? "/spec/policyTypes" : "/spec/types",
               value: object.kind == "StagedKubernetesNetworkPolicy" ? variables.defaultKubeTypes : variables.defaultTypes
             }

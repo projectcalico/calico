@@ -17,9 +17,8 @@ package routetable_test
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -28,8 +27,9 @@ func init() {
 	testutils.HookLogrusForGinkgo()
 }
 
-func TestRouteTable(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/felix_routetable_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/routetable", []Reporter{junitReporter})
+func TestRules(t *testing.T) {
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/felix_routetable_suite.xml"
+	ginkgo.RunSpecs(t, "UT: felix/routetable", suiteConfig, reporterConfig)
 }

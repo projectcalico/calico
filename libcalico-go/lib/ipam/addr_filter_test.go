@@ -52,7 +52,6 @@ var cidrFilterTests = []struct {
 
 func TestCIDRSliceFilter_Matches(t *testing.T) {
 	for _, test := range cidrFilterTests {
-		test := test
 		t.Run(fmt.Sprintf("filter_%s", strings.Join(test.FilterCIDRs, ",")), func(t *testing.T) {
 			var filter cidrSliceFilter
 			for _, cidr := range test.FilterCIDRs {
@@ -118,7 +117,6 @@ func TestCIDRSliceFilter_filterOutDuplicates(t *testing.T) {
 			Expected: []string{"10.0.0.0/24", "11.0.0.0/8"},
 		},
 	} {
-		test := test
 		t.Run(fmt.Sprintf("filterOutDuplicates_%s", strings.Join(test.CIDRs, ",")), func(t *testing.T) {
 			RegisterTestingT(t)
 			var filter cidrSliceFilter

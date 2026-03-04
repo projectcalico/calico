@@ -37,6 +37,7 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 		--net=host \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
@@ -63,7 +64,10 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
 	# Patch in manual tweaks to the generated CRDs.
+	# - Add nullable to IPAM block allocations field to allow null values in the allocations array.
+	# - Remove the profiles CRD. Profiles are backed by Namespaces in Kubernetes and the CRD is not needed.
 	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
+	rm -f config/crd/projectcalico.org_profiles.yaml
 
 	# Generate defaults
 	$(DOCKER_RUN) $(CALICO_BUILD) \

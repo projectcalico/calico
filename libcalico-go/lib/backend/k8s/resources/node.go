@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -90,7 +90,7 @@ func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
 
-	node, err := mergeCalicoNodeIntoK8sNode(kvp.Value.(*libapiv3.Node), oldNode)
+	node, err := mergeCalicoNodeIntoK8sNode(kvp.Value.(*internalapi.Node), oldNode)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +200,7 @@ func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, option
 // K8sNodeToCalico converts a Kubernetes format node, with Calico annotations, to a Calico Node.
 func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, error) {
 	// Create a new CalicoNode resource and copy the settings across from the k8s Node.
-	calicoNode := libapiv3.NewNode()
+	calicoNode := internalapi.NewNode()
 	calicoNode.ObjectMeta.Name = k8sNode.Name
 	SetCalicoMetadataFromK8sAnnotations(calicoNode, k8sNode)
 
@@ -212,7 +212,7 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	}
 
 	// Extract the BGP configuration stored in the annotations.
-	bgpSpec := &libapiv3.NodeBGPSpec{}
+	bgpSpec := &internalapi.NodeBGPSpec{}
 	annotations := k8sNode.ObjectMeta.Annotations
 	bgpSpec.IPv4Address = getAnnotation(k8sNode, nodeBgpIpv4AddrAnnotation, validatorv3.ValidateCIDRv4)
 	bgpSpec.IPv6Address = getAnnotation(k8sNode, nodeBgpIpv6AddrAnnotation, validatorv3.ValidateCIDRv6)
@@ -229,10 +229,10 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	}
 
 	// Initialize the wireguard spec. We'll include it if it contains non-zero data.
-	wireguardSpec := &libapiv3.NodeWireguardSpec{}
+	wireguardSpec := &internalapi.NodeWireguardSpec{}
 
 	// Add in an orchestrator reference back to the Kubernetes node name.
-	calicoNode.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: k8sNode.Name, Orchestrator: apiv3.OrchestratorKubernetes}}
+	calicoNode.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: k8sNode.Name, Orchestrator: apiv3.OrchestratorKubernetes}}
 
 	// If using host-local IPAM, assign an IPIP and wireguard tunnel address statically. They can both have the same IP.
 	if usePodCIDR && k8sNode.Spec.PodCIDR != "" {
@@ -256,12 +256,12 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	}
 
 	// Only set the BGP spec if it is not empty.
-	if !reflect.DeepEqual(*bgpSpec, libapiv3.NodeBGPSpec{}) {
+	if !reflect.DeepEqual(*bgpSpec, internalapi.NodeBGPSpec{}) {
 		calicoNode.Spec.BGP = bgpSpec
 	}
 
 	// Only set the Wireguard spec if it is not empty.
-	if !reflect.DeepEqual(*wireguardSpec, libapiv3.NodeWireguardSpec{}) {
+	if !reflect.DeepEqual(*wireguardSpec, internalapi.NodeWireguardSpec{}) {
 		calicoNode.Spec.Wireguard = wireguardSpec
 	}
 
@@ -272,10 +272,10 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	calicoNode.Spec.VXLANTunnelMACAddrV6 = getAnnotation(k8sNode, nodeBgpVXLANTunnelMACAddrV6Annotation, validatorv3.ValidateMAC)
 
 	// Set the node status
-	nodeStatus := libapiv3.NodeStatus{}
+	nodeStatus := internalapi.NodeStatus{}
 	nodeStatus.WireguardPublicKey = annotations[nodeWireguardPublicKeyAnnotation]
 	nodeStatus.WireguardPublicKeyV6 = annotations[nodeWireguardPublicKeyV6Annotation]
-	if !reflect.DeepEqual(nodeStatus, libapiv3.NodeStatus{}) {
+	if !reflect.DeepEqual(nodeStatus, internalapi.NodeStatus{}) {
 		calicoNode.Status = nodeStatus
 	}
 
@@ -297,38 +297,38 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: k8sNode.Name,
-			Kind: libapiv3.KindNode,
+			Kind: internalapi.KindNode,
 		},
 		Value:    calicoNode,
 		Revision: k8sNode.ObjectMeta.ResourceVersion,
 	}, nil
 }
 
-func fillAllAddresses(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
+func fillAllAddresses(calicoNode *internalapi.Node, k8sNode *kapiv1.Node) {
 	if bgp := calicoNode.Spec.BGP; bgp != nil {
 		if addr := bgp.IPv4Address; addr != "" {
-			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, libapiv3.NodeAddress{Address: addr, Type: libapiv3.CalicoNodeIP})
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, internalapi.NodeAddress{Address: addr, Type: internalapi.CalicoNodeIP})
 		}
 		if addr := bgp.IPv6Address; addr != "" {
-			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, libapiv3.NodeAddress{Address: addr, Type: libapiv3.CalicoNodeIP})
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, internalapi.NodeAddress{Address: addr, Type: internalapi.CalicoNodeIP})
 		}
 	}
 
 	for _, kaddr := range k8sNode.Status.Addresses {
 		switch kaddr.Type {
 		case kapiv1.NodeInternalIP:
-			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, libapiv3.NodeAddress{Address: kaddr.Address, Type: libapiv3.InternalIP})
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, internalapi.NodeAddress{Address: kaddr.Address, Type: internalapi.InternalIP})
 		case kapiv1.NodeExternalIP:
-			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, libapiv3.NodeAddress{Address: kaddr.Address, Type: libapiv3.ExternalIP})
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, internalapi.NodeAddress{Address: kaddr.Address, Type: internalapi.ExternalIP})
 		default:
 			continue
 		}
 	}
 }
 
-func fillAllInterfaces(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
+func fillAllInterfaces(calicoNode *internalapi.Node, k8sNode *kapiv1.Node) {
 	annotations := k8sNode.ObjectMeta.Annotations
-	interfaces := []libapiv3.NodeInterface{}
+	interfaces := []internalapi.NodeInterface{}
 	if _, ok := annotations[nodeInterfacesAnnotation]; !ok {
 		// The annotation is not present, so we don't have any interfaces to fill.
 		return
@@ -353,7 +353,7 @@ func fillAllInterfaces(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
 
 // mergeCalicoNodeIntoK8sNode takes a k8s node and a Calico node and puts the values from the Calico
 // node into the k8s node.
-func mergeCalicoNodeIntoK8sNode(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) (*kapiv1.Node, error) {
+func mergeCalicoNodeIntoK8sNode(calicoNode *internalapi.Node, k8sNode *kapiv1.Node) (*kapiv1.Node, error) {
 	// Nodes inherit labels from Kubernetes, but we also have our own set of labels that are stored in an annotation.
 	// For nodes that are being updated, we want to avoid writing k8s labels that we inherited into our annotation
 	// and we don't want to touch the k8s labels directly.  Take a copy of the node resource and update its labels
@@ -485,7 +485,7 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node)
 //
 // Note: if a Kubernetes label shadows a Calico label, the Calico label will be lost when the resource is written
 // back to the datastore.  This is consistent with kube-controllers' behavior.
-func mergeCalicoAndK8sLabels(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) error {
+func mergeCalicoAndK8sLabels(calicoNode *internalapi.Node, k8sNode *kapiv1.Node) error {
 	// Now, copy the Kubernetes Node labels over.  Note: this may overwrite Calico labels of the same name, but that's
 	// consistent with the kube-controllers behavior.
 	for k, v := range k8sNode.Labels {
@@ -511,7 +511,7 @@ func mergeCalicoAndK8sLabels(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) er
 
 // restoreCalicoLabels tries to undo the transformation done by mergeCalicoLabels.  If no changes are needed, it
 // returns the input value; otherwise, it returns a copy.
-func restoreCalicoLabels(calicoNode *libapiv3.Node) (*libapiv3.Node, error) {
+func restoreCalicoLabels(calicoNode *internalapi.Node) (*internalapi.Node, error) {
 	rawLabels := calicoNode.Annotations[nodeK8sLabelAnnotation]
 	if rawLabels == "" {
 		return calicoNode, nil

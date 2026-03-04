@@ -17,3 +17,13 @@
         env_vars:
           - name: STORE_BUILD_CACHE
             value: "true"
+
+      # Run a subset of the kube-controllers CI tests that use the projectcalico.org/v3 API group for CRDs.
+      - name: "kube-controllers: CI (projectcalico.org/v3)"
+        commands:
+          - ../.semaphore/run-and-monitor ut.log make image ut
+        env_vars:
+          - name: CALICO_API_GROUP
+            value: "projectcalico.org/v3"
+          - name: STORE_BUILD_CACHE
+            value: "true"

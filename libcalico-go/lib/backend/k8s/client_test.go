@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,7 +43,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -65,6 +66,7 @@ var (
 	calicoAllowPolicyModelSpec = apiv3.GlobalNetworkPolicySpec{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 		Ingress: []apiv3.Rule{
 			{
 				Action: "Allow",
@@ -79,6 +81,7 @@ var (
 	calicoDisallowPolicyModelSpec = apiv3.GlobalNetworkPolicySpec{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 		Ingress: []apiv3.Rule{
 			{
 				Action: "Deny",
@@ -95,6 +98,7 @@ var (
 	calicoAllowPolicyModelV1 = model.Policy{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []string{"ingress", "egress"},
 		InboundRules: []model.Rule{
 			{
 				Action: "allow",
@@ -109,6 +113,7 @@ var (
 	calicoDisallowPolicyModelV1 = model.Policy{
 		Tier:  "default",
 		Order: &zeroOrder,
+		Types: []string{"ingress", "egress"},
 		InboundRules: []model.Rule{
 			{
 				Action: "deny",
@@ -137,7 +142,7 @@ var (
 
 	// Use a back-off set of intervals for testing deletion of a namespace
 	// which can sometimes be slow.
-	slowCheck = []interface{}{
+	slowCheck = []any{
 		60 * time.Second,
 		1 * time.Second,
 	}
@@ -308,8 +313,8 @@ func expectEventOfType(events <-chan api.WatchEvent, type_ api.WatchEventType) *
 //
 // The returned function returns the cached entry or nil if the entry does not
 // exist in the cache.
-func (c *cb) GetSyncerValueFunc(key model.Key) func() interface{} {
-	return func() interface{} {
+func (c *cb) GetSyncerValueFunc(key model.Key) func() any {
+	return func() any {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
 		defer c.Lock.Unlock()
@@ -327,8 +332,8 @@ func (c *cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 // the Value may itself by nil.
 //
 // The returned function returns true if the entry is present.
-func (c *cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
-	return func() interface{} {
+func (c *cb) GetSyncerValuePresentFunc(key model.Key) func() any {
+	return func() any {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
 		defer c.Lock.Unlock()
@@ -367,6 +372,7 @@ func CreateClientAndSyncer(cfg apiconfig.KubeConfig) (*KubeClient, *cb, api.Sync
 var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
 		c   *KubeClient
+		cs  *kubernetes.Clientset
 		cli ctrlclient.Client
 		ctx context.Context
 	)
@@ -379,10 +385,10 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		var err error
 		c, _, _ = CreateClientAndSyncer(cfg.Spec.KubeConfig)
 
-		// Create a controller-runtime client.
-		// Create a client for interacting with CRDs directly.
-		config, _, err := CreateKubernetesClientset(&cfg.Spec)
+		// Create a controller-runtime client for interacting with CRDs directly.
+		config, clientset, err := CreateKubernetesClientset(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
+		cs = clientset
 
 		// The CRD client needs to be configured with the correct scheme based on the
 		// API version of the underlying CRDs.
@@ -393,9 +399,50 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 	})
 
 	It("should properly read / write owner references", func() {
-		podUID := types.UID("3b5bff7a-501d-429f-b581-8954440883f4")
-		npUID := types.UID("19e9c0f4-501d-429f-b581-8954440883f4")
-		npUIDv1, err := conversion.ConvertUID(npUID)
+		// Create owner objects so the Kubernetes garbage collector doesn't delete the
+		// dependent NetworkPolicy. With v3 CRDs, owner references are stored as real
+		// Kubernetes ownerReferences (not in an annotation), so the GC will act on them
+		// and delete the NetworkPolicy if the owners don't exist.
+		pod, err := cs.CoreV1().Pods("default").Create(ctx, &k8sapi.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-owner-ref-pod",
+			},
+			Spec: k8sapi.PodSpec{
+				Containers: []k8sapi.Container{
+					{Name: "pause", Image: "busybox", Command: []string{"sleep", "infinity"}},
+				},
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			_ = cs.CoreV1().Pods("default").Delete(ctx, pod.Name, metav1.DeleteOptions{})
+		}()
+		podUID := pod.UID
+
+		nsKVP := model.KVPair{
+			Key: model.ResourceKey{
+				Name:      "test-owner-ref-networkset",
+				Namespace: "default",
+				Kind:      apiv3.KindNetworkSet,
+			},
+			Value: &apiv3.NetworkSet{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindNetworkSet,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-owner-ref-networkset",
+					Namespace: "default",
+				},
+			},
+		}
+		nsResult, err := c.Create(ctx, &nsKVP)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			_, _ = c.Delete(ctx, nsKVP.Key, "")
+		}()
+		nsUID := nsResult.Value.(*apiv3.NetworkSet).UID
+		nsUIDv1, err := conversion.ConvertUID(nsUID)
 		Expect(err).NotTo(HaveOccurred())
 
 		name := "test-owner-ref-policy"
@@ -426,7 +473,7 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 							APIVersion: apiv3.GroupVersionCurrent,
 							Kind:       apiv3.KindNetworkSet,
 							Name:       "test-owner-ref-networkset",
-							UID:        npUID,
+							UID:        nsUID,
 						},
 					},
 				},
@@ -441,12 +488,13 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		Expect(kvp2.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences).To(Equal(kvp.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences))
 
 		// Query the underlying custom resource and check that the UID is as expected.
-		// The Pod UID should be unchanged, but the NetworkPolicy UID behavior varies based on API group:
+		// The Pod UID should be unchanged, but the NetworkSet UID behavior varies based on API group:
 		// - crd.projectcalico.org: UID belonging to the Calico resource has been translated.
 		// - projectcalico.org/v3: UID belonging to the Calico resource is unchanged.
 		crd := &apiv3.NetworkPolicy{}
-		err = cli.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, crd)
-		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() error {
+			return cli.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, crd)
+		}, "5s", "100ms").ShouldNot(HaveOccurred())
 
 		var meta metav1.ObjectMeta
 		if v3CRD {
@@ -466,11 +514,11 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 
 		if v3CRD {
 			// UID should be unchanged if we're in v3 CRD mode.
-			Expect(meta.OwnerReferences[1].UID).To(Equal(npUID))
+			Expect(meta.OwnerReferences[1].UID).To(Equal(nsUID))
 			Expect(meta.OwnerReferences[1].APIVersion).To(Equal("projectcalico.org/v3"))
 		} else {
-			// Compare the OwnerReferences. pod UID should be unchanged, but np UID should be translated.
-			Expect(meta.OwnerReferences[1].UID).To(Equal(npUIDv1))
+			// Compare the OwnerReferences. pod UID should be unchanged, but NetworkSet UID should be translated.
+			Expect(meta.OwnerReferences[1].UID).To(Equal(nsUIDv1))
 			Expect(meta.OwnerReferences[1].APIVersion).To(Equal("crd.projectcalico.org/v1"))
 		}
 	})
@@ -672,7 +720,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 	It("should handle the static default-allow Profile", func() {
 		findAllowAllProfileEvent := func(c <-chan api.WatchEvent) bool {
 			found := false
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				select {
 				case e := <-c:
 					if e.Type == api.WatchAdded &&
@@ -1290,6 +1338,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Tier:         "default",
 			StagedAction: apiv3.StagedActionSet,
 			Order:        &zeroOrder,
+			Types:        []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 			Ingress: []apiv3.Rule{
 				{
 					Action: "Allow",
@@ -1305,6 +1354,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Tier:         "default",
 			StagedAction: apiv3.StagedActionSet,
 			Order:        &zeroOrder,
+			Types:        []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 			Ingress: []apiv3.Rule{
 				{
 					Action: "Deny",
@@ -1590,7 +1640,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
-			vals := []interface{}{}
+			vals := []any{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
 				vals = append(vals, k.Value.(*apiv3.HostEndpoint).Spec)
@@ -1741,7 +1791,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
-			vals := []interface{}{}
+			vals := []any{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
 				vals = append(vals, k.Value.(*apiv3.NetworkSet).Spec)
@@ -1912,7 +1962,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
-			vals := []interface{}{}
+			vals := []any{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
 				vals = append(vals, k.Value.(*apiv3.BGPPeer).Spec)
@@ -1948,7 +1998,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		var nodename, peername1, peername2 string
 
 		By("Listing all Nodes to find a suitable Node name", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			// Get the hostname so we can make a Get call
 			kvp := *nodes.KVPairs[0]
@@ -2105,7 +2155,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
-			vals := []interface{}{}
+			vals := []any{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
 				vals = append(vals, k.Value.(*apiv3.BGPPeer).Spec)
@@ -2176,7 +2226,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Waiting for the pod to start", func() {
 			// Wait up to 120s for pod to start running.
 			log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
-			for i := 0; i < 120; i++ {
+			for range 120 {
 				p, err := c.ClientSet.CoreV1().Pods("default").Get(ctx, pod.ObjectMeta.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				if p.Status.Phase == k8sapi.PodRunning {
@@ -2207,23 +2257,23 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Performing a List() operation", func() {
 			// Perform List and ensure it shows up in the Calico API.
-			weps, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, "")
+			weps, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(weps.KVPairs)).To(BeNumerically(">", 0))
 		})
 
 		By("Performing a List(Name=wepName) operation", func() {
 			// Perform List, including a workload Name
-			weps, err := c.List(ctx, model.ResourceListOptions{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			weps, err := c.List(ctx, model.ResourceListOptions{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(weps.KVPairs)).To(Equal(1))
 		})
 
 		By("Performing a Get() operation then updating the wep", func() {
 			// Perform a Get and ensure no error in the Calico API.
-			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
-			fmt.Printf("Updating Wep %+v\n", wep.Value.(*libapiv3.WorkloadEndpoint).Spec)
+			fmt.Printf("Updating Wep %+v\n", wep.Value.(*internalapi.WorkloadEndpoint).Spec)
 			ctxCNI := resources.ContextWithPatchMode(ctx, resources.PatchModeCNI)
 			_, err = c.Update(ctxCNI, wep)
 			Expect(err).NotTo(HaveOccurred())
@@ -2293,7 +2343,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			})
 
 			var wepKV *model.KVPair
-			key := model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}
+			key := model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}
 			By("Checking the pod is visible before we mark it as finished", func() {
 				// Perform a Get and ensure no error in the Calico API.
 				var err error
@@ -2302,7 +2352,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				Expect(wepKV).NotTo(BeNil())
 
 				// Perform List and ensure it shows up in the Calico API.
-				weps, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, "")
+				weps, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindWorkloadEndpoint}, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(weps.KVPairs)).To(BeNumerically(">", 0))
 			})
@@ -2319,7 +2369,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					// can finish).
 					wepKV, err = c.Get(ctx, key, "")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(wepKV.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
+					Expect(wepKV.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
 
 					// Deleting in the Calico API with incorrect UID should fail.
 					realUID := wepKV.UID
@@ -2330,14 +2380,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					wepKV.UID = realUID
 					wepKV2, err := c.Get(ctx, key, "")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(wepKV2.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
+					Expect(wepKV2.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
 
 					// Successful deletion in the Calico API should make the IPs disappear.
 					_, err = c.DeleteKVP(ctx, wepKV)
 					Expect(err).NotTo(HaveOccurred())
 					wepKV2, err = c.Get(ctx, key, "")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(wepKV2.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(HaveLen(0))
+					Expect(wepKV2.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks).To(HaveLen(0))
 
 					return
 				}
@@ -2417,12 +2467,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Checking the pod is visible before we remove its IP", func() {
 			// Perform a Get and ensure no error in the Calico API.
-			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(wep).NotTo(BeNil())
 
 			// Perform List and ensure it shows up in the Calico API.
-			weps, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, "")
+			weps, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(weps.KVPairs)).To(BeNumerically(">", 0))
 		})
@@ -2471,12 +2521,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			// Add the IP via our API.  This simulates what the CNI plugin does.
 			wep, err := c.Get(
 				ctx,
-				model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint},
+				model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint},
 				"",
 			)
 			Expect(err).NotTo(HaveOccurred())
-			wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks = []string{"192.168.1.1"}
-			fmt.Printf("Updating Wep %+v\n", wep.Value.(*libapiv3.WorkloadEndpoint).Spec)
+			wep.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks = []string{"192.168.1.1"}
+			fmt.Printf("Updating Wep %+v\n", wep.Value.(*internalapi.WorkloadEndpoint).Spec)
 			ctxCNI := resources.ContextWithPatchMode(ctx, resources.PatchModeCNI)
 			_, err = c.Update(ctxCNI, wep)
 			Expect(err).NotTo(HaveOccurred())
@@ -2487,9 +2537,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(p.Annotations["cni.projectcalico.org/podIP"]).To(Equal("192.168.1.1"))
 
 			// Get the wep through our API to check that the annotation round-trips.
-			wep, err = c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			wep, err = c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.1.1/32"))
+			Expect(wep.Value.(*internalapi.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.1.1/32"))
 		})
 
 		By("Setting the pod phase to Running", func() {
@@ -2511,7 +2561,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			// Wait up to 120s for pod to start running.
 			log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
 
-			for i := 0; i < 120; i++ {
+			for range 120 {
 				p, err := c.ClientSet.CoreV1().Pods("default").Get(ctx, pod.ObjectMeta.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				if p.Status.Phase == k8sapi.PodRunning {
@@ -2572,7 +2622,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		var nodename string
 
 		By("Listing all Nodes to find a suitable Node name", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			kvp := *nodes.KVPairs[0]
 			nodename = kvp.Key.(model.ResourceKey).Name
@@ -2815,7 +2865,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		ip := "192.168.0.101"
 
 		By("Listing all Nodes", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			// Get the hostname so we can make a Get call
 			kvp = *nodes.KVPairs[0]
@@ -2823,7 +2873,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing a specific Node", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Name: nodeHostname, Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Name: nodeHostname, Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(nodes.KVPairs).To(HaveLen(1))
 			Expect(nodes.KVPairs[0].Key).To(Equal(kvp.Key))
@@ -2831,13 +2881,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing a specific invalid Node", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Name: "foobarbaz-node", Kind: libapiv3.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Name: "foobarbaz-node", Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(nodes.KVPairs).To(HaveLen(0))
 		})
 
 		By("Getting a specific nodeHostname", func() {
-			n, err := c.Get(ctx, model.ResourceKey{Name: nodeHostname, Kind: libapiv3.KindNode}, "")
+			n, err := c.Get(ctx, model.ResourceKey{Name: nodeHostname, Kind: internalapi.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check to see we have the right Node
@@ -2850,7 +2900,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Getting nonexistent Node", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: "Fake", Kind: libapiv3.KindNode}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: "Fake", Kind: internalapi.KindNode}, "")
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -2865,14 +2915,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			testKvp := model.KVPair{
 				Key: model.ResourceKey{
 					Name: kvp.Key.(model.ResourceKey).Name,
-					Kind: libapiv3.KindNode,
+					Kind: internalapi.KindNode,
 				},
-				Value: &libapiv3.Node{
+				Value: &internalapi.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: kvp.Key.(model.ResourceKey).Name,
 					},
-					Spec: libapiv3.NodeSpec{
-						BGP: &libapiv3.NodeBGPSpec{
+					Spec: internalapi.NodeSpec{
+						BGP: &internalapi.NodeBGPSpec{
 							ASNumber:    &newAsn,
 							IPv4Address: ip,
 						},
@@ -2881,20 +2931,20 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			}
 			node, err := c.Update(ctx, &testKvp)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(*node.Value.(*libapiv3.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
+			Expect(*node.Value.(*internalapi.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
 
 			// Also check that Get() returns the changes
 			getNode, err := c.Get(ctx, kvp.Key.(model.ResourceKey), "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(*getNode.Value.(*libapiv3.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
-			Expect(getNode.Value.(*libapiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal(""))
+			Expect(*getNode.Value.(*internalapi.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
+			Expect(getNode.Value.(*internalapi.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal(""))
 
 			// We do not support creating Nodes, we should see an error
 			// if the Node does not exist.
 			missingKvp := model.KVPair{
 				Key: model.ResourceKey{
 					Name: "IDontExist",
-					Kind: libapiv3.KindNode,
+					Kind: internalapi.KindNode,
 				},
 			}
 			_, err = c.Create(ctx, &missingKvp)
@@ -2906,14 +2956,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			testKvp := model.KVPair{
 				Key: model.ResourceKey{
 					Name: kvp.Key.(model.ResourceKey).Name,
-					Kind: libapiv3.KindNode,
+					Kind: internalapi.KindNode,
 				},
-				Value: &libapiv3.Node{
+				Value: &internalapi.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: kvp.Key.(model.ResourceKey).Name,
 					},
-					Spec: libapiv3.NodeSpec{
-						BGP: &libapiv3.NodeBGPSpec{
+					Spec: internalapi.NodeSpec{
+						BGP: &internalapi.NodeBGPSpec{
 							IPv4Address:        ip,
 							IPv4IPIPTunnelAddr: "10.0.0.1",
 						},
@@ -2923,14 +2973,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			node, err := c.Update(ctx, &testKvp)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(node.Value.(*libapiv3.Node).Spec.BGP.ASNumber).To(BeNil())
-			Expect(node.Value.(*libapiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
+			Expect(node.Value.(*internalapi.Node).Spec.BGP.ASNumber).To(BeNil())
+			Expect(node.Value.(*internalapi.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
 
 			// Also check that Get() returns the changes
 			getNode, err := c.Get(ctx, kvp.Key.(model.ResourceKey), "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(getNode.Value.(*libapiv3.Node).Spec.BGP.ASNumber).To(BeNil())
-			Expect(getNode.Value.(*libapiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
+			Expect(getNode.Value.(*internalapi.Node).Spec.BGP.ASNumber).To(BeNil())
+			Expect(getNode.Value.(*internalapi.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
 		})
 
 		By("Syncing HostIPs over the Syncer", func() {
@@ -3534,7 +3584,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(l.KVPairs).To(HaveLen(2))
 
 			// Watch from part way
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
@@ -3556,7 +3606,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(l.KVPairs).To(HaveLen(2))
 
 			// Watch from part way
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
@@ -3578,7 +3628,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(l.KVPairs).To(HaveLen(2))
 
 			// Watch from part way
-			for i := 0; i < 2; i++ {
+			for i := range 2 {
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
@@ -3678,19 +3728,19 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			deleteAllPods()
 		})
 		It("supports watching a specific workloadEndpoint", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Namespace: "default", Kind: internalapi.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			event := ExpectAddedEvent(watch.ResultChan())
 			Expect(event.New.Key.String()).To(Equal("WorkloadEndpoint(default/127.0.0.1-k8s-test--pod--1-eth0)"))
 		})
 		It("rejects watching a specific workloadEndpoint without a namespace", func() {
-			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Kind: libapiv3.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
+			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Kind: internalapi.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("cannot watch a specific WorkloadEndpoint without a namespace"))
 		})
 		It("supports watching all workloadEndpoints", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: internalapi.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
@@ -3700,13 +3750,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 	It("Should support watching Nodes", func() {
 		By("Watching a single node", func() {
 			name := "127.0.0.1" // Node created by test/mock-node.yaml
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: name, Kind: libapiv3.KindNode}, api.WatchOptions{Revision: ""})
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: name, Kind: internalapi.KindNode}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 
 			// We should get at least one event from the watch.
 			var receivedEvent bool
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.
@@ -3723,13 +3773,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 
 		By("Watching all nodes", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, api.WatchOptions{Revision: ""})
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 
 			// We should get at least one event from the watch.
 			var receivedEvent bool
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.
@@ -3764,7 +3814,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 			// We should get at least one event from the watch.
 			var receivedEvent bool
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				select {
 				case e := <-watch.ResultChan():
 					// Got an event. Check it's OK.

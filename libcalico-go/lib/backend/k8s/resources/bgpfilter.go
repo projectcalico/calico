@@ -29,8 +29,8 @@ func NewBGPFilterClient(r rest.Interface, group BackingAPIGroup) K8sResourceClie
 	return &customResourceClient{
 		restClient:      r,
 		resource:        BGPFilterResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.BGPFilter{}),
-		k8sListType:     reflect.TypeOf(apiv3.BGPFilterList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.BGPFilter](),
+		k8sListType:     reflect.TypeFor[apiv3.BGPFilterList](),
 		kind:            apiv3.KindBGPFilter,
 		apiGroup:        group,
 	}

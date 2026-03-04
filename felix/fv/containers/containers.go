@@ -24,13 +24,14 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -425,7 +426,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		// Capture data race warnings and log to file.
 		if strings.Contains(line, "WARNING: DATA RACE") {
 			_, err := fmt.Fprintf(dataRaceFile, "Detected data race (in %s) while running test: %s\n",
-				c.Name, ginkgo.CurrentGinkgoTestDescription().FullTestText)
+				c.Name, ginkgo.CurrentSpecReport().FullText())
 			Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log.")
 			foundDataRace = true
 		}
@@ -539,7 +540,7 @@ func (c *Container) GetPIDs(processName string) []int {
 		return nil
 	}
 	var pids []int
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if line == "" {
 			continue
 		}
@@ -564,7 +565,7 @@ func (c *Container) GetProcInfo(processName string) []ProcInfo {
 		return nil
 	}
 	var pids []ProcInfo
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		log.WithField("line", line).Debug("Parsing ps line")
 		matches := psRegexp.FindStringSubmatch(line)
 		if len(matches) == 0 {
@@ -801,7 +802,7 @@ func (c *Container) IPSetSizes() map[string]int {
 	currentName := ""
 	membersSeen := false
 	log.WithField("ipsets", ipsetsOutput).Info("IP sets state")
-	for _, line := range strings.Split(ipsetsOutput, "\n") {
+	for line := range strings.SplitSeq(ipsetsOutput, "\n") {
 		log.WithField("line", line).Debug("Parsing line")
 		if strings.HasPrefix(line, "Name:") {
 			currentName = strings.Split(line, " ")[1]
@@ -851,19 +852,19 @@ func (c *Container) NumNFTSetMembers(ipVersion int, setName string) int {
 	}
 
 	type nftResp struct {
-		Nftables []map[string]interface{} `json:"nftables"`
+		Nftables []map[string]any `json:"nftables"`
 	}
 	var resp nftResp
 	Expect(json.Unmarshal([]byte(out), &resp)).NotTo(HaveOccurred(), fmt.Sprintf("Failed to unmarshal JSON: %s", out))
 	for _, obj := range resp.Nftables {
 		if obj["set"] != nil {
-			setObj, ok := obj["set"].(map[string]interface{})
+			setObj, ok := obj["set"].(map[string]any)
 			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse set: %v", obj))
 			if _, ok := setObj["elem"]; !ok {
 				// No elements.
 				return 0
 			}
-			elems, ok := setObj["elem"].([]interface{})
+			elems, ok := setObj["elem"].([]any)
 			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse elem: %v", setObj))
 			return len(elems)
 		}
@@ -896,7 +897,7 @@ func (c *Container) nftablesSetNamesForVersion(ver string) []string {
 	out, err := c.ExecOutput("nft", "list", "sets", ver)
 	Expect(err).NotTo(HaveOccurred(), out)
 	var names []string
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "set ") {
 			// set <name> {
@@ -1028,13 +1029,7 @@ func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int,
 	ipv6 := net.ParseIP(ip).To4() == nil
 	nat := c.BPFNATDump(ipv6)
 	if natBack, ok := nat[front]; ok {
-		found := false
-		for _, b := range natBack {
-			if b == back {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(natBack, back)
 		if !found {
 			return false
 		}
