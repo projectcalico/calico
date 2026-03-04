@@ -3,7 +3,7 @@ name: Publish official release
 agent:
   machine:
     type: f1-standard-4
-    os_image: ubuntu2204
+    os_image: ubuntu2404
 execution_time_limit:
   hours: 14
 blocks:
@@ -30,6 +30,7 @@ blocks:
           # Log in to container registries needed for release.
           - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
           - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+          - echo $QUAY_TOKEN | helm registry login --username "$QUAY_USER" --password-stdin quay.io
           # Credentials for accessing gcloud, needed to push images to gcr
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
           - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
@@ -71,7 +72,7 @@ blocks:
           - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
           # Install more tools
           - sudo apt update
-          - sudo apt install -y moreutils patchelf jq dch
+          - sudo apt install -y moreutils patchelf jq devscripts
       jobs:
         - name: "Build Openstack Packages"
           execution_time_limit:

@@ -11,13 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package testutils
 
 import (
 	"fmt"
 	"os"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -65,7 +66,8 @@ func E2eDatastoreDescribe(description string, datastores DatastoreType, body fun
 					Spec: apiconfig.CalicoAPIConfigSpec{
 						DatastoreType: apiconfig.Kubernetes,
 						KubeConfig: apiconfig.KubeConfig{
-							Kubeconfig: kubeconfig,
+							Kubeconfig:     kubeconfig,
+							CalicoAPIGroup: os.Getenv("CALICO_API_GROUP"),
 						},
 					},
 				})

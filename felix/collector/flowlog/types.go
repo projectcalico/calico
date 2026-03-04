@@ -292,7 +292,7 @@ func newPolicySet(ruleIDs []*calc.RuleID, includeStaged bool) FlowPolicySet {
 			continue
 		}
 		if !includeStaged {
-			if model.PolicyIsStaged(rid.Name) {
+			if model.KindIsStaged(rid.Kind) {
 				nsp++
 				continue
 			}

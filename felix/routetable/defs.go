@@ -16,6 +16,7 @@ package routetable
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"reflect"
 
@@ -69,9 +70,30 @@ var (
 	ErrIfaceDown       = errors.New("interface down")
 )
 
+// RouteKey represents the kernel's FIB key, and is also what we use on the RouteTable API to
+// identify each route.  The kernel and RouteTable API allow routes to coexist as long as they have
+// different keys.
+type RouteKey struct {
+	// Destination CIDR; route matches traffic to this destination.
+	CIDR ip.CIDR
+	// TOS is the Type-of-Service field.  For example, one app may mark its
+	// packets as "high importance" and that will take a different route to
+	// another app.
+	//
+	// Kernel uses the TOS=0 route if there isn't a more precise match.
+	TOS int
+	// Priority is the routing metric / distance.  Given two routes with the
+	// same CIDR, the kernel prefers the route with the _lower_ priority.
+	Priority int
+}
+
+func (k RouteKey) String() string {
+	return fmt.Sprintf("%s(tos=%x metric=%d)", k.CIDR.String(), k.TOS, k.Priority)
+}
+
 type Target struct {
+	RouteKey
 	Type      TargetType
-	CIDR      ip.CIDR
 	GW        ip.Addr
 	Src       ip.Addr
 	DestMAC   net.HardwareAddr

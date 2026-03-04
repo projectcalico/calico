@@ -26,20 +26,20 @@ import (
 func printUsageAndExit() {
 	_, _ = fmt.Fprint(os.Stderr, `CI Dependency helper tool.
 
-Usage: 
+Usage:
 
   deps [options] modules <package>          # Print go modules that package depends on
   deps [options] local-dirs <package>       # Print in-repo go package dirs that
                                   # package depends on.
-  deps local-dirs-main-only <package> # Print in-repo go package dirs that 
+  deps local-dirs-main-only <package> # Print in-repo go package dirs that
                                   # package depends on. (Main packages only.)
   deps [options] local-dirs-main-only <package> # Print in-repo go package dirs that
                                   # package depends on. (Main packages only.)
   deps [options] test-exclusions <package>  # Print glob patterns to match *_test.go
-                                  # files in dependency dirs outside the 
+                                  # files in dependency dirs outside the
                                   # package itself.
   deps [options] sem-change-in(-pretty) <package>[,<secondary package>...] # Print a SemaphoreCI
-                                  # conditions DSL change_in() clause for 
+                                  # conditions DSL change_in() clause for
                                   # <package>, including non-test deps from
                                   # any <secondary package> clauses.
 
@@ -54,12 +54,14 @@ The test-exclusions and sem-change-in sub-commands are intended to be used with
 packages at the top-level of the repo.  Test exclusions are based on whether
 a dependency is within the package.
 
-The change_in() clause always depends on the whole package directory itself. 
+The change_in() clause always depends on the whole package directory itself.
 Some non-Go dependencies are hard-coded in the tool.  For example, it knows
 that node depends on felix/bpf-*.
 `)
 	os.Exit(1)
 }
+
+const mainBranchName = "master"
 
 var (
 	pretty   = flag.Bool("pretty", false, "Pretty-print the output (only applies to sem-change-in).")
@@ -130,6 +132,14 @@ var nonGoDeps = map[string][]string{
 		// BPF programs.
 		"/felix/bpf-apache",
 		"/felix/bpf-gpl",
+		// Root-level Makefile is used to build operator and other images,
+		// used by the STs.
+		"/Makefile",
+	},
+
+	"e2e": {
+		// Root-level Makefile is used to build the operator and other images.
+		"/Makefile",
 	},
 
 	// Whisker is not a go project so we list the whole thing.
@@ -168,10 +178,9 @@ var extraPrereqRegexps = map[string]*regexp.Regexp{
 // dependencies, for which we include non-test files only.
 func calculateDeps(packages set.Set[string]) map[string]*Deps {
 	deps := map[string]*Deps{}
-	packages.Iter(func(pkg string) error {
+	for pkg := range packages.All() {
 		deps[pkg] = nil
-		return nil
-	})
+	}
 
 	var lock sync.Mutex
 	var eg errgroup.Group
@@ -259,8 +268,8 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	// also run typha, api server, etc.  Add inclusions for those.
 	for _, otherPkg := range otherPkgs {
 		const nonGoPrefix = "non-go:"
-		if strings.HasPrefix(otherPkg, nonGoPrefix) {
-			inclusions.Add(strings.TrimPrefix(otherPkg, nonGoPrefix))
+		if after, ok := strings.CutPrefix(otherPkg, nonGoPrefix); ok {
+			inclusions.Add(after)
 			continue
 		}
 
@@ -290,14 +299,13 @@ func filterInclusions(primaryPkg string, inclusions set.Set[string]) set.Typed[s
 	out := set.New[string]()
 
 	conditionalIncludes := map[string]*regexp.Regexp{}
-	inclusions.Iter(func(item string) error {
+	for item := range inclusions.All() {
 		if r := extraPrereqRegexps[item]; r != nil {
 			conditionalIncludes[item] = r
 		} else {
 			out.Add(item)
 		}
-		return nil
-	})
+	}
 
 	if len(conditionalIncludes) == 0 {
 		return out
@@ -426,6 +434,9 @@ func printModules(pkg string) {
 	// For ease, do the full cross product. Only takes ~100ms.
 	var mods []string
 	for _, mod := range modules {
+		if mod.Replace != nil {
+			mod = *mod.Replace
+		}
 		for _, pkg := range packageDeps {
 			if strings.HasPrefix(pkg, mod.Path) {
 				if mod.Version != "" {
@@ -502,6 +513,7 @@ func findMainPackages(pkg string) ([]string, error) {
 type module struct {
 	Path    string
 	Version string
+	Replace *module
 }
 
 func loadGoMods() ([]module, error) {
@@ -539,7 +551,10 @@ type templateData struct {
 func generateSemaphoreYamls() {
 	logrus.Info("Generating semaphore YAML pipeline files")
 	semaphoreDir := ".semaphore"
-	defaultBranchStanza := calculateBranchStanza(semaphoreDir)
+	defaultBranchStanza, err := calculateBranchStanza(semaphoreDir)
+	if err != nil {
+		logrus.Fatalf("Failed to calculate default branch stanza: %v", err)
+	}
 	logrus.Infof("Using default branch stanza: %q", defaultBranchStanza)
 
 	// Validate change_in lines in template blocks include pipeline_file stanza.
@@ -671,16 +686,16 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 func indentBlocks(blocks []templateData) []templateData {
 	for i, block := range blocks {
 		lines := strings.Split(block.content, "\n")
-		indented := ""
+		var indented strings.Builder
 		for _, line := range lines {
 			if line == "" {
 				// Ignore blank lines (and in particular, the empty "line" that
 				// Split() creates if the content ends with a newline.
 				continue
 			}
-			indented += "  " + line + "\n"
+			indented.WriteString("  " + line + "\n")
 		}
-		blocks[i].content = indented
+		blocks[i].content = indented.String()
 	}
 	return blocks
 }
@@ -765,42 +780,72 @@ func validateChangeInClauses(semaphoreDir string) error {
 	return nil
 }
 
-func calculateBranchStanza(semaphoreDir string) string {
-	// Determine current branch.
-	current := os.Getenv("DEFAULT_BRANCH_OVERRIDE")
-	if current == "" {
-		current = os.Getenv("SEMAPHORE_GIT_BRANCH")
+func calculateBranchStanza(semaphoreDir string) (string, error) {
+	branch, err := calculateDefaultBranch(semaphoreDir)
+	if err != nil {
+		return "", err
 	}
-	if current == "" {
-		// Fallback to git.
-		out, err := exec.Command("git", "branch", "--show-current").Output()
-		if err == nil {
-			current = strings.TrimSpace(string(out))
-		}
+	if branch == mainBranchName {
+		// Default, so no need to specify.
+		return "", nil
 	}
-	if current == "" {
-		current = "master"
-	} // final fallback
+	return fmt.Sprintf(", default_branch: '%s'", branch), nil
+}
 
-	releaseBranchRegexp := regexp.MustCompile(`release(-calient)?-v`)
-	if releaseBranchRegexp.MatchString(current) {
-		return fmt.Sprintf(", default_branch: '%s'", current)
-	}
-	if current == "master" {
-		return ""
+func calculateDefaultBranch(semaphoreDir string) (string, error) {
+	if branch := os.Getenv("DEFAULT_BRANCH_OVERRIDE"); branch != "" {
+		// Manual override.
+		logrus.Infof("Using DEFAULT_BRANCH_OVERRIDE for default branch: %s", branch)
+		return branch, nil
 	}
 
-	// Try to detect from existing semaphore.yml
+	if branch := os.Getenv("SEMAPHORE_GIT_BRANCH"); branch != "" {
+		// In CI, this env var is set either to the current branch, if we're
+		// building on a branch, or to the target branch if we're building
+		// a PR.
+		logrus.Infof("Using SEMAPHORE_GIT_BRANCH for default branch: %s", branch)
+		return branch, nil
+	}
+
+	// Fallback to git.
+	out, err := exec.Command("git", "branch", "--show-current").Output()
+	if err != nil {
+		return "", fmt.Errorf("git branch --show-current failed: %w", err)
+	}
+	branch := strings.TrimSpace(string(out))
+
+	if branch == mainBranchName {
+		logrus.Info("On master branch, using that for default branch.")
+		return branch, nil
+	}
+
+	// Check for release branch.
+	releaseBranchPrefix := os.Getenv("RELEASE_BRANCH_PREFIX")
+	if releaseBranchPrefix == "" {
+		return "", fmt.Errorf("RELEASE_BRANCH_PREFIX not set")
+	}
+	releaseBranchRegexp := regexp.MustCompile(`^` + regexp.QuoteMeta(releaseBranchPrefix) + `-v[\d.-]+$`)
+	if s := releaseBranchRegexp.FindString(branch); s != "" {
+		// Explicitly on a release branch, so use that.
+		logrus.Infof("On release branch %s, using that for default branch.", s)
+		return s, nil
+	}
+
+	// If we're not on a release branch, this is likely to be a PR build,
+	// and the semaphore.yml should have inherited the default from whichever
+	// branch it was based on.  Check there.
+	logrus.Infof("Branch %q is not a release branch, checking semaphore.yml for default branch.", branch)
 	detected, err := detectExistingDefaultBranch(filepath.Join(semaphoreDir, "semaphore.yml"))
 	if err != nil {
-		logrus.Warnf("Failed to detect existing default branch: %v", err)
+		return "", fmt.Errorf("detect release branch from semaphore yaml: %w", err)
 	}
 	if detected != "" {
-		logrus.Warnf("Currently on a non-master, non-release branch. This branch appears to be a branch of %s; using that as default branch.", detected)
-		return fmt.Sprintf(", default_branch: '%s'", detected)
+		logrus.Infof("Found default branch %s in semaphore.yml, using it for default branch.", detected)
+		return detected, nil
 	}
-	logrus.Warn("Currently on a non-master, non-release branch. Appears to be a branch of master; not specifying default branch.")
-	return ""
+
+	logrus.Info("Found no default branch in semaphore.yml, assuming master.")
+	return mainBranchName, nil
 }
 
 func detectExistingDefaultBranch(path string) (string, error) {

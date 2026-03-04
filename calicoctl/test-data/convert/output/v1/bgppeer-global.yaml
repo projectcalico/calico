@@ -1,7 +1,0 @@
-apiVersion: projectcalico.org/v3
-kind: BGPPeer
-metadata:
-  name: 192-20-30-40
-spec:
-  asNumber: 64567
-  peerIP: 192.20.30.40

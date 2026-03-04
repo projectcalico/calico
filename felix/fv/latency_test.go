@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -210,9 +210,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Latency tests with initiali
 })
 
 func generateIPv4s(n int) (result []string) {
-	for a := 0; a < 256; a++ {
-		for b := 0; b < 256; b++ {
-			for c := 0; c < 256; c++ {
+	for a := range 256 {
+		for b := range 256 {
+			for c := range 256 {
 				if n <= 0 {
 					return
 				}
@@ -225,9 +225,9 @@ func generateIPv4s(n int) (result []string) {
 }
 
 func generateIPv6s(n int) (result []string) {
-	for a := 0; a < 256; a++ {
-		for b := 0; b < 256; b++ {
-			for c := 0; c < 256; c++ {
+	for a := range 256 {
+		for b := range 256 {
+			for c := range 256 {
 				if n <= 0 {
 					return
 				}
@@ -245,15 +245,13 @@ func getTotalBPFIPSetMembers(felix *infrastructure.Felix) int {
 		log.WithError(err).WithField("output", out).Warn("Failed to run bpftool")
 		return -1
 	}
-	r := regexp.MustCompile(`Found (\d+) elements`)
-	m := r.FindStringSubmatch(out)
-	if m != nil {
-		count, err := strconv.ParseInt(m[1], 10, 64)
-		if err != nil {
-			log.WithError(err).Panic("Failed to parse bpftool output")
-		}
-		return int(count)
+
+	// Count occurrences of "key:" at the start of lines in bpftool output.
+	re := regexp.MustCompile(`(?m)^\s*"key":`)
+	matches := re.FindAllStringIndex(out, -1)
+	if matches == nil {
+		log.WithField("out", out).Warn("bpftool didn't return any 'key:' lines")
+		return 0
 	}
-	log.WithField("out", out).Warn("bpftool didn't return a Found n elements line")
-	return -1
+	return len(matches)
 }

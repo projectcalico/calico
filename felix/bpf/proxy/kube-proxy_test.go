@@ -15,11 +15,9 @@
 package proxy_test
 
 import (
-	"fmt"
 	"net"
-	"net/http"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -30,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 var _ = Describe("BPF kube-proxy", func() {
@@ -89,6 +88,9 @@ var _ = Describe("BPF kube-proxy", func() {
 
 		k8s := fake.NewClientset(testSvc, testSvcEps)
 		p, _ = proxy.StartKubeProxy(k8s, "test-node", maps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSize(maglevLUTSize))
+		// Unblock start(), which blocks on the initial host metadata update.
+		p.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "dummy"})
+		Expect(p.CompleteDeferredWork()).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -111,21 +113,9 @@ var _ = Describe("BPF kube-proxy", func() {
 			}).Should(BeTrue())
 		})
 
-		By("checking that the healthCheckNodePort is accessible", func() {
-			Eventually(func() error {
-				result, err := http.Get(fmt.Sprintf("http://localhost:%d", healthCheckNodePort))
-				if err != nil {
-					return err
-				}
-				if result.StatusCode != 503 {
-					return fmt.Errorf("Unexpected status code %d; expected 503", result.StatusCode)
-				}
-				return nil
-			}, "5s", "200ms").Should(Succeed())
-		})
+		updatedIP := net.IPv4(2, 2, 2, 2)
 
 		By("checking nodeport has the updated IP and not the initial IP", func() {
-			updatedIP := net.IPv4(2, 2, 2, 2)
 			p.OnHostIPsUpdate([]net.IP{updatedIP})
 
 			Eventually(func() bool {
@@ -142,19 +132,6 @@ var _ = Describe("BPF kube-proxy", func() {
 				}
 				return false
 			}).Should(BeTrue())
-		})
-
-		By("checking that the healthCheckNodePort is still accessible", func() {
-			Eventually(func() error {
-				result, err := http.Get(fmt.Sprintf("http://localhost:%d", healthCheckNodePort))
-				if err != nil {
-					return err
-				}
-				if result.StatusCode != 503 {
-					return fmt.Errorf("Unexpected status code %d; expected 503", result.StatusCode)
-				}
-				return nil
-			}, "5s", "200ms").Should(Succeed())
 		})
 
 		By("checking nodeport has 2 updated IPs", func() {

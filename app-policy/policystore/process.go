@@ -39,7 +39,7 @@ func (store *PolicyStore) ProcessUpdate(subscriptionType string, update *proto.T
 	case *proto.ToDataplane_ActiveProfileRemove:
 		store.processActiveProfileRemove(payload.ActiveProfileRemove)
 	case *proto.ToDataplane_ActivePolicyUpdate:
-		if !storeStaged && model.PolicyIsStaged(payload.ActivePolicyUpdate.Id.Name) {
+		if !storeStaged && model.KindIsStaged(payload.ActivePolicyUpdate.Id.Name) {
 			log.WithFields(log.Fields{
 				"id": payload.ActivePolicyUpdate.Id,
 			}).Debug("Skipping StagedPolicy ActivePolicyUpdate")
@@ -49,7 +49,7 @@ func (store *PolicyStore) ProcessUpdate(subscriptionType string, update *proto.T
 
 		store.processActivePolicyUpdate(payload.ActivePolicyUpdate)
 	case *proto.ToDataplane_ActivePolicyRemove:
-		if !storeStaged && model.PolicyIsStaged(payload.ActivePolicyRemove.Id.Name) {
+		if !storeStaged && model.KindIsStaged(payload.ActivePolicyRemove.Id.Name) {
 			log.WithFields(log.Fields{
 				"id": payload.ActivePolicyRemove.Id,
 			}).Debug("Skipping StagedPolicy ActivePolicyRemove")
@@ -198,7 +198,6 @@ func (store *PolicyStore) processWorkloadEndpointUpdate(subscriptionType string,
 	case "per-host-policies":
 		store.Endpoints[types.ProtoToWorkloadEndpointID(update.Id)] = update.Endpoint
 		log.Debugf("%d endpoints received so far", len(store.Endpoints))
-		//store.wepUpdates.onWorkloadEndpointUpdate(update, store.IPToIndexes)
 	}
 }
 
@@ -216,7 +215,6 @@ func (store *PolicyStore) processWorkloadEndpointRemove(subscriptionType string,
 		store.Endpoint = nil
 	case "per-host-policies":
 		delete(store.Endpoints, types.ProtoToWorkloadEndpointID(update.Id))
-		//store.wepUpdates.onWorkloadEndpointRemove(update, store.IPToIndexes)
 	}
 }
 

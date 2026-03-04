@@ -40,6 +40,15 @@ function log_error() {
     log_fail "$@"
 }
 
+# Helper function to redirect output based on VERBOSE setting
+function redirect_output() {
+  if [[ "${VERBOSE}" == "true" ]]; then
+    "$@"
+  else
+    "$@" > /dev/null 2>&1
+  fi
+}
+
 unset -f retry_command
 function retry_command() {
   local RETRY=$(($1/10))
@@ -58,7 +67,7 @@ unset -f pause-for-debug
 function pause-for-debug() {
   # Stop for debug
   echo "Check for pause file..."
-  while [ -f /home/semaphore/pause-for-debug ];
+  while [ -f "${HOME}/pause-for-debug" ];
   do
     echo "#"
     sleep 30

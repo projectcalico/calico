@@ -20,7 +20,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -68,13 +67,10 @@ const backendKeyV6Size = 8
 const backendValueV6Size = 20
 
 //	struct cali_maglev_key {
-//		ipv46_addr_t vip;
-//		__u16 port;
-//		__u8 proto;
-//		__u8 pad;
+//		__u32 svc_id;
 //		__u32 ordinal; // should always be a value of [0..M-1], where M is a very large prime number. -Alex
 //	};
-const maglevBackendKeyV6Size = 24
+const maglevBackendKeyV6Size = 8
 
 const maglevBackendValueV6Size = backendValueV6Size
 
@@ -82,41 +78,23 @@ type MaglevBackendKeyV6 [maglevBackendKeyV6Size]byte
 
 var _ MaglevBackendKeyInterface = MaglevBackendKeyV6{}
 
-func NewMaglevBackendKeyV6(addr net.IP, port uint16, proto uint8, ordinal uint32) MaglevBackendKeyV6 {
-	// TODO ADAPT TO V6
+func NewMaglevBackendKeyV6(svcID, ordinal uint32) MaglevBackendKeyV6 {
 	var k MaglevBackendKeyV6
-	addr = addr.To16()
-	if len(addr) != 16 {
-		logrus.WithField("ip", addr).Panic("Bad IP")
-	}
-	copy(k[:16], addr)
-
-	binary.LittleEndian.PutUint16(k[16:18], port)
-	k[18] = proto
-	k[19] = 0
-	binary.LittleEndian.PutUint32(k[20:24], ordinal)
-
+	binary.LittleEndian.PutUint32(k[0:4], svcID)
+	binary.LittleEndian.PutUint32(k[4:8], ordinal)
 	return k
 }
 
-func NewMaglevBackendKeyV6Intf(addr net.IP, port uint16, protocol uint8, ordinal uint32) MaglevBackendKeyInterface {
-	return NewMaglevBackendKeyV6(addr, port, protocol, ordinal)
+func NewMaglevBackendKeyV6Intf(svcID, ordinal uint32) MaglevBackendKeyInterface {
+	return NewMaglevBackendKeyV6(svcID, ordinal)
 }
 
-func (k MaglevBackendKeyV6) VIP() net.IP {
-	return k[0:16]
-}
-
-func (k MaglevBackendKeyV6) Port() uint16 {
-	return binary.LittleEndian.Uint16(k[16:18])
-}
-
-func (k MaglevBackendKeyV6) Protocol() uint8 {
-	return k[18]
+func (k MaglevBackendKeyV6) SvcID() uint32 {
+	return binary.LittleEndian.Uint32(k[0:4])
 }
 
 func (k MaglevBackendKeyV6) Ordinal() uint32 {
-	return binary.LittleEndian.Uint32(k[20:24])
+	return binary.LittleEndian.Uint32(k[4:8])
 }
 
 func (k MaglevBackendKeyV6) AsBytes() []byte {
@@ -124,11 +102,9 @@ func (k MaglevBackendKeyV6) AsBytes() []byte {
 }
 
 func (k MaglevBackendKeyV6) String() string {
-	addr := k.VIP()
-	port := k.Port()
-	proto := k.Protocol()
+	svcID := k.SvcID()
 	ord := k.Ordinal()
-	return fmt.Sprintf("%s:%d/%d, %d", addr, port, proto, ord)
+	return fmt.Sprintf("MaglevBackendKeyV6{%d:%d}", svcID, ord)
 }
 
 func MaglevBackendKeyV6FromBytes(b []byte) MaglevBackendKeyInterface {
@@ -323,6 +299,7 @@ var MaglevMapV6Parameters = maps.MapParameters{
 	MaxEntries: 1009,
 	Name:       "cali_v6_mglv",
 	Flags:      unix.BPF_F_NO_PREALLOC,
+	Version:    2,
 }
 
 func MaglevMapV6() maps.MapWithExistsCheck {

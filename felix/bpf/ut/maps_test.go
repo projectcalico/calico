@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -96,7 +97,7 @@ func TestMapDownSize(t *testing.T) {
 	RegisterTestingT(t)
 	// Add 10 entries to the old map
 	numEntries := 10
-	for i := 0; i < numEntries; i++ {
+	for i := range numEntries {
 		err := insertNumberedKey(i)
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -149,7 +150,7 @@ func TestCTDeltaMigration(t *testing.T) {
 
 	// Add 10 more entries to the old map
 	numEntries := 10
-	for i := 0; i < numEntries; i++ {
+	for i := range numEntries {
 		err := insertNumberedKey(i)
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -157,7 +158,7 @@ func TestCTDeltaMigration(t *testing.T) {
 	matchKeyVals := func(ctSaved conntrack.MapMem) {
 		Expect(ctSaved).Should(HaveKeyWithValue(k, newVal))
 		Expect(ctSaved).ShouldNot(HaveKeyWithValue(k, v))
-		for i := 0; i < numEntries; i++ {
+		for i := range numEntries {
 			key := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), uint16(i), net.ParseIP("10.0.0.2"), uint16(i>>16))
 			val := conntrack.Value{}
 			for j := range val {
@@ -264,7 +265,7 @@ func TestDeleteDuringIter(t *testing.T) {
 
 func testDelDuringIterN(numEntries int) {
 	cleanUpMaps()
-	for i := 0; i < numEntries; i++ {
+	for i := range numEntries {
 		err := insertNumberedKey(i)
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -394,7 +395,7 @@ func benchMapIteration(b *testing.B, n int) {
 
 func setUpConntrackMapEntries(b *testing.B, n int) {
 	b.StopTimer()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		var k conntrack.Key
 		var v conntrack.Value
 		binary.LittleEndian.PutUint32(k[:], uint32(i))
@@ -445,7 +446,7 @@ func benchMapIteratorMulti(b *testing.B, n int) {
 }
 
 func doSingleMapIteratorMultiTest(n int) {
-	iter, err := bpfmaps.NewIterator(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize, conntrack.MaxEntries)
+	iter, err := bpfmaps.NewIterator(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize, conntrack.MaxEntries, true)
 	if err != nil {
 		panic(err)
 	}
@@ -468,4 +469,38 @@ func doSingleMapIteratorMultiTest(n int) {
 	_ = iter.Close()
 	runtime.KeepAlive(k)
 	runtime.KeepAlive(v)
+}
+
+// Test slow iteration of failsafe map.
+func TestFailsafeMapIteration(t *testing.T) {
+	RegisterTestingT(t)
+	defer cleanUpMaps()
+	port := []uint16{8080, 8081, 8082, 8083, 8084}
+	keys := make([]failsafes.Key, 0, len(port))
+	for _, p := range port {
+		k := failsafes.MakeKey(17, p, false, "0.0.0.0", 32)
+		err := fsafeMap.Update(k.ToSlice(), []byte{1, 2, 3, 4})
+		Expect(err).NotTo(HaveOccurred())
+		keys = append(keys, k.(failsafes.Key))
+	}
+
+	iter, err := bpfmaps.NewIterator(fsafeMap.MapFD(), failsafes.KeySize, failsafes.ValueSize, failsafes.MapParams.MaxEntries, false)
+	Expect(err).NotTo(HaveOccurred())
+	var k []byte
+	numIterations := 0
+	for {
+		k, _, err = iter.Next()
+		if err != nil {
+			if err == bpfmaps.ErrIterationFinished {
+				break
+			}
+			Expect(err).NotTo(HaveOccurred())
+		}
+		numIterations++
+		key := failsafes.KeyFromSlice(k)
+		Expect(keys).To(ContainElement(key.(failsafes.Key)), "Unexpected key found during iteration")
+	}
+
+	Expect(numIterations).To(Equal(len(port)))
+	_ = iter.Close()
 }

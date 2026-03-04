@@ -26,15 +26,17 @@ const (
 
 // +genclient
 // +genclient:nonNamespaced
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster,shortName={sgnp}
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
+// +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
 
 // StagedGlobalNetworkPolicy is a staged GlobalNetworkPolicy.
 type StagedGlobalNetworkPolicy struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the Policy.
-	Spec StagedGlobalNetworkPolicySpec `json:"spec,omitempty"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              StagedGlobalNetworkPolicySpec `json:"spec"`
 }
 
 type StagedGlobalNetworkPolicySpec struct {
@@ -46,6 +48,7 @@ type StagedGlobalNetworkPolicySpec struct {
 	// security policies within the tier, the "default" tier is created automatically if it
 	// does not exist, this means for deployments requiring only a single Tier, the tier name
 	// may be omitted on all policy management requests.
+	// +kubebuilder:default=default
 	Tier string `json:"tier,omitempty" validate:"omitempty,name"`
 	// Order is an optional field that specifies the order in which the policy is applied.
 	// Policies with higher "order" are applied after those with lower
@@ -99,6 +102,9 @@ type StagedGlobalNetworkPolicySpec struct {
 	//
 	// When the policy is read back again, Types will always be one of these values, never empty
 	// or nil.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=2
+	// +listType=set
 	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
 
 	// DoNotTrack indicates whether packets matched by the rules in this policy should go through

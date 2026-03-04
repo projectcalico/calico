@@ -44,7 +44,7 @@ def read_status(name):
     return status_dict['status']
 
 def delete_status(name):
-    kubectl("delete caliconodestatuses.crd.projectcalico.org %s" % name)
+    kubectl("delete caliconodestatus %s" % name)
 
 def is_subdict(small, big):
     return dict(big, **small) == big

@@ -27,7 +27,7 @@ import (
 
 var (
 	matchTier = regexp.MustCompile("^/?calico/v1/policy/tier/([^/]+)/metadata$")
-	typeTier  = reflect.TypeOf(Tier{})
+	typeTier  = reflect.TypeFor[Tier]()
 )
 
 type TierKey struct {
@@ -53,6 +53,10 @@ func (key TierKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key TierKey) valueType() (reflect.Type, error) {
 	return typeTier, nil
+}
+
+func (key TierKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[Tier](key, rawData)
 }
 
 func (key TierKey) String() string {

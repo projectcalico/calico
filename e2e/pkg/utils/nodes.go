@@ -17,9 +17,10 @@ package utils
 import (
 	"context"
 	"net"
+	"slices"
 	"time"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +36,7 @@ func RequireNodeCount(f *framework.Framework, count int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	nodes, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	Expect(err).NotTo(HaveOccurred(), "Error listing nodes")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Error listing nodes")
 
 	// Count the number of ready nodes.
 	numReady := 0
@@ -47,7 +48,7 @@ func RequireNodeCount(f *framework.Framework, count int) {
 		}
 	}
 
-	ExpectWithOffset(1, numReady).To(BeNumerically(">=", count), "Test requires at least %d nodes, found %d", count, numReady)
+	gomega.ExpectWithOffset(1, numReady).To(gomega.BeNumerically(">=", count), "Test requires at least %d nodes, found %d", count, numReady)
 }
 
 type NodesInfoGetter interface {
@@ -164,12 +165,7 @@ func checkNodeIsMaster(f *framework.Framework, ips []string) bool {
 	}
 
 	hasIP := func(endpointIP string) bool {
-		for _, ip := range ips {
-			if ip == endpointIP {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(ips, endpointIP)
 	}
 
 	for _, ss := range endpnts.Subsets {

@@ -43,8 +43,12 @@ spec:
       # resources to terminate when being uninstalled.
       terminationGracePeriodSeconds: 60
       hostNetwork: true
+      {{- if .Values.dnsPolicy }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- else }}
       # This must be set when hostNetwork is true or else the cluster services won't resolve
       dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
       {{- if .Values.dnsConfig }}
       dnsConfig:
         {{- toYaml .Values.dnsConfig | nindent 8 }}
@@ -77,6 +81,9 @@ spec:
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
               value: {{.Values.tigeraOperator.version}}
+          {{- with .Values.tigeraOperator.env }}
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint

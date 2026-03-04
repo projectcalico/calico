@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -61,7 +61,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 	BeforeEach(func() {
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		tc, client = infrastructure.StartNNodeTopology(1, opts, infra)
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
 
 		infra.AddDefaultAllow()
 	})
@@ -280,8 +280,8 @@ func getMapSize(felix *infrastructure.Felix, m maps.Map) (int, error) {
 	return int(output["max_entries"].(float64)), nil
 }
 
-func showBpfMap(felix *infrastructure.Felix, m maps.Map) (map[string]interface{}, error) {
-	var data map[string]interface{}
+func showBpfMap(felix *infrastructure.Felix, m maps.Map) (map[string]any, error) {
+	var data map[string]any
 	cmd, err := maps.ShowMapCmd(m)
 	if err != nil {
 		return nil, err

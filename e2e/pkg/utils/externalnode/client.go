@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 

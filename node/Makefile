@@ -5,7 +5,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/node
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
-WINDOWS_IMAGE         ?=node-windows
+WINDOWS_IMAGE         ?=$(NODE_IMAGE)-windows
 
 # We don't include the windows images here because we build them differently
 # using targets within this makefile.
@@ -27,6 +27,9 @@ REMOTE_DEPS = $(LIBBPF_A) \
 	      filesystem/usr/lib/calico/bpf \
 	      filesystem/etc/calico/confd/conf.d \
 	      filesystem/etc/calico/confd/templates
+
+# Run these tests against the projectcalico.org/v3 API group by default.
+CALICO_API_GROUP ?= projectcalico.org/v3
 
 ###############################################################################
 # Include ../lib.Makefile
@@ -66,10 +69,6 @@ BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.xz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
-
-# Versions and locations of dependencies used in tests.
-TEST_CONTAINER_NAME_VER?=latest
-TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
 
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
@@ -131,7 +130,7 @@ MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/
 # Variables used by the tests
 ST_TO_RUN?=tests/st/
 K8ST_TO_RUN?=tests/
-# Can exclude the slower tests with "-a '!slow'"
+# Can exclude the slower tests with "-m 'not slow'"
 ST_OPTIONS?=
 
 K8ST_REPORT_FILENAME ?= k8s-tests.xml
@@ -146,6 +145,7 @@ DATE:=$(shell date -u +'%FT%T%z')
 SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ./cmd -name '*.go') \
 	  $(shell find ../felix -name '*.go') \
+	  $(shell find ../app-policy -name '*.go') \
 	  $(shell find ../typha -name '*.go') \
 	  $(shell find ../felix -name '*.[ch]') \
 	  $(shell find ../libcalico-go -name '*.go') \
@@ -302,6 +302,7 @@ K8ST_IMAGE_TARS=calico-node.tar \
 	calicoctl.tar \
 	kube-controllers.tar \
 	operator.tar \
+	webhook.tar \
 	whisker.tar \
 	whisker-backend.tar \
 	goldmane.tar
@@ -320,12 +321,17 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 	-e GINKGO_ARGS="$(GINKGO_ARGS)" \
 	$(CALICO_BUILD) ./run-uts $(WHAT)
 
 ###############################################################################
 # System tests
 ###############################################################################
+CHARTS=../bin/tigera-operator-$(GIT_VERSION).tgz \
+			 ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz \
+			 ../bin/projectcalico.org.v3-$(GIT_VERSION).tgz
+
 dist/calicoctl:
 	mkdir -p dist
 	make -C ../calicoctl build
@@ -354,9 +360,13 @@ test_image: .calico_test.created
 	$(DOCKER_BUILD) --build-arg ETCD_VERSION=$(ETCD_VERSION) -f calico_test/Dockerfile -t $(TEST_CONTAINER_NAME) calico_test
 	touch $@
 
-chart: ../bin/tigera-operator-$(GIT_VERSION).tgz
+chart: $(CHARTS)
 ../bin/tigera-operator-$(GIT_VERSION).tgz:
 	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
+../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz:
+	make -C ../ bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+../bin/projectcalico.org.v3-$(GIT_VERSION).tgz:
+	make -C ../ bin/projectcalico.org.v3-$(GIT_VERSION).tgz
 
 # Tag to use for images built for e2e testing. This must match the image tag used in
 # tests/k8st/infra/calico_versions.yml
@@ -415,6 +425,11 @@ goldmane.tar: ../go.mod $(shell find ../goldmane -name '*.go')
 	docker tag calico/goldmane:latest-$(ARCH) calico/goldmane:$(TEST_BUILD_TAG)
 	docker save --output $@ calico/goldmane:$(TEST_BUILD_TAG)
 
+webhook.tar: ../go.mod $(shell find ../webhooks -name '*.go') $(shell find ../libcalico-go -name '*.go')
+	make -C ../webhooks image
+	docker tag calico/webhooks:latest-$(ARCH) calico/webhooks:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/webhooks:$(TEST_BUILD_TAG)
+
 whisker.tar: ../go.mod $(shell find ../whisker)
 	make -C ../whisker image
 	docker tag calico/whisker:latest-$(ARCH) calico/whisker:$(TEST_BUILD_TAG)
@@ -433,21 +448,6 @@ load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	# calicoctl is deployed as a pod on the cluster and needs to be recreated.
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f tests/k8st/infra/calicoctl.yaml
 
-.PHONY: st-checks
-st-checks:
-	@if mount | grep -q "cgroup on /sys/fs/cgroup"; then \
-		echo "cgroup v1 mounted"; \
-	else \
-		echo; \
-		echo "ERROR: Looks like your system uses cgroupv2, which is "; \
-		echo "not compatible with our ancient version of dind."; \
-		echo "You can either run this test in a VM, or add "; \
-		echo "systemd.unified_cgroup_hierarchy=0 to your kernel "; \
-		echo "command line (if supported by your kernel/OS)."; \
-		echo; \
-		exit 1; \
-	fi
-
 .PHONY: k8s-test
 ## Run the k8s tests
 k8s-test:
@@ -456,8 +456,14 @@ k8s-test:
 	$(MAKE) kind-k8st-cleanup
 
 .PHONY: kind-k8st-setup
-kind-k8st-setup: $(K8ST_IMAGE_TARS) ../bin/tigera-operator-$(GIT_VERSION).tgz kind-cluster-create
-	KUBECONFIG=$(KIND_KUBECONFIG) KIND=$(KIND) ARCH=$(ARCH) GIT_VERSION=$(GIT_VERSION) BGP_CONFIG=$(BGP_CONFIG) ./tests/k8st/deploy_resources_on_kind_cluster.sh
+kind-k8st-setup: $(K8ST_IMAGE_TARS) $(CHARTS) kind-cluster-create
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	KIND=$(KIND) \
+	ARCH=$(ARCH) \
+	GIT_VERSION=$(GIT_VERSION) \
+	CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	BGP_CONFIG=$(BGP_CONFIG) \
+	./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
@@ -471,40 +477,16 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    --net host \
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
-	     cd /code/tests/k8st && nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/$(K8ST_REPORT_FILENAME)" --with-timer'
+	     cd /code/tests/k8st && pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
 
 .PHONY: kind-k8st-cleanup
 kind-k8st-cleanup: kind-cluster-destroy
-
-.PHONY: st
-## Run the system tests
-st: st-checks $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd .calico_test.created dist/calico dist/calico-ipam
-	# Use the host, PID and network namespaces from the host.
-	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
-	# Map the docker socket in so docker can be used from inside the container
-	# HOST_CHECKOUT_DIR is used for volume mounts on containers started by this one.
-	# All of code under test is mounted into the container.
-	#   - This also provides access to calicoctl and the docker client
-	docker run --uts=host \
-		   --pid=host \
-		   --net=host \
-		   --privileged \
-		   -v $(CURDIR):/code \
-		   -e HOST_CHECKOUT_DIR=$(CURDIR) \
-		   -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
-		   -e MY_IP=$(LOCAL_IP_ENV) \
-		   -e NODE_CONTAINER_NAME=calico/node:$(TEST_BUILD_TAG) \
-		   --rm -t \
-		   -v /var/run/docker.sock:/var/run/docker.sock \
-		   $(TEST_CONTAINER_NAME) \
-		   sh -c 'nosetests $(ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
-	$(MAKE) stop-etcd
 
 ###############################################################################
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks ut image image-windows st
+ci: static-checks ut image image-windows
 
 ## Deploys images to registry
 cd: image-all cd-common

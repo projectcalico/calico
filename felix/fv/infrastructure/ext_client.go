@@ -29,11 +29,11 @@ type ExtClientOpts struct {
 	Image       string
 }
 
-func RunExtClient(infra DatastoreInfra, namePrefix string) *containers.Container {
+func RunExtClient(infra CleanupProvider, namePrefix string) *containers.Container {
 	return RunExtClientWithOpts(infra, namePrefix, ExtClientOpts{})
 }
 
-func RunExtClientWithOpts(infra DatastoreInfra, namePrefix string, opts ExtClientOpts) *containers.Container {
+func RunExtClientWithOpts(infra CleanupProvider, namePrefix string, opts ExtClientOpts) *containers.Container {
 	wd, err := os.Getwd()
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get working directory")
 

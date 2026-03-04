@@ -381,7 +381,7 @@ func (d *DedupeBuffer) onInSyncAfterReconnection() {
 	log.Infof("In sync with Typha, synthesizing deletions for %d "+
 		"resources not seen during the resync.",
 		d.liveKeysNotSeenSinceReconnect.Len())
-	d.liveKeysNotSeenSinceReconnect.Iter(func(key string) error {
+	for key := range d.liveKeysNotSeenSinceReconnect.All() {
 		parsedKey := model.KeyFromDefaultPath(key)
 		if parsedKey == nil {
 			// Not clear how this could happen since these keys came from the
@@ -395,8 +395,7 @@ func (d *DedupeBuffer) onInSyncAfterReconnection() {
 			},
 			UpdateType: api.UpdateTypeKVDeleted,
 		})
-		return nil
-	})
+	}
 }
 
 var _ api.SyncerCallbacks = (*DedupeBuffer)(nil)

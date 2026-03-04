@@ -92,7 +92,7 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector *selector.
 	optimized := false
 	debug := logrus.IsLevelEnabled(logrus.DebugLevel)
 	if found {
-		res := lrs[labelName]
+		res, _ := lrs.Get(labelName)
 		if !res.PossibleToSatisfy() {
 			// Selector is impossible to satisfy, we don't even need to
 			// add it to the index(!)
@@ -158,7 +158,7 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	labelName, found := findMostRestrictedLabel(lrs)
 	optimized := false
 	if found {
-		res := lrs[labelName]
+		res, _ := lrs.Get(labelName)
 		if !res.PossibleToSatisfy() {
 			optimized = true
 		} else if res.MustHaveOneOfValues != nil {
@@ -187,11 +187,11 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	delete(s.selectorsByID, id)
 }
 
-func findMostRestrictedLabel(lrs map[uniquestr.Handle]parser.LabelRestriction) (uniquestr.Handle, bool) {
+func findMostRestrictedLabel(lrs parser.LabelRestrictions) (uniquestr.Handle, bool) {
 	var zeroHandle uniquestr.Handle
 	var bestLabel uniquestr.Handle
 	var bestScore = -1
-	for label, res := range lrs {
+	for label, res := range lrs.All() {
 		score := scoreLabelRestriction(res)
 		if bestLabel == zeroHandle ||
 			score > bestScore ||
@@ -214,10 +214,7 @@ func scoreLabelRestriction(lr parser.LabelRestriction) int {
 		score += 10
 	}
 	if lr.MustHaveOneOfValues != nil {
-		s := 10000 - len(lr.MustHaveOneOfValues)
-		if s < 100 {
-			s = 100
-		}
+		s := max(10000-len(lr.MustHaveOneOfValues), 100)
 		score += s
 	}
 	return score
@@ -233,27 +230,40 @@ type Labeled interface {
 	AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle]
 }
 
-func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(item Labeled, f func(SelID, *selector.Selector)) {
-	emit := func(id SelID) error {
-		f(id, s.selectorsByID[id])
-		return nil
-	}
+func (s *LabelRestrictionIndex[SelID]) AllPotentialMatches(item Labeled) iter.Seq2[SelID, *selector.Selector] {
+	return func(yield func(SelID, *selector.Selector) bool) {
+		emit := func(id SelID) bool {
+			return yield(id, s.selectorsByID[id])
+		}
 
-	for k, v := range item.AllOwnAndParentLabelHandles() {
-		values, ok := s.labelToValueToIDs[k]
-		if !ok {
-			continue
+		for k, v := range item.AllOwnAndParentLabelHandles() {
+			values, ok := s.labelToValueToIDs[k]
+			if !ok {
+				continue
+			}
+			if values.selsMatchingWildcard != nil {
+				for id := range values.selsMatchingWildcard.All() {
+					if !emit(id) {
+						return
+					}
+				}
+			}
+			if ids := values.selsMatchingSpecificValues[v]; ids != nil {
+				for id := range ids.All() {
+					if !emit(id) {
+						return
+					}
+				}
+			}
 		}
-		if values.selsMatchingWildcard != nil {
-			values.selsMatchingWildcard.Iter(emit)
-		}
-		if ids := values.selsMatchingSpecificValues[v]; ids != nil {
-			ids.Iter(emit)
+
+		// Finally, emit the unoptimized selectors.
+		for id := range s.unoptimizedIDs.All() {
+			if !emit(id) {
+				return
+			}
 		}
 	}
-
-	// Finally, emit the unoptimized selectors.
-	s.unoptimizedIDs.Iter(emit)
 }
 
 func (s *LabelRestrictionIndex[SelID]) updateGauges() {

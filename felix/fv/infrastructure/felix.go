@@ -19,6 +19,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -29,7 +31,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -247,18 +249,14 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		envVars["DELAY_FELIX_START"] = "true"
 	}
 
-	for k, v := range options.ExtraEnvVars {
-		envVars[k] = v
-	}
+	maps.Copy(envVars, options.ExtraEnvVars)
 
 	for k, v := range envVars {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
 	}
 
 	// Add in the volumes.
-	for k, v := range options.ExtraVolumes {
-		volumes[k] = v
-	}
+	maps.Copy(volumes, options.ExtraVolumes)
 	for k, v := range volumes {
 		args = append(args, "-v", fmt.Sprintf("%s:%s", k, v))
 	}
@@ -347,7 +345,7 @@ func (f *Felix) Stop() {
 	f.FlowServerStop()
 	f.Container.Stop()
 
-	if ginkgo.CurrentGinkgoTestDescription().Failed {
+	if ginkgo.CurrentSpecReport().Failed() {
 		Expect(f.DataRaces()).To(BeEmpty(), "Test FAILED and data races were detected in the logs at teardown.")
 	} else {
 		Expect(f.DataRaces()).To(BeEmpty(), "Test PASSED but data races were detected in the logs at teardown.")
@@ -423,9 +421,17 @@ func (f *Felix) Ready() (bool, error) {
 		healthAddr = f.TopologyOptions.ExtraEnvVars["FELIX_HEALTHHOST"]
 	}
 
-	resp, err := http.Get("http://" + healthAddr + ":9099/readiness")
+	url := "http://" + net.JoinHostPort(healthAddr, "9099") + "/readiness"
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		logrus.WithError(err).Debug("HTTP GET for readiness failed")
+		logrus.WithError(err).Error("Forming HTTP request for readiness failed")
+		return false, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logrus.WithError(err).Warn("HTTP GET for readiness failed")
 		return false, err
 	}
 	ok := resp.StatusCode == http.StatusOK
@@ -537,6 +543,7 @@ func (f *Felix) FlowLogsFromLocalSocket() ([]flowlog.FlowLog, error) {
 	if len(flows) == 0 {
 		return nil, fmt.Errorf("no flow log received yet")
 	}
+
 	var flogs []flowlog.FlowLog
 	for _, f := range flows {
 		flogs = append(flogs, goldmane.ConvertGoldmaneToFlowlog(types.FlowToProto(f)))
@@ -596,8 +603,8 @@ func (f *Felix) BPFIfState(family int) map[string]BPFIfState {
 
 	states := make(map[string]BPFIfState)
 
-	lines := strings.Split(out, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(out, "\n")
+	for line := range lines {
 		match := bpfIfStateRegexp.FindStringSubmatch(line)
 		if len(match) == 0 {
 			continue
@@ -656,7 +663,7 @@ func (f *Felix) BPFNumContiguousPolProgramsFn(iface string, ingressOrEgress stri
 
 func (f *Felix) BPFNumPolProgramsByName(iface string, ingressOrEgress string, family int) (contiguous, total int) {
 	entryPointIdx := f.BPFPolEntryPointIdx(iface, ingressOrEgress, family)
-	return f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
+	return f.BPFNumPolProgramsByEntryPoint(entryPointIdx, ingressOrEgress)
 }
 
 func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string, family int) int {
@@ -676,20 +683,25 @@ func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string, family
 	return entryPointIdx
 }
 
-func (f *Felix) BPFNumPolProgramsTotalByEntryPointFn(entryPointIdx int) func() (total int) {
+func (f *Felix) BPFNumPolProgramsTotalByEntryPointFn(entryPointIdx int, ingressOrEgress string) func() (total int) {
 	return func() (total int) {
-		_, total = f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
+		_, total = f.BPFNumPolProgramsByEntryPoint(entryPointIdx, ingressOrEgress)
 		return
 	}
 }
 
-func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int) (contiguous, total int) {
+func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int, ingressOrEgress string) (contiguous, total int) {
 	gapSeen := false
-	for i := 0; i < jump.MaxSubPrograms; i++ {
+	jmpMapName := jump.EgressMapParameters.VersionedName()
+	if ingressOrEgress == "egress" {
+		jmpMapName = jump.IngressMapParameters.VersionedName()
+	}
+	pinnedMap := "/sys/fs/bpf/tc/globals/" + jmpMapName
+	for i := range jump.MaxSubPrograms {
 		k := polprog.SubProgramJumpIdx(entryPointIdx, i, jump.TCMaxEntryPoints)
 		out, err := f.ExecOutput(
 			"bpftool", "map", "lookup",
-			"pinned", "/sys/fs/bpf/tc/globals/cali_jump3",
+			"pinned", pinnedMap,
 			"key",
 			fmt.Sprintf("%d", k&0xff),
 			fmt.Sprintf("%d", (k>>8)&0xff),
@@ -715,8 +727,8 @@ func (f *Felix) IPTablesChains(table string) map[string][]string {
 	out := map[string][]string{}
 	raw, err := f.ExecOutput("iptables-save", "-t", table)
 	Expect(err).NotTo(HaveOccurred())
-	lines := strings.Split(raw, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(raw, "\n")
+	for line := range lines {
 		if strings.HasPrefix(line, "#") {
 			// Line is a comment, ignore.
 			continue

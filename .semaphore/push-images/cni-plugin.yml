@@ -4,10 +4,8 @@ agent:
   machine:
     type: f1-standard-2
     os_image: ubuntu2204
-
 execution_time_limit:
   minutes: 60
-
 global_job_config:
   env_vars:
     - name: DEV_REGISTRIES
@@ -24,9 +22,9 @@ global_job_config:
       - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
       - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-
+      - ssh-add ~/.ssh/id_rsa
 blocks:
-  - name: Publish cni-plugin images
+  - name: Publish cni-plugin images and multi-arch manifests
     dependencies: []
     skip:
       when: "branch !~ '.+'"
@@ -34,17 +32,7 @@ blocks:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin cd CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin cd push-manifests-with-tag CONFIRM=true; fi
         - name: Windows
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin release-windows CONFIRM=true; fi
-  - name: Publish cni-plugin multi-arch manifests
-    dependencies:
-      - Publish cni-plugin images
-    skip:
-      when: "branch !~ '.+'"
-    task:
-      jobs:
-        - name: Linux multi-arch manifests
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin push-manifests-with-tag CONFIRM=true; fi

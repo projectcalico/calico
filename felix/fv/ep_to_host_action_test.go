@@ -18,8 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -59,6 +58,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
 			wName := fmt.Sprintf("w%d", ii)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, client)
 			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].ConfigureInInfra(infra)
 
@@ -68,15 +68,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		cc = &connectivity.Checker{}
 	})
 
-	entry := func(chainPolicy string, epToHostPol string, hep string, hepPolicy api.Action, expectedConn connectivity.Expected) table.TableEntry {
-		return table.Entry(
+	entry := func(chainPolicy string, epToHostPol string, hep string, hepPolicy api.Action, expectedConn connectivity.Expected) TableEntry {
+		return Entry(
 			fmt.Sprintf("INPUT=%s, ep-to-host=%s, HEP=%s, HEP-pol=%s, expected connectivity=%v",
 				chainPolicy, epToHostPol, hep, hepPolicy, expectedConn),
 			chainPolicy, epToHostPol, hep, hepPolicy, expectedConn,
 		)
 	}
 
-	table.DescribeTable("endpoint to host tests",
+	DescribeTable("endpoint to host tests",
 		func(chainPolicy string, epToHostPol string, hepIface string, hepPolicy api.Action, expectedConn connectivity.Expected) {
 			// Set the chain policy.
 			for _, f := range tc.Felixes {

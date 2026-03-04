@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"net"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
@@ -223,8 +223,8 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &svcKey.handle,
-					AttrSecondary: map[string]string{
+					HandleID: &svcKey.handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeService:   svc.Name,
 						ipam.AttributeType:      string(svc.Spec.Type),
 						ipam.AttributeNamespace: svc.Namespace,
@@ -253,16 +253,16 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		block.Unallocated = []int{2, 3}
 		block.Attributes = []model.AllocationAttribute{
 			{
-				AttrPrimary: &svcKey.handle,
-				AttrSecondary: map[string]string{
+				HandleID: &svcKey.handle,
+				ActiveOwnerAttrs: map[string]string{
 					ipam.AttributeService:   svc.Name,
 					ipam.AttributeType:      string(svc.Spec.Type),
 					ipam.AttributeNamespace: svc.Namespace,
 				},
 			},
 			{
-				AttrPrimary: &svcKey.handle,
-				AttrSecondary: map[string]string{
+				HandleID: &svcKey.handle,
+				ActiveOwnerAttrs: map[string]string{
 					ipam.AttributeService:   svc.Name,
 					ipam.AttributeType:      string(svc.Spec.Type),
 					ipam.AttributeNamespace: svc.Namespace,
@@ -289,6 +289,27 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		Expect(c.allocationTracker.ipsByService[*svcKey]).To(BeEmpty())
 		Expect(c.allocationTracker.ipsByBlock).To(BeEmpty())
 		Expect(c.allocationTracker.servicesByIP).To(BeEmpty())
+	})
+
+	It("should not panic on handleBlockUpdate with nil *AllocationBlock", func() {
+		cidr := cnet.MustParseCIDR("10.0.0.4/30")
+		key := model.BlockKey{CIDR: cidr}
+
+		// A nil *AllocationBlock wrapped in a non-nil interface passes the
+		// "kvp.Value == nil" check but causes a nil-pointer dereference on
+		// field access.
+		var nilBlock *model.AllocationBlock
+		kvp := model.KVPair{
+			Key:   key,
+			Value: nilBlock, // non-nil interface, nil underlying pointer
+		}
+
+		Expect(func() {
+			c.handleBlockUpdate(kvp)
+		}).ToNot(Panic())
+
+		// The block should have been cleaned up from the tracker.
+		Expect(c.allocationTracker.ipsByBlock).To(BeEmpty())
 	})
 
 	It("should parse calico annotations", func() {
@@ -516,5 +537,41 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		err = c.ensureDatastoreUpgraded()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cli.IPAMUpgradeCallCount()).To(Equal(2))
+	})
+
+	It("should handle invalid IP addresses in allocation tracker without panicking", func() {
+		svcKey, err := serviceKeyFromService(&svc)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Add an invalid IP address to the allocation tracker
+		c.allocationTracker.assignAddressToService(*svcKey, "invalid-ip-address")
+
+		// Create a service with pool annotations to trigger the problematic code path
+		svc.Annotations = map[string]string{
+			annotationIPv4Pools: "[\"10.0.0.0/24\"]",
+		}
+
+		// Add a valid IP pool to the controller
+		ipv4Pool := apiv3.IPPool{
+			TypeMeta: metav1.TypeMeta{},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pool",
+			},
+			Spec: apiv3.IPPoolSpec{
+				CIDR:        "10.0.0.0/24",
+				AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+			},
+		}
+		c.ipPools["test-pool"] = ipv4Pool
+
+		// Create the service in the fake client
+		_, err = c.clientSet.CoreV1().Services(svc.Namespace).Create(context.Background(), &svc, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		// This should not panic even with invalid IP in allocation tracker
+		// The syncService method should handle invalid IPs gracefully
+		Expect(func() {
+			c.syncService(*svcKey)
+		}).ToNot(Panic())
 	})
 })

@@ -16,7 +16,7 @@ package networking
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
@@ -39,7 +39,7 @@ var _ = describe.CalicoDescribe(
 		var server *conncheck.Server
 		var client1 *conncheck.Client
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
 			// Define a function to set the HostPort on the server pod.
 			hostPortSetter := func(pod *v1.Pod) {
 				pod.Spec.Containers[0].Ports = []v1.ContainerPort{
@@ -59,12 +59,12 @@ var _ = describe.CalicoDescribe(
 			checker.Deploy()
 		})
 
-		AfterEach(func() {
+		ginkgo.AfterEach(func() {
 			checker.Stop()
 		})
 
 		text := fmt.Sprintf("with host port resources active on :%d", hostport)
-		Context(text, func() {
+		ginkgo.Context(text, func() {
 			framework.ConformanceIt("should support Pod HostPorts", func() {
 				checker.ExpectSuccess(client1, server.HostPorts(hostport)...)   // Expect success on the correct host port.
 				checker.ExpectFailure(client1, server.HostPorts(hostport+1)...) // Expect failure on an incorrect host port.

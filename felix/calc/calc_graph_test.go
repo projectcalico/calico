@@ -15,8 +15,7 @@
 package calc_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -43,11 +42,11 @@ var udpPort = proto.ServicePort{Port: 123, Protocol: "UDP"}
 var tcpPort = proto.ServicePort{Port: 321, Protocol: "TCP"}
 
 var _ = DescribeTable("Calculation graph pass-through tests",
-	func(key model.Key, input interface{}, expUpdate interface{}, expRemove interface{}) {
+	func(key model.Key, input any, expUpdate any, expRemove any) {
 		// Create a calculation graph/event buffer combo.
 		eb := NewEventSequencer(nil)
-		var messageReceived interface{}
-		eb.Callback = func(message interface{}) {
+		var messageReceived any
+		eb.Callback = func(message any) {
 			log.WithField("message", message).Info("Received message")
 			messageReceived = message
 		}
@@ -229,14 +228,14 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 
 var _ = Describe("Host IP duplicate squashing test", func() {
 	var eb *EventSequencer
-	var messagesReceived []interface{}
+	var messagesReceived []any
 	var cg *dispatcher.Dispatcher
 
 	BeforeEach(func() {
 		// Create a calculation graph/event buffer combo.
 		eb = NewEventSequencer(nil)
 		messagesReceived = nil
-		eb.Callback = func(message interface{}) {
+		eb.Callback = func(message any) {
 			log.WithField("message", message).Info("Received message")
 			messagesReceived = append(messagesReceived, message)
 		}

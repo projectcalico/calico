@@ -46,7 +46,7 @@ type Manager struct {
 	ipFamily     proto.IPVersion
 }
 
-func (m *Manager) OnUpdate(_ interface{}) {
+func (m *Manager) OnUpdate(_ any) {
 }
 
 func NewManager(
@@ -149,7 +149,7 @@ func (m *Manager) ResyncFailsafes() error {
 		addPort(p, true)
 	}
 
-	unknownKeys.Iter(func(k KeyInterface) error {
+	for k := range unknownKeys.All() {
 		err := m.failsafesMap.Delete(k.ToSlice())
 		if err != nil {
 			log.WithError(err).WithField("key", k).Warn("Failed to remove failsafe port from map.")
@@ -157,8 +157,7 @@ func (m *Manager) ResyncFailsafes() error {
 		} else {
 			log.WithField("key", k).Debug("Deleted failsafe port.")
 		}
-		return nil
-	})
+	}
 
 	m.failsafesInSync = !syncFailed
 	if syncFailed {

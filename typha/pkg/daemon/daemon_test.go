@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -346,6 +346,11 @@ func (b *mockDatastore) HostEndpoints() clientv3.HostEndpointInterface {
 	panic("not implemented")
 }
 
+// LiveMigrations returns an interface for managing live migration resources.
+func (b *mockDatastore) LiveMigrations() clientv3.LiveMigrationInterface {
+	panic("not implemented")
+}
+
 // WorkloadEndpoints returns an interface for managing workload endpoint resources.
 func (b *mockDatastore) WorkloadEndpoints() clientv3.WorkloadEndpointInterface {
 	panic("not implemented")
@@ -397,7 +402,7 @@ func (b *mockDatastore) CalicoNodeStatus() clientv3.CalicoNodeStatusInterface {
 }
 
 // IPAMConfig returns an interface for managing the IPAMConfig resources.
-func (b *mockDatastore) IPAMConfig() clientv3.IPAMConfigInterface {
+func (c *mockDatastore) IPAMConfiguration() clientv3.IPAMConfigurationInterface {
 	panic("not implemented")
 }
 
@@ -422,13 +427,10 @@ func (b *mockDatastore) getNumInitCalls() int {
 
 var _ RealClientV3 = (*mockDatastore)(nil)
 
-type dummySyncer struct {
-}
+type dummySyncer struct{}
 
 func (*dummySyncer) Start() {
-
 }
 
 func (*dummySyncer) Stop() {
-
 }

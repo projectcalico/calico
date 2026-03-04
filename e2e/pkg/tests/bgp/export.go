@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "github.com/tigera/operator/api/v1"
@@ -48,7 +50,7 @@ var _ = describe.CalicoDescribe(
 		// Create a new framework for the tests.
 		f := utils.NewDefaultFramework("bgp-export")
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
 			// Create a connection tester for the test.
 			checker = conncheck.NewConnectionTester(f)
 
@@ -82,7 +84,7 @@ var _ = describe.CalicoDescribe(
 			pool.Spec.DisableBGPExport = false
 			err = cli.Create(context.Background(), pool)
 			Expect(err).NotTo(HaveOccurred(), "Error creating IP pool")
-			DeferCleanup(func() {
+			ginkgo.DeferCleanup(func() {
 				err = cli.Delete(context.Background(), pool)
 				Expect(err).NotTo(HaveOccurred(), "Error deleting IP pool")
 			})
@@ -90,7 +92,7 @@ var _ = describe.CalicoDescribe(
 			// Before each test, perform the following steps:
 			// - Create a server pod and corresponding service in the main namespace for the test.
 			// - Create a client pod and assert that it can connect to the service.
-			By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
+			ginkgo.By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
 
 			// Use customizers to ensure pods use the test IP pool and avoid landing on the same node.
 			customtizer := conncheck.CombineCustomizers(
@@ -118,15 +120,15 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 
-		AfterEach(func() {
+		ginkgo.AfterEach(func() {
 			checker.Stop()
 			restoreBGPConfig()
 		})
 
-		It("should not export pools with export disabled", func() {
+		ginkgo.It("should not export pools with export disabled", func() {
 			// Disable the node to node mesh and replace it with explicit peerings.
 			disableFullMesh(cli)
-			By("Creating a BGPPeer to re-enable connectivity, simulating full mesh")
+			ginkgo.By("Creating a BGPPeer to re-enable connectivity, simulating full mesh")
 			peer := &v3.BGPPeer{
 				ObjectMeta: metav1.ObjectMeta{Name: "peer-to-self"},
 				Spec: v3.BGPPeerSpec{
@@ -136,7 +138,7 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
-			DeferCleanup(func() {
+			ginkgo.DeferCleanup(func() {
 				err := cli.Delete(context.Background(), peer)
 				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
 			})

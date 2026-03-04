@@ -14,9 +14,6 @@ BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
-
 include ../lib.Makefile
 
 SRC_FILES=$(shell find cmd -name '*.go') $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
@@ -132,12 +129,13 @@ TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 
 ## Run the unit tests in a container.
 test: ut
-ut fv: $(TEST_BINARIES)
+ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED)
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
+		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		   CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
 		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
-		   CRDS=$(CURDIR)/../libcalico-go/config/crd \
+		   CRDS=$(REPO_ROOT)/$(CALICO_CRD_PATH) \
 		   CERTS_PATH=$(CERTS_PATH) \
 		   ./run-uts $(WHAT)
 

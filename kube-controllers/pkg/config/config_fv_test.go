@@ -16,11 +16,10 @@ package config_test
 
 import (
 	"context"
-	"os"
 	"regexp"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,7 +40,8 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 		c                 client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
-		kconfigFile       *os.File
+		kconfigFile       string
+		removeKubeconfig  func()
 	)
 
 	BeforeEach(func() {
@@ -54,16 +54,9 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigFile, err = os.CreateTemp("", "ginkgo-nodecontroller")
-		Expect(err).NotTo(HaveOccurred())
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigFile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
+		kconfigFile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigFile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
-
-		k8sClient, err = testutils.GetK8sClient(kconfigFile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigFile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -82,16 +75,16 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 
 	AfterEach(func() {
 		_ = c.Close()
-		_ = os.Remove(kconfigFile.Name())
 		controllerManager.Stop()
 		uut.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
 	})
 
 	Context("with no KubeControllersConfig at start of day", func() {
 		BeforeEach(func() {
-			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), nil)
+			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile, nil)
 		})
 
 		It("should create default config", func() {
@@ -102,6 +95,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			}, time.Second*10, time.Millisecond*500).ShouldNot(BeNil())
 
 			// Spot check the status to make sure it's set.
+			Expect(out.Status.RunningConfig).ToNot(BeNil())
 			Expect(out.Status.RunningConfig.HealthChecks).To(Equal(v3.Enabled))
 		})
 
@@ -121,6 +115,9 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			Eventually(func() string {
 				out, err := c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 				if err != nil {
+					return ""
+				}
+				if out.Status.RunningConfig == nil {
 					return ""
 				}
 				return out.Status.RunningConfig.HealthChecks
@@ -156,6 +153,9 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			Eventually(func() bool {
 				out, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
+				if out.Status.RunningConfig == nil {
+					return false
+				}
 				return out.Status.RunningConfig.HealthChecks != ""
 			}, time.Second*10, time.Millisecond*500).Should(BeTrue())
 
@@ -176,7 +176,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			_, err := c.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
-			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), nil)
+			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile, nil)
 		})
 
 		It("should set status matching config with defaults for unset values", func() {
@@ -185,18 +185,21 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 				var err error
 				out, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
+				if out.Status.RunningConfig == nil {
+					return nil
+				}
 				return out.Status.RunningConfig.Controllers.Namespace
 			}, time.Second*10, time.Millisecond*500).ShouldNot(BeNil())
 			Expect(out.Status.RunningConfig.Controllers.Node).To(BeNil())
 			Expect(out.Status.RunningConfig.Controllers.Policy).To(BeNil())
 			Expect(out.Status.RunningConfig.Controllers.WorkloadEndpoint).To(BeNil())
 			Expect(out.Status.RunningConfig.Controllers.ServiceAccount).To(BeNil())
+			Expect(out.Status.RunningConfig.Controllers.LoadBalancer).To(BeNil())
 
 			// These fields are defaulted
 			Expect(out.Status.RunningConfig.HealthChecks).To(Equal(v3.Enabled))
 			Expect(out.Status.RunningConfig.LogSeverityScreen).To(Equal("Info"))
 			Expect(out.Status.RunningConfig.EtcdV3CompactionPeriod).To(Equal(&metav1.Duration{Duration: time.Minute * 10}))
-			Expect(out.Status.RunningConfig.Controllers.LoadBalancer.AssignIPs).To(Equal(v3.AllServices))
 		})
 	})
 
@@ -212,7 +215,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			_, err := c.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
-			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), map[string]string{
+			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile, map[string]string{
 				"ENABLED_CONTROLLERS": "node",
 			})
 		})
@@ -244,6 +247,19 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kcc.Status.EnvironmentVars).To(Equal(map[string]string{"ENABLED_CONTROLLERS": "node"}))
+		})
+
+		It("should not default loadbalancer config if not part of ENABLED_CONTROLLERS", func() {
+			// Wait until controller is up and has set status
+			var kcc *v3.KubeControllersConfiguration
+			Eventually(func() map[string]string {
+				var err error
+				kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				return kcc.Status.EnvironmentVars
+			}, time.Second*10, time.Millisecond*500).Should(Equal(map[string]string{"ENABLED_CONTROLLERS": "node"}))
+
+			Expect(kcc.Status.RunningConfig.Controllers.LoadBalancer).To(BeNil())
 		})
 	})
 })

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
@@ -50,10 +50,12 @@ func buildSimpleService() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 			ClusterIPs:            []string{"127.0.0.1", "::1"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			ExternalIPs:           []string{externalIP1, externalIP2},
+			IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 		},
 	}
 	ep = &discoveryv1.EndpointSlice{
-		ObjectMeta: meta,
+		AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+		ObjectMeta:  meta,
 	}
 	return
 }
@@ -68,10 +70,12 @@ func buildSimpleService2() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 			ClusterIPs:            []string{"127.0.0.5", "::5"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			ExternalIPs:           []string{externalIP1, externalIP2},
+			IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 		},
 	}
 	ep = &discoveryv1.EndpointSlice{
-		ObjectMeta: meta,
+		AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+		ObjectMeta:  meta,
 	}
 	return
 }
@@ -86,6 +90,7 @@ func buildSimpleService3() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 			ClusterIPs:            []string{"127.0.0.10", "::a"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			LoadBalancerIP:        loadBalancerIP1,
+			IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 		},
 		Status: v1.ServiceStatus{
 			LoadBalancer: v1.LoadBalancerStatus{
@@ -94,7 +99,8 @@ func buildSimpleService3() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 		},
 	}
 	ep = &discoveryv1.EndpointSlice{
-		ObjectMeta: meta,
+		AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+		ObjectMeta:  meta,
 	}
 	return
 }
@@ -109,10 +115,12 @@ func buildSimpleService4() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 			ClusterIPs:            []string{"127.0.0.11", "::b"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			ExternalIPs:           []string{externalIP3},
+			IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 		},
 	}
 	ep = &discoveryv1.EndpointSlice{
-		ObjectMeta: meta,
+		AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+		ObjectMeta:  meta,
 	}
 	return
 }
@@ -139,7 +147,7 @@ var _ = Describe("RouteGenerator", func() {
 		rg = &routeGenerator{
 			nodeName:                   "foobar",
 			svcIndexer:                 cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
-			epIndexer:                  cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
+			epIndexer:                  cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{endpointSliceServiceIndex: endpointSliceServiceIndexFunc}),
 			svcRouteMap:                make(map[string]map[string]bool),
 			routeAdvertisementRefCount: make(map[string]int),
 			client: &client{
@@ -317,6 +325,7 @@ var _ = Describe("RouteGenerator", func() {
 
 			// Add the endpoint back with an IPv6 address.  The service's cluster IPs
 			// should remain non-advertised.
+			ep.AddressType = discoveryv1.AddressType(v1.IPv6Protocol)
 			ep.Endpoints = []discoveryv1.Endpoint{{
 				Addresses: []string{"fd5f:1234::3"},
 				NodeName:  &rg.nodeName,
@@ -336,6 +345,7 @@ var _ = Describe("RouteGenerator", func() {
 
 			// Add the endpoint again with an IPv4 address.  The service's cluster IPs
 			// should now be advertised.
+			ep.AddressType = discoveryv1.AddressType(v1.IPv4Protocol)
 			ep.Endpoints = []discoveryv1.Endpoint{{
 				Addresses: []string{"10.96.0.45"},
 				NodeName:  &rg.nodeName,
@@ -697,6 +707,68 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.programmedRouteRefCount).NotTo(HaveKey(key))
 			})
 
+			// This test reproduces the CI-1944 bug: when serviceLoadBalancerIPs has a /32 entry
+			// and the LB IP is assigned from an IPPool (so spec.loadBalancerIP is empty, IP only in
+			// status.loadBalancer.ingress), services with externalTrafficPolicy=Cluster should still
+			// be advertised per-service, since /32s are excluded from global aggregation.
+			It("should handle /32 routes for LoadBalancerIPs assigned from IPPool (status only, no spec.loadBalancerIP)", func() {
+				// Use a fresh LB IP that is not used by any other test service.
+				lbIP := "192.168.1.50"
+				key := "/calico/staticroutes/" + lbIP + "-32"
+
+				// Build a LoadBalancer service with Cluster traffic policy and NO spec.loadBalancerIP.
+				// The IP appears only in status.loadBalancer.ingress, as is typical for IPPool allocation.
+				lbSvcMeta := metav1.ObjectMeta{Namespace: "foo", Name: "lb-cluster", Labels: map[string]string{"kubernetes.io/service-name": "lb-cluster"}}
+				lbSvc := &v1.Service{
+					ObjectMeta: lbSvcMeta,
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "127.0.0.20",
+						ClusterIPs:            []string{"127.0.0.20"},
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
+						// LoadBalancerIP intentionally NOT set.
+					},
+					Status: v1.ServiceStatus{
+						LoadBalancer: v1.LoadBalancerStatus{
+							Ingress: []v1.LoadBalancerIngress{{IP: lbIP}},
+						},
+					},
+				}
+				lbEp := &discoveryv1.EndpointSlice{
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+					ObjectMeta:  lbSvcMeta,
+				}
+				addEndpointSubset(lbEp, rg.nodeName, "1.1.1.1")
+
+				// Configure a /32 serviceLoadBalancerIPs entry matching the service's LB IP.
+				lbIPRange := fmt.Sprintf("%s/32", lbIP)
+				By("onLoadBalancerIPsUpdate to include /32 route")
+				rg.client.onLoadBalancerIPsUpdate([]string{lbIPRange})
+
+				// No routes should be advertised yet (no service registered).
+				rg.resyncKnownRoutes()
+				Expect(rg.client.cache[key]).To(Equal(""))
+
+				// Add the service and endpoint.
+				err := rg.epIndexer.Add(lbEp)
+				Expect(err).NotTo(HaveOccurred())
+				err = rg.svcIndexer.Add(lbSvc)
+				Expect(err).NotTo(HaveOccurred())
+
+				// The /32 route should now be advertised from the per-service path.
+				By("Resyncing routes after adding service")
+				rg.resyncKnownRoutes()
+				Expect(rg.client.cache[key]).To(Equal(lbIP + "/32"))
+				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
+
+				// Remove BGPConfiguration and verify route is withdrawn.
+				rg.client.onLoadBalancerIPsUpdate([]string{})
+				rg.resyncKnownRoutes()
+				Expect(rg.client.cache).NotTo(HaveKey(key))
+				Expect(rg.client.programmedRouteRefCount).NotTo(HaveKey(key))
+			})
+
 			// This test simulates a situation where BGPConfiguration has a /32 route that exactly matches
 			// externalIP of a LoadBalancer service with ExternalTrafficPolicy set to Local. The route should only be advertised
 			// when the Service is created, and not when the BGPConfiguration is created.
@@ -822,6 +894,81 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 				Expect(result).To(BeFalse())
 			})
 
+			It("should advertise Cluster services with /32 LB IP from status.loadBalancer.ingress when aggregation is enabled", func() {
+				// This reproduces the CI-1944 bug: when serviceLoadBalancerIPs has a /32 entry
+				// and the LB IP is assigned via IPPool (so svc.Spec.LoadBalancerIP is empty,
+				// IP only in svc.Status.LoadBalancer.Ingress), the service should still be
+				// advertised per-service since /32s are excluded from global aggregation.
+				_, lbNet, _ := net.ParseCIDR("192.168.1.0/32")
+				mockClient.loadBalancerIPs = []string{"192.168.1.0/32"}
+				mockClient.loadBalancerIPNets = []*net.IPNet{lbNet}
+
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "10.0.0.1",
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
+						// Note: LoadBalancerIP is NOT set (empty), as is typical when
+						// IPs are assigned from a Calico IPPool.
+					},
+					Status: v1.ServiceStatus{
+						LoadBalancer: v1.LoadBalancerStatus{
+							Ingress: []v1.LoadBalancerIngress{{IP: "192.168.1.0"}},
+						},
+					},
+				}
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+					Endpoints: []discoveryv1.Endpoint{
+						{
+							Addresses: []string{"10.0.0.2"},
+							NodeName:  &rg.nodeName,
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
+				Expect(result).To(BeTrue())
+			})
+
+			It("should advertise Cluster services with /128 LB IP from status.loadBalancer.ingress when aggregation is enabled", func() {
+				// IPv6 equivalent of the CI-1944 bug.
+				_, lbNet, _ := net.ParseCIDR("fd00::1/128")
+				mockClient.loadBalancerIPs = []string{"fd00::1/128"}
+				mockClient.loadBalancerIPNets = []*net.IPNet{lbNet}
+
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "fd00::1",
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv6Protocol},
+					},
+					Status: v1.ServiceStatus{
+						LoadBalancer: v1.LoadBalancerStatus{
+							Ingress: []v1.LoadBalancerIngress{{IP: "fd00::1"}},
+						},
+					},
+				}
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					AddressType: discoveryv1.AddressType(v1.IPv6Protocol),
+					Endpoints: []discoveryv1.Endpoint{
+						{
+							Addresses: []string{"fd00::2"},
+							NodeName:  &rg.nodeName,
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
+				Expect(result).To(BeTrue())
+			})
+
 			It("should still advertise Local services when aggregation is enabled", func() {
 				svc := &v1.Service{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
@@ -829,10 +976,12 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "10.0.0.1",
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"10.0.0.2"},
@@ -858,10 +1007,12 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "10.0.0.1",
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"10.0.0.2"},
@@ -880,11 +1031,13 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "10.0.0.1",
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
-					Endpoints:  []discoveryv1.Endpoint{},
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+					Endpoints:   []discoveryv1.Endpoint{},
 				}
 
 				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
@@ -904,10 +1057,12 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "10.0.0.1", // IPv4
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv4Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					ObjectMeta:  metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
+					AddressType: discoveryv1.AddressType(v1.IPv6Protocol),
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"2001:db8::1"}, // IPv6
@@ -926,6 +1081,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Type:                  v1.ServiceTypeLoadBalancer,
 						ClusterIP:             "2001:db8::1", // IPv6
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv6Protocol},
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
@@ -934,6 +1090,65 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						Namespace: "default",
 						Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
 					},
+					AddressType: discoveryv1.AddressType(v1.IPv6Protocol),
+					Endpoints: []discoveryv1.Endpoint{
+						{
+							Addresses: []string{"2001:db8::2"}, // IPv6
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
+				Expect(result).To(BeTrue())
+			})
+
+			It("should advertise dual-stuck service when get IPv4 endpointSlice", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "2001:db8::1",
+						ClusterIPs:            []string{"2001:db8::1", "1.1.1.1"},
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
+					},
+				}
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-svc",
+						Namespace: "default",
+						Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+					},
+					AddressType: discoveryv1.AddressType(v1.IPv4Protocol),
+					Endpoints: []discoveryv1.Endpoint{
+						{
+							Addresses: []string{"10.10.10.10"}, // IPv6
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
+				Expect(result).To(BeTrue())
+			})
+
+			It("should advertise dual-stuck service when get IPv6 endpointSlice", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "2001:db8::1",
+						ClusterIPs:            []string{"2001:db8::1", "1.1.1.1"},
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+						IPFamilies:            []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
+					},
+				}
+				ep := &discoveryv1.EndpointSlice{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-svc",
+						Namespace: "default",
+						Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+					},
+					AddressType: discoveryv1.AddressType(v1.IPv6Protocol),
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"2001:db8::2"}, // IPv6

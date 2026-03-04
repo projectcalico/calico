@@ -2,6 +2,29 @@ promotions:
   # Manual promotion for publishing a hashrelease.
   - name: Publish hashrelease
     pipeline_file: release/hashrelease.yml
+    parameters:
+      env_vars:
+        - required: true
+          options:
+            - "true"
+            - "false"
+          default_value: "false"
+          description: "Build container images. If 'true', container images will be built as part of the hashrelease process."
+          name: BUILD_CONTAINER_IMAGES
+        - required: true
+          options:
+            - "true"
+            - "false"
+          default_value: "false"
+          description: "create tarball of images. If 'true', a tarball of images will be added to the release.tgz. Requires BUILD_CONTAINER_IMAGES to also be 'true'."
+          name: ARCHIVE_IMAGES
+        - required: true
+          options:
+            - "true"
+            - "false"
+          default_value: "false"
+          description: "publish images. If 'true', images will be pushed to the container registry/registries as part of the hashrelease process. Requires BUILD_CONTAINER_IMAGES to also be 'true'."
+          name: PUBLISH_IMAGES
   # Manual promotion for publishing a release.
   - name: Publish official release
     pipeline_file: release/release.yml

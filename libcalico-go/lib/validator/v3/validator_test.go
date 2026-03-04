@@ -15,43 +15,48 @@
 package v3_test
 
 import (
+	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	k8sv1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 func init() {
 	// We need some pointers to ints, so just define as values here.
-	var Vneg1 = -1
-	var V0 = 0
-	var V4 = 4
-	var V6 = 6
-	var V128 = 128
-	var V254 = 254
-	var V255 = 255
-	var V256 = 256
-	var Vffffffff = 0xffffffff
-	var V100000000 = 0x100000000
-	var tierOrder = float64(100.0)
-	var defaultTierOrder = api.DefaultTierOrder
-	var anpTierOrder = api.AdminNetworkPolicyTierOrder
-	var banpTierOrder = api.BaselineAdminNetworkPolicyTierOrder
-	var defaultTierBadOrder = float64(10.0)
+	Vneg1 := -1
+	V0 := 0
+	V4 := 4
+	V6 := 6
+	V128 := 128
+	V254 := 254
+	V255 := 255
+	V256 := 256
+	Vffffffff := 0xffffffff
+	V100000000 := 0x100000000
+	tierOrder := float64(100.0)
+	defaultTierOrder := api.DefaultTierOrder
+	adminTierOrder := api.KubeAdminTierOrder
+	baselineTierOrder := api.KubeBaselineTierOrder
+	defaultTierBadOrder := float64(10.0)
 
 	// We need pointers to bools, so define the values here.
-	var Vtrue = true
-	var Vfalse = false
+	Vtrue := true
+	Vfalse := false
 
 	// Set up some values we use in various tests.
 	ipv4_1 := "1.2.3.4"
@@ -135,8 +140,8 @@ func init() {
 
 	// Perform validation on error messages from validator
 	DescribeTable("Validator errors",
-		func(input interface{}, e string) {
-			err := v3.Validate(input)
+		func(input any, e string) {
+			err := validator.Validate(input)
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(Equal(e))
 		},
@@ -157,12 +162,12 @@ func init() {
 	// scenarios.  This does not test precise error strings - but does cover a lot of the validation
 	// code paths.
 	DescribeTable("Validator",
-		func(input interface{}, valid bool) {
+		func(input any, valid bool) {
 			if valid {
-				Expect(v3.Validate(input)).NotTo(HaveOccurred(),
+				Expect(validator.Validate(input)).NotTo(HaveOccurred(),
 					"expected value to be valid")
 			} else {
-				Expect(v3.Validate(input)).To(HaveOccurred(),
+				Expect(validator.Validate(input)).To(HaveOccurred(),
 					"expected value to be invalid")
 			}
 		},
@@ -176,51 +181,51 @@ func init() {
 		Entry("should reject rule with no action", api.Rule{}, false),
 
 		// (API model) EndpointPorts.
-		Entry("should accept EndpointPort with tcp protocol", libapiv3.WorkloadEndpointPort{
+		Entry("should accept EndpointPort with tcp protocol", internalapi.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoTCP,
 			Port:     1234,
 		}, true),
-		Entry("should accept EndpointPort with udp protocol", libapiv3.WorkloadEndpointPort{
+		Entry("should accept EndpointPort with udp protocol", internalapi.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoUDP,
 			Port:     1234,
 		}, true),
-		Entry("should accept EndpointPort with sctp protocol", libapiv3.WorkloadEndpointPort{
+		Entry("should accept EndpointPort with sctp protocol", internalapi.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoSCTP,
 			Port:     1234,
 		}, true),
-		Entry("should reject EndpointPort with empty name", libapiv3.WorkloadEndpointPort{
+		Entry("should reject EndpointPort with empty name", internalapi.WorkloadEndpointPort{
 			Name:     "",
 			Protocol: protoUDP,
 			Port:     1234,
 		}, false),
-		Entry("should accept EndpointPort with empty name but HostPort specified", libapiv3.WorkloadEndpointPort{
+		Entry("should accept EndpointPort with empty name but HostPort specified", internalapi.WorkloadEndpointPort{
 			Name:     "",
 			Protocol: protoUDP,
 			Port:     1234,
 			HostPort: 2345,
 		}, true),
-		Entry("should reject EndpointPort with no protocol", libapiv3.WorkloadEndpointPort{
+		Entry("should reject EndpointPort with no protocol", internalapi.WorkloadEndpointPort{
 			Name: "a-valid-port",
 			Port: 1234,
 		}, false),
-		Entry("should reject EndpointPort with numeric protocol", libapiv3.WorkloadEndpointPort{
+		Entry("should reject EndpointPort with numeric protocol", internalapi.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoNumeric,
 			Port:     1234,
 		}, false),
-		Entry("should reject EndpointPort with no port", libapiv3.WorkloadEndpointPort{
+		Entry("should reject EndpointPort with no port", internalapi.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoTCP,
 		}, false),
 
 		// (API) WorkloadEndpointSpec.
 		Entry("should accept WorkloadEndpointSpec with a port (m)",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
-				Ports: []libapiv3.WorkloadEndpointPort{
+				Ports: []internalapi.WorkloadEndpointPort{
 					{
 						Name:     "a-valid-port",
 						Protocol: protoTCP,
@@ -231,9 +236,9 @@ func init() {
 			true,
 		),
 		Entry("should reject WorkloadEndpointSpec with an unnamed port and no host mapping (m)",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
-				Ports: []libapiv3.WorkloadEndpointPort{
+				Ports: []internalapi.WorkloadEndpointPort{
 					{
 						Protocol: protoTCP,
 						Port:     1234,
@@ -243,9 +248,9 @@ func init() {
 			false,
 		),
 		Entry("should accept WorkloadEndpointSpec with name-clashing ports (m)",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
-				Ports: []libapiv3.WorkloadEndpointPort{
+				Ports: []internalapi.WorkloadEndpointPort{
 					{
 						Name:     "a-valid-port",
 						Protocol: protoTCP,
@@ -261,9 +266,9 @@ func init() {
 			true,
 		),
 		Entry("should accept WorkloadEndpointSpec with an unnamed port and a host port (m)",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
-				Ports: []libapiv3.WorkloadEndpointPort{
+				Ports: []internalapi.WorkloadEndpointPort{
 					{
 						Protocol: protoTCP,
 						Port:     1234,
@@ -274,9 +279,9 @@ func init() {
 			true,
 		),
 		Entry("should reject WorkloadEndpointSpec with a port with an invalid host IP (m)",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
-				Ports: []libapiv3.WorkloadEndpointPort{
+				Ports: []internalapi.WorkloadEndpointPort{
 					{
 						Protocol: protoTCP,
 						Port:     1234,
@@ -288,14 +293,14 @@ func init() {
 			false,
 		),
 		Entry("should reject WorkloadEndpointSpec with an invalid source spoofing config (m)",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName:              "eth0",
 				AllowSpoofedSourcePrefixes: []string{"10.abcd"},
 			},
 			false,
 		),
 		Entry("should accept WorkloadEndpointSpec with an ip or prefix in the source spoofing config (m)",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName:              "eth0",
 				AllowSpoofedSourcePrefixes: []string{"10.0.0.1", "192.168.0.0/16"},
 			},
@@ -701,11 +706,11 @@ func init() {
 		),
 
 		// (API) Interface.
-		Entry("should accept a valid interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Valid_Iface.0-9"}, true),
-		Entry("should reject an interface that is too long", libapiv3.WorkloadEndpointSpec{InterfaceName: "interfaceTooLong"}, false),
-		Entry("should reject & in an interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Invalid&Intface"}, false),
-		Entry("should reject # in an interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Invalid#Intface"}, false),
-		Entry("should reject : in an interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Invalid:Intface"}, false),
+		Entry("should accept a valid interface", internalapi.WorkloadEndpointSpec{InterfaceName: "Valid_Iface.0-9"}, true),
+		Entry("should reject an interface that is too long", internalapi.WorkloadEndpointSpec{InterfaceName: "interfaceTooLong"}, false),
+		Entry("should reject & in an interface", internalapi.WorkloadEndpointSpec{InterfaceName: "Invalid&Intface"}, false),
+		Entry("should reject # in an interface", internalapi.WorkloadEndpointSpec{InterfaceName: "Invalid#Intface"}, false),
+		Entry("should reject : in an interface", internalapi.WorkloadEndpointSpec{InterfaceName: "Invalid:Intface"}, false),
 
 		// (API) FelixConfiguration.
 		Entry("should accept a valid IptablesBackend value 'Legacy'", api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendLegacy}, true),
@@ -804,10 +809,10 @@ func init() {
 		Entry("should reject an invalid MTUIfacePattern value '*'", api.FelixConfigurationSpec{MTUIfacePattern: "*"}, false),
 		Entry("should accept a valid MTUIfacePattern value 'eth.*'", api.FelixConfigurationSpec{MTUIfacePattern: "eth.*"}, true),
 
-		Entry("should allow HealthTimeoutOverride 0", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: metav1.Duration{Duration: 0}}}}, true),
-		Entry("should reject HealthTimeoutOverride -1", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: metav1.Duration{Duration: -1}}}}, false),
-		Entry("should reject HealthTimeoutOverride with bad name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "%", Timeout: metav1.Duration{Duration: 10}}}}, false),
-		Entry("should reject HealthTimeoutOverride with no name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "", Timeout: metav1.Duration{Duration: 10}}}}, false),
+		Entry("should allow HealthTimeoutOverride 0", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: v1.Duration{Duration: 0}}}}, true),
+		Entry("should reject HealthTimeoutOverride -1", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: v1.Duration{Duration: -1}}}}, false),
+		Entry("should reject HealthTimeoutOverride with bad name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "%", Timeout: v1.Duration{Duration: 10}}}}, false),
+		Entry("should reject HealthTimeoutOverride with no name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "", Timeout: v1.Duration{Duration: 10}}}}, false),
 
 		// (API) Protocol
 		Entry("should accept protocol TCP", protocolFromString("TCP"), true),
@@ -829,102 +834,102 @@ func init() {
 
 		// (API) IPNAT
 		Entry("should accept valid IPNAT IPv4",
-			libapiv3.IPNAT{
+			internalapi.IPNAT{
 				InternalIP: ipv4_1,
 				ExternalIP: ipv4_2,
 			}, true),
 		Entry("should accept valid IPNAT IPv6",
-			libapiv3.IPNAT{
+			internalapi.IPNAT{
 				InternalIP: ipv6_1,
 				ExternalIP: ipv6_2,
 			}, true),
 		Entry("should reject IPNAT mixed IPv4 (int) and IPv6 (ext)",
-			libapiv3.IPNAT{
+			internalapi.IPNAT{
 				InternalIP: ipv4_1,
 				ExternalIP: ipv6_1,
 			}, false),
 		Entry("should reject IPNAT mixed IPv6 (int) and IPv4 (ext)",
-			libapiv3.IPNAT{
+			internalapi.IPNAT{
 				InternalIP: ipv6_1,
 				ExternalIP: ipv4_1,
 			}, false),
 
 		// (API) WorkloadEndpointSpec
 		Entry("should accept workload endpoint with interface only",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 			}, true),
 		Entry("should accept workload endpoint with networks and no nats",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_1, netv4_2, netv6_1, netv6_2},
 			}, true),
 		Entry("should accept workload endpoint with IPv4 NAT covered by network",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_1},
-				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv4_1, ExternalIP: ipv4_2}},
+				IPNATs:        []internalapi.IPNAT{{InternalIP: ipv4_1, ExternalIP: ipv4_2}},
 			}, true),
 		Entry("should accept workload endpoint with IPv6 NAT covered by network",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv6_1},
-				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv6_1, ExternalIP: ipv6_2}},
+				IPNATs:        []internalapi.IPNAT{{InternalIP: ipv6_1, ExternalIP: ipv6_2}},
 			}, true),
 		Entry("should accept workload endpoint with IPv4 and IPv6 NAT covered by network",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_1, netv6_1},
-				IPNATs: []libapiv3.IPNAT{
+				IPNATs: []internalapi.IPNAT{
 					{InternalIP: ipv4_1, ExternalIP: ipv4_2},
 					{InternalIP: ipv6_1, ExternalIP: ipv6_2},
 				},
 			}, true),
 		Entry("should accept workload endpoint with mixed-case ContainerID",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				ContainerID:   "Cath01234-G",
 			}, true),
-		Entry("should reject workload endpoint with no config", libapiv3.WorkloadEndpointSpec{}, false),
+		Entry("should reject workload endpoint with no config", internalapi.WorkloadEndpointSpec{}, false),
 		Entry("should reject workload endpoint with IPv4 networks that contain >1 address",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_3},
 			}, false),
 		Entry("should reject workload endpoint with IPv6 networks that contain >1 address",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv6_3},
 			}, false),
 		Entry("should reject workload endpoint with nats and no networks",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
-				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
+				IPNATs:        []internalapi.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
 			}, false),
 		Entry("should reject workload endpoint with IPv4 NAT not covered by network",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_1},
-				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
+				IPNATs:        []internalapi.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
 			}, false),
 		Entry("should reject workload endpoint with IPv6 NAT not covered by network",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv6_1},
-				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv6_2, ExternalIP: ipv6_1}},
+				IPNATs:        []internalapi.IPNAT{{InternalIP: ipv6_2, ExternalIP: ipv6_1}},
 			}, false),
 		Entry("should reject workload endpoint containerID that starts with a dash",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali0134",
 				ContainerID:   "-abcdefg",
 			}, false),
 		Entry("should reject workload endpoint containerID that ends with a dash",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali0134",
 				ContainerID:   "abcdeSg-",
 			}, false),
 		Entry("should reject workload endpoint containerID that contains a period",
-			libapiv3.WorkloadEndpointSpec{
+			internalapi.WorkloadEndpointSpec{
 				InterfaceName: "cali0134",
 				ContainerID:   "abcde-j.g",
 			}, false),
@@ -974,15 +979,18 @@ func init() {
 
 		// (API) IPPool
 		Entry("should accept IP pool with IPv4 CIDR /26",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
-				Spec: api.IPPoolSpec{CIDR: netv4_3},
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec:       api.IPPoolSpec{CIDR: netv4_3},
 			}, true),
 		Entry("should accept IP pool with IPv4 CIDR /10",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
-				Spec: api.IPPoolSpec{CIDR: netv4_4},
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec:       api.IPPoolSpec{CIDR: netv4_4},
 			}, true),
 		Entry("should accept IP pool with IPv6 CIDR /122",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:      netv6_3,
 					IPIPMode:  api.IPIPModeNever,
@@ -990,7 +998,8 @@ func init() {
 				},
 			}, true),
 		Entry("should accept IP pool with IPv6 CIDR /10",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:      netv6_4,
 					IPIPMode:  api.IPIPModeNever,
@@ -1002,7 +1011,8 @@ func init() {
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:     netv4_5,
-					Disabled: true},
+					Disabled: true,
+				},
 			}, true),
 		Entry("should accept a disabled IP pool with IPv6 CIDR /128",
 			api.IPPool{
@@ -1011,7 +1021,8 @@ func init() {
 					CIDR:      netv6_1,
 					IPIPMode:  api.IPIPModeNever,
 					VXLANMode: api.VXLANModeNever,
-					Disabled:  true},
+					Disabled:  true,
+				},
 			}, true),
 		Entry("should reject IP pool with IPv4 CIDR /27", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv4_5}}, false),
 		Entry("should reject IP pool with IPv6 CIDR /128", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv6_1}}, false),
@@ -1305,16 +1316,6 @@ func init() {
 		Entry("should accept VXLAN mode Never ", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "Never"}, true),
 		Entry("should reject VXLAN mode never", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "never"}, false),
 		Entry("should reject VXLAN mode badVal", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "badVal"}, false),
-
-		// (API) IPIP APIv1 backwards compatibility. Read-only field IPIP
-		Entry("should accept a nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: nil}, true),
-		Entry("should accept it when the IPIP field is not specified", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
-		Entry("should reject a non-nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: &api.IPIPConfiguration{Enabled: true, Mode: encap.Always}}, false),
-
-		// (API) NatOutgoing APIv1 backwards compatibility. Read-only field NatOutgoingV1
-		Entry("should accept NATOutgoingV1 field set to true", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", NATOutgoingV1: false}, true),
-		Entry("should accept it when the NATOutgoingV1 field is not specified", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
-		Entry("should reject NATOutgoingV1 field set to true", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", NATOutgoingV1: true}, false),
 
 		// (API) ICMPFields
 		Entry("should accept ICMP with no config", api.ICMPFields{}, true),
@@ -2196,37 +2197,37 @@ func init() {
 		}, true),
 
 		// (API) NodeSpec
-		Entry("should accept node with IPv4 BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv4Address: netv4_1}}, true),
-		Entry("should accept node with IPv6 BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv6Address: netv6_1}}, true),
-		Entry("should accept node with tunnel IP in BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv4IPIPTunnelAddr: "10.0.0.1"}}, true),
-		Entry("should accept node with no BGP", libapiv3.NodeSpec{}, true),
-		Entry("should reject node with an empty BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{}}, false),
-		Entry("should reject node with IPv6 address in IPv4 field", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv4Address: netv6_1}}, false),
-		Entry("should reject node with IPv4 address in IPv6 field", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv6Address: netv4_1}}, false),
-		Entry("should reject node with bad RR cluster ID #1", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{
+		Entry("should accept node with IPv4 BGP", internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{IPv4Address: netv4_1}}, true),
+		Entry("should accept node with IPv6 BGP", internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{IPv6Address: netv6_1}}, true),
+		Entry("should accept node with tunnel IP in BGP", internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{IPv4IPIPTunnelAddr: "10.0.0.1"}}, true),
+		Entry("should accept node with no BGP", internalapi.NodeSpec{}, true),
+		Entry("should reject node with an empty BGP", internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{}}, false),
+		Entry("should reject node with IPv6 address in IPv4 field", internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{IPv4Address: netv6_1}}, false),
+		Entry("should reject node with IPv4 address in IPv6 field", internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{IPv6Address: netv4_1}}, false),
+		Entry("should reject node with bad RR cluster ID #1", internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address:             netv4_1,
 			RouteReflectorClusterID: "abcdef",
 		}}, false),
-		Entry("should reject node with bad RR cluster ID #2", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{
+		Entry("should reject node with bad RR cluster ID #2", internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address:             netv4_1,
 			RouteReflectorClusterID: "300.34.3.1",
 		}}, false),
-		Entry("should accept node with good RR cluster ID", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{
+		Entry("should accept node with good RR cluster ID", internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address:             netv4_1,
 			RouteReflectorClusterID: "245.0.0.1",
 		}}, true),
 
 		// Wireguard config field tests
-		Entry("should allow valid Wireguard public-key", libapiv3.NodeStatus{
+		Entry("should allow valid Wireguard public-key", internalapi.NodeStatus{
 			WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
 		}, true),
-		Entry("should allow valid IP address on Wireguard config", libapiv3.NodeSpec{Wireguard: &libapiv3.NodeWireguardSpec{
+		Entry("should allow valid IP address on Wireguard config", internalapi.NodeSpec{Wireguard: &internalapi.NodeWireguardSpec{
 			InterfaceIPv4Address: ipv4_1,
 		}}, true),
-		Entry("should reject invalid IP address on Wireguard config", libapiv3.NodeSpec{Wireguard: &libapiv3.NodeWireguardSpec{
+		Entry("should reject invalid IP address on Wireguard config", internalapi.NodeSpec{Wireguard: &internalapi.NodeWireguardSpec{
 			InterfaceIPv4Address: "foo.bar",
 		}}, false),
-		Entry("should reject invalid Wireguard public-key", libapiv3.NodeStatus{
+		Entry("should reject invalid Wireguard public-key", internalapi.NodeStatus{
 			WireguardPublicKey: "foobar",
 		}, false),
 
@@ -2664,67 +2665,80 @@ func init() {
 			ObjectMeta: v1.ObjectMeta{Name: "foo"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, true),
+			},
+		}, true),
 		Entry("Tier: valid name with dash", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "fo-o"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, true),
+			},
+		}, true),
 		Entry("Tier: disallow dot in name", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "fo.o"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: allow valid name of 63 chars", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: string(value63)},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, true),
+			},
+		}, true),
 		Entry("Tier: disallow a name of 64 chars", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: string(value64)},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: disallow other chars", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: disallow default tier with an invalid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
-			}}, false),
+			},
+		}, false),
 		Entry("Tier: allow default tier with the predefined order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierOrder,
-			}}, true),
-		Entry("Tier: disallow adminnetworkpolicy tier with an invalid order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
+			},
+		}, true),
+		Entry("Tier: disallow kube-admin tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
-			}}, false),
-		Entry("Tier: allow adminnetworkpolicy tier with the predefined order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
+			},
+		}, false),
+		Entry("Tier: allow kube-admin tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
 			Spec: api.TierSpec{
-				Order: &anpTierOrder,
-			}}, true),
-		Entry("Tier: disallow baselineadminnetworkpolicy tier with an invalid order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
+				Order: &adminTierOrder,
+			},
+		}, true),
+		Entry("Tier: disallow kube-baseline tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
 			Spec: api.TierSpec{
 				Order: &defaultTierBadOrder,
-			}}, false),
-		Entry("Tier: allow baselineadminnetworkpolicy tier with the predefined order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
+			},
+		}, false),
+		Entry("Tier: allow kube-baseline tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
 			Spec: api.TierSpec{
-				Order: &banpTierOrder,
-			}}, true),
+				Order: &baselineTierOrder,
+			},
+		}, true),
 		Entry("Tier: allow a tier with a valid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "platform"},
 			Spec: api.TierSpec{
 				Order: &tierOrder,
-			}}, true),
+			},
+		}, true),
 
 		// NetworkPolicySpec Types field checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
@@ -3697,15 +3711,15 @@ func init() {
 		}, false),
 
 		// Block Affinities validation in BlockAffinitySpec
-		Entry("should accept non-deleted block affinities", libapiv3.BlockAffinitySpec{
-			Deleted: "false",
+		Entry("should accept non-deleted block affinities", api.BlockAffinitySpec{
+			Deleted: false,
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
 			Type:    "host",
 		}, true),
-		Entry("should not accept deleted block affinities", libapiv3.BlockAffinitySpec{
-			Deleted: "true",
+		Entry("should not accept deleted block affinities", api.BlockAffinitySpec{
+			Deleted: true,
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
@@ -3763,6 +3777,81 @@ func init() {
 		),
 	)
 }
+
+// These tests run e2e validation against a real datastore (compared to the above tests which only verify the validator code).
+// This is needed because our architecture places validation in several places, including in the datastore backend when running in
+// CRD mode. Note that these tests execute a superset of the validation tests done above.
+//
+// TODO: Right now, these only run against Kubernetes (CRD) datastore. This is because many of the validaitons are specifically to test
+// logic implemented with CEL validations on CRDs, and no equivalents exist for etcd.
+var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
+	BeforeEach(func() {
+		// Clean the datastore before each test.
+		bc, err := backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(bc.Clean()).To(Succeed(), "Failed to clean datastore before test")
+	})
+
+	DescribeTable("Tier validation tests", func(tierSpec api.Tier, errStr string) {
+		// Create a client.
+		client, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Try to create the Tier.
+		_, err = client.Tiers().Create(context.Background(), &tierSpec, options.SetOptions{})
+		if errStr == "" {
+			Expect(err).NotTo(HaveOccurred())
+		} else {
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(errStr), "Expected error message to contain substring")
+		}
+	},
+		Entry("should accept an empty Tier spec",
+			api.Tier{ObjectMeta: v1.ObjectMeta{Name: "valid-tier"}, Spec: api.TierSpec{}},
+			"",
+		),
+
+		Entry("should reject kube-baseline with wrong default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "kube-baseline"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Deny), Order: ptr.To(api.KubeBaselineTierOrder)},
+			},
+			"must have default action",
+		),
+
+		Entry("should accept kube-baseline with correct default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "kube-baseline"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Pass), Order: ptr.To(api.KubeBaselineTierOrder)},
+			},
+			"",
+		),
+
+		Entry("should reject kube-admin with wrong default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "kube-admin"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Deny), Order: ptr.To(api.KubeAdminTierOrder)},
+			},
+			"must have default action",
+		),
+
+		Entry("should accept kube-admin with correct default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "kube-admin"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Pass), Order: ptr.To(api.KubeAdminTierOrder)},
+			},
+			"",
+		),
+
+		Entry("should reject default tier with wrong default action",
+			api.Tier{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.TierSpec{DefaultAction: ptr.To(api.Pass), Order: ptr.To(api.DefaultTierOrder)},
+			},
+			"must have default action",
+		),
+	)
+})
 
 func protocolFromString(s string) *numorstring.Protocol {
 	p := numorstring.ProtocolFromString(s)

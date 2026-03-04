@@ -76,10 +76,11 @@ type Iterator struct {
 	numEntriesVisited int
 
 	// wg is to sync with the syscall executing thread on close
-	wg         sync.WaitGroup
-	keysValues chan keysValues
-	cancelCtx  context.Context
-	cancelCB   context.CancelFunc
+	wg                   sync.WaitGroup
+	keysValues           chan keysValues
+	cancelCtx            context.Context
+	cancelCB             context.CancelFunc
+	batchLookupSupported bool
 }
 
 type MapInfo struct {

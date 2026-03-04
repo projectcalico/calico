@@ -100,6 +100,9 @@ func (clock *controlledClock) Now() Time {
 	clock.Lock()
 	defer clock.Unlock()
 
+	if localOverride != nil {
+		return clock.Unix(clock.now, 0).In(localOverride)
+	}
 	return clock.Unix(clock.now, 0)
 }
 

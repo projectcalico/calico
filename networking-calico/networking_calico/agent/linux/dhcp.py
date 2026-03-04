@@ -219,6 +219,8 @@ class DnsmasqRouted(dhcp.Dnsmasq):
 
         # Add '--enable-ra'.
         cmd.append("--enable-ra")
+        # Don't advertise the MTU, since we don't have the value here
+        cmd.append("--ra-param=ns-*,mtu:off,0")
 
         # Enumerate precisely the TAP interfaces to listen on.
         cmd.remove("--interface=tap*")

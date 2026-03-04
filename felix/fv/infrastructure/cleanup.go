@@ -16,13 +16,22 @@ package infrastructure
 
 import (
 	"sync"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/stacktrace"
 )
 
 // cleanupStack is a reusable reverse-order cleanup registry.
 // It is thread-safe and does not suppress panics from registered functions.
 type cleanupStack struct {
 	mu  sync.Mutex
-	fns []func()
+	fns []annotatedFunc
+}
+
+type annotatedFunc struct {
+	caller string
+	f      func()
 }
 
 func (c *cleanupStack) Add(f func()) {
@@ -30,13 +39,21 @@ func (c *cleanupStack) Add(f func()) {
 		return
 	}
 	c.mu.Lock()
-	c.fns = append(c.fns, f)
+	c.fns = append(c.fns, annotatedFunc{
+		f:      f,
+		caller: miniStackStrace(),
+	})
 	c.mu.Unlock()
+}
+
+func miniStackStrace() string {
+	return stacktrace.MiniStackStrace("/infrastructure/cleanup.go")
 }
 
 // Run executes registered functions in reverse order and clears the stack.
 // Panics from cleanup functions are allowed to propagate to the caller.
 func (c *cleanupStack) Run() {
+	logrus.Info("Running cleanup stack...")
 	c.mu.Lock()
 	fns := c.fns
 	c.fns = nil
@@ -45,7 +62,7 @@ func (c *cleanupStack) Run() {
 	runCleanupStack(fns)
 }
 
-func runCleanupStack(fs []func()) {
+func runCleanupStack(fs []annotatedFunc) {
 	if len(fs) == 0 {
 		return
 	}
@@ -54,6 +71,24 @@ func runCleanupStack(fs []func()) {
 	// a panic.  We also want the panic to propagate so that it causes the test
 	// to fail.  By deferring the first function and then recursing, we get
 	// both of those properties.
-	defer fs[0]()
+	defer func() {
+		logCtx := logrus.WithField("registeredAt", fs[0].caller)
+		logCtx.Info("Running cleanup func.")
+		// We don't want to recover a panic from runCleanupStack so we call the
+		// func via callFuncLogPanic; this limits the scope of recover call.
+		callFuncLogPanic(logCtx, fs[0].f)
+		logCtx.Info("Cleanup func succeeded.")
+	}()
 	runCleanupStack(fs[1:])
+}
+
+func callFuncLogPanic(logCtx *logrus.Entry, theFunc func()) {
+	defer func() {
+		if x := recover(); x != nil {
+			logCtx.WithField("panic", x).Warn("Cleanup func panicked.")
+			panic(x)
+		}
+	}()
+
+	theFunc()
 }

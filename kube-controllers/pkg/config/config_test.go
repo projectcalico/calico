@@ -19,7 +19,7 @@ import (
 	"os"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -32,7 +32,6 @@ import (
 )
 
 var _ = Describe("Config", func() {
-
 	// unsetEnv() function that unsets environment variables
 	// required by kube-controllers controller
 	unsetEnv := func() {
@@ -112,7 +111,7 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return default RunConfig", func(done Done) {
+			It("should return default RunConfig", func() {
 				runCfg := <-ctrl.ConfigChan()
 				Expect(runCfg.LogLevelScreen).To(Equal(log.InfoLevel))
 				Expect(runCfg.HealthEnabled).To(BeTrue())
@@ -148,10 +147,12 @@ var _ = Describe("Config", func() {
 				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
 					AssignIPs: v3.AllServices,
 				}))
-				close(done)
+				Expect(rc.Migration).To(Equal(&config.MigrationControllerConfig{
+					PolicyNameMigrator: "Enabled",
+				}))
 			})
 
-			It("should write status", func(done Done) {
+			It("should write status", func() {
 				<-ctrl.ConfigChan()
 				Expect(m.update).ToNot(BeNil())
 				s := m.update.Status
@@ -167,17 +168,20 @@ var _ = Describe("Config", func() {
 					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
-					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				}))
 				Expect(c.WorkloadEndpoint).To(Equal(&v3.WorkloadEndpointControllerConfig{
-					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				}))
 				Expect(c.Namespace).To(Equal(&v3.NamespaceControllerConfig{
-					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				}))
 				Expect(c.ServiceAccount).To(Equal(&v3.ServiceAccountControllerConfig{
-					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				}))
 				Expect(c.LoadBalancer).To(Equal(&v3.LoadBalancerControllerConfig{
 					AssignIPs: v3.AllServices,
 				}))
-				close(done)
 			})
 		})
 
@@ -202,15 +206,22 @@ var _ = Describe("Config", func() {
 							LeakGracePeriod:  &v1.Duration{Duration: 20 * time.Minute},
 						},
 						Policy: &v3.PolicyControllerConfig{
-							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30}},
+							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30},
+						},
 						WorkloadEndpoint: &v3.WorkloadEndpointControllerConfig{
-							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 31}},
+							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 31},
+						},
 						Namespace: &v3.NamespaceControllerConfig{
-							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 32}},
+							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 32},
+						},
 						ServiceAccount: &v3.ServiceAccountControllerConfig{
-							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 33}},
+							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 33},
+						},
 						LoadBalancer: &v3.LoadBalancerControllerConfig{
 							AssignIPs: v3.RequestedServicesOnly,
+						},
+						Migration: &v3.MigrationControllerConfig{
+							PolicyNameMigrator: "Disabled",
 						},
 					},
 				}
@@ -223,7 +234,7 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return RunConfig matching API", func(done Done) {
+			It("should return RunConfig matching API", func() {
 				runCfg := <-ctrl.ConfigChan()
 				Expect(runCfg.LogLevelScreen).To(Equal(log.WarnLevel))
 				Expect(runCfg.HealthEnabled).To(BeFalse())
@@ -258,10 +269,12 @@ var _ = Describe("Config", func() {
 				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
 					AssignIPs: v3.RequestedServicesOnly,
 				}))
-				close(done)
+				Expect(rc.Migration).To(Equal(&config.MigrationControllerConfig{
+					PolicyNameMigrator: "Disabled",
+				}))
 			})
 
-			It("should write status matching API", func(done Done) {
+			It("should write status matching API", func() {
 				<-ctrl.ConfigChan()
 				Expect(m.update).ToNot(BeNil())
 				s := m.update.Status
@@ -269,8 +282,8 @@ var _ = Describe("Config", func() {
 
 				// Since there are no environment variables, the running config
 				// should be exactly the API Spec
-				Expect(s.RunningConfig).To(Equal(m.get.Spec))
-				close(done)
+				Expect(s.RunningConfig).NotTo(BeNil())
+				Expect(*s.RunningConfig).To(Equal(m.get.Spec))
 			})
 		})
 
@@ -290,13 +303,12 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should create a default KubeControllersConfig", func(done Done) {
+			It("should create a default KubeControllersConfig", func() {
 				<-ctrl.ConfigChan()
 				Expect(m.create.Spec).To(Equal(config.NewDefaultKubeControllersConfig().Spec))
-				close(done)
-			}, 600)
+			})
 
-			It("should send new update when API values change", func(done Done) {
+			It("should send new update when API values change", func() {
 				// initial config
 				<-ctrl.ConfigChan()
 
@@ -318,10 +330,9 @@ var _ = Describe("Config", func() {
 
 				// get the update
 				<-ctrl.ConfigChan()
-				close(done)
 			})
 
-			It("should not send new update when Spec is unchanged", func(done Done) {
+			It("should not send new update when Spec is unchanged", func() {
 				// initial config
 				<-ctrl.ConfigChan()
 
@@ -346,10 +357,9 @@ var _ = Describe("Config", func() {
 					update = true
 				}
 				Expect(update).To(BeFalse())
-				close(done)
-			}, 2)
+			})
 
-			It("should handle watch closed by remote", func(done Done) {
+			It("should handle watch closed by remote", func() {
 				// initial config
 				<-ctrl.ConfigChan()
 
@@ -398,16 +408,11 @@ var _ = Describe("Config", func() {
 
 				// this should trigger an update
 				<-ctrl.ConfigChan()
-
-				close(done)
-
-			}, 3)
+			})
 		})
-
 	})
 
 	Context("with valid user defined values", func() {
-
 		var cfg *config.Config
 
 		BeforeEach(func() {
@@ -452,7 +457,7 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return RunConfig matching env", func(done Done) {
+			It("should return RunConfig matching env", func() {
 				runCfg := <-ctrl.ConfigChan()
 				Expect(runCfg.LogLevelScreen).To(Equal(log.DebugLevel))
 				Expect(runCfg.HealthEnabled).To(BeFalse())
@@ -472,10 +477,9 @@ var _ = Describe("Config", func() {
 				Expect(rc.Namespace).To(BeNil())
 				Expect(rc.WorkloadEndpoint).To(BeNil())
 				Expect(rc.ServiceAccount).To(BeNil())
-				close(done)
-			}, 600)
+			})
 
-			It("should write status", func(done Done) {
+			It("should write status", func() {
 				<-ctrl.ConfigChan()
 				Expect(m.update).ToNot(BeNil())
 				s := m.update.Status
@@ -499,11 +503,11 @@ var _ = Describe("Config", func() {
 					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
-					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 105}}))
+					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 105},
+				}))
 				Expect(c.WorkloadEndpoint).To(BeNil())
 				Expect(c.Namespace).To(BeNil())
 				Expect(c.ServiceAccount).To(BeNil())
-				close(done)
 			})
 		})
 
@@ -530,13 +534,17 @@ var _ = Describe("Config", func() {
 							},
 						},
 						Policy: &v3.PolicyControllerConfig{
-							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30}},
+							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30},
+						},
 						WorkloadEndpoint: &v3.WorkloadEndpointControllerConfig{
-							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 31}},
+							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 31},
+						},
 						Namespace: &v3.NamespaceControllerConfig{
-							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 32}},
+							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 32},
+						},
 						ServiceAccount: &v3.ServiceAccountControllerConfig{
-							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 33}},
+							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 33},
+						},
 					},
 				}
 				m = &mockKCC{get: kcc}
@@ -548,7 +556,7 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return RunConfig matching API environment", func(done Done) {
+			It("should return RunConfig matching API environment", func() {
 				runCfg := <-ctrl.ConfigChan()
 				Expect(runCfg.LogLevelScreen).To(Equal(log.DebugLevel))
 				Expect(runCfg.HealthEnabled).To(BeFalse())
@@ -570,10 +578,9 @@ var _ = Describe("Config", func() {
 				Expect(rc.WorkloadEndpoint).To(BeNil())
 				Expect(rc.Namespace).To(BeNil())
 				Expect(rc.ServiceAccount).To(BeNil())
-				close(done)
 			})
 
-			It("should write status matching environment", func(done Done) {
+			It("should write status matching environment", func() {
 				<-ctrl.ConfigChan()
 				Expect(m.update).ToNot(BeNil())
 				s := m.update.Status
@@ -596,14 +603,13 @@ var _ = Describe("Config", func() {
 					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
-					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 105}}))
+					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 105},
+				}))
 				Expect(c.WorkloadEndpoint).To(BeNil())
 				Expect(c.Namespace).To(BeNil())
 				Expect(c.ServiceAccount).To(BeNil())
-				close(done)
 			})
 		})
-
 	})
 
 	Context("with invalid user defined values", func() {
@@ -629,7 +635,6 @@ var _ = Describe("Config", func() {
 	})
 
 	Context("with ENABLED_CONTROLLERS set", func() {
-
 		BeforeEach(func() {
 			unsetEnv()
 			err := os.Setenv("ENABLED_CONTROLLERS", "node,namespace,policy,serviceaccount,workloadendpoint")
@@ -640,8 +645,7 @@ var _ = Describe("Config", func() {
 			unsetEnv()
 		})
 
-		It("should use reconciler periods from API", func(done Done) {
-
+		It("should use reconciler periods from API", func() {
 			cfg := new(config.Config)
 			err := cfg.Parse()
 			Expect(err).ToNot(HaveOccurred())
@@ -658,13 +662,17 @@ var _ = Describe("Config", func() {
 						HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled},
 					},
 					Policy: &v3.PolicyControllerConfig{
-						ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30}},
+						ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30},
+					},
 					WorkloadEndpoint: &v3.WorkloadEndpointControllerConfig{
-						ReconcilerPeriod: &v1.Duration{Duration: time.Second * 31}},
+						ReconcilerPeriod: &v1.Duration{Duration: time.Second * 31},
+					},
 					Namespace: &v3.NamespaceControllerConfig{
-						ReconcilerPeriod: &v1.Duration{Duration: time.Second * 32}},
+						ReconcilerPeriod: &v1.Duration{Duration: time.Second * 32},
+					},
 					ServiceAccount: &v3.ServiceAccountControllerConfig{
-						ReconcilerPeriod: &v1.Duration{Duration: time.Second * 33}},
+						ReconcilerPeriod: &v1.Duration{Duration: time.Second * 33},
+					},
 				},
 			}
 			m := &mockKCC{get: kcc}
@@ -676,7 +684,6 @@ var _ = Describe("Config", func() {
 			Expect(runCfg.Controllers.WorkloadEndpoint.ReconcilerPeriod).To(Equal(time.Second * 31))
 			Expect(runCfg.Controllers.Namespace.ReconcilerPeriod).To(Equal(time.Second * 32))
 			Expect(runCfg.Controllers.ServiceAccount.ReconcilerPeriod).To(Equal(time.Second * 33))
-			close(done)
 		})
 	})
 })
@@ -696,6 +703,11 @@ func (m *mockKCC) Create(ctx context.Context, res *v3.KubeControllersConfigurati
 }
 
 func (m *mockKCC) Update(ctx context.Context, res *v3.KubeControllersConfiguration, opts options.SetOptions) (*v3.KubeControllersConfiguration, error) {
+	m.update = res.DeepCopy()
+	return res, nil
+}
+
+func (m *mockKCC) UpdateStatus(ctx context.Context, res *v3.KubeControllersConfiguration, opts options.SetOptions) (*v3.KubeControllersConfiguration, error) {
 	m.update = res.DeepCopy()
 	return res, nil
 }

@@ -155,6 +155,8 @@ enum FilterType {
   FilterTypeSourceNamespace = 4;
   FilterTypePolicyTier = 5;
   FilterTypePolicyName = 6;
+  FilterTypePolicyKind = 7;
+  FilterTypePolicyNamespace = 8;
 }
 
 // FlowResult wraps a Flow object with additional metadata.
@@ -200,6 +202,12 @@ message Filter {
 
   // Policies matches on policy fields. Combined using logical OR.
   repeated PolicyMatch policies = 8;
+
+  // Reporter filters on the reporter field.
+  Reporter reporter = 9;
+
+  // Pending/Staged Actions filters on the action field. Combined using logical OR.
+  repeated Action pending_actions = 10;
 }
 
 enum MatchType {
@@ -247,8 +255,10 @@ enum PolicyKind {
 
   // Native Kubernetes types.
   NetworkPolicy = 6;
-  AdminNetworkPolicy = 7;
-  BaselineAdminNetworkPolicy = 8;
+  // AdminNetworkPolicy (7) and BaselineAdminNetworkPolicy (8) are no longer supported.
+  reserved 7; 
+  reserved 8;
+  ClusterNetworkPolicy = 11;
 
   // Calico Profiles.
   Profile = 9;

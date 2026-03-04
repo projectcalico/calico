@@ -4,6 +4,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "confd"
     prologue:
       commands:
         - cd confd
@@ -13,3 +16,6 @@
           minutes: 60
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"

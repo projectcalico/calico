@@ -26,7 +26,7 @@ import (
 // Create a new NewClusterInfoUpdateProcessor.
 func NewClusterInfoUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 	return NewConfigUpdateProcessor(
-		reflect.TypeOf(apiv3.ClusterInformationSpec{}),
+		reflect.TypeFor[apiv3.ClusterInformationSpec](),
 		DisallowAnnotations,
 		func(node, name string) model.Key {
 			if name == "DatastoreReady" {
@@ -46,6 +46,6 @@ func NewClusterInfoUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 	)
 }
 
-func datastoreReadyToBool(value interface{}) interface{} {
+func datastoreReadyToBool(value any) any {
 	return value.(bool)
 }

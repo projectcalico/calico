@@ -1,8 +1,0 @@
-apiVersion: projectcalico.org/v3
-kind: BGPPeer
-metadata:
-  name: node2.1-2-3-4
-spec:
-  asNumber: 6455
-  node: node2
-  peerIP: 1.2.3.4

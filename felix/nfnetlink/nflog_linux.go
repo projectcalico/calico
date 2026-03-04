@@ -1,5 +1,4 @@
 //go:build !windows
-// +build !windows
 
 // Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
@@ -364,7 +363,7 @@ func parseNflog(m []byte) (NflogPacket, error) {
 		return nflogPacket, err
 	}
 
-	for idx := 0; idx < n; idx++ {
+	for idx := range n {
 		attr := attrs[idx]
 		attrType := int(attr.Attr.Type) & nfnl.NLA_TYPE_MASK
 		native := binary.BigEndian

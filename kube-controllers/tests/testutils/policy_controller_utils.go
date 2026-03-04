@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 )
 
-func RunPolicyController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile, ctrls string) *containers.Container {
+func RunKubeControllers(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile, ctrls string) *containers.Container {
 	if ctrls == "" {
 		// Default to all controllers.
 		ctrls = "workloadendpoint,namespace,policy,node,serviceaccount"
@@ -37,6 +37,7 @@ func RunPolicyController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigf
 		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-e", "LOG_LEVEL=debug",
+		"-e", "FV_TEST=true", // Indicate that this is an FV test run, enabling some test hooks.
 		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
 		os.Getenv("CONTAINER_NAME"))

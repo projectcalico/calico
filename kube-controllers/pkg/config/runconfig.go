@@ -60,6 +60,11 @@ type ControllersConfig struct {
 	ServiceAccount   *GenericControllerConfig
 	Namespace        *GenericControllerConfig
 	LoadBalancer     *LoadBalancerControllerConfig
+	Migration        *MigrationControllerConfig
+}
+
+type MigrationControllerConfig struct {
+	PolicyNameMigrator v3.ControllerMode
 }
 
 type GenericControllerConfig struct {
@@ -142,6 +147,9 @@ func NewDefaultKubeControllersConfig() *v3.KubeControllersConfiguration {
 			LoadBalancer: &v3.LoadBalancerControllerConfig{
 				AssignIPs: v3.AllServices,
 			},
+			Migration: &v3.MigrationControllerConfig{
+				PolicyNameMigrator: v3.ControllerEnabled,
+			},
 		},
 	}
 
@@ -168,6 +176,11 @@ func syncDatastore(ctx context.Context, cfg Config, client clientv3.KubeControll
 	// set to the empty state.
 	var currentSet bool
 	var w watch.Interface
+	defer func() {
+		if w != nil {
+			w.Stop()
+		}
+	}()
 
 	env := make(map[string]string)
 	for _, k := range AllEnvs {
@@ -205,7 +218,7 @@ MAINLOOP:
 		// Write the status back to the API datastore, so that end users can inspect the current
 		// running config.
 		snapshot.Status = status
-		snapshot, err = client.Update(ctx, snapshot, options.SetOptions{})
+		snapshot, err = client.UpdateStatus(ctx, snapshot, options.SetOptions{})
 		if err != nil {
 			log.WithError(err).Warn("unable to perform status update on KubeControllersConfiguration(default)")
 			snapshot = nil
@@ -243,7 +256,6 @@ MAINLOOP:
 			time.Sleep(datastoreBackoff)
 			continue MAINLOOP
 		}
-		defer w.Stop()
 		for e := range w.ResultChan() {
 			switch e.Type {
 			case watch.Error:
@@ -270,7 +282,7 @@ MAINLOOP:
 				// our update will trigger a watch update in an infinite loop
 				if !reflect.DeepEqual(snapshot.Status, status) {
 					snapshot.Status = status
-					snapshot, err = client.Update(ctx, snapshot, options.SetOptions{})
+					snapshot, err = client.UpdateStatus(ctx, snapshot, options.SetOptions{})
 					if err != nil {
 						// this probably means someone else is trying to write to the resource,
 						// so best to just take a breath and start over
@@ -332,7 +344,10 @@ func getOrCreateSnapshot(ctx context.Context, kcc clientv3.KubeControllersConfig
 // mergeConfig takes the environment variables, and resulting config
 func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControllersConfigurationSpec) (RunConfig, v3.KubeControllersConfigurationStatus) {
 	var rCfg RunConfig
-	status := v3.KubeControllersConfigurationStatus{EnvironmentVars: map[string]string{}}
+	status := v3.KubeControllersConfigurationStatus{
+		RunningConfig:   &v3.KubeControllersConfigurationSpec{},
+		EnvironmentVars: map[string]string{},
+	}
 	rc := &rCfg.Controllers
 
 	mergeLogLevel(envVars, &status, &rCfg, apiCfg)
@@ -346,6 +361,8 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 	mergeHealthEnabled(envVars, &status, &rCfg, apiCfg)
 
 	mergeLoadBalancer(&status, &rCfg, apiCfg)
+
+	mergeMigrationController(&status, &rCfg, apiCfg)
 
 	// Merge prometheus information.
 	if apiCfg.PrometheusMetricsPort != nil {
@@ -398,13 +415,22 @@ func mergeLoadBalancer(status *v3.KubeControllersConfigurationStatus, rCfg *RunC
 			rCfg.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
 			status.RunningConfig.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
 		}
-	} else {
-		// We can enable the LoadBalancer controller as it won't be assigning any IPs if IPPool for LoadBalancer is not set
-		rCfg.Controllers.LoadBalancer = &LoadBalancerControllerConfig{
-			AssignIPs: v3.AllServices,
-		}
-		status.RunningConfig.Controllers.LoadBalancer = &v3.LoadBalancerControllerConfig{
-			AssignIPs: v3.AllServices,
+	}
+}
+
+func mergeMigrationController(status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
+	rCfg.Controllers.Migration = &MigrationControllerConfig{
+		PolicyNameMigrator: v3.ControllerEnabled,
+	}
+	status.RunningConfig.Controllers.Migration = &v3.MigrationControllerConfig{
+		PolicyNameMigrator: v3.ControllerEnabled,
+	}
+
+	// Override from API if set.
+	if apiCfg.Controllers.Migration != nil {
+		if apiCfg.Controllers.Migration.PolicyNameMigrator == v3.ControllerDisabled {
+			rCfg.Controllers.Migration.PolicyNameMigrator = v3.ControllerDisabled
+			status.RunningConfig.Controllers.Migration.PolicyNameMigrator = v3.ControllerDisabled
 		}
 	}
 }
@@ -620,7 +646,7 @@ func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControlle
 	v, p := envVars[EnvEnabledControllers]
 	if p {
 		status.EnvironmentVars[EnvEnabledControllers] = v
-		for _, controllerType := range strings.Split(v, ",") {
+		for controllerType := range strings.SplitSeq(v, ",") {
 			switch controllerType {
 			case "workloadendpoint":
 				rc.WorkloadEndpoint = &GenericControllerConfig{}
@@ -638,8 +664,12 @@ func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControlle
 				rc.ServiceAccount = &GenericControllerConfig{}
 				sc.ServiceAccount = &v3.ServiceAccountControllerConfig{}
 			case "loadbalancer":
-				rc.LoadBalancer = &LoadBalancerControllerConfig{}
-				sc.LoadBalancer = &v3.LoadBalancerControllerConfig{}
+				rc.LoadBalancer = &LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}
+				sc.LoadBalancer = &v3.LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}
 			case "flannelmigration":
 				log.WithField(EnvEnabledControllers, v).Fatal("cannot run flannelmigration with other controllers")
 			default:

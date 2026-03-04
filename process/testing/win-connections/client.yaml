@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: client
+  name: client
+  namespace: demo
+spec:
+  containers:
+    - args:
+        - /bin/sh
+        - -c
+        - sleep 360000
+      image: busybox
+      imagePullPolicy: Always
+      name: client
+  nodeSelector:
+    kubernetes.io/os: linux
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: client-b
+  name: client-b
+  namespace: demo
+spec:
+  containers:
+    - args:
+        - /bin/sh
+        - -c
+        - sleep 360000
+      image: busybox
+      imagePullPolicy: Always
+      name: client-b
+  nodeSelector:
+    kubernetes.io/os: linux

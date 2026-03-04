@@ -1,5 +1,4 @@
 //go:build !windows
-// +build !windows
 
 // Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
@@ -65,7 +64,7 @@ func conntrackEntryFromNfAttrs(m []byte, family uint8) (CtEntry, error) {
 	native := binary.BigEndian
 
 	// Start building a Conntrack Entry
-	for idx := 0; idx < n; idx++ {
+	for idx := range n {
 		attr := attrs[idx]
 		attrType := int(attr.Attr.Type) & nfnl.NLA_TYPE_MASK
 		isNestedAttr := int(attr.Attr.Type)&syscall.NLA_F_NESTED == syscall.NLA_F_NESTED
@@ -135,7 +134,7 @@ func parseConntrackTuple(tuple *CtTuple, value []byte, family uint8) error {
 	tuple.L3ProtoNum = int(family)
 
 	native := binary.BigEndian
-	for idx := 0; idx < n; idx++ {
+	for idx := range n {
 		attr := attrs[idx]
 		attrType := uint16(int(attr.Attr.Type) & nfnl.NLA_TYPE_MASK)
 		isNestedAttr := int(attr.Attr.Type)&syscall.NLA_F_NESTED == syscall.NLA_F_NESTED
@@ -172,7 +171,7 @@ func parseTupleIp(tuple *CtTuple, value []byte) error {
 	if err != nil {
 		return err
 	}
-	for idx := 0; idx < n; idx++ {
+	for idx := range n {
 		attr := attrs[idx]
 		attrType := uint16(int(attr.Attr.Type) & nfnl.NLA_TYPE_MASK)
 		switch attrType {
@@ -194,7 +193,7 @@ func parseTupleProto(tuple *CtTuple, value []byte) error {
 		return err
 	}
 	native := binary.BigEndian
-	for idx := 0; idx < n; idx++ {
+	for idx := range n {
 		attr := attrs[idx]
 		attrType := uint16(int(attr.Attr.Type) & nfnl.NLA_TYPE_MASK)
 		switch attrType {
@@ -225,7 +224,7 @@ func parseConntrackCounters(value []byte) (CtCounters, error) {
 		return counters, err
 	}
 	native := binary.BigEndian
-	for idx := 0; idx < n; idx++ {
+	for idx := range n {
 		attr := attrs[idx]
 		attrType := uint16(int(attr.Attr.Type) & nfnl.NLA_TYPE_MASK)
 		switch attrType {
@@ -251,7 +250,7 @@ func parseProtoInfo(cpi *CtProtoInfo, value []byte) error {
 		return err
 	}
 
-	for idx := 0; idx < n; idx++ {
+	for idx := range n {
 		attr := attrs[idx]
 		attrType := uint16(int(attr.Attr.Type) & nfnl.NLA_TYPE_MASK)
 		isNestedAttr := int(attr.Attr.Type)&syscall.NLA_F_NESTED == syscall.NLA_F_NESTED
@@ -279,7 +278,7 @@ func parseProtoInfoTCP(cpi *CtProtoInfo, value []byte) error {
 	if err != nil {
 		return err
 	}
-	for idx := 0; idx < n; idx++ {
+	for idx := range n {
 		attr := attrs[idx]
 		attrType := uint16(int(attr.Attr.Type) & nfnl.NLA_TYPE_MASK)
 		switch attrType {

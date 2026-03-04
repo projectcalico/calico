@@ -21,9 +21,9 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -45,7 +45,9 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)
-			if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) {
+			if strings.HasPrefix(r.Name, converter.KubernetesNetworkPolicyEtcdPrefix) {
+				// In etcd mode, we use a name prefix to multiplex K8s NetworkPolicies and Calico NetworkPolicies, so
+				// cannot allow Calico network policies to be named with that prefix.
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "create or apply",
 					Identifier: resource,
@@ -56,7 +58,9 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)
-			if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) {
+			if strings.HasPrefix(r.Name, converter.KubernetesNetworkPolicyEtcdPrefix) {
+				// In etcd mode, we use a name prefix to multiplex K8s NetworkPolicies and Calico NetworkPolicies, so
+				// cannot allow Calico network policies to be named with that prefix.
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "apply or replace",
 					Identifier: resource,
@@ -67,7 +71,9 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)
-			if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) {
+			if strings.HasPrefix(r.Name, converter.KubernetesNetworkPolicyEtcdPrefix) {
+				// In etcd mode, we use a name prefix to multiplex K8s NetworkPolicies and Calico NetworkPolicies, so
+				// cannot allow Calico network policies to be named with that prefix.
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "delete",
 					Identifier: resource,

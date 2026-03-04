@@ -8,6 +8,7 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		--net=host \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
@@ -48,20 +49,6 @@ clean:
 	$(MAKE) -C release clean
 	rm -rf ./bin
 
-ci-preflight-checks:
-	$(MAKE) check-go-mod
-	$(MAKE) verify-go-mods
-	$(MAKE) check-dockerfiles
-	$(MAKE) check-language
-	$(MAKE) generate SKIP_FIX_CHANGED=true
-	$(MAKE) fix-all
-	$(MAKE) -C networking-calico fmtpy
-	$(MAKE) check-ocp-no-crds
-	$(MAKE) yaml-lint
-	$(MAKE) check-dirty
-	$(MAKE) go-vet
-	$(MAKE) -C networking-calico flake8
-
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
 
@@ -69,6 +56,9 @@ go-vet:
 	# Go vet will check that libbpf headers can be found; make sure they're available.
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
+
+update-x-libraries:
+	$(DOCKER_GO_BUILD) sh -c "go get golang.org/x/... && go mod tidy"
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
@@ -78,6 +68,9 @@ check-images-availability: bin/crane bin/yq
 
 check-language:
 	./hack/check-language.sh
+
+check-ginkgo-v2:
+	./hack/check-ginkgo-v2.sh
 
 check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
@@ -114,15 +107,19 @@ get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERA
 	@echo ==============================================================================================================
 	@echo === Pulling new operator CRDs from $(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) branch $(OPERATOR_BRANCH) ===
 	@echo ==============================================================================================================
-	cd ./charts/tigera-operator/crds/ && \
+	cd ./charts/crd.projectcalico.org.v1/templates/ && \
 	for file in operator.tigera.io_*.yaml; do \
 		echo "downloading $$file from operator repo"; \
-		curl -fsSL https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; \
+		curl -fsSL https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/imports/crds/operator/$${file} -o $${file}; \
+		cp $${file} ../../projectcalico.org.v3/templates/$${file}; \
 	done
 	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
-	$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps generate-semaphore-yamls"
+	$(DOCKER_GO_BUILD) sh -c "DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
+	                          SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
+	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
+	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
 
 GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --perl '^./\K[^/]+' | sort -u)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
@@ -140,11 +137,31 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules $(dir $@)"; \
 	} > $@
 
-# Build the tigera-operator helm chart.
-chart: bin/tigera-operator-$(GIT_VERSION).tgz
-bin/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+CHART_DESTINATION ?= ./bin
+
+# Build helm charts.
+chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz \
+			 $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz \
+			 $(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+
+$(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/tigera-operator \
-	--destination ./bin/ \
+	--destination $(CHART_DESTINATION)/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
+
+$(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/crd.projectcalico.org.v1/ -type f)
+	mkdir -p $(CHART_DESTINATION)
+	bin/helm package ./charts/crd.projectcalico.org.v1/ \
+	--destination $(CHART_DESTINATION)/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
+
+$(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/projectcalico.org.v3/ -type f)
+	mkdir -p $(CHART_DESTINATION)
+	bin/helm package ./charts/projectcalico.org.v3/ \
+	--destination $(CHART_DESTINATION)/ \
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)
 
@@ -166,25 +183,31 @@ image:
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
 E2E_SKIP ?= ""
-BGP_CONFIG ?= "Enabled"
-ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"
-ADMINPOLICY_UNSUPPORTED_FEATURES ?= ""
+K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
+K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
+
+## Create a kind cluster and run all e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
-	KUBECONFIG=$(KIND_KUBECONFIG) BGP_CONFIG=$(BGP_CONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
+	$(MAKE) e2e-run-test
+	$(MAKE) e2e-run-cnp-test
 
-	# Disabling ANP/BANP conformance tests due to being replaced by ClusterNetworkPolicy (and also being flaky).
-	#KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
-	# -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
-	#  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
-
-e2e-test-adminpolicy:
+## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
+e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
-	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
-	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
+	$(MAKE) e2e-run-cnp-test
+
+## Run the general e2e tests against a pre-existing kind cluster.
+e2e-run-test:
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test --ginkgo.focus=$(E2E_FOCUS) --ginkgo.skip=$(E2E_SKIP)
+
+## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
+e2e-run-cnp-test:
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
+	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
+	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
 ###############################################################################
 # Release logic below
@@ -210,7 +233,7 @@ release: release/bin/release
 	@release/bin/release release build
 
 # Publish an already built release.
-release-publish: release/bin/release bin/ghr
+release-publish: release/bin/release bin/ghr bin/helm
 	@release/bin/release release publish
 
 release-public: bin/gh release/bin/release
@@ -222,7 +245,7 @@ create-release-branch: release/bin/release
 
 # Test the release code
 release-test:
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r release/pkg
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.

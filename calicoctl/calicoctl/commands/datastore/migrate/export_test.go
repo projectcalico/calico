@@ -17,7 +17,7 @@ package migrate
 import (
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -79,22 +79,24 @@ var _ = Describe("Etcd to KDD Migration Export handling", func() {
 		allPlurals.Discard("profiles")
 		// WEPs are backed by Pods in KDD.
 		allPlurals.Discard("workloadendpoints")
+		// LiveMigrations are backed by KubeVirt VirtualMachineInstanceMigration in KDD.
+		allPlurals.Discard("livemigrations")
 		// ClusterInformation is generated fresh in the new cluster.
 		allPlurals.Discard("clusterinformations")
 		// Not supported in KDD (OpenStack only).
 		allPlurals.Discard("caliconodestatuses")
 		// Handled by IPAM migration code.
 		allPlurals.Discard("ipamconfigs")
+		allPlurals.Discard("ipamconfigurations")
 		allPlurals.Discard("blockaffinities")
 
-		allPlurals.Iter(func(resource string) error {
+		for resource := range allPlurals.All() {
 			if strings.HasPrefix(resource, "kubernetes") {
 				// "kubernetes"-prefixed resources are backed by Kubernetes API
 				// objects, not Calico objects.
-				return set.RemoveItem
+				allPlurals.Discard(resource)
 			}
-			return nil
-		})
+		}
 
 		Expect(allV3Resources).To(ConsistOf(allPlurals.Slice()))
 	})

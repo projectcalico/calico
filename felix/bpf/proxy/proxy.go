@@ -43,6 +43,8 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"k8s.io/kubernetes/pkg/proxy/runner"
 	"k8s.io/kubernetes/pkg/proxy/util"
+
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // Proxy watches for updates of Services and Endpoints, maintains their mapping
@@ -57,12 +59,15 @@ type Proxy interface {
 type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
+	SetHostIPs([]net.IP)
+	SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
 type DPSyncerState struct {
 	SvcMap   k8sp.ServicePortMap
 	EpsMap   k8sp.EndpointsMap
+	Hostname string
 	NodeZone string
 }
 
@@ -93,6 +98,8 @@ type proxy struct {
 	svcMap k8sp.ServicePortMap
 	epsMap k8sp.EndpointsMap
 
+	hostMetadataByHostname map[string]*proto.HostMetadataV4V6Update
+
 	dpSyncer  DPSyncer
 	syncerLck sync.Mutex
 	// executes periodic the dataplane updates
@@ -115,17 +122,11 @@ type proxy struct {
 	// event recorder to update node events
 	recorder        events.EventRecorder
 	svcHealthServer healthcheck.ServiceHealthServer
-	healthzServer   healthcheckIntf
+	healthzServer   Healthcheck
 
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
 	stopOnce sync.Once
-}
-
-type healthcheckIntf interface {
-	Health() healthcheck.ProxyHealth
-	QueuedUpdate(v1.IPFamily)
-	Updated(v1.IPFamily)
 }
 
 type stoppableRunner interface {
@@ -151,6 +152,8 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		svcMap:   make(k8sp.ServicePortMap),
 		epsMap:   make(k8sp.EndpointsMap),
 
+		hostMetadataByHostname: make(map[string]*proto.HostMetadataV4V6Update),
+
 		recorder: new(loggerRecorder),
 
 		// TODO: revisit these default values.
@@ -160,6 +163,8 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		stopCh:        make(chan struct{}),
 		healthzServer: new(alwaysHealthy),
+		// N.B. we do not start healthzServer until we have at least some host
+		// IPs. Dataplane implementation of hostports assumes we have a host IP.
 	}
 
 	for _, o := range opts {
@@ -175,7 +180,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	dp.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
-	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
 	p.epsChanges = k8sp.NewEndpointsChangeTracker(ipVersion, p.hostname, nil, nil)
 	p.svcChanges = k8sp.NewServiceChangeTracker(ipVersion, makeServiceInfo, nil)
@@ -236,8 +240,7 @@ func (p *proxy) Stop() {
 	p.stopOnce.Do(func() {
 		log.Info("Proxy stopping")
 		// Pass empty update to close all the health checks.
-		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
-		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
+		p.stopSvcHealthServer()
 		p.dpSyncer.Stop()
 		close(p.stopCh)
 		p.stopWg.Wait()
@@ -246,11 +249,9 @@ func (p *proxy) Stop() {
 }
 
 func (p *proxy) startRoutine(f func()) {
-	p.stopWg.Add(1)
-	go func() {
-		defer p.stopWg.Done()
+	p.stopWg.Go(func() {
 		f()
-	}()
+	})
 }
 
 func (p *proxy) syncDP() {
@@ -275,11 +276,13 @@ func (p *proxy) invokeDPSyncer() error {
 	_ = p.svcMap.Update(p.svcChanges)
 	_ = p.epsMap.Update(p.epsChanges)
 
-	if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
-		return fmt.Errorf("error syncing healthcheck Services - err: %w", err)
-	}
-	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
-		return fmt.Errorf("error syncing healthcheck endpoints - err: %w", err)
+	if p.healthzServer != nil && p.svcHealthServer != nil {
+		if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
+			return fmt.Errorf("error syncing healthcheck Services - err: %w", err)
+		}
+		if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
+			return fmt.Errorf("error syncing healthcheck endpoints - err: %w", err)
+		}
 	}
 
 	if p.healthzServer != nil {
@@ -290,6 +293,7 @@ func (p *proxy) invokeDPSyncer() error {
 	err := p.dpSyncer.Apply(DPSyncerState{
 		SvcMap:   p.svcMap,
 		EpsMap:   p.epsMap,
+		Hostname: p.hostname,
 		NodeZone: p.nodeZone,
 	})
 	p.syncerLck.Unlock()
@@ -366,6 +370,53 @@ func (p *proxy) SetSyncer(s DPSyncer) {
 	p.forceSyncDP()
 }
 
+func (p *proxy) stopSvcHealthServer() {
+	if p.svcHealthServer != nil {
+		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
+		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
+	}
+}
+
+func (p *proxy) SetHostIPs(hostIPs []net.IP) {
+	p.runnerLck.Lock()
+	defer p.runnerLck.Unlock()
+
+	p.stopSvcHealthServer()
+
+	ips := make([]string, 0, len(hostIPs))
+	for _, ip := range hostIPs {
+		if ip.To4() != nil && p.ipFamily == 4 {
+			ips = append(ips, ip.String()+"/32")
+		} else if ip.To4() == nil && p.ipFamily != 4 {
+			ips = append(ips, ip.String()+"/128")
+		}
+	}
+
+	npa := util.NewNodePortAddresses(p.v1IPFamily(), ips)
+	log.Infof("NodePortAddresses V%d for health checks: %s", p.ipFamily, npa.String())
+	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder,
+		npa, p.healthzServer)
+}
+
+func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool) {
+	p.runnerLck.Lock()
+	defer p.runnerLck.Unlock()
+
+	// Clear the proxy's map and repopulate.
+	for k := range p.hostMetadataByHostname {
+		delete(p.hostMetadataByHostname, k)
+	}
+
+	for k, v := range updates {
+		p.hostMetadataByHostname[k] = v
+	}
+
+	if requestResync {
+		// Invoke a sync via the runner, so that we can release any locks in this goroutine.
+		p.syncDP()
+	}
+}
+
 func (p *proxy) IPFamily() discovery.AddressType {
 	if p.ipFamily == 4 {
 		return discovery.AddressTypeIPv4
@@ -399,7 +450,7 @@ func (is *initState) setEpsSynced() {
 
 type loggerRecorder struct{}
 
-func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...any) {
 }
 
 const (
@@ -418,12 +469,14 @@ type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
 	UseMaglev() bool
+	TopologyMode() string
 }
 
 type servicePortAnnotations struct {
 	reapTerminatingUDP bool
 	excludeService     bool
 	useMaglev          bool
+	topologyMode       string
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
@@ -436,6 +489,10 @@ func (s *servicePortAnnotations) ExcludeService() bool {
 
 func (s *servicePortAnnotations) UseMaglev() bool {
 	return s.useMaglev
+}
+
+func (s *servicePortAnnotations) TopologyMode() string {
+	return s.topologyMode
 }
 
 type servicePort struct {
@@ -463,15 +520,10 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		svc.useMaglev = true
 	}
 
+	if v, ok := s.Annotations[v1.AnnotationTopologyMode]; ok {
+		svc.topologyMode = v
+	}
+
 out:
 	return svc
 }
-
-type alwaysHealthy struct{}
-
-func (a *alwaysHealthy) Health() healthcheck.ProxyHealth {
-	return healthcheck.ProxyHealth{Healthy: true}
-}
-
-func (a *alwaysHealthy) QueuedUpdate(v1.IPFamily) {}
-func (a *alwaysHealthy) Updated(v1.IPFamily)      {}

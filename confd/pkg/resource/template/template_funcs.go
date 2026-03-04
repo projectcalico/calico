@@ -1,32 +1,31 @@
 package template
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
-	"os"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/confd/pkg/backends"
 )
 
-func newFuncMap() map[string]interface{} {
-	m := make(map[string]interface{})
+func newFuncMap() map[string]any {
+	m := make(map[string]any)
 	m["base"] = path.Base
 	m["split"] = strings.Split
 	m["json"] = UnmarshalJsonObject
 	m["jsonArray"] = UnmarshalJsonArray
 	m["dir"] = path.Dir
 	m["map"] = CreateMap
-	m["getenv"] = Getenv
 	m["join"] = strings.Join
 	m["datetime"] = time.Now
 	m["toUpper"] = strings.ToUpper
@@ -39,15 +38,27 @@ func newFuncMap() map[string]interface{} {
 	m["fileExists"] = isFileExist
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
-	m["hashToIPv4"] = hashToIPv4
-	m["bgpFilterFunctionName"] = BGPFilterFunctionName
 	m["bgpFilterBIRDFuncs"] = BGPFilterBIRDFuncs
 	return m
 }
 
-func addFuncs(out, in map[string]interface{}) {
-	for name, fn := range in {
-		out[name] = fn
+func addFuncs(out, in map[string]any) {
+	maps.Copy(out, in)
+}
+
+// addCalicoFuncs adds Calico-specific template functions
+func addCalicoFuncs(funcMap map[string]any) {
+	// Add getBGPConfig function that takes the ipVersion and client as parameters
+	funcMap["getBGPConfig"] = func(ipVersion int, client any) (any, error) {
+		if storeClient, ok := client.(backends.StoreClient); ok {
+			config, err := storeClient.GetBirdBGPConfig(ipVersion)
+			if err != nil {
+				// Return error to fail template execution and prevent broken config
+				return nil, err
+			}
+			return config, nil
+		}
+		return nil, errors.New("client does not support GetBirdBGPConfig")
 	}
 }
 
@@ -183,7 +194,7 @@ func BGPFilterFunctionName(filterName, direction, version string) (string, error
 	}
 	pieces := []string{"bgp_", "", "_", normalizedDirection, "FilterV", version}
 	maxBIRDSymLen := 64
-	resizedName, err := truncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
+	resizedName, err := TruncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
 	if err != nil {
 		return "", err
 	}
@@ -389,77 +400,13 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 	return lines, nil
 }
 
-// The maximum length of a k8s resource (253 bytes) is longer than the maximum length of BIRD symbols (64 chars).
-// This function provides a way to map the k8s resource name to a BIRD symbol name that accounts
-// for the length difference in a way that minimizes the chance of collisions
-func truncateAndHashName(name string, maxLen int) (string, error) {
-	if len(name) <= maxLen {
-		return name, nil
-	}
-	// SHA256 outputs a hash 64 chars long but we'll use only the first 16
-	hashCharsToUse := 16
-	// Account for underscore we insert between truncated name and hash string
-	hashStrSize := hashCharsToUse + 1
-	if maxLen <= hashStrSize {
-		return "", fmt.Errorf("max truncated string length must be greater than the minimum size of %d",
-			hashStrSize)
-	}
-	hash := sha256.New()
-	_, err := hash.Write([]byte(name))
-	if err != nil {
-		return "", err
-	}
-	truncationLen := maxLen - hashStrSize
-	hashStr := fmt.Sprintf("%X", hash.Sum(nil))
-	truncatedName := fmt.Sprintf("%s_%s", name[:truncationLen], hashStr[:hashCharsToUse])
-	return truncatedName, nil
-}
-
-// hashToIPv4 hashes the given string and
-// formats the resulting 4 bytes as an IPv4 address.
-func hashToIPv4(nodeName string) string {
-	hash := sha256.New()
-	_, err := hash.Write([]byte(nodeName))
-	if err != nil {
-		return ""
-	}
-	hashBytes := hash.Sum(nil)
-	ip := hashBytes[:4]
-	//BGP doesn't allow router IDs in special IP ranges (e.g., 224.x.x.x)
-	ip0Value := int(ip[0])
-	if ip0Value > 223 {
-		ip0Value = ip0Value - 32
-	}
-	routerId := strconv.Itoa(ip0Value) + "." +
-		strconv.Itoa(int(ip[1])) + "." +
-		strconv.Itoa(int(ip[2])) + "." +
-		strconv.Itoa(int(ip[3]))
-	return routerId
-}
-
-// Getenv retrieves the value of the environment variable named by the key.
-// It returns the value, which will the default value if the variable is not present.
-// If no default value was given - returns "".
-func Getenv(key string, v ...string) string {
-	defaultValue := ""
-	if len(v) > 0 {
-		defaultValue = v[0]
-	}
-
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
-}
-
 // CreateMap creates a key-value map of string -> interface{}
 // The i'th is the key and the i+1 is the value
-func CreateMap(values ...interface{}) (map[string]interface{}, error) {
+func CreateMap(values ...any) (map[string]any, error) {
 	if len(values)%2 != 0 {
 		return nil, errors.New("invalid map call")
 	}
-	dict := make(map[string]interface{}, len(values)/2)
+	dict := make(map[string]any, len(values)/2)
 	for i := 0; i < len(values); i += 2 {
 		key, ok := values[i].(string)
 		if !ok {
@@ -470,14 +417,14 @@ func CreateMap(values ...interface{}) (map[string]interface{}, error) {
 	return dict, nil
 }
 
-func UnmarshalJsonObject(data string) (map[string]interface{}, error) {
-	var ret map[string]interface{}
+func UnmarshalJsonObject(data string) (map[string]any, error) {
+	var ret map[string]any
 	err := json.Unmarshal([]byte(data), &ret)
 	return ret, err
 }
 
-func UnmarshalJsonArray(data string) ([]interface{}, error) {
-	var ret []interface{}
+func UnmarshalJsonArray(data string) ([]any, error) {
+	var ret []any
 	err := json.Unmarshal([]byte(data), &ret)
 	return ret, err
 }

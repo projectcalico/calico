@@ -152,6 +152,28 @@ rules:
     verbs:
       - watch
       - list
+  # Needed for policy name migrator.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - networkpolicies
+      - stagednetworkpolicies
+      - globalnetworkpolicies
+      - stagedglobalnetworkpolicies
+    verbs:
+      - watch
+      - list
+      - get
+      - create
+      - update
+      - delete
+  # Needed for policy name migrator to check calico/node daemonset status.
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+    verbs:
+      - get
+    resourceNames:
+      - calico-node
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,

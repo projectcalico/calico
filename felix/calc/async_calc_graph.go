@@ -71,8 +71,8 @@ func init() {
 
 type AsyncCalcGraph struct {
 	CalcGraph        *CalcGraph
-	inputEvents      chan interface{}
-	outputChannels   []chan<- interface{}
+	inputEvents      chan any
+	outputChannels   []chan<- any
 	eventSequencer   *EventSequencer
 	beenInSync       bool
 	needToSendInSync bool
@@ -95,13 +95,13 @@ const (
 
 func NewAsyncCalcGraph(
 	conf *config.Config,
-	outputChannels []chan<- interface{},
+	outputChannels []chan<- any,
 	healthAggregator *health.HealthAggregator,
 	lookupCache *LookupsCache,
 ) *AsyncCalcGraph {
 	eventSequencer := NewEventSequencer(conf)
 	g := &AsyncCalcGraph{
-		inputEvents:      make(chan interface{}, 10),
+		inputEvents:      make(chan any, 10),
 		outputChannels:   outputChannels,
 		eventSequencer:   eventSequencer,
 		healthAggregator: healthAggregator,
@@ -228,7 +228,7 @@ func (acg *AsyncCalcGraph) maybeFlush() {
 	}
 }
 
-func (acg *AsyncCalcGraph) onEvent(event interface{}) {
+func (acg *AsyncCalcGraph) onEvent(event any) {
 	log.Debug("Sending output event on channel(s)")
 	healthTickCount := 0
 	startTime := time.Now()

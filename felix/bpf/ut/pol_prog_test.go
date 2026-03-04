@@ -32,6 +32,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -126,7 +127,7 @@ func TestPolicyLoadKitchenSinkPolicy(t *testing.T) {
 
 	cleanIPSetMap()
 
-	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), policyJumpMap.MapFD(), 0,
+	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), policyJumpMap[hook.Ingress].MapFD(), 0,
 		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	insns, err := pg.Instructions(polprog.Rules{
 		Tiers: []polprog.Tier{{
@@ -172,7 +173,7 @@ func TestPolicyLoadGarbageProgram(t *testing.T) {
 	RegisterTestingT(t)
 
 	var insns asm.Insns
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		i := uint8(i)
 		insns = append(insns, asm.Insn{Instruction: [8]uint8{i, i, i, i, i, i, i, i}})
 	}
@@ -2338,11 +2339,11 @@ func initExtraTier() {
 	const numExtraPols = 250
 	const numRulesPerPol = 50
 	pols := make([]polprog.Policy, 0, numExtraPols)
-	for i := 0; i < numExtraPols; i++ {
+	for i := range numExtraPols {
 		pol := polprog.Policy{
 			Name: fmt.Sprintf("pol-%d", i),
 		}
-		for j := 0; j < numRulesPerPol; j++ {
+		for j := range numRulesPerPol {
 			pol.Rules = append(pol.Rules, noOpRule(i*numRulesPerPol+j))
 		}
 		pols = append(pols, pol)
@@ -2370,7 +2371,7 @@ func noOpRule(n int) polprog.Rule {
 	}
 	if n%1000 == 0 {
 		// Add lots of ports to a handful of rules.
-		for p := 0; p < 2000; p++ {
+		for p := range 2000 {
 			ports = append(ports, &proto.PortRange{
 				First: int32(p*2 + 10000),
 				Last:  int32(p*2 + 10001),
@@ -2892,13 +2893,18 @@ func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 		setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
 	}
 
-	if policyJumpMap != nil {
-		_ = policyJumpMap.Close()
+	for _, polJumpMap := range policyJumpMap {
+		if polJumpMap != nil {
+			_ = polJumpMap.Close()
+		}
 	}
-	policyJumpMap = jump.Map()
-	_ = unix.Unlink(policyJumpMap.Path())
-	err = policyJumpMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
+
+	policyJumpMap = jump.Maps()
+	for _, hk := range []hook.Hook{hook.Egress, hook.Ingress} {
+		_ = unix.Unlink(policyJumpMap[hk].Path())
+		err = policyJumpMap[hk].EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	allowIdx := tcdefs.ProgIndexAllowed
 	denyIdx := tcdefs.ProgIndexDrop
@@ -2936,7 +2942,7 @@ retry:
 		ipsfd,
 		testStateMap.MapFD(),
 		staticProgsMap.MapFD(),
-		policyJumpMap.MapFD(),
+		policyJumpMap[hook.Ingress].MapFD(),
 		polprogOpts...,
 	)
 	insns, err := pg.Instructions(tp.Policy())
@@ -2963,7 +2969,7 @@ retry:
 		Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
 		Expect(polProgFD).NotTo(BeZero())
 		polProgFDs = append(polProgFDs, polProgFD)
-		err = policyJumpMap.Update(
+		err = policyJumpMap[hook.Ingress].Update(
 			jump.Key(polprog.SubProgramJumpIdx(polProgIdx, i, stride)),
 			jump.Value(polProgFD.FD()),
 		)

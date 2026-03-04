@@ -16,11 +16,13 @@ package calc_test
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 
 	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -49,6 +51,7 @@ type State struct {
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
 	ExpectedHostMetadataV4V6             map[string]*proto.HostMetadataV4V6Update
+	ExpectedEndpointComputedData         map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData
 	ExpectedNumberOfALPPolicies          int
 	ExpectedNumberOfTiers                int
 	ExpectedNumberOfPolicies             int
@@ -78,6 +81,7 @@ func NewState() State {
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
 		ExpectedHostMetadataV4V6:             make(map[string]*proto.HostMetadataV4V6Update),
+		ExpectedEndpointComputedData:         make(map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData),
 		ExpectedNumberOfPolicies:             -1,
 		ExpectedNumberOfTiers:                -1,
 		ExpectedEncapsulation:                &proto.Encapsulation{},
@@ -91,18 +95,11 @@ func (s State) Copy() State {
 	for k, ips := range s.ExpectedIPSets {
 		cpy.ExpectedIPSets[k] = ips.Copy()
 	}
-	for k, v := range s.ExpectedEndpointPolicyOrder {
-		cpy.ExpectedEndpointPolicyOrder[k] = v
-	}
-	for k, v := range s.ExpectedUntrackedEndpointPolicyOrder {
-		cpy.ExpectedUntrackedEndpointPolicyOrder[k] = v
-	}
-	for k, v := range s.ExpectedPreDNATEndpointPolicyOrder {
-		cpy.ExpectedPreDNATEndpointPolicyOrder[k] = v
-	}
-	for k, v := range s.ExpectedHostMetadataV4V6 {
-		cpy.ExpectedHostMetadataV4V6[k] = v
-	}
+	maps.Copy(cpy.ExpectedEndpointPolicyOrder, s.ExpectedEndpointPolicyOrder)
+	maps.Copy(cpy.ExpectedUntrackedEndpointPolicyOrder, s.ExpectedUntrackedEndpointPolicyOrder)
+	maps.Copy(cpy.ExpectedPreDNATEndpointPolicyOrder, s.ExpectedPreDNATEndpointPolicyOrder)
+	maps.Copy(cpy.ExpectedHostMetadataV4V6, s.ExpectedHostMetadataV4V6)
+	maps.Copy(cpy.ExpectedEndpointComputedData, s.ExpectedEndpointComputedData)
 
 	cpy.ExpectedPolicyIDs = s.ExpectedPolicyIDs.Copy()
 	cpy.ExpectedUntrackedPolicyIDs = s.ExpectedUntrackedPolicyIDs.Copy()
@@ -132,16 +129,6 @@ func (s State) withKVUpdates(kvs ...model.KVPair) (newState State) {
 	newState.DatastoreState = make([]model.KVPair, 0, len(kvs)+len(s.DatastoreState))
 	// Make a set containing the new keys.
 	newKeys := make(map[string]bool)
-
-	for i, kv := range kvs {
-		if k, ok := kv.Key.(model.PolicyKey); ok {
-			if k.Tier == "" {
-				k.Tier = "default"
-				kv.Key = k
-				kvs[i] = kv
-			}
-		}
-	}
 
 	for _, kv := range kvs {
 		newKeys[kvToPath(kv)] = true
@@ -303,8 +290,8 @@ func (s State) Keys() set.Set[string] {
 	return set
 }
 
-func (s State) KVsCopy() map[string]interface{} {
-	kvs := make(map[string]interface{})
+func (s State) KVsCopy() map[string]any {
+	kvs := make(map[string]any)
 	for _, kv := range s.DatastoreState {
 		kvs[kvToPath(kv)] = kv.Value
 	}
@@ -314,7 +301,7 @@ func (s State) KVsCopy() map[string]interface{} {
 func kvToPath(kv model.KVPair) string {
 	path, err := model.KeyToDefaultPath(kv.Key)
 	if err != nil {
-		logrus.WithField("key", kv.Key).Panic("Unable to convert key to default path")
+		logrus.WithError(err).WithField("key", kv.Key).Panic("Unable to convert key to default path")
 	}
 	return path
 }
@@ -377,7 +364,7 @@ func (s State) NumALPPolicies() int {
 	return s.ExpectedNumberOfALPPolicies
 }
 
-func (s State) ActiveKeys(keyTypeExample interface{}) set.Set[model.Key] {
+func (s State) ActiveKeys(keyTypeExample any) set.Set[model.Key] {
 	// Need to be a little careful here, the DatastoreState can contain an ordered sequence of updates and deletions
 	// We need to track which keys are actually still live at the end of it.
 	keys := set.New[model.Key]()

@@ -1,0 +1,41 @@
+# This file contains a values.yaml configuration for installing Calico backed by
+# projectcalico.org/v3 CRDs instead of using the API server.
+installation:
+  enabled: true
+  registry: docker.io
+
+  # Disable HA control plane.
+  controlPlaneReplicas: 1
+
+  # Diable CSI / flexVolume as they are not used by these tests.
+  kubeletVolumePluginPath: "None"
+  flexVolumePath: "None"
+
+  # Configure CIDRs to match kubeadm cluster.
+  calicoNetwork:
+    # Enable policy setup timeout to increase test reliability.
+    linuxPolicySetupTimeoutSeconds: 5
+    ipPools:
+    - cidr: 192.168.0.0/16
+    - cidr: fd00:10:244::/64
+
+apiServer:
+  enabled: false
+
+goldmane:
+  enabled: true
+
+whisker:
+  enabled: true
+
+# CRDs are installed by `make kind-cluster-create` in lib.Makefile ($(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd;)
+manageCRDs: false
+
+# Configuration for the tigera operator
+tigeraOperator:
+  image: tigera/operator
+  version: test-build
+  registry: docker.io
+  env:
+  - name: CALICO_API_GROUP
+    value: "projectcalico.org/v3"

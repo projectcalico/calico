@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -78,7 +78,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 			out, err := felix.ExecOutput(saveCommand, "-t", "filter")
 			Expect(err).NotTo(HaveOccurred())
 			var cidrBlockLines []string
-			for _, line := range strings.Split(out, "\n") {
+			for line := range strings.SplitSeq(out, "\n") {
 				if strings.Contains(line, "-A cali-cidr-block") {
 					cidrBlockLines = append(cidrBlockLines, line)
 				}
@@ -114,8 +114,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		// unused) service IP.
 		tcpdumpF := tc.Felixes[0].AttachTCPDump("eth0")
 		tcpdumpF.AddMatcher("serviceIPPackets", regexp.MustCompile(`10\.96\.0\.19`))
-		tcpdumpF.Start()
-		defer tcpdumpF.Stop()
+		tcpdumpF.Start(infra)
 
 		// Send a single ping from the external client to the unused service IP.
 		err := externalClient.ExecMayFail("ping", "-c", "1", "-W", "1", "10.96.0.19")

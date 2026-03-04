@@ -250,12 +250,11 @@ func (s LabelNameSingleValueStrategy[ItemID]) EstimatedItemsToScan() int {
 
 func (s LabelNameSingleValueStrategy[ItemID]) Scan(f func(id ItemID) bool) {
 	// Ideal case, we have one set to scan.
-	s.idSet.Iter(func(id ItemID) error {
+	for id := range s.idSet.All() {
 		if !f(id) {
-			return set.StopIteration
+			break
 		}
-		return nil
-	})
+	}
 }
 
 func (s LabelNameSingleValueStrategy[ItemID]) Name() string {
@@ -311,13 +310,12 @@ func (s LabelNameStrategy[ItemID]) EstimatedItemsToScan() int {
 func (s LabelNameStrategy[ItemID]) Scan(f func(id ItemID) bool) {
 	for _, epIDs := range s.values.m {
 		stop := false
-		epIDs.Iter(func(id ItemID) error {
+		for id := range epIDs.All() {
 			if !f(id) {
 				stop = true
-				return set.StopIteration
+				break
 			}
-			return nil
-		})
+		}
 		if stop {
 			return
 		}

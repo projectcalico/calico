@@ -23,8 +23,9 @@ echo "[INFO] starting prologue"
 echo "[INFO] Clean out language tools we don't use to free up disk"
 sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*} /root/.local/share/heroku /usr/local/lib/heroku
 
-# Set up the DNS resolver to use OpenDNS servers, which appear to be more reliable.
+echo "[INFO] overriding DNS..."
 echo "nameserver 208.67.222.222" | sudo tee /etc/resolv.conf
+echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
 
 echo "[INFO] checkout..."
 checkout
@@ -41,8 +42,8 @@ RANDOM_TOKEN2=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 4 || true)
 echo "[INFO] random tokens: ${RANDOM_TOKEN1} ${RANDOM_TOKEN2}"
 
 echo "[INFO] Installing jq..."
-sudo apt-get update -y
-sudo apt-get install jq -y
+sudo apt-get -o Acquire::Retries=5 update  -y
+sudo apt-get install -o Acquire::Retries=5 jq -y
 
 echo "[INFO] exporting default env vars..."
 export SEMAPHORE_PIPELINE_STARTED_AT=$(date +%s)
@@ -88,6 +89,7 @@ export BZ_MCM_PREFIX=${BZ_MCM_PREFIX:-"bz-${PRODUCT}-${RANDOM_TOKEN2}"}
 
 export CLUSTER_NAME=${CLUSTER_NAME:-bz-${PRODUCT}-${RANDOM_TOKEN1}}
 export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER_NAME}-diags.tgz}
+export GS_BUCKET=${GS_BUCKET-semaphore_diags}
 export BANZAI_CORE_BRANCH=${BANZAI_CORE_BRANCH:-""}
 export BZ_TASK_VERSION=${BZ_TASK_VERSION:-"v2.8.1"}
 export SEMAPHORE_AGENT_UPLOAD_JOB_LOGS=${SEMAPHORE_AGENT_UPLOAD_JOB_LOGS:-"when-trimmed"}
@@ -109,15 +111,11 @@ echo "-----------"
 echo "Semaphore OS information"
 lsb_release -a
 
-echo "[INFO] overriding DNS..."
-echo "nameserver 208.67.222.222" | sudo tee /etc/resolv.conf
-echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
-
 echo "[INFO] installing google cloud sdk..."
 gcloud_cmd_c1="echo \"deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main\" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list"
 gcloud_cmd_c1="$gcloud_cmd_c1 && curl --retry 9 --retry-all-errors -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$gcloud_cmd_c1"; fi
-sudo apt-get update -y || true; sudo apt-get install google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin -y || true
+sudo apt-get -o Acquire::Retries=5 update  -y || true; sudo apt-get install -o Acquire::Retries=5 google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin -y || true
 
 echo "[INFO] activating google service account..."
 export GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-$HOME/secrets/banzai-google-service-account.json}
@@ -125,13 +123,19 @@ gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIAL
 gcloud config set project ${GOOGLE_PROJECT}
 export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
 
+dummy_needrestart_cmd="echo \"[INFO] creating dummy needrestart script in /usr/local/bin\""
+dummy_needrestart_cmd="$dummy_needrestart_cmd; echo \#\!/usr/bin/bash | sudo tee /usr/local/bin/needrestart"
+dummy_needrestart_cmd="$dummy_needrestart_cmd && echo 'echo [DEBUG] dummy needrestart invoked' | sudo tee -a /usr/local/bin/needrestart"
+dummy_needrestart_cmd="$dummy_needrestart_cmd && sudo chmod +x /usr/local/bin/needrestart"
+if ! command -v needrestart; then eval "$dummy_needrestart_cmd"; fi
+
 # Update package lists to ensure the latest versions are available.
 # Temporarily disable needrestart during installation to avoid interactive prompts.
 # Set needrestart to automatically restart all required services after installation.
 # Install python3-pip without requiring manual confirmation (-y flag).
 # Explicitly restart all necessary services using needrestart to ensure daemons using outdated libraries are refreshed.
 pip_install_cmd="echo \"[INFO] installing pip beforehand for c1...\""
-pip_install_cmd="$pip_install_cmd; echo \"[INFO] Installing pip3...\" && sudo apt update && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install python3-pip -y && sudo needrestart -r a"
+pip_install_cmd="$pip_install_cmd; echo \"[INFO] Installing pip3...\" && sudo apt-get -o Acquire::Retries=5 update  && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 python3-pip -y && sudo needrestart -r a"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* && $SEMAPHORE_AGENT_MACHINE_OS_IMAGE == "ubuntu2204" ]]; then eval "$pip_install_cmd"; fi
 
 aws_cli_cmd="echo \"[INFO] installing AWS CLI using pip3...\""
@@ -145,11 +149,11 @@ azure_cli_cmd="$azure_cli_cmd; az login --service-principal -u ${AZ_SP_ID} -p ${
 if [[ $PROVISIONER =~ ^azr-.* ]]; then eval "$azure_cli_cmd"; fi
 
 install_tools_cmd="echo \"[INFO] installing addtional tools for c1...\""
-install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing jq, unzip...\" && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install jq unzip -y && sudo needrestart -r a"
+install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing unzip...\" && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 unzip -y && sudo needrestart -r a"
 install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing requests...\" && pip3 install --retries=20 --upgrade requests"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$install_tools_cmd"; fi
 
-if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-tools..."; sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -y putty-tools && sudo needrestart -r a; fi
+if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-tools..."; sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 -y putty-tools && sudo needrestart -r a; fi
 
 echo "[INFO] Installing Banzai CLI..."
 [[ -n "${BZ_VERSION}" ]] && export BZ_RELEASE=tags/${BZ_VERSION} || export BZ_RELEASE=latest
@@ -163,9 +167,37 @@ cp ~/secrets/docker_cfg.json "$HOME/.docker/config.json"
 mkdir -p "${BZ_LOGS_DIR}"
 
 cd "$HOME" || exit
+hcp_scripts="echo \"[INFO] Initializing Banzai utilities...\""
+hcp_scripts="$hcp_scripts; git clone git@github.com:tigera/banzai-utils.git \"${HOME}/banzai-utils\""
+hcp_scripts="$hcp_scripts; cp -R \"${HOME}/banzai-utils\"/ocp-hcp/*.sh \"${BZ_GLOBAL_BIN}\""
+if [[ "${HCP_ENABLED}" == "true" ]]; then eval $hcp_scripts; fi
+
 std="echo \"[INFO] Initializing Banzai profile...\""
-std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
+std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets 2>&1 | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
 std="$std; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
-eval "$std"
+
+hcp="unset CLUSTER_NAME; unset DIAGS_ARCHIVE_FILENAME; unset K8S_VERSION"
+hcp="$hcp; echo \"[INFO] starting hcp init...\""
+hcp="$hcp; hcp-init.sh 2>&1 | tee \"${BZ_LOGS_DIR}/initialize.log\""
+hcp="$hcp; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
+
+restore_hcp_hosting="echo \"[INFO] Restoring from ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} cache\""
+restore_hcp_hosting="$restore_hcp_hosting; cache restore ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} |& tee ${BZ_LOGS_DIR}/restore.log"
+
+if [[ "${HCP_ENABLED}" == "true" ]]; then std=$hcp; elif [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then std=$restore_hcp_hosting; fi
+echo "$std"; eval "$std"
+
+restore_hcp_hosting_home="echo \"[INFO] Setting BZ_HOME env var from restored cache\""
+restore_hcp_hosting_home="$restore_hcp_hosting_home; unset BZ_HOME; export BZ_HOME=$(cat ${BZ_LOGS_DIR}/restore.log | grep -oP 'Restored: \K(.*)(?=.)' || echo '')"
+if [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then echo "$restore_hcp_hosting_home"; eval "$restore_hcp_hosting_home"; fi
+
+if [[ "${HCP_STAGE}" == "hosting" || "${HCP_STAGE}" == "destroy-hosting" ]]; then python3 -m pip install -r ${BZ_HOME}/scripts/requirements.txt; export PROVISIONER=aws-openshift; pip3 install --upgrade --user awscli; fi
+export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-"${BZ_HOME}/.local"}
+
+if [[ "${HCP_STAGE}" == "hosted" ]]; then artifact pull workflow hosting-${HOSTING_CLUSTER}-kubeconfig -f --destination ${BZ_LOCAL_DIR}/hosting-kubeconfig; fi
+
+rm_firmware_cmd="echo \"[INFO] Removing /usr/lib/firmware to free disk space\""
+rm_firmware_cmd="$rm_firmware_cmd; sudo rm -rf /usr/lib/firmware"
+if [[ "${HCP_STAGE}" == "hosted" ]]; then echo "$rm_firmware_cmd"; eval "$rm_firmware_cmd"; fi
 
 echo "[INFO] exiting prologue"

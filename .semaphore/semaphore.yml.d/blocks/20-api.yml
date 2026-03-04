@@ -10,6 +10,6 @@
       commands:
         - cd api
     jobs:
-      - name: make ci
+      - name: "API: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci

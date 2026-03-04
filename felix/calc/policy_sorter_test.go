@@ -18,6 +18,8 @@ import (
 	"reflect"
 	"testing"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -43,17 +45,18 @@ func TestPolKV_String(t *testing.T) {
 		},
 		{
 			name:     "nil policy",
-			kv:       PolKV{Key: model.PolicyKey{Name: "name"}},
-			expected: "name(nil policy)"},
+			kv:       PolKV{Key: model.PolicyKey{Name: "name", Namespace: "ns", Kind: "kind"}},
+			expected: "kind/ns/name(nil policy)",
+		},
 		{
 			name:     "nil order",
-			kv:       PolKV{Key: model.PolicyKey{Name: "name"}, Value: &nilOrder},
-			expected: "name(default)",
+			kv:       PolKV{Key: model.PolicyKey{Name: "name", Kind: "kind"}, Value: &nilOrder},
+			expected: "kind/name(default)",
 		},
 		{
 			name:     "order set",
-			kv:       PolKV{Key: model.PolicyKey{Name: "name"}, Value: &policyMetadata{Order: 10.5}},
-			expected: "name(10.5)",
+			kv:       PolKV{Key: model.PolicyKey{Name: "name", Kind: "kind"}, Value: &policyMetadata{Order: 10.5, Tier: "default"}},
+			expected: "kind/name(10.5)",
 		},
 	}
 
@@ -69,14 +72,14 @@ func TestPolicySorter_HasPolicy(t *testing.T) {
 	poc := NewPolicySorter()
 	polKey := model.PolicyKey{
 		Name: "test-policy",
-		Tier: "test-tier",
+		Kind: v3.KindGlobalNetworkPolicy,
 	}
 	found := poc.HasPolicy(polKey)
 	if found {
 		t.Error("Unexpectedly found policy when it should not be present")
 	}
 
-	pol := policyMetadata{}
+	pol := policyMetadata{Tier: "default"}
 	_ = poc.UpdatePolicy(polKey, &pol)
 
 	found = poc.HasPolicy(polKey)
@@ -90,24 +93,25 @@ func TestPolicySorter_UpdatePolicy(t *testing.T) {
 
 	polKey := model.PolicyKey{
 		Name: "test-policy",
-		Tier: "default",
+		Kind: v3.KindGlobalNetworkPolicy,
 	}
 
-	pol := policyMetadata{}
+	pol := policyMetadata{Tier: "default"}
 
 	dirty := poc.UpdatePolicy(polKey, &pol)
-	if tierInfo, found := poc.tiers[polKey.Tier]; !found {
+	if tierName, tierInfo := poc.tierForPolicy(polKey, &pol); tierName == "" {
 		t.Error("Adding new policy to tier that does not yet exist - expected tier to be created but it is not found")
 	} else {
 		if !dirty {
 			t.Error("Adding new policy - expected dirty to be true but it was false")
 		}
-		if _, found = tierInfo.Policies[polKey]; !found {
+		if _, found := tierInfo.Policies[polKey]; !found {
 			t.Error("Adding new policy - expected policy to be in Policies but it is not")
 		}
 	}
 
 	newPol := policyMetadata{
+		Tier:  "default",
 		Order: 7,
 	}
 
@@ -154,8 +158,8 @@ func TestPolicySorter_UpdatePolicy(t *testing.T) {
 		t.Error("Deleting existing policy - expected dirty to be true but it was false")
 	}
 
-	if tierInfo, found := poc.tiers[polKey.Tier]; found {
-		if _, found = tierInfo.Policies[polKey]; found {
+	if tierName, tierInfo := poc.tierForPolicy(polKey, nil); tierName != "" {
+		if _, found := tierInfo.Policies[polKey]; found {
 			t.Error("Deleting existing policy - expected policy not to be in Policies but it is")
 		}
 	}
@@ -169,11 +173,11 @@ func TestPolicySorter_UpdatePolicy(t *testing.T) {
 func TestPolicySorter_OnUpdate_Basic(t *testing.T) {
 	poc := NewPolicySorter()
 
-	policy := model.Policy{}
+	policy := model.Policy{Tier: "default"}
 	kvp := model.KVPair{
 		Key: model.PolicyKey{
 			Name: "test-policy",
-			Tier: "default",
+			Kind: v3.KindGlobalNetworkPolicy,
 		},
 		Value: &policy,
 	}
@@ -204,8 +208,10 @@ func TestPolicySorter_OnUpdate_Basic(t *testing.T) {
 
 func TestPolicySorter_OnUpdate_RemoveFromNonExistent(t *testing.T) {
 	ps := NewPolicySorter()
-	key := model.PolicyKey{Tier: "default", Name: "foo"}
-	pol := &model.Policy{}
+	key := model.PolicyKey{Name: "foo", Kind: v3.KindGlobalNetworkPolicy}
+	pol := &model.Policy{
+		Tier: "default",
+	}
 	ps.OnUpdate(api.Update{
 		KVPair: model.KVPair{
 			Key:   key,
@@ -219,6 +225,7 @@ func TestPolicySorter_OnUpdate_RemoveFromNonExistent(t *testing.T) {
 
 	expectedPolicies := map[model.PolicyKey]policyMetadata{
 		key: {
+			Tier:  "default",
 			Order: polMetaDefaultOrder,
 			Flags: policyMetaIngress | policyMetaEgress,
 		},

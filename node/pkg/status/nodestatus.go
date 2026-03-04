@@ -127,7 +127,7 @@ type NodeStatusReporter struct {
 	client client.Interface
 
 	// Channel for getting updates and status updates from syncer.
-	syncerC chan interface{}
+	syncerC chan any
 
 	// cache for pending updates.
 	// No lock needed for updating the cache since it is updated in main loop only.
@@ -156,7 +156,7 @@ func NewNodeStatusReporter(node string,
 		nodename:       node,
 		cfg:            cfg,
 		client:         client,
-		syncerC:        make(chan interface{}, 1),
+		syncerC:        make(chan any, 1),
 		reporter:       make(map[string]*reporter),
 		pendingUpdates: make(map[string]*apiv3.CalicoNodeStatus),
 		populators:     populators,

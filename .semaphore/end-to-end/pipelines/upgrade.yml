@@ -50,7 +50,7 @@ global_job_config:
     - name: USE_PRIVATE_REGISTRY
       value: "true"
     - name: PRIVATE_REGISTRY
-      value: "quay.io/calico/"
+      value: "quay.io/"
 
 blocks:
   - name: calico tests
@@ -138,7 +138,7 @@ blocks:
               value: aws-openshift
           matrix:
             - env_var: OPENSHIFT_VERSION
-              values: ["4.16.32"]
+              values: ["4.19.20"]
             - env_var: DATAPLANE
               values: ["CalicoIptables"]
             - env_var: INSTALLER

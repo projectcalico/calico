@@ -15,13 +15,20 @@
 package model_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
+
+func mustParseCIDR(s string) net.IPNet {
+	_, ipNet, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return *ipNet
+}
 
 var _ = Describe("AllocationBlock tests", func() {
 	It("should calculate non-affine allocations correctly", func() {
@@ -40,9 +47,9 @@ var _ = Describe("AllocationBlock tests", func() {
 			},
 			Affinity: &affinity,
 			Attributes: []model.AllocationAttribute{
-				{AttrSecondary: map[string]string{"node": "myhost"}},
-				{AttrSecondary: map[string]string{"node": "otherhost"}},
-				{AttrSecondary: map[string]string{"node": "anotherhost"}},
+				{ActiveOwnerAttrs: map[string]string{"node": "myhost"}},
+				{ActiveOwnerAttrs: map[string]string{"node": "otherhost"}},
+				{ActiveOwnerAttrs: map[string]string{"node": "anotherhost"}},
 			},
 		}
 

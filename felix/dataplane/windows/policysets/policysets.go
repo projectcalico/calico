@@ -61,7 +61,7 @@ func NewPolicySets(hns HNSAPI, ipsets []IPSetCache, reader StaticRulesReader) *P
 
 // AddOrReplacePolicySet is responsible for the creation (or replacement) of a Policy set
 // and it is capable of processing either Profiles or Policies from the datastore.
-func (s *PolicySets) AddOrReplacePolicySet(setId string, policy interface{}) {
+func (s *PolicySets) AddOrReplacePolicySet(setId string, policy any) {
 	log.WithField("setID", setId).Info("Processing add/replace of Policy set")
 
 	// Process the policy/profile from the datastore and convert it into
@@ -209,12 +209,11 @@ func (s *PolicySets) ProcessIpSetUpdate(ipSetId string) []string {
 // getPoliciesByIpSetId locates any Policy set(s) which reference the provided IP set
 func (s *PolicySets) getPoliciesByIpSetId(ipSetId string) (policies []string) {
 	for policySetId, policySet := range s.policySetIdToPolicySet {
-		policySet.IpSetIds.Iter(func(id string) error {
+		for id := range policySet.IpSetIds.All() {
 			if id == ipSetId {
 				policies = append(policies, policySetId)
 			}
-			return nil
-		})
+		}
 	}
 	return
 }
@@ -594,16 +593,11 @@ func protoPortToHCSPort(port *proto.PortRange) string {
 
 // This function will create chunks of ports/ports range with chunksize
 func SplitPortList(ports []*proto.PortRange, chunkSize int) (splits [][]*proto.PortRange) {
-
 	if len(ports) == 0 {
 		splits = append(splits, []*proto.PortRange{})
 	}
 	for i := 0; i < len(ports); i += chunkSize {
-		last := i + chunkSize
-
-		if last > len(ports) {
-			last = len(ports)
-		}
+		last := min(i+chunkSize, len(ports))
 
 		splits = append(splits, ports[i:last])
 	}
@@ -612,16 +606,11 @@ func SplitPortList(ports []*proto.PortRange, chunkSize int) (splits [][]*proto.P
 
 // This function will create chunks of IP addresses/Cidr with chunksize
 func SplitIPList(ipAddrs []string, chunkSize int) (splits [][]string) {
-
 	if len(ipAddrs) == 0 {
 		splits = append(splits, []string{})
 	}
 	for i := 0; i < len(ipAddrs); i += chunkSize {
-		last := i + chunkSize
-
-		if last > len(ipAddrs) {
-			last = len(ipAddrs)
-		}
+		last := min(i+chunkSize, len(ipAddrs))
 
 		splits = append(splits, ipAddrs[i:last])
 	}

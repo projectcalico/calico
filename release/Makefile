@@ -17,10 +17,11 @@ export OPERATOR_BRANCH
 build: bin/release
 
 clean:
-	@rm -rf ./bin
-	@rm -rf ./output ./_output ./report ./tmp ./*.log
+	@rm -rf ./bin ./output ./_output ./report ./tmp
+	@find ../ -name '*release*.log' -delete
+	@find . -name '*.received.*' -delete
 
-bin/release: $(shell find . -name "*.go")
+bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl")
 	@mkdir -p bin && \
 	$(call build_binary, ./cmd, bin/release)
 
@@ -43,10 +44,14 @@ ci: static-checks ut
 .PHONY: hashrelease hashrelease-build hashrelease-publish
 hashrelease: hashrelease-build hashrelease-publish
 
+# Ensures helm is in the bin dir relative to repo root
+../bin/helm:
+	@$(MAKE) -C ../ helm
+
 hashrelease-build: bin/release var-require-all-GITHUB_TOKEN
 	@bin/release hashrelease build
 
-hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN
+hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN ../bin/helm
 	@bin/release hashrelease publish
 
 hashrelease-svr-gc: bin/release

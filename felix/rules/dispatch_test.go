@@ -17,8 +17,7 @@ package rules_test
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/generictables"
@@ -66,7 +65,7 @@ var _ = Describe("Dispatch chains", func() {
 		var epMarkMapper EndpointMarkMapper
 		var renderer RuleRenderer
 		BeforeEach(func() {
-			renderer = NewRenderer(rrConfigNormal)
+			renderer = NewRenderer(rrConfigNormal, false)
 			epMarkMapper = NewEndpointMarkMapper(rrConfigNormal.MarkEndpoint, rrConfigNormal.MarkNonCaliEndpoint)
 		})
 
@@ -238,7 +237,7 @@ var _ = Describe("Dispatch chains", func() {
 						},
 					},
 					{
-						Name: "cali-set-endpoint-mark-2",
+						Name: "cali-set-endpoint-mark-wep-2",
 						Rules: []generictables.Rule{
 							inboundGotoRule("cali2333", "cali-sm-cali2333"),
 							inboundGotoRule("cali2444", "cali-sm-cali2444"),
@@ -248,7 +247,7 @@ var _ = Describe("Dispatch chains", func() {
 						Name: "cali-set-endpoint-mark",
 						Rules: []generictables.Rule{
 							inboundGotoRule("cali1234", "cali-sm-cali1234"),
-							inboundGotoRule("cali2+", "cali-set-endpoint-mark-2"),
+							inboundGotoRule("cali2+", "cali-set-endpoint-mark-wep-2"),
 							smUnknownEndpointDropRule("cali"),
 							smUnknownEndpointDropRule("tap"),
 							smNonCaliSetMarkRule,
@@ -354,7 +353,7 @@ var _ = Describe("Dispatch chains", func() {
 							},
 						},
 						{
-							Name: "cali-set-endpoint-mark-1",
+							Name: "cali-set-endpoint-mark-wep-1",
 							Rules: []generictables.Rule{
 								inboundGotoRule("cali11", "cali-sm-cali11"),
 								inboundGotoRule("cali12", "cali-sm-cali12"),
@@ -362,7 +361,7 @@ var _ = Describe("Dispatch chains", func() {
 							},
 						},
 						{
-							Name: "cali-set-endpoint-mark-2",
+							Name: "cali-set-endpoint-mark-wep-2",
 							Rules: []generictables.Rule{
 								inboundGotoRule("cali21", "cali-sm-cali21"),
 								inboundGotoRule("cali22", "cali-sm-cali22"),
@@ -371,8 +370,8 @@ var _ = Describe("Dispatch chains", func() {
 						{
 							Name: "cali-set-endpoint-mark",
 							Rules: []generictables.Rule{
-								inboundGotoRule("cali1+", "cali-set-endpoint-mark-1"),
-								inboundGotoRule("cali2+", "cali-set-endpoint-mark-2"),
+								inboundGotoRule("cali1+", "cali-set-endpoint-mark-wep-1"),
+								inboundGotoRule("cali2+", "cali-set-endpoint-mark-wep-2"),
 								smUnknownEndpointDropRule("cali"),
 								smUnknownEndpointDropRule("tap"),
 								smNonCaliSetMarkRule,

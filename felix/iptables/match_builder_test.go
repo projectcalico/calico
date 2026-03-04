@@ -15,8 +15,7 @@
 package iptables_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/generictables"
@@ -112,4 +111,7 @@ var _ = DescribeTable("MatchBuilder",
 	// IPVS.
 	Entry("IPVSConnection", Match().IPVSConnection(), "-m ipvs --ipvs"),
 	Entry("NotIPVSConnection", Match().NotIPVSConnection(), "-m ipvs ! --ipvs"),
+	// Limits.
+	Entry("Limit with rate", Match().Limit("30/second", 0), "-m limit --limit 30/second"),
+	Entry("Limit with rate and burst", Match().Limit("40/day", 5), "-m limit --limit 40/day --limit-burst 5"),
 )

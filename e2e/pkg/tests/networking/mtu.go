@@ -14,7 +14,9 @@ package networking
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
@@ -39,7 +41,7 @@ var _ = describe.CalicoDescribe(
 		var checker conncheck.ConnectionTester
 		var clientPod *conncheck.Client
 
-		BeforeEach(func() {
+		ginkgo.BeforeEach(func() {
 			var err error
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
@@ -61,7 +63,7 @@ var _ = describe.CalicoDescribe(
 			checker.Deploy()
 		})
 
-		It("should select the correct MTU for the platform", func() {
+		ginkgo.It("should select the correct MTU for the platform", func() {
 			// Get the MTU within the pod.
 			out, err := conncheck.ExecInPod(clientPod.Pod(), "sh", "-c", "ip link show eth0")
 			Expect(err).NotTo(HaveOccurred())

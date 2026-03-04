@@ -16,10 +16,11 @@ package mock
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"sync"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -106,18 +107,21 @@ func (d *MockDataplane) ActiveUntrackedPolicies() set.Set[types.PolicyID] {
 
 	return d.activeUntrackedPolicies.Copy()
 }
+
 func (d *MockDataplane) ActivePreDNATPolicies() set.Set[types.PolicyID] {
 	d.Lock()
 	defer d.Unlock()
 
 	return d.activePreDNATPolicies.Copy()
 }
+
 func (d *MockDataplane) ActiveProfiles() set.Set[types.ProfileID] {
 	d.Lock()
 	defer d.Unlock()
 
 	return d.activeProfiles.Copy()
 }
+
 func (d *MockDataplane) ActiveVTEPs() set.Set[types.VXLANTunnelEndpointUpdate] {
 	d.Lock()
 	defer d.Unlock()
@@ -129,6 +133,7 @@ func (d *MockDataplane) ActiveVTEPs() set.Set[types.VXLANTunnelEndpointUpdate] {
 
 	return cp
 }
+
 func (d *MockDataplane) ActiveWireguardEndpoints() set.Set[types.WireguardEndpointUpdate] {
 	d.Lock()
 	defer d.Unlock()
@@ -140,6 +145,7 @@ func (d *MockDataplane) ActiveWireguardEndpoints() set.Set[types.WireguardEndpoi
 
 	return cp
 }
+
 func (d *MockDataplane) ActiveWireguardV6Endpoints() set.Set[types.WireguardEndpointV6Update] {
 	d.Lock()
 	defer d.Unlock()
@@ -151,6 +157,7 @@ func (d *MockDataplane) ActiveWireguardV6Endpoints() set.Set[types.WireguardEndp
 
 	return cp
 }
+
 func (d *MockDataplane) ActiveHostMetadataV4V6() map[string]*proto.HostMetadataV4V6Update {
 	d.Lock()
 	defer d.Unlock()
@@ -162,6 +169,7 @@ func (d *MockDataplane) ActiveHostMetadataV4V6() map[string]*proto.HostMetadataV
 
 	return cp
 }
+
 func (d *MockDataplane) ActiveRoutes() set.Set[types.RouteUpdate] {
 	d.Lock()
 	defer d.Unlock()
@@ -208,9 +216,7 @@ func (d *MockDataplane) ServiceAccounts() map[types.ServiceAccountID]*proto.Serv
 	defer d.Unlock()
 
 	cpy := make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate)
-	for k, v := range d.serviceAccounts {
-		cpy[k] = v
-	}
+	maps.Copy(cpy, d.serviceAccounts)
 	return cpy
 }
 
@@ -219,9 +225,7 @@ func (d *MockDataplane) Namespaces() map[types.NamespaceID]*proto.NamespaceUpdat
 	defer d.Unlock()
 
 	cpy := make(map[types.NamespaceID]*proto.NamespaceUpdate)
-	for k, v := range d.namespaces {
-		cpy[k] = v
-	}
+	maps.Copy(cpy, d.namespaces)
 	return cpy
 }
 
@@ -260,9 +264,7 @@ func (d *MockDataplane) Config() map[string]string {
 		return nil
 	}
 	localCopy := map[string]string{}
-	for k, v := range d.config {
-		localCopy[k] = v
-	}
+	maps.Copy(localCopy, d.config)
 	return localCopy
 }
 
@@ -289,7 +291,7 @@ func NewMockDataplane() *MockDataplane {
 	return s
 }
 
-func (d *MockDataplane) OnEvent(event interface{}) {
+func (d *MockDataplane) OnEvent(event any) {
 	d.Lock()
 	defer d.Unlock()
 
@@ -298,7 +300,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	evType := reflect.TypeOf(event).String()
 	fmt.Fprintf(ginkgo.GinkgoWriter, "       <- Event: %v %v\n", evType, event)
 	Expect(event).NotTo(BeNil())
-	Expect(reflect.TypeOf(event).Kind()).To(Equal(reflect.Ptr))
+	Expect(reflect.TypeOf(event).Kind()).To(Equal(reflect.Pointer))
 
 	// Test wrapping the message for the external dataplane
 	switch event := event.(type) {
@@ -386,16 +388,15 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		var allPolsIDs []types.PolicyID
 		for i, tier := range event.Endpoint.Tiers {
 			tierInfos[i].Name = tier.Name
-			tierInfos[i].IngressPolicyNames = tier.IngressPolicies
-			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
+			tierInfos[i].IngressPolicies = convertPolicyIDs(tier.IngressPolicies)
+			tierInfos[i].EgressPolicies = convertPolicyIDs(tier.EgressPolicies)
 
 			// Check that all the policies referenced by the endpoint are already present, which
 			// is one of the guarantees provided by the EventSequencer.
-			var combinedPolNames []string
-			combinedPolNames = append(combinedPolNames, tier.IngressPolicies...)
-			combinedPolNames = append(combinedPolNames, tier.EgressPolicies...)
-			for _, polName := range combinedPolNames {
-				polID := types.PolicyID{Tier: tier.Name, Name: polName}
+			var combinedPolicies []types.PolicyID
+			combinedPolicies = append(combinedPolicies, convertPolicyIDs(tier.IngressPolicies)...)
+			combinedPolicies = append(combinedPolicies, convertPolicyIDs(tier.EgressPolicies)...)
+			for _, polID := range combinedPolicies {
 				allPolsIDs = append(allPolsIDs, polID)
 				Expect(d.activePolicies).To(HaveKey(polID),
 					fmt.Sprintf("Expected policy %v referenced by workload endpoint "+
@@ -429,8 +430,8 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		tierInfos := make([]TierInfo, len(tiers))
 		for i, tier := range tiers {
 			tierInfos[i].Name = tier.Name
-			tierInfos[i].IngressPolicyNames = tier.IngressPolicies
-			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
+			tierInfos[i].IngressPolicies = convertPolicyIDs(tier.IngressPolicies)
+			tierInfos[i].EgressPolicies = convertPolicyIDs(tier.EgressPolicies)
 		}
 		id := hostEpId(types.ProtoToHostEndpointID(event.GetId()))
 		d.endpointToPolicyOrder[id.String()] = tierInfos
@@ -439,8 +440,8 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		uTierInfos := make([]TierInfo, len(uTiers))
 		for i, tier := range uTiers {
 			uTierInfos[i].Name = tier.Name
-			uTierInfos[i].IngressPolicyNames = tier.IngressPolicies
-			uTierInfos[i].EgressPolicyNames = tier.EgressPolicies
+			uTierInfos[i].IngressPolicies = convertPolicyIDs(tier.IngressPolicies)
+			uTierInfos[i].EgressPolicies = convertPolicyIDs(tier.EgressPolicies)
 		}
 		d.endpointToUntrackedPolicyOrder[id.String()] = uTierInfos
 
@@ -448,8 +449,8 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		pTierInfos := make([]TierInfo, len(pTiers))
 		for i, tier := range pTiers {
 			pTierInfos[i].Name = tier.Name
-			pTierInfos[i].IngressPolicyNames = tier.IngressPolicies
-			pTierInfos[i].EgressPolicyNames = tier.EgressPolicies
+			pTierInfos[i].IngressPolicies = convertPolicyIDs(tier.IngressPolicies)
+			pTierInfos[i].EgressPolicies = convertPolicyIDs(tier.EgressPolicies)
 		}
 		d.endpointToPreDNATPolicyOrder[id.String()] = pTierInfos
 	case *proto.HostEndpointRemove:
@@ -470,20 +471,18 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		Expect(d.namespaces).To(HaveKey(id))
 		delete(d.namespaces, id)
 	case *proto.RouteUpdate:
-		d.activeRoutes.Iter(func(r types.RouteUpdate) error {
+		for r := range d.activeRoutes.All() {
 			if event.Dst == r.Dst {
-				return set.RemoveItem
+				d.activeRoutes.Discard(r)
 			}
-			return nil
-		})
+		}
 		d.activeRoutes.Add(types.ProtoToRouteUpdate(event))
 	case *proto.RouteRemove:
-		d.activeRoutes.Iter(func(r types.RouteUpdate) error {
+		for r := range d.activeRoutes.All() {
 			if event.Dst == r.Dst {
-				return set.RemoveItem
+				d.activeRoutes.Discard(r)
 			}
-			return nil
-		})
+		}
 	case *proto.VXLANTunnelEndpointUpdate:
 		d.activeVTEPs[event.Node] = types.ProtoToVXLANTunnelEndpointUpdate(event)
 	case *proto.VXLANTunnelEndpointRemove:
@@ -518,9 +517,21 @@ func (d *MockDataplane) RawValues() map[string]string {
 }
 
 type TierInfo struct {
-	Name               string
-	IngressPolicyNames []string
-	EgressPolicyNames  []string
+	Name            string
+	IngressPolicies []types.PolicyID
+	EgressPolicies  []types.PolicyID
+}
+
+func convertPolicyIDs(in []*proto.PolicyID) []types.PolicyID {
+	var out []types.PolicyID
+	for _, pid := range in {
+		out = append(out, types.PolicyID{
+			Kind:      pid.Kind,
+			Name:      pid.Name,
+			Namespace: pid.Namespace,
+		})
+	}
+	return out
 }
 
 type workloadId types.WorkloadEndpointID

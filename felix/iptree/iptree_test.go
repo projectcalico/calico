@@ -26,7 +26,6 @@ func TestMainline(t *testing.T) {
 				"10.0.0.16/28", "10.0.0.8/29", "10.0.0.4/30", "10.0.0.3", "10.0.0.0"},
 			[]string{"10.0.0.0/24"}},
 	} {
-		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			RegisterTestingT(t)
 
@@ -34,7 +33,7 @@ func TestMainline(t *testing.T) {
 			for _, c := range test.CIDRsToAdd {
 				tree.AddCIDRString(c)
 			}
-			var cidrsAsIface []interface{}
+			var cidrsAsIface []any
 			for _, c := range test.CIDRsToExpect {
 				cidrsAsIface = append(cidrsAsIface, c)
 			}
@@ -55,7 +54,6 @@ func TestIntersection(t *testing.T) {
 		{"zero-1&128-1", []string{"0.0.0.0/1"}, []string{"128.0.0.0/1"}, []string{}},
 		{"128-1&zero-0", []string{"128.0.0.0/1"}, []string{"0.0.0.0/0"}, []string{"128.0.0.0/1"}},
 	} {
-		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			RegisterTestingT(t)
 
@@ -70,7 +68,7 @@ func TestIntersection(t *testing.T) {
 
 			intersection := Intersect(treeA, treeB)
 
-			var cidrsAsIface []interface{}
+			var cidrsAsIface []any
 			for _, c := range test.CIDRsToExpect {
 				cidrsAsIface = append(cidrsAsIface, c)
 			}
@@ -94,7 +92,6 @@ func TestSubtraction(t *testing.T) {
 			[]string{"10.0.0.0/25", "10.0.1.0/25"},
 			[]string{"10.0.0.0/23"}, []string{}},
 	} {
-		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			RegisterTestingT(t)
 
@@ -109,7 +106,7 @@ func TestSubtraction(t *testing.T) {
 
 			intersection := Subtract(treeA, treeB)
 
-			var cidrsAsIface []interface{}
+			var cidrsAsIface []any
 			for _, c := range test.CIDRsToExpect {
 				cidrsAsIface = append(cidrsAsIface, c)
 			}

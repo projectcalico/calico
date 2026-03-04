@@ -4,10 +4,16 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "mock-node"
     prologue:
       commands:
         - cd test-tools/mocknode
     jobs:
-      - name: Mock node
+      - name: "Mock node: CI"
         commands:
           - ../../.semaphore/run-and-monitor make-ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"

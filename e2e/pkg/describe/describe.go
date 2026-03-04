@@ -61,6 +61,7 @@ var features = map[string]bool{
 	"NetworkPolicy":   true,
 	"Tiered-Policy":   true,
 	"IPPool":          true,
+	"IPAM":            true,
 	"AutoHEPs":        true,
 	"Host-Protection": true,
 	"HostPorts":       true,
@@ -69,6 +70,18 @@ var features = map[string]bool{
 	"Maglev":          true,
 	"BGPPeer":         true,
 	"IPIP":            true,
+	"Tiered-RBAC":     true,
+	"Pods":            true,
+	"QoS":             true,
+	"Datapath":        true,
+}
+
+// RequiresNoEncap marks tests that require unencapsulated traffic to function.
+// This is typically used for tests that verify BGP functionality without IPIP, or other similar tests.
+// Such tests must be run on clusters that support unencapsulated traffic, such as bare-metal clusters
+// or cloud clusters with appropriate configuration.
+func RequiresNoEncap() any {
+	return framework.WithLabel("NoEncap")
 }
 
 // WithFeature marks tests as verifying a specific feature.
@@ -89,7 +102,7 @@ func WithAzure() any {
 	return framework.WithLabel("RunsOnAzure")
 }
 
-// WithAzure marks tests that must run on AWS.
+// WithAWS marks tests that must run on AWS.
 func WithAWS() any {
 	return framework.WithLabel("RunsOnAWS")
 }

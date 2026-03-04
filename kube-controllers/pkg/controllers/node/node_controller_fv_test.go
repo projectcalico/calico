@@ -19,11 +19,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"reflect"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -34,7 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	backend "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -47,13 +46,12 @@ import (
 var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 	var (
 		etcd              *containers.Container
-		policyController  *containers.Container
+		kubeControllers   *containers.Container
 		apiserver         *containers.Container
 		calicoClient      client.Interface
 		bc                backend.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
-		kconfigfile       *os.File
 	)
 
 	BeforeEach(func() {
@@ -65,17 +63,10 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, err = os.CreateTemp("", "ginkgo-policycontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
+		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
+		defer cancel()
 
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
-
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -90,24 +81,17 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
-		apply := func() error {
-			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
-			if err != nil {
-				return fmt.Errorf("%s: %s", err, out)
-			}
-			return nil
-		}
-		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+		testutils.ApplyCRDs(apiserver)
 
 		// Make a Calico client and backend client.
 		type accessor interface {
 			Backend() backend.Client
 		}
-		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile.Name())
+		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
 		bc = calicoClient.(accessor).Backend()
 
 		// In KDD mode, we only support the node controller right now.
-		policyController = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
+		kubeControllers = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile, "node")
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
@@ -116,7 +100,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 	AfterEach(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
-		policyController.Stop()
+		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
 	})
@@ -372,8 +356,8 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 			// See https://github.com/projectcalico/libcalico-go/pull/1345
 			kvp := blocks.KVPairs[0]
 			b := kvp.Value.(*model.AllocationBlock)
-			malformedHandle := fmt.Sprintf("%s\r\neth0", *b.Attributes[0].AttrPrimary)
-			blocks.KVPairs[0].Value.(*model.AllocationBlock).Attributes[0].AttrPrimary = &malformedHandle
+			malformedHandle := fmt.Sprintf("%s\r\neth0", *b.Attributes[0].HandleID)
+			blocks.KVPairs[0].Value.(*model.AllocationBlock).Attributes[0].HandleID = &malformedHandle
 			_, err = bc.Update(context.Background(), blocks.KVPairs[0])
 			Expect(err).NotTo(HaveOccurred())
 
@@ -423,7 +407,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 	var (
 		etcd              *containers.Container
-		policyController  *containers.Container
+		kubeControllers   *containers.Container
 		apiserver         *containers.Container
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
@@ -442,20 +426,14 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.Remove(kconfigfile.Name()) }()
-		data := testutils.BuildKubeconfig(apiserver.IP)
-		_, err = kconfigfile.Write([]byte(data))
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make the kubeconfig readable by the container.
-		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
+		defer cancel()
 
 		// Run the controller.
-		policyController = testutils.RunPolicyController(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
+		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
 
-		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
+		var err error
+		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available.
@@ -475,7 +453,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 	AfterEach(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
-		policyController.Stop()
+		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
 	})
@@ -489,10 +467,10 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 			}
 			_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			cn := libapi.NewNode()
+			cn := internalapi.NewNode()
 			cn.Name = cNodeName
-			cn.Spec = libapi.NodeSpec{
-				OrchRefs: []libapi.OrchRef{
+			cn.Spec = internalapi.NodeSpec{
+				OrchRefs: []internalapi.OrchRef{
 					{
 						NodeName:     kNodeName,
 						Orchestrator: "k8s",
@@ -505,7 +483,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 
 			err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(func() *libapi.Node {
+			Eventually(func() *internalapi.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
 			}, time.Second*2, 500*time.Millisecond).Should(BeNil())
@@ -520,12 +498,12 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 			_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cn := &libapi.Node{
+			cn := &internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: cNodeName,
 				},
-				Spec: libapi.NodeSpec{
-					OrchRefs: []libapi.OrchRef{
+				Spec: internalapi.NodeSpec{
+					OrchRefs: []internalapi.OrchRef{
 						{
 							NodeName:     kNodeName,
 							Orchestrator: "mesos",
@@ -538,7 +516,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 
 			err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			Consistently(func() *libapi.Node {
+			Consistently(func() *internalapi.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
@@ -549,16 +527,16 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		})
 
 		It("should not be removed if orchrefs are nil.", func() {
-			cn := &libapi.Node{
+			cn := &internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: cNodeName,
 				},
-				Spec: libapi.NodeSpec{},
+				Spec: internalapi.NodeSpec{},
 			}
 			_, err := calicoClient.Nodes().Create(context.Background(), cn, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			Consistently(func() *libapi.Node {
+			Consistently(func() *internalapi.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
@@ -575,12 +553,12 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create the node object in Calico's datastore.
-			cn := &libapi.Node{
+			cn := &internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: cNodeName,
 				},
-				Spec: libapi.NodeSpec{
-					OrchRefs: []libapi.OrchRef{
+				Spec: internalapi.NodeSpec{
+					OrchRefs: []internalapi.OrchRef{
 						{
 							NodeName:     kNodeName,
 							Orchestrator: "k8s",
@@ -618,12 +596,12 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create the WEP, using the address.
-			wep := libapi.WorkloadEndpoint{
+			wep := internalapi.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "caliconodename-k8s-mypod-mywep",
 					Namespace: "default",
 				},
-				Spec: libapi.WorkloadEndpointSpec{
+				Spec: internalapi.WorkloadEndpointSpec{
 					InterfaceName: "eth0",
 					Pod:           "mypod",
 					Endpoint:      "mywep",
@@ -741,7 +719,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check that the node is removed from Calico
-			Eventually(func() *libapi.Node {
+			Eventually(func() *internalapi.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
 			}, time.Second*2, 500*time.Millisecond).Should(BeNil())
@@ -832,11 +810,11 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a Calico node with a reference to it.
-			cn := libapi.NewNode()
+			cn := internalapi.NewNode()
 			cn.Name = cNodeName
 			cn.Labels = map[string]string{"calico-label": "calico-value", "label1": "badvalue"}
-			cn.Spec = libapi.NodeSpec{
-				OrchRefs: []libapi.OrchRef{
+			cn.Spec = internalapi.NodeSpec{
+				OrchRefs: []internalapi.OrchRef{
 					{
 						NodeName:     kNodeName,
 						Orchestrator: "k8s",
@@ -874,7 +852,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 			// Delete the Kubernetes node.
 			err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(func() *libapi.Node {
+			Eventually(func() *internalapi.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
 			}, time.Second*2, 500*time.Millisecond).Should(BeNil())

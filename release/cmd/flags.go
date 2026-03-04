@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
@@ -125,6 +126,11 @@ var (
 		Usage:   "Override default registries for the release. Repeat for multiple registries.",
 		Sources: cli.EnvVars("REGISTRIES"), // avoid DEV_REGISTRIES as it is already used by the build system (lib.Makefile).
 	}
+	helmRegistryFlag = &cli.StringSliceFlag{
+		Name:    "helm-registry",
+		Usage:   "Override default OCI-based helm chart registries for the release. Repeat for multiple registries.",
+		Sources: cli.EnvVars("HELM_REGISTRIES"),
+	}
 
 	archOptions = []string{"amd64", "arm64", "ppc64le", "s390x"}
 	archFlag    = &cli.StringSliceFlag{
@@ -135,7 +141,7 @@ var (
 		Value:   archOptions,
 		Action: func(_ context.Context, c *cli.Command, values []string) error {
 			for _, arch := range values {
-				if !utils.Contains(archOptions, arch) {
+				if !slices.Contains(archOptions, arch) {
 					return fmt.Errorf("invalid architecture %s", arch)
 				}
 			}
@@ -149,7 +155,7 @@ var (
 		Sources: cli.EnvVars("BUILD_CONTAINER_IMAGES"), // avoid BUILD_IMAGES as it is already used by the build system (lib.Makefile).
 		Value:   true,
 	}
-	buildHashreleaseImageFlag = &cli.BoolFlag{
+	buildHashreleaseImagesFlag = &cli.BoolFlag{
 		Name:    buildImagesFlag.Name,
 		Usage:   buildImagesFlag.Usage,
 		Sources: buildImagesFlag.Sources,
@@ -162,11 +168,28 @@ var (
 		Sources: cli.EnvVars("PUBLISH_IMAGES"),
 		Value:   true,
 	}
-	publishHashreleaseImageFlag = &cli.BoolFlag{
+	publishHashreleaseImagesFlag = &cli.BoolFlag{
 		Name:    publishImagesFlag.Name,
 		Usage:   publishImagesFlag.Usage,
 		Sources: publishImagesFlag.Sources,
 		Value:   false,
+	}
+
+	publishChartsFlag = &cli.BoolFlag{
+		Name:    "publish-charts",
+		Usage:   "Publish Helm charts to the registry",
+		Sources: cli.EnvVars("PUBLISH_CHARTS"),
+		Value:   true,
+	}
+	awsProfileFlag = &cli.StringFlag{
+		Name:    "aws-profile",
+		Usage:   "The AWS profile to use",
+		Sources: cli.EnvVars("AWS_PROFILE"),
+	}
+	s3BucketFlag = &cli.StringFlag{
+		Name:    "s3-bucket",
+		Usage:   "The S3 bucket to publish release artifacts to.",
+		Sources: cli.EnvVars("S3_BUCKET"),
 	}
 
 	archiveImagesFlag = &cli.BoolFlag{
@@ -174,6 +197,24 @@ var (
 		Usage:   "Archive images in the release tarball",
 		Sources: cli.EnvVars("ARCHIVE_IMAGES"),
 		Value:   true,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if b && !c.Bool(buildImagesFlag.Name) {
+				return fmt.Errorf("cannot archive images without building them; set --%s to 'true'", buildImagesFlag.Name)
+			}
+			return nil
+		},
+	}
+	archiveHashreleaseImagesFlag = &cli.BoolFlag{
+		Name:    archiveImagesFlag.Name,
+		Usage:   archiveImagesFlag.Usage,
+		Sources: archiveImagesFlag.Sources,
+		Value:   false,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if b && !c.Bool(buildHashreleaseImagesFlag.Name) {
+				return fmt.Errorf("cannot archive images without building them; set --%s to 'true'", buildHashreleaseImagesFlag.Name)
+			}
+			return nil
+		},
 	}
 )
 
@@ -347,14 +388,19 @@ var (
 		Sources: cli.EnvVars("IMAGE_SCANNER_SELECT"),
 		Value:   "all",
 	}
-	skipImageScanFlag = &cli.BoolFlag{
-		Name:    "skip-image-scan",
+	skipImageScanFlagName = "skip-image-scan"
+	skipImageScanFlag     = &cli.BoolFlag{
+		Name:    skipImageScanFlagName,
 		Usage:   "Skip sending the image to the image scan service",
 		Sources: cli.EnvVars("SKIP_IMAGE_SCAN"),
 		Value:   false,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if !b && (c.String(imageScannerAPIFlag.Name) == "" || c.String(imageScannerTokenFlag.Name) == "") {
-				return fmt.Errorf("image scanner configuration is required, ensure %s and %s flags are set", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name)
+			logrus.WithField(skipImageScanFlagName, b).Info("Image scanning configuration")
+			if !b && !imageScanningAPIConfig(c).Valid() {
+				if !c.Bool(ciFlag.Name) {
+					logrus.Warn("Image scanning configuration is incomplete")
+				}
+				return fmt.Errorf("invalid configuration for image scanning. Either set --%s and --%s or set --%s to 'true'", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name, skipImageScanFlagName)
 			}
 			return nil
 		},

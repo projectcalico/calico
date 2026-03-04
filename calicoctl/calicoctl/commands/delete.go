@@ -131,15 +131,15 @@ Description:
 	}
 
 	if len(results.ResErrs) > 0 {
-		var errStr string
+		var errStr strings.Builder
 		for _, err := range results.ResErrs {
 			if results.SingleKind != "" {
-				errStr += fmt.Sprintf("Failed to delete '%s' resource: %v\n", results.SingleKind, err)
+				errStr.WriteString(fmt.Sprintf("Failed to delete '%s' resource: %v\n", results.SingleKind, err))
 			} else {
-				errStr += fmt.Sprintf("Failed to delete resource: %v\n", err)
+				errStr.WriteString(fmt.Sprintf("Failed to delete resource: %v\n", err))
 			}
 		}
-		return errors.New(errStr)
+		return errors.New(errStr.String())
 	}
 
 	return nil

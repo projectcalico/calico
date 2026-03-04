@@ -39,7 +39,7 @@ VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 # Note: OS is always set on Windows
 ifeq ($(OS),Windows_NT)
 BUILDARCH = x86_64
-BUILDOS = x86_64
+BUILDOS = Windows
 else
 BUILDARCH ?= $(shell uname -m)
 BUILDOS ?= $(shell uname -s | tr A-Z a-z)
@@ -84,7 +84,7 @@ endif
 # This is only needed when running non-native binaries.
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --privileged --rm tonistiigi/binfmt --install all || true
+	docker run --privileged --rm calico/binfmt:qemu-v10.1.3 --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
@@ -207,7 +207,12 @@ ifeq ($(GIT_USE_SSH),true)
 endif
 
 # Get version from git. We allow setting this manually for the hashrelease process.
-GIT_VERSION ?= $(shell git describe --tags --dirty --always --abbrev=12)
+# By default, includes commit count and hash (--long). During releases (RELEASE=true),
+# only the tag is used without the commit count suffix.
+GIT_VERSION ?= $(shell git describe --tags --dirty --always --abbrev=12 --long)
+ifeq ($(RELEASE),true)
+	GIT_VERSION := $(shell git describe --tags --dirty --always --abbrev=12)
+endif
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
@@ -280,6 +285,39 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
+# Support for git worktrees.  In a worktree, .git is a file pointing to
+# <main-repo>/.git/worktrees/<name>.  When Docker containers need git access,
+# the main .git directory must also be mounted, and GIT_DIR / GIT_WORK_TREE
+# must be set so that git can find objects and the correct working tree.
+_GIT_DIR := $(shell git rev-parse --absolute-git-dir 2>/dev/null)
+_GIT_COMMON_DIR := $(realpath $(shell git rev-parse --git-common-dir 2>/dev/null))
+ifneq ($(_GIT_DIR),$(_GIT_COMMON_DIR))
+# Running in a git worktree: mount the main .git directory at its host path
+# so the worktree .git file pointer resolves inside the container.
+# DOCKER_GIT_WORK_TREE can be overridden by Makefiles that mount the repo at
+# a different container path (e.g. api/Makefile).
+DOCKER_GIT_WORK_TREE ?= /go/src/github.com/projectcalico/calico
+DOCKER_GIT_WORKTREE_ARGS := \
+	-v $(_GIT_COMMON_DIR):$(_GIT_COMMON_DIR):ro \
+	-e GIT_DIR=$(_GIT_DIR) \
+	-e GIT_WORK_TREE=$(DOCKER_GIT_WORK_TREE)
+else
+DOCKER_GIT_WORKTREE_ARGS :=
+endif
+
+# Configure the Calico API group to use. Projects importing this Makefile can override this variable
+# if they need to.
+# Supported values:
+# - crd.projectcalico.org/v1 (default)
+# - projectcalico.org/v3
+CALICO_API_GROUP ?= crd.projectcalico.org/v1
+
+# Where to find Calico CRD files depends on which API group we are using to back them.
+CALICO_CRD_PATH ?= api/config/crd/
+ifneq ($(CALICO_API_GROUP),projectcalico.org/v3)
+CALICO_CRD_PATH = libcalico-go/config/crd/
+endif
+
 # The image to use for building calico/base-dependent modules (e.g. apiserver, typha).
 ifdef USE_UBI_AS_CALICO_BASE
 CALICO_BASE ?= $(UBI_IMAGE)
@@ -304,14 +342,15 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
+		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e "GOFLAGS=$(GOFLAGS)" \
-		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
@@ -1071,6 +1110,14 @@ var-require-all-%:
 var-require-one-of-%:
 	@$(MAKE) --quiet --no-print-directory var-require REQUIRED_VARS=$*
 
+# build-images echos the images that would be built.
+# If WINDOWS_IMAGE is set then it echos the windows image that would be built as well.
+build-images: var-require-all-BUILD_IMAGES
+	$(if $(WINDOWS_IMAGE),\
+		@echo $(BUILD_IMAGES) $(WINDOWS_IMAGE),\
+		@echo $(BUILD_IMAGES)\
+	)
+
 # sem-cut-release triggers the cut-release pipeline (or test-cut-release if CONFIRM is not specified) in semaphore to
 # cut the release. The pipeline is triggered for the current commit, and the branch it's triggered on is calculated
 # from the RELEASE_VERSION, CNX, and OS variables given.
@@ -1253,28 +1300,22 @@ bin/yq:
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
-# This setup is used to download and install the 'crane' binary into the local bin/ directory.
-# The binary will be placed at: ./bin/crane
+# This setup is used to download and install the `crane` binary into $(REPOROOT)/bin/crane.
 # Normalize architecture for go-containerregistry filenames
-CRANE_BUILDARCH := $(shell uname -m | sed 's/aarch64/arm64/')
-CRANE_OS := $(shell uname -s)
-ifeq ($(CRANE_BUILDARCH),)
-  $(error Unsupported or unknown architecture: $(shell uname -m))
+CRANE_ARCH = $(subst amd64,x86_64,$(BUILDARCH))
+ifeq ($(OS),Windows_NT)
+CRANE_OS = Windows
+else
+CRANE_OS = $(shell uname -s)
 endif
-ifeq ($(CRANE_OS),)
-  $(error Unsupported or unknown OS: $(shell uname -s))
-endif
+CRANE_URL = https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_$(CRANE_OS)_$(CRANE_ARCH).tar.gz
 
-CRANE_FILENAME := go-containerregistry_$(CRANE_OS)_$(CRANE_BUILDARCH).tar.gz
-CRANE_URL := https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/$(CRANE_FILENAME)
-
-# Install crane binary into bin/
 .PHONY: bin/crane
 bin/crane: $(REPO_ROOT)/bin/crane
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@curl -sSfL --retry 5 $(CRANE_URL) | tar zx -C $(REPO_ROOT)/bin crane
+	@curl -sSfL --retry 5 $(CRANE_URL) | tar xz -C $(REPO_ROOT)/bin crane
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
@@ -1300,7 +1341,15 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 		--tls-private-key-file=/home/user/certs/kubernetes-key.pem \
 		--enable-priority-and-fairness=false \
 		--max-mutating-requests-inflight=0 \
-		--max-requests-inflight=0
+		--max-requests-inflight=0 \
+		--enable-aggregator-routing \
+		--requestheader-client-ca-file=/home/user/certs/ca.pem \
+		--requestheader-username-headers=X-Remote-User \
+		--requestheader-group-headers=X-Remote-Group \
+		--requestheader-extra-headers-prefix=X-Remote-Extra- \
+		--proxy-client-cert-file=/home/user/certs/kubernetes.pem \
+		--proxy-client-key-file=/home/user/certs/kubernetes-key.pem
+
 
 	# Wait until the apiserver is accepting requests.
 	while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
@@ -1316,7 +1365,7 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	while ! docker exec $(APISERVER_NAME) kubectl \
-		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/; \
+		apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
 		do echo "Trying to create CRDs"; \
 		sleep 1; \
 		done
@@ -1371,13 +1420,20 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd; do echo "Waiting for CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/charts/crd.projectcalico.org.v1/templates/; do echo "Waiting for operator CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/$(CALICO_CRD_PATH); do echo "Waiting for calico CRDs to be created"; sleep 2; done
+
+	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_clusternetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
+
+	# Install mutating admission policies.
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/; do echo "Waiting for mutating admission policies to be created"; sleep 2; done
+
 	touch $@
 
 kind-cluster-destroy: $(KIND) $(KUBECTL)
 	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
 	# This requires we execute CNI del on pods with pod networking.
-	-$(KUBECTL) --kubeconfig=$(KIND_KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force --timeout=10m
 	-$(KIND) delete cluster --name $(KIND_NAME)
 	rm -f $(KIND_KUBECONFIG)
 	rm -f $(REPO_ROOT)/.$(KIND_NAME).created
@@ -1622,3 +1678,8 @@ release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIE
 	for registry in $(DEV_REGISTRIES); do \
 		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$${describe_tag} $${registry}/$(WINDOWS_IMAGE):$${release_tag}; \
 	done;
+
+# Name of a test image that is used by both "node" and "calicoctl", so defined here.  This image is
+# built by node/Makefile.
+TEST_CONTAINER_NAME_VER?=latest
+TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)

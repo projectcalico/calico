@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2023 Tigera, Inc. All rights reserved.
+# Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,5 +15,6 @@
 
 vm_name=$1
 
-exec gcloud --quiet compute scp "ubuntu@${vm_name}:$2" "$3" "--zone=${ZONE}" --scp-flag="-o ServerAliveInterval=10"
+vm_ip=$(gcloud compute instances describe ${vm_name} --zone=${ZONE} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+exec scp -o ServerAliveInterval=10 "ubuntu@${vm_ip}:$2" "$3"
 

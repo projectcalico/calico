@@ -166,7 +166,7 @@ func newVXLANManagerWithShims(
 	return m
 }
 
-func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
+func (m *vxlanManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.VXLANTunnelEndpointUpdate:
 		// Check to make sure that we are dealing with messages of the correct IP version.
@@ -269,8 +269,10 @@ func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetab
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{
-			CIDR: cidr,
-			MTU:  m.mtu,
+			RouteKey: routetable.RouteKey{
+				CIDR: cidr,
+			},
+			MTU: m.mtu,
 		}
 	}
 
@@ -286,9 +288,11 @@ func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetab
 	}
 	return &routetable.Target{
 		Type: routetable.TargetTypeVXLAN,
-		CIDR: cidr,
-		GW:   ip.FromString(vtepAddr),
-		MTU:  m.mtu,
+		RouteKey: routetable.RouteKey{
+			CIDR: cidr,
+		},
+		GW:  ip.FromString(vtepAddr),
+		MTU: m.mtu,
 	}
 }
 

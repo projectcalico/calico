@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"regexp"
@@ -27,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -41,9 +42,8 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -192,7 +192,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					// Swap route entry to match between workloads.
 					routeEntriesV6[0], routeEntriesV6[1] = routeEntriesV6[1], routeEntriesV6[0]
 				}
-				for i := 0; i < nodeCount; i++ {
+				for i := range nodeCount {
 					wgBootstrapEvents = topologyContainers.Felixes[i].WatchStdoutFor(
 						regexp.MustCompile(".*(Cleared wireguard public key from datastore|Wireguard public key not set in datastore).+"),
 					)
@@ -436,7 +436,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					for _, felix := range topologyContainers.Felixes {
 						if wireguardEnabledV4 {
 							var wgPubKeyOrig string
-							var node *v3.Node
+							var node *internalapi.Node
 							var err error
 
 							// Get the original public-key.
@@ -472,7 +472,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						}
 						if wireguardEnabledV6 {
 							var wgPubKeyOrig string
-							var node *v3.Node
+							var node *internalapi.Node
 							var err error
 
 							// Get the original public-key.
@@ -704,7 +704,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 							tcpdump.AddMatcher("numWorkload1to0PacketsV6", regexp.MustCompile(workload10PacketsPatternV6))
 						}
 
-						tcpdump.Start()
+						tcpdump.Start(infra)
 						tcpdumps[i] = tcpdump
 					}
 				})
@@ -842,7 +842,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						By("Waiting for the policy to apply")
 						if BPFMode() {
 							for _, felix := range topologyContainers.Felixes {
-								bpfWaitForPolicy(felix, "eth0", "egress", "default.deny-wg-port")
+								bpfWaitForGlobalNetworkPolicy(felix, "eth0", "egress", "deny-wg-port")
 							}
 						}
 
@@ -1216,7 +1216,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range tc.Felixes {
 				felix.Exec("ip", "addr")
 				felix.Exec("ip", "rule", "list")
@@ -1236,7 +1236,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 
 		tc.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 		}
 		infra.Stop()
@@ -1346,7 +1346,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 				inWorkloadPacketsPattern := fmt.Sprintf("IP %s\\.\\d+ > %s\\.\\d+:", wls[2].IP, wls[0].IP)
 				tcpdump.AddMatcher("numInWorkloadPackets", regexp.MustCompile(inWorkloadPacketsPattern))
 
-				tcpdump.Start()
+				tcpdump.Start(infra)
 				tcpdumps = append(tcpdumps, tcpdump)
 			}
 		})
@@ -1496,7 +1496,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 			nonTunnelPacketsFelix1toFelix0Pattern := fmt.Sprintf("IP %s\\.%s > %s\\.%s: TCP", tc.Felixes[1].IP, defaultWorkloadPort, tc.Felixes[0].IP, defaultWorkloadPort)
 			tcpdump.AddMatcher("numNonTunnelPacketsFelix1toFelix0", regexp.MustCompile(nonTunnelPacketsFelix1toFelix0Pattern))
 
-			tcpdump.Start()
+			tcpdump.Start(infra)
 			tcpdumps = append(tcpdumps, tcpdump)
 		}
 
@@ -1528,8 +1528,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 			Eventually(func() []int {
 				var handshakes []int
 				out, _ := felix.ExecOutput("wg", "show", wireguardInterfaceNameDefault, "latest-handshakes")
-				peers := strings.Split(out, "\n")
-				for _, peer := range peers {
+				peers := strings.SplitSeq(out, "\n")
+				for peer := range peers {
 					parts := strings.Split(peer, "\t")
 					if len(parts) == 2 {
 						h, _ := strconv.Atoi(parts[1])
@@ -1659,7 +1659,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		cc.ResetExpectations()
 
 		By("checking same node pod-to-pod connectivity")
-		for felixIdx := 0; felixIdx < nodeCount; felixIdx++ {
+		for felixIdx := range nodeCount {
 			cc.ExpectSome(wlsByHost[felixIdx][0], wlsByHost[felixIdx][1])
 		}
 
@@ -1720,8 +1720,6 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 
 	if ipipEnabled && !wireguardIPv6Enabled {
 		topologyOptions.IPIPMode = api.IPIPModeAlways
-		topologyOptions.SimulateBIRDRoutes = false
-		topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	} else {
 		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.SimulateBIRDRoutes = true
@@ -1731,9 +1729,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	topologyOptions.ExtraEnvVars["FELIX_IPTABLESMARKMASK"] = "4294934528" // 0xffff8000
 
 	for _, envs := range extraEnvs {
-		for k, v := range envs {
-			topologyOptions.ExtraEnvVars[k] = v
-		}
+		maps.Copy(topologyOptions.ExtraEnvVars, envs)
 	}
 
 	// Enable Wireguard.
@@ -1834,22 +1830,11 @@ func createWorkloadWithAssignedIP(
 	if ip.To4() == nil {
 		mtu = wireguardMTUV6Default
 	}
-
+	if infraOpts.UseIPPools {
+		infrastructure.AssignIP(wlName, wlIP, felix.Hostname, *client)
+	}
 	wl := workload.Run(felix, wlName, "default", wlIP, defaultWorkloadPort, "tcp", workload.WithMTU(mtu))
 	wl.ConfigureInInfra(*infra)
-
-	if infraOpts.UseIPPools {
-		err := (*client).IPAM().AssignIP(utils.Ctx, ipam.AssignIPArgs{
-			IP:       ip,
-			HandleID: &wlName,
-			Attrs: map[string]string{
-				ipam.AttributeNode: felix.Hostname,
-			},
-			Hostname: felix.Hostname,
-		})
-		Expect(err).NotTo(HaveOccurred())
-	}
-
 	return wl
 }
 

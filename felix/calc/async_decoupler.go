@@ -20,12 +20,12 @@ import (
 
 func NewSyncerCallbacksDecoupler() *SyncerCallbacksDecoupler {
 	return &SyncerCallbacksDecoupler{
-		c: make(chan interface{}),
+		c: make(chan any),
 	}
 }
 
 type SyncerCallbacksDecoupler struct {
-	c chan interface{}
+	c chan any
 }
 
 func (a *SyncerCallbacksDecoupler) OnStatusUpdated(status api.SyncStatus) {

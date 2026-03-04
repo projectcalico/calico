@@ -17,13 +17,14 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
 	"os"
 	"regexp"
 	"sync"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -33,6 +34,8 @@ import (
 
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
@@ -121,7 +124,6 @@ func DefaultTopologyOptions() TopologyOptions {
 		TyphaLogSeverity:      "info",
 		IPIPMode:              api.IPIPModeAlways,
 		IPIPStrategy:          NewDefaultTunnelStrategy(DefaultIPPoolCIDR, DefaultIPv6PoolCIDR),
-		SimulateBIRDRoutes:    true,
 		IPPoolCIDR:            DefaultIPPoolCIDR,
 		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
 		UseIPPools:            true,
@@ -229,6 +231,10 @@ func StartNNodeTopology(
 		opts.IPIPMode = api.IPIPModeNever
 	}
 
+	if !opts.SimulateBIRDRoutes {
+		opts.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
+	}
+
 	// Get client.
 	client = infra.GetCalicoClient()
 	mustInitDatastore(client)
@@ -290,12 +296,10 @@ func StartNNodeTopology(
 	// the same copy, while starting Felixes, we could hit a concurrent map read/write
 	// problem.
 	optsPerFelix := make([]TopologyOptions, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		optsPerFelix[i] = opts
 		optsPerFelix[i].ExtraEnvVars = map[string]string{}
-		for k, v := range opts.ExtraEnvVars {
-			optsPerFelix[i].ExtraEnvVars[k] = v
-		}
+		maps.Copy(optsPerFelix[i].ExtraEnvVars, opts.ExtraEnvVars)
 
 		// Different log prefix for each Felix.
 		optsPerFelix[i].ExtraEnvVars["BPF_LOG_PFX"] = fmt.Sprintf("%d-", i)
@@ -314,7 +318,7 @@ func StartNNodeTopology(
 	}
 
 	// Now start the Felixes.
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -329,7 +333,7 @@ func StartNNodeTopology(
 	_, IPv6CIDR, err := net.ParseCIDR(opts.IPv6PoolCIDR)
 	Expect(err).To(BeNil())
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = ""
 		felix := tc.Felixes[i]
 		felix.TyphaIP = typhaIP
@@ -358,7 +362,6 @@ func StartNNodeTopology(
 			infra.SetExpectedVXLANTunnelAddr(felix, opts.VXLANStrategy.TunnelAddress(i))
 			expectedIPs = append(expectedIPs, felix.ExpectedVXLANTunnelAddr)
 			if opts.EnableIPv6 {
-				expectedIPs = append(expectedIPs, felix.IPv6)
 				infra.SetExpectedVXLANV6TunnelAddr(felix, opts.VXLANStrategy.TunnelAddressV6(i))
 				expectedIPs = append(expectedIPs, felix.ExpectedVXLANV6TunnelAddr)
 			}
@@ -459,6 +462,11 @@ func StartNNodeTopology(
 	}
 
 	wg.Wait()
+	if ginkgo.CurrentSpecReport().Failed() {
+		// If one of our parallel start-up goroutines fails, it will eventually
+		// fail the test but Ginkgo has no automatic way to abort the main goroutine.
+		ginkgo.Fail("StartNNodeTopology: failure on background goroutine.")
+	}
 	success = true
 	return
 }
@@ -504,4 +512,17 @@ func mustInitDatastore(client client.Interface) {
 		log.WithError(err).Info("EnsureInitialized result")
 		return err
 	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
+}
+
+func AssignIP(workload, addr, hostname string, client client.Interface) {
+	// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+	err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+		IP:       cnet.MustParseIP(addr),
+		HandleID: &workload,
+		Attrs: map[string]string{
+			ipam.AttributeNode: hostname,
+		},
+		Hostname: hostname,
+	})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }

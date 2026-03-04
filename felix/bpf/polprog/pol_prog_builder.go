@@ -75,7 +75,8 @@ type Option func(b *Builder)
 func NewBuilder(
 	ipSetIDProvider ipSetIDProvider,
 	ipsetMapFD, stateMapFD, staticProgsMapFD, policyJumpMapFD maps.FD,
-	opts ...Option) *Builder {
+	opts ...Option,
+) *Builder {
 	b := &Builder{
 		ipSetIDProvider:    ipSetIDProvider,
 		ipSetMapFD:         ipsetMapFD,
@@ -172,8 +173,17 @@ type Rule struct {
 }
 
 type Policy struct {
-	Name  string
-	Rules []Rule
+	Kind      string
+	Namespace string
+	Name      string
+	Rules     []Rule
+}
+
+func (r Policy) NamespacedName() string {
+	if r.Namespace != "" {
+		return fmt.Sprintf("%s/%s", r.Namespace, r.Name)
+	}
+	return r.Name
 }
 
 type Tier struct {
@@ -532,8 +542,8 @@ func (p *Builder) writeProfiles(profiles []Policy, noProfileMatchID uint64, allo
 
 func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
 	for ruleIdx, rule := range policy.Rules {
-		log.Debugf("Start of rule %d", ruleIdx)
-		p.b.AddCommentF("Start of rule %s", rule)
+		log.Debugf("Start of %s rule %d", policy.NamespacedName(), ruleIdx)
+		p.b.AddCommentF("Start of rule %s %s", policy.NamespacedName(), rule)
 		ipsets := p.printIPSetIDs(rule)
 		if ipsets != "" {
 			p.b.AddCommentF("IPSets %s", p.printIPSetIDs(rule))
@@ -541,17 +551,24 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		p.b.AddCommentF("Rule MatchID: %d", rule.MatchID)
 		action := strings.ToLower(rule.Action)
 		p.writeRule(rule, actionLabels[action], destLeg)
-		log.Debugf("End of rule %d", ruleIdx)
-		p.b.AddCommentF("End of rule %s", rule.RuleId)
+		log.Debugf("End of rule %s %d", policy.NamespacedName(), ruleIdx)
+		p.b.AddCommentF("End of rule %s %s", policy.NamespacedName(), rule.RuleId)
 	}
 }
 
 func (p *Builder) writePolicy(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
-	p.b.AddCommentF("Start of policy %s", policy.Name)
-	log.Debugf("Start of policy %q %d", policy.Name, p.policyID)
+	// Identifying comment at the start and end of the policy.
+	cmtID := fmt.Sprintf("%s %s %d", policy.Kind, policy.Name, p.policyID)
+	if policy.Namespace != "" {
+		cmtID = fmt.Sprintf("%s %s/%s %d", policy.Kind, policy.Namespace, policy.Name, p.policyID)
+	}
+	p.b.AddCommentF("Start of %s", cmtID)
+	log.Debugf("Start of %s", cmtID)
+
 	p.writePolicyRules(policy, actionLabels, destLeg)
-	log.Debugf("End of policy %q %d", policy.Name, p.policyID)
-	p.b.AddCommentF("End of policy %s", policy.Name)
+
+	log.Debugf("End of %s", cmtID)
+	p.b.AddCommentF("End of %s", cmtID)
 	p.policyID++
 }
 
@@ -806,6 +823,7 @@ func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) 
 		p.b.JumpNEImm64(asm.R1, (int32(icmpCode)<<8)|int32(icmpType), p.endOfRuleLabel())
 	}
 }
+
 func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 	if p.policyDebugEnabled {
 		cidrStrings := "{"
@@ -974,7 +992,6 @@ func (p *Builder) writeIPSetMatch(negate bool, leg matchLeg, ipSets []string) {
 
 // Match if packet matches ANY of the given IP sets.
 func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
-
 	onMatchLabel := p.freshPerRuleLabel()
 
 	for _, ipSetID := range ipSets {

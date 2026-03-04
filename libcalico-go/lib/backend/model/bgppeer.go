@@ -31,7 +31,7 @@ import (
 var (
 	matchGlobalBGPPeer        = regexp.MustCompile("^/?calico/bgp/v1/global/peer_v./([^/]+)$")
 	matchHostBGPPeer          = regexp.MustCompile("^/?calico/bgp/v1/host/([^/]+)/peer_v./([^/]+)$")
-	typeBGPPeer               = reflect.TypeOf(BGPPeer{})
+	typeBGPPeer               = reflect.TypeFor[BGPPeer]()
 	ipPortSeparator           = "-"
 	defaultPort        uint16 = 179
 )
@@ -64,6 +64,10 @@ func (key NodeBGPPeerKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key NodeBGPPeerKey) valueType() (reflect.Type, error) {
 	return typeBGPPeer, nil
+}
+
+func (key NodeBGPPeerKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[BGPPeer](key, rawData)
 }
 
 func (key NodeBGPPeerKey) String() string {
@@ -146,6 +150,10 @@ func (key GlobalBGPPeerKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key GlobalBGPPeerKey) valueType() (reflect.Type, error) {
 	return typeBGPPeer, nil
+}
+
+func (key GlobalBGPPeerKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[BGPPeer](key, rawData)
 }
 
 func (key GlobalBGPPeerKey) String() string {

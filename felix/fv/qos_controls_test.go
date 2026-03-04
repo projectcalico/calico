@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -34,10 +34,8 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 func init() {
@@ -187,7 +185,7 @@ var _ = infrastructure.DatastoreDescribe(
 			},
 			{
 				Encap:       "vxlan",
-				BPFLogLevel: "Debug",
+				BPFLogLevel: "Info",
 			},
 		} {
 			encap := testConfig.Encap
@@ -204,12 +202,8 @@ var _ = infrastructure.DatastoreDescribe(
 				)
 
 				BeforeEach(func() {
-					infra = getInfra()
+					infra = getInfra(infrastructure.WithBPFLogByteLimit(16 * 1024 * 1024))
 					topt = infrastructure.DefaultTopologyOptions()
-
-					if bpfLogLevel != "Debug" && !BPFMode() {
-						Skip("Skipping QoS control tests with non-debug bpfLogLevel on iptables/nftables mode (for deduplication).")
-					}
 
 					switch encap {
 					case "none":
@@ -224,17 +218,15 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 						topt.VXLANMode = apiv3.VXLANModeNever
 						topt.IPIPMode = apiv3.IPIPModeAlways
-						topt.SimulateBIRDRoutes = true
 					case "vxlan":
 						topt.IPIPMode = apiv3.IPIPModeNever
 						topt.VXLANMode = apiv3.VXLANModeAlways
 						topt.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(topt.IPPoolCIDR, topt.IPv6PoolCIDR)
-						topt.SimulateBIRDRoutes = false
 					}
 
-					topt.UseIPPools = true
 					topt.DelayFelixStart = true
 					topt.TriggerDelayedFelixStart = true
+					topt.FelixLogSeverity = "Debug"
 					if BPFMode() {
 						topt.ExtraEnvVars["FELIX_BPFLogLevel"] = bpfLogLevel
 					}
@@ -250,20 +242,9 @@ var _ = infrastructure.DatastoreDescribe(
 					for ii := range w {
 						wIP := fmt.Sprintf("10.65.%d.2", ii)
 						wName := fmt.Sprintf("w%d", ii)
+						infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
 						w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 						w[ii].ConfigureInInfra(infra)
-						if topt.UseIPPools {
-							// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-							err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-								IP:       cnet.MustParseIP(wIP),
-								HandleID: &w[ii].Name,
-								Attrs: map[string]string{
-									ipam.AttributeNode: tc.Felixes[ii].Hostname,
-								},
-								Hostname: tc.Felixes[ii].Hostname,
-							})
-							Expect(err).NotTo(HaveOccurred())
-						}
 					}
 
 					if BPFMode() {
@@ -336,7 +317,14 @@ var _ = infrastructure.DatastoreDescribe(
 						if BPFMode() && BPFAttachType() == "tc" {
 							Skip("Skipping QoS control bandwidth tests on BPF TC attach mode.")
 						}
+
+						By("Removing all limits from workloads")
+						for i := range len(w) {
+							w[i].WorkloadEndpoint.Spec.QoSControls = nil
+							w[i].UpdateInInfra(infra)
+						}
 					})
+
 					getQdisc := func() string {
 						out, err := tc.Felixes[1].ExecOutput("tc", "qdisc")
 						logrus.Infof("tc qdisc output:\n%v", out)
@@ -360,13 +348,12 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(baselinePeakrate).To(BeNumerically(">=", 100000000.0*10))
 
 						By("Setting 10Mbps limit and 100Mbps peakrate for ingress on workload 1")
-						w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							IngressBandwidth: 10000000,
 							IngressBurst:     300000000,
 							IngressPeakrate:  100000000,
 						}
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to appear in 'tc qdisc'")
 						// ingress config should be present
@@ -384,13 +371,12 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(ingressLimitedPeakrate).To(BeNumerically("<=", 100000000.0*1.2))
 
 						By("Setting 10Mbps limit and 100Mbps peakrate for egress on workload 1")
-						w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							EgressBandwidth: 10000000,
 							EgressBurst:     300000000,
 							EgressPeakrate:  100000000,
 						}
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to appear in 'tc qdisc'")
 						// ingress config should not be present
@@ -410,7 +396,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 1")
 						w[1].WorkloadEndpoint.Spec.QoSControls = nil
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to disappear in 'tc qdisc'")
 						// ingress config should not be present
@@ -423,7 +408,28 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(err).NotTo(HaveOccurred())
 						err = serverCmd.Process.Release()
 						Expect(err).NotTo(HaveOccurred())
+					})
 
+					It("should correctly apply bandwidth limits when a non-default qdisc exists (handle != 0)", func() {
+						By("Replacing the default noqueue qdisc with a non-default qdisc (handle 8001)")
+						out, err := tc.Felixes[1].ExecOutput("tc", "qdisc", "replace", "dev", w[1].InterfaceName, "root", "handle", "8001:", "noqueue")
+						logrus.Infof("tc qdisc replace output:\n%v", out)
+						Expect(err).NotTo(HaveOccurred())
+
+						By("Waiting for the config to appear in 'tc qdisc'")
+						Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc noqueue 8001: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+`))
+
+						By("Setting 10Mbps limit and 100Mbps peakrate for ingress on workload 1")
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							IngressBandwidth: 10000000,
+							IngressBurst:     300000000,
+							IngressPeakrate:  100000000,
+						}
+						w[1].UpdateInInfra(infra)
+
+						By("Waiting for the config to appear in 'tc qdisc'")
+						// ingress config should be present
+						Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc tbf \d+: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+ rate ` + regexp.QuoteMeta("10Mbit") + `.* peakrate ` + regexp.QuoteMeta("100Mbit")))
 					})
 				})
 
@@ -444,12 +450,11 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(baselineRate).To(BeNumerically(">=", 100*1e6*0.8))
 
 						By("Setting 100 packets/s limit for ingress on workload 0 (iperf2 server)")
-						w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							IngressPacketRate:  100,
 							IngressPacketBurst: 200,
 						}
 						w[0].UpdateInInfra(infra)
-						Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
 						if BPFMode() {
 							By("Waiting for the config to appear in the BPF maps on workload 0")
@@ -491,7 +496,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 0")
 						w[0].WorkloadEndpoint.Spec.QoSControls = nil
 						w[0].UpdateInInfra(infra)
-						Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
 						if BPFMode() {
 							By("Waiting for the config to disappear in the BPF maps on workload 0")
@@ -513,12 +517,11 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Setting 100kpps limit for egress on workload 1 (iperf2 client)")
-						w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							EgressPacketRate:  100,
 							EgressPacketBurst: 200,
 						}
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						if BPFMode() {
 							By("Waiting for the config to appear in the BPF maps on workload 1")
@@ -560,7 +563,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 1")
 						w[1].WorkloadEndpoint.Spec.QoSControls = nil
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						if BPFMode() {
 							By("Waiting for the config to disappear in the BPF maps on workload 1")
@@ -626,11 +628,10 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Setting connection limit for ingress on workload 0")
-						w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							IngressMaxConnections: int64(numConnections),
 						}
 						w[0].UpdateInInfra(infra)
-						Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
 						By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
 						if NFTMode() {
@@ -669,7 +670,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 0")
 						w[0].WorkloadEndpoint.Spec.QoSControls = nil
 						w[0].UpdateInInfra(infra)
-						Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
 						By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
 						if NFTMode() {
@@ -685,11 +685,10 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Setting connection limit for egress on workload 1 (clients)")
-						w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							EgressMaxConnections: int64(numConnections),
 						}
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
 						if NFTMode() {
@@ -721,7 +720,6 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Removing all limits from workload 1")
 						w[1].WorkloadEndpoint.Spec.QoSControls = nil
 						w[1].UpdateInInfra(infra)
-						Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
 						By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 1")
 						if NFTMode() {

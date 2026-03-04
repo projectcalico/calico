@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
+// #cgo CFLAGS: -I${SRCDIR}/../bpf-gpl/libbpf/src -I${SRCDIR}/../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../bpf-gpl -Werror
 // #include "bpf_syscall.h"
 import "C"
 
@@ -38,8 +39,16 @@ func SyscallSupport() bool {
 const defaultLogSize = 1024 * 1024
 const maxLogSize = 128 * 1024 * 1024
 
+func LoadBPFProgramFromInsnsWithAttachType(insns asm.Insns, name, license string, progType, attachType uint32) (fd ProgFD, err error) {
+	return loadBPFProgramFromInsns(insns, name, license, progType, attachType)
+}
+
 func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uint32) (fd ProgFD, err error) {
-	log.Debugf("LoadBPFProgramFromInsns(%v, %q, %v, %v)", insns, name, license, progType)
+	return loadBPFProgramFromInsns(insns, name, license, progType, 0)
+}
+
+func loadBPFProgramFromInsns(insns asm.Insns, name, license string, progType, attachType uint32) (fd ProgFD, err error) {
+	log.Debugf("loadBPFProgramFromInsns(%v, %q, %v, %v, %v)", insns, name, license, progType, attachType)
 	utils.IncreaseLockedMemoryQuota()
 
 	// Occasionally see retryable errors here, retry silently a few times before going into log-collection mode.
@@ -47,7 +56,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uin
 	for retries := 10; retries > 0; retries-- {
 		// By default, try to load the program with logging disabled.  This has two advantages: better performance
 		// and the fact that the log cannot overflow.
-		fd, err = tryLoadBPFProgramFromInsns(insns, name, license, 0, progType)
+		fd, err = tryLoadBPFProgramFromInsns(insns, name, license, 0, progType, attachType)
 		if err == nil {
 			log.WithField("fd", fd).Debug("Loaded program successfully")
 			return fd, nil
@@ -61,7 +70,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uin
 	log.WithError(err).Warn("Failed to load BPF program; collecting diagnostics...")
 	var logSize uint = defaultLogSize
 	for {
-		fd, err2 := tryLoadBPFProgramFromInsns(insns, name, license, logSize, progType)
+		fd, err2 := tryLoadBPFProgramFromInsns(insns, name, license, logSize, progType, attachType)
 		if err2 == nil {
 			// Unexpected but we'll take it.
 			log.Warn("Retry succeeded.")
@@ -81,7 +90,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uin
 	}
 }
 
-func tryLoadBPFProgramFromInsns(insns asm.Insns, name, license string, logSize uint, progType uint32) (ProgFD, error) {
+func tryLoadBPFProgramFromInsns(insns asm.Insns, name, license string, logSize uint, progType, attachType uint32) (ProgFD, error) {
 	log.Debugf("tryLoadBPFProgramFromInsns(..., %s, %v, %v, %v)", name, license, logSize, progType)
 	bpfAttr := C.bpf_attr_alloc()
 	defer C.free(unsafe.Pointer(bpfAttr))
@@ -101,32 +110,33 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, name, license string, logSize u
 		defer C.free(logBuf)
 	}
 
-	C.bpf_attr_setup_load_prog(bpfAttr, cName,
-		(C.uint)(progType), C.uint(len(insns)), cInsnBytes, cLicense,
+	fd, err := C.bpf_load_prog(cName, (C.uint)(progType), (C.uint)(attachType), cInsnBytes, C.uint(len(insns)), cLicense,
 		(C.uint)(logLevel), (C.uint)(logSize), logBuf)
-	fd, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_LOAD, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
+	if err != nil {
+		errno, _ := err.(syscall.Errno)
 
-	if errno != 0 && errno != unix.ENOSPC /* log buffer too small */ {
-		goLog := strings.TrimSpace(C.GoString((*C.char)(logBuf)))
-		log.WithError(errno).Debug("BPF_PROG_LOAD failed")
-		if len(goLog) > 0 {
-			lines := strings.Split(goLog, "\n")
-			for _, l := range lines {
-				log.Error("BPF_PROG_LOAD failed, BPF Verifier output:    ", l)
+		if errno != 0 && errno != unix.ENOSPC /* log buffer too small */ {
+			goLog := strings.TrimSpace(C.GoString((*C.char)(logBuf)))
+			log.WithError(errno).Debug("BPF_PROG_LOAD failed")
+			if len(goLog) > 0 {
+				lines := strings.Split(goLog, "\n")
+				for _, l := range lines {
+					log.Error("BPF_PROG_LOAD failed, BPF Verifier output:    ", l)
+				}
+				if errno == 524 /* Linux ENOTSUPP */ && len(lines) == 1 {
+					// likely a JIT error, verifier passed
+					// XXX we could test if it says Processed x instructions, but
+					// the message may change
+					return 0, fmt.Errorf("likely a JIT error, bpf_harden may be set: %w", unix.ERANGE)
+				}
+			} else if logSize > 0 {
+				log.Error("BPF_PROG_LOAD failed, verifier log was empty.")
 			}
-			if errno == 524 /* Linux ENOTSUPP */ && len(lines) == 1 {
-				// likely a JIT error, verifier passed
-				// XXX we could test if it says Processed x instructions, but
-				// the message may change
-				return 0, fmt.Errorf("likely a JIT error, bpf_harden may be set: %w", unix.ERANGE)
-			}
-		} else if logSize > 0 {
-			log.Error("BPF_PROG_LOAD failed, verifier log was empty.")
 		}
-	}
 
-	if errno != 0 {
-		return 0, errno
+		if errno != 0 {
+			return 0, errno
+		}
 	}
 	return ProgFD(fd), nil
 }

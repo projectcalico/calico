@@ -18,8 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -690,6 +689,6 @@ var _ = testutils.E2eDatastoreDescribe("StagedKubernetesNetworkPolicy tests", te
 				Expect(np.GetName()).To(Equal(name))
 			}
 		},
-		nameNormalizationTests...,
+		nameNormalizationTests,
 	)
 })

@@ -50,7 +50,7 @@ func NewTestServerConfig() *TestServerConfig {
 	}
 }
 
-func withConfigGetFreshApiserverServerAndClient(
+func withConfigGetFreshAPIServerServerAndClient(
 	t *testing.T,
 	serverConfig *TestServerConfig,
 ) (*apiserver.ProjectCalicoServer,
@@ -94,7 +94,7 @@ func withConfigGetFreshApiserverServerAndClient(
 		}
 	}()
 
-	if err := waitForApiserverUp(secureAddr, serverFailed); err != nil {
+	if err := waitForAPIServerUp(secureAddr, serverFailed); err != nil {
 		t.Fatalf("%v", err)
 	}
 	if pcs == nil {
@@ -112,19 +112,16 @@ func withConfigGetFreshApiserverServerAndClient(
 	return pcs, clientset, cfg, shutdownServer
 }
 
-func getFreshApiserverAndClient(
-	t *testing.T,
-	newEmptyObj func() runtime.Object,
-) (calicoclient.Interface, func()) {
+func getFreshAPIServerAndClient(t *testing.T, newEmptyObj func() runtime.Object) (calicoclient.Interface, func()) {
 	serverConfig := &TestServerConfig{
 		etcdServerList: []string{"http://localhost:2379"},
 		emptyObjFunc:   newEmptyObj,
 	}
-	_, client, _, shutdownFunc := withConfigGetFreshApiserverServerAndClient(t, serverConfig)
+	_, client, _, shutdownFunc := withConfigGetFreshAPIServerServerAndClient(t, serverConfig)
 	return client, shutdownFunc
 }
 
-func waitForApiserverUp(serverURL string, stopCh <-chan struct{}) error {
+func waitForAPIServerUp(serverURL string, stopCh <-chan struct{}) error {
 	interval := 1 * time.Second
 	timeout := 30 * time.Second
 	startWaiting := time.Now()

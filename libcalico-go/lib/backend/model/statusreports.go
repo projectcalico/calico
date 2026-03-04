@@ -28,7 +28,7 @@ import (
 var (
 	matchActiveStatusReport = regexp.MustCompile("^/?calico/felix/v2/([^/]+)/host/([^/]+)/status$")
 	matchLastStatusReport   = regexp.MustCompile("^/?calico/felix/v2/([^/]+)/host/([^/]+)/last_reported_status")
-	typeStatusReport        = reflect.TypeOf(StatusReport{})
+	typeStatusReport        = reflect.TypeFor[StatusReport]()
 )
 
 type ActiveStatusReportKey struct {
@@ -60,6 +60,10 @@ func (key ActiveStatusReportKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key ActiveStatusReportKey) valueType() (reflect.Type, error) {
 	return typeStatusReport, nil
+}
+
+func (key ActiveStatusReportKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[StatusReport](key, rawData)
 }
 
 func (key ActiveStatusReportKey) String() string {
@@ -133,6 +137,10 @@ func (key LastStatusReportKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key LastStatusReportKey) valueType() (reflect.Type, error) {
 	return typeStatusReport, nil
+}
+
+func (key LastStatusReportKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONPointer[StatusReport](key, rawData)
 }
 
 func (key LastStatusReportKey) String() string {

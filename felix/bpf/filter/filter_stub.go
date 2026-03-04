@@ -22,6 +22,6 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
-func New(_ tcdefs.EndpointType, _ int, _ string, _ maps.FD) (asm.Insns, error) {
+func New(_ tcdefs.EndpointType, _ int, _ string, _, _ maps.FD) (asm.Insns, error) {
 	panic("this is stub only")
 }

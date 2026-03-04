@@ -15,13 +15,12 @@
 package fv_test
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -33,8 +32,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
@@ -82,6 +79,7 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 
 			wIP := net.ParseIP(fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)).String()
 			wName := fmt.Sprintf("w%d%d", ii, wi)
+			infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
 
 			w := workload.New(tc.Felixes[ii], wName, "default",
 				wIP, strconv.Itoa(port), "tcp")
@@ -94,19 +92,6 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 				Expect(err).NotTo(HaveOccurred())
 				w.ConfigureInInfra(infra)
 			}
-			if options.UseIPPools {
-				// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-				err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-					IP:       cnet.MustParseIP(wIP),
-					HandleID: &w.Name,
-					Attrs: map[string]string{
-						ipam.AttributeNode: tc.Felixes[ii].Hostname,
-					},
-					Hostname: tc.Felixes[ii].Hostname,
-				})
-				Expect(err).NotTo(HaveOccurred())
-			}
-
 			return w
 		}
 

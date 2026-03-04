@@ -106,7 +106,7 @@ func GetRawMetrics(ip string, port int, caFile, certFile, keyFile string) (out s
 		httpClient.Transport = &http.Transport{}
 	}
 	var resp *http.Response
-	resp, err = httpClient.Get(fmt.Sprintf("%v://%v:%v/metrics", method, ip, port))
+	resp, err = httpClient.Get(fmt.Sprintf("%s://%s/metrics", method, net.JoinHostPort(ip, strconv.Itoa(port))))
 	if err != nil {
 		return
 	}

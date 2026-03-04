@@ -215,7 +215,7 @@ func TestPerfPoll(t *testing.T) {
 		},
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		poller.rings[i] = &perfRing{
 			ctrl: new(unix.PerfEventMmapPage),
 			ring: make([]byte, 1024),

@@ -156,7 +156,7 @@ func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bo
 	return false
 }
 
-func (m *routeManager) OnUpdate(protoBufMsg interface{}) {
+func (m *routeManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
 		// Check to make sure that we are dealing with messages of the correct IP version.
@@ -402,8 +402,10 @@ func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlin
 			continue
 		}
 		rtt = append(rtt, routetable.Target{
-			Type:     routetable.TargetTypeBlackhole,
-			CIDR:     cidr,
+			Type: routetable.TargetTypeBlackhole,
+			RouteKey: routetable.RouteKey{
+				CIDR: cidr,
+			},
 			Protocol: proto,
 		})
 	}
@@ -421,8 +423,10 @@ func (m *routeManager) noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 		return nil
 	}
 	noEncapRoute := routetable.Target{
-		Type:     routetable.TargetTypeNoEncap,
-		CIDR:     cidr,
+		Type: routetable.TargetTypeNoEncap,
+		RouteKey: routetable.RouteKey{
+			CIDR: cidr,
+		},
 		GW:       ip.FromString(r.DstNodeIp),
 		Protocol: m.routeProtocol,
 	}
@@ -454,7 +458,7 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 		for _, addr := range addrs {
 			// Match address with or without subnet mask
 			if addr.IP.String() == parentAddr || addr.IPNet.String() == parentAddr {
-				m.logCtx.Debugf("Found parent interface: %s", link)
+				m.logCtx.Debugf("Found parent interface: %+v", link)
 				return link, nil
 			}
 		}

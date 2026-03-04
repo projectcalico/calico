@@ -65,7 +65,7 @@ func benchmarkWorkloadUpdates(b *testing.B, numSels int) {
 		lastID = ipSetID
 		lastMember = member
 	}
-	for i := 0; i < numSels; i++ {
+	for i := range numSels {
 		sel, err := selector.Parse(fmt.Sprintf(`alpha == "beta" && has(ipset-%d)`, i))
 		if err != nil {
 			b.Fatal(err)
@@ -91,7 +91,7 @@ func sendUpdates(b *testing.B, idx *SelectorAndNamedPortIndex, updates []api.Upd
 
 func makeEndpointUpdates(num int) []api.Update {
 	updates := make([]api.Update, num)
-	for n := 0; n < num; n++ {
+	for n := range num {
 		key := model.WorkloadEndpointKey{
 			Hostname:       "host",
 			OrchestratorID: "k8s",
@@ -156,7 +156,7 @@ func benchmarkParentUpdates(b *testing.B, numSels, numEndpoints int) {
 		idx.OnUpdate(upd)
 	}
 
-	for i := 0; i < numSels; i++ {
+	for i := range numSels {
 		sel, err := selector.Parse(fmt.Sprintf(`projectcalico.org/name == "namespace-%d"`, i))
 		if err != nil {
 			b.Fatal(err)

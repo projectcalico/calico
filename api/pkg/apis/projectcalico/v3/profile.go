@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,13 +23,12 @@ const (
 	KindProfileList = "ProfileList"
 )
 
-// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ProfileList is a list of Profile objects.
 type ProfileList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []Profile `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -37,12 +36,13 @@ type ProfileList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type Profile struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec ProfileSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec ProfileSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // ProfileSpec contains the specification for a security Profile resource.

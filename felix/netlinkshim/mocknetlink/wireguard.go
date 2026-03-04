@@ -17,7 +17,7 @@ package mocknetlink
 import (
 	"sort"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -237,10 +237,9 @@ func (d *MockWireguard) ConfigureDevice(name string, cfg wgtypes.Config) error {
 			}
 
 			var allowedIPStr []string
-			allowedIPs.Iter(func(allowedIP string) error {
+			for allowedIP := range allowedIPs.All() {
 				allowedIPStr = append(allowedIPStr, allowedIP)
-				return nil
-			})
+			}
 			sort.Strings(allowedIPStr)
 
 			peer.AllowedIPs = nil

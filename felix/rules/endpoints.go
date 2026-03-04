@@ -15,21 +15,22 @@
 package rules
 
 import (
+	"crypto/sha3"
 	"encoding/base64"
 	"fmt"
+	"hash"
 	"strconv"
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/sha3"
 
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	calicohash "github.com/projectcalico/calico/libcalico-go/lib/hash"
 )
 
 const (
@@ -359,7 +360,7 @@ func (r *DefaultRuleRenderer) endpointSetMarkChain(
 }
 
 func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []*generictables.Chain {
-	rules := make([]generictables.Rule, 0, len(group.PolicyNames)*2-1)
+	rules := make([]generictables.Rule, 0, len(group.Policies)*2-1)
 	polChainPrefix := PolicyInboundPfx
 	if group.Direction == PolicyDirectionOutbound {
 		polChainPrefix = PolicyOutboundPfx
@@ -370,9 +371,9 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 	// fire.
 	const returnStride = 5
 	count := -1
-	for _, polName := range group.PolicyNames {
-		if model.PolicyIsStaged(polName) {
-			logrus.Debugf("Skip programming staged policy %v", polName)
+	for _, pol := range group.Policies {
+		if model.KindIsStaged(pol.Kind) {
+			logrus.Debugf("Skip programming staged policy %v", pol)
 			continue
 		}
 		count++
@@ -403,8 +404,8 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 
 		chainToJumpTo := PolicyChainName(
 			polChainPrefix,
-			&types.PolicyID{Tier: group.Tier, Name: polName},
-			r.NFTables,
+			pol,
+			r.nft,
 		)
 		rules = append(rules, generictables.Rule{
 			Match:  match,
@@ -453,7 +454,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		}
 	}
 
-	//Add QoS controls for packet rate if applicable
+	// Add QoS controls for packet rate if applicable
 	if chainType == chainTypeNormal && qosControls != nil {
 		logrus.WithField("qosControls", qosControls).Debug("Rendering QoS controls packet rate rules")
 		markLimitPacketRate := r.MarkScratch0
@@ -461,7 +462,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			// Add ingress packet rate limit rules if applicable
 			if qosControls.IngressPacketRate != 0 {
 				logrus.WithFields(logrus.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "IngressPacketBurst": qosControls.IngressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
-				if r.NFTables {
+				if r.nft {
 					rules = append(rules,
 						generictables.Rule{
 							Match:   r.NewMatch(),
@@ -499,7 +500,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			// Add egress packet rate limit rules if applicable
 			if qosControls.EgressPacketRate != 0 {
 				logrus.WithFields(logrus.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "EgressPacketBurst": qosControls.EgressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
-				if r.NFTables {
+				if r.nft {
 					rules = append(rules,
 						generictables.Rule{
 							Match:   r.NewMatch(),
@@ -541,7 +542,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		rules = r.appendConntrackRules(rules, allowAction)
 	}
 
-	//Add QoS controls for number of connections if applicable
+	// Add QoS controls for number of connections if applicable
 	if chainType == chainTypeNormal && qosControls != nil {
 		logrus.WithField("qosControls", qosControls).Debug("Rendering QoS controls number of connection rules")
 		if dir == RuleDirIngress {
@@ -636,15 +637,15 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				}
 				if polGroup.ShouldBeInlined() {
 					// Group is too small to have its own chain.
-					for _, p := range polGroup.PolicyNames {
-						if model.PolicyIsStaged(p) {
+					for _, p := range polGroup.Policies {
+						if model.KindIsStaged(p.Kind) {
 							logrus.Debugf("Skip programming inlined staged policy %v", p)
 							continue
 						}
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
 							policyPrefix,
-							&types.PolicyID{Tier: tier.Name, Name: p},
-							r.NFTables,
+							p,
+							r.nft,
 						))
 					}
 				} else {
@@ -701,9 +702,10 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					rules = append(rules, generictables.Rule{
 						Match:  r.NewMatch().MarkClear(r.MarkPass),
 						Action: r.IptablesFilterDenyAction(),
-						Comment: []string{fmt.Sprintf("End of tier %s. %s if no policies passed packet",
-							tier.Name,
-							r.IptablesFilterDenyAction()),
+						Comment: []string{
+							fmt.Sprintf("End of tier %s. %s if no policies passed packet",
+								tier.Name,
+								r.IptablesFilterDenyAction()),
 						},
 					})
 				} else if r.FlowLogsEnabled {
@@ -737,7 +739,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if chainType == chainTypeNormal {
 		// Then, jump to each profile in turn.
 		for _, profileID := range profileIds {
-			profChainName := ProfileChainName(profilePrefix, &types.ProfileID{Name: profileID}, r.NFTables)
+			profChainName := ProfileChainName(profilePrefix, &types.ProfileID{Name: profileID}, r.nft)
 			rules = append(rules,
 				generictables.Rule{Match: r.NewMatch(), Action: r.Jump(profChainName)},
 				// If policy marked packet as accepted, it returns, setting the
@@ -808,7 +810,7 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, a
 }
 
 func EndpointChainName(prefix string, ifaceName string, maxLen int) string {
-	return hashutils.GetLengthLimitedID(
+	return calicohash.GetLengthLimitedID(
 		prefix,
 		ifaceName,
 		maxLen,
@@ -822,15 +824,14 @@ const MaxPolicyGroupUIDLength = iptables.MaxChainNameLength - len(PolicyGroupInb
 // a list of policies.  If large enough (currently >1 entry) it will be
 // programmed into its own chain.
 type PolicyGroup struct {
-	// Tier is only used in enterprise.  There can be policies with the same
-	// name in different tiers so we need to disambiguate.
-	Tier string
 	// Direction matches the policy model direction inbound/outbound. Each
 	// group is either inbound or outbound since the set of active policy
 	// can differ between the directions (a policy may have inbound rules
 	// only, for example).
-	Direction   PolicyDirection
-	PolicyNames []string
+	Direction PolicyDirection
+
+	Policies []*types.PolicyID
+
 	// Selector is the original selector used by the grouped policies.  By
 	// grouping on selector, we ensure that if one policy in a group matches
 	// an endpoint then all policies in that group must match the endpoint.
@@ -847,7 +848,7 @@ func (g *PolicyGroup) UniqueID() string {
 		return g.cachedUID
 	}
 
-	hash := sha3.New224()
+	hash := hash.Hash(sha3.New224())
 	write := func(s string) {
 		_, err := hash.Write([]byte(s))
 		if err != nil {
@@ -858,12 +859,11 @@ func (g *PolicyGroup) UniqueID() string {
 			logrus.WithError(err).Panic("Failed to write to hasher")
 		}
 	}
-	write(g.Tier)
 	write(g.Selector)
 	write(fmt.Sprint(g.Direction))
-	write(strconv.Itoa(len(g.PolicyNames)))
-	for _, name := range g.PolicyNames {
-		write(name)
+	write(strconv.Itoa(len(g.Policies)))
+	for _, policy := range g.Policies {
+		write(policy.String())
 	}
 	hashBytes := hash.Sum(make([]byte, 0, hash.Size()))
 	g.cachedUID = base64.RawURLEncoding.EncodeToString(hashBytes)[:MaxPolicyGroupUIDLength]
@@ -879,8 +879,8 @@ func (g *PolicyGroup) ChainName() string {
 
 func (g *PolicyGroup) ShouldBeInlined() bool {
 	var count int
-	for _, name := range g.PolicyNames {
-		if !model.PolicyIsStaged(name) {
+	for _, pol := range g.Policies {
+		if !model.KindIsStaged(pol.Kind) {
 			count++
 			if count > 1 {
 				return false
@@ -891,8 +891,8 @@ func (g *PolicyGroup) ShouldBeInlined() bool {
 }
 
 func (g *PolicyGroup) HasNonStagedPolicies() bool {
-	for _, n := range g.PolicyNames {
-		if !model.PolicyIsStaged(n) {
+	for _, pol := range g.Policies {
+		if !model.KindIsStaged(pol.Kind) {
 			return true
 		}
 	}

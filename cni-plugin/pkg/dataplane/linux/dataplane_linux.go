@@ -20,6 +20,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"syscall"
 	"time"
 
@@ -31,7 +32,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
@@ -68,8 +69,9 @@ func (d *LinuxDataplane) DoNetworking(
 	result *cniv1.Result,
 	desiredVethName string,
 	routes []*net.IPNet,
-	endpoint *api.WorkloadEndpoint,
+	endpoint *internalapi.WorkloadEndpoint,
 	annotations map[string]string,
+	skipHostSideRoutes bool,
 ) (hostVethName, contVethMAC string, err error) {
 	hostVethName = desiredVethName
 	d.logger.Infof("Setting the host side veth name to %s", hostVethName)
@@ -98,10 +100,15 @@ func (d *LinuxDataplane) DoNetworking(
 		return "", "", fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
 	}
 
-	// Add the routes to host veth in the host namespace.
-	err = SetupRoutes(hostNlHandle, hostVeth, result)
-	if err != nil {
-		return "", "", fmt.Errorf("error adding host side routes for interface: %s, error: %s", hostVeth.Attrs().Name, err)
+	// Add the routes to host veth in the host namespace unless explicitly skipped
+	// (e.g., for KubeVirt migration target pods where Felix will program the route)
+	if !skipHostSideRoutes {
+		err = SetupRoutes(hostNlHandle, hostVeth, result)
+		if err != nil {
+			return "", "", fmt.Errorf("error adding host side routes for interface: %s, error: %s", hostVeth.Attrs().Name, err)
+		}
+	} else {
+		d.logger.Info("Skipping host-side route setup (skipHostSideRoutes=true)")
 	}
 
 	return hostVethName, contVethMAC, err
@@ -140,6 +147,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			PeerNamespace: netlink.NsFd(int(hostNS.Fd())),
 		}
 
+		var expectedHostSideIPv6Addr net.IP
 		if err := netlink.LinkAdd(veth); err != nil {
 			d.logger.Errorf("Error adding veth %+v: %s", veth, err)
 			return err
@@ -151,21 +159,33 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			return err
 		}
 
-		// We create the veth with random MAC address because the kernel sometimes
-		// fails to honor a MAC that we set on the LinkAdd request.  However,
-		// we want a fixed MAC address so try to set that now.  A fixed MAC
-		// address makes ARP programming easier/static, and it paves the way for
-		// live migration of workloads in the future.
-		var expectedHostSideIPv6Addr net.IP
-		if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, hostSideMAC); err != nil {
-			d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
-		} else {
-			// We've seen the kernel use the old MAC to calculate the link-local
-			// address.  Presumably because we bring the link "up" before the
-			// MAC has reached all parts of the kernel.  Give it a bit of time
-			// to settle in hopes of making that less likely.
-			time.Sleep(10 * time.Millisecond)
-			expectedHostSideIPv6Addr = hostSideMACAsIPv6LL
+		macUpdateTimeout := time.After(5 * time.Second)
+		for {
+			// We create the veth with random MAC address because the kernel sometimes
+			// fails to honor a MAC that we set on the LinkAdd request.  In addition,
+			// LinkSetHardwareAddr sometimes fails silently so we retry.
+			if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, hostSideMAC); err != nil {
+				d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
+				break
+			}
+
+			// Read back the MAC to check that the set actually worked.
+			hostVeth, err = hostNlHandle.LinkByName(hostVethName)
+			if err != nil {
+				err = fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
+				return err
+			}
+			if slices.Equal(hostVeth.Attrs().HardwareAddr, hostSideMAC) {
+				d.logger.Info("Read back correct host-side MAC.")
+				expectedHostSideIPv6Addr = hostSideMACAsIPv6LL
+				break
+			}
+			d.logger.Warnf("Host-side veth MAC %s does not match expected %s. Retrying...", hostVeth.Attrs().HardwareAddr, hostSideMAC)
+			select {
+			case <-macUpdateTimeout:
+				return fmt.Errorf("timed out waiting for host veth %q to accept MAC %s", hostVethName, hostSideMAC.String())
+			case <-time.After(100 * time.Millisecond):
+			}
 		}
 
 		// Figure out whether we have IPv4 and/or IPv6 addresses.
@@ -296,7 +316,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			// after these sysctls
 			var err error
 			var addresses []netlink.Addr
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				if i > 0 {
 					time.Sleep(50 * time.Millisecond)
 					d.logger.Info("Retry lookup of host-side IPv6 link local address...")

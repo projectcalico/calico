@@ -1,4 +1,4 @@
-- name: app-policy
+- name: Application Layer Policy
   run:
     when: "${CHANGE_IN(app-policy)}"
   dependencies:
@@ -8,6 +8,6 @@
       commands:
         - cd app-policy
     jobs:
-      - name: app-policy tests
+      - name: "Application Layer Policy: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci

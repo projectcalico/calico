@@ -16,6 +16,7 @@ package calc
 
 import (
 	"reflect"
+	"slices"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -44,6 +45,8 @@ type FelixSender interface {
 type PolicyMatchListener interface {
 	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey)
+	OnComputedSelectorMatch(cs string, endpointKey model.EndpointKey)
+	OnComputedSelectorMatchStopped(cs string, endpointKey model.EndpointKey)
 }
 
 // ActiveRulesCalculator calculates the set of policies and profiles (i.e. the rules) that
@@ -95,6 +98,8 @@ type ActiveRulesCalculator struct {
 	OnPolicyCountsChanged func(numTiers, numPolicies, numProfiles, numALPPolicies int)
 	OnAlive               func()
 }
+
+type computedSelector string
 
 func NewActiveRulesCalculator() *ActiveRulesCalculator {
 	arc := &ActiveRulesCalculator{
@@ -283,16 +288,26 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	return
 }
 
+// AddExtraComputedSelector adds an extra non-policy selector to the label index and gives OnComputedSelectorMatch
+// and OnComputedSelectorMatchStopped callbacks when that selector matches/stops matching local endpoints.  Allows for
+// sharing the expensive selector index.
+func (arc *ActiveRulesCalculator) AddExtraComputedSelector(cs string) {
+	sel, err := selector.Parse(cs)
+	if err != nil {
+		log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
+	}
+	arc.labelIndex.UpdateSelector(computedSelector(cs), sel)
+}
+
+func (arc *ActiveRulesCalculator) RemoveExtraComputedSelector(cs string) {
+	arc.labelIndex.DeleteSelector(computedSelector(cs))
+}
+
 func policyForceProgrammed(policy *model.Policy) bool {
 	if policy == nil {
 		return false
 	}
-	for _, v := range policy.PerformanceHints {
-		if v == v3.PerfHintAssumeNeededOnEveryNode {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(policy.PerformanceHints, v3.PerfHintAssumeNeededOnEveryNode)
 }
 
 func (arc *ActiveRulesCalculator) updateStats() {
@@ -308,13 +323,13 @@ func (arc *ActiveRulesCalculator) OnStatusUpdate(status api.SyncStatus) {
 		if arc.missingProfiles.Len() > 0 {
 			// Log out any profiles that were missing during the resync.  We defer
 			// this until now because we may hear about profiles or endpoints first.
-			arc.missingProfiles.Iter(func(profileID string) error {
+			for profileID := range arc.missingProfiles.All() {
 				log.WithField("profileID", profileID).Warning(
 					"End of resync: local endpoints refer to missing " +
 						"or invalid profile, profile's rules replaced " +
 						"with drop rules.")
-				return set.RemoveItem
-			})
+				arc.missingProfiles.Discard(profileID)
+			}
 		}
 	}
 }
@@ -349,10 +364,19 @@ func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profil
 	}
 }
 
-func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
+func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId any) {
+	if cs, ok := selID.(computedSelector); ok {
+		for _, l := range arc.PolicyMatchListeners {
+			if labelId, ok := labelId.(model.EndpointKey); ok {
+				l.OnComputedSelectorMatch(string(cs), labelId)
+			}
+		}
+		return
+	}
 	polKey := selID.(model.PolicyKey)
 	policyWasActive := arc.policyIDToEndpointKeys.ContainsKey(polKey)
 	arc.policyIDToEndpointKeys.Put(selID, labelId)
+
 	if !policyWasActive {
 		// Policy wasn't active before, tell the listener.  The policy
 		// must be in allPolicies because we can only match on a policy
@@ -364,6 +388,7 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 		}
 		arc.sendPolicyUpdate(polKey, policy)
 	}
+
 	if labelId, ok := labelId.(model.EndpointKey); ok {
 		for _, l := range arc.PolicyMatchListeners {
 			l.OnPolicyMatch(polKey, labelId)
@@ -371,7 +396,15 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 	}
 }
 
-func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
+func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId any) {
+	if cs, ok := selID.(computedSelector); ok {
+		for _, l := range arc.PolicyMatchListeners {
+			if labelId, ok := labelId.(model.EndpointKey); ok {
+				l.OnComputedSelectorMatchStopped(string(cs), labelId)
+			}
+		}
+		return
+	}
 	polKey := selID.(model.PolicyKey)
 	arc.policyIDToEndpointKeys.Discard(selID, labelId)
 	if !arc.policyIDToEndpointKeys.ContainsKey(selID) {
@@ -388,12 +421,10 @@ func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
 	}
 }
 
-var (
-	DummyDropRules = model.ProfileRules{
-		InboundRules:  []model.Rule{{Action: "deny"}},
-		OutboundRules: []model.Rule{{Action: "deny"}},
-	}
-)
+var DummyDropRules = model.ProfileRules{
+	InboundRules:  []model.Rule{{Action: "deny"}},
+	OutboundRules: []model.Rule{{Action: "deny"}},
+}
 
 func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string, rules *model.ProfileRules) {
 	active := arc.profileIDToEndpointKeys.ContainsKey(profileID)
