@@ -326,7 +326,14 @@ endif
 clean:
 	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll *_map_stub.c
 
-# Fixes an issue where make thinks these .h files are dependencies that need
-# to be built. Just include them as a noop in order to trick make.
+# The .d dependency files reference external headers (libbpf, system, clang
+# built-ins).  When the go-build container or libbpf version changes, those
+# paths may no longer exist, causing make to fail with "No rule to make
+# target".  Adding empty catch-all targets lets make proceed far enough to
+# regenerate the .d files with the correct, up-to-date paths.
+./libbpf/%.h:
+	@:
 /usr/include/%.h:
-	@echo "No need to build $@"
+	@:
+/usr/lib/clang/%.h:
+	@:
