@@ -26,10 +26,10 @@ export default {
                 color: 'tigeraBlack',
                 _checked: {
                     border: 'none',
-                    bg: 'tigeraBlueMedium40',
-                    borderColor: 'tigeraBlueMedium40',
+                    bg: 'tigeraGoldMedium',
+                    borderColor: 'tigeraGoldMedium',
                     _hover: {
-                        bg: 'tigeraBlueMedium80',
+                        bg: 'tigeraGoldMedium',
                         border: 'none',
                     },
                     _disabled: {

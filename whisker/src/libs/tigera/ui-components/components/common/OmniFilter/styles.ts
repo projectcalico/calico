@@ -1,12 +1,5 @@
 import type { ComponentMultiStyleConfig } from '@chakra-ui/react';
 
-export const totalItemsLabelStyles = {
-    color: 'tigeraGrey.600',
-    _dark: {
-        color: 'tigeraGrey.400',
-    },
-};
-
 export default {
     parts: ['triggerText', 'triggerActive', 'content'],
     baseStyle: {
@@ -40,6 +33,15 @@ export default {
                 boxShadow: 'none',
                 outline: 'none',
             },
+        },
+        footer: {
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            display: 'flex',
+            borderColor: 'tigeraGrey.200',
+        },
+        header: {
+            borderColor: 'tigeraGrey.200',
         },
     },
 } as ComponentMultiStyleConfig;

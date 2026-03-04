@@ -162,7 +162,6 @@ export default {
                     bg: 'transparent',
                     color: 'tigeraGrey.200',
                 },
-                _focus: { boxShadow: 'none' },
             },
         },
         solidAlt: {
