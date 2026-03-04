@@ -132,15 +132,6 @@ echo "Install additional permissions for BGP password"
 ${kubectl} apply -f $TEST_DIR/infra/additional-rbac.yaml
 echo
 
-BGP_CONFIG=${BGP_CONFIG:-"Enabled"}
-if [[ "$BGP_CONFIG" == "Disabled" ]]; then
-  echo "Install Calico using the helm chart with BGP disabled"
-  $HELM install calico $CHART -f $TEST_DIR/infra/values_no_bgp.yaml -n tigera-operator --create-namespace
-else
-  echo "Install Calico using the helm chart"
-  $HELM install calico $CHART -f $TEST_DIR/infra/values.yaml -n tigera-operator --create-namespace
-fi
-
 # CRDs are already created prior to reaching this script from within lib.Makefile as part
 # of kind cluster creation.
 echo "Install Calico using the helm chart"
@@ -175,9 +166,12 @@ wait_pod_ready calicoctl -n kube-system
 echo "Calico is running."
 echo
 
-if [[ "$BGP_CONFIG" == "Disabled" ]]; then
-  echo "Patching FelixConfiguration to make Felix program cluster routes"
+if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
+  echo "Patching FelixConfiguration to configure Felix program cluster routes"
   ${kubectl} patch felixconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Enabled"}}'
+  
+  echo "Patching BGPConfiguration to configure BIRD to not program cluster routes"
+  ${kubectl} patch bgpconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Disabled"}}'
 fi
 
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
