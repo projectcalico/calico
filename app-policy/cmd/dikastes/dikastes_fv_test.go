@@ -221,13 +221,10 @@ func newDikastesTestEnv(t *testing.T, ctx context.Context) *dikastesTestEnv {
 	syncSocketPath := path.Join(socketDir, "policysync.sock")
 	ss := newTestSyncServer(ctx, syncSocketPath)
 
-	// Create the dikastes authz server wired the same way as the real runServer().
+	// Create the dikastes authz server using the same newCheckServer as runServer().
 	storeManager := policystore.NewPolicyStoreManager()
-	checkServer := checker.NewServer(ctx, storeManager,
-		checker.WithRegisteredCheckProvider(checker.NewALPCheckProvider()),
-	)
 	gs := grpc.NewServer()
-	authz.RegisterAuthorizationServer(gs, checkServer)
+	newCheckServer(ctx, gs, storeManager)
 
 	dikastesSocketPath := path.Join(socketDir, "dikastes.sock")
 	lis, err := net.Listen("unix", dikastesSocketPath)
