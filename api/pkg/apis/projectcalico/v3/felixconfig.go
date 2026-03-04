@@ -888,6 +888,17 @@ type FelixConfigurationSpec struct {
 	// [Default: 1]
 	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty,cidrs"`
 
+	// IstioAmbientMode configures Felix to work together with Tigera's Istio distribution.
+	// [Default: Disabled]
+	// +optional
+	IstioAmbientMode *IstioAmbientMode `json:"istioAmbientMode,omitempty"`
+
+	// IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
+	// SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
+	// with other Istio installation. [Default: 23]
+	// +optional
+	IstioDSCPMark *numorstring.DSCP `json:"istioDSCPMark,omitempty"`
+
 	// CgroupV2Path overrides the default location where to find the cgroup hierarchy.
 	CgroupV2Path string `json:"cgroupV2Path,omitempty"`
 
@@ -1166,6 +1177,15 @@ type BPFConntrackTimeouts struct {
 	// +optional
 	ICMPTimeout *BPFConntrackTimeout `json:"icmpTimeout,omitempty"`
 }
+
+// IstioAmbientMode is the enum used to enable/disable Tigera Istio mode.
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type IstioAmbientMode string
+
+const (
+	IstioAmbientModeEnabled  IstioAmbientMode = "Enabled"
+	IstioAmbientModeDisabled IstioAmbientMode = "Disabled"
+)
 
 // New FelixConfiguration creates a new (zeroed) FelixConfiguration struct with the TypeMetadata
 // initialized to the current version.
