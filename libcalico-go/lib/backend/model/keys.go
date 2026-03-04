@@ -85,14 +85,6 @@ type Key interface {
 	String() string
 }
 
-// ComparableKey is a Key that is also comparable, meaning it can be used as a
-// Go map key or compared with ==.  All Key implementations in this package
-// satisfy this constraint.
-type ComparableKey interface {
-	Key
-	comparable
-}
-
 // Interface used to perform datastore lookups.
 type ListInterface interface {
 	// defaultPathRoot() returns a default stringified root path, i.e. path
@@ -145,7 +137,7 @@ type KVPairList struct {
 // order to support datastores that do not support storing data at non-leaf
 // nodes in the hierarchy (such as etcd v3), the path returned for a "parent"
 // key, is not a direct ancestor of its children.
-func KeyToDefaultPath[K ComparableKey](key K) (string, error) {
+func KeyToDefaultPath(key Key) (string, error) {
 	return key.defaultPath()
 }
 
@@ -173,7 +165,7 @@ func KeyToDefaultPath[K ComparableKey](key K) (string, error) {
 // and KeyToDefaultPath(PolicyKey{Kind: "NetworkPolicy", Namespace: "default", Name: "b"}):
 //
 //	"/calico/v1/policy/NetworkPolicy/default/b"
-func KeyToDefaultDeletePath[K ComparableKey](key K) (string, error) {
+func KeyToDefaultDeletePath(key Key) (string, error) {
 	return key.defaultDeletePath()
 }
 
@@ -203,7 +195,7 @@ func KeyToDefaultDeletePath[K ComparableKey](key K) (string, error) {
 // indicating that these paths should also be deleted when they are empty.
 // In this example it is equivalent to deleting the workload when there are
 // no more endpoints in the workload.
-func KeyToDefaultDeleteParentPaths[K ComparableKey](key K) ([]string, error) {
+func KeyToDefaultDeleteParentPaths(key Key) ([]string, error) {
 	return key.defaultDeleteParentPaths()
 }
 
@@ -669,7 +661,7 @@ func parseJSONPointer[V any](key Key, rawData []byte) (*V, error) {
 // our value structs, according to the type of key.  I.e. if passed a
 // PolicyKey as the first parameter, it will try to parse rawData into a
 // Policy struct.
-func ParseValue[K ComparableKey](key K, rawData []byte) (any, error) {
+func ParseValue(key Key, rawData []byte) (any, error) {
 	return key.parseValue(rawData)
 }
 
