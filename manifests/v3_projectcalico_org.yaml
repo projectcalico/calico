@@ -33422,9 +33422,26 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -33433,6 +33450,50 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -33448,6 +33509,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -33465,9 +33530,26 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -33476,6 +33558,50 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -33491,6 +33617,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -33508,9 +33638,26 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -33519,6 +33666,50 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -33534,6 +33725,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -33551,9 +33746,26 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -33562,6 +33774,50 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -33577,6 +33833,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
