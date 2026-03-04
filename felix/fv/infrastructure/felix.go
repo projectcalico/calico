@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -420,7 +421,7 @@ func (f *Felix) Ready() (bool, error) {
 		healthAddr = f.TopologyOptions.ExtraEnvVars["FELIX_HEALTHHOST"]
 	}
 
-	url := "http://" + healthAddr + ":9099/readiness"
+	url := "http://" + net.JoinHostPort(healthAddr, "9099") + "/readiness"
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

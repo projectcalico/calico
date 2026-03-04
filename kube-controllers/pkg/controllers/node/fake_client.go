@@ -143,6 +143,10 @@ func (f *FakeCalicoClient) HostEndpoints() clientv3.HostEndpointInterface {
 	panic("not implemented")
 }
 
+func (f *FakeCalicoClient) LiveMigrations() clientv3.LiveMigrationInterface {
+	panic("not implemented")
+}
+
 // WorkloadEndpoints returns an interface for managing workload endpoint resources.
 func (f *FakeCalicoClient) WorkloadEndpoints() clientv3.WorkloadEndpointInterface {
 	panic("not implemented")
@@ -311,6 +315,11 @@ func (f *fakeIPAMClient) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOpt
 
 // GetAssignmentAttributes returns the AllocationAttribute for the given IP address.
 func (f *fakeIPAMClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (*model.AllocationAttribute, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
+func (f *fakeIPAMClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *ipam.OwnerAttributeUpdates, preconditions *ipam.OwnerAttributePreconditions) error {
 	panic("not implemented") // TODO: Implement
 }
 

@@ -1,0 +1,7 @@
+X-Repolib-Name: {{.RepoName}}
+Types: deb
+URIs: {{.RepoURL}}
+Suites: {{.Suite}}
+Components: main
+Architectures: {{ join .Architectures " " }}
+Signed-By: {{.GpgKey}}

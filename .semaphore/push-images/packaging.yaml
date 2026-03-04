@@ -4,10 +4,8 @@ agent:
   machine:
     type: f1-standard-2
     os_image: ubuntu2404
-
 execution_time_limit:
   minutes: 60
-
 global_job_config:
   secrets:
     - name: google-service-account-for-tigera-infra
@@ -33,7 +31,7 @@ global_job_config:
       # notably being much faster because it uses Semaphore's cache to fetch
       # files from.
       - install-package --no-install-recommends devscripts moreutils patchelf jq
-
+      - ssh-add ~/.ssh/id_rsa
 blocks:
   # This promotion is only _automatic_ for the master branch.  For other
   # branches, and PRs, it is available but not automatic.  This means a

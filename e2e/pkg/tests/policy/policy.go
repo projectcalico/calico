@@ -41,6 +41,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("NetworkPolicy"),
 	describe.WithCategory(describe.Policy),
+	describe.WithWindows(),
 	"Calico NetworkPolicy",
 	func() {
 		// Define variables common across all tests.
@@ -93,11 +94,11 @@ var _ = describe.CalicoDescribe(
 		// - Creating a default-deny policy applied to both namespaces using a GlobalNetworkPolicy.
 		// - Isolating both namespaces with ingress and egress policies
 		// - Asserting only same namespace connectivity exists.
-		framework.ConformanceIt("should correctly isolate namespaces [RunsOnWindows]", func() {
+		framework.ConformanceIt("should correctly isolate namespaces", func() {
 			nsA := f.Namespace
 
 			By("Creating a second namespace B")
-			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 			nsB, err := f.CreateNamespace(ctx, f.BaseName+"-b", nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -221,7 +222,7 @@ var _ = describe.CalicoDescribe(
 
 		framework.ConformanceIt("should support service account selectors", func() {
 			ns := f.Namespace
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
 			By(fmt.Sprintf("Applying a default-deny policy to namespace %s", ns.Name))
@@ -286,7 +287,8 @@ var _ = describe.CalicoDescribe(
 
 		framework.ConformanceIt("should support namespace selectors", func() {
 			ns := f.Namespace
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
 
 			By(fmt.Sprintf("Applying a default-deny policy to namespace %s", ns.Name))
 			defaultDeny := newDefaultDenyIngressPolicy(ns.Name)
@@ -345,7 +347,7 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 
-		framework.ConformanceIt("should support a 'deny egress' policy [RunsOnWindows]", func() {
+		framework.ConformanceIt("should support a 'deny egress' policy", func() {
 			By("Creating calico egress policy which denies traffic within namespace.")
 			nsName := f.Namespace.Name
 			policyName := "deny-egress"

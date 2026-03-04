@@ -1559,6 +1559,11 @@ func (c shimClient) HostEndpoints() client.HostEndpointInterface {
 	return c.client.HostEndpoints()
 }
 
+// LiveMigrations returns an interface for managing live migration resources.
+func (c shimClient) LiveMigrations() client.LiveMigrationInterface {
+	return c.client.LiveMigrations()
+}
+
 // WorkloadEndpoints returns an interface for managing workload endpoint resources.
 func (c shimClient) WorkloadEndpoints() client.WorkloadEndpointInterface {
 	return c.client.WorkloadEndpoints()

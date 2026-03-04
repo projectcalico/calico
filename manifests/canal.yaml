@@ -2857,6 +2857,11 @@ spec:
               properties:
                 autoAllocateBlocks:
                   type: boolean
+                kubeVirtVMAddressPersistence:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 maxBlocksPerHost:
                   maximum: 2147483647
                   minimum: 0
@@ -6404,6 +6409,14 @@ rules:
     verbs:
       - create
       - update
+  # For monitoring KubeVirt live migration.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # CNI cluster role
