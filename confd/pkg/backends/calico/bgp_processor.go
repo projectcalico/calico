@@ -839,51 +839,46 @@ func (c *client) processIPPool(
 	ipVersion int,
 ) string {
 	cidr := ippool.CIDR.String()
-	var action, comment, extraStatement string
 
-	felixHandlesRoutes := func(forProgrammingKernel bool, routeType string) {
-		if forProgrammingKernel {
-			action = "reject"
-			comment = fmt.Sprintf("%s routes are handled by Felix.", routeType)
-		} else {
-			action = "accept"
-		}
+	// IPPool's BGP export is disabled, and filter is for exporting to other peers.
+	if ippool.DisableBGPExport && !forProgrammingKernel {
+		return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "BGP export is disabled.")
 	}
 
-	switch {
-	case ippool.DisableBGPExport && !forProgrammingKernel:
-		// IPPool's BGP export is disabled, and filter is for exporting to other peers.
-		action = "reject"
-		comment = "BGP export is disabled."
-	case ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet:
-		// VXLAN encapsulation is always handled by Felix.
-		felixHandlesRoutes(forProgrammingKernel, "VXLAN")
-	case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
-		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
-		// IPIP encapsulation or No-Encap.
+	// VXLAN encapsulation.
+	if ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet {
+		if forProgrammingKernel {
+			// Programming VXLAN routes is always handled by Felix.
+			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "VXLAN routes are handled by Felix.")
+		}
+		return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
+	}
+
+	// IPIP encapsulation or No-Encap.
+	if ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet ||
+		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never {
 		if programClusterRoutes {
+			var extraStatement string
 			if forProgrammingKernel && ipVersion == 4 {
 				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
 				// our fork of BIRD.
 				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 			}
-			action = "accept"
-		} else {
-			felixHandlesRoutes(forProgrammingKernel, "Cluster")
+			return emitFilterStatementForIPPools(cidr, extraStatement, "accept", filterAction, "")
 		}
-	default:
-		log.WithFields(log.Fields{
-			"ippool":    ippool.CIDR,
-			"ipVersion": ipVersion,
-		}).Error("Invalid ippool")
-		return ""
+
+		// Felix is responsible for programming cluster routes, not BIRD.
+		if forProgrammingKernel {
+			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "Cluster routes are handled by Felix.")
+		}
+		return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
 	}
 
-	// Filter statements based on provided filterAction.
-	if len(filterAction) != 0 && filterAction != action {
-		return ""
-	}
-	return emitFilterStatementForIPPools(cidr, extraStatement, action, comment)
+	log.WithFields(log.Fields{
+		"ippool":    ippool.CIDR,
+		"ipVersion": ipVersion,
+	}).Error("Invalid ippool")
+	return ""
 }
 
 func (c *client) localSubnet(ipVersion int) (string, error) {
@@ -910,7 +905,11 @@ func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSub
 	}
 }
 
-func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string) (statement string) {
+func emitFilterStatementForIPPools(cidr, extraStatement, action, filterAction, comment string) (statement string) {
+	// Filter statements based on provided filterAction.
+	if len(filterAction) != 0 && filterAction != action {
+		return
+	}
 	// Check mandatory inputs.
 	if len(cidr) == 0 || len(action) == 0 {
 		return

@@ -150,6 +150,11 @@ type BGPConfigurationSpec struct {
 	// ProgramClusterRoutes specifies whether BIRD or Felix should program cluster routes. When Enabled, Calico uses BGP
 	// to distribute route information between nodes. When disabled, Calico learns the necessary routing information
 	// from its IPAM database and running workloads on the cluster. Felix always programs VXLAN routes. [Default: Enabled]
+
+	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
+	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,
+	// confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route.
+	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet.
 	// +kubebuilder:validation:Enum=Enabled;Disabled
 	// +optional
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
