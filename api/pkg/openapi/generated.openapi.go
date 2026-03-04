@@ -836,7 +836,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					},
 					"programClusterRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node, when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled, confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route. Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet.",
+							Description: "ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node, when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled, confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route. Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Enabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
