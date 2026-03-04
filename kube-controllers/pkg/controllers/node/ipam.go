@@ -836,6 +836,7 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 			} else {
 				log.WithError(err).Warnf("Failed to lookup corresponding node, skipping %s", cnode)
 			}
+			c.allocationState.markClean(cnode, "node lookup skipped")
 			continue
 		}
 		logc := log.WithFields(log.Fields{"calicoNode": cnode, "k8sNode": knode})
@@ -925,19 +926,24 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 			if !canDelete {
 				// There are still valid allocations on the node.
 				logc.Infof("Can't cleanup node yet - IPs still in use on this node")
+				c.allocationState.markClean(cnode, "allocations still in use")
 				continue
 			}
 
-			// Mark the node's tunnel addresses for GC.
+			// Mark the node's tunnel addresses as confirmed leaks for GC.
 			for _, a := range tunnelAddresses {
 				a.markConfirmedLeak()
 				c.confirmedLeaks[a.id()] = a
 			}
 
-			// The node is ready have its IPAM affinities released. It exists in Calico IPAM, but
+			// The node is ready to have its IPAM affinities released. It exists in Calico IPAM, but
 			// not in the Kubernetes API. Additionally, we've checked that there are no
-			// outstanding valid allocations on the node.
+			// outstanding valid allocations on the node. Leave the node dirty — it will be
+			// marked clean by releaseNodes once cleanup succeeds.
 			nodesToRelease = append(nodesToRelease, cnode)
+		} else {
+			// Node still exists in Kubernetes, we've finished checking it.
+			c.allocationState.markClean(cnode, "node still exists in Kubernetes")
 		}
 	}
 	return nodesToRelease, nil
@@ -1065,7 +1071,9 @@ func (c *IPAMController) syncIPAM() error {
 	log.Debug("Synchronizing IPAM data")
 
 	// Scan known allocations, determining if there are any IP address leaks
-	// or nodes that should have their block affinities released.
+	// or nodes that should have their block affinities released. Each node is
+	// individually marked clean in the dirty set as it is processed, so an early
+	// return here only leaves unprocessed nodes dirty for retry.
 	nodesToRelease, err := c.checkAllocations()
 	if err != nil {
 		return err
@@ -1087,18 +1095,15 @@ func (c *IPAMController) syncIPAM() error {
 
 	// Delete any nodes that we determined can be removed in checkAllocations. These
 	// nodes are no longer in the Kubernetes API, and have no valid allocations, so can be cleaned up entirely
-	// from Calico IPAM.
-	if err = c.releaseNodes(nodesToRelease); err != nil {
-		return err
-	}
-
-	c.allocationState.syncComplete()
+	// from Calico IPAM. Successfully released nodes are marked clean inside releaseNodes;
+	// failed nodes remain dirty and will be retried on the next sync.
+	failedNodes := c.releaseNodes(nodesToRelease)
 	log.Debug("IPAM sync completed")
 
-	// If there is still dirty state, then we need to do another pass.
-	if len(c.confirmedLeaks) > 0 {
-		log.WithField("num", len(c.confirmedLeaks)).Info("Confirmed leaks still exist, scheduling another pass")
-		kick(c.syncChan)
+	// If there is remaining work, return an error so the retry controller schedules
+	// the next sync with exponential backoff, avoiding tight-loop retries.
+	if len(failedNodes) > 0 || len(c.confirmedLeaks) > 0 {
+		return fmt.Errorf("work remaining: %d nodes, %d confirmed leaks", len(failedNodes), len(c.confirmedLeaks))
 	}
 	return nil
 }
@@ -1186,25 +1191,26 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	return nil
 }
 
-func (c *IPAMController) releaseNodes(nodes []string) error {
+// releaseNodes attempts to release IPAM affinities for the given nodes. Returns the
+// list of nodes that failed cleanup so they can be retried on the next sync.
+func (c *IPAMController) releaseNodes(nodes []string) []string {
 	if len(nodes) == 0 {
 		return nil
 	}
 
 	log.WithField("num", len(nodes)).Info("Found a batch of nodes to release")
-	var storedErr error
+	var failedNodes []string
 	for _, cnode := range nodes {
 		logc := log.WithField("node", cnode)
-
-		// Potentially rate limit node cleanup.
 		logc.Info("Cleaning up IPAM affinities for deleted node")
 		if err := c.cleanupNode(cnode); err != nil {
-			// Store the error, but continue. Storing the error ensures we'll retry.
-			logc.WithError(err).Warnf("Error cleaning up node")
-			storedErr = err
+			logc.WithError(err).Warnf("Error cleaning up node, will retry on next sync")
+			failedNodes = append(failedNodes, cnode)
+		} else {
+			c.allocationState.markClean(cnode, "node released successfully")
 		}
 	}
-	return storedErr
+	return failedNodes
 }
 
 func (c *IPAMController) cleanupNode(cnode string) error {
@@ -1217,7 +1223,6 @@ func (c *IPAMController) cleanupNode(cnode string) error {
 		Host:         cnode,
 	}
 
-	// Release the affinities for this node, requiring that the blocks are empty.
 	if err := c.client.IPAM().ReleaseHostAffinities(context.TODO(), affinityCfg, true); err != nil {
 		logc.WithError(err).Errorf("Failed to release block affinities for node")
 		return err
