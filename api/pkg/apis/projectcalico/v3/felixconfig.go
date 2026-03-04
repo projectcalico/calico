@@ -570,6 +570,11 @@ type FelixConfigurationSpec struct {
 
 	// ProgramClusterRoutes specifies whether Felix should program all cluster routes instead of BIRD.
 	// Felix always programs VXLAN routes. [Default: Disabled]
+
+	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
+	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
+	// confd and BIRD program that route. When ProgramClusterRoutes is Enabled, Felix will program that route.
+	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
