@@ -462,6 +462,7 @@ kind-k8st-setup: $(K8ST_IMAGE_TARS) $(CHARTS) kind-cluster-create
 	ARCH=$(ARCH) \
 	GIT_VERSION=$(GIT_VERSION) \
 	CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	BGP_CONFIG=$(BGP_CONFIG) \
 	./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
