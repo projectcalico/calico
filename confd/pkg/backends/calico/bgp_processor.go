@@ -780,7 +780,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		// Generate statements for rejecting ippools in the filter for exporting routes to iBGP peers.
 		statement = processIPPool(&ippool, programClusterRoutes, false, true, "reject", "", ipVersion)
 		if len(statement) != 0 {
-			config.InternalBGPExportFilter = append(config.InternalBGPExportFilter, statement)
+			config.BGPExportFilterForInternalPeers = append(config.BGPExportFilterForInternalPeers, statement)
 		}
 
 		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
@@ -802,7 +802,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	slices.Sort(config.KernelFilterForIPPools)
 	slices.Sort(config.BGPExportFilterForDisabledIPPools)
 	slices.Sort(config.BGPExportFilterForEnabledIPPools)
-	slices.Sort(config.InternalBGPExportFilter)
+	slices.Sort(config.BGPExportFilterForInternalPeers)
 
 	return nil
 }
@@ -850,7 +850,7 @@ func processIPPool(
 
 	// IPPool's BGP export is disabled, and filter is for exporting to other peers.
 	if ippool.DisableBGPExport && !forProgrammingKernel &&
-		!forInternalPeers { // Specific filter for internal peers are generated separately.
+		!forInternalPeers { // Specific filter for internal peers is generated separately.
 		return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "BGP export is disabled.")
 	}
 
@@ -878,7 +878,7 @@ func processIPPool(
 			if forInternalPeers {
 				// Do not generate any statement, since "reject_tunnel_routes" filter rejects all routes related to
 				// *.calico and *.cali interfaces which rejects all vxlan, and wireguard routes.
-				// Additionally, BIRD does not re-advertise ipip and no-encap routes, as those are programmed by BIRD.
+				// Also, BIRD does not re-advertise ipip and no-encap routes, as those are programmed by BIRD itself.
 				return ""
 			}
 			// Exporting routes to all peers.

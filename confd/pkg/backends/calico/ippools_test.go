@@ -144,9 +144,9 @@ func Test_processIPPoolsV4(t *testing.T) {
 			config.BGPExportFilterForEnabledIPPools, expected)
 	}
 
-	if config.InternalBGPExportFilter != nil {
+	if config.BGPExportFilterForInternalPeers != nil {
 		t.Errorf("Expected BIRD filter for exporting to internal peers to be nil.\n Generated=%#v",
-			config.InternalBGPExportFilter)
+			config.BGPExportFilterForInternalPeers)
 	}
 }
 
@@ -201,9 +201,9 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 			config.BGPExportFilterForEnabledIPPools, expected)
 	}
 
-	if config.InternalBGPExportFilter != nil {
+	if config.BGPExportFilterForInternalPeers != nil {
 		t.Errorf("Expected BIRD filter for exporting to internal peers to be nil.\n Generated=%#v",
-			config.InternalBGPExportFilter)
+			config.BGPExportFilterForInternalPeers)
 	}
 }
 
@@ -277,9 +277,9 @@ func Test_processIPPoolsV6(t *testing.T) {
 			config.BGPExportFilterForEnabledIPPools, expected)
 	}
 
-	if config.InternalBGPExportFilter != nil {
+	if config.BGPExportFilterForInternalPeers != nil {
 		t.Errorf("Expected BIRD filter for exporting to internal peers to be nil.\n Generated=%#v",
-			config.InternalBGPExportFilter)
+			config.BGPExportFilterForInternalPeers)
 	}
 }
 
@@ -367,9 +367,9 @@ func Test_processIPPoolsV4_FelixProgramsClusterRoutes(t *testing.T) {
 		`  if (net ~ 10.14.0.0/16) then { reject; }`,
 	}
 	slices.Sort(expected)
-	if !reflect.DeepEqual(config.InternalBGPExportFilter, expected) {
+	if !reflect.DeepEqual(config.BGPExportFilterForInternalPeers, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.InternalBGPExportFilter, expected)
+			config.BGPExportFilterForInternalPeers, expected)
 	}
 }
 
@@ -457,9 +457,9 @@ func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
 		`  if (net ~ dead:beef:14::/64) then { reject; }`,
 	}
 	slices.Sort(expected)
-	if !reflect.DeepEqual(config.InternalBGPExportFilter, expected) {
+	if !reflect.DeepEqual(config.BGPExportFilterForInternalPeers, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.InternalBGPExportFilter, expected)
+			config.BGPExportFilterForInternalPeers, expected)
 	}
 }
 

@@ -32,7 +32,7 @@ type BirdBGPConfig struct {
 
 	BGPExportFilterForDisabledIPPools []string // Filters for disabled ippools for all peers.
 	BGPExportFilterForEnabledIPPools  []string // Filters for exporting enabled ippools to all peers.
-	InternalBGPExportFilter           []string // Filters for exporting routes to iBGP peers.
+	BGPExportFilterForInternalPeers   []string // Filters for exporting routes to iBGP peers.
 	KernelFilterForIPPools            []string // Filters for programming kernel.
 }
 
