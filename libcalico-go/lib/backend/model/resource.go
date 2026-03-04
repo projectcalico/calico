@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,11 +121,12 @@ func init() {
 	registerResourceInfo[apiv3.BGPFilter](apiv3.KindBGPFilter, "BGPFilters")
 	registerResourceInfo[apiv3.IPAMConfiguration](apiv3.KindIPAMConfiguration, "ipamconfigurations")
 
-	// Register internal API resources (from libcalico-go/lib/apis/internalapi).
+	// Register libcalico-go/v3 resources.
 	registerResourceInfo[internalapi.Node](internalapi.KindNode, "nodes")
 	registerResourceInfo[internalapi.WorkloadEndpoint](internalapi.KindWorkloadEndpoint, "workloadendpoints")
 	registerResourceInfo[internalapi.IPAMConfig](internalapi.KindIPAMConfig, "ipamconfigs")
 	registerResourceInfo[internalapi.BlockAffinity](internalapi.KindBlockAffinity, "blockaffinities")
+	registerResourceInfo[internalapi.LiveMigration](internalapi.KindLiveMigration, "livemigrations")
 
 	// Register Kubernetes resources.
 	registerResourceInfo[kapiv1.Service](KindKubernetesService, "kubernetesservice")

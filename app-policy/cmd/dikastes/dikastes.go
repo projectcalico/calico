@@ -223,7 +223,7 @@ func (h *httpTerminationHandler) RunHTTPServer(addr string, port string) (*http.
 		}
 	}
 
-	httpServerSockAddr := fmt.Sprintf("%s:%s", addr, port)
+	httpServerSockAddr := net.JoinHostPort(addr, port)
 	httpServerMux := http.NewServeMux()
 	httpServerMux.Handle("/terminate", h)
 	httpServer := &http.Server{Addr: httpServerSockAddr, Handler: httpServerMux}

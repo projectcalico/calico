@@ -3741,13 +3741,17 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	if m.v4 != nil {
 		m.routeTableV4.RouteUpdate(dataplanedefs.BPFInDev, routetable.Target{
 			Type: routetable.TargetTypeLinkLocalUnicast,
-			CIDR: bpfnatGWCIDR,
+			RouteKey: routetable.RouteKey{
+				CIDR: bpfnatGWCIDR,
+			},
 		})
 	}
 	if m.v6 != nil {
 		m.routeTableV6.RouteUpdate(dataplanedefs.BPFInDev, routetable.Target{
 			Type: routetable.TargetTypeLinkLocalUnicast,
-			CIDR: bpfnatGWCIDRv6,
+			RouteKey: routetable.RouteKey{
+				CIDR: bpfnatGWCIDRv6,
+			},
 		})
 	}
 
@@ -4464,7 +4468,9 @@ var (
 func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 	target := routetable.Target{
 		Type: routetable.TargetTypeGlobalUnicast,
-		CIDR: cidr,
+		RouteKey: routetable.RouteKey{
+			CIDR: cidr,
+		},
 	}
 
 	if cidr.Version() == 6 {
@@ -4486,10 +4492,10 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 
 func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
 	if m.v6 != nil && cidr.Version() == 6 {
-		m.routeTableV6.RouteRemove(dataplanedefs.BPFInDev, cidr)
+		m.routeTableV6.RouteRemove(dataplanedefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
 	}
 	if m.v4 != nil && cidr.Version() == 4 {
-		m.routeTableV4.RouteRemove(dataplanedefs.BPFInDev, cidr)
+		m.routeTableV4.RouteRemove(dataplanedefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
 	}
 	logrus.WithFields(logrus.Fields{
 		"cidr": cidr,

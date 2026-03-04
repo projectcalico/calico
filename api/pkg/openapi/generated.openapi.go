@@ -3165,7 +3165,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"programClusterRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
+							Description: "ProgramClusterRoutes specifies whether Felix should program all cluster routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4859,6 +4859,13 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.Reference
 							Description: "Whether or not to auto allocate blocks to hosts.",
 							Default:     false,
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"kubeVirtVMAddressPersistence": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction). When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses when their underlying pods are recreated during VM operations. When Disabled, VMs receive new IP addresses whenever their pods are recreated. Defaults to Enabled if not specified.",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},

@@ -394,6 +394,23 @@ func (rg *routeGenerator) isAllowedLoadBalancerIP(loadBalancerIP string) bool {
 	return false
 }
 
+// hasAnySingleLoadBalancerIP checks whether the service has any LoadBalancer IP
+// that matches a single-IP (/32 or /128) entry in serviceLoadBalancerIPs.
+// It checks both svc.Spec.LoadBalancerIP (deprecated but still used) and the
+// actual assigned IPs from svc.Status.LoadBalancer.Ingress, since IPs assigned
+// from a Calico IPPool only appear in status, not spec.
+func (rg *routeGenerator) hasAnySingleLoadBalancerIP(svc *v1.Service) bool {
+	if rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
+		return true
+	}
+	for _, ingress := range svc.Status.LoadBalancer.Ingress {
+		if rg.isSingleLoadBalancerIP(ingress.IP) {
+			return true
+		}
+	}
+	return false
+}
+
 // isSingleLoadBalancerIP determines if the given IP is in the list of
 // allowed LoadBalancer CIDRs given in the default bgpconfiguration
 // and is a single IP entry (/32 for IPV4 or /128 for IPV6)
@@ -492,7 +509,7 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 	// - LoadBalancer with a single IP.
 	// - Any one of the externalIPs are a single IP.
 	if svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster {
-		if svc.Spec.Type == v1.ServiceTypeLoadBalancer && rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
+		if svc.Spec.Type == v1.ServiceTypeLoadBalancer && rg.hasAnySingleLoadBalancerIP(svc) {
 			logc.Debug("Advertising load balancer of type cluster because of single IP definition")
 			return true
 		}

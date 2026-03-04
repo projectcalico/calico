@@ -1921,7 +1921,7 @@ spec:
                   type: string
                 programClusterRoutes:
                   description: |-
-                    ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
+                    ProgramClusterRoutes specifies whether Felix should program all cluster routes instead of BIRD.
                     Felix always programs VXLAN routes. [Default: Disabled]
                   enum:
                     - Enabled
@@ -2856,6 +2856,11 @@ spec:
               properties:
                 autoAllocateBlocks:
                   type: boolean
+                kubeVirtVMAddressPersistence:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 maxBlocksPerHost:
                   maximum: 2147483647
                   minimum: 0
@@ -6435,6 +6440,14 @@ rules:
       - daemonsets
     verbs:
       - get
+  # For monitoring KubeVirt live migration.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # CNI cluster role

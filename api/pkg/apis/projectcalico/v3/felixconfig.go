@@ -568,7 +568,7 @@ type FelixConfigurationSpec struct {
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
 
-	// ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
+	// ProgramClusterRoutes specifies whether Felix should program all cluster routes instead of BIRD.
 	// Felix always programs VXLAN routes. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`

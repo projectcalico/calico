@@ -11,66 +11,31 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 ARG GIT_VERSION=unknown
-ARG IPTABLES_VER=1.8.8-6
-ARG LIBNFTNL_VER=1.2.2-1
-ARG IPSET_VER=7.11-6
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
 
 FROM calico/bpftool:v7.4.0 AS bpftool
+
 FROM ${BIRD_IMAGE} AS bird
 
-# Use this build stage to build iptables rpm and runit binaries.
-# We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
+# Use this build stage to install iptables-legacy and build runit binaries.
 # We need to build runit because there aren't any rpms for it in AlmaLinux or ubi repositories.
-FROM almalinux:8 AS almalinux
+FROM almalinux:9 AS almalinux
 
-ARG IPTABLES_VER
-ARG LIBNFTNL_VER
-ARG IPSET_VER
 ARG RUNIT_VER
-ARG CENTOS_MIRROR_BASE_URL=https://linuxsoft.cern.ch/cern/centos/s9
-ARG LIBNFTNL_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/source/tree/Packages/libnftnl-${LIBNFTNL_VER}.el9.src.rpm
-ARG IPTABLES_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/source/tree/Packages/iptables-${IPTABLES_VER}.el9.src.rpm
-ARG IPTABLES_LEGACY_SOURCERPM_URL=https://archives.fedoraproject.org/pub/archive/epel/9.3/Everything/source/tree/Packages/i/iptables-epel-${IPTABLES_VER}.el9.2.src.rpm
-ARG IPSET_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/source/tree/Packages/ipset-${IPSET_VER}.el9.src.rpm
 
-# Install build dependencies and security updates.
-RUN dnf install -y 'dnf-command(config-manager)' && \
-    # Enable PowerTools repo for '-devel' packages
-    dnf config-manager --set-enabled powertools && \
-    # Install required packages for building rpms. yum-utils is not required but it gives us yum-builddep to easily install build deps.
-    yum install --allowerasing -y rpm-build yum-utils make && \
-    # Need these to build runit.
-    yum install --allowerasing -y wget glibc-static gcc && \
-    # Ensure all security updates are installed.
-    yum -y update-minimal --security
+RUN dnf upgrade -y && dnf install -y epel-release
 
-# In order to rebuild the iptables RPM, we first need to rebuild the libnftnl RPM because building
-# iptables requires libnftnl-devel but libnftnl-devel is not available on ubi or AlmaLinux repos.
-# (Note: it's not in RHEL8.1 either https://bugzilla.redhat.com/show_bug.cgi?id=1711361).
-# Rebuilding libnftnl will give us libnftnl-devel too.
-RUN rpm -i ${LIBNFTNL_SOURCERPM_URL} && \
-    yum-builddep -y --spec /root/rpmbuild/SPECS/libnftnl.spec && \
-    rpmbuild -bb /root/rpmbuild/SPECS/libnftnl.spec && \
-    # Now install libnftnl and libnftnl-devel
-    rpm -Uv /root/rpmbuild/RPMS/aarch64/libnftnl-${LIBNFTNL_VER}.el8.aarch64.rpm && \
-    rpm -Uv /root/rpmbuild/RPMS/aarch64/libnftnl-devel-${LIBNFTNL_VER}.el8.aarch64.rpm && \
-    # Install source RPM for iptables and install its build dependencies.
-    rpm -i ${IPTABLES_SOURCERPM_URL} && \
-    yum-builddep -y --spec /root/rpmbuild/SPECS/iptables.spec && \
-    rpmbuild -bb /root/rpmbuild/SPECS/iptables.spec && \
-    # iptables-legacy has been deprecated, but to keep the backwards compatibility
-    # we need install source RPM for iptables-legacy and install its build dependencies.
-    rpm -i ${IPTABLES_LEGACY_SOURCERPM_URL} && \
-    yum-builddep -y --spec /root/rpmbuild/SPECS/iptables-epel.spec && \
-    rpmbuild -bb /root/rpmbuild/SPECS/iptables-epel.spec
+RUN dnf --enablerepo=crb install -y \
+    iptables-legacy \
+    # Needed for building runit
+    gcc \
+    glibc-static \
+    patch
 
-# Install source RPM for ipset and install its build dependencies.
-RUN rpm -i ${IPSET_SOURCERPM_URL} && \
-    yum-builddep -y --spec /root/rpmbuild/SPECS/ipset.spec && \
-    rpmbuild -bb /root/rpmbuild/SPECS/ipset.spec
+RUN dnf clean all
 
 # Copy the patch that adjusts svlogd log file permissions from 0744 to 0644.
 # This file is used in the next step to apply the patch during the build process.
@@ -83,90 +48,68 @@ RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}
     patch -p1 < /svlogd_use_0644_permission_instead_of_0744.patch && \
     package/compile
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest AS ubi
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS ubi
 
 ARG GIT_VERSION
-ARG IPTABLES_VER
-ARG IPSET_VER
 ARG RUNIT_VER
 
-# Update base packages to pick up security updates.  Must do this before adding the AlmaLinux repo.
-RUN microdnf upgrade
-
-# Copy in runit binaries
-COPY --from=almalinux /root/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
-
-# Copy in our rpms
-COPY --from=almalinux /root/rpmbuild/RPMS/aarch64/* /tmp/rpms/
-
-# Install a subset of packages from UBI prior to removing the UBI repo below.
-# We do this because the UBI repo has updated versions with CVE fixes. We can remove
-# this once the AlmaLinux repo updates the version of these packages.
-# gzip >= 1.9-13.el8_5
-# cryptsetup-libs >= 2.3.3-4.el8_5.1
-RUN microdnf install \
+# Update base packages to pick up security updates - must do this before adding the AlmaLinux repo,
+# and install the necessary packages from ubi repos.
+RUN microdnf upgrade -y
+RUN microdnf install -y \
     # Don't install copious docs.
     --setopt=tsflags=nodocs \
     gzip \
     cryptsetup-libs \
     # Needed for iptables
     libpcap libmnl libnfnetlink libnetfilter_conntrack \
+    ipset \
     iputils \
+    nftables \
     # Need arp
     net-tools \
     # Need kmod to ensure ip6tables-save works correctly
     kmod \
     # Also needed (provides utilities for browsing procfs like ps)
-    procps \
     iproute \
+    procps \
     # Needed for runit startup script
     which \
     # Needed for the cleanup script
     findutils
 
-# Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
+# Since the ubi repos do not contain all the packages we need (e.g. they're missing conntrack-tools),
 # we're using AlmaLinux repos for missing packages.
 COPY almalinux.repo /etc/yum.repos.d/almalinux.repo
 
-RUN microdnf --enablerepo=baseos install \
-    # Needed for conntrack
+RUN microdnf --enablerepo=appstream --enablerepo=baseos install -y \
+    # From appstream - needed for conntrack
     libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
-    conntrack-tools
-
-# Install iptables-libs via rpm. The libs must installed before installing iproute-tc and nftables via 'microdnf install'
-# otherwise they will pull a different version of iptables-libs as a dependency.
-RUN rpm -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.aarch64.rpm && \
-    rpm -i /tmp/rpms/iptables-legacy-libs-${IPTABLES_VER}.el8.2.aarch64.rpm
-
-# iproute-tc and nftables depend on iptables-libs and should be installed after it.
-RUN microdnf --enablerepo=baseos install iproute-tc nftables
-
-# Install iptables via rpm.
-RUN rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.aarch64.rpm && \
-    rpm -i /tmp/rpms/iptables-nft-${IPTABLES_VER}.el8.aarch64.rpm && \
-    # Install ipset version
-    rpm --force -i /tmp/rpms/ipset-libs-${IPSET_VER}.el8.aarch64.rpm && \
-    rpm -i /tmp/rpms/ipset-${IPSET_VER}.el8.aarch64.rpm && \
-    # Set alternatives
-    alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
-    alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
+    conntrack-tools \
+    # From baseos
+    iproute-tc iptables-nft
 
 RUN microdnf clean all
 
-# Change the permissions for ipset so it can be run by any container user.
-RUN chgrp 0 /usr/sbin/ipset && \
-    chmod g=u /usr/sbin/ipset
+# Copy in runit binaries
+COPY --from=almalinux /root/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 
-# Change the permissions for iptables so it can be run by any container user.
-RUN chgrp 0 /usr/sbin/iptables && \
-    chmod g=u /usr/sbin/iptables
+# Copy in xtables-legacy binary and libs
+COPY --from=almalinux /usr/sbin/xtables-legacy-multi /usr/sbin/xtables-legacy-multi
+COPY --from=almalinux /lib64/libip4tc.so.2 /lib64/libip4tc.so.2
+COPY --from=almalinux /lib64/libip6tc.so.2 /lib64/libip6tc.so.2
+
+# Set symbolic links for iptables-legacy binaries
+RUN set -eux; \
+    for bin in iptables-legacy iptables-legacy-restore iptables-legacy-save ip6tables-legacy ip6tables-legacy-restore ip6tables-legacy-save; do \
+        ln -sf xtables-legacy-multi /usr/sbin/${bin} || true; \
+    done
 
 # Copy our bird binaries in
-COPY --from=bird /bird* /bin/
-
-# Set the suid bit on bird to allow our user to execute them with root permissions.
-RUN chmod u+s /bin/bird
-RUN chmod u+s /bin/bird6
+COPY --from=bird /bird /bin/bird
+COPY --from=bird /birdcl /bin/birdcl
+COPY --from=bird /bird6 /bin/bird6
+COPY --from=bird /birdcl6 /bin/birdcl6
 
 # Copy in the filesystem - this contains licenses, etc...
 COPY filesystem/etc/ /etc
@@ -174,25 +117,15 @@ COPY filesystem/included-source/ /included-source
 COPY filesystem/usr/ /usr
 COPY filesystem/sbin/* /usr/sbin/
 
-# Change permissions to make confd templates and output available in /etc/calico
-# to all container users.
-RUN chgrp -R 0 /etc/calico && \
-    chmod -R g=u /etc/calico
-
-COPY --from=bpftool /bpftool /bin
+COPY --from=bpftool /bpftool /bin/bpftool
 
 ARG BIN_DIR
+
 # Copy in the calico-node binary
 COPY ${BIN_DIR}/calico-node-arm64 /bin/calico-node
 
-# Set the suid bit on calico-node
-RUN chmod u+s /bin/calico-node
-
 # Copy in the mountns binary
 COPY ${BIN_DIR}/mountns-arm64 /bin/mountns
-
-# Set the suid bit on mountns
-RUN chmod u+s /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
