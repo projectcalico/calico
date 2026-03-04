@@ -107,7 +107,9 @@ func runServer(arguments map[string]interface{}) {
 	// Check server
 	gs := grpc.NewServer()
 	storeManager := policystore.NewPolicyStoreManager()
-	checkServer := checker.NewServer(ctx, storeManager)
+	checkServer := checker.NewServer(ctx, storeManager,
+		checker.WithRegisteredCheckProvider(checker.NewALPCheckProvider()),
+	)
 	authz.RegisterAuthorizationServer(gs, checkServer)
 	checkServerV2 := checkServer.V2Compat()
 	authz_v2alpha.RegisterAuthorizationServer(gs, checkServerV2)
