@@ -144,6 +144,8 @@ rules:
       - delete
     resourceNames:
       - clusternetworkpolicies.policy.networking.k8s.io
+      - adminnetworkpolicies.policy.networking.k8s.io
+      - baselineadminnetworkpolicies.policy.networking.k8s.io
   - apiGroups:
       - ""
     resources:
@@ -467,6 +469,15 @@ rules:
       - create
       - update
       - delete
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - networkpolicies
+      - globalnetworkpolicies
+    verbs:
+      - get
+      - list
+      - watch
   # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
@@ -482,6 +493,15 @@ rules:
       - create
       - update
       - delete
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - tier.networkpolicies
+      - tier.globalnetworkpolicies
+    verbs:
+      - list
+      - watch
+      - get
   # For tiered network policy actions, tigera-apiserver requires get authorization on the associated tier.
   - apiGroups:
       - projectcalico.org
@@ -499,6 +519,7 @@ rules:
     resources:
       - tiers
     verbs:
+      - get
       - create
       - list
       - watch
