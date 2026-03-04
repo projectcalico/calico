@@ -66,8 +66,9 @@ func (key BlockAffinityKey) defaultPath() (string, error) {
 		affinityType = IPAMAffinityTypeHost
 	}
 
-	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/ipam/v2/%s/%s/ipv%d/block/%s", affinityType, key.Host, prefixVersion(key.CIDR), c)
+	cidr := key.CIDR.Masked()
+	c := strings.Replace(cidr.String(), "/", "-", 1)
+	e := fmt.Sprintf("/calico/ipam/v2/%s/%s/ipv%d/block/%s", affinityType, key.Host, prefixVersion(cidr), c)
 	return e, nil
 }
 
