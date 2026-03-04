@@ -772,20 +772,26 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		}
 
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
-		statement := c.processIPPool(&ippool, programClusterRoutes, false, "reject", "", ipVersion)
+		statement := processIPPool(&ippool, programClusterRoutes, false, false, "reject", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
+		// Generate statements for rejecting ippools in the filter for exporting routes to iBGP peers.
+		statement = processIPPool(&ippool, programClusterRoutes, false, true, "reject", "", ipVersion)
+		if len(statement) != 0 {
+			config.InternalBGPExportFilter = append(config.InternalBGPExportFilter, statement)
+		}
+
 		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
-		statement = c.processIPPool(&ippool, programClusterRoutes, false, "accept", "", ipVersion)
+		statement = processIPPool(&ippool, programClusterRoutes, false, false, "accept", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
 		if ipVersion == 6 || ipVersion == 4 && localSubnetErr == nil {
 			// Generate statements for kernel programming filter.
-			statement = c.processIPPool(&ippool, programClusterRoutes, true, filterActionForKernel, localSubnet, ipVersion)
+			statement = processIPPool(&ippool, programClusterRoutes, true, false, filterActionForKernel, localSubnet, ipVersion)
 			if len(statement) != 0 {
 				config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 			}
@@ -796,6 +802,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	slices.Sort(config.KernelFilterForIPPools)
 	slices.Sort(config.BGPExportFilterForDisabledIPPools)
 	slices.Sort(config.BGPExportFilterForEnabledIPPools)
+	slices.Sort(config.InternalBGPExportFilter)
 
 	return nil
 }
@@ -830,10 +837,11 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 // and the following statement for exporting to BGP peers:
 //
 //	if (net ~ 10.10.0.0/16) then { accept; }
-func (c *client) processIPPool(
+func processIPPool(
 	ippool *model.IPPool,
 	programClusterRoutes bool,
 	forProgrammingKernel bool,
+	forInternalPeers bool,
 	filterAction string,
 	localSubnet string,
 	ipVersion int,
@@ -841,7 +849,8 @@ func (c *client) processIPPool(
 	cidr := ippool.CIDR.String()
 
 	// IPPool's BGP export is disabled, and filter is for exporting to other peers.
-	if ippool.DisableBGPExport && !forProgrammingKernel {
+	if ippool.DisableBGPExport && !forProgrammingKernel &&
+		!forInternalPeers { // Specific filter for internal peers are generated separately.
 		return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "BGP export is disabled.")
 	}
 
@@ -851,6 +860,7 @@ func (c *client) processIPPool(
 			// Programming VXLAN routes is always handled by Felix.
 			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "VXLAN routes are handled by Felix.")
 		}
+		// Exporting routes to all peers.
 		return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
 	}
 
@@ -864,6 +874,14 @@ func (c *client) processIPPool(
 				// our fork of BIRD.
 				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 			}
+			// Exporting routes to iBGP peers.
+			if forInternalPeers {
+				// Do not generate any statement, since "reject_tunnel_routes" filter rejects all routes related to
+				// *.calico and *.cali interfaces which rejects all vxlan, and wireguard routes.
+				// Additionally, BIRD does not re-advertise ipip and no-encap routes, as those are programmed by BIRD.
+				return ""
+			}
+			// Exporting routes to all peers.
 			return emitFilterStatementForIPPools(cidr, extraStatement, "accept", filterAction, "")
 		}
 
@@ -871,6 +889,12 @@ func (c *client) processIPPool(
 		if forProgrammingKernel {
 			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "Cluster routes are handled by Felix.")
 		}
+		// Reject exporting routes to iBGP peers when Felix is responsible for programming cluster routes.
+		// Disabled ippools are handled above.
+		if forInternalPeers && !ippool.DisableBGPExport {
+			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "")
+		}
+		// Exporting routes to all peers.
 		return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
 	}
 
