@@ -877,8 +877,8 @@ func processIPPool(
 			// Exporting routes to iBGP peers.
 			if forInternalPeers {
 				// Do not generate any statement, since "reject_tunnel_routes" filter rejects all routes related to
-				// *.calico and *.cali interfaces which rejects all vxlan, and wireguard routes.
-				// Also, BIRD does not re-advertise ipip and no-encap routes, as those are programmed by BIRD itself.
+				// *.calico and *.cali interfaces, which rejects all VXLAN, and WireGuard routes.
+				// Also, BIRD does not re-advertise IPIP and no-encap routes, as those are programmed by BIRD itself.
 				return ""
 			}
 			// Exporting routes to all peers.
