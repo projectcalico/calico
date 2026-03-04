@@ -30,9 +30,10 @@ type BirdBGPConfig struct {
 	ListenPort       string
 	DirectInterfaces string // Complete interface pattern string for protocol direct
 
-	BGPExportFilterForDisabledIPPools []string
-	BGPExportFilterForEnabledIPPools  []string
-	KernelFilterForIPPools            []string
+	BGPExportFilterForDisabledIPPools []string // Filters for disabled ippools for all peers.
+	BGPExportFilterForEnabledIPPools  []string // Filters for exporting enabled ippools to all peers.
+	InternalBGPExportFilter           []string // Filters for exporting routes to iBGP peers.
+	KernelFilterForIPPools            []string // Filters for programming kernel.
 }
 
 // BirdBGPPeer represents a processed BGP peer configuration
