@@ -360,7 +360,9 @@ func CIDRFromCalicoNet(ipNet calinet.IPNet) CIDR {
 }
 
 // CIDRFromPrefix converts a netip.Prefix to a CIDR.
+// The prefix is masked to ensure canonical representation.
 func CIDRFromPrefix(p netip.Prefix) CIDR {
+	p = p.Masked()
 	addr := p.Addr()
 	bits := p.Bits()
 	if addr.Is4() {
