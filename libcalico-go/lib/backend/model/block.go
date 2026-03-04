@@ -59,8 +59,9 @@ func (key BlockKey) defaultPath() (string, error) {
 	if !key.CIDR.IsValid() {
 		return "", errors.ErrorInsufficientIdentifiers{}
 	}
-	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/ipam/v2/assignment/ipv%d/block/%s", prefixVersion(key.CIDR), c)
+	cidr := key.CIDR.Masked()
+	c := strings.Replace(cidr.String(), "/", "-", 1)
+	e := fmt.Sprintf("/calico/ipam/v2/assignment/ipv%d/block/%s", prefixVersion(cidr), c)
 	return e, nil
 }
 

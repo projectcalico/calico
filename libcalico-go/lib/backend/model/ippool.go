@@ -42,8 +42,9 @@ func (key IPPoolKey) defaultPath() (string, error) {
 	if !key.CIDR.IsValid() {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "cidr"}
 	}
-	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/v1/ipam/v%d/pool/%s", prefixVersion(key.CIDR), c)
+	cidr := key.CIDR.Masked()
+	c := strings.Replace(cidr.String(), "/", "-", 1)
+	e := fmt.Sprintf("/calico/v1/ipam/v%d/pool/%s", prefixVersion(cidr), c)
 	return e, nil
 }
 
@@ -76,8 +77,9 @@ func (options IPPoolListOptions) defaultPathRoot() string {
 	if !options.CIDR.IsValid() {
 		return k
 	}
-	c := strings.Replace(options.CIDR.String(), "/", "-", 1)
-	k = k + fmt.Sprintf("v%d/pool/", prefixVersion(options.CIDR)) + c
+	cidr := options.CIDR.Masked()
+	c := strings.Replace(cidr.String(), "/", "-", 1)
+	k = k + fmt.Sprintf("v%d/pool/", prefixVersion(cidr)) + c
 	return k
 }
 

@@ -373,7 +373,7 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 }
 
 func parseKey(k model.Key) (name, cidr string) {
-	cidr = fmt.Sprintf("%s", k.(model.BlockKey).CIDR)
+	cidr = k.(model.BlockKey).CIDR.Masked().String()
 	name = names.CIDRToName(model.IPNetFromPrefix(k.(model.BlockKey).CIDR))
 	return
 }
