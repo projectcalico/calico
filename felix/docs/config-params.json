@@ -1997,8 +1997,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Specifies whether Felix should program IPIP routes instead of BIRD.\nFelix always programs VXLAN routes.",
-          "DescriptionHTML": "<p>Specifies whether Felix should program IPIP routes instead of BIRD.\nFelix always programs VXLAN routes.</p>",
+          "Description": "Specifies whether Felix should program all cluster routes instead of BIRD.\nFelix always programs VXLAN routes.",
+          "DescriptionHTML": "<p>Specifies whether Felix should program all cluster routes instead of BIRD.\nFelix always programs VXLAN routes.</p>",
           "UserEditable": true,
           "GoType": "*string"
         },
