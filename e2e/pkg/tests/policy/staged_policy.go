@@ -189,7 +189,7 @@ var _ = describe.CalicoDescribe(
 				BeforeEach(func() {
 					selector := fmt.Sprintf("pod-name == \"%s\"", server.Name())
 					ingress := []v3.Rule{{Action: v3.Deny}}
-					stagedGlobalNetworkPolicyName = "sgnp-deny-1"
+					stagedGlobalNetworkPolicyName = utils.GenerateRandomName("sgnp-deny")
 					stagedGlobalNetworkPolicy = CreateStagedGlobalNetworkPolicy(stagedGlobalNetworkPolicyName, customTier, 10, selector, ingress, nil)
 
 					Expect(cli.Create(context.TODO(), stagedGlobalNetworkPolicy)).ShouldNot(HaveOccurred())
@@ -286,19 +286,21 @@ var _ = describe.CalicoDescribe(
 					order := 200.0
 					policy := CreateStagedNetworkPolicy("service-deny-in", customTier, server.Pod().Namespace, order, selector, ingress, nil)
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					})
 
 					// enforce the policy
 					_, enforced := ConvertStagedPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					})
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
 					checker.ExpectFailure(client1, server.ClusterIP().Port(serverPort))
 					checker.Execute()
-
-					// delete policies
-					Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -312,21 +314,24 @@ var _ = describe.CalicoDescribe(
 					ingress := []v3.Rule{{Action: v3.Deny}}
 					selector := fmt.Sprintf("pod-name==\"%s\"", server.Name())
 					order := 200.0
-					policy := CreateStagedGlobalNetworkPolicy("service-deny-in", customTier, order, selector, ingress, nil)
+					policyName := utils.GenerateRandomName("service-deny-in")
+					policy := CreateStagedGlobalNetworkPolicy(policyName, customTier, order, selector, ingress, nil)
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					})
 
 					// enforce the policy
 					_, enforced := ConvertStagedGlobalPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					})
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
 					checker.ExpectFailure(client1, server.ClusterIP().Port(serverPort))
 					checker.Execute()
-
-					// delete policies
-					Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 				})
 			})
 		})
