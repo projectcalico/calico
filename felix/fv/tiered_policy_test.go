@@ -803,7 +803,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 			// Wait for the initial deny rules to be fully programmed before changing
 			// the tier default action, to avoid racing with the initial programming.
 			Eventually(rulesProgrammed, "15s", "200ms").Should(BeTrue())
-			Consistently(rulesProgrammed, "10s", "200ms").Should(BeTrue())
+			Consistently(rulesProgrammed, "2s", "200ms").Should(BeTrue())
 
 			tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
