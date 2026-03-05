@@ -42,7 +42,9 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 			NATOutgoingEnabled: true,
 		}, &infra)
 
-		client = infra.(*infrastructure.K8sDatastoreInfra).Client
+		var err error
+		client, err = infra.GetCalicoClient()
+		Expect(err).NotTo(HaveOccurred())
 
 		for ii := range wls {
 			wls[ii] = workload.Run(
