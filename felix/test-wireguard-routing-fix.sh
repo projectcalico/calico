@@ -37,7 +37,7 @@ WORKER_NODES=$($KUBECTL get nodes -o jsonpath='{.items[?(@.spec.taints[*].effect
 echo "=== 3. WIREGUARD INTERFACE STATUS ==="
 for node in $WORKER_NODES; do
     echo "--- $node ---"
-    if $KUBECTL debug node/$node -it --image=nicolaka/netshoot -- ip link show wireguard.cali >/dev/null 2>&1; then
+    if $KUBECTL debug node/$node -it --image=nicolaka/netshoot:v0.13 -- ip link show wireguard.cali >/dev/null 2>&1; then
         echo "✅ WireGuard interface detected"
     else
         echo "⚠️ WireGuard interface not found"
@@ -53,7 +53,7 @@ echo ""
 
 for node in $WORKER_NODES; do
     echo "--- $node ---"
-    $KUBECTL debug node/$node -it --image=nicolaka/netshoot -- ip rule show | grep -E "fwmark|lookup 1" || true
+    $KUBECTL debug node/$node -it --image=nicolaka/netshoot:v0.13 -- ip rule show | grep -E "fwmark|lookup 1" || true
     echo ""
 done
 
@@ -61,7 +61,7 @@ done
 echo "=== 5. WIREGUARD ROUTE TABLE ==="
 FIRST_NODE=$(echo "$WORKER_NODES" | head -1)
 echo "Checking table 1 on $FIRST_NODE:"
-$KUBECTL debug node/$FIRST_NODE -it --image=nicolaka/netshoot -- ip route show table 1 || true
+$KUBECTL debug node/$FIRST_NODE -it --image=nicolaka/netshoot:v0.13 -- ip route show table 1 || true
 echo ""
 
 # 7. Deploy test pod
@@ -76,7 +76,7 @@ metadata:
 spec:
   containers:
   - name: nginx
-    image: nginx:latest
+    image: nginx:1.27-alpine
     ports:
     - containerPort: 80
 EOF
@@ -102,14 +102,14 @@ if [ -z "$CONTROL_PLANE" ]; then
 fi
 
 echo "Testing from control-plane node '$CONTROL_PLANE' → pod $POD_IP"
-$KUBECTL debug node/$CONTROL_PLANE -it --image=curlimages/curl -- curl -m 5 -s http://$POD_IP | grep -q "Welcome to nginx" && \
+$KUBECTL debug node/$CONTROL_PLANE -it --image=curlimages/curl:8.11.0 -- curl -m 5 -s http://$POD_IP | grep -q "Welcome to nginx" && \
     echo "✅ SUCCESS: Host→Pod connectivity works!" || \
     echo "❌ FAILED: Host→Pod connectivity broken!"
 echo ""
 
 # 9. Test pod→pod connectivity
 echo "=== 8. POD→POD CONNECTIVITY TEST ==="
-$KUBECTL run test-client --image=busybox --restart=Never --rm -i --command -- wget -q -O- http://$POD_IP | grep -q "Welcome to nginx" && \
+$KUBECTL run test-client --image=busybox:1.37.0 --restart=Never --rm -i --command -- wget -q -O- http://$POD_IP | grep -q "Welcome to nginx" && \
     echo "✅ SUCCESS: Pod→Pod connectivity works!" || \
     echo "❌ FAILED: Pod→Pod connectivity broken!"
 echo ""
