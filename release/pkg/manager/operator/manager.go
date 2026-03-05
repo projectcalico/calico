@@ -15,7 +15,6 @@
 package operator
 
 import (
-	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -124,19 +123,18 @@ func NewManager(opts ...Option) *OperatorManager {
 }
 
 func (o *OperatorManager) Build() error {
-	if o.validate {
-		if err := o.PreBuildValidation(); err != nil {
-			return err
-		}
+	if err := o.PreBuildValidation(); err != nil {
+		return err
 	}
 	env, logFields, err := o.buildEnv()
 	if err != nil {
-		return fmt.Errorf("env vars for building operator: %s", err)
+		return fmt.Errorf("env vars for building operator: %w", err)
 	}
 	logrus.WithFields(logFields).Info("Building operator")
 	out, err := o.make("release", env)
 	if err != nil {
-		return fmt.Errorf("failed to build operator: %s: %s", err, out)
+		logrus.Error(out)
+		return fmt.Errorf("failed to build operator: %w", err)
 	}
 	logrus.WithFields(logFields).Infof("Built operator: %s", out)
 	return nil
@@ -154,14 +152,17 @@ func (o *OperatorManager) buildEnv() ([]string, logrus.Fields, error) {
 		fmt.Sprintf("VERSION=%s", o.version),
 	)
 	if o.isHashRelease {
-		env = append(env,
-			fmt.Sprintf("HASHRELEASE=true"),
-			fmt.Sprintf("CALICO_VERSION=%s", o.calicoVersion),
-			fmt.Sprintf("CALICO_DIR=%s", o.calicoDir),
-		)
 		logFields["hashrelease"] = "true"
-		logFields["calico_version"] = o.calicoVersion
-		logFields["calico_dir"] = o.calicoDir
+		env = append(env, "HASHRELEASE=true")
+		// calico version and directory are only used for build and not publish.
+		if o.calicoVersion != "" {
+			env = append(env, fmt.Sprintf("CALICO_VERSION=%s", o.calicoVersion))
+			logFields["calico_version"] = o.calicoVersion
+		}
+		if o.calicoDir != "" {
+			env = append(env, fmt.Sprintf("CALICO_DIR=%s", o.calicoDir))
+			logFields["calico_dir"] = o.calicoDir
+		}
 	}
 	if len(o.architectures) > 0 {
 		archs := strings.Join(o.architectures, ",")
@@ -175,28 +176,34 @@ func (o *OperatorManager) buildEnv() ([]string, logrus.Fields, error) {
 }
 
 func (o *OperatorManager) PreBuildValidation() error {
+	if !o.validate {
+		return nil
+	}
 	var errStack error
 	if o.dir == "" {
 		errStack = errors.Join(errStack, fmt.Errorf("no repository root specified"))
 	}
+	dirty, err := utils.GitIsDirty(o.dir)
+	if err != nil {
+		return fmt.Errorf("failed to check if git is dirty: %w", err)
+	}
+	if dirty {
+		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them"))
+	}
+	if o.isHashRelease && (o.calicoVersion == "" || o.calicoDir == "") {
+		errStack = errors.Join(errStack, errors.New("hashrelease requires calico version and directory to be specified"))
+	}
 	if !o.validateBranch {
-		return nil
+		return errStack
 	}
 	branch, err := utils.GitBranch(o.dir)
 	if err != nil {
-		return fmt.Errorf("failed to determine branch: %s", err)
+		return fmt.Errorf("failed to determine branch: %w", err)
 	}
 	match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, o.releaseBranchPrefix)
 	re := regexp.MustCompile(match)
 	if !re.MatchString(branch) {
 		errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
-	}
-	dirty, err := utils.GitIsDirty(o.dir)
-	if err != nil {
-		return fmt.Errorf("failed to check if git is dirty: %s", err)
-	}
-	if dirty {
-		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before building the hashrelease"))
 	}
 	return errStack
 }
@@ -209,27 +216,50 @@ func (o *OperatorManager) Publish() error {
 
 	env, logFields, err := o.buildEnv()
 	if err != nil {
-		return fmt.Errorf("env vars for publishing operator: %s", err)
+		return fmt.Errorf("env vars for publishing operator: %w", err)
 	}
 	logrus.WithFields(logFields).Info("Publishing operator")
 	out, err := o.make("release-publish", env)
 	if err != nil {
-		return fmt.Errorf("failed to publish operator: %s: %s", err, out)
+		logrus.Error(out)
+		return fmt.Errorf("failed to publish operator: %w", err)
 	}
 	logrus.WithFields(logFields).Infof("Published operator: %s", out)
 	return nil
 }
 
+func (o *OperatorManager) PreReleasePublicValidation() error {
+	if !o.publish || !o.validate {
+		return nil
+	}
+	var errStack error
+	if o.dir == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no repository root specified"))
+	}
+	if o.version == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no version specified"))
+	}
+	return errStack
+}
+
 // ReleasePublic publishes the current draft release of the operator to make it publicly available.
 // It determines the latest release version, compares it with the current version, and marks the release as the latest if applicable.
 func (o *OperatorManager) ReleasePublic() error {
+	if !o.publish {
+		logrus.Warn("Skipping releasing operator to public")
+		return nil
+	}
+	if err := o.PreReleasePublicValidation(); err != nil {
+		return err
+	}
 	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", o.version))
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		env = append(env, "DEBUG=true")
 	}
 	out, err := o.make("release-public", env)
 	if err != nil {
-		return fmt.Errorf("failed to release operator: %s: %s", err, out)
+		logrus.Error(out)
+		return fmt.Errorf("failed to release operator: %w", err)
 	}
 	return nil
 }
