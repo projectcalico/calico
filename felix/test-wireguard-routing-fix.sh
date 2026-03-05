@@ -37,7 +37,11 @@ WORKER_NODES=$($KUBECTL get nodes -o jsonpath='{.items[?(@.spec.taints[*].effect
 echo "=== 3. WIREGUARD INTERFACE STATUS ==="
 for node in $WORKER_NODES; do
     echo "--- $node ---"
-    $KUBECTL get nodes $node -o json | grep -q '"wireguard.cali"' && echo "✅ WireGuard interface detected" || echo "⚠️ WireGuard interface not found"
+    if $KUBECTL debug node/$node -it --image=nicolaka/netshoot -- ip link show wireguard.cali >/dev/null 2>&1; then
+        echo "✅ WireGuard interface detected"
+    else
+        echo "⚠️ WireGuard interface not found"
+    fi
 done
 echo ""
 
