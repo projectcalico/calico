@@ -45,7 +45,7 @@ func TestBuildImportFilter_DefaultAccept(t *testing.T) {
 	c := &client{}
 
 	// Test with no filter - should return default accept
-	result := c.buildImportFilter(nil, 4)
+	result := c.buildImportFilter(nil, 4, "64512", "64512")
 	assert.Contains(t, result, "accept;")
 	assert.Contains(t, result, "# Prior to introduction of BGP Filters")
 }
@@ -54,7 +54,7 @@ func TestBuildImportFilter_EmptyFilters(t *testing.T) {
 	c := &client{}
 
 	// Test with empty filters array - should return default accept
-	result := c.buildImportFilter([]string{}, 4)
+	result := c.buildImportFilter([]string{}, 4, "64512", "64512")
 	assert.Contains(t, result, "accept;")
 }
 
@@ -62,8 +62,8 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 	c := &client{}
 
 	// Test that IPv4 and IPv6 return appropriate default
-	resultV4 := c.buildImportFilter(nil, 4)
-	resultV6 := c.buildImportFilter(nil, 6)
+	resultV4 := c.buildImportFilter(nil, 4, "64512", "64512")
+	resultV6 := c.buildImportFilter(nil, 6, "64512", "64512")
 
 	// Both should have accept by default
 	assert.Contains(t, resultV4, "accept;")
@@ -1771,7 +1771,7 @@ func TestBuildImportFilter_WithBGPFilter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"my-filter"}, 4)
+	result := c.buildImportFilter([]string{"my-filter"}, 4, "64512", "64512")
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-filter_importFilterV4'();")
@@ -1805,7 +1805,7 @@ func TestBuildImportFilter_WithMultipleBGPFilters(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"filter1", "filter2"}, 4)
+	result := c.buildImportFilter([]string{"filter1", "filter2"}, 4, "64512", "64512")
 
 	// Should include both filter function calls
 	assert.Contains(t, result, "'bgp_filter1_importFilterV4'();")
@@ -1831,7 +1831,7 @@ func TestBuildImportFilter_IPv6Filter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"ipv6-filter"}, 6)
+	result := c.buildImportFilter([]string{"ipv6-filter"}, 6, "64512", "64512")
 
 	// Should use V6 suffix
 	assert.Contains(t, result, "'bgp_ipv6-filter_importFilterV6'();")
@@ -1854,7 +1854,7 @@ func TestBuildImportFilter_FilterWithNoImportRules(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"export-only"}, 4)
+	result := c.buildImportFilter([]string{"export-only"}, 4, "64512", "64512")
 
 	// Should NOT include the filter call since there are no import rules
 	assert.NotContains(t, result, "'bgp_export-only_importFilterV4'();")
@@ -1869,7 +1869,7 @@ func TestBuildImportFilter_FilterNotFound(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"nonexistent-filter"}, 4)
+	result := c.buildImportFilter([]string{"nonexistent-filter"}, 4, "64512", "64512")
 
 	// Should NOT include the filter call since filter doesn't exist
 	assert.NotContains(t, result, "'bgp_nonexistent-filter_importFilterV4'();")

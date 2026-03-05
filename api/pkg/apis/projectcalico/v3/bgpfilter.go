@@ -15,6 +15,7 @@
 package v3
 
 import (
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -51,21 +52,28 @@ type BGPFilterSpec struct {
 	ExportV4 []BGPFilterRuleV4 `json:"exportV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.
+	// Source is not applicable to import rules because all imported routes are from BGP peers by definition.
+	// +kubebuilder:validation:Rule="self.all(r, !has(r.source) || r.source == '')",message="source is not applicable to import rules"
 	ImportV4 []BGPFilterRuleV4 `json:"importV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.
 	ExportV6 []BGPFilterRuleV6 `json:"exportV6,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.
+	// Source is not applicable to import rules because all imported routes are from BGP peers by definition.
+	// +kubebuilder:validation:Rule="self.all(r, !has(r.source) || r.source == '')",message="source is not applicable to import rules"
 	ImportV6 []BGPFilterRuleV6 `json:"importV6,omitempty" validate:"omitempty,dive"`
 }
 
-// BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.
+// BGPFilterRuleV4 defines a BGP filter rule consisting of match criteria, a terminal action,
+// and optional operations to apply to matching routes.
 // +mapType=atomic
+// +kubebuilder:validation:Rule="!has(self.operations) || size(self.operations) == 0 || self.action == 'Accept'",message="operations may only be used with action Accept"
 type BGPFilterRuleV4 struct {
 	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv4"`
 
+	// +optional
 	PrefixLength *BGPFilterPrefixLengthV4 `json:"prefixLength,omitempty" validate:"omitempty"`
 
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
@@ -74,15 +82,50 @@ type BGPFilterRuleV4 struct {
 
 	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
 
+	// If non-empty, this filter rule will only apply to routes being imported from or exported
+	// to a BGP peer of the specified type.  If empty, the rule applies to all peers.
+	// +optional
+	PeerType BGPFilterPeerType `json:"peerType,omitempty" validate:"omitempty,oneof=eBGP iBGP"`
+
+	// If set, this filter rule will only apply to routes that match the specified BGP
+	// community criteria.  Currently only applies on import, where it matches communities
+	// set by the remote peer.  On export, community matching is ignored; export rules use
+	// the AddCommunity operation instead.
+	// +optional
+	Communities *BGPFilterCommunityMatch `json:"communities,omitempty" validate:"omitempty"`
+
+	// If non-empty, this filter rule will only apply to routes whose AS path begins with the
+	// specified sequence of AS numbers.
+	// +optional
+	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty,dive"`
+
+	// If non-nil, this filter rule will only apply to routes with the given priority, in the
+	// same units as the ...RoutePriority fields in FelixConfiguration.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
+	Priority *int `json:"priority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+
 	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
+
+	// Operations is an ordered list of route modifications to apply to matching routes before
+	// accepting them.  Only valid when Action is "Accept"; specifying operations with "Reject"
+	// is rejected by validation.  Each entry must set exactly one operation field.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=10
+	Operations []BGPFilterOperation `json:"operations,omitempty" validate:"omitempty,dive"`
 }
 
-// BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.
+// BGPFilterRuleV6 defines a BGP filter rule consisting of match criteria, a terminal action,
+// and optional operations to apply to matching routes.
 // +mapType=atomic
+// +kubebuilder:validation:Rule="!has(self.operations) || size(self.operations) == 0 || self.action == 'Accept'",message="operations may only be used with action Accept"
 type BGPFilterRuleV6 struct {
 	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv6"`
 
+	// +optional
 	PrefixLength *BGPFilterPrefixLengthV6 `json:"prefixLength,omitempty" validate:"omitempty"`
 
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
@@ -91,7 +134,39 @@ type BGPFilterRuleV6 struct {
 
 	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
 
+	// If non-empty, this filter rule will only apply to routes being imported from or exported
+	// to a BGP peer of the specified type.  If empty, the rule applies to all peers.
+	// +optional
+	PeerType BGPFilterPeerType `json:"peerType,omitempty" validate:"omitempty,oneof=eBGP iBGP"`
+
+	// If set, this filter rule will only apply to routes that match the specified BGP
+	// community criteria.  Currently only applies on import, where it matches communities
+	// set by the remote peer.  On export, community matching is ignored; export rules use
+	// the AddCommunity operation instead.
+	// +optional
+	Communities *BGPFilterCommunityMatch `json:"communities,omitempty" validate:"omitempty"`
+
+	// If non-empty, this filter rule will only apply to routes whose AS path begins with the
+	// specified sequence of AS numbers.
+	// +optional
+	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty,dive"`
+
+	// If non-nil, this filter rule will only apply to routes with the given priority, in the
+	// same units as the ...RoutePriority fields in FelixConfiguration.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
+	Priority *int `json:"priority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+
 	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
+
+	// Operations is an ordered list of route modifications to apply to matching routes before
+	// accepting them.  Only valid when Action is "Accept"; specifying operations with "Reject"
+	// is rejected by validation.  Each entry must set exactly one operation field.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=10
+	Operations []BGPFilterOperation `json:"operations,omitempty" validate:"omitempty,dive"`
 }
 
 // +mapType=atomic
@@ -138,6 +213,80 @@ const (
 	Accept BGPFilterAction = "Accept"
 	Reject BGPFilterAction = "Reject"
 )
+
+// BGPFilterPeerType specifies which type of BGP peer a filter rule applies to.
+// +kubebuilder:validation:Enum=eBGP;iBGP
+type BGPFilterPeerType string
+
+const (
+	BGPFilterPeerTypeEBGP BGPFilterPeerType = "eBGP"
+	BGPFilterPeerTypeIBGP BGPFilterPeerType = "iBGP"
+)
+
+// BGPFilterCommunityMatch specifies community-based match criteria for a BGP filter rule.
+// Currently only a single community value is supported.  A MatchOperator field may be
+// introduced in the future to support anyOf/allOf semantics with multiple values.
+// +mapType=atomic
+type BGPFilterCommunityMatch struct {
+	// Values is a list of BGP community values to match against.  Each value must be in
+	// `aa:nn` (standard) or `aa:nn:mm` (large) format.
+	// For standard communities, `aa` and `nn` must be 16-bit values (0-65535).
+	// For large communities, `aa`, `nn`, and `mm` must be 32-bit values (0-4294967295).
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=1
+	// +kubebuilder:validation:Rule="self.all(v, v.matches('^[0-9]+:[0-9]+$') ? (int(v.split(':')[0]) <= 65535 && int(v.split(':')[1]) <= 65535) : (v.matches('^[0-9]+:[0-9]+:[0-9]+$') && int(v.split(':')[0]) <= 4294967295 && int(v.split(':')[1]) <= 4294967295 && int(v.split(':')[2]) <= 4294967295))",message="standard communities must have 16-bit values (aa:nn), large communities must have 32-bit values (aa:nn:mm)"
+	Values []string `json:"values" validate:"required,dive"`
+}
+
+// BGPFilterOperation is a discriminated union representing a single route modification.
+// Exactly one field must be set.
+// +mapType=atomic
+// +kubebuilder:validation:Rule="(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath) ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1",message="exactly one operation must be set"
+type BGPFilterOperation struct {
+	// AddCommunity adds the specified BGP community to the route.
+	// +optional
+	AddCommunity *BGPFilterAddCommunity `json:"addCommunity,omitempty" validate:"omitempty"`
+
+	// PrependASPath prepends the specified AS numbers to the route's AS path.
+	// +optional
+	PrependASPath *BGPFilterPrependASPath `json:"prependASPath,omitempty" validate:"omitempty"`
+
+	// SetPriority sets the route's priority (metric), in the same units as the
+	// ...RoutePriority fields in FelixConfiguration.
+	// +optional
+	SetPriority *BGPFilterSetPriority `json:"setPriority,omitempty" validate:"omitempty"`
+}
+
+// BGPFilterAddCommunity specifies a BGP community to add to a route.
+// +mapType=atomic
+type BGPFilterAddCommunity struct {
+	// Value is a BGP community value in `aa:nn` (standard) or `aa:nn:mm` (large) format.
+	// For standard communities, `aa` and `nn` must be 16-bit values (0-65535).
+	// For large communities, `aa`, `nn`, and `mm` must be 32-bit values (0-4294967295).
+	// +kubebuilder:validation:Rule="self.matches('^[0-9]+:[0-9]+$') ? (int(self.split(':')[0]) <= 65535 && int(self.split(':')[1]) <= 65535) : (self.matches('^[0-9]+:[0-9]+:[0-9]+$') && int(self.split(':')[0]) <= 4294967295 && int(self.split(':')[1]) <= 4294967295 && int(self.split(':')[2]) <= 4294967295)",message="standard communities must have 16-bit values (aa:nn), large communities must have 32-bit values (aa:nn:mm)"
+	Value string `json:"value" validate:"required"`
+}
+
+// BGPFilterPrependASPath specifies AS numbers to prepend to a route's AS path.
+// +mapType=atomic
+type BGPFilterPrependASPath struct {
+	// Prefix is the sequence of AS numbers to prepend to the route's AS path.
+	// The resulting path starts with these AS numbers in the order listed;
+	// e.g. [65000, 65001] produces the path "65000 65001 <original>".
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=10
+	Prefix []numorstring.ASNumber `json:"prefix" validate:"required,dive"`
+}
+
+// BGPFilterSetPriority specifies a route priority to set.
+// +mapType=atomic
+type BGPFilterSetPriority struct {
+	// Value is the priority to set, in the same units as FelixConfiguration's
+	// ...RoutePriority fields.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
+	Value int `json:"value" validate:"required,gte=1,lte=2147483646"`
+}
 
 // New BGPFilter creates a new (zeroed) BGPFilter struct with the TypeMetadata
 // initialized to the current version.
