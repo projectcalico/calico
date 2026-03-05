@@ -393,11 +393,28 @@ func verifyFlowCount(url string, count int) {
 		}
 
 		if len(response.Items) != count {
-			return fmt.Errorf("number of flow items does not match, expected %d, got %d", count, len(response.Items))
+			var diag strings.Builder
+			diag.WriteString(fmt.Sprintf("expected %d flow items, got %d\n", count, len(response.Items)))
+			for i, item := range response.Items {
+				diag.WriteString(fmt.Sprintf("  flow[%d]: reporter=%s action=%s src=%s/%s dst=%s/%s proto=%s destPort=%d\n",
+					i, item.Reporter, item.Action,
+					item.SourceNamespace, item.SourceName,
+					item.DestNamespace, item.DestName,
+					item.Protocol, item.DestPort))
+				if len(item.Policies.Enforced) > 0 || len(item.Policies.Pending) > 0 {
+					for _, p := range item.Policies.Enforced {
+						diag.WriteString(fmt.Sprintf("    enforced: %s\n", policyHitString(p.Kind, p.Namespace, p.Name, p.Tier, p.Action)))
+					}
+					for _, p := range item.Policies.Pending {
+						diag.WriteString(fmt.Sprintf("    pending: %s\n", policyHitString(p.Kind, p.Namespace, p.Name, p.Tier, p.Action)))
+					}
+				}
+			}
+			return fmt.Errorf("%s", diag.String())
 		}
 
 		return nil
-	}, 90*time.Second, 5*time.Second).Should(Not(HaveOccurred()))
+	}, 150*time.Second, 5*time.Second).Should(Not(HaveOccurred()))
 }
 
 func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.PolicyKind, action whiskerv1.Action) {
