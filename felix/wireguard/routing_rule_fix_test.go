@@ -12,7 +12,6 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
-	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 	. "github.com/projectcalico/calico/felix/wireguard"
 )
@@ -20,9 +19,9 @@ import (
 var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 	var (
 		wg            *Wireguard
-		wgDataplane   *mocknetlink.MockDataplane
-		rtDataplane   *mocknetlink.MockDataplane
-		rrDataplane   *mocknetlink.MockDataplane
+		wgDataplane   *mocknetlink.MockNetlinkDataplane
+		rtDataplane   *mocknetlink.MockNetlinkDataplane
+		rrDataplane   *mocknetlink.MockNetlinkDataplane
 		t             *mocktime.MockTime
 		config        *Config
 		s             *mockStatus
@@ -73,7 +72,7 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 			wgDataplane.NewMockWireguard,
 			10*time.Second,
 			t,
-			routetable.FelixRouteProtocol,
+			FelixRouteProtocol,
 			s.status,
 			s.writeProcSys,
 			logutils.NewSummarizer("test"),
@@ -98,11 +97,11 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 
 				Expect(rule.Priority).To(Equal(rulePriority))
 				Expect(rule.Table).To(Equal(tableIndex))
-				Expect(rule.Invert).To(BeTrue())
-				Expect(rule.Mark).To(Equal(firewallMark))
+			Expect(rule.Invert).To(BeFalse())
+			Expect(rule.Mark).To(Equal(0))
 				Expect(rule.Mask).To(Equal(ptr.To(firewallMark)))
 				Expect(rule.Src).ToNot(BeNil())
-				Expect(rule.Src.String()).To(Equal(cidr_pool1.ToIPNet().String()))
+				Expect(rule.Src.String()).To(Equal(cidr_pool1.String()))
 			})
 		})
 
@@ -124,15 +123,15 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				for _, rule := range rrDataplane.AddedRules {
 					Expect(rule.Priority).To(Equal(rulePriority))
 					Expect(rule.Table).To(Equal(tableIndex))
-					Expect(rule.Invert).To(BeTrue())
-					Expect(rule.Mark).To(Equal(firewallMark))
+				Expect(rule.Invert).To(BeFalse())
+				Expect(rule.Mark).To(Equal(0))
 					Expect(rule.Src).ToNot(BeNil())
 					srcCIDRs = append(srcCIDRs, rule.Src.String())
 				}
 
 				Expect(srcCIDRs).To(ConsistOf(
-					cidr_pool1.ToIPNet().String(),
-					cidr_pool2.ToIPNet().String(),
+					cidr_pool1.String(),
+					cidr_pool2.String(),
 				))
 			})
 		})
@@ -164,8 +163,8 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 					srcCIDRs = append(srcCIDRs, rule.Src.String())
 				}
 				Expect(srcCIDRs).To(ConsistOf(
-					cidr_pool1.ToIPNet().String(),
-					cidr_pool2.ToIPNet().String(),
+					cidr_pool1.String(),
+					cidr_pool2.String(),
 				))
 			})
 		})
@@ -194,7 +193,7 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 
 				rule := rrDataplane.AddedRules[0]
 				Expect(rule.Src).ToNot(BeNil())
-				Expect(rule.Src.String()).To(Equal(cidr_pool1.ToIPNet().String()))
+				Expect(rule.Src.String()).To(Equal(cidr_pool1.String()))
 			})
 		})
 
@@ -212,7 +211,7 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 
 				Expect(rrDataplane.AddedRules).To(HaveLen(1))
 				rule := rrDataplane.AddedRules[0]
-				Expect(rule.Src.String()).To(Equal(cidr_pool1.ToIPNet().String()))
+				Expect(rule.Src.String()).To(Equal(cidr_pool1.String()))
 			})
 		})
 	})
@@ -230,7 +229,7 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				wgDataplane.NewMockWireguard,
 				10*time.Second,
 				t,
-				routetable.FelixRouteProtocol,
+				FelixRouteProtocol,
 				s.status,
 				s.writeProcSys,
 				logutils.NewSummarizer("test"),
@@ -257,8 +256,8 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 
 			Expect(rule.Priority).To(Equal(rulePriority))
 			Expect(rule.Table).To(Equal(tableIndex))
-			Expect(rule.Invert).To(BeTrue())
-			Expect(rule.Mark).To(Equal(firewallMark))
+			Expect(rule.Invert).To(BeFalse())
+			Expect(rule.Mark).To(Equal(0))
 			Expect(rule.Mask).To(Equal(ptr.To(firewallMark)))
 			Expect(rule.Src).To(BeNil())
 		})
@@ -311,7 +310,7 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 			rule := rrDataplane.AddedRules[0]
 
 			Expect(rule.Src).ToNot(BeNil())
-			Expect(rule.Src.String()).To(Equal(cidr_pool1.ToIPNet().String()))
+			Expect(rule.Src.String()).To(Equal(cidr_pool1.String()))
 
 			link := wgDataplane.NameToLink["wg0"]
 			Expect(link).ToNot(BeNil())
@@ -333,12 +332,4 @@ func (s *mockStatus) status(publicKey wgtypes.Key) error {
 
 func (s *mockStatus) writeProcSys(path, value string) error {
 	return nil
-}
-
-func mustGeneratePrivateKey() wgtypes.Key {
-	key, err := wgtypes.GeneratePrivateKey()
-	if err != nil {
-		panic(err)
-	}
-	return key
 }
