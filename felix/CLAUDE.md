@@ -296,6 +296,18 @@ Shared networking subsystems used across dataplanes:
 | `nfnetlink/` | Conntrack and nflog via netfilter netlink |
 | `netlinkshim/` | Netlink abstraction layer for testing and portability |
 
+## Diagnosing Test Failures with fv-tests-guru
+
+[fv-tests-guru](https://github.com/tigera/fv-tests-guru) is an AI-powered tool that parses Felix FV/UT failure logs and runs AI analysis to diagnose root causes. It reads its Gemini API key from `~/.fv-tests-guru/gemini-key`.
+
+When asked to analyze a test failure log file, run fv-tests-guru and use its output to understand the failure and fix it:
+
+```bash
+fv-tests-guru -debug-logfile <log-path> -ai-provider gemini -calico-repo .. -max-timeout 1m40s
+```
+
+Add `-ut` for unit test logs. Use `-extra-context "..."` to provide hints about the branch under test.
+
 ## Configuration
 
 - `config/config_params.go` — all Felix parameters with defaults and metadata
