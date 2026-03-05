@@ -55,10 +55,6 @@ func newTestLMCEnv() *testLMCEnv {
 	return env
 }
 
-func (env *testLMCEnv) clearEvents() {
-	env.roleEvents = nil
-}
-
 // lastRole returns the most recent role emitted for a given WEP key, or NO_ROLE if none.
 func (env *testLMCEnv) lastRole(key model.WorkloadEndpointKey) proto.LiveMigrationRole {
 	for i := len(env.roleEvents) - 1; i >= 0; i-- {
@@ -216,7 +212,6 @@ func TestLiveMigrationCalculator_WEPsThenLM(t *testing.T) {
 	if got := env.lastRole(srcKey); got != proto.LiveMigrationRole_NO_ROLE {
 		t.Errorf("expected NO_ROLE for src-pod before LM, got %v", got)
 	}
-	env.clearEvents()
 
 	// LM arrives naming both WEPs.
 	lmKey := makeLMKey("lm1")
@@ -229,20 +224,6 @@ func TestLiveMigrationCalculator_WEPsThenLM(t *testing.T) {
 	if env.lastRole(dstKey) != proto.LiveMigrationRole_TARGET {
 		t.Errorf("expected TARGET for dst-pod, got %v", env.lastRole(dstKey))
 	}
-}
-
-func TestLiveMigrationCalculator_LMDeleted(t *testing.T) {
-	env := newTestLMCEnv()
-
-	srcKey := makeWEPKey("ns", "src-pod")
-	dstKey := makeWEPKey("ns", "dst-pod")
-	env.lmc.OnUpdate(makeWEPUpdate(srcKey))
-	env.lmc.OnUpdate(makeWEPUpdate(dstKey))
-
-	lmKey := makeLMKey("lm1")
-	lm := makeLM(ptrNN("ns", "src-pod"), ptrNN("ns", "dst-pod"), nil)
-	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
-	env.clearEvents()
 
 	// Delete the LM.
 	env.lmc.OnUpdate(makeLMDelete(lmKey))
@@ -255,6 +236,9 @@ func TestLiveMigrationCalculator_LMDeleted(t *testing.T) {
 	}
 }
 
+// Note, this scenario isn't expected as part of mainline live migration.  But it might happen
+// transiently if a newly migrated VM is quickly re-live-migrated to a new host and the control
+// plane is slow to clean up resources for the first migration.
 func TestLiveMigrationCalculator_TargetWinsOverSource(t *testing.T) {
 	env := newTestLMCEnv()
 
@@ -280,6 +264,9 @@ func TestLiveMigrationCalculator_TargetWinsOverSource(t *testing.T) {
 	}
 }
 
+// Note, this scenario isn't expected as part of mainline live migration.  Once a LiveMigration
+// specifies a source, that should never change within the same LiveMigration resource.  But it's
+// useful to test how the product code would respond if it did.
 func TestLiveMigrationCalculator_LMUpdateChangesSourceName(t *testing.T) {
 	env := newTestLMCEnv()
 
@@ -295,7 +282,6 @@ func TestLiveMigrationCalculator_LMUpdateChangesSourceName(t *testing.T) {
 	if env.lastRole(wepAKey) != proto.LiveMigrationRole_SOURCE {
 		t.Fatalf("expected pod-a SOURCE, got %v", env.lastRole(wepAKey))
 	}
-	env.clearEvents()
 
 	// Update LM to change source from pod-a to pod-b.
 	lmUpdated := makeLM(ptrNN("ns", "pod-b"), nil, nil)
@@ -345,7 +331,6 @@ func TestLiveMigrationCalculator_SelectorMatchThenLMDeleted(t *testing.T) {
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_TARGET {
 		t.Fatalf("expected TARGET, got %v", env.lastRole(wepKey))
 	}
-	env.clearEvents()
 
 	// Delete the LM — selector is removed, ARC fires match-stopped, WEP reverts.
 	env.lmc.OnUpdate(makeLMDelete(lmKey))
@@ -355,6 +340,9 @@ func TestLiveMigrationCalculator_SelectorMatchThenLMDeleted(t *testing.T) {
 	}
 }
 
+// Note, this scenario isn't expected as part of mainline live migration.  We would expect every
+// unique LiveMigration resource to have its own unique selector.  But it's useful to test how the
+// product code would respond.
 func TestLiveMigrationCalculator_SelectorRefCounting(t *testing.T) {
 	env := newTestLMCEnv()
 
@@ -382,7 +370,7 @@ func TestLiveMigrationCalculator_SelectorRefCounting(t *testing.T) {
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_TARGET {
 		t.Fatalf("expected TARGET, got %v", env.lastRole(wepKey))
 	}
-	env.clearEvents()
+	eventCount := len(env.roleEvents)
 
 	// Delete first LM — selector should still be active, WEP still TARGET.
 	env.lmc.OnUpdate(makeLMDelete(lm1Key))
@@ -390,8 +378,8 @@ func TestLiveMigrationCalculator_SelectorRefCounting(t *testing.T) {
 		t.Fatal("expected selector to still be tracked after first LM deleted")
 	}
 	// No role change event expected (still TARGET).
-	if len(env.roleEvents) != 0 {
-		t.Errorf("expected no role change, got %v", env.roleEvents)
+	if len(env.roleEvents) != eventCount {
+		t.Errorf("expected no role change, got %v", env.roleEvents[eventCount:])
 	}
 
 	// Delete second LM — selector removed, WEP reverts to NO_ROLE.
@@ -404,6 +392,9 @@ func TestLiveMigrationCalculator_SelectorRefCounting(t *testing.T) {
 	}
 }
 
+// Note, this scenario isn't expected as part of mainline live migration.  Once a LiveMigration
+// specifies a destination, that should never change for the same LiveMigration resource.  But it's
+// useful to test how the product code would respond.
 func TestLiveMigrationCalculator_SelectorChangeOnUpdate(t *testing.T) {
 	env := newTestLMCEnv()
 
@@ -422,7 +413,6 @@ func TestLiveMigrationCalculator_SelectorChangeOnUpdate(t *testing.T) {
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_TARGET {
 		t.Fatalf("expected TARGET via selectorA, got %v", env.lastRole(wepKey))
 	}
-	env.clearEvents()
 
 	// Update LM to change selector from A to B.
 	lmUpdated := makeLM(nil, nil, ptrStr("has(selectorB)"))
@@ -450,7 +440,6 @@ func TestLiveMigrationCalculator_WEPDeleteRemovesTracking(t *testing.T) {
 	lmKey := makeLMKey("lm1")
 	lm := makeLM(ptrNN("ns", "pod-a"), nil, nil)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
-	env.clearEvents()
 
 	// Delete the WEP.
 	env.lmc.OnUpdate(makeWEPDelete(wepKey))
@@ -470,13 +459,13 @@ func TestLiveMigrationCalculator_WEPUpdateIsIdempotent(t *testing.T) {
 	lmKey := makeLMKey("lm1")
 	lm := makeLM(ptrNN("ns", "pod-a"), nil, nil)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
-	env.clearEvents()
 
 	// Send the same WEP update again — should be a no-op.
+	eventCount := len(env.roleEvents)
 	env.lmc.OnUpdate(makeWEPUpdate(wepKey))
 
-	if len(env.roleEvents) != 0 {
-		t.Errorf("expected no role events on duplicate WEP update, got %d", len(env.roleEvents))
+	if len(env.roleEvents) != eventCount {
+		t.Errorf("expected no role events on duplicate WEP update, got %d", len(env.roleEvents)-eventCount)
 	}
 }
 
@@ -561,7 +550,6 @@ func TestLiveMigrationCalculator_EndToEndSourceHost(t *testing.T) {
 	if env.lastRole(srcKey) != proto.LiveMigrationRole_SOURCE {
 		t.Errorf("expected SOURCE, got %v", env.lastRole(srcKey))
 	}
-	env.clearEvents()
 
 	env.lmc.OnUpdate(makeLMDelete(lmKey))
 	if env.lastRole(srcKey) != proto.LiveMigrationRole_NO_ROLE {
@@ -569,6 +557,10 @@ func TestLiveMigrationCalculator_EndToEndSourceHost(t *testing.T) {
 	}
 }
 
+// Note, this scenario isn't expected as part of mainline live migration.  It shouldn't be the case
+// that there are two LiveMigrations specifying the same source at the same time.  But it's useful
+// to test how the product code would respond.  Perhaps could happen in the case of a first live
+// migration failing and then been retried?
 func TestLiveMigrationCalculator_TransientOverlap(t *testing.T) {
 	env := newTestLMCEnv()
 
@@ -587,13 +579,13 @@ func TestLiveMigrationCalculator_TransientOverlap(t *testing.T) {
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_SOURCE {
 		t.Errorf("expected SOURCE with two LMs, got %v", env.lastRole(wepKey))
 	}
-	env.clearEvents()
 
 	// Delete LM1 — still SOURCE because LM2 remains.
+	eventCount := len(env.roleEvents)
 	env.lmc.OnUpdate(makeLMDelete(lm1Key))
 	// Role should not have changed (still SOURCE), so no event should be emitted.
-	if len(env.roleEvents) != 0 {
-		t.Errorf("expected no role change when one of two overlapping LMs deleted, got %v", env.roleEvents)
+	if len(env.roleEvents) != eventCount {
+		t.Errorf("expected no role change when one of two overlapping LMs deleted, got %v", env.roleEvents[eventCount:])
 	}
 
 	// Delete LM2 — now NO_ROLE.
@@ -603,6 +595,9 @@ func TestLiveMigrationCalculator_TransientOverlap(t *testing.T) {
 	}
 }
 
+// Note, this scenario isn't expected as part of mainline live migration.  KubeVirt always uses
+// selector and OpenStack always uses the direct name, and never the twain should meet.  But it's
+// useful to test how the product code would respond.
 func TestLiveMigrationCalculator_SelectorWinsOverDirectTarget(t *testing.T) {
 	env := newTestLMCEnv()
 
@@ -645,7 +640,7 @@ func TestLiveMigrationCalculator_SelectorWinsOverDirectTarget(t *testing.T) {
 	}
 }
 
-func TestLiveMigrationCalculator_WEPReCreated(t *testing.T) {
+func TestLiveMigrationCalculator_WEPRecreated(t *testing.T) {
 	env := newTestLMCEnv()
 
 	lmKey := makeLMKey("lm1")
@@ -658,7 +653,6 @@ func TestLiveMigrationCalculator_WEPReCreated(t *testing.T) {
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_SOURCE {
 		t.Fatalf("expected SOURCE, got %v", env.lastRole(wepKey))
 	}
-	env.clearEvents()
 
 	// Delete and re-create WEP.
 	env.lmc.OnUpdate(makeWEPDelete(wepKey))
