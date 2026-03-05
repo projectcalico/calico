@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -340,6 +340,10 @@ func collectCalicoResource(dir string) {
 	buf, err = common.Exec([]string{"kubectl", "api-resources", "--api-group=projectcalico.org", "-o", "name"})
 	if err != nil {
 		log.WithError(err).Warn("Couldn't list api-resources for projectcalico.org group, skipping v3 API resource discovery")
+		fmt.Printf("Couldn't list api-resources for projectcalico.org group, skipping v3 API resource discovery: %s\n", err)
+		if buf != nil {
+			fmt.Printf("\tcmd output:\n\t\t%s", buf.String())
+		}
 	} else {
 		apiResources := strings.Fields(buf.String())
 		for _, resource := range apiResources {
