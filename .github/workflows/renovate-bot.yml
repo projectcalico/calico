@@ -1,0 +1,25 @@
+name: Renovate update dependencies
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Renovate
+        uses: renovatebot/github-action@v46.1.1
+        with:
+          token: ${{ secrets.MARVIN_RENOVATE_PAT }}
+          configurationFile: renovate.json
+          mount-docker-socket: true
+          docker-user: root
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ALLOWED_COMMANDS: '["^make gen-deps-files$"]'
+          RENOVATE_GIT_AUTHOR: "marvin-tigera <marvin-tigera@users.noreply.github.com>"
