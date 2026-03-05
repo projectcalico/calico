@@ -640,6 +640,30 @@ var _ = Describe("KubeVirt VM-based handle ID", Label("KubeVirt"), func() {
 				verifyHandleReleased(calicoClient, "net1", testNs, vmName)
 			})
 
+			It("should succeed when pod is already deleted before CNI DEL runs (parallel DEL race)", func() {
+				fmt.Println("\n[TEST] ===== Running test: CNI DEL succeeds when pod already deleted =====")
+				setupSourceVirtLauncherPod(false)
+
+				// Delete the pod from Kubernetes before running CNI DEL.
+				// This simulates the race condition where parallel CNI DEL calls
+				// cause the pod to be gone by the time a subsequent DEL tries to look it up.
+				err := k8sClient.CoreV1().Pods(testNs).Delete(context.Background(), sourcePodName, metav1.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Wait for the pod to be fully removed from the API server
+				Eventually(func() bool {
+					_, err := k8sClient.CoreV1().Pods(testNs).Get(context.Background(), sourcePodName, metav1.GetOptions{})
+					return err != nil
+				}, "10s", "200ms").Should(BeTrue(), "Pod should be deleted from API server")
+
+				// CNI DEL should succeed even though the pod is already gone.
+				// getVMIInfoForPod returns (nil, nil) for a not-found pod, so cmdDel
+				// falls through to the standard (non-VM) release path which handles
+				// "resource does not exist" gracefully.
+				_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", sourceCNIArgs, sourceCID, cniVersion)
+				Expect(exitCode).To(Equal(0), "CNI DEL should succeed even when pod is already deleted")
+			})
+
 			It("should release handle when standalone VMI has deletion timestamp and pod is deleted", func() {
 				fmt.Println("\n[TEST] ===== Running test: IP release - standalone VMI with deletion timestamp =====")
 				setupSourceVirtLauncherPod(true)

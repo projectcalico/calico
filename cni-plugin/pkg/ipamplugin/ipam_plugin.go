@@ -35,6 +35,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
@@ -549,8 +550,9 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 
 // getVMIInfoForPod retrieves KubeVirt VirtualMachineInstance (VMI) information for a given pod.
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
-// Returns (nil, nil) if the pod is not a virt-launcher pod.
-// Returns (nil, error) if there was an error retrieving or validating VMI information.
+// Returns (nil, nil) if the pod is not a virt-launcher pod or if the pod has already been deleted
+// (e.g., due to parallel CNI DEL calls during live migration).
+// Returns (nil, error) if there was an unexpected error retrieving or validating VMI information.
 func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
 	// Only check for VMI info in Kubernetes orchestrator
 	if epIDs.Orchestrator != "k8s" || epIDs.Pod == "" || epIDs.Namespace == "" {
@@ -571,9 +573,15 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 		return nil, err
 	}
 
-	// Get the pod
+	// Get the pod. If the pod is already deleted (e.g., parallel CNI DEL calls during
+	// live migration), treat it as a non-VMI pod so cmdDel falls through to the standard
+	// release path which handles "not found" gracefully.
 	pod, err := k8sClient.CoreV1().Pods(epIDs.Namespace).Get(context.Background(), epIDs.Pod, metav1.GetOptions{})
 	if err != nil {
+		if kerrors.IsNotFound(err) {
+			logger.Info("Pod already deleted, skipping VMI detection")
+			return nil, nil
+		}
 		logger.WithError(err).Error("Failed to get pod for VMI detection")
 		return nil, err
 	}
