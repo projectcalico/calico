@@ -157,7 +157,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	})
 
 	// Always detect VMI info so we can reject migration targets when persistence is disabled.
-	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
+	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger, false)
 	if err != nil {
 		return fmt.Errorf("failed to get VMI info: %w", err)
 	}
@@ -550,10 +550,10 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 
 // getVMIInfoForPod retrieves KubeVirt VirtualMachineInstance (VMI) information for a given pod.
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
-// Returns (nil, nil) if the pod is not a virt-launcher pod or if the pod has already been deleted
-// (e.g., due to parallel CNI DEL calls during live migration).
-// Returns (nil, error) if there was an unexpected error retrieving or validating VMI information.
-func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
+// Returns (nil, nil) if the pod is not a virt-launcher pod, or if isDel is true and the pod
+// has already been deleted (e.g., due to parallel CNI DEL calls during live migration).
+// Returns (nil, error) if there was an error retrieving or validating VMI information.
+func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry, isDel bool) (*kubevirt.PodVMIInfo, error) {
 	// Only check for VMI info in Kubernetes orchestrator
 	if epIDs.Orchestrator != "k8s" || epIDs.Pod == "" || epIDs.Namespace == "" {
 		return nil, nil
@@ -573,13 +573,13 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 		return nil, err
 	}
 
-	// Get the pod. If the pod is already deleted (e.g., parallel CNI DEL calls during
-	// live migration), treat it as a non-VMI pod so cmdDel falls through to the standard
-	// release path which handles "not found" gracefully.
+	// Get the pod. During CNI DEL, the pod may already be deleted (e.g., parallel CNI DEL
+	// calls during live migration). Treat this as a non-VMI pod so cmdDel falls through to
+	// the standard release path which handles missing resources gracefully.
 	pod, err := k8sClient.CoreV1().Pods(epIDs.Namespace).Get(context.Background(), epIDs.Pod, metav1.GetOptions{})
 	if err != nil {
-		if kerrors.IsNotFound(err) {
-			logger.Info("Pod already deleted, skipping VMI detection")
+		if isDel && kerrors.IsNotFound(err) {
+			logger.Debug("Pod already deleted, skipping VMI detection")
 			return nil, nil
 		}
 		logger.WithError(err).Error("Failed to get pod for VMI detection")
@@ -660,7 +660,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	})
 
 	// Always detect VMI info for logging, but only use VM-based handle when persistence is enabled.
-	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
+	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger, true)
 	if err != nil {
 		return fmt.Errorf("failed to get VMI info: %w", err)
 	}
