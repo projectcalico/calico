@@ -36,8 +36,8 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 			FelixLogSeverity:           "info",
 			EnableIPv6:                 false,
 			ExtraEnvVars:               map[string]string{
-				"FELIX_WIREGUARDENABLED": "true",
-				"FELIX_WIREGUARDENCRYPTHOSTTRAFFIC": "false",
+				"FELIX_WIREGUARDENABLED":             "true",
+				"FELIX_WIREGUARDHOSTENCRYPTIONENABLED": "false",
 			},
 			NATOutgoingEnabled: true,
 		}, &infra)
