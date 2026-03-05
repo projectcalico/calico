@@ -1,12 +1,10 @@
 package wireguard_test
 
 import (
-	"net"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/utils/ptr"
 
@@ -343,12 +341,4 @@ func mustGeneratePrivateKey() wgtypes.Key {
 		panic(err)
 	}
 	return key
-}
-
-func mustParseCIDR(cidr string) *net.IPNet {
-	_, ipnet, err := net.ParseCIDR(cidr)
-	if err != nil {
-		panic(err)
-	}
-	return ipnet
 }
