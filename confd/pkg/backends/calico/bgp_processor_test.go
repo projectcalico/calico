@@ -1954,6 +1954,197 @@ func TestBuildExportFilter_FilterWithNoExportRules(t *testing.T) {
 	assert.Contains(t, result, "calico_export_to_bgp_peers")
 }
 
+func TestBuildImportFilter_WithPeerType_SameAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "iBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Same AS → sameAS=true → is_internal=true
+	result := c.buildImportFilter([]string{"pt-filter"}, 4, "64512", "64512")
+	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
+}
+
+func TestBuildImportFilter_WithPeerType_DifferentAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "eBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Different AS → sameAS=false → is_internal=false
+	result := c.buildImportFilter([]string{"pt-filter"}, 4, "65000", "64512")
+	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(false);")
+	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
+}
+
+func TestBuildImportFilter_WithoutPeerType_NoParam(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action": "Accept",
+					"cidr":   "10.0.0.0/8",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/no-pt-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// No PeerType rules → function called without parameter
+	result := c.buildImportFilter([]string{"no-pt-filter"}, 4, "65000", "64512")
+	assert.Contains(t, result, "'bgp_no-pt-filter_importFilterV4'();")
+	assert.NotContains(t, result, "'bgp_no-pt-filter_importFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_no-pt-filter_importFilterV4'(false);")
+}
+
+func TestBuildExportFilter_WithPeerType_SameAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "iBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-export": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Same AS → sameAS=true → is_internal=true
+	result := c.buildExportFilter([]string{"pt-export"}, "64512", "64512", 4)
+	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
+}
+
+func TestBuildExportFilter_WithPeerType_DifferentAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "eBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-export": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Different AS → sameAS=false → is_internal=false
+	result := c.buildExportFilter([]string{"pt-export"}, "65000", "64512", 4)
+	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(false);")
+	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
+}
+
+func TestBuildExportFilter_WithoutPeerType_NoParam(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action": "Accept",
+					"cidr":   "10.0.0.0/8",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/no-pt-export": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// No PeerType rules → function called without parameter
+	result := c.buildExportFilter([]string{"no-pt-export"}, "65000", "64512", 4)
+	assert.Contains(t, result, "'bgp_no-pt-export_exportFilterV4'();")
+	assert.NotContains(t, result, "'bgp_no-pt-export_exportFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_no-pt-export_exportFilterV4'(false);")
+}
+
+func TestBuildImportFilter_MixedPeerTypeAndNonPeerType(t *testing.T) {
+	// Filter with PeerType rule
+	ptFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "eBGP",
+				},
+			},
+		},
+	}
+	ptFilterJSON, _ := json.Marshal(ptFilter)
+
+	// Filter without PeerType
+	noPtFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Accept"},
+			},
+		},
+	}
+	noPtFilterJSON, _ := json.Marshal(noPtFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/with-pt":    string(ptFilterJSON),
+		"/calico/resources/v3/projectcalico.org/bgpfilters/without-pt": string(noPtFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	result := c.buildImportFilter([]string{"with-pt", "without-pt"}, 4, "65000", "64512")
+
+	// PeerType filter gets the bool parameter
+	assert.Contains(t, result, "'bgp_with-pt_importFilterV4'(false);")
+	// Non-PeerType filter does not
+	assert.Contains(t, result, "'bgp_without-pt_importFilterV4'();")
+}
+
 func TestProcessGlobalPeers_WithBGPFilter(t *testing.T) {
 	originalNodeName := NodeName
 	NodeName = "node-1"

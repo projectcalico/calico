@@ -91,7 +91,7 @@ func filterStatement(fields filterArgs) (string, error) {
 	if fields.source != "" {
 		sourceCondition, err := filterMatchSource(fields.source)
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 		conditions = append(conditions, sourceCondition)
 	}
@@ -99,7 +99,7 @@ func filterStatement(fields filterArgs) (string, error) {
 	if fields.iface != "" {
 		ifaceCondition, err := filterMatchInterface(fields.iface)
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 		conditions = append(conditions, ifaceCondition)
 	}
