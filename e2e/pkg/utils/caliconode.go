@@ -47,11 +47,24 @@ func GetCalicoNodePodOnNode(clientset kubernetes.Interface, nodeName string) *co
 	return nil
 }
 
-// GetPodInterfaceName returns the host-side veth interface name for a workload pod
-// by running `ip route get <podIP>` in the calico-node container. This is
-// prefix-agnostic and works with cali, eni, azv, gke, or any other prefix.
-func GetPodInterfaceName(calicoNodePod *corev1.Pod, workloadPodIP string) string {
-	cmd := fmt.Sprintf("ip route get %s", workloadPodIP)
+// GetPodInterfaceName returns the host-side veth interface name for a workload
+// pod by looking up the calico-node pod on the same node and running
+// `ip route get <podIP>`. This is prefix-agnostic and works with cali, eni,
+// azv, gke, or any other prefix.
+func GetPodInterfaceName(clientset kubernetes.Interface, workloadPod *corev1.Pod) string {
+	calicoNodePod := GetCalicoNodePodOnNode(clientset, workloadPod.Spec.NodeName)
+	if calicoNodePod == nil {
+		logrus.WithField("node", workloadPod.Spec.NodeName).Error("calico-node pod not found on node")
+		return ""
+	}
+
+	podIP := workloadPod.Status.PodIP
+	if podIP == "" {
+		logrus.WithField("pod", workloadPod.Name).Error("Workload pod has no IP")
+		return ""
+	}
+
+	cmd := fmt.Sprintf("ip route get %s", podIP)
 	out, err := ExecInCalicoNode(calicoNodePod, cmd)
 	if err != nil {
 		logrus.WithError(err).WithField("cmd", cmd).Error("Failed to exec ip route get in calico-node pod")
@@ -70,12 +83,12 @@ func GetPodInterfaceName(calicoNodePod *corev1.Pod, workloadPodIP string) string
 }
 
 // GetPodInterfaceIndex returns the interface index for the given interface name
-// by running `ip addr` in the calico-node container.
+// by reading /sys/class/net/<ifname>/ifindex in the calico-node container.
 func GetPodInterfaceIndex(calicoNodePod *corev1.Pod, intfName string) int {
-	cmd := fmt.Sprintf("ip addr | grep '%s' | sed -n 's/^\\([0-9]\\+\\):.*/\\1/p'", intfName)
+	cmd := fmt.Sprintf("cat /sys/class/net/%s/ifindex", intfName)
 	out, err := ExecInCalicoNode(calicoNodePod, cmd)
 	if err != nil {
-		logrus.WithError(err).WithField("cmd", cmd).Error("Failed to exec ip addr in calico-node pod")
+		logrus.WithError(err).WithField("cmd", cmd).Error("Failed to read interface index")
 		return 0
 	}
 	idx, err := strconv.Atoi(strings.TrimSpace(out))
@@ -86,9 +99,9 @@ func GetPodInterfaceIndex(calicoNodePod *corev1.Pod, intfName string) int {
 	return idx
 }
 
-// ExecInCalicoNode runs a shell command in a calico-node pod via kubectl exec.
+// ExecInCalicoNode runs a shell command in the calico-node container via kubectl exec.
 func ExecInCalicoNode(pod *corev1.Pod, cmd string) (string, error) {
-	args := []string{"exec", pod.Name, "-n", pod.Namespace, "--", "sh", "-c", cmd}
+	args := []string{"exec", pod.Name, "-n", pod.Namespace, "-c", "calico-node", "--", "sh", "-c", cmd}
 	return e2ekubectl.NewKubectlCommand(pod.Namespace, args...).
 		WithTimeout(time.After(10 * time.Second)).
 		Exec()
