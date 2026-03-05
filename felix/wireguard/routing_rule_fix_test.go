@@ -5,10 +5,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
@@ -78,6 +80,17 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 			logutils.NewSummarizer("test"),
 			mockFeatureDetector,
 		)
+
+		// Bootstrap: perform the initial Apply to create the wg0 link in the mock dataplane,
+		// then signal the interface is up so subsequent Apply calls proceed past ErrWaitingForLink.
+		wgDataplane.ImmediateLinkUp = true
+		_ = wg.Apply() // creates the link
+		rtDataplane.AddIface(101, "wg0", true, true)
+		wg.OnIfaceStateChanged("wg0", 101, ifacemonitor.StateUp)
+		_ = wg.Apply() // brings WireGuard key + config in sync
+		// Clear any rules recorded during bootstrap
+		rrDataplane.AddedRules = nil
+		rrDataplane.DeletedRules = nil
 	})
 
 	Context("when EncryptHostTraffic=false (default)", func() {
@@ -88,7 +101,6 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				wg.EndpointUpdate(hostname, ipv4_local)
 				wg.RouteUpdate(hostname, cidr_pool1)
 
-				wg.OnIfaceStateChanged("wg0", 1, "up")
 				err := wg.Apply()
 				Expect(err).ToNot(HaveOccurred())
 
@@ -98,7 +110,7 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				Expect(rule.Priority).To(Equal(rulePriority))
 				Expect(rule.Table).To(Equal(tableIndex))
 			Expect(rule.Invert).To(BeFalse())
-			Expect(rule.Mark).To(Equal(0))
+			Expect(rule.Mark).To(Equal(uint32(0)))
 				Expect(rule.Mask).To(Equal(ptr.To(firewallMark)))
 				Expect(rule.Src).ToNot(BeNil())
 				Expect(rule.Src.String()).To(Equal(cidr_pool1.String()))
@@ -113,7 +125,6 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				wg.RouteUpdate(hostname, cidr_pool1)
 				wg.RouteUpdate(hostname, cidr_pool2)
 
-				wg.OnIfaceStateChanged("wg0", 1, "up")
 				err := wg.Apply()
 				Expect(err).ToNot(HaveOccurred())
 
@@ -124,7 +135,7 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 					Expect(rule.Priority).To(Equal(rulePriority))
 					Expect(rule.Table).To(Equal(tableIndex))
 				Expect(rule.Invert).To(BeFalse())
-				Expect(rule.Mark).To(Equal(0))
+				Expect(rule.Mark).To(Equal(uint32(0)))
 					Expect(rule.Src).ToNot(BeNil())
 					srcCIDRs = append(srcCIDRs, rule.Src.String())
 				}
@@ -143,7 +154,6 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				wg.EndpointUpdate(hostname, ipv4_local)
 				wg.RouteUpdate(hostname, cidr_pool1)
 
-				wg.OnIfaceStateChanged("wg0", 1, "up")
 				err := wg.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rrDataplane.AddedRules).To(HaveLen(1))
@@ -154,18 +164,13 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				err = wg.Apply()
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(rrDataplane.DeletedRules).To(HaveLen(1))
-				Expect(rrDataplane.AddedRules).To(HaveLen(2))
+			// cidr_pool1 rule already exists, only cidr_pool2 is newly added
+			Expect(rrDataplane.DeletedRules).To(HaveLen(0))
+			Expect(rrDataplane.AddedRules).To(HaveLen(1))
 
-				srcCIDRs := make([]string, 0)
-				for _, rule := range rrDataplane.AddedRules {
-					Expect(rule.Src).ToNot(BeNil())
-					srcCIDRs = append(srcCIDRs, rule.Src.String())
-				}
-				Expect(srcCIDRs).To(ConsistOf(
-					cidr_pool1.String(),
-					cidr_pool2.String(),
-				))
+			rule := rrDataplane.AddedRules[0]
+			Expect(rule.Src).ToNot(BeNil())
+			Expect(rule.Src.String()).To(Equal(cidr_pool2.String()))
 			})
 		})
 
@@ -177,7 +182,6 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				wg.RouteUpdate(hostname, cidr_pool1)
 				wg.RouteUpdate(hostname, cidr_pool2)
 
-				wg.OnIfaceStateChanged("wg0", 1, "up")
 				err := wg.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rrDataplane.AddedRules).To(HaveLen(2))
@@ -188,12 +192,13 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				err = wg.Apply()
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(rrDataplane.DeletedRules).To(HaveLen(2))
-				Expect(rrDataplane.AddedRules).To(HaveLen(1))
+			// cidr_pool2 rule deleted, cidr_pool1 rule already exists (not re-added)
+			Expect(rrDataplane.DeletedRules).To(HaveLen(1))
+			Expect(rrDataplane.AddedRules).To(HaveLen(0))
 
-				rule := rrDataplane.AddedRules[0]
-				Expect(rule.Src).ToNot(BeNil())
-				Expect(rule.Src.String()).To(Equal(cidr_pool1.String()))
+			deletedRule := rrDataplane.DeletedRules[0]
+			Expect(deletedRule.Src).ToNot(BeNil())
+			Expect(deletedRule.Src.String()).To(Equal(cidr_pool2.String()))
 			})
 		})
 
@@ -205,7 +210,6 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				wg.RouteUpdate(hostname, cidr_pool1)
 				wg.RouteUpdate(hostname, cidr_workload)
 
-				wg.OnIfaceStateChanged("wg0", 1, "up")
 				err := wg.Apply()
 				Expect(err).ToNot(HaveOccurred())
 
@@ -218,6 +222,11 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 
 	Context("when EncryptHostTraffic=true", func() {
 		BeforeEach(func() {
+			// Use fresh dataplanes to avoid conflict with the outer BeforeEach's open netlink connections.
+			wgDataplane = mocknetlink.New()
+			rtDataplane = mocknetlink.New()
+			rrDataplane = mocknetlink.New()
+
 			config.EncryptHostTraffic = true
 			wg = NewWithShims(
 				hostname,
@@ -239,6 +248,11 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 					},
 				},
 			)
+			wgDataplane.ImmediateLinkUp = true
+			_ = wg.Apply()
+			rtDataplane.AddIface(101, "wg0", true, true)
+			wg.OnIfaceStateChanged("wg0", 101, ifacemonitor.StateUp)
+			_ = wg.Apply()
 		})
 
 		It("should create single unscoped routing rule without source match", func() {
@@ -247,17 +261,19 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 			wg.EndpointUpdate(hostname, ipv4_local)
 			wg.RouteUpdate(hostname, cidr_pool1)
 
-			wg.OnIfaceStateChanged("wg0", 1, "up")
 			err := wg.Apply()
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(rrDataplane.AddedRules).To(HaveLen(1))
-			rule := rrDataplane.AddedRules[0]
+			// The unscoped rule is idempotent — it is set during bootstrap and remains.
+			// Filter rrDataplane.Rules to find our wireguard routing rule by priority.
+			wgRules := filterRulesByPriority(rrDataplane.Rules, rulePriority)
+			Expect(wgRules).To(HaveLen(1))
+			rule := wgRules[0]
 
 			Expect(rule.Priority).To(Equal(rulePriority))
 			Expect(rule.Table).To(Equal(tableIndex))
-			Expect(rule.Invert).To(BeFalse())
-			Expect(rule.Mark).To(Equal(0))
+			Expect(rule.Invert).To(BeTrue())
+			Expect(rule.Mark).To(Equal(firewallMark))
 			Expect(rule.Mask).To(Equal(ptr.To(firewallMark)))
 			Expect(rule.Src).To(BeNil())
 		})
@@ -268,11 +284,11 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 			wg.EndpointUpdate(hostname, ipv4_local)
 			wg.RouteUpdate(hostname, cidr_pool1)
 
-			wg.OnIfaceStateChanged("wg0", 1, "up")
 			err := wg.Apply()
 			Expect(err).ToNot(HaveOccurred())
-			Expect(rrDataplane.AddedRules).To(HaveLen(1))
-			Expect(rrDataplane.AddedRules[0].Src).To(BeNil())
+			wgRules := filterRulesByPriority(rrDataplane.Rules, rulePriority)
+			Expect(wgRules).To(HaveLen(1))
+			Expect(wgRules[0].Src).To(BeNil())
 
 			rrDataplane.ResetDeltas()
 
@@ -280,8 +296,11 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 			err = wg.Apply()
 			Expect(err).ToNot(HaveOccurred())
 
+			// No rules should be added or deleted — the unscoped rule is idempotent.
 			Expect(rrDataplane.AddedRules).To(HaveLen(0))
 			Expect(rrDataplane.DeletedRules).To(HaveLen(0))
+			wgRules = filterRulesByPriority(rrDataplane.Rules, rulePriority)
+			Expect(wgRules).To(HaveLen(1))
 		})
 	})
 
@@ -302,7 +321,6 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 			wg.EndpointUpdate(peer1, ipv4_peer1)
 			wg.RouteUpdate(peer1, cidr_pool2)
 
-			wg.OnIfaceStateChanged("wg0", 1, "up")
 			err := wg.Apply()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -316,6 +334,80 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 			Expect(link).ToNot(BeNil())
 			Expect(link.WireguardPeers).To(HaveLen(1))
 		})
+
+Context("when switching EncryptHostTraffic modes at runtime", func() {
+It("should remove old unscoped rule when switching from true to false", func() {
+// Start with EncryptHostTraffic=true
+config.EncryptHostTraffic = true
+key_local := mustGeneratePrivateKey().PublicKey()
+wg.EndpointWireguardUpdate(hostname, key_local, nil)
+wg.EndpointUpdate(hostname, ipv4_local)
+wg.RouteUpdate(hostname, cidr_pool1)
+
+err := wg.Apply()
+Expect(err).ToNot(HaveOccurred())
+
+// Verify unscoped rule was added
+Expect(rrDataplane.AddedRules).To(HaveLen(1))
+unscopedRule := rrDataplane.AddedRules[0]
+Expect(unscopedRule.Src).To(BeNil()) // Unscoped
+
+// Switch to EncryptHostTraffic=false
+config.EncryptHostTraffic = false
+rrDataplane.AddedRules = nil
+rrDataplane.DeletedRules = nil
+
+err = wg.Apply()
+Expect(err).ToNot(HaveOccurred())
+
+// Verify old unscoped rule was removed and per-CIDR rule was added
+Expect(rrDataplane.DeletedRules).To(HaveLen(1))
+deletedRule := rrDataplane.DeletedRules[0]
+Expect(deletedRule.Src).To(BeNil()) // Unscoped rule deleted
+
+Expect(rrDataplane.AddedRules).To(HaveLen(1))
+newRule := rrDataplane.AddedRules[0]
+Expect(newRule.Src).ToNot(BeNil())
+Expect(newRule.Src.String()).To(Equal(cidr_pool1.String()))
+})
+
+It("should remove old per-CIDR rules when switching from false to true", func() {
+// Start with EncryptHostTraffic=false
+config.EncryptHostTraffic = false
+key_local := mustGeneratePrivateKey().PublicKey()
+wg.EndpointWireguardUpdate(hostname, key_local, nil)
+wg.EndpointUpdate(hostname, ipv4_local)
+wg.RouteUpdate(hostname, cidr_pool1)
+wg.RouteUpdate(hostname, cidr_pool2)
+
+err := wg.Apply()
+Expect(err).ToNot(HaveOccurred())
+
+// Verify per-CIDR rules were added
+Expect(rrDataplane.AddedRules).To(HaveLen(2))
+for _, rule := range rrDataplane.AddedRules {
+Expect(rule.Src).ToNot(BeNil()) // Source-scoped
+}
+
+// Switch to EncryptHostTraffic=true
+config.EncryptHostTraffic = true
+rrDataplane.AddedRules = nil
+rrDataplane.DeletedRules = nil
+
+err = wg.Apply()
+Expect(err).ToNot(HaveOccurred())
+
+// Verify old per-CIDR rules were removed and unscoped rule was added
+Expect(rrDataplane.DeletedRules).To(HaveLen(2))
+for _, rule := range rrDataplane.DeletedRules {
+Expect(rule.Src).ToNot(BeNil()) // Per-CIDR rules deleted
+}
+
+Expect(rrDataplane.AddedRules).To(HaveLen(1))
+newRule := rrDataplane.AddedRules[0]
+Expect(newRule.Src).To(BeNil()) // Unscoped
+})
+})
 	})
 })
 
@@ -332,4 +424,16 @@ func (s *mockStatus) status(publicKey wgtypes.Key) error {
 
 func (s *mockStatus) writeProcSys(path, value string) error {
 	return nil
+}
+
+// filterRulesByPriority returns only the rules with the given priority,
+// filtering out default kernel rules (priority 0, 32766, 32767).
+func filterRulesByPriority(rules []netlink.Rule, priority int) []netlink.Rule {
+	var out []netlink.Rule
+	for _, r := range rules {
+		if r.Priority == priority {
+			out = append(out, r)
+		}
+	}
+	return out
 }
