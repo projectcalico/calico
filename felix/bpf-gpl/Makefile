@@ -325,3 +325,8 @@ endif
 
 clean:
 	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll *_map_stub.c
+
+# TODO: remove these catch-all rules once all .d files have been regenerated
+# with -MP (above).  They handle stale .d files that predate the -MP flag.
+/usr/include/%.h:
+	@echo "No need to build $@"
