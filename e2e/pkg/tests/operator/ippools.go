@@ -34,6 +34,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("IPPool"),
 	describe.WithCategory(describe.Operator),
+	describe.WithSerial(),
 	"operator IPPool management tests",
 	func() {
 		f := utils.NewDefaultFramework("pool-management")
@@ -48,12 +49,10 @@ var _ = describe.CalicoDescribe(
 		ginkgo.BeforeEach(func() {
 			ctx = context.Background()
 
-			var err error
-
 			// Create a controller runtime client for interacting with the Calico resources in the test.
 			// Calicoctl doesn't support operator.tigera.io/v1 APIs.
 			scheme := runtime.NewScheme()
-			err = v3.AddToScheme(scheme)
+			err := v3.AddToScheme(scheme)
 			Expect(err).NotTo(HaveOccurred())
 			err = operatorv1.AddToScheme(scheme)
 			Expect(err).NotTo(HaveOccurred())

@@ -39,6 +39,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
+	describe.WithSerial(),
 	"BGPPeer",
 	func() {
 		// Define variables common across all tests.

@@ -42,6 +42,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithFeature("IPIP"),
 	describe.WithCategory(describe.Networking),
 	describe.RequiresNoEncap(),
+	describe.WithSerial(),
 	"IP-in-IP tests",
 	func() {
 		// Define variables common across all tests.
