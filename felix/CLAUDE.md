@@ -300,7 +300,7 @@ Shared networking subsystems used across dataplanes:
 
 [fv-tests-guru](https://github.com/tigera/fv-tests-guru) is an AI-powered tool that parses Felix FV/UT failure logs and runs AI analysis to diagnose root causes. It reads its Gemini API key from `~/.fv-tests-guru/gemini-key`.
 
-When asked to analyze a test failure log file, run fv-tests-guru and use its output to understand the failure and fix it:
+**When asked to analyze a test failure log file, always run fv-tests-guru FIRST** — it is the most efficient way to identify the failing test(s), extract relevant context, and get an initial diagnosis. Use its output to guide subsequent investigation (reading test code, checking source changes, etc.).
 
 ```bash
 fv-tests-guru -debug-logfile <log-path> -ai-provider gemini -calico-repo .. -max-timeout 1m40s
