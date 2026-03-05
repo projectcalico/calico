@@ -70,16 +70,36 @@ type BGPFilterSpec struct {
 // +mapType=atomic
 // +kubebuilder:validation:Rule="!has(self.operations) || size(self.operations) == 0 || self.action == 'Accept'",message="operations may only be used with action Accept"
 type BGPFilterRuleV4 struct {
+	// If non-empty, this filter rule will only apply when the route being exported or imported
+	// "matches" the given CIDR - where the definition of "matches" is according to
+	// MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation,
+	// <prefix>/<length>.
 	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv4"`
 
+	// PrefixLength further constrains the CIDR match by restricting the range of allowed
+	// prefix lengths.  For example, CIDR "10.0.0.0/8" with MatchOperator "In" and
+	// PrefixLength {min: 16, max: 24} matches any route within 10.0.0.0/8 whose prefix
+	// length is between /16 and /24.  Only meaningful when CIDR is also specified; if
+	// PrefixLength is nil, the CIDR's own prefix length is used as the minimum and /32
+	// (for V4) as the maximum.
 	// +optional
 	PrefixLength *BGPFilterPrefixLengthV4 `json:"prefixLength,omitempty" validate:"omitempty"`
 
+	// If set to "RemotePeers": for export rules, this filter rule will only apply to routes
+	// learned from BGP peers (i.e. re-advertised routes), not locally originated routes.
+	// For import rules, this field is redundant because imported routes are by definition
+	// from BGP peers.
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
 
+	// If non-empty, this filter rule will only apply to routes with an outgoing interface that
+	// matches Interface.
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
 
+	// MatchOperator defines how the route's prefix is compared against CIDR.  "Equal" requires
+	// an exact prefix match, "In" requires the route to be contained within the CIDR (or equal),
+	// "NotEqual" and "NotIn" are their negations.  Only meaningful when CIDR is also specified.
+	// Required when CIDR is set.
 	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
 
 	// If non-empty, this filter rule will only apply to routes being imported from or exported
@@ -122,16 +142,36 @@ type BGPFilterRuleV4 struct {
 // +mapType=atomic
 // +kubebuilder:validation:Rule="!has(self.operations) || size(self.operations) == 0 || self.action == 'Accept'",message="operations may only be used with action Accept"
 type BGPFilterRuleV6 struct {
+	// If non-empty, this filter rule will only apply when the route being exported or imported
+	// "matches" the given CIDR - where the definition of "matches" is according to
+	// MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation,
+	// <prefix>/<length>.
 	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv6"`
 
+	// PrefixLength further constrains the CIDR match by restricting the range of allowed
+	// prefix lengths.  For example, CIDR "fd00::/8" with MatchOperator "In" and
+	// PrefixLength {min: 48, max: 64} matches any route within fd00::/8 whose prefix
+	// length is between /48 and /64.  Only meaningful when CIDR is also specified; if
+	// PrefixLength is nil, the CIDR's own prefix length is used as the minimum and /128
+	// (for V6) as the maximum.
 	// +optional
 	PrefixLength *BGPFilterPrefixLengthV6 `json:"prefixLength,omitempty" validate:"omitempty"`
 
+	// If set to "RemotePeers": for export rules, this filter rule will only apply to routes
+	// learned from BGP peers (i.e. re-advertised routes), not locally originated routes.
+	// For import rules, this field is redundant because imported routes are by definition
+	// from BGP peers.
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
 
+	// If non-empty, this filter rule will only apply to routes with an outgoing interface that
+	// matches Interface.
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
 
+	// MatchOperator defines how the route's prefix is compared against CIDR.  "Equal" requires
+	// an exact prefix match, "In" requires the route to be contained within the CIDR (or equal),
+	// "NotEqual" and "NotIn" are their negations.  Only meaningful when CIDR is also specified.
+	// Required when CIDR is set.
 	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
 
 	// If non-empty, this filter rule will only apply to routes being imported from or exported
