@@ -60,17 +60,11 @@ var _ = describe.CalicoDescribe(
 			serverNode := nodeNames[0]
 			clientNode := nodeNames[1]
 
-			pinToNode := func(nodeName string) func(*corev1.Pod) {
-				return func(pod *corev1.Pod) {
-					pod.Spec.NodeName = nodeName
-				}
-			}
-
 			tester := iperfcheck.NewIperfTester(f)
 			defer tester.Stop()
 
-			server := iperfcheck.NewPeer("iperf-server", f.Namespace, iperfcheck.WithPeerCustomizer(pinToNode(serverNode)))
-			client := iperfcheck.NewPeer("iperf-client", f.Namespace, iperfcheck.WithPeerCustomizer(pinToNode(clientNode)))
+			server := iperfcheck.NewPeer("iperf-server", f.Namespace, iperfcheck.WithNodeName(serverNode))
+			client := iperfcheck.NewPeer("iperf-client", f.Namespace, iperfcheck.WithNodeName(clientNode))
 			tester.AddPeer(server)
 			tester.AddPeer(client)
 
@@ -91,12 +85,11 @@ var _ = describe.CalicoDescribe(
 			By("Replacing iperf3 client with 10Mbit ingress bandwidth limit")
 			tester.RemovePeer("iperf-client")
 			client = iperfcheck.NewPeer("iperf-client", f.Namespace,
+				iperfcheck.WithNodeName(clientNode),
 				iperfcheck.WithPeerCustomizer(func(pod *corev1.Pod) {
-					pod.Spec.NodeName = clientNode
-					if pod.Annotations == nil {
-						pod.Annotations = map[string]string{}
+					pod.Annotations = map[string]string{
+						"qos.projectcalico.org/ingressBandwidth": "10M",
 					}
-					pod.Annotations["qos.projectcalico.org/ingressBandwidth"] = "10M"
 				}))
 			tester.AddPeer(client)
 			tester.Deploy()
@@ -117,12 +110,11 @@ var _ = describe.CalicoDescribe(
 			By("Replacing iperf3 client with 10Mbit egress bandwidth limit")
 			tester.RemovePeer("iperf-client")
 			client = iperfcheck.NewPeer("iperf-client", f.Namespace,
+				iperfcheck.WithNodeName(clientNode),
 				iperfcheck.WithPeerCustomizer(func(pod *corev1.Pod) {
-					pod.Spec.NodeName = clientNode
-					if pod.Annotations == nil {
-						pod.Annotations = map[string]string{}
+					pod.Annotations = map[string]string{
+						"qos.projectcalico.org/egressBandwidth": "10M",
 					}
-					pod.Annotations["qos.projectcalico.org/egressBandwidth"] = "10M"
 				}))
 			tester.AddPeer(client)
 			tester.Deploy()
@@ -141,13 +133,12 @@ var _ = describe.CalicoDescribe(
 			By("Replacing iperf3 client with both ingress and egress bandwidth limits")
 			tester.RemovePeer("iperf-client")
 			client = iperfcheck.NewPeer("iperf-client", f.Namespace,
+				iperfcheck.WithNodeName(clientNode),
 				iperfcheck.WithPeerCustomizer(func(pod *corev1.Pod) {
-					pod.Spec.NodeName = clientNode
-					if pod.Annotations == nil {
-						pod.Annotations = map[string]string{}
+					pod.Annotations = map[string]string{
+						"qos.projectcalico.org/ingressBandwidth": "10M",
+						"qos.projectcalico.org/egressBandwidth":  "10M",
 					}
-					pod.Annotations["qos.projectcalico.org/ingressBandwidth"] = "10M"
-					pod.Annotations["qos.projectcalico.org/egressBandwidth"] = "10M"
 				}))
 			tester.AddPeer(client)
 			tester.Deploy()
@@ -186,17 +177,11 @@ var _ = describe.CalicoDescribe(
 			serverNode := nodeNames[0]
 			clientNode := nodeNames[1]
 
-			pinToNode := func(nodeName string) func(*corev1.Pod) {
-				return func(pod *corev1.Pod) {
-					pod.Spec.NodeName = nodeName
-				}
-			}
-
 			tester := iperfcheck.NewIperfTester(f)
 			defer tester.Stop()
 
-			server := iperfcheck.NewPeer("iperf-server", f.Namespace, iperfcheck.WithPeerCustomizer(pinToNode(serverNode)))
-			clientPeer := iperfcheck.NewPeer("iperf-client", f.Namespace, iperfcheck.WithPeerCustomizer(pinToNode(clientNode)))
+			server := iperfcheck.NewPeer("iperf-server", f.Namespace, iperfcheck.WithNodeName(serverNode))
+			clientPeer := iperfcheck.NewPeer("iperf-client", f.Namespace, iperfcheck.WithNodeName(clientNode))
 			tester.AddPeer(server)
 			tester.AddPeer(clientPeer)
 
@@ -220,12 +205,11 @@ var _ = describe.CalicoDescribe(
 			By("Replacing server with ingressPacketRate=100 annotation")
 			tester.RemovePeer("iperf-server")
 			server = iperfcheck.NewPeer("iperf-server", f.Namespace,
+				iperfcheck.WithNodeName(serverNode),
 				iperfcheck.WithPeerCustomizer(func(pod *corev1.Pod) {
-					pod.Spec.NodeName = serverNode
-					if pod.Annotations == nil {
-						pod.Annotations = map[string]string{}
+					pod.Annotations = map[string]string{
+						"qos.projectcalico.org/ingressPacketRate": "100",
 					}
-					pod.Annotations["qos.projectcalico.org/ingressPacketRate"] = "100"
 				}))
 			tester.AddPeer(server)
 			tester.Deploy()
@@ -246,7 +230,7 @@ var _ = describe.CalicoDescribe(
 			// --- Egress packet rate limit ---
 			By("Removing rate-limited server, re-deploying plain server")
 			tester.RemovePeer("iperf-server")
-			server = iperfcheck.NewPeer("iperf-server", f.Namespace, iperfcheck.WithPeerCustomizer(pinToNode(serverNode)))
+			server = iperfcheck.NewPeer("iperf-server", f.Namespace, iperfcheck.WithNodeName(serverNode))
 			tester.AddPeer(server)
 
 			By("Replacing client with egressPacketRate=100 annotation")

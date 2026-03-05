@@ -52,12 +52,20 @@ type Peer struct {
 	name       string
 	namespace  *v1.Namespace
 	labels     map[string]string
+	nodeName   string
 	pod        *v1.Pod
 	customizer func(*v1.Pod)
 }
 
 // PeerOption configures a Peer.
 type PeerOption func(*Peer)
+
+// WithNodeName pins the peer pod to the given node.
+func WithNodeName(nodeName string) PeerOption {
+	return func(p *Peer) {
+		p.nodeName = nodeName
+	}
+}
 
 // WithPeerLabels sets additional labels on the peer pod.
 func WithPeerLabels(labels map[string]string) PeerOption {
@@ -403,6 +411,9 @@ func createPeerPod(f *framework.Framework, peer *Peer) (*v1.Pod, error) {
 		},
 	}
 
+	if peer.nodeName != "" {
+		pod.Spec.NodeName = peer.nodeName
+	}
 	if peer.customizer != nil {
 		peer.customizer(pod)
 	}
