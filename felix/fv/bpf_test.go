@@ -1962,6 +1962,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Starting permanent connection")
 						pc := w[0][0].StartPersistentConnection(w[1][0].IP, 8055, workload.PersistentConnectionOpts{
 							MonitorConnectivity: true,
+							Timeout:             60 * time.Second,
 						})
 						defer pc.Stop()
 
@@ -2005,7 +2006,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						w[0][0].RemoveSpoofWEPFromInfra(infra)
 						w[0][0].ConfigureInInfraAsSpoofInterface(infra)
 						By("Should get pongs again after switching WEP to spoof iface")
-						expectPongs()
+						// Use a longer timeout here: Felix must process the WEP removal
+						// and re-creation, update the BPF route table, and then the
+						// test-connection tool needs to get a response through.
+						EventuallyWithOffset(1, pc.SinceLastPong, "15s").Should(
+							BeNumerically("<", time.Second),
+							"Expected to see pong responses on the connection but didn't receive any")
+						log.Info("Pongs received within last 1s")
 					})
 				}
 
