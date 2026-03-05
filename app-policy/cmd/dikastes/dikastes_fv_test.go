@@ -102,16 +102,15 @@ func TestDikastesCheckDenyPolicy(t *testing.T) {
 				Tiers: []*proto.TierInfo{{
 					Name:            "default",
 					DefaultAction:   "Deny",
-					IngressPolicies: []*proto.PolicyID{{Name: "deny-all"}},
+					IngressPolicies: []string{"deny-all"},
 				}},
 			},
 		},
 	}})
 	env.sendUpdate(&proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
 		ActivePolicyUpdate: &proto.ActivePolicyUpdate{
-			Id: &proto.PolicyID{Name: "deny-all"},
+			Id: &proto.PolicyID{Tier: "default", Name: "deny-all"},
 			Policy: &proto.Policy{
-				Tier:         "default",
 				InboundRules: []*proto.Rule{{Action: "Deny"}},
 			},
 		},
@@ -153,16 +152,15 @@ func TestDikastesCheckHTTPMethodMatch(t *testing.T) {
 				Tiers: []*proto.TierInfo{{
 					Name:            "default",
 					DefaultAction:   "Deny",
-					IngressPolicies: []*proto.PolicyID{{Name: "allow-get"}},
+					IngressPolicies: []string{"allow-get"},
 				}},
 			},
 		},
 	}})
 	env.sendUpdate(&proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
 		ActivePolicyUpdate: &proto.ActivePolicyUpdate{
-			Id: &proto.PolicyID{Name: "allow-get"},
+			Id: &proto.PolicyID{Tier: "default", Name: "allow-get"},
 			Policy: &proto.Policy{
-				Tier: "default",
 				InboundRules: []*proto.Rule{{
 					Action:    "Allow",
 					HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}},
