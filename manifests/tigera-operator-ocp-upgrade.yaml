@@ -177,8 +177,6 @@ rules:
       - delete
     resourceNames:
       - clusternetworkpolicies.policy.networking.k8s.io
-      - adminnetworkpolicies.policy.networking.k8s.io
-      - baselineadminnetworkpolicies.policy.networking.k8s.io
   - apiGroups:
       - ""
     resources:
@@ -561,6 +559,7 @@ rules:
       - list
       - watch
       - delete
+  # For Tiers controller, the operator needs to read/watch access to NetworkPolicies and GlobalNetworkPolicies.
   - apiGroups:
       - projectcalico.org
     resources:
