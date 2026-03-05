@@ -28,7 +28,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	v1 "k8s.io/api/core/v1"
-	errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -109,8 +108,6 @@ var _ = describe.CalicoDescribe(
 		var checker conncheck.ConnectionTester
 		var hepServer1 *conncheck.Server
 		var client1 *conncheck.Client
-		var hep *v3.HostEndpoint
-
 		BeforeEach(func() {
 			var err error
 			cli, err = client.New(f.ClientConfig())
@@ -185,25 +182,11 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create our hostEndpoint - it is created with the same name as the GNP.
-			hep = createHostEndpoint(cli, hepPolicyName, hepNodeName, hepPort1, pod.Status.HostIP)
+			createHostEndpoint(cli, hepPolicyName, hepNodeName, hepPort1, pod.Status.HostIP)
 		})
 
 		AfterEach(func() {
 			checker.Stop()
-
-			// Clean up any policies / heps we created.
-			err := cli.Delete(context.Background(), defaultAllow)
-			if err != nil && !errors.IsNotFound(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
-			err = cli.Delete(context.Background(), allowLogCollection)
-			if err != nil && !errors.IsNotFound(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
-			err = cli.Delete(context.Background(), hep)
-			if err != nil && !errors.IsNotFound(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
 		})
 
 		It("should block all inbound connections by default", func() {
@@ -230,10 +213,6 @@ var _ = describe.CalicoDescribe(
 			}
 			err := cli.Create(context.Background(), policy)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(context.Background(), policy)
-				Expect(err).NotTo(HaveOccurred())
-			}()
 
 			checker.ExpectSuccess(client1, hepServer1.ServiceDomain().Port(hepPort1))
 			checker.ExpectSuccess(client1, hepServer1.ServiceDomain().Port(hepPort2))
@@ -270,10 +249,6 @@ var _ = describe.CalicoDescribe(
 
 			err := cli.Create(context.Background(), policy)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(context.Background(), policy)
-				Expect(err).NotTo(HaveOccurred())
-			}()
 
 			// The named port should be accessible, the other port should not.
 			checker.ExpectSuccess(client1, hepServer1.ServiceDomain().Port(hepPort1))
@@ -310,10 +285,6 @@ var _ = describe.CalicoDescribe(
 					err := cli.Create(context.Background(), allowIngressPolicy)
 					Expect(err).NotTo(HaveOccurred())
 				})
-				defer func() {
-					err := cli.Delete(context.Background(), allowIngressPolicy)
-					Expect(err).NotTo(HaveOccurred())
-				}()
 
 				By("asserting connections work now prior to creating the doNotTrack GNP", func() {
 					checker.ExpectSuccess(client1, hepServer1.ServiceDomain().Port(hepPort1))
@@ -348,10 +319,6 @@ var _ = describe.CalicoDescribe(
 					err := cli.Create(context.Background(), doNotTrackPolicy)
 					Expect(err).NotTo(HaveOccurred())
 				})
-				defer func() {
-					err := cli.Delete(context.Background(), doNotTrackPolicy)
-					Expect(err).NotTo(HaveOccurred())
-				}()
 
 				// Named port is not accessible, the other port should be.
 				checker.ExpectFailure(client1, hepServer1.ServiceDomain().Port(hepPort1))
@@ -389,10 +356,6 @@ var _ = describe.CalicoDescribe(
 					err := cli.Create(context.Background(), allowIngressPolicy)
 					Expect(err).NotTo(HaveOccurred())
 				})
-				defer func() {
-					err := cli.Delete(context.Background(), allowIngressPolicy)
-					Expect(err).NotTo(HaveOccurred())
-				}()
 
 				By("asserting connections work now from an external node", func() {
 					checker.ResetExpectations()
@@ -467,12 +430,6 @@ var _ = describe.CalicoDescribe(
 					err = cli.Create(context.Background(), doNotTrackExactPolicy)
 					Expect(err).NotTo(HaveOccurred())
 				})
-				defer func() {
-					err := cli.Delete(context.Background(), doNotTrackExactPolicy)
-					Expect(err).NotTo(HaveOccurred())
-					err = cli.Delete(context.Background(), globalNetworkSetDOS)
-					Expect(err).NotTo(HaveOccurred())
-				}()
 
 				By(fmt.Sprintf("asserting that none of the ports (tcp %d, %d) are accessible from the external node", hepPort1, hepPort2), func() {
 					checker.ResetExpectations()
