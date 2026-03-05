@@ -5,6 +5,12 @@
 #ifndef __CALI_POLICY_H__
 #define __CALI_POLICY_H__
 
+// Base of range for reserved IP set IDs for Calico Enterprise.
+#define RESERVED_IP_SET_BASE (((__u64)1)<<32)
+
+// IP set ID for All Istio WEPs.  Must match the ID defined in ipsets.go.
+#define ALL_ISTIO_WEPS_ID (RESERVED_IP_SET_BASE + 1)
+
 enum calico_policy_result {
 	CALI_POL_NO_MATCH,
 	CALI_POL_ALLOW,

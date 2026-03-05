@@ -650,6 +650,7 @@ func (t *TcGlobalData) Set(m *Map) error {
 		&cJumps[0], // it is safe because we hold the reference here until we return.
 		&cJumpsV6[0],
 		C.short(t.DSCP),
+		C.short(t.IstioDSCP),
 		C.uint(t.MaglevLUTSize),
 	)
 
