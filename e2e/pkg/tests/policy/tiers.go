@@ -92,10 +92,6 @@ var _ = describe.CalicoDescribe(
 		AfterEach(func() {
 			defer cancel()
 			checker.Stop()
-
-			By("Deleting tier0")
-			err := cli.Delete(ctx, tier0)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("with a single tier taking precedence over the default tier", func() {
@@ -117,10 +113,6 @@ var _ = describe.CalicoDescribe(
 
 				err := cli.Create(ctx, passPolicy)
 				Expect(err).NotTo(HaveOccurred())
-				defer func() {
-					err := cli.Delete(ctx, passPolicy)
-					Expect(err).NotTo(HaveOccurred())
-				}()
 
 				By("Testing server pod should not be accessible with default deny.")
 				checker.ExpectFailure(client1, server.ClusterIPs()...)
@@ -142,10 +134,6 @@ var _ = describe.CalicoDescribe(
 				}
 				err = cli.Create(ctx, allowPolicy)
 				Expect(err).NotTo(HaveOccurred())
-				defer func() {
-					err := cli.Delete(ctx, allowPolicy)
-					Expect(err).NotTo(HaveOccurred())
-				}()
 
 				By("Testing server pod should be accessible.")
 				checker.ExpectSuccess(client1, server.ClusterIPs()...)
@@ -164,12 +152,6 @@ var _ = describe.CalicoDescribe(
 
 				By("Creating tier1 with higher order number than tier0")
 				err := cli.Create(ctx, tier1)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			AfterEach(func() {
-				By("Deleting tier1")
-				err := cli.Delete(ctx, tier1)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -192,10 +174,6 @@ var _ = describe.CalicoDescribe(
 				}
 				err := cli.Create(ctx, passPolicy)
 				Expect(err).NotTo(HaveOccurred())
-				defer func() {
-					err := cli.Delete(ctx, passPolicy)
-					Expect(err).NotTo(HaveOccurred())
-				}()
 
 				By("Testing server pod should not be accessible due to default deny.")
 				checker.ExpectFailure(client1, server.ClusterIP())
@@ -220,10 +198,6 @@ var _ = describe.CalicoDescribe(
 				}
 				err = cli.Create(ctx, t1Allow)
 				Expect(err).NotTo(HaveOccurred())
-				defer func() {
-					err := cli.Delete(ctx, t1Allow)
-					Expect(err).NotTo(HaveOccurred())
-				}()
 
 				By("Testing server pod should be accessible.")
 				checker.ExpectSuccess(client1, server.ClusterIP())
@@ -249,10 +223,6 @@ var _ = describe.CalicoDescribe(
 				}
 				err := cli.Create(ctx, np)
 				Expect(err).NotTo(HaveOccurred())
-				defer func() {
-					err := cli.Delete(ctx, np)
-					Expect(err).NotTo(HaveOccurred())
-				}()
 
 				By("Testing server pod should not be accessible.")
 				checker.ExpectFailure(client1, server.ClusterIP())

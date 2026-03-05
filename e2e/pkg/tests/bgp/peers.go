@@ -25,7 +25,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -127,12 +126,6 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
-			ginkgo.DeferCleanup(func() {
-				err := cli.Delete(context.Background(), peer)
-				if !errors.IsNotFound(err) {
-					Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
-				}
-			})
 
 			// Verify connectivity is restored.
 			checker.ResetExpectations()
@@ -168,12 +161,6 @@ var _ = describe.CalicoDescribe(
 					}
 					err = cli.Create(context.Background(), peer)
 					Expect(err).NotTo(HaveOccurred(), "Error creating per-node BGPPeer resource")
-					ginkgo.DeferCleanup(func() {
-						err := cli.Delete(context.Background(), peer)
-						if !errors.IsNotFound(err) {
-							Expect(err).NotTo(HaveOccurred(), "Error deleting per-node BGPPeer resource during cleanup")
-						}
-					})
 				}
 			}
 

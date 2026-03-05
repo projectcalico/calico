@@ -151,12 +151,6 @@ func waitForBGPEstablishedForNode(cli ctrlclient.Client, node string) {
 	err := cli.Create(context.Background(), status)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error creating CalicoNodeStatus resource")
 
-	// Make sure we clean up the CalicoNodeStatus resource after we're done.
-	defer func() {
-		err := cli.Delete(context.Background(), status)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error deleting CalicoNodeStatus resource")
-	}()
-
 	// Expect the CalicoNodeStatus to report all BGPPeers as established.
 	EventuallyWithOffset(1, func() error {
 		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: node}, status)
