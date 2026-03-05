@@ -313,7 +313,7 @@ bin:
 .PRECIOUS: %.d %_v6.d
 
 COMPILE_DEPS=set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
+		$(CC) -MP -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
@@ -325,8 +325,3 @@ endif
 
 clean:
 	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll *_map_stub.c
-
-# Fixes an issue where make thinks these .h files are dependencies that need
-# to be built. Just include them as a noop in order to trick make.
-/usr/include/%.h:
-	@echo "No need to build $@"
