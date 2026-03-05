@@ -28,13 +28,13 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
-	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 )
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("IPPool"),
 	describe.WithCategory(describe.Operator),
+	describe.WithSerial(),
 	"operator IPPool management tests",
 	func() {
 		f := utils.NewDefaultFramework("pool-management")
@@ -49,16 +49,10 @@ var _ = describe.CalicoDescribe(
 		ginkgo.BeforeEach(func() {
 			ctx = context.Background()
 
-			// Ensure a clean starting environment before each test.
-			var err error
-			calicoClient, err := client.New(f.ClientConfig())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(utils.CleanDatastore(calicoClient)).ShouldNot(HaveOccurred())
-
 			// Create a controller runtime client for interacting with the Calico resources in the test.
 			// Calicoctl doesn't support operator.tigera.io/v1 APIs.
 			scheme := runtime.NewScheme()
-			err = v3.AddToScheme(scheme)
+			err := v3.AddToScheme(scheme)
 			Expect(err).NotTo(HaveOccurred())
 			err = operatorv1.AddToScheme(scheme)
 			Expect(err).NotTo(HaveOccurred())
