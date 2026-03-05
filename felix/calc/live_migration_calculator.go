@@ -189,8 +189,12 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 					set.New[model.ResourceKey](),
 				},
 			}
-			wepData.directNameKeys[SOURCE].AddSet(lmc.directNameKeys[SOURCE][namespacedName])
-			wepData.directNameKeys[TARGET].AddSet(lmc.directNameKeys[TARGET][namespacedName])
+			if lmc.directNameKeys[SOURCE][namespacedName] != nil {
+				wepData.directNameKeys[SOURCE].AddSet(lmc.directNameKeys[SOURCE][namespacedName])
+			}
+			if lmc.directNameKeys[TARGET][namespacedName] != nil {
+				wepData.directNameKeys[TARGET].AddSet(lmc.directNameKeys[TARGET][namespacedName])
+			}
 			lmc.weps[namespacedName] = wepData
 			lmc.indicateRole(key, wepData.liveMigrationRole())
 		} else {
@@ -252,14 +256,14 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 					lmc.unrefDirectName(old[sourceOrTarget], key, sourceOrTarget)
 				}
 				if new[sourceOrTarget].Name != "" {
-					lmc.refDirectName(old[sourceOrTarget], key, sourceOrTarget)
+					lmc.refDirectName(new[sourceOrTarget], key, sourceOrTarget)
 				}
 			}
 		}
 
 		if newSelector != oldSelector {
 			if oldSelector != "" {
-				lmc.unrefSelector(newSelector, key)
+				lmc.unrefSelector(oldSelector, key)
 			}
 			if newSelector != "" {
 				lmc.refSelector(newSelector, key)
@@ -290,6 +294,9 @@ func (lmc *LiveMigrationCalculator) OnPolicyMatch(_ model.PolicyKey, _ model.End
 func (lmc *LiveMigrationCalculator) OnPolicyMatchStopped(_ model.PolicyKey, _ model.EndpointKey) {}
 
 func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey model.EndpointKey) {
+	if _, ok := lmc.selectorKeys[cs]; !ok {
+		return
+	}
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		name, ns := wepKey.GetNameAndNamespace()
 		namespacedName := types.NamespacedName{Namespace: ns, Name: name}
@@ -302,6 +309,9 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 }
 
 func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, epKey model.EndpointKey) {
+	if _, ok := lmc.selectorKeys[cs]; !ok {
+		return
+	}
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		name, ns := wepKey.GetNameAndNamespace()
 		namespacedName := types.NamespacedName{Namespace: ns, Name: name}
