@@ -925,8 +925,13 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 			} else if a.isVMAllocation() {
 				// VM/VMI allocation with no backing VM or standalone VMI.
 				// Use a dedicated grace period to tolerate transient gaps
-				// during VM restarts and migrations.
-				a.markLeak(c.vmRecreationGracePeriod)
+				// during VM restarts and migrations. If the operator configured
+				// a longer LeakGracePeriod, respect that as well.
+				gracePeriod := c.vmRecreationGracePeriod
+				if c.config.LeakGracePeriod != nil && c.config.LeakGracePeriod.Duration > gracePeriod {
+					gracePeriod = c.config.LeakGracePeriod.Duration
+				}
+				a.markLeak(gracePeriod)
 			} else if c.config.LeakGracePeriod != nil {
 				// The allocation is NOT valid, but the Kubernetes node still exists, so our confidence is lower.
 				// Mark as a candidate leak. If this state remains, it will switch
