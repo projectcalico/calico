@@ -1081,18 +1081,18 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 // data to avoid incorrectly releasing in-use IPs.
 func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
 	ns := a.attrs[ipam.AttributeNamespace]
-	vmName := a.attrs[ipam.AttributeVMIName]
+	vmiName := a.attrs[ipam.AttributeVMIName]
 	logc := log.WithFields(a.fields())
 
 	// If we can't reason about it, don't GC it.
 	// (We can tighten this later once attrs are guaranteed.)
-	if ns == "" || vmName == "" || c.vmIndexer == nil {
+	if ns == "" || vmiName == "" || c.vmIndexer == nil || c.vmiIndexer == nil {
 		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
 		return true
 	}
 
 	// Build the cache key using the same format as cache.MetaNamespaceKeyFunc.
-	key := cache.NewObjectName(ns, vmName).String()
+	key := cache.NewObjectName(ns, vmiName).String()
 
 	// Check if the VM exists in the informer cache.
 	_, vmExists, err := c.vmIndexer.GetByKey(key)

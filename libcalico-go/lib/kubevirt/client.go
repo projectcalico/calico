@@ -69,36 +69,3 @@ func (v *virtClientAdapter) VirtualMachine(namespace string) VMInterface {
 func (v *virtClientAdapter) VirtualMachineInstanceMigration(namespace string) VMIMInterface {
 	return v.client.VirtualMachineInstanceMigrations(namespace)
 }
-
-// TryCreateVirtClient attempts to create a KubeVirt client.
-// Returns nil if KubeVirt is not available.
-func TryCreateVirtClient(restConfig *rest.Config) (VirtClientInterface, error) {
-	if restConfig == nil {
-		log.Debug("No REST config provided.")
-		return nil, fmt.Errorf("no REST config provided")
-	}
-	// Check if KubeVirt API group is available before attempting to create the client
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
-	if err != nil {
-		log.WithError(err).Debug("Failed to create discovery client for kubevirt detection")
-		return nil, err
-	}
-	isKubevirtInstalled, err := IsKubeVirtInstalled(discoveryClient)
-	if err != nil {
-		log.WithError(err).Warn("Failed to detect kubevirt installation, proceeding without KubeVirt support")
-		return nil, nil
-	}
-	if !isKubevirtInstalled {
-		return nil, nil
-	}
-
-	// Attempt to create a KubeVirt client from the REST config
-	virtClient, err := NewVirtClient(restConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// Wrap the client with our interface adapter
-	log.Info("Successfully created KubeVirt client")
-	return virtClient, nil
-}
