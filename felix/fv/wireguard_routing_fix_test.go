@@ -97,6 +97,9 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 						return fmt.Errorf("node %d: routing rule malformed: %s", i, rule)
 					}
 
+					if strings.Contains(rule, "not from") {
+						return fmt.Errorf("node %d: routing rule must not use inverted source constraint: %s", i, rule)
+					}
 					rule98, err := felix.ExecOutput("ip", "rule", "show", "pref", "98")
 					if err != nil {
 						return fmt.Errorf("node %d: failed to check priority 98: %v", i, err)
