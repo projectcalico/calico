@@ -3,4 +3,5 @@ kind: BGPConfiguration
 metadata:
  name: default
 spec:
-  programClusterRoutes: Disabled
+ programClusterRoutes: Disabled
+ nodeToNodeMeshEnabled: false
