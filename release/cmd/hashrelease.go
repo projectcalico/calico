@@ -123,6 +123,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 					operator.WithVersion(data.OperatorVersion()),
 					operator.WithCalicoDirectory(cfg.RepoRootDir),
+					operator.WithCalicoVersion(data.ProductVersion()),
 					operator.WithTempDirectory(cfg.TmpDir),
 				}
 				if reg := c.String(operatorRegistryFlag.Name); reg != "" {
