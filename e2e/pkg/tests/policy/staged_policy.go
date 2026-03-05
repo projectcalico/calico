@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 package policy
 
 import (
@@ -92,10 +92,11 @@ var _ = describe.CalicoDescribe(
 				stopCh = make(chan time.Time, 1)
 
 				// We read flow logs from whisker-backend, we start port forward so we can query the flows
-				kubectl.PortForward("calico-system", "deployment/whisker", "3002", "", stopCh)
+				localPort, err := kubectl.PortForward("calico-system", "deployment/whisker", "3002", "", stopCh)
+				Expect(err).NotTo(HaveOccurred())
 
 				// Build url to get flows from whisker
-				url = buildURL(server.Pod().Namespace, server.Pod().Namespace, "-1800")
+				url = buildURL(localPort, server.Pod().Namespace, server.Pod().Namespace, "-1800")
 
 				// Port forward should be working and whisker-backend should return 200 status
 				verifyPortForward(url)
@@ -188,7 +189,7 @@ var _ = describe.CalicoDescribe(
 				BeforeEach(func() {
 					selector := fmt.Sprintf("pod-name == \"%s\"", server.Name())
 					ingress := []v3.Rule{{Action: v3.Deny}}
-					stagedGlobalNetworkPolicyName = "sgnp-deny-1"
+					stagedGlobalNetworkPolicyName = utils.GenerateRandomName("sgnp-deny")
 					stagedGlobalNetworkPolicy = CreateStagedGlobalNetworkPolicy(stagedGlobalNetworkPolicyName, customTier, 10, selector, ingress, nil)
 
 					Expect(cli.Create(context.TODO(), stagedGlobalNetworkPolicy)).ShouldNot(HaveOccurred())
@@ -285,19 +286,21 @@ var _ = describe.CalicoDescribe(
 					order := 200.0
 					policy := CreateStagedNetworkPolicy("service-deny-in", customTier, server.Pod().Namespace, order, selector, ingress, nil)
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					})
 
 					// enforce the policy
 					_, enforced := ConvertStagedPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					})
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
 					checker.ExpectFailure(client1, server.ClusterIP().Port(serverPort))
 					checker.Execute()
-
-					// delete policies
-					Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -311,28 +314,31 @@ var _ = describe.CalicoDescribe(
 					ingress := []v3.Rule{{Action: v3.Deny}}
 					selector := fmt.Sprintf("pod-name==\"%s\"", server.Name())
 					order := 200.0
-					policy := CreateStagedGlobalNetworkPolicy("service-deny-in", customTier, order, selector, ingress, nil)
+					policyName := utils.GenerateRandomName("service-deny-in")
+					policy := CreateStagedGlobalNetworkPolicy(policyName, customTier, order, selector, ingress, nil)
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					})
 
 					// enforce the policy
 					_, enforced := ConvertStagedGlobalPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					})
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
 					checker.ExpectFailure(client1, server.ClusterIP().Port(serverPort))
 					checker.Execute()
-
-					// delete policies
-					Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 				})
 			})
 		})
 	})
 
-func buildURL(sourceNamespace, destinationNamespace, startTime string) string {
-	baseURL := "http://localhost:3002/flows"
+func buildURL(port int, sourceNamespace, destinationNamespace, startTime string) string {
+	baseURL := fmt.Sprintf("http://localhost:%d/flows", port)
 
 	f := whiskerv1.Filters{
 		SourceNamespaces: whiskerv1.FilterMatches[string]{
@@ -361,8 +367,13 @@ func verifyPortForward(url string) {
 		}
 		defer func() { _ = resp.Body.Close() }()
 
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("http response is not successful %d", resp.StatusCode)
+			return fmt.Errorf("http response is not successful %d, body: %s", resp.StatusCode, string(body))
 		}
 
 		return nil
@@ -379,13 +390,13 @@ func verifyFlowCount(url string, count int) {
 		}
 		defer func() { _ = resp.Body.Close() }()
 
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected status code %d", resp.StatusCode)
-		}
-
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status code %d, body: %s", resp.StatusCode, string(body))
 		}
 
 		if err = json.Unmarshal(body, &response); err != nil {
@@ -410,6 +421,8 @@ func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.Polic
 
 	body, err := io.ReadAll(resp.Body)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	ExpectWithOffset(1, resp.StatusCode).To(Equal(http.StatusOK), "unexpected status code from whisker-backend, body: %s", string(body))
 
 	err = json.Unmarshal(body, &response)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
