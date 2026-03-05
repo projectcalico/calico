@@ -33,6 +33,7 @@ import (
 	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -71,6 +72,12 @@ const (
 
 	// key for ratelimited sync retries.
 	retryKey = "ipamSyncRetry"
+
+	// defaultVMRecreationGracePeriod is the time window to allow VM recreation
+	// (e.g., restart, live migration) before treating the allocation as a leak.
+	// This is separate from the configurable LeakGracePeriod which applies to
+	// pod IP allocations.
+	defaultVMRecreationGracePeriod = 5 * time.Minute
 )
 
 func init() {
@@ -117,7 +124,7 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer) *IPAMController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, vmIndexer, vmiIndexer cache.Indexer) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -146,9 +153,11 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 	)
 
 	return &IPAMController{
-		client:    c,
-		clientset: cs,
-		config:    cfg,
+		client:     c,
+		clientset:  cs,
+		config:     cfg,
+		vmIndexer:  vmIndexer,
+		vmiIndexer: vmiIndexer,
 
 		syncChan: syncChan,
 
@@ -173,6 +182,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		poolManager:                 newPoolManager(),
 		datastoreReady:              true,
 		consolidationWindow:         1 * time.Second,
+		vmRecreationGracePeriod:     defaultVMRecreationGracePeriod,
 
 		// Track blocks which we might want to release.
 		blockReleaseTracker: newBlockReleaseTracker(leakGracePeriod),
@@ -191,6 +201,11 @@ type IPAMController struct {
 	podLister  v1lister.PodLister
 	nodeLister v1lister.NodeLister
 	config     config.NodeControllerConfig
+
+	// vmIndexer and vmiIndexer are optional KubeVirt cache indexers for verifying
+	// VM/VMI resources. Nil if KubeVirt is not installed.
+	vmIndexer  cache.Indexer
+	vmiIndexer cache.Indexer
 
 	syncStatus bapi.SyncStatus
 
@@ -241,6 +256,9 @@ type IPAMController struct {
 	// consolidationWindow is the time to wait for additional updates after receiving one before processing the updates
 	// received. This is to allow for multiple node deletion events to be consolidated into a single event.
 	consolidationWindow time.Duration
+
+	// vmRecreationGracePeriod is the time window to allow VM recreation before treating the allocation as a leak.
+	vmRecreationGracePeriod time.Duration
 
 	// For unit testing purposes.
 	pauseRequestChannel chan pauseRequest
@@ -905,6 +923,16 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 				// - The node the allocation belongs to no longer exists.
 				// - The pod owning this allocation no longer exists.
 				a.markConfirmedLeak()
+			} else if a.isVMAllocation() {
+				// VM/VMI allocation with no backing VM or standalone VMI.
+				// Use a dedicated grace period to tolerate transient gaps
+				// during VM restarts and migrations. If the operator configured
+				// a longer LeakGracePeriod, respect that as well.
+				gracePeriod := c.vmRecreationGracePeriod
+				if c.config.LeakGracePeriod != nil && c.config.LeakGracePeriod.Duration > gracePeriod {
+					gracePeriod = c.config.LeakGracePeriod.Duration
+				}
+				a.markLeak(gracePeriod)
 			} else if c.config.LeakGracePeriod != nil {
 				// The allocation is NOT valid, but the Kubernetes node still exists, so our confidence is lower.
 				// Mark as a candidate leak. If this state remains, it will switch
@@ -959,6 +987,11 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	if a.isTunnelAddress() {
 		// Tunnel addresses are only valid if the hosting node still exists.
 		return a.knode != ""
+	}
+
+	// Handle VMI-based allocations
+	if a.isVMAllocation() {
+		return c.isVMAllocationValid(a)
 	}
 
 	if ns == "" || pod == "" {
@@ -1051,6 +1084,70 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	}
 
 	logc.Debugf("Allocated IP no longer in-use by pod")
+	return false
+}
+
+// isVMAllocationValid checks whether the backing VM or standalone VMI for
+// a VMI-type IP allocation still exists. Returns true on any error or missing
+// data to avoid incorrectly releasing in-use IPs.
+func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
+	ns := a.attrs[ipam.AttributeNamespace]
+	vmiName := a.attrs[ipam.AttributeVMIName]
+	logc := log.WithFields(a.fields())
+
+	// If we can't reason about it, don't GC it.
+	// (We can tighten this later once attrs are guaranteed.)
+	if ns == "" || vmiName == "" || c.vmIndexer == nil || c.vmiIndexer == nil {
+		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
+		return true
+	}
+
+	// Build the cache key using the same format as cache.MetaNamespaceKeyFunc.
+	key := cache.NewObjectName(ns, vmiName).String()
+
+	// Check if the VM exists in the informer cache.
+	_, vmExists, err := c.vmIndexer.GetByKey(key)
+	if err != nil {
+		logc.WithError(err).Error("Failed to look up VM in cache, assuming allocation is valid")
+		return true
+	}
+	if vmExists {
+		logc.Debug("VM found, allocation is valid")
+		return true
+	}
+
+	// VM not found — check if a standalone VMI (not owned by a VM) exists.
+	// If the VMI has a VM ownerReference but the VM is already gone, the VMI
+	// is just awaiting garbage collection and is not evidence of a valid allocation.
+	obj, vmiExists, err := c.vmiIndexer.GetByKey(key)
+	if err != nil {
+		logc.WithError(err).Warn("Failed to look up VMI in cache, assuming allocation is valid")
+		return true
+	}
+	if vmiExists {
+		vmi, ok := obj.(*kubevirtv1.VirtualMachineInstance)
+		if !ok {
+			logc.Warn("Unexpected object type in VMI cache, assuming allocation is valid")
+			return true
+		}
+		if !hasVMOwner(vmi) {
+			logc.Debug("Standalone VMI found, allocation is valid")
+			return true
+		}
+		logc.Debug("VMI found but owned by a deleted VM, not treating as valid")
+	}
+
+	logc.Debug("Neither VM nor standalone VMI found")
+	return false
+}
+
+// hasVMOwner returns true if the VMI has an ownerReference pointing to a VirtualMachine.
+func hasVMOwner(vmi *kubevirtv1.VirtualMachineInstance) bool {
+	for i := range vmi.OwnerReferences {
+		if vmi.OwnerReferences[i].Kind == "VirtualMachine" {
+			return true
+		}
+	}
 	return false
 }
 
