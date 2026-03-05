@@ -161,6 +161,37 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 		}
 	}
 
+	// For UPDATE operations, also authorize the old tier. A tier change requires permission on both
+	// the old tier (to remove the policy from it) and the new tier (already checked above).
+	if ar.Request.Operation == v1.Update && len(ar.Request.OldObject.Raw) > 0 {
+		_, oldTier, err := h.parsePolicy(ar.Request.Kind.Kind, ar.Request.OldObject.Raw)
+		if err != nil {
+			logCtx.WithError(err).Error("Failed to parse old policy metadata")
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Failed to parse old policy metadata: %v", err),
+					Reason:  metav1.StatusReasonInvalid,
+				},
+			}
+		}
+		if oldTier != tier {
+			logCtx.WithField("oldTier", oldTier).Debug("Tier changed, authorizing old tier")
+			if err = h.authz.AuthorizeTierOperation(ctx, obj.GetName(), oldTier); err != nil {
+				logCtx.WithError(err).Warn("User is not authorized for old tier")
+				return &v1.AdmissionResponse{
+					Allowed: false,
+					Result: &metav1.Status{
+						Status:  metav1.StatusFailure,
+						Message: fmt.Sprintf("Authorization failed for old tier: %v", err),
+						Reason:  metav1.StatusReasonForbidden,
+					},
+				}
+			}
+		}
+	}
+
 	// If validation passes, return an allowed response
 	logCtx.Debug("User is authorized")
 	return &v1.AdmissionResponse{Allowed: true}
