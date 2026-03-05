@@ -214,11 +214,6 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 					}
 				})
 
-				ginkgo.AfterEach(func() {
-					err := cli.Delete(context.Background(), denyIngressPolicy)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
 				ginkgo.It("should block one node 1 from entering node 0 on port 9090 with ingress policy", func() {
 					// Without any policy, the test pod should be able to hit the service on both ports.
 					checker.ExpectSuccess(cliHostNet, server.ClusterIP().Port(port9090))
@@ -248,11 +243,6 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 					clientPod = conncheck.NewClient("client", f.Namespace, conncheck.WithClientCustomizer(clientPodOnNodeOne))
 					checker.AddClient(clientPod)
 					checker.Deploy()
-				})
-
-				ginkgo.AfterEach(func() {
-					err := cli.Delete(context.Background(), denyEgressPolicy)
-					Expect(err).NotTo(HaveOccurred())
 				})
 
 				ginkgo.It("should block one node 1 from reaching node 0 on port 9091 with egress policy", func() {

@@ -84,10 +84,6 @@ var _ = describe.CalicoDescribe(
 			pool.Spec.DisableBGPExport = false
 			err = cli.Create(context.Background(), pool)
 			Expect(err).NotTo(HaveOccurred(), "Error creating IP pool")
-			ginkgo.DeferCleanup(func() {
-				err = cli.Delete(context.Background(), pool)
-				Expect(err).NotTo(HaveOccurred(), "Error deleting IP pool")
-			})
 
 			// Before each test, perform the following steps:
 			// - Create a server pod and corresponding service in the main namespace for the test.
@@ -138,10 +134,6 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
-			ginkgo.DeferCleanup(func() {
-				err := cli.Delete(context.Background(), peer)
-				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
-			})
 
 			// Disable BGP export on the pool.
 			pool := &v3.IPPool{}

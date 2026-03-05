@@ -94,10 +94,6 @@ var _ = describe.CalicoDescribe(
 			pool.Spec.IPIPMode = v3.IPIPModeAlways
 			err = cli.Create(context.Background(), pool)
 			Expect(err).NotTo(HaveOccurred(), "Error creating IP pool")
-			ginkgo.DeferCleanup(func() {
-				err = cli.Delete(context.Background(), pool)
-				Expect(err).NotTo(HaveOccurred(), "Error deleting IP pool")
-			})
 
 			// Before each test, perform the following steps:
 			// - Create a server pod and corresponding service in the main namespace for the test.

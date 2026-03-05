@@ -102,8 +102,6 @@ var _ = describe.CalicoDescribe(
 			})
 
 			AfterEach(func() {
-				Expect(cli.Delete(context.TODO(), tierObj)).ShouldNot(HaveOccurred())
-
 				checker.Stop()
 
 				// Stop the kubectl port forward
@@ -134,10 +132,6 @@ var _ = describe.CalicoDescribe(
 						whiskerv1.PolicyKindStagedKubernetesNetworkPolicy,
 						whiskerv1.Action(0), // Action is empty for StagedKubernetesNetworkPolicy
 					)
-				})
-
-				AfterEach(func() {
-					Expect(cli.Delete(context.TODO(), stagedKubernetesNetworkPolicy)).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -172,11 +166,6 @@ var _ = describe.CalicoDescribe(
 						whiskerv1.ActionDeny,
 					)
 				})
-
-				AfterEach(func() {
-					// clean-up policy
-					Expect(cli.Delete(context.TODO(), stagedPolicy)).ShouldNot(HaveOccurred())
-				})
 			})
 
 			Context("StagedGlobalNetworkPolicy", func() {
@@ -208,10 +197,6 @@ var _ = describe.CalicoDescribe(
 						whiskerv1.ActionDeny,
 					)
 				})
-
-				AfterEach(func() {
-					Expect(cli.Delete(context.TODO(), stagedGlobalNetworkPolicy)).ShouldNot(HaveOccurred())
-				})
 			})
 		})
 
@@ -241,7 +226,6 @@ var _ = describe.CalicoDescribe(
 			})
 
 			AfterEach(func() {
-				Expect(cli.Delete(context.TODO(), tierObj)).ShouldNot(HaveOccurred())
 				checker.Stop()
 			})
 
@@ -255,16 +239,10 @@ var _ = describe.CalicoDescribe(
 					podSelector := metav1.LabelSelector{MatchLabels: server.Pod().Labels}
 					policy := CreateStagedKubernetesNetworkPolicyIngressDeny("service-deny-in", server.Pod().Namespace, podSelector)
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					DeferCleanup(func() {
-						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					})
 
 					// enforce the policy
 					_, enforced := ConvertStagedKubernetesPolicyToK8SEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
-					DeferCleanup(func() {
-						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
-					})
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
@@ -295,9 +273,6 @@ var _ = describe.CalicoDescribe(
 					checker.ExpectFailure(client1, server.ClusterIP().Port(serverPort))
 					checker.Execute()
 
-					// delete policies
-					Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -323,9 +298,6 @@ var _ = describe.CalicoDescribe(
 					checker.ExpectFailure(client1, server.ClusterIP().Port(serverPort))
 					checker.Execute()
 
-					// delete policies
-					Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 				})
 			})
 		})

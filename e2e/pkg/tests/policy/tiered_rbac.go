@@ -141,16 +141,6 @@ var _ = describe.CalicoDescribe(
 				}
 			}
 
-			By("Cleaning up test tiers")
-			for _, name := range []string{rbacTestTier, rbacOtherTier} {
-				tier := v3.NewTier()
-				tier.Name = name
-				if err := adminCli.Delete(ctx, tier); err != nil {
-					logrus.WithError(err).WithField("name", name).Error("Failed to delete Tier")
-					errOccurred = true
-				}
-			}
-
 			Expect(errOccurred).To(BeFalse(), "errors occurred during teardown")
 		})
 
@@ -242,8 +232,6 @@ var _ = describe.CalicoDescribe(
 				)
 				np.Spec.Order = ptr.To(200.0)
 				Expect(cli.Update(ctx, np)).To(Succeed(), "tier admin should be able to update policy")
-
-				Expect(adminCli.Delete(ctx, np)).To(Succeed())
 			})
 
 			// Verifies that update is denied when the user lacks tier GET access,
@@ -270,8 +258,6 @@ var _ = describe.CalicoDescribe(
 				err := cli.Update(ctx, np)
 				Expect(err).To(HaveOccurred(), "update should be denied without tier GET access")
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
-
-				Expect(adminCli.Delete(ctx, np)).To(Succeed())
 			})
 		})
 
@@ -444,8 +430,6 @@ var _ = describe.CalicoDescribe(
 				err = cli.Delete(ctx, np)
 				Expect(err).To(HaveOccurred(), "read-only user should not be able to delete policy")
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
-
-				Expect(adminCli.Delete(ctx, np)).To(Succeed())
 			})
 		})
 	},

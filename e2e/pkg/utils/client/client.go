@@ -28,7 +28,21 @@ import (
 )
 
 // New returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
+// The returned client automatically registers Ginkgo DeferCleanup for every successful Create call,
+// ensuring test-created resources are always cleaned up. Use NewWithoutAutoCleanup if you need to
+// opt out of this behavior.
 func New(cfg *rest.Config) (client.Client, error) {
+	c, err := NewWithoutAutoCleanup(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return NewWithAutoCleanup(c), nil
+}
+
+// NewWithoutAutoCleanup returns a new controller-runtime client without automatic cleanup behavior.
+// Use this when you need full control over resource lifecycle, e.g., for resources created in
+// BeforeSuite or tests that explicitly test deletion behavior.
+func NewWithoutAutoCleanup(cfg *rest.Config) (client.Client, error) {
 	// Use the API client if the Calico v3 API is available, otherwise fall back to the calicoctl exec client.
 	c, err := NewAPIClient(cfg)
 	if err != nil {
