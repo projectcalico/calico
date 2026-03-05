@@ -185,7 +185,7 @@ E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
 E2E_SKIP ?= ""
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
-CLUSTER_ROUTING ?= "BGP"
+CLUSTER_ROUTING ?= BGP
 
 ## Create a kind cluster and run all e2e tests.
 e2e-test:

@@ -1,7 +1,7 @@
 apiVersion: projectcalico.org/v3
 kind: BGPConfiguration
 metadata:
- name: default
+  name: default
 spec:
- programClusterRoutes: Disabled
- nodeToNodeMeshEnabled: false
+  programClusterRoutes: Disabled
+  nodeToNodeMeshEnabled: false

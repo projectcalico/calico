@@ -165,7 +165,7 @@ echo
 if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
   echo "Patching FelixConfiguration to configure Felix program cluster routes"
   ${kubectl} patch felixconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Enabled"}}'
-  
+
   echo "Apply BGPConfiguration to configure BIRD to not program cluster routes"
   ${kubectl} apply -f $TEST_DIR/infra/bgpconfig.yaml
 fi
