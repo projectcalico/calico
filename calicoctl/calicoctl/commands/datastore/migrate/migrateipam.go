@@ -132,9 +132,16 @@ func (m *migrateIPAM) PullFromDatastore() error {
 		// Update node names in the block to match the Kubernetes node
 		if m.nodeMap != nil {
 			for i, allocationAttribute := range block.Attributes {
-				// Update the node name if it has a corresponding Kubernetes node name
+				// Update the node name in ActiveOwnerAttrs if it has a corresponding Kubernetes node name
 				if nodeName, ok := m.nodeMap[allocationAttribute.ActiveOwnerAttrs["node"]]; ok {
 					block.Attributes[i].ActiveOwnerAttrs["node"] = nodeName
+				}
+
+				// Update the node name in AlternateOwnerAttrs if present
+				if allocationAttribute.AlternateOwnerAttrs != nil {
+					if nodeName, ok := m.nodeMap[allocationAttribute.AlternateOwnerAttrs["node"]]; ok {
+						block.Attributes[i].AlternateOwnerAttrs["node"] = nodeName
+					}
 				}
 
 				// Update the handle ID for any tunnel addresses
