@@ -42,6 +42,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
 	describe.WithDisruptive(),
+	describe.WithSerial(),
 	"Route reflectors",
 	func() {
 		// Define variables common across all tests.
