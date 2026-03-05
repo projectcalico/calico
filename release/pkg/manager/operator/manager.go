@@ -32,11 +32,14 @@ const (
 	DefaultImage               = registry.TigeraOperatorImage
 	DefaultOrg                 = utils.TigeraOrg
 	DefaultRepoName            = "operator"
-	DefaultRemote              = utils.DefaultRemote
 	DefaultBranchName          = utils.DefaultBranch
 	DefaultReleaseBranchPrefix = "release"
-	DefaultDevTagSuffix        = "0.dev"
 	DefaultRegistry            = "quay.io"
+)
+
+var (
+	defaultProductEnvPrefix = "CALICO"
+	defaultProductRegistry  = registry.DefaultCalicoRegistries[0]
 )
 
 type OperatorManager struct {
@@ -54,10 +57,7 @@ type OperatorManager struct {
 
 	calicoVersion string
 
-	// tmpDir is the absolute path to the temporary directory
-	tmpDir string
-
-	// outputDir is the absolute path to the output directory
+	// outputDir is the absolute path to the output directory.
 	outputDir string
 
 	// image is the name of the operator image (e.g. tigera/operator)
@@ -68,21 +68,6 @@ type OperatorManager struct {
 
 	// productRegistry is the registry to use for product images (e.g. quay.io/calico)
 	productRegistry string
-
-	// origin remote repository
-	remote string
-
-	// githubOrg is the organization of the repository
-	githubOrg string
-
-	// repoName is the name of the repository
-	repoName string
-
-	// branch is the branch to use
-	branch string
-
-	// devTag is the development tag identifier
-	devTagIdentifier string
 
 	// releaseBranchPrefix is the prefix for the release branch
 	releaseBranchPrefix string
@@ -106,19 +91,20 @@ type OperatorManager struct {
 
 func NewManager(opts ...Option) *OperatorManager {
 	o := &OperatorManager{
-		runner:          &command.RealCommandRunner{},
-		registry:        DefaultRegistry,
-		image:           DefaultImage,
-		productRegistry: registry.DefaultCalicoRegistries[0],
-		validate:        true,
-		publish:         true,
+		runner:   &command.RealCommandRunner{},
+		registry: DefaultRegistry,
+		image:    DefaultImage,
+		validate: true,
+		publish:  true,
 	}
 	for _, opt := range opts {
 		if err := opt(o); err != nil {
 			logrus.WithError(err).Fatal("Failed to apply option")
 		}
 	}
-
+	if o.productRegistry == "" {
+		o.productRegistry = defaultProductRegistry
+	}
 	return o
 }
 
@@ -142,26 +128,31 @@ func (o *OperatorManager) Build() error {
 
 func (o *OperatorManager) buildEnv() ([]string, logrus.Fields, error) {
 	logFields := logrus.Fields{
-		"registry": o.registry,
-		"image":    o.image,
-		"version":  o.version,
+		"registry":        o.registry,
+		"calico_registry": o.productRegistry,
+		"image":           o.image,
+		"version":         o.version,
 	}
 	env := append(os.Environ(),
 		fmt.Sprintf("REGISTRY=%s", o.registry),
 		fmt.Sprintf("IMAGE=%s", o.image),
 		fmt.Sprintf("VERSION=%s", o.version),
+		fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, o.productRegistry),
 	)
 	if o.isHashRelease {
 		logFields["hashrelease"] = "true"
 		env = append(env, "HASHRELEASE=true")
-		// calico version and directory are only used for build and not publish.
 		if o.calicoVersion != "" {
-			env = append(env, fmt.Sprintf("CALICO_VERSION=%s", o.calicoVersion))
+			env = append(env, fmt.Sprintf("%s_VERSION=%s", defaultProductEnvPrefix, o.calicoVersion))
 			logFields["calico_version"] = o.calicoVersion
 		}
 		if o.calicoDir != "" {
-			env = append(env, fmt.Sprintf("CALICO_DIR=%s", o.calicoDir))
+			env = append(env, fmt.Sprintf("%s_DIR=%s", defaultProductEnvPrefix, o.calicoDir))
 			logFields["calico_dir"] = o.calicoDir
+		}
+		if o.outputDir != "" {
+			env = append(env, fmt.Sprintf("OUTPUT_DIR=%s", o.outputDir))
+			logFields["output_dir"] = o.outputDir
 		}
 	}
 	if len(o.architectures) > 0 {
