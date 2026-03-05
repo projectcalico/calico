@@ -2000,12 +2000,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Should no longer get pongs when using the spoof interface")
 						expectNoPongs()
 
-						// Move WEP to spoof interface
+						// Move WEP to spoof interface.  This simulates a pod being
+						// removed and a new pod being created on the spoof interface.
+						// The old TCP connection is expected to be killed by a RST
+						// (WorkloadRemoveScannerTCP marks CT entries for RST when a
+						// workload IP is removed).  Verify that new connections work
+						// on the new interface.
 						w[0][0].RemoveFromInfra(infra)
 						w[0][0].RemoveSpoofWEPFromInfra(infra)
 						w[0][0].ConfigureInInfraAsSpoofInterface(infra)
-						By("Should get pongs again after switching WEP to spoof iface")
-						expectPongs()
+						By("Should have connectivity via new connections after WEP move to spoof iface")
+						cc.Expect(Some, w[0][0], w[1][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
 					})
 				}
 
