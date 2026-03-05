@@ -594,16 +594,17 @@ func (o *Obj) AttachCGroupLegacy(cgroup, progName string) error {
 
 const (
 	// Set when IPv6 is enabled to configure bpf dataplane accordingly
-	GlobalsRPFOptionEnabled            uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
-	GlobalsRPFOptionStrict             uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
-	GlobalsNoDSRCidrs                  uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
-	GlobalsLoUDPOnly                   uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
-	GlobalsRedirectPeer                uint32 = C.CALI_GLOBALS_REDIRECT_PEER
-	GlobalsFlowLogsEnabled             uint32 = C.CALI_GLOBALS_FLOWLOGS_ENABLED
-	GlobalsNATOutgoingExcludeHosts     uint32 = C.CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS
-	GlobalsSkipEgressRedirect          uint32 = C.CALI_GLOBALS_SKIP_EGRESS_REDIRECT
-	GlobalsIngressPacketRateConfigured uint32 = C.CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED
-	GlobalsEgressPacketRateConfigured  uint32 = C.CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED
+	GlobalsRPFOptionEnabled              uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
+	GlobalsRPFOptionStrict               uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
+	GlobalsNoDSRCidrs                    uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
+	GlobalsLoUDPOnly                     uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
+	GlobalsRedirectPeer                  uint32 = C.CALI_GLOBALS_REDIRECT_PEER
+	GlobalsFlowLogsEnabled               uint32 = C.CALI_GLOBALS_FLOWLOGS_ENABLED
+	GlobalsNATOutgoingExcludeHosts       uint32 = C.CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS
+	GlobalsSkipEgressRedirect            uint32 = C.CALI_GLOBALS_SKIP_EGRESS_REDIRECT
+	GlobalsIngressPacketRateConfigured   uint32 = C.CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED
+	GlobalsEgressPacketRateConfigured    uint32 = C.CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED
+	GlobalsWorkloadSrcSpoofingConfigured uint32 = C.CALI_GLOBALS_WORKLOAD_SRC_SPOOFING_CONFIGURED
 
 	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
 	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
