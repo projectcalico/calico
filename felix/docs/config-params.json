@@ -2052,8 +2052,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Specifies whether Felix should program all cluster routes instead of BIRD.\nFelix always programs VXLAN routes.",
-          "DescriptionHTML": "<p>Specifies whether Felix should program all cluster routes instead of BIRD.\nFelix always programs VXLAN routes.</p>",
+          "Description": "Controls how a cluster node gets a route to a workload on another node,\nwhen that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,\nit is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.\nFelix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet.",
+          "DescriptionHTML": "<p>Controls how a cluster node gets a route to a workload on another node,\nwhen that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,\nit is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.\nFelix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet.</p>",
           "UserEditable": true,
           "GoType": "*string"
         },
