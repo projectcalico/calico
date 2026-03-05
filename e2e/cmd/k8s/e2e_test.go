@@ -45,6 +45,10 @@ func init() {
 	klog.SetOutput(ginkgo.GinkgoWriter)
 	logrus.SetOutput(ginkgo.GinkgoWriter)
 
+	// Register the standard -test.* flags so that the ginkgo CLI
+	// can pass -test.timeout, -test.count, etc. to this binary.
+	testing.Init()
+
 	// Register flags.
 	config.CopyFlags(config.Flags, flag.CommandLine)
 	framework.RegisterCommonFlags(flag.CommandLine)
