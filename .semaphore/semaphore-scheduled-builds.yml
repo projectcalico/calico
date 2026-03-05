@@ -573,13 +573,13 @@ blocks:
           type: f1-standard-4
           os_image: ubuntu2204
       jobs:
-        - name: "E2E tests: Conformance"
+        - name: "E2E tests: Conformance (BIRD programs cluster routes)"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-        - name: Conformance e2e tests (Felix programs cluster routes)
+        - name: "E2E tests: Conformance (Felix programs cluster routes)"
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
           env_vars:
