@@ -512,7 +512,7 @@ func (c *client) buildPeerFromData(peer *bgpPeer, prefix string, config *types.B
 	}
 
 	// Filters - build inline filter blocks
-	result.ImportFilter = c.buildImportFilter(peer.Filters, ipVersion, result.ASNumber, effectiveNodeAS)
+	result.ImportFilter = c.buildImportFilter(peer.Filters, result.ASNumber, effectiveNodeAS, ipVersion)
 	result.ExportFilter = c.buildExportFilter(peer.Filters, result.ASNumber, effectiveNodeAS, ipVersion)
 
 	// Optional fields
@@ -624,7 +624,7 @@ func filterHasPeerType(filter *v3.BGPFilter, direction string, ipVersion int) bo
 }
 
 // buildImportFilter builds the import filter block
-func (c *client) buildImportFilter(filters []string, ipVersion int, peerAS, nodeAS string) string {
+func (c *client) buildImportFilter(filters []string, peerAS, nodeAS string, ipVersion int) string {
 	var filterLines []string
 
 	// Determine filter suffix based on IP version
