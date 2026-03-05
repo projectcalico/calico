@@ -18,3 +18,13 @@
         env_vars:
           - name: STORE_BUILD_CACHE
             value: "true"
+      - name: Conformance e2e tests (Felix programs cluster routes)
+        commands:
+          - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
+        env_vars:
+          - name: CLUSTER_ROUTING
+            value: "FELIX"
+          - name: E2E_SKIP
+            value: "BGP"
+          - name: STORE_BUILD_CACHE
+            value: "true"
