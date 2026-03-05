@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -6465,6 +6465,21 @@ func bpfCheckIfGlobalNetworkPolicyProgrammedV6(felix *infrastructure.Felix, ifac
 }
 
 func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
+	var (
+		out string
+		err error
+	)
+
+	if felix.TopologyOptions.EnableIPv6 {
+		out, err = felix.ExecOutput("calico-bpf", "-6", "policy", "dump", iface, hook)
+	} else {
+		out, err = felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook)
+	}
+	Expect(err).NotTo(HaveOccurred())
+	return out
+}
+
+func bpfDumpPolicyAsm(felix *infrastructure.Felix, iface, hook string) string {
 	var (
 		out string
 		err error

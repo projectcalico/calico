@@ -90,7 +90,9 @@ outer:
 	for i := range 256 {
 		for j := range 256 {
 			rt.RouteUpdate(RouteClassLocalWorkload, ifaceName, Target{
-				CIDR: ip.MustParseCIDROrIP(fmt.Sprintf("10.0.%d.%d/32", i, j)),
+				RouteKey: RouteKey{
+					CIDR: ip.MustParseCIDROrIP(fmt.Sprintf("10.0.%d.%d/32", i, j)),
+				},
 			})
 			n++
 			if n == numRoutes {

@@ -279,6 +279,8 @@ blocks:
               value: gcp-kubeadm
             - name: KUBE_PROXY_MODE
               value: ipvs
+            - name: USE_API_SERVER
+              value: "false"
 
   - name: usage reporting
     dependencies: []
@@ -518,6 +520,8 @@ blocks:
               value: "10.0.0.0/29"
             - name: PROVISIONER
               value: "aws-kubeadm"
+            - name: USE_API_SERVER
+              value: "false"
 
         - name: AKS w AKS CNI + Overlay
           execution_time_limit:

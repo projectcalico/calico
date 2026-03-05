@@ -79,6 +79,24 @@ func (f *FakeCalicoClient) IPAMUpgradeNodeNames() []string {
 	return nil
 }
 
+// SetReleaseHostAffinityError configures the fake IPAM client to return the given
+// error from ReleaseHostAffinities for the specified host, simulating cleanup failures.
+// Pass nil to clear the error for a host.
+func (f *FakeCalicoClient) SetReleaseHostAffinityError(host string, err error) {
+	if fic, ok := f.ipamClient.(*fakeIPAMClient); ok {
+		fic.Lock()
+		defer fic.Unlock()
+		if fic.releaseHostAffinityErrors == nil {
+			fic.releaseHostAffinityErrors = make(map[string]error)
+		}
+		if err == nil {
+			delete(fic.releaseHostAffinityErrors, host)
+		} else {
+			fic.releaseHostAffinityErrors[host] = err
+		}
+	}
+}
+
 // StagedGlobalNetworkPolicies returns an interface for managing staged global network policy resources.
 func (f *FakeCalicoClient) StagedGlobalNetworkPolicies() clientv3.StagedGlobalNetworkPolicyInterface {
 	panic("not implemented") // TODO: Implement
@@ -270,6 +288,10 @@ type fakeIPAMClient struct {
 	upgradeCalls     int
 	upgradeNodeNames []string
 	upgradeErrors    []error // returned in order on successive calls
+
+	// releaseHostAffinityErrors maps host names to errors that ReleaseHostAffinities
+	// should return, simulating per-node "block not empty" failures during cleanup.
+	releaseHostAffinityErrors map[string]error
 }
 
 func (f *fakeIPAMClient) affinityReleased(aff string) bool {
@@ -315,6 +337,11 @@ func (f *fakeIPAMClient) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOpt
 
 // GetAssignmentAttributes returns the AllocationAttribute for the given IP address.
 func (f *fakeIPAMClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (*model.AllocationAttribute, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
+func (f *fakeIPAMClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *ipam.OwnerAttributeUpdates, preconditions *ipam.OwnerAttributePreconditions) error {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -375,7 +402,9 @@ func (f *fakeIPAMClient) ReleaseBlockAffinity(ctx context.Context, block *model.
 func (f *fakeIPAMClient) ReleaseHostAffinities(ctx context.Context, affinityCfg ipam.AffinityConfig, mustBeEmpty bool) error {
 	f.Lock()
 	defer f.Unlock()
-
+	if err, ok := f.releaseHostAffinityErrors[affinityCfg.Host]; ok {
+		return err
+	}
 	f.affinitiesReleased[affinityCfg.Host] = true
 	return nil
 }
