@@ -109,8 +109,8 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 
 				Expect(rule.Priority).To(Equal(rulePriority))
 				Expect(rule.Table).To(Equal(tableIndex))
-			Expect(rule.Invert).To(BeFalse())
-			Expect(rule.Mark).To(Equal(uint32(0)))
+				Expect(rule.Invert).To(BeFalse())
+				Expect(rule.Mark).To(Equal(uint32(0)))
 				Expect(rule.Mask).To(Equal(ptr.To(firewallMark)))
 				Expect(rule.Src).ToNot(BeNil())
 				Expect(rule.Src.String()).To(Equal(cidr_pool1.String()))
@@ -134,8 +134,8 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 				for _, rule := range rrDataplane.AddedRules {
 					Expect(rule.Priority).To(Equal(rulePriority))
 					Expect(rule.Table).To(Equal(tableIndex))
-				Expect(rule.Invert).To(BeFalse())
-				Expect(rule.Mark).To(Equal(uint32(0)))
+					Expect(rule.Invert).To(BeFalse())
+					Expect(rule.Mark).To(Equal(uint32(0)))
 					Expect(rule.Src).ToNot(BeNil())
 					srcCIDRs = append(srcCIDRs, rule.Src.String())
 				}
