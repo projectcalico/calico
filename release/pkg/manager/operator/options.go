@@ -30,6 +30,13 @@ func WithCalicoDirectory(dir string) Option {
 	}
 }
 
+func WithCalicoVersion(version string) Option {
+	return func(o *OperatorManager) error {
+		o.calicoVersion = version
+		return nil
+	}
+}
+
 func WithTempDirectory(dir string) Option {
 	return func(o *OperatorManager) error {
 		o.tmpDir = dir
