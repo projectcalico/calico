@@ -511,7 +511,7 @@ rules:
       - update
       - delete
 {{- end }}
-  # For Tiers controller, the operator needs to read/watch access to network policies and GlobalNetworkPolicies.
+  # For Tiers controller, the operator needs to read/watch access to NetworkPolicies and GlobalNetworkPolicies.
   - apiGroups:
       - projectcalico.org
     resources:
