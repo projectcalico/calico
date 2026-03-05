@@ -313,7 +313,7 @@ bin:
 .PRECIOUS: %.d %_v6.d
 
 COMPILE_DEPS=set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
+		$(CC) -MP -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
@@ -325,15 +325,3 @@ endif
 
 clean:
 	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll *_map_stub.c
-
-# The .d dependency files reference external headers (libbpf, system, clang
-# built-ins).  When the go-build container or libbpf version changes, those
-# paths may no longer exist, causing make to fail with "No rule to make
-# target".  Adding empty catch-all targets lets make proceed far enough to
-# regenerate the .d files with the correct, up-to-date paths.
-./libbpf/%.h:
-	@:
-/usr/include/%.h:
-	@:
-/usr/lib/clang/%.h:
-	@:
