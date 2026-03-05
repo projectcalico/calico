@@ -367,8 +367,13 @@ func verifyPortForward(url string) {
 		}
 		defer func() { _ = resp.Body.Close() }()
 
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("http response is not successful %d", resp.StatusCode)
+			return fmt.Errorf("http response is not successful %d, body: %s", resp.StatusCode, string(body))
 		}
 
 		return nil
@@ -385,13 +390,13 @@ func verifyFlowCount(url string, count int) {
 		}
 		defer func() { _ = resp.Body.Close() }()
 
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected status code %d", resp.StatusCode)
-		}
-
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status code %d, body: %s", resp.StatusCode, string(body))
 		}
 
 		if err = json.Unmarshal(body, &response); err != nil {
@@ -419,6 +424,8 @@ func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.Polic
 
 	body, err := io.ReadAll(resp.Body)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	ExpectWithOffset(1, resp.StatusCode).To(Equal(http.StatusOK), "unexpected status code from whisker-backend, body: %s", string(body))
 	err = json.Unmarshal(body, &response)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	ExpectWithOffset(1, kind).NotTo(Equal(""), "BUG: kind should not be empty")
