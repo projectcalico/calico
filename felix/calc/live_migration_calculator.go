@@ -47,6 +47,11 @@ type LiveMigrationCalculator struct {
 	liveMigrations         map[model.ResourceKey]internalapi.LiveMigration
 	directNameKeys         [SOURCE_OR_TARGET]map[types.NamespacedName]set.Set[model.ResourceKey]
 	selectorKeys           map[string]set.Set[model.ResourceKey]
+
+	// pendingSelectorMatches tracks WEPs that were matched by a computed selector callback
+	// before the LMC had processed the WEP update.  This can happen because the ARC's
+	// handler runs before the LMC's handler in the dispatcher chain.
+	pendingSelectorMatches set.Set[types.NamespacedName]
 }
 
 type wepData struct {
@@ -89,7 +94,8 @@ func NewLiveMigrationCalculator(
 			map[types.NamespacedName]set.Set[model.ResourceKey]{},
 			map[types.NamespacedName]set.Set[model.ResourceKey]{},
 		},
-		selectorKeys: map[string]set.Set[model.ResourceKey]{},
+		selectorKeys:           map[string]set.Set[model.ResourceKey]{},
+		pendingSelectorMatches: set.New[types.NamespacedName](),
 	}
 	activeRulesCalc.RegisterPolicyMatchListener(lmc)
 	return lmc
@@ -194,6 +200,10 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			}
 			if lmc.directNameKeys[TARGET][namespacedName] != nil {
 				wepData.directNameKeys[TARGET].AddSet(lmc.directNameKeys[TARGET][namespacedName])
+			}
+			if lmc.pendingSelectorMatches.Contains(namespacedName) {
+				wepData.targetSelectorMatching = true
+				lmc.pendingSelectorMatches.Discard(namespacedName)
 			}
 			lmc.weps[namespacedName] = wepData
 			lmc.indicateRole(key, wepData.liveMigrationRole())
@@ -304,6 +314,12 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 			lmc.withRoleUpdateIfNeeded(wepData, func() {
 				wepData.targetSelectorMatching = true
 			})
+		} else {
+			// WEP not yet tracked; the ARC handler runs before ours in the
+			// dispatcher chain, so we may receive selector match callbacks
+			// before our OnUpdate has processed the WEP.  Record it so we can
+			// pick it up when the WEP is processed.
+			lmc.pendingSelectorMatches.Add(namespacedName)
 		}
 	}
 }
@@ -319,6 +335,9 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, ep
 			lmc.withRoleUpdateIfNeeded(wepData, func() {
 				wepData.targetSelectorMatching = false
 			})
+		} else {
+			// Undo a pending match if there was one.
+			lmc.pendingSelectorMatches.Discard(namespacedName)
 		}
 	}
 }
