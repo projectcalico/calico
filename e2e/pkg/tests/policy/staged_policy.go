@@ -92,10 +92,11 @@ var _ = describe.CalicoDescribe(
 				stopCh = make(chan time.Time, 1)
 
 				// We read flow logs from whisker-backend, we start port forward so we can query the flows
-				kubectl.PortForward("calico-system", "deployment/whisker", "3002", "", stopCh)
+				localPort, err := kubectl.PortForward("calico-system", "deployment/whisker", "3002", "", stopCh)
+				Expect(err).NotTo(HaveOccurred())
 
 				// Build url to get flows from whisker
-				url = buildURL(server.Pod().Namespace, server.Pod().Namespace, "-1800")
+				url = buildURL(localPort, server.Pod().Namespace, server.Pod().Namespace, "-1800")
 
 				// Port forward should be working and whisker-backend should return 200 status
 				verifyPortForward(url)
@@ -331,8 +332,8 @@ var _ = describe.CalicoDescribe(
 		})
 	})
 
-func buildURL(sourceNamespace, destinationNamespace, startTime string) string {
-	baseURL := "http://localhost:3002/flows"
+func buildURL(port int, sourceNamespace, destinationNamespace, startTime string) string {
+	baseURL := fmt.Sprintf("http://localhost:%d/flows", port)
 
 	f := whiskerv1.Filters{
 		SourceNamespaces: whiskerv1.FilterMatches[string]{
