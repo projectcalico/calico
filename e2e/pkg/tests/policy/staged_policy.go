@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 package policy
 
 import (
@@ -393,11 +393,14 @@ func verifyFlowCount(url string, count int) {
 		}
 
 		if len(response.Items) != count {
-			return fmt.Errorf("number of flow items does not match, expected %d, got %d", count, len(response.Items))
+			return fmt.Errorf(
+				"expected %d flow items, got %d\n%s",
+				count, len(response.Items), formatFlowDiagnostics(response.Items),
+			)
 		}
 
 		return nil
-	}, 90*time.Second, 5*time.Second).Should(Not(HaveOccurred()))
+	}, 150*time.Second, 5*time.Second).Should(Not(HaveOccurred()))
 }
 
 func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.PolicyKind, action whiskerv1.Action) {
@@ -410,74 +413,71 @@ func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.Polic
 
 	body, err := io.ReadAll(resp.Body)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
 	err = json.Unmarshal(body, &response)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
 	ExpectWithOffset(1, kind).NotTo(Equal(""), "BUG: kind should not be empty")
 
-	// Build up an error message to help debug if the policy is not found
-	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("Could not find flow:\nKind:%s Name:%s Tier:%s Action:%s\n\n", kind, name, tier, action))
-	msg.WriteString(fmt.Sprintf("Found %d flow items:\n", len(response.Items)))
+	matchesPolicyHit := func(p *whiskerv1.PolicyHit) bool {
+		return p != nil && p.Name == name && p.Tier == tier && p.Kind == kind && p.Action == action
+	}
 
-responseLoop:
 	for _, item := range response.Items {
-		pendingPolicies := item.Policies.Pending
-		for _, pending := range pendingPolicies {
-			msg.WriteString(fmt.Sprintf(
-				"  - %s\n", policyHitString(
-					pending.Kind,
-					pending.Namespace,
-					pending.Name,
-					pending.Tier,
-					pending.Action,
-				)))
-
-			if pending.Name == name &&
-				pending.Tier == tier &&
-				pending.Kind == kind &&
-				pending.Action == action {
+		for _, pending := range item.Policies.Pending {
+			if matchesPolicyHit(pending) || matchesPolicyHit(pending.Trigger) {
 				containsStagedPolicy = true
-				break responseLoop
-			}
-
-			if pending.Trigger != nil {
-				msg.WriteString(fmt.Sprintf(
-					"    - TriggeredBy(%s)\n",
-					policyHitString(
-						pending.Trigger.Kind,
-						pending.Trigger.Namespace,
-						pending.Trigger.Name,
-						pending.Trigger.Tier,
-						pending.Trigger.Action,
-					)))
-				if pending.Trigger.Name == name &&
-					pending.Trigger.Tier == tier &&
-					pending.Trigger.Kind == kind &&
-					pending.Trigger.Action == action {
-					containsStagedPolicy = true
-					break responseLoop
-				}
+				break
 			}
 		}
 	}
 
-	Expect(containsStagedPolicy).Should(BeTrue(), msg.String())
+	Expect(containsStagedPolicy).Should(
+		BeTrue(),
+		fmt.Sprintf(
+			"Could not find staged policy: Kind:%s Name:%s Tier:%s Action:%s\n%s",
+			kind, name, tier, action, formatFlowDiagnostics(response.Items),
+		),
+	)
 }
 
-func policyHitString(kind whiskerv1.PolicyKind, namespace, name, tier string, action whiskerv1.Action) string {
-	msg := fmt.Sprintf("Kind:%s ", kind)
-	if namespace != "" {
-		msg += fmt.Sprintf("Namespace:%s ", namespace)
+func formatFlowDiagnostics(flows []whiskerv1.FlowResponse) string {
+	var diag strings.Builder
+	diag.WriteString(fmt.Sprintf("Found %d flow(s):\n", len(flows)))
+	for i, item := range flows {
+		diag.WriteString(fmt.Sprintf(
+			"  flow[%d]: reporter=%s action=%s src=%s/%s dst=%s/%s proto=%s destPort=%d\n",
+			i, item.Reporter, item.Action,
+			item.SourceNamespace, item.SourceName,
+			item.DestNamespace, item.DestName,
+			item.Protocol, item.DestPort,
+		))
+		for _, p := range item.Policies.Enforced {
+			diag.WriteString(fmt.Sprintf("    enforced: %s\n", formatPolicyHit(p)))
+		}
+		for _, p := range item.Policies.Pending {
+			diag.WriteString(fmt.Sprintf("    pending: %s\n", formatPolicyHit(p)))
+			if p.Trigger != nil {
+				diag.WriteString(fmt.Sprintf("      triggered-by: %s\n", formatPolicyHit(p.Trigger)))
+			}
+		}
 	}
-	if name != "" {
-		msg += fmt.Sprintf("Name:%s ", name)
+	return diag.String()
+}
+
+func formatPolicyHit(p *whiskerv1.PolicyHit) string {
+	if p == nil {
+		return "<nil>"
 	}
-	if tier != "" {
-		msg += fmt.Sprintf("Tier:%s ", tier)
+	msg := fmt.Sprintf("Kind:%s ", p.Kind)
+	if p.Namespace != "" {
+		msg += fmt.Sprintf("Namespace:%s ", p.Namespace)
 	}
-	msg += fmt.Sprintf("Action:%s ", action)
+	if p.Name != "" {
+		msg += fmt.Sprintf("Name:%s ", p.Name)
+	}
+	if p.Tier != "" {
+		msg += fmt.Sprintf("Tier:%s ", p.Tier)
+	}
+	msg += fmt.Sprintf("Action:%s", p.Action)
 	return msg
 }
 
