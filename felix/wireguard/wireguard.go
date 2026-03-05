@@ -1651,7 +1651,7 @@ func (w *Wireguard) addRouteRule() {
 		for cidr := range w.programmedRoutingRuleCIDRs.All() {
 			w.routerule.RemoveRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
 				MatchSrcAddress(cidr.ToIPNet()).
-				Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)).
+				MatchFWMarkWithMask(0, uint32(w.config.FirewallMark)).
 				GoToTable(w.config.RoutingTableIndex))
 		}
 		w.programmedRoutingRuleCIDRs.Clear()
@@ -1669,7 +1669,7 @@ func (w *Wireguard) addRouteRule() {
 			for cidr := range node.cidrs.All() {
 				w.routerule.SetRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
 					MatchSrcAddress(cidr.ToIPNet()).
-					Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)).
+					MatchFWMarkWithMask(0, uint32(w.config.FirewallMark)).
 					GoToTable(w.config.RoutingTableIndex))
 				w.programmedRoutingRuleCIDRs.Add(cidr)
 			}
