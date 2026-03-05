@@ -755,6 +755,15 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		logCtx.WithError(localSubnetErr).Debug("Failed to get local host subnet")
 	}
 
+	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
+	if c.globalBGPConfig != nil && c.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
+		*c.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
+		programClusterRoutes = false
+		logCtx.Debug("Programming cluster routes is disabled.")
+	} else {
+		logCtx.Debug("Programming cluster routes is enabled.")
+	}
+
 	for key, value := range kvPairs {
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
@@ -763,20 +772,20 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 		}
 
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
-		statement := c.processIPPool(&ippool, false, "reject", "", ipVersion)
+		statement := c.processIPPool(&ippool, programClusterRoutes, false, "reject", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
 		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
-		statement = c.processIPPool(&ippool, false, "accept", "", ipVersion)
+		statement = c.processIPPool(&ippool, programClusterRoutes, false, "accept", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
 		if ipVersion == 6 || ipVersion == 4 && localSubnetErr == nil {
 			// Generate statements for kernel programming filter.
-			statement = c.processIPPool(&ippool, true, filterActionForKernel, localSubnet, ipVersion)
+			statement = c.processIPPool(&ippool, programClusterRoutes, true, filterActionForKernel, localSubnet, ipVersion)
 			if len(statement) != 0 {
 				config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 			}
@@ -823,49 +832,53 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 //	if (net ~ 10.10.0.0/16) then { accept; }
 func (c *client) processIPPool(
 	ippool *model.IPPool,
+	programClusterRoutes bool,
 	forProgrammingKernel bool,
 	filterAction string,
 	localSubnet string,
 	ipVersion int,
 ) string {
 	cidr := ippool.CIDR.String()
-	var action, comment, extraStatement string
-	switch {
-	case ippool.DisableBGPExport && !forProgrammingKernel:
-		// IPPool's BGP export is disabled, and filter is for exporting to other peers.
-		action = "reject"
-		comment = "BGP export is disabled."
-	case ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet:
-		// VXLAN encapsulation is always handled by Felix.
-		if forProgrammingKernel {
-			// Felix always handles programming VXLAN IPPools.
-			action = "reject"
-			comment = "VXLAN routes are handled by Felix."
-		} else {
-			action = "accept"
-		}
-	case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
-		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
-		// IPIP encapsulation or No-Encap.
-		if forProgrammingKernel && ipVersion == 4 {
-			// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
-			// our fork of BIRD.
-			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
-		}
-		action = "accept"
-	default:
-		log.WithFields(log.Fields{
-			"ippool":    ippool.CIDR,
-			"ipVersion": ipVersion,
-		}).Error("Invalid ippool")
-		return ""
+
+	// IPPool's BGP export is disabled, and filter is for exporting to other peers.
+	if ippool.DisableBGPExport && !forProgrammingKernel {
+		return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "BGP export is disabled.")
 	}
 
-	// Filter statements based on provided filterAction.
-	if len(filterAction) != 0 && filterAction != action {
-		return ""
+	// VXLAN encapsulation.
+	if ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet {
+		if forProgrammingKernel {
+			// Programming VXLAN routes is always handled by Felix.
+			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "VXLAN routes are handled by Felix.")
+		}
+		return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
 	}
-	return emitFilterStatementForIPPools(cidr, extraStatement, action, comment)
+
+	// IPIP encapsulation or No-Encap.
+	if ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet ||
+		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never {
+		if programClusterRoutes {
+			var extraStatement string
+			if forProgrammingKernel && ipVersion == 4 {
+				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+				// our fork of BIRD.
+				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
+			}
+			return emitFilterStatementForIPPools(cidr, extraStatement, "accept", filterAction, "")
+		}
+
+		// Felix is responsible for programming cluster routes, not BIRD.
+		if forProgrammingKernel {
+			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "Cluster routes are handled by Felix.")
+		}
+		return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
+	}
+
+	log.WithFields(log.Fields{
+		"ippool":    ippool.CIDR,
+		"ipVersion": ipVersion,
+	}).Error("Invalid ippool")
+	return ""
 }
 
 func (c *client) localSubnet(ipVersion int) (string, error) {
@@ -892,7 +905,11 @@ func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSub
 	}
 }
 
-func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string) (statement string) {
+func emitFilterStatementForIPPools(cidr, extraStatement, action, filterAction, comment string) (statement string) {
+	// Filter statements based on provided filterAction.
+	if len(filterAction) != 0 && filterAction != action {
+		return
+	}
 	// Check mandatory inputs.
 	if len(cidr) == 0 || len(action) == 0 {
 		return

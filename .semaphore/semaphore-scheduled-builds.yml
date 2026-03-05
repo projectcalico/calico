@@ -25,6 +25,8 @@ global_job_config:
       value: calico-transient-build-artifacts-europe-west3
     - name: BUILDKIT_PROGRESS
       value: plain
+    - name: SEMAPHORE_AGENT_UPLOAD_JOB_LOGS
+      value: when-trimmed
   prologue:
     commands:
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
@@ -199,6 +201,10 @@ promotions:
       when: "branch =~ 'master|release-.*'"
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
+  - name: Push Webhooks images
+    pipeline_file: push-images/webhooks.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
   - name: Publish openstack packages
@@ -567,10 +573,20 @@ blocks:
           type: f1-standard-4
           os_image: ubuntu2204
       jobs:
-        - name: "E2E tests: Conformance"
+        - name: "E2E tests: Conformance (BIRD programs cluster routes)"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
           env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
+        - name: "E2E tests: Conformance (Felix programs cluster routes)"
+          commands:
+            - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
+          env_vars:
+            - name: CLUSTER_ROUTING
+              value: "FELIX"
+            - name: E2E_SKIP
+              value: "BGP"
             - name: STORE_BUILD_CACHE
               value: "true"
   - name: Envoy Gateway
@@ -661,6 +677,8 @@ blocks:
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
       jobs:
         - name: "Felix: Build and cache FV prerequisites"
           priority:
@@ -706,6 +724,7 @@ blocks:
       epilogue:
         always:
           commands:
+            - ./.semaphore/analyze-test-failures --ut || true
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "Felix: multi-arch build"
     run:
@@ -821,6 +840,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: nftables tests on Ubuntu 22.04"
     run:
       when: "true"
@@ -844,6 +865,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
     run:
       when: "true"
@@ -867,6 +890,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
     run:
       when: "true"
@@ -894,6 +919,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: BPF program-loading check on 25.10 (nftables)"
     run:
       when: "true"
@@ -920,6 +947,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
     run:
       when: "true"
@@ -947,6 +976,8 @@ blocks:
             - source felix/.semaphore/fv-epilogue
       secrets:
         - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
   - name: Goldmane
     run:
       when: "true"

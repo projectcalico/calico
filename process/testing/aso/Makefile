@@ -4,6 +4,7 @@ KIND_VERSION?=v0.24.0
 KUBE_VERSION?=v1.33.7
 HELM_VERSION?=v3.16.3
 GOMPLATE_VERSION?=v3.11.7
+CRANE_VERSION?=v0.21.2
 
 KIND_CLUSTER_NAME?=kind
 
@@ -69,7 +70,7 @@ CALICO_MARKER:=.calico-installed
 .PHONY: install-calico
 install-calico: $(CALICO_MARKER)
 
-$(CALICO_MARKER): $(KUBEADM_MARKER)
+$(CALICO_MARKER): $(KUBEADM_MARKER) $(BINDIR)/crane
 	@echo "Installing Calico ..."
 	./install-calico.sh
 	touch $@
@@ -117,6 +118,12 @@ $(BINDIR)/helm:
 	tar -xzf $(BINDIR)/helm.tar.gz -C $(BINDIR) --strip-components=1 linux-$(ARCH)/helm
 	rm $(BINDIR)/helm.tar.gz
 	chmod +x $@
+	touch $@
+
+CRANE_ARCH = $(subst amd64,x86_64,$(ARCH))
+$(BINDIR)/crane:
+	mkdir -p $(@D)
+	curl -sSfL --retry 5 https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz | tar xz -C $(@D) crane
 	touch $@
 
 .PHONY: clean
