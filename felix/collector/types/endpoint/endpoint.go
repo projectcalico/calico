@@ -78,7 +78,7 @@ func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
 	key := ed.Key()
 	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
-		ns, name := k.GetNameAndNamespace()
+		name, ns := k.GetNameAndNamespace()
 		if ns == "" {
 			return Metadata{}, fmt.Errorf("WEP '%v' has no namespace", k.WorkloadID)
 		}
