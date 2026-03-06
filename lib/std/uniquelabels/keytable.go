@@ -15,7 +15,9 @@
 package uniquelabels
 
 import (
+	"encoding/json"
 	"math/bits"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -102,6 +104,92 @@ func (cm compactMap) allHandles(yield func(uniquestr.Handle, uniquestr.Handle) b
 		bf &= bf - 1
 		arrayIdx++
 	}
+}
+
+// marshalJSON writes a JSON object directly from the compact bitfield,
+// avoiding an intermediate map[string]string allocation.  Keys are emitted
+// in sorted order to match encoding/json's map key ordering convention.
+func (cm compactMap) marshalJSON() ([]byte, error) {
+	n := cm.len()
+	if n == 0 {
+		return []byte("{}"), nil
+	}
+	snap := globalKeyTable.currentSnap()
+
+	// Collect key-value pairs indexed by position in the values array.
+	// Backing array is compile-time sized so it can be stack-allocated.
+	type kv struct {
+		key, val string
+	}
+	var backing [maxKeyTableSize]kv
+	pairs := backing[:n]
+	bf := cm.keyBits
+	arrayIdx := 0
+	for bf != 0 {
+		pos := bits.TrailingZeros64(bf)
+		pairs[arrayIdx] = kv{
+			key: snap.byIndex[pos].Value(),
+			val: readValueAt(cm.ptr, arrayIdx).Value(),
+		}
+		bf &= bf - 1
+		arrayIdx++
+	}
+	slices.SortFunc(pairs, func(a, b kv) int {
+		if a.key < b.key {
+			return -1
+		}
+		if a.key > b.key {
+			return 1
+		}
+		return 0
+	})
+
+	// Pre-size: 15 keys × ~40 bytes each ≈ 600 bytes typical.
+	buf := make([]byte, 0, n*40)
+	buf = append(buf, '{')
+	for i, p := range pairs {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		buf = appendJSONString(buf, p.key)
+		buf = append(buf, ':')
+		buf = appendJSONString(buf, p.val)
+	}
+	buf = append(buf, '}')
+	return buf, nil
+}
+
+// appendJSONString appends a JSON-encoded string (with quotes) to buf.
+// Optimised for Kubernetes label syntax (alphanumerics, '-', '_', '.', '/')
+// which needs no escaping.  Falls back to json.Marshal for anything else.
+//
+// Fuzz-tested against encoding/json for correctness.
+func appendJSONString(buf []byte, s string) []byte {
+	if isLabelSafe(s) {
+		buf = append(buf, '"')
+		buf = append(buf, s...)
+		buf = append(buf, '"')
+		return buf
+	}
+	// Slow path: delegate to encoding/json for correct escaping.
+	quoted, _ := json.Marshal(s)
+	return append(buf, quoted...)
+}
+
+// isLabelSafe reports whether s contains only bytes that are safe to
+// embed in a JSON string without escaping.  This covers the Kubernetes
+// label value charset ([a-zA-Z0-9._-]) plus '/' which appears in
+// label keys (e.g. "kubernetes.io/name").
+func isLabelSafe(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
+			c == '-' || c == '_' || c == '.' || c == '/' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (cm compactMap) equals(other compactMap) bool {

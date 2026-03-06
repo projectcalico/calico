@@ -15,7 +15,6 @@
 package uniquelabels
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"hash/maphash"
@@ -64,8 +63,18 @@ func TestInternedLabelsJSONRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if !bytes.Equal(j, j2) {
-				t.Errorf("Interned map should produce same JSON as normal map; got %s, want %s", j2, j)
+			// Compare semantically: both should unmarshal to the same map.
+			// Byte-exact comparison isn't reliable because compact maps
+			// emit keys in bitfield order, not Go's random map order.
+			var fromPlain, fromInterned map[string]string
+			if err := json.Unmarshal(j, &fromPlain); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(j2, &fromInterned); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(fromPlain, fromInterned) {
+				t.Errorf("Interned map should produce equivalent JSON; got %s, want %s", j2, j)
 			}
 
 			var out Map
@@ -903,6 +912,97 @@ func TestFallbackIntersectProducesCompactWhenPossible(t *testing.T) {
 	if !result.EquivalentTo(map[string]string{"a": "1"}) {
 		t.Errorf("wrong content: %v", result)
 	}
+}
+
+func TestAppendJSONStringMatchesStdlib(t *testing.T) {
+	cases := []string{
+		"",
+		"simple",
+		"with space",
+		`with"quotes`,
+		"with\\backslash",
+		"with\nnewline",
+		"with\ttab",
+		"with\x00null",
+		"with/slash",
+		"emoji: \U0001F600",
+		"unicode: café",
+		"mixed: a\"b\\c\nd\te\x01f",
+		"kubernetes.io/name",
+		"example.com/label-key",
+	}
+	for _, s := range cases {
+		got := string(appendJSONString(nil, s))
+		want, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q) failed: %v", s, err)
+		}
+		if got != string(want) {
+			t.Errorf("appendJSONString(%q) = %s, want %s", s, got, want)
+		}
+	}
+}
+
+func FuzzAppendJSONString(f *testing.F) {
+	f.Add("")
+	f.Add("simple")
+	f.Add(`with"quotes`)
+	f.Add("with\\backslash")
+	f.Add("with\nnewline")
+	f.Add("with\ttab")
+	f.Add("with\x00null")
+	f.Add("emoji: \U0001F600")
+	f.Add("unicode: café")
+	f.Add("kubernetes.io/name")
+	f.Fuzz(func(t *testing.T, s string) {
+		got := string(appendJSONString(nil, s))
+		want, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q) failed: %v", s, err)
+		}
+		if got != string(want) {
+			t.Errorf("appendJSONString(%q) = %s, want %s", s, got, want)
+		}
+	})
+}
+
+func BenchmarkMarshalJSON(b *testing.B) {
+	const nKeys = 15
+	input := make(map[string]string, nKeys)
+	for i := range nKeys {
+		input[fmt.Sprintf("example.com/label-%d", i)] = fmt.Sprintf("value-%d", i)
+	}
+
+	b.Run("compact", func(b *testing.B) {
+		unsafeTestOnlyReset()
+		m := Make(input)
+		if !m.isCompact() {
+			b.Fatal("expected compact representation")
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for range b.N {
+			_, err := m.MarshalJSON()
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("fallback", func(b *testing.B) {
+		m := makeFallback(input)
+		if m.isCompact() {
+			b.Fatal("expected fallback representation")
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for range b.N {
+			_, err := m.MarshalJSON()
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }
 
 func TestFallbackFallbackEquals(t *testing.T) {
