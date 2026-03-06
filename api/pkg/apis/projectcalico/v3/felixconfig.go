@@ -164,6 +164,19 @@ const (
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
+	// NodeSelector is an optional label selector that restricts this FelixConfiguration
+	// to only apply to nodes that match the given selector. This field is only valid
+	// on FelixConfiguration resources whose name is not "default" and does not start
+	// with "node.". For resources named "default", the configuration applies globally
+	// to all nodes. For resources named "node.<nodename>", the configuration applies to
+	// the named node only.
+	//
+	// When multiple selector-scoped FelixConfiguration resources match a given node, all
+	// matching configurations are merged. For any fields set in more than one matching
+	// resource, the effective value is not well defined.
+	// +optional
+	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector" confignamev1:"-"`
+
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
 	UseInternalDataplaneDriver *bool `json:"useInternalDataplaneDriver,omitempty"`

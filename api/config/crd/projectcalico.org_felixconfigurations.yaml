@@ -450,6 +450,8 @@ spec:
                   type: string
                 nftablesRefreshInterval:
                   type: string
+                nodeSelector:
+                  type: string
                 openstackRegion:
                   type: string
                 policySyncPathPrefix:
