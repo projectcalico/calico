@@ -2326,6 +2326,151 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			})
 		})
 
+		Describe("live migration route priority", func() {
+			const (
+				normalPriority   = 100
+				elevatedPriority = 50
+			)
+
+			wlEPUpdate := &proto.WorkloadEndpointUpdate{
+				Id: &wlEPID1,
+				Endpoint: &proto.WorkloadEndpoint{
+					State:      "active",
+					Mac:        "01:02:03:04:05:06",
+					Name:       "cali12345-ab",
+					ProfileIds: []string{},
+					Tiers:      []*proto.TierInfo{},
+					Ipv4Nets:   []string{"10.0.240.2/24"},
+					Ipv6Nets:   []string{"2001:db8:2::2/128"},
+				},
+			}
+
+			expectedRouteTarget := func(priority int) []routetable.Target {
+				var cidr string
+				if ipVersion == 6 {
+					cidr = "2001:db8:2::2/128"
+				} else {
+					cidr = "10.0.240.0/24"
+				}
+				return []routetable.Target{{
+					RouteKey: routetable.RouteKey{
+						CIDR:     ip.MustParseCIDROrIP(cidr),
+						Priority: priority,
+					},
+					DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+				}}
+			}
+
+			JustBeforeEach(func() {
+				// Override config with explicit route priorities.
+				epMgr.cfg.normalRoutePriority = normalPriority
+				epMgr.cfg.elevatedRoutePriority = elevatedPriority
+			})
+
+			Context("with endpoint already active", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(wlEPUpdate)
+					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					applyUpdates(epMgr)
+				})
+
+				It("should set routes at normal priority", func() {
+					routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+				})
+
+				Context("when live migration state becomes Target", func() {
+					JustBeforeEach(func() {
+						epMgr.OnUpdate(&liveMigrationStateUpdate{
+							ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
+							State: liveMigrationStateTarget,
+						})
+						applyUpdates(epMgr)
+					})
+
+					It("should suppress routes", func() {
+						routeTable.checkRoutes("cali12345-ab", nil)
+					})
+
+					Context("when live migration state becomes Live", func() {
+						JustBeforeEach(func() {
+							epMgr.OnUpdate(&liveMigrationStateUpdate{
+								ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
+								State: liveMigrationStateLive,
+							})
+							applyUpdates(epMgr)
+						})
+
+						It("should set routes at elevated priority", func() {
+							routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+						})
+
+						Context("when live migration state becomes TimeWait", func() {
+							JustBeforeEach(func() {
+								epMgr.OnUpdate(&liveMigrationStateUpdate{
+									ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
+									State: liveMigrationStateTimeWait,
+								})
+								applyUpdates(epMgr)
+							})
+
+							It("should still set routes at elevated priority", func() {
+								routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+							})
+
+							Context("when live migration state becomes Base", func() {
+								JustBeforeEach(func() {
+									epMgr.OnUpdate(&liveMigrationStateUpdate{
+										ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
+										State: liveMigrationStateBase,
+									})
+									applyUpdates(epMgr)
+								})
+
+								It("should revert to normal priority", func() {
+									routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+								})
+							})
+						})
+					})
+				})
+
+				Context("when endpoint is removed while in live migration", func() {
+					JustBeforeEach(func() {
+						epMgr.OnUpdate(&liveMigrationStateUpdate{
+							ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
+							State: liveMigrationStateLive,
+						})
+						applyUpdates(epMgr)
+						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &wlEPID1})
+						applyUpdates(epMgr)
+					})
+
+					It("should remove routes and clean up live migration state", func() {
+						routeTable.checkRoutes("cali12345-ab", nil)
+						Expect(epMgr.pendingLiveMigrationStates).To(BeEmpty())
+					})
+				})
+			})
+
+			Context("when live migration state arrives before endpoint", func() {
+				JustBeforeEach(func() {
+					// Live migration state update arrives but WEP isn't active yet.
+					epMgr.OnUpdate(&liveMigrationStateUpdate{
+						ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
+						State: liveMigrationStateTarget,
+					})
+					// Now the WEP arrives.
+					epMgr.OnUpdate(wlEPUpdate)
+					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					applyUpdates(epMgr)
+				})
+
+				It("should suppress routes for the target", func() {
+					routeTable.checkRoutes("cali12345-ab", nil)
+				})
+			})
+		})
+
 		Describe("workloads as local bgp peer", func() {
 			var linkCali1, linkCali2 netlink.Link
 			listLinkAddrs := func(nl netlinkshim.Interface, link netlink.Link) []string {
