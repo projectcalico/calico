@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -420,74 +420,72 @@ func validateICMPFields(structLevel validator.StructLevel) {
 func validateRule(structLevel validator.StructLevel) {
 	rule := structLevel.Current().Interface().(api.Rule)
 
-	/*
-		allPortsAreNamed := func(ports []numorstring.Port) bool {
-			for _, p := range ports {
-				if len(p.PortName) == 0 {
-					return false
-				}
+	allPortsAreNamed := func(ports []numorstring.Port) bool {
+		for _, p := range ports {
+			if len(p.PortName) == 0 {
+				return false
 			}
-			return true
 		}
+		return true
+	}
 
-		// If the protocol does not support ports, check that the port values have not
-		// been specified.
-		if rule.Protocol == nil {
-			if !allPortsAreNamed(rule.Source.Ports) {
+	// If the protocol does not support ports, check that the port values have not
+	// been specified.
+	if rule.Protocol == nil {
+		if !allPortsAreNamed(rule.Source.Ports) {
+			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
+				"SrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+		}
+		if !allPortsAreNamed(rule.Source.NotPorts) {
+			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
+				"NotSrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+		}
+		if !allPortsAreNamed(rule.Destination.Ports) {
+			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
+				"DstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+		}
+		if !allPortsAreNamed(rule.Destination.NotPorts) {
+			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
+				"NotDstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+		}
+	} else { // Protocol != nil
+		if !rule.Protocol.SupportsPorts() {
+			if len(rule.Source.Ports) > 0 {
 				structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-					"SrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+					"Source.Ports", "", reason(protocolPortsMsg), "")
 			}
-			if !allPortsAreNamed(rule.Source.NotPorts) {
+			if len(rule.Source.NotPorts) > 0 {
 				structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-					"NotSrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+					"Source.NotPorts", "", reason(protocolPortsMsg), "")
 			}
-			if !allPortsAreNamed(rule.Destination.Ports) {
+
+			if len(rule.Destination.Ports) > 0 {
 				structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-					"DstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+					"Destination.Ports", "", reason(protocolPortsMsg), "")
 			}
-			if !allPortsAreNamed(rule.Destination.NotPorts) {
+			if len(rule.Destination.NotPorts) > 0 {
 				structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-					"NotDstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
-			}
-		} else { // Protocol != nil
-			if !rule.Protocol.SupportsPorts() {
-				if len(rule.Source.Ports) > 0 {
-					structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-						"Source.Ports", "", reason(protocolPortsMsg), "")
-				}
-				if len(rule.Source.NotPorts) > 0 {
-					structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-						"Source.NotPorts", "", reason(protocolPortsMsg), "")
-				}
-
-				if len(rule.Destination.Ports) > 0 {
-					structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-						"Destination.Ports", "", reason(protocolPortsMsg), "")
-				}
-				if len(rule.Destination.NotPorts) > 0 {
-					structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-						"Destination.NotPorts", "", reason(protocolPortsMsg), "")
-				}
+					"Destination.NotPorts", "", reason(protocolPortsMsg), "")
 			}
 		}
+	}
 
-		// Check that only one of the net or nets fields is specified.
-		hasNetField := rule.Source.Net != nil ||
-			rule.Destination.Net != nil ||
-			rule.Source.NotNet != nil ||
-			rule.Destination.NotNet != nil
-		hasNetsField := len(rule.Source.Nets) != 0 ||
-			len(rule.Destination.Nets) != 0 ||
-			len(rule.Source.NotNets) != 0 ||
-			len(rule.Destination.NotNets) != 0
-		if hasNetField && hasNetsField {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.Nets),
-				"Source/Destination.Net/Nets",
-				"Source/Destination.Net/Nets",
-				reason("only one of Net and Nets fields allowed"),
-				"")
-		}
-	*/
+	// Check that only one of the net or nets fields is specified.
+	hasNetField := rule.Source.Net != nil ||
+		rule.Destination.Net != nil ||
+		rule.Source.NotNet != nil ||
+		rule.Destination.NotNet != nil
+	hasNetsField := len(rule.Source.Nets) != 0 ||
+		len(rule.Destination.Nets) != 0 ||
+		len(rule.Source.NotNets) != 0 ||
+		len(rule.Destination.NotNets) != 0
+	if hasNetField && hasNetsField {
+		structLevel.ReportError(reflect.ValueOf(rule.Source.Nets),
+			"Source/Destination.Net/Nets",
+			"Source/Destination.Net/Nets",
+			reason("only one of Net and Nets fields allowed"),
+			"")
+	}
 
 	var seenV4, seenV6 bool
 
@@ -517,59 +515,57 @@ func validateRule(structLevel validator.StructLevel) {
 }
 
 func validateBackendRule(structLevel validator.StructLevel) {
-	/*
-		rule := structLevel.Current().Interface().(model.Rule)
+	rule := structLevel.Current().Interface().(model.Rule)
 
-		allPortsAreNamed := func(ports []numorstring.Port) bool {
-			for _, p := range ports {
-				if len(p.PortName) == 0 {
-					return false
-				}
+	allPortsAreNamed := func(ports []numorstring.Port) bool {
+		for _, p := range ports {
+			if len(p.PortName) == 0 {
+				return false
 			}
-			return true
 		}
+		return true
+	}
 
-		// If the protocol does not support ports check that the port values have not
-		// been specified.
-		if rule.Protocol == nil {
-			if !allPortsAreNamed(rule.SrcPorts) {
+	// If the protocol does not support ports check that the port values have not
+	// been specified.
+	if rule.Protocol == nil {
+		if !allPortsAreNamed(rule.SrcPorts) {
+			structLevel.ReportError(reflect.ValueOf(rule.SrcPorts),
+				"SrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+		}
+		if !allPortsAreNamed(rule.NotSrcPorts) {
+			structLevel.ReportError(reflect.ValueOf(rule.NotSrcPorts),
+				"NotSrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+		}
+		if !allPortsAreNamed(rule.DstPorts) {
+			structLevel.ReportError(reflect.ValueOf(rule.DstPorts),
+				"DstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+		}
+		if !allPortsAreNamed(rule.NotDstPorts) {
+			structLevel.ReportError(reflect.ValueOf(rule.NotDstPorts),
+				"NotDstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+		}
+	} else { // Protocol != nil
+		if !rule.Protocol.SupportsPorts() {
+			if len(rule.SrcPorts) > 0 {
 				structLevel.ReportError(reflect.ValueOf(rule.SrcPorts),
-					"SrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+					"SrcPorts", "", reason(protocolPortsMsg), "")
 			}
-			if !allPortsAreNamed(rule.NotSrcPorts) {
+			if len(rule.NotSrcPorts) > 0 {
 				structLevel.ReportError(reflect.ValueOf(rule.NotSrcPorts),
-					"NotSrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+					"NotSrcPorts", "", reason(protocolPortsMsg), "")
 			}
-			if !allPortsAreNamed(rule.DstPorts) {
-				structLevel.ReportError(reflect.ValueOf(rule.DstPorts),
-					"DstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
-			}
-			if !allPortsAreNamed(rule.NotDstPorts) {
-				structLevel.ReportError(reflect.ValueOf(rule.NotDstPorts),
-					"NotDstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
-			}
-		} else { // Protocol != nil
-			if !rule.Protocol.SupportsPorts() {
-				if len(rule.SrcPorts) > 0 {
-					structLevel.ReportError(reflect.ValueOf(rule.SrcPorts),
-						"SrcPorts", "", reason(protocolPortsMsg), "")
-				}
-				if len(rule.NotSrcPorts) > 0 {
-					structLevel.ReportError(reflect.ValueOf(rule.NotSrcPorts),
-						"NotSrcPorts", "", reason(protocolPortsMsg), "")
-				}
 
-				if len(rule.DstPorts) > 0 {
-					structLevel.ReportError(reflect.ValueOf(rule.DstPorts),
-						"DstPorts", "", reason(protocolPortsMsg), "")
-				}
-				if len(rule.NotDstPorts) > 0 {
-					structLevel.ReportError(reflect.ValueOf(rule.NotDstPorts),
-						"NotDstPorts", "", reason(protocolPortsMsg), "")
-				}
+			if len(rule.DstPorts) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.DstPorts),
+					"DstPorts", "", reason(protocolPortsMsg), "")
+			}
+			if len(rule.NotDstPorts) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.NotDstPorts),
+					"NotDstPorts", "", reason(protocolPortsMsg), "")
 			}
 		}
-	*/
+	}
 }
 
 func validateNodeSpec(structLevel validator.StructLevel) {

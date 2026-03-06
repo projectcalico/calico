@@ -444,89 +444,53 @@ func (m nftMatch) IPSetNames() []string {
 
 func (m nftMatch) SourcePorts(ports ...uint16) generictables.MatchCriteria {
 	portsString := PortsToMultiport(ports)
-	if len(m.proto) != 0 || m.protoNum != 0 {
-		m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.transportProto(), portsString))
-	} else {
-		m.clauses = append(m.clauses, fmt.Sprintf("th sport %s", portsString))
-	}
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.transportProto(), portsString))
 	return m
 }
 
 func (m nftMatch) NotSourcePorts(ports ...uint16) generictables.MatchCriteria {
 	portsString := PortsToMultiport(ports)
-	if len(m.proto) != 0 || m.protoNum != 0 {
-		m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.transportProto(), portsString))
-	} else {
-		m.clauses = append(m.clauses, fmt.Sprintf("th sport != %s", portsString))
-	}
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.transportProto(), portsString))
 	return m
 }
 
 func (m nftMatch) DestPort(port uint16) generictables.MatchCriteria {
-	if len(m.proto) != 0 || m.protoNum != 0 {
-		m.clauses = append(m.clauses, fmt.Sprintf("%s dport %v", m.transportProto(), port))
-	} else {
-		m.clauses = append(m.clauses, fmt.Sprintf("th dport %v", port))
-	}
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %v", m.transportProto(), port))
 	return m
 }
 
 func (m nftMatch) DestPorts(ports ...uint16) generictables.MatchCriteria {
-	if len(m.proto) != 0 || m.protoNum != 0 {
-		m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.transportProto(), PortsToMultiport(ports)))
-	} else {
-		m.clauses = append(m.clauses, fmt.Sprintf("th dport %s", PortsToMultiport(ports)))
-	}
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.transportProto(), PortsToMultiport(ports)))
 	return m
 }
 
 func (m nftMatch) NotDestPorts(ports ...uint16) generictables.MatchCriteria {
 	portsString := PortsToMultiport(ports)
-	if len(m.proto) != 0 || m.protoNum != 0 {
-		m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.transportProto(), portsString))
-	} else {
-		m.clauses = append(m.clauses, fmt.Sprintf("th dport != %s", portsString))
-	}
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.transportProto(), portsString))
 	return m
 }
 
 func (m nftMatch) SourcePortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
 	portsString := PortRangesToMultiport(ports)
-	if len(m.proto) != 0 || m.protoNum != 0 {
-		m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.transportProto(), portsString))
-	} else {
-		m.clauses = append(m.clauses, fmt.Sprintf("th sport %s", portsString))
-	}
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.transportProto(), portsString))
 	return m
 }
 
 func (m nftMatch) NotSourcePortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
 	portsString := PortRangesToMultiport(ports)
-	if len(m.proto) != 0 || m.protoNum != 0 {
-		m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.transportProto(), portsString))
-	} else {
-		m.clauses = append(m.clauses, fmt.Sprintf("th sport != %s", portsString))
-	}
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.transportProto(), portsString))
 	return m
 }
 
 func (m nftMatch) DestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
 	portsString := PortRangesToMultiport(ports)
-	if len(m.proto) != 0 || m.protoNum != 0 {
-		m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.transportProto(), portsString))
-	} else {
-		m.clauses = append(m.clauses, fmt.Sprintf("th dport %s", portsString))
-	}
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.transportProto(), portsString))
 	return m
 }
 
 func (m nftMatch) NotDestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
 	portsString := PortRangesToMultiport(ports)
-	if len(m.proto) != 0 || m.protoNum != 0 {
-		m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.transportProto(), portsString))
-	} else {
-		m.clauses = append(m.clauses, fmt.Sprintf("th dport != %s", portsString))
-	}
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.transportProto(), portsString))
 	return m
 }
 

@@ -291,7 +291,6 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		newMatch:          r.NewMatch,
 		markAllBlocksPass: r.MarkScratch0,
 		markThisBlockPass: r.MarkScratch1,
-		nft:               r.nft,
 	}
 
 	// Port matches.  We only need to render blocks of ports if, in total, there's more than one
@@ -333,25 +332,6 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		matchBlockBuilder.AppendCIDRMatchBlock(ruleCopy.DstNet, dst)
 		// Since we're using a block for this, nil out the match.
 		ruleCopy.DstNet = nil
-	}
-
-	if ruleCopy.Protocol == nil {
-		notSrcPortSplits := SplitPortList(ruleCopy.NotSrcPorts)
-		if len(notSrcPortSplits)+len(ruleCopy.NotSrcNamedPortIpSetIds) > 1 {
-			// Render a block for the source ports.
-			matchBlockBuilder.AppendNegatedPortMatchBlock(ipSetConfig, ruleCopy.Protocol, notSrcPortSplits, ruleCopy.NotSrcNamedPortIpSetIds, src)
-			// And remove them from the rule since they're already handled.
-			ruleCopy.NotSrcPorts = nil
-			ruleCopy.NotSrcNamedPortIpSetIds = nil
-		}
-		notDstPortSplits := SplitPortList(ruleCopy.NotDstPorts)
-		if len(notDstPortSplits)+len(ruleCopy.NotDstNamedPortIpSetIds) > 1 {
-			// Render a block for the destination ports.
-			matchBlockBuilder.AppendPortMatchBlock(ipSetConfig, ruleCopy.Protocol, notDstPortSplits, ruleCopy.NotDstNamedPortIpSetIds, dst)
-			// And remove them from the rule since they're already handled.
-			ruleCopy.NotDstPorts = nil
-			ruleCopy.NotDstNamedPortIpSetIds = nil
-		}
 	}
 	// Now, work out if we need to render a block for the src/dst negative CIDR matches.  We need
 	// to do that if:
@@ -416,7 +396,6 @@ type matchBlockBuilder struct {
 	actions  generictables.ActionFactory
 
 	Rules []generictables.Rule
-	nft   bool
 }
 
 func (r *matchBlockBuilder) AppendPortMatchBlock(
@@ -438,24 +417,12 @@ func (r *matchBlockBuilder) AppendPortMatchBlock(
 		"srcOrDst":     srcOrDst,
 	})
 	for _, split := range numericPortSplits {
-		if protocol == nil && !r.nft {
-			// Handle nil protocol in iptables, since it's mandatory for matching a port block.
-			for _, p := range []string{"tcp", "udp", "sctp"} {
-				m := r.newMatch().Protocol(p)
-				m = srcOrDst.AppendMatchPorts(m, split)
-				r.Rules = append(r.Rules, generictables.Rule{
-					Match:  m,
-					Action: r.actions.SetMark(markToSet),
-				})
-			}
-		} else {
-			m := appendProtocolMatch(r.newMatch(), protocol, logCxt)
-			m = srcOrDst.AppendMatchPorts(m, split)
-			r.Rules = append(r.Rules, generictables.Rule{
-				Match:  m,
-				Action: r.actions.SetMark(markToSet),
-			})
-		}
+		m := appendProtocolMatch(r.newMatch(), protocol, logCxt)
+		m = srcOrDst.AppendMatchPorts(m, split)
+		r.Rules = append(r.Rules, generictables.Rule{
+			Match:  m,
+			Action: r.actions.SetMark(markToSet),
+		})
 	}
 
 	for _, namedPortIPSetID := range namedPortIPSetIDs {
@@ -468,53 +435,6 @@ func (r *matchBlockBuilder) AppendPortMatchBlock(
 
 	// Append the end-of-block rules.
 	r.finishPositiveBlock()
-}
-
-func (r *matchBlockBuilder) AppendNegatedPortMatchBlock(
-	ipSetConfig *ipsets.IPVersionConfig,
-	protocol *proto.Protocol,
-	numericPortSplits [][]*proto.PortRange,
-	namedPortIPSetIDs []string,
-	srcOrDst srcOrDst,
-) {
-	// Write out the initial "reset" rule if this is the first block.  Since this is a negated
-	// rule, we want the AllBlocks bit to be set by default .
-	r.maybeAppendInitialRule(r.markAllBlocksPass)
-
-	logCxt := logrus.WithFields(logrus.Fields{
-		"protocol":     protocol,
-		"portSplits":   numericPortSplits,
-		"namedPortIDs": namedPortIPSetIDs,
-		"srcOrDst":     srcOrDst,
-	})
-	for _, split := range numericPortSplits {
-		if protocol == nil && !r.nft {
-			// Handle nil protocol in iptables, since it's mandatory for matching a port block.
-			for _, p := range []string{"tcp", "udp", "sctp"} {
-				m := r.newMatch().Protocol(p)
-				m = srcOrDst.AppendMatchPorts(m, split)
-				r.Rules = append(r.Rules, generictables.Rule{
-					Match:  m,
-					Action: r.actions.ClearMark(r.markAllBlocksPass),
-				})
-			}
-		} else {
-			m := appendProtocolMatch(r.newMatch(), protocol, logCxt)
-			m = srcOrDst.AppendMatchPorts(m, split)
-			r.Rules = append(r.Rules, generictables.Rule{
-				Match:  m,
-				Action: r.actions.ClearMark(r.markAllBlocksPass),
-			})
-		}
-	}
-
-	for _, namedPortIPSetID := range namedPortIPSetIDs {
-		ipsetName := ipSetConfig.NameForMainIPSet(namedPortIPSetID)
-		r.Rules = append(r.Rules, generictables.Rule{
-			Match:  srcOrDst.MatchIPPortIPSet(r.newMatch(), ipsetName),
-			Action: r.actions.ClearMark(r.markAllBlocksPass),
-		})
-	}
 }
 
 func (r *matchBlockBuilder) AppendCIDRMatchBlock(cidrs []string, srcOrDst srcOrDst) {
@@ -856,11 +776,7 @@ func (r *DefaultRuleRenderer) generateLogPrefix(id types.IDMaker, tier string) s
 	})
 }
 
-func appendProtocolMatch(
-	match generictables.MatchCriteria,
-	protocol *proto.Protocol,
-	logCxt *logrus.Entry,
-) generictables.MatchCriteria {
+func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {
 	if protocol == nil {
 		return match
 	}
@@ -1030,24 +946,22 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.NotSourceIPSet(ipsetName)
 	}
 
-	if pRule.Protocol != nil {
-		if len(pRule.NotSrcPorts) > 0 {
-			logCxt.WithFields(logrus.Fields{
-				"ports": pRule.NotSrcPorts,
-			}).Debug("Adding negated src port match")
-			for _, portSplit := range SplitPortList(pRule.NotSrcPorts) {
-				match = match.NotSourcePortRanges(portSplit)
-			}
+	if len(pRule.NotSrcPorts) > 0 {
+		logCxt.WithFields(logrus.Fields{
+			"ports": pRule.NotSrcPorts,
+		}).Debug("Adding negated src port match")
+		for _, portSplit := range SplitPortList(pRule.NotSrcPorts) {
+			match = match.NotSourcePortRanges(portSplit)
 		}
+	}
 
-		for _, np := range pRule.NotSrcNamedPortIpSetIds {
-			ipsetName := nameForIPSet(np)
-			logCxt.WithFields(logrus.Fields{
-				"namedPort": np,
-				"ipsetName": ipsetName,
-			}).Debug("Adding negated source named port match")
-			match = match.NotSourceIPPortSet(ipsetName)
-		}
+	for _, np := range pRule.NotSrcNamedPortIpSetIds {
+		ipsetName := nameForIPSet(np)
+		logCxt.WithFields(logrus.Fields{
+			"namedPort": np,
+			"ipsetName": ipsetName,
+		}).Debug("Adding negated source named port match")
+		match = match.NotSourceIPPortSet(ipsetName)
 	}
 
 	if len(pRule.NotDstNet) == 1 {
@@ -1066,24 +980,22 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}).Debug("Adding negated dst IP set match")
 	}
 
-	if pRule.Protocol != nil {
-		if len(pRule.NotDstPorts) > 0 {
-			logCxt.WithFields(logrus.Fields{
-				"ports": pRule.NotSrcPorts,
-			}).Debug("Adding negated dst port match")
-			for _, portSplit := range SplitPortList(pRule.NotDstPorts) {
-				match = match.NotDestPortRanges(portSplit)
-			}
+	if len(pRule.NotDstPorts) > 0 {
+		logCxt.WithFields(logrus.Fields{
+			"ports": pRule.NotDstPorts,
+		}).Debug("Adding negated dst port match")
+		for _, portSplit := range SplitPortList(pRule.NotDstPorts) {
+			match = match.NotDestPortRanges(portSplit)
 		}
+	}
 
-		for _, np := range pRule.NotDstNamedPortIpSetIds {
-			ipsetName := nameForIPSet(np)
-			logCxt.WithFields(logrus.Fields{
-				"namedPort": np,
-				"ipsetName": ipsetName,
-			}).Debug("Adding negated dest named port match")
-			match = match.NotDestIPPortSet(ipsetName)
-		}
+	for _, np := range pRule.NotDstNamedPortIpSetIds {
+		ipsetName := nameForIPSet(np)
+		logCxt.WithFields(logrus.Fields{
+			"namedPort": np,
+			"ipsetName": ipsetName,
+		}).Debug("Adding negated dest named port match")
+		match = match.NotDestIPPortSet(ipsetName)
 	}
 
 	if ipVersion == 4 {
