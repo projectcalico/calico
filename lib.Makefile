@@ -1590,8 +1590,9 @@ KIND_SETUP_CHARTS=$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
 	$(REPO_ROOT)/bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz \
 	$(REPO_ROOT)/bin/projectcalico.org.v3-$(GIT_VERSION).tgz
 
-# Deploy Calico on an existing kind cluster. Assumes images are already built
-# and tagged as test-build in the local Docker daemon.
+# Create a kind cluster and deploy Calico on it via Helm. Assumes images are
+# already built and tagged as test-build in the local Docker daemon. If a
+# cluster already exists (stamp file present), the creation step is skipped.
 .PHONY: kind-setup
 kind-setup: $(KIND_SETUP_CHARTS) kind-cluster-create
 	REPO_ROOT=$(REPO_ROOT) \

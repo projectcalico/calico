@@ -88,6 +88,7 @@ function collect_diags() {
     fi
   done
 
+  # Also check for Running pods that aren't fully ready (e.g., 0/1, 1/2).
   ${kctl} get po -A --no-headers 2>/dev/null | while read -r ns name ready status rest; do
     if [ "$status" = "Running" ]; then
       ready_count="${ready%%/*}"
@@ -169,6 +170,7 @@ if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
 fi
 
 # Wait for the Calico API server to be available, if not using the projectcalico.org/v3 CRDs.
+# If using the projectcalico.org/v3 CRDs, there is no Calico API server to wait for.
 if [ "$CALICO_API_GROUP" != "projectcalico.org/v3" ]; then
   echo "Wait for the Calico API server to be ready"
   if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
@@ -198,9 +200,10 @@ ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
 ${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml
 
-echo "Wait for cluster to be ready..."
+echo "Cluster is ready."
 echo
 
+# Show all the pods running for diags purposes.
 ${kubectl} get po --all-namespaces -o wide
 ${kubectl} get svc
 
