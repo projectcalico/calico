@@ -177,12 +177,12 @@ func marshalSortedPairs(pairs []kv) ([]byte, error) {
 }
 
 // appendJSONString appends a JSON-encoded string (with quotes) to buf.
-// Optimised for Kubernetes label syntax (alphanumerics, '-', '_', '.', '/')
-// which needs no escaping.  Falls back to json.Marshal for anything else.
+// All printable ASCII except '"' and '\\' is safe to embed directly in
+// a JSON string.  Falls back to json.Marshal for anything else.
 //
 // Fuzz-tested against encoding/json for correctness.
 func appendJSONString(buf []byte, s string) []byte {
-	if isLabelSafe(s) {
+	if jsonSafe(s) {
 		buf = append(buf, '"')
 		buf = append(buf, s...)
 		buf = append(buf, '"')
@@ -193,18 +193,16 @@ func appendJSONString(buf []byte, s string) []byte {
 	return append(buf, quoted...)
 }
 
-// isLabelSafe reports whether s contains only bytes that are safe to
-// embed in a JSON string without escaping.  This covers the Kubernetes
-// label value charset ([a-zA-Z0-9._-]) plus '/' which appears in
-// label keys (e.g. "kubernetes.io/name").
-func isLabelSafe(s string) bool {
+// jsonSafe reports whether s contains only bytes that are safe to embed
+// in a JSON string without escaping: printable ASCII (0x20..0x7E)
+// excluding '"', '\\', and HTML-sensitive characters '&', '<', '>'
+// (which json.Marshal escapes by default).
+func jsonSafe(s string) bool {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
-			c == '-' || c == '_' || c == '.' || c == '/' {
-			continue
+		if c < 0x20 || c > 0x7E || c == '"' || c == '\\' || c == '&' || c == '<' || c == '>' {
+			return false
 		}
-		return false
 	}
 	return true
 }
