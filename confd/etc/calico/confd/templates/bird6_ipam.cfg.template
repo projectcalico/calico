@@ -64,6 +64,15 @@ function calico_export_to_bgp_peers(bool internal_peer) {
 }
 
 filter calico_kernel_programming {
+{{- if $config.Peers}}
+{{- range $config.Peers}}
+{{- if .SourceAddr}}
+  if (proto = "{{.Name}}") then {
+    krt_prefsrc = {{.SourceAddr}};
+  }
+{{- end}}
+{{- end}}
+{{- end}}
 {{- $reject_key := "/rejectcidrsv6"}}
 {{- if ls $reject_key}}
 
