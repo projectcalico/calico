@@ -1061,6 +1061,27 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *gene
 func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *generictables.Chain {
 	rules := []generictables.Rule{}
 
+	if r.IstioAmbientModeEnabled {
+		var meshIPSet string
+		if ipVersion == 4 {
+			meshIPSet = r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllIstioWEPs)
+		} else {
+			meshIPSet = r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllIstioWEPs)
+		}
+		for _, ifacePrefix := range r.WorkloadIfacePrefixes {
+			rules = append(rules,
+				generictables.Rule{
+					Match: r.NewMatch().
+						Protocol("tcp").
+						ConntrackState("NEW").
+						OutInterface(ifacePrefix + r.wildcard).
+						DestIPSet(meshIPSet).
+						SourceIPSet(meshIPSet),
+					Action: r.DSCP(r.IstioDSCPMark),
+				})
+		}
+	}
+
 	// Note, we use RETURN as the Allow action in this chain, rather than ACCEPT because the
 	// mangle table is typically used, if at all, for packet manipulations that might need to
 	// apply to our allowed traffic.

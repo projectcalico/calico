@@ -236,6 +236,7 @@ type bpfInterfaceInfo struct {
 	endpointID    *types.WorkloadEndpointID
 	ifaceType     IfaceType
 	masterIfIndex int
+	hasIstioDSCP  bool
 }
 
 func (i bpfInterfaceInfo) ifaceIsUp() bool {
@@ -400,6 +401,7 @@ type bpfEndpointManager struct {
 
 	healthAggregator     *health.HealthAggregator
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	istioDSCP            uint8
 
 	QoSMap        maps.MapWithUpdateWithFlags
 	maglevLUTSize int
@@ -689,6 +691,10 @@ func NewBPFEndpointManager(
 				logrus.WithError(err).Warn("Failed to set jit hardening to 1, continuing with 2 - performance may be degraded")
 			}
 		}
+	}
+
+	if config.RulesConfig.IstioAmbientModeEnabled {
+		m.istioDSCP = config.RulesConfig.IstioDSCPMark
 	}
 
 	return m, nil
@@ -1282,6 +1288,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 	m.addWEPToIndexes(wlID, wl)
 	m.withIface(wl.Name, func(iface *bpfInterface) bool {
 		iface.info.endpointID = &wlID
+		iface.info.hasIstioDSCP = wl.IsIstioAmbient
 		return true // Force interface to be marked dirty in case policies changed.
 	})
 }
@@ -2289,10 +2296,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	startTime := time.Now()
 
 	var (
-		state      bpfInterfaceState
-		endpointID *types.WorkloadEndpointID
-		ifaceUp    bool
-		ifindex    int
+		state        bpfInterfaceState
+		endpointID   *types.WorkloadEndpointID
+		ifaceUp      bool
+		ifindex      int
+		hasIstioDSCP bool
 	)
 
 	// Other threads might be filling in jump map FDs in the map so take the lock.
@@ -2302,6 +2310,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		ifindex = iface.info.ifIndex
 		endpointID = iface.info.endpointID
 		state = iface.dpState
+		hasIstioDSCP = iface.info.hasIstioDSCP
 		return false
 	})
 	m.ifacesLock.Unlock()
@@ -2473,6 +2482,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		} else {
 			ap.DSCP = dscp
 		}
+	}
+
+	ap.IstioDSCP = -1
+	if hasIstioDSCP {
+		ap.IstioDSCP = int8(m.istioDSCP)
 	}
 
 	if err := m.wepStateFillJumps(ap, &state); err != nil {

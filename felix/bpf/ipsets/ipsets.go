@@ -35,6 +35,14 @@ var (
 	})
 )
 
+const (
+	// Base of range for reserved IP set IDs for Calico Enterprise.
+	ReservedIPSetBase uint64 = 1 << 32
+
+	// IP set ID for All Istio WEPs.
+	AllIstioWEPsID = ReservedIPSetBase + 1
+)
+
 func init() {
 	prometheus.MustRegister(bpfIPSetsGauge)
 }
