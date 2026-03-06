@@ -79,14 +79,14 @@ var _ = Describe("Config", func() {
 
 		Context("with default API values", func() {
 			var m *mockKCC
-			var ctrl *config.RunConfigController
+			var ctrl *config.ConfigController
 			var ctx context.Context
 			var cancel context.CancelFunc
 
 			BeforeEach(func() {
 				ctx, cancel = context.WithCancel(context.Background())
 				m = &mockKCC{get: config.NewDefaultKubeControllersConfig().DeepCopy()}
-				ctrl = config.NewRunConfigController(ctx, *cfg, m)
+				ctrl = config.NewConfigController(ctx, *cfg, m)
 			})
 
 			AfterEach(func() {
@@ -94,12 +94,12 @@ var _ = Describe("Config", func() {
 			})
 
 			It("should return default resolved spec", func() {
-				runCfg := <-ctrl.ConfigChan()
-				Expect(runCfg.LogSeverityScreen).To(Equal("Info"))
-				Expect(runCfg.HealthChecks).To(Equal(v3.Enabled))
-				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: time.Minute * 10}))
+				cfg := <-ctrl.ConfigChan()
+				Expect(cfg.LogSeverityScreen).To(Equal("Info"))
+				Expect(cfg.HealthChecks).To(Equal(v3.Enabled))
+				Expect(cfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: time.Minute * 10}))
 
-				rc := runCfg.Controllers
+				rc := cfg.Controllers
 				Expect(rc.Node).To(Equal(&v3.NodeControllerConfig{
 					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 					SyncLabels:       v3.Enabled,
@@ -161,7 +161,7 @@ var _ = Describe("Config", func() {
 
 		Context("with non-default API values", func() {
 			var m *mockKCC
-			var ctrl *config.RunConfigController
+			var ctrl *config.ConfigController
 			var ctx context.Context
 			var cancel context.CancelFunc
 
@@ -201,7 +201,7 @@ var _ = Describe("Config", func() {
 				}
 				m = &mockKCC{get: kcc}
 				ctx, cancel = context.WithCancel(context.Background())
-				ctrl = config.NewRunConfigController(ctx, *cfg, m)
+				ctrl = config.NewConfigController(ctx, *cfg, m)
 			})
 
 			AfterEach(func() {
@@ -209,12 +209,12 @@ var _ = Describe("Config", func() {
 			})
 
 			It("should return resolved spec matching API", func() {
-				runCfg := <-ctrl.ConfigChan()
-				Expect(runCfg.LogSeverityScreen).To(Equal("Warning"))
-				Expect(runCfg.HealthChecks).To(Equal(v3.Disabled))
-				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: 0}))
+				cfg := <-ctrl.ConfigChan()
+				Expect(cfg.LogSeverityScreen).To(Equal("Warning"))
+				Expect(cfg.HealthChecks).To(Equal(v3.Disabled))
+				Expect(cfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: 0}))
 
-				rc := runCfg.Controllers
+				rc := cfg.Controllers
 				Expect(rc.Node).To(Equal(&v3.NodeControllerConfig{
 					SyncLabels:      v3.Disabled,
 					HostEndpoint:    &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
@@ -255,14 +255,14 @@ var _ = Describe("Config", func() {
 
 		Context("with no API values", func() {
 			var m *mockKCC
-			var ctrl *config.RunConfigController
+			var ctrl *config.ConfigController
 			var ctx context.Context
 			var cancel context.CancelFunc
 
 			BeforeEach(func() {
 				m = &mockKCC{geterror: errors.ErrorResourceDoesNotExist{}}
 				ctx, cancel = context.WithCancel(context.Background())
-				ctrl = config.NewRunConfigController(ctx, *cfg, m)
+				ctrl = config.NewConfigController(ctx, *cfg, m)
 			})
 
 			AfterEach(func() {
@@ -406,14 +406,14 @@ var _ = Describe("Config", func() {
 
 		Context("with default API values", func() {
 			var m *mockKCC
-			var ctrl *config.RunConfigController
+			var ctrl *config.ConfigController
 			var ctx context.Context
 			var cancel context.CancelFunc
 
 			BeforeEach(func() {
 				ctx, cancel = context.WithCancel(context.Background())
 				m = &mockKCC{get: config.NewDefaultKubeControllersConfig().DeepCopy()}
-				ctrl = config.NewRunConfigController(ctx, *cfg, m)
+				ctrl = config.NewConfigController(ctx, *cfg, m)
 			})
 
 			AfterEach(func() {
@@ -421,12 +421,12 @@ var _ = Describe("Config", func() {
 			})
 
 			It("should return resolved spec matching env", func() {
-				runCfg := <-ctrl.ConfigChan()
-				Expect(runCfg.LogSeverityScreen).To(Equal("Debug"))
-				Expect(runCfg.HealthChecks).To(Equal(v3.Disabled))
-				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: time.Minute * 33}))
+				cfg := <-ctrl.ConfigChan()
+				Expect(cfg.LogSeverityScreen).To(Equal("Debug"))
+				Expect(cfg.HealthChecks).To(Equal(v3.Disabled))
+				Expect(cfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: time.Minute * 33}))
 
-				rc := runCfg.Controllers
+				rc := cfg.Controllers
 				Expect(rc.Node).To(Equal(&v3.NodeControllerConfig{
 					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 					SyncLabels:       v3.Disabled,
@@ -475,7 +475,7 @@ var _ = Describe("Config", func() {
 
 		Context("with non-default API values", func() {
 			var m *mockKCC
-			var ctrl *config.RunConfigController
+			var ctrl *config.ConfigController
 			var ctx context.Context
 			var cancel context.CancelFunc
 
@@ -511,7 +511,7 @@ var _ = Describe("Config", func() {
 				}
 				m = &mockKCC{get: kcc}
 				ctx, cancel = context.WithCancel(context.Background())
-				ctrl = config.NewRunConfigController(ctx, *cfg, m)
+				ctrl = config.NewConfigController(ctx, *cfg, m)
 			})
 
 			AfterEach(func() {
@@ -519,12 +519,12 @@ var _ = Describe("Config", func() {
 			})
 
 			It("should return resolved spec with env overriding API", func() {
-				runCfg := <-ctrl.ConfigChan()
-				Expect(runCfg.LogSeverityScreen).To(Equal("Debug"))
-				Expect(runCfg.HealthChecks).To(Equal(v3.Disabled))
-				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: time.Minute * 33}))
+				cfg := <-ctrl.ConfigChan()
+				Expect(cfg.LogSeverityScreen).To(Equal("Debug"))
+				Expect(cfg.HealthChecks).To(Equal(v3.Disabled))
+				Expect(cfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: time.Minute * 33}))
 
-				rc := runCfg.Controllers
+				rc := cfg.Controllers
 				Expect(rc.Node).To(Equal(&v3.NodeControllerConfig{
 					SyncLabels:      v3.Disabled,
 					HostEndpoint:    &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
@@ -614,12 +614,12 @@ var _ = Describe("Config", func() {
 			m := &mockKCC{get: kcc}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			ctrl := config.NewRunConfigController(ctx, *cfg, m)
-			runCfg := <-ctrl.ConfigChan()
-			Expect(runCfg.Controllers.Policy.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 30}))
-			Expect(runCfg.Controllers.WorkloadEndpoint.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 31}))
-			Expect(runCfg.Controllers.Namespace.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 32}))
-			Expect(runCfg.Controllers.ServiceAccount.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 33}))
+			ctrl := config.NewConfigController(ctx, *cfg, m)
+			resolved := <-ctrl.ConfigChan()
+			Expect(resolved.Controllers.Policy.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 30}))
+			Expect(resolved.Controllers.WorkloadEndpoint.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 31}))
+			Expect(resolved.Controllers.Namespace.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 32}))
+			Expect(resolved.Controllers.ServiceAccount.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 33}))
 		})
 	})
 })

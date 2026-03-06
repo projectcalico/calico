@@ -45,13 +45,13 @@ const (
 	defaultLeakGracePeriod  = 15 * time.Minute
 )
 
-type RunConfigController struct {
+type ConfigController struct {
 	out chan v3.KubeControllersConfigurationSpec
 }
 
 // ConfigChan returns a channel that sends an initial config snapshot at start
 // of day, and updates whenever the config changes.
-func (r *RunConfigController) ConfigChan() <-chan v3.KubeControllersConfigurationSpec {
+func (r *ConfigController) ConfigChan() <-chan v3.KubeControllersConfigurationSpec {
 	return r.out
 }
 
@@ -97,13 +97,13 @@ func NewDefaultKubeControllersConfig() *v3.KubeControllersConfiguration {
 	return kubeControllersConfig
 }
 
-// NewRunConfigController creates the RunConfigController. The controller connects
+// NewConfigController creates the ConfigController. The controller connects
 // to the datastore to get the KubeControllersConfiguration resource, merges it with
 // the config from environment variables, and emits resolved specs over a channel
 // to push config out to the rest of the controllers. It also handles setting the
 // KubeControllersConfiguration.Status with the current running configuration.
-func NewRunConfigController(ctx context.Context, cfg Config, client clientv3.KubeControllersConfigurationInterface) *RunConfigController {
-	ctrl := &RunConfigController{out: make(chan v3.KubeControllersConfigurationSpec)}
+func NewConfigController(ctx context.Context, cfg Config, client clientv3.KubeControllersConfigurationInterface) *ConfigController {
+	ctrl := &ConfigController{out: make(chan v3.KubeControllersConfigurationSpec)}
 	go syncDatastore(ctx, cfg, client, ctrl.out)
 	return ctrl
 }
