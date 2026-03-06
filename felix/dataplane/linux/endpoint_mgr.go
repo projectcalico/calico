@@ -449,6 +449,10 @@ func (m *endpointManager) OnUpdate(protoBufMsg any) {
 		} else {
 			m.pendingLiveMigrationStates[msg.ID] = msg.State
 		}
+		// Mark the endpoint dirty so CompleteDeferredWork re-evaluates its routes.
+		if ep := m.activeWlEndpoints[msg.ID]; ep != nil {
+			m.pendingWlEpUpdates[msg.ID] = ep
+		}
 	}
 }
 
@@ -703,6 +707,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.callbacks.InvokeRemoveWorkload(oldWorkload)
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
+		delete(m.pendingLiveMigrationStates, id)
 		if oldWorkload != nil {
 			m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 			// Remove any routes from the routing table.  The RouteTable will remove any
@@ -823,13 +828,24 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					}
 				}
 				var routeTargets []routetable.Target
-				if adminUp {
-					logCxt.Debug("Endpoint up, adding routes")
+				lmState, hasLMState := m.pendingLiveMigrationStates[id]
+				if hasLMState && lmState == liveMigrationStateTarget {
+					logCxt.Debug("Live migration target, suppressing routes")
+				} else if adminUp {
+					routePriority := m.cfg.normalRoutePriority
+					if hasLMState {
+						// Live or TimeWait: use elevated priority.
+						routePriority = m.cfg.elevatedRoutePriority
+						logCxt.WithField("priority", routePriority).Debug(
+							"Endpoint up, adding routes with elevated priority for live migration")
+					} else {
+						logCxt.Debug("Endpoint up, adding routes")
+					}
 					for _, s := range ipStrings {
 						routeTargets = append(routeTargets, routetable.Target{
 							RouteKey: routetable.RouteKey{
 								CIDR:     ip.MustParseCIDROrIP(s),
-								Priority: m.cfg.normalRoutePriority,
+								Priority: routePriority,
 							},
 							DestMAC: mac,
 						})
