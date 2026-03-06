@@ -14,20 +14,27 @@
 
 package uniquelabels
 
+//go:generate go run gen_compact.go
+
 import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"maps"
+	"math/bits"
+	"unsafe"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
 
 type handleMap = map[uniquestr.Handle]uniquestr.Handle
 
+// emptyBacking is the singleton compact allocation for the Empty map.
+// bitfield = topBit means "compact representation, zero keys present".
+var emptyBacking = compact4{bitfield: topBit}
+
 var (
-	Nil   = Map{m: nil}
-	Empty = Map{m: map[uniquestr.Handle]uniquestr.Handle{}}
+	Nil   = Map{}
+	Empty = Map{ptr: unsafe.Pointer(&emptyBacking)}
 )
 
 // Map is a *read only* string-to-string map that interns keys and values.
@@ -37,34 +44,62 @@ var (
 // To allow drop-in replacement of a map[string]string, Map has unique
 // representations of nil (Nil) and empty (Empty). The zero value of a Map is
 // the Nil value; it can be detected with IsNil(). Map is a value type, which
-// precludes using Go's normal nil.  Making Map a pointer type would increase
-// overheads; making map an alias for map[uniquestr.Handle]uniquestr.Handle
-// would break the read-only property, preventing future optimisations.
+// precludes using Go's normal nil.
+//
+// Internally, Map stores an unsafe.Pointer to one of two representations:
+//
+//   - Compact: the first uint64 has the top bit set and encodes a bitfield
+//     of which keys (from a global lookup table) are present.  The values
+//     follow immediately as a flat array of uniquestr.Handle.
+//   - Fallback: the first uint64 has the top bit clear, followed by a
+//     regular Go map[uniquestr.Handle]uniquestr.Handle.
 //
 // Uses uniquestr.Handle internally, so it is most efficient to query the map
 // using AllHandles() and GetHandle().
 type Map struct {
-	_ [0]func() // Explicitly non-comparable; must use Equals() method.
-	m handleMap
+	_   [0]func()      // Explicitly non-comparable; must use Equals() method.
+	ptr unsafe.Pointer // -> compact* or *fallbackMap; nil for Nil.
 }
 
-// EquivalentTo reports whether this Map contains exactly the same entries as
-// the given map[string]string. Iterates the Map's handles, converting back to
-// strings via pointer dereference rather than iterating the input map (which
-// would require uniquestr.Make per key lookup).
-func (i Map) EquivalentTo(m map[string]string) bool {
-	if i.IsNil() != (m == nil) {
+// compact returns the compact view if this Map uses the bitfield
+// representation.  Must not be called when m.ptr is nil.
+func (m Map) compact() (compactMap, bool) {
+	header := *(*uint64)(m.ptr)
+	if header&topBit != 0 {
+		return compactMap{ptr: m.ptr, keyBits: header &^ topBit}, true
+	}
+	return compactMap{}, false
+}
+
+// asFallback returns the fallback view.  Must only be called when m.ptr is
+// non-nil and compact() returned false.
+func (m Map) asFallback() *fallbackMap {
+	return (*fallbackMap)(m.ptr)
+}
+
+// isCompact reports whether this Map uses the compact bitfield representation.
+func (m Map) isCompact() bool {
+	if m.ptr == nil {
 		return false
 	}
-	if len(m) != i.Len() {
-		return false
+	_, ok := m.compact()
+	return ok
+}
+
+// IsNil reports whether the map is the nil representation.
+func (m Map) IsNil() bool {
+	return m.ptr == nil
+}
+
+// Len returns the number of entries.
+func (m Map) Len() int {
+	if m.ptr == nil {
+		return 0
 	}
-	for k, v := range i.AllStrings() {
-		if mv, ok := m[k]; !ok || mv != v {
-			return false
-		}
+	if cm, ok := m.compact(); ok {
+		return cm.len()
 	}
-	return true
+	return m.asFallback().len()
 }
 
 // Make makes an interned copy of the given map.  In order to benefit from
@@ -75,7 +110,7 @@ func (i Map) EquivalentTo(m map[string]string) bool {
 // returns the singleton Empty.
 //
 // Make caches recently-returned Maps so that repeated calls with the same input
-// return the same Map, avoiding redundant handleMap allocations.
+// return the same Map, avoiding redundant allocations.
 func Make(m map[string]string) Map {
 	if m == nil {
 		return Nil
@@ -87,52 +122,150 @@ func Make(m map[string]string) Map {
 	if cached, hash, ok := recentCache.Lookup(m); ok {
 		return cached
 	} else {
-		hm := make(handleMap, len(m))
-		for k, v := range m {
-			hm[uniquestr.Make(k)] = uniquestr.Make(v)
-		}
-		result := Map{m: hm}
+		result := makeInner(m)
 		recentCache.Store(hash, result)
 		return result
 	}
 }
 
+// makeInner builds a Map from a non-nil, non-empty map[string]string.
+// It first tries to build a compact representation directly without
+// allocating a Go map; falls back to a handleMap when keys are unknown
+// or the key table is full.
+func makeInner(m map[string]string) Map {
+	if result, ok := tryMakeCompactDirect(m); ok {
+		return result
+	}
+	// Slow path: build a handleMap for key registration or fallback.
+	hm := make(handleMap, len(m))
+	for k, v := range m {
+		hm[uniquestr.Make(k)] = uniquestr.Make(v)
+	}
+	if bf, vals, ok := globalKeyTable.registerKeys(hm); ok {
+		return Map{ptr: allocCompact(bf, vals)}
+	}
+	return Map{ptr: unsafe.Pointer(&fallbackMap{m: hm})}
+}
+
+// tryMakeCompactDirect attempts to build a compact Map directly from
+// the input map without allocating an intermediate handleMap.  Succeeds
+// when all keys are already in the global key table (the common case
+// after startup).
+func tryMakeCompactDirect(m map[string]string) (Map, bool) {
+	if len(m) > maxKeyTableSize {
+		return Map{}, false
+	}
+	snap := globalKeyTable.currentSnap()
+	var bf uint64
+	var valsByPos [maxKeyTableSize]uniquestr.Handle
+	for k, v := range m {
+		kh := uniquestr.Make(k)
+		pos, found := snap.byHandle[kh]
+		if !found {
+			return Map{}, false
+		}
+		bf |= uint64(1) << pos
+		valsByPos[pos] = uniquestr.Make(v)
+	}
+	// Pack values in bit order.
+	vals := make([]uniquestr.Handle, bits.OnesCount64(bf))
+	remaining := bf
+	for i := range vals {
+		pos := uint(bits.TrailingZeros64(remaining))
+		vals[i] = valsByPos[pos]
+		remaining &= remaining - 1
+	}
+	return Map{ptr: allocCompact(bf|topBit, vals)}, true
+}
+
 // Equals returns true if the map contains the same key/value pairs as the
 // other map.  In line with maps.Equal, Nil and Empty compare equal.
-func (i Map) Equals(other Map) bool {
-	return maps.Equal(i.m, other.m)
-}
-
-// MarshalJSON implements the json.Marshaler interface. Must be defined on the
-// value receiver so that Map can be embedded in other structs.
-func (i Map) MarshalJSON() ([]byte, error) {
-	return json.Marshal(i.m)
-}
-
-// UnmarshalJSON implements the json.Unmarshaler interface.  Must be defined on
-// the pointer receiver so that it can have side effects.
-func (i *Map) UnmarshalJSON(data []byte) error {
-	var hm handleMap
-	if err := json.Unmarshal(data, &hm); err != nil {
-		return err
+//
+// When both maps use the compact representation, Equals compares the
+// bitfields directly and then the value arrays element-by-element,
+// avoiding any hash-table lookups.
+func (m Map) Equals(other Map) bool {
+	if m.ptr == other.ptr {
+		return true
 	}
-	i.m = hm
-	return nil
+	if m.ptr == nil || other.ptr == nil {
+		// One is Nil, other is not (same-pointer handled above).
+		// Nil equals Empty by contract.
+		return m.Len() == 0 && other.Len() == 0
+	}
+	cm, mCompact := m.compact()
+	co, oCompact := other.compact()
+	if mCompact && oCompact {
+		return cm.equals(co)
+	}
+	// Mixed or both fallback: generic comparison.
+	if m.Len() != other.Len() {
+		return false
+	}
+	for k, v := range m.AllHandles() {
+		if ov, ok := other.GetHandle(k); !ok || ov != v {
+			return false
+		}
+	}
+	return true
 }
 
-func (i Map) AllHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+// EquivalentTo reports whether this Map contains exactly the same entries as
+// the given map[string]string.
+func (m Map) EquivalentTo(other map[string]string) bool {
+	if m.IsNil() != (other == nil) {
+		return false
+	}
+	if len(other) != m.Len() {
+		return false
+	}
+	for k, v := range m.AllStrings() {
+		if mv, ok := other[k]; !ok || mv != v {
+			return false
+		}
+	}
+	return true
+}
+
+// GetString looks up key k (as a plain string).
+func (m Map) GetString(k string) (string, bool) {
+	v, ok := m.GetHandle(uniquestr.Make(k))
+	if !ok {
+		return "", false
+	}
+	return v.Value(), true
+}
+
+// GetHandle looks up key h using an interned handle.  This is the preferred
+// lookup method for hot paths.
+func (m Map) GetHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
+	if m.ptr == nil {
+		return uniquestr.Handle{}, false
+	}
+	if cm, ok := m.compact(); ok {
+		return cm.getHandle(h)
+	}
+	return m.asFallback().getHandle(h)
+}
+
+// AllHandles returns an iterator over key/value handle pairs.
+func (m Map) AllHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
 	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
-		for k, v := range i.m {
-			if !yield(k, v) {
-				return
-			}
+		if m.ptr == nil {
+			return
+		}
+		if cm, ok := m.compact(); ok {
+			cm.allHandles(yield)
+		} else {
+			m.asFallback().allHandles(yield)
 		}
 	}
 }
 
-func (i Map) AllStrings() iter.Seq2[string, string] {
+// AllStrings returns an iterator over key/value string pairs.
+func (m Map) AllStrings() iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
-		for k, v := range i.m {
+		for k, v := range m.AllHandles() {
 			if !yield(k.Value(), v.Value()) {
 				return
 			}
@@ -140,50 +273,53 @@ func (i Map) AllStrings() iter.Seq2[string, string] {
 	}
 }
 
-func (i Map) RecomputeOriginalMap() map[string]string {
-	if i.m == nil {
+// RecomputeOriginalMap converts back to a plain map[string]string.
+func (m Map) RecomputeOriginalMap() map[string]string {
+	if m.ptr == nil {
 		return nil
 	}
-	m := make(map[string]string, len(i.m))
-	for k, v := range i.m {
-		m[k.Value()] = v.Value()
+	result := make(map[string]string, m.Len())
+	for k, v := range m.AllStrings() {
+		result[k] = v
 	}
-	return m
+	return result
 }
 
-func (i Map) GetString(k string) (string, bool) {
-	v, ok := (i.m)[uniquestr.Make(k)]
-	if !ok {
-		return "", false
+func (m Map) String() string {
+	return fmt.Sprint(m.RecomputeOriginalMap())
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+// Both compact and fallback maps write JSON directly with sorted keys,
+// avoiding intermediate map allocations and encoding/json reflection.
+func (m Map) MarshalJSON() ([]byte, error) {
+	if m.ptr == nil {
+		return []byte("null"), nil
 	}
-	return v.Value(), true
-}
-
-func (i Map) GetHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
-	v, ok := (i.m)[h]
-	if !ok {
-		return uniquestr.Handle{}, false
+	if cm, ok := m.compact(); ok {
+		return cm.marshalJSON()
 	}
-	return uniquestr.Handle(v), true
+	return m.asFallback().marshalJSON()
 }
 
-func (i Map) Len() int {
-	return len(i.m)
+// UnmarshalJSON implements the json.Unmarshaler interface.  Unmarshalling
+// goes through Make so that keys are registered in the global key table
+// and the cache is consulted.  This is important because UnmarshalJSON is
+// the main entry point when receiving data from Typha.
+func (m *Map) UnmarshalJSON(data []byte) error {
+	var raw map[string]string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*m = Make(raw)
+	return nil
 }
 
-func (i Map) IsNil() bool {
-	return i.m == nil
-}
-
-func (i Map) String() string {
-	return fmt.Sprint(i.RecomputeOriginalMap())
-}
-
-// IntersectAndFilter returns a Map that contains only the keys/value pairs that
+// IntersectAndFilter returns a Map that contains only the key/value pairs that
 // are both:
 //
-// - Common to both input Maps.
-// - Match the include predicate.
+//   - Common to both input Maps.
+//   - Match the include predicate.
 //
 // If either map is Nil, returns Nil.  Otherwise, returns a non-Nil, but
 // possibly empty Map.  May return one of the input maps.
@@ -205,7 +341,7 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 
 	// Do a pass to determine if we need to allocate a new map.
 	needToFilter := false
-	for k, v := range a.m {
+	for k, v := range a.AllHandles() {
 		if !include(k, v) {
 			needToFilter = true
 			break
@@ -221,8 +357,35 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 	}
 
 	// We _do_ need to make a new map, re-do the calculation.
+	// If a is compact, build a compact result (the intersection's keys
+	// are a subset of a's keys, which are all in the key table).
+	if cm, ok := a.compact(); ok {
+		snap := globalKeyTable.currentSnap()
+		var resultBf uint64
+		var vals []uniquestr.Handle
+		remaining := cm.keyBits
+		aIdx := 0
+		for remaining != 0 {
+			pos := uint(bits.TrailingZeros64(remaining))
+			key := snap.byIndex[pos]
+			val := readValueAt(cm.ptr, aIdx)
+			if include(key, val) {
+				if otherV, ok := b.GetHandle(key); ok && otherV == val {
+					resultBf |= uint64(1) << pos
+					vals = append(vals, val)
+				}
+			}
+			remaining &= remaining - 1
+			aIdx++
+		}
+		if len(vals) == 0 {
+			return Empty
+		}
+		return Map{ptr: allocCompact(resultBf|topBit, vals)}
+	}
+
 	intersection := map[uniquestr.Handle]uniquestr.Handle{}
-	for k, v := range a.m {
+	for k, v := range a.AllHandles() {
 		if !include(k, v) {
 			continue
 		}
@@ -234,7 +397,31 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 	if len(intersection) == 0 {
 		return Empty
 	}
-	return Map{m: intersection}
+	// Try to produce a compact result: if every key in the intersection
+	// is already in the key table, we can use the bitfield representation.
+	if len(intersection) <= maxKeyTableSize {
+		snap := globalKeyTable.currentSnap()
+		var bf uint64
+		allKnown := true
+		for k := range intersection {
+			pos, ok := snap.byHandle[k]
+			if !ok {
+				allKnown = false
+				break
+			}
+			bf |= uint64(1) << pos
+		}
+		if allKnown {
+			vals := make([]uniquestr.Handle, len(intersection))
+			for k, v := range intersection {
+				pos := snap.byHandle[k]
+				arrayIdx := bits.OnesCount64(bf & ((uint64(1) << pos) - 1))
+				vals[arrayIdx] = v
+			}
+			return Map{ptr: allocCompact(bf|topBit, vals)}
+		}
+	}
+	return Map{ptr: unsafe.Pointer(&fallbackMap{m: intersection})}
 }
 
 func noOpFilter(uniquestr.Handle, uniquestr.Handle) bool {
