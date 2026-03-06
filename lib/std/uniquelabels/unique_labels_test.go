@@ -15,6 +15,7 @@
 package uniquelabels
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"hash/maphash"
@@ -63,18 +64,9 @@ func TestInternedLabelsJSONRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Compare semantically: both should unmarshal to the same map.
-			// Byte-exact comparison isn't reliable because compact maps
-			// emit keys in bitfield order, not Go's random map order.
-			var fromPlain, fromInterned map[string]string
-			if err := json.Unmarshal(j, &fromPlain); err != nil {
-				t.Fatal(err)
-			}
-			if err := json.Unmarshal(j2, &fromInterned); err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(fromPlain, fromInterned) {
-				t.Errorf("Interned map should produce equivalent JSON; got %s, want %s", j2, j)
+			// Both encodings sort keys, so byte-exact comparison is valid.
+			if !bytes.Equal(j, j2) {
+				t.Errorf("Interned map should produce same JSON as normal map; got %s, want %s", j2, j)
 			}
 
 			var out Map
