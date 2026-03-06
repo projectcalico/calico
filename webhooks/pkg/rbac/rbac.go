@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
 
@@ -248,7 +249,7 @@ func getTier(obj any) (string, bool) {
 	if tier.Kind() != reflect.String {
 		return "", false
 	}
-	return tier.String(), true
+	return names.TierOrDefault(tier.String()), true
 }
 
 // augmentContextWithUserInfo adds the necessary user and request information from the admission request to the context so that it can
