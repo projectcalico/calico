@@ -664,11 +664,10 @@ func cmdDel(args *skel.CmdArgs) error {
 	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
 	if err != nil {
 		if err == errPodNotFound {
-			// During parallel CNI DEL calls (e.g., live migration), the pod may already be
-			// deleted by the time we look it up. In that case, treat it as a non-VMI pod so
-			// we fall through to the standard release path which handles missing resources
-			// gracefully.
-			logger.Info("Pod already deleted, skipping VMI detection for CNI DEL")
+			// During parallel CNI DEL calls (e.g., live migration), the pod may already
+			// be deleted by the time we look it up.
+			logger.Info("Pod already deleted, nothing to clean up for CNI DEL")
+			return nil
 		} else {
 			return fmt.Errorf("failed to get VMI info: %w", err)
 		}
