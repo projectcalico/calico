@@ -36,10 +36,10 @@ func TestNATDump(t *testing.T) {
 		nat2.NewNATBackendKey(108, 0): nat2.NewNATBackendValue(net.IPv4(3, 3, 3, 3), 553),
 	}
 
-	dumpNice(func(format string, i ...any) { fmt.Printf(format, i...) }, nat, back)
+	dumpNice(func(format string, i ...any) { fmt.Printf(format, i...) }, nat, back, false)
 }
 
-// TestDumpNiceGrouping verifies that dumpNice groups frontends sharing the
+// TestDumpNiceGrouping verifies that dumpNiceGrouped groups frontends sharing the
 // same service ID so the backend list is printed just once per service.
 func TestDumpNiceGrouping(t *testing.T) {
 	natMap := nat2.MapMem{
@@ -56,7 +56,7 @@ func TestDumpNiceGrouping(t *testing.T) {
 	}
 
 	var output strings.Builder
-	dumpNice(func(format string, i ...any) { fmt.Fprintf(&output, format, i...) }, natMap, back)
+	dumpNiceGrouped(func(format string, i ...any) { fmt.Fprintf(&output, format, i...) }, natMap, back)
 
 	out := output.String()
 
@@ -115,7 +115,7 @@ func TestFilterByServiceID(t *testing.T) {
 	}
 
 	var output strings.Builder
-	dumpNice(func(format string, i ...any) { fmt.Fprintf(&output, format, i...) }, filtered, back)
+	dumpNice(func(format string, i ...any) { fmt.Fprintf(&output, format, i...) }, filtered, back, false)
 
 	out := output.String()
 	if !strings.Contains(out, "1.1.1.1") {
