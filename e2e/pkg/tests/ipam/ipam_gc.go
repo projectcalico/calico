@@ -56,9 +56,6 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred(), "failed to create controller-runtime client")
 
-			// Ensure a clean starting environment before each test.
-			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred(), "failed to clean datastore")
-
 			// Verify that the cluster uses Calico IPAM. The Installation resource
 			// provides a definitive answer when available; IP pools serve as a
 			// fallback indicator for manifest-based installs.

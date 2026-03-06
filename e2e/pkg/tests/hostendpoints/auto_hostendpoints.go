@@ -93,9 +93,6 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			// Ensure a clean starting environment before each test.
-			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred())
-
 			// Sanity check: make sure we have a default kubecontrollersconfiguration.
 			originalKCC = v3.KubeControllersConfiguration{}
 			err = cli.Get(context.Background(), types.NamespacedName{Name: "default"}, &originalKCC)
