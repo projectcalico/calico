@@ -99,13 +99,48 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Extract the raw object from the admission request. In some cases (e.g., DELETE), the object may be in
-	// the OldObject field instead of the Object field, so we check both.
-	raw := ar.Request.Object.Raw
-	if len(raw) == 0 {
-		raw = ar.Request.OldObject.Raw
+	// Parse the new object (from Object.Raw) and old object (from OldObject.Raw) to extract
+	// tier information. CREATE/UPDATE have Object.Raw; UPDATE/DELETE have OldObject.Raw.
+	var (
+		obj              client.Object
+		newTier, oldTier string
+		err              error
+	)
+
+	if len(ar.Request.Object.Raw) > 0 {
+		obj, newTier, err = h.parsePolicy(ar.Request.Kind.Kind, ar.Request.Object.Raw)
+		if err != nil {
+			logCtx.WithError(err).Error("Failed to parse policy")
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Failed to parse policy: %v", err),
+					Reason:  metav1.StatusReasonInvalid,
+				},
+			}
+		}
 	}
-	if len(raw) == 0 {
+	if len(ar.Request.OldObject.Raw) > 0 {
+		var oldObj client.Object
+		oldObj, oldTier, err = h.parsePolicy(ar.Request.Kind.Kind, ar.Request.OldObject.Raw)
+		if err != nil {
+			logCtx.WithError(err).Error("Failed to parse old policy")
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Failed to parse old policy: %v", err),
+					Reason:  metav1.StatusReasonInvalid,
+				},
+			}
+		}
+		if obj == nil {
+			// DELETE: no new object, use the old object for context.
+			obj = oldObj
+		}
+	}
+	if obj == nil {
 		logCtx.Warn("No object in admission request")
 		return &v1.AdmissionResponse{
 			Allowed: false,
@@ -116,23 +151,6 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 			},
 		}
 	}
-
-	// Parse the raw JSON.
-	obj, tier, err := h.parsePolicy(ar.Request.Kind.Kind, raw)
-	if err != nil {
-		logCtx.WithError(err).Error("Failed to parse policy metadata")
-		return &v1.AdmissionResponse{
-			Allowed: false,
-			Result: &metav1.Status{
-				Status:  metav1.StatusFailure,
-				Message: fmt.Sprintf("Failed to parse policy metadata: %v", err),
-				Reason:  metav1.StatusReasonInvalid,
-			},
-		}
-	}
-
-	// Log the tier being used for authorization.
-	logCtx = logCtx.WithField("tier", tier)
 
 	// Create a context with the necessary information to pass to the RBAC authorizer.
 	// This includes the user info from the admission request.
@@ -149,7 +167,12 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 		}
 	}
 
-	// Run the RBAC authorizer to check if the user is authorized to perform the operation.
+	// Authorize the new tier for CREATE/UPDATE, or the old tier for DELETE.
+	tier := newTier
+	if tier == "" {
+		tier = oldTier
+	}
+	logCtx = logCtx.WithField("tier", tier)
 	if err = h.authz.AuthorizeTierOperation(ctx, obj.GetName(), tier); err != nil {
 		logCtx.WithError(err).Warn("User is not authorized")
 		return &v1.AdmissionResponse{
@@ -162,33 +185,19 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 		}
 	}
 
-	// For UPDATE operations, also authorize the old tier. A tier change requires permission on both
-	// the old tier (to remove the policy from it) and the new tier (already checked above).
-	if ar.Request.Operation == v1.Update && len(ar.Request.OldObject.Raw) > 0 {
-		_, oldTier, err := h.parsePolicy(ar.Request.Kind.Kind, ar.Request.OldObject.Raw)
-		if err != nil {
-			logCtx.WithError(err).Error("Failed to parse old policy metadata")
+	// For UPDATE operations where the tier changed, also authorize the old tier. A tier change
+	// requires permission on both the old tier (to remove the policy) and the new tier (checked above).
+	if newTier != "" && oldTier != "" && oldTier != newTier {
+		logCtx.WithField("oldTier", oldTier).Debug("Tier changed, authorizing old tier")
+		if err = h.authz.AuthorizeTierOperation(ctx, obj.GetName(), oldTier); err != nil {
+			logCtx.WithError(err).Warn("User is not authorized for old tier")
 			return &v1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
 					Status:  metav1.StatusFailure,
-					Message: fmt.Sprintf("Failed to parse old policy metadata: %v", err),
-					Reason:  metav1.StatusReasonInvalid,
+					Message: fmt.Sprintf("Authorization failed for old tier: %v", err),
+					Reason:  metav1.StatusReasonForbidden,
 				},
-			}
-		}
-		if oldTier != tier {
-			logCtx.WithField("oldTier", oldTier).Debug("Tier changed, authorizing old tier")
-			if err = h.authz.AuthorizeTierOperation(ctx, obj.GetName(), oldTier); err != nil {
-				logCtx.WithError(err).Warn("User is not authorized for old tier")
-				return &v1.AdmissionResponse{
-					Allowed: false,
-					Result: &metav1.Status{
-						Status:  metav1.StatusFailure,
-						Message: fmt.Sprintf("Authorization failed for old tier: %v", err),
-						Reason:  metav1.StatusReasonForbidden,
-					},
-				}
 			}
 		}
 	}
