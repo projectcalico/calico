@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -936,8 +935,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 				return nil
 			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
-
-		time.Sleep(3 * time.Second)
 	}
 
 	configureStagedDrop := func() {
@@ -1645,8 +1642,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 				return nil
 			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
-
-		time.Sleep(5 * time.Second)
 	}
 
 	configureStagedPass := func() {
@@ -1721,8 +1716,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 				return nil
 			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
-
-		time.Sleep(5 * time.Second)
 	}
 
 	It("get expected flow logs with pending policies", func() {
