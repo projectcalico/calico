@@ -29,7 +29,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -71,7 +70,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		namespaceInformer := factory.Core().V1().Namespaces().Informer()
 
 		// Config for the test.
-		cfg := config.LoadBalancerControllerConfig{AssignIPs: apiv3.AllServices}
+		cfg := apiv3.LoadBalancerControllerConfig{AssignIPs: apiv3.AllServices}
 
 		// stopChan is used in AfterEach to stop the controller in each test.
 		stopChan = make(chan struct{})

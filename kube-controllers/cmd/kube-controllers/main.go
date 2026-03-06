@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -161,7 +162,7 @@ func main() {
 
 	dataFeed := utils.NewDataFeed(libcalicoClient, cfg.DatastoreType)
 
-	var runCfg config.RunConfig
+	var runCfg v3.KubeControllersConfigurationSpec
 	// flannelmigration doesn't use the datastore config API
 	v, ok := os.LookupEnv(config.EnvEnabledControllers)
 	if ok && strings.Contains(v, "flannelmigration") {
@@ -178,58 +179,58 @@ func main() {
 		flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, libcalicoClient, flannelConfig)
 		controllerCtrl.controllers["FlannelMigration"] = flannelMigrationController
 
-		// Set some global defaults for flannelmigration
-		// Note that we now ignore the HEALTH_ENABLED environment variable in the case of flannel migration
-		runCfg.HealthEnabled = true
-		runCfg.LogLevelScreen = logLevel
+		// Set some global defaults for flannelmigration.
+		// Note that we now ignore the HEALTH_ENABLED environment variable in the case of flannel migration.
+		runCfg.HealthChecks = v3.Enabled
+		runCfg.LogSeverityScreen = logLevel.String()
 
-		// this channel will never receive, and thus flannelmigration will never
+		// This channel will never receive, and thus flannelmigration will never
 		// restart due to a config change.
-		controllerCtrl.restart = make(chan config.RunConfig)
+		controllerCtrl.restart = make(chan v3.KubeControllersConfigurationSpec)
 	} else {
 		log.Info("Getting initial config snapshot from datastore")
 		cCtrlr := config.NewRunConfigController(ctx, *cfg, libcalicoClient.KubeControllersConfiguration())
 		runCfg = <-cCtrlr.ConfigChan()
 		log.Info("Got initial config snapshot")
 
-		// any subsequent changes trigger a restart
+		// Any subsequent changes trigger a restart.
 		controllerCtrl.restart = cCtrlr.ConfigChan()
 		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, k8sconfig)
 	}
 
 	if cfg.DatastoreType == utils.Etcdv3 {
-		// If configured to do so, start an etcdv3 compaction.
-		go startCompactor(ctx, runCfg.EtcdV3CompactionPeriod)
+		go startCompactor(ctx, runCfg.EtcdV3CompactionPeriod.Duration)
 	}
 
-	// Run the health checks on a separate goroutine.
-	if runCfg.HealthEnabled {
+	if runCfg.HealthChecks == v3.Enabled {
 		log.Info("Starting status report routine")
 		go runHealthChecks(ctx, s, k8sClientset, libcalicoClient)
 	}
 
 	// Set the log level from the merged config.
-	log.SetLevel(runCfg.LogLevelScreen)
+	if l, err := log.ParseLevel(runCfg.LogSeverityScreen); err == nil {
+		log.SetLevel(l)
+	}
 
-	if runCfg.PrometheusPort != 0 {
-		// Serve prometheus metrics.
-		log.Infof("Starting Prometheus metrics server on port %d", runCfg.PrometheusPort)
+	if runCfg.PrometheusMetricsPort != nil && *runCfg.PrometheusMetricsPort != 0 {
+		port := *runCfg.PrometheusMetricsPort
+		log.Infof("Starting Prometheus metrics server on port %d", port)
 		go func() {
 			mux := http.NewServeMux()
 			mux.Handle("/metrics", promhttp.Handler())
-			err := http.ListenAndServe(fmt.Sprintf(":%d", runCfg.PrometheusPort), mux)
+			err := http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to serve prometheus metrics")
 			}
 		}()
 	}
 
-	if runCfg.DebugProfilePort != 0 {
-		debugserver.StartDebugPprofServer("0.0.0.0", int(runCfg.DebugProfilePort))
+	if runCfg.DebugProfilePort != nil && *runCfg.DebugProfilePort != 0 {
+		debugserver.StartDebugPprofServer("0.0.0.0", int(*runCfg.DebugProfilePort))
 	}
 
-	// Run the controllers. This runs until a config change triggers a restart
-	controllerCtrl.RunControllers(dataFeed, runCfg)
+	// Run the controllers. This runs until a config change triggers a restart.
+	controllerCtrl.RunControllers(dataFeed)
 
 	// Shut down compaction, healthChecks, and configController
 	cancel()
@@ -456,13 +457,14 @@ type controllerControl struct {
 	ctx         context.Context
 	controllers map[string]controller.Controller
 	stop        chan struct{}
-	restart     <-chan config.RunConfig
+	restart     <-chan v3.KubeControllersConfigurationSpec
 	informers   []cache.SharedIndexInformer
 }
 
 func (cc *controllerControl) InitControllers(
 	ctx context.Context,
-	cfg config.RunConfig,
+	cfg v3.KubeControllersConfigurationSpec,
+	datastoreType string,
 	k8sClientset *kubernetes.Clientset,
 	calicoClient client.Interface,
 	v3c clientset.Interface,
@@ -488,7 +490,6 @@ func (cc *controllerControl) InitControllers(
 		v3CRDs := k8s.UsingV3CRDs(&config.Spec)
 
 		if v3CRDs {
-			// Enable the IPPool controller, which manages graceful IP pool teardown.
 			poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
 			cc.controllers["IPPool"] = poolController
 			cc.registerInformers(poolInformer, blockInformer)
@@ -506,46 +507,47 @@ func (cc *controllerControl) InitControllers(
 		}
 	}
 
-	if cfg.Controllers.WorkloadEndpoint != nil {
-		podController := pod.NewPodController(ctx, k8sClientset, calicoClient, *cfg.Controllers.WorkloadEndpoint, podInformer)
+	c := cfg.Controllers
+
+	if c.WorkloadEndpoint != nil {
+		podController := pod.NewPodController(ctx, k8sClientset, calicoClient, c.WorkloadEndpoint.ReconcilerPeriod.Duration, podInformer)
 		cc.controllers["Pod"] = podController
 		cc.registerInformers(podInformer)
 	}
 
-	if cfg.Controllers.Namespace != nil {
-		namespaceController := namespace.NewNamespaceController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Namespace)
+	if c.Namespace != nil {
+		namespaceController := namespace.NewNamespaceController(ctx, k8sClientset, calicoClient, c.Namespace.ReconcilerPeriod.Duration)
 		cc.controllers["Namespace"] = namespaceController
 	}
-	if cfg.Controllers.Policy != nil {
-		policyController := networkpolicy.NewPolicyController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Policy)
+	if c.Policy != nil {
+		policyController := networkpolicy.NewPolicyController(ctx, k8sClientset, calicoClient, c.Policy.ReconcilerPeriod.Duration)
 		cc.controllers["NetworkPolicy"] = policyController
 	}
-	if cfg.Controllers.Node != nil {
+	if c.Node != nil {
 		deferredInformers := kubevirt.NewDeferredInformers(kubevirt.NewIndexerFunc(k8sconfig, 5*time.Minute), 30*time.Second, cc.stop)
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, deferredInformers)
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *c.Node, nodeInformer, podInformer, dataFeed, deferredInformers)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
 	}
-	if cfg.Controllers.ServiceAccount != nil {
-		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)
+	if c.ServiceAccount != nil {
+		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, c.ServiceAccount.ReconcilerPeriod.Duration)
 		cc.controllers["ServiceAccount"] = serviceAccountController
 	}
 
-	if cfg.Controllers.LoadBalancer != nil {
-		loadBalancerController := loadbalancer.NewLoadBalancerController(k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer, serviceInformer, namespaceInformer, dataFeed)
+	if c.LoadBalancer != nil {
+		loadBalancerController := loadbalancer.NewLoadBalancerController(k8sClientset, calicoClient, *c.LoadBalancer, serviceInformer, namespaceInformer, dataFeed)
 		cc.controllers["LoadBalancer"] = loadBalancerController
 		cc.registerInformers(serviceInformer, namespaceInformer)
 	}
 
-	if cfg.Controllers.Migration != nil && cfg.Controllers.Migration.PolicyNameMigrator == "Enabled" {
-		// Register the policy name migrator controller.
+	if c.Migration != nil && c.Migration.PolicyNameMigrator == v3.ControllerEnabled {
 		policyMigrator := networkpolicy.NewMigratorController(ctx, k8sClientset, calicoClient, dataFeed)
 		cc.controllers["NetworkPolicyMigrator"] = policyMigrator
 	}
 
 	// We don't need the full Pod object. In order to reduce memory usage, add a transform that only
 	// includes the fields we need.
-	if err := podInformer.SetTransform(converter.PodTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {
+	if err := podInformer.SetTransform(converter.PodTransformer(c.WorkloadEndpoint != nil)); err != nil {
 		log.WithError(err).Fatal("Failed to set transform on pod informer")
 	}
 }
@@ -568,7 +570,7 @@ func (cc *controllerControl) registerInformers(infs ...cache.SharedIndexInformer
 }
 
 // Runs all the controllers and blocks until we get a restart.
-func (cc *controllerControl) RunControllers(dataFeed *utils.DataFeed, cfg config.RunConfig) {
+func (cc *controllerControl) RunControllers(dataFeed *utils.DataFeed) {
 	// Start any registered informers.
 	for _, inf := range cc.informers {
 		log.WithField("informer", inf).Info("Starting informer")

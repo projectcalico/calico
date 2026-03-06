@@ -18,6 +18,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -29,7 +30,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	rcache "github.com/projectcalico/calico/kube-controllers/pkg/cache"
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	kdd "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -41,15 +41,15 @@ import (
 // namespaceController implements the Controller interface for managing Kubernetes namespaces
 // and syncing them to the Calico datastore as Profiles.
 type namespaceController struct {
-	informer      cache.Controller
-	resourceCache rcache.ResourceCache
-	calicoClient  client.Interface
-	ctx           context.Context
-	cfg           config.GenericControllerConfig
+	informer         cache.Controller
+	resourceCache    rcache.ResourceCache
+	calicoClient     client.Interface
+	ctx              context.Context
+	reconcilerPeriod time.Duration
 }
 
 // NewNamespaceController returns a controller which manages Namespace objects.
-func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
+func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, reconcilerPeriod time.Duration) controller.Controller {
 	namespaceConverter := converter.NewNamespaceConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
@@ -148,7 +148,7 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 		Indexers: cache.Indexers{},
 	})
 
-	return &namespaceController{informer, ccache, c, ctx, cfg}
+	return &namespaceController{informer, ccache, c, ctx, reconcilerPeriod}
 }
 
 // Run starts the controller.
@@ -171,12 +171,9 @@ func (c *namespaceController) Run(stopCh chan struct{}) {
 	log.Debug("Finished syncing with Kubernetes API (Namespaces)")
 
 	// Start Calico cache.
-	c.resourceCache.Run(c.cfg.ReconcilerPeriod.String())
+	c.resourceCache.Run(c.reconcilerPeriod.String())
 
-	// Start a number of worker threads to read from the queue.
-	for i := 0; i < c.cfg.NumberOfWorkers; i++ {
-		go c.runWorker()
-	}
+	go c.runWorker()
 	log.Info("Namespace/Profile controller is now running")
 
 	<-stopCh
