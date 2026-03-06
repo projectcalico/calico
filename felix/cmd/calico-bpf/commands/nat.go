@@ -15,8 +15,10 @@
 package commands
 
 import (
+	"bytes"
 	"fmt"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -208,25 +210,53 @@ type printfFn func(format string, i ...any)
 
 func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf printfFn,
 	natMap map[FK]nat.FrontendValue, back map[nat.BackendKey]BV) {
-	for nk, nv := range natMap {
-		valCount := nv.Count()
-		count := int(valCount)
-		if valCount == nat.BlackHoleCount {
-			count = -1
+	// Group frontend keys by service ID so that siblings sharing the same
+	// backend pool (e.g. ClusterIP + NodePort) are printed together and the
+	// backend list is shown just once per group.
+	byID := make(map[uint32][]FK)
+	for nk := range natMap {
+		id := natMap[nk].ID()
+		byID[id] = append(byID[id], nk)
+	}
+
+	// Sort service IDs for deterministic output.
+	ids := make([]uint32, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+
+	for _, id := range ids {
+		keys := byID[id]
+		// Sort frontend keys within the group for deterministic output.
+		sort.Slice(keys, func(i, j int) bool {
+			return bytes.Compare(keys[i].AsBytes(), keys[j].AsBytes()) < 0
+		})
+
+		// Print every frontend line in the group.
+		var count int
+		for _, nk := range keys {
+			nv := natMap[nk]
+			valCount := nv.Count()
+			count = int(valCount)
+			if valCount == nat.BlackHoleCount {
+				count = -1
+			}
+			local := nv.LocalCount()
+			flags := nv.FlagsAsString()
+			if flags != "" {
+				flags = " flags " + flags
+			}
+			printf("%s port %d proto %d id %d count %d local %d%s",
+				nk.Addr(), nk.Port(), nk.Proto(), id, count, local, flags)
+			srcCIDR := nk.SrcCIDR()
+			if srcCIDR.Prefix() != 0 {
+				printf(" src %s", srcCIDR)
+			}
+			printf("\n")
 		}
-		local := nv.LocalCount()
-		id := nv.ID()
-		flags := nv.FlagsAsString()
-		if flags != "" {
-			flags = " flags " + flags
-		}
-		printf("%s port %d proto %d id %d count %d local %d%s",
-			nk.Addr(), nk.Port(), nk.Proto(), id, count, local, flags)
-		srcCIDR := nk.SrcCIDR()
-		if srcCIDR.Prefix() != 0 {
-			printf(" src %s", srcCIDR)
-		}
-		printf("\n")
+
+		// Print the shared backend list once for the whole group.
 		for i := 0; i < count; i++ {
 			bk := nat.NewNATBackendKey(id, uint32(i))
 			bv, ok := back[bk]
