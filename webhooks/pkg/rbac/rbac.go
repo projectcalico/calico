@@ -172,7 +172,7 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 	if tier == "" {
 		tier = oldTier
 	}
-	logCtx = logCtx.WithField("tier", tier)
+	logCtx = logCtx.WithFields(logrus.Fields{"newTier": newTier, "oldTier": oldTier})
 	if err = h.authz.AuthorizeTierOperation(ctx, obj.GetName(), tier); err != nil {
 		logCtx.WithError(err).Warn("User is not authorized")
 		return &v1.AdmissionResponse{
