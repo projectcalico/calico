@@ -332,8 +332,8 @@ func updateHostEndpointConfig(client ctrlclient.Client, desiredKCC v3.KubeContro
 }
 
 // getHostEndpointConfig returns the HostEndpoint config from a KCC, or nil if
-// the Node controller config is not set. This is nil-safe unlike direct field
-// access through the pointer chain.
+// either the Node controller config or the HostEndpoint config is not set.
+// This is nil-safe unlike direct field access through the pointer chain.
 func getHostEndpointConfig(kcc v3.KubeControllersConfiguration) *v3.AutoHostEndpointConfig {
 	if kcc.Spec.Controllers.Node == nil {
 		return nil
