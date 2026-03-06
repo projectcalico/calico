@@ -15,13 +15,27 @@
 package intdataplane
 
 import (
+	"bytes"
+	"io"
 	"time"
 
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
+	"github.com/gopacket/gopacket/pcapgo"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 )
+
+const etherTypeRARP = layers.EthernetType(0x8035)
+
+// garpHandle abstracts an AF_PACKET handle for GARP/RARP detection.
+// Production code uses *pcapgo.EthernetHandle; tests inject fakes.
+type garpHandle interface {
+	io.Closer
+	gopacket.PacketDataSource
+}
 
 // liveMigrationStateUpdate is a pseudo-proto message emitted by the liveMigrationMonitor
 // when a per-workload FSM changes state.  It is fanned out to all managers (like
@@ -41,14 +55,22 @@ type liveMigrationMonitor struct {
 	fsms            map[types.WorkloadEndpointID]*liveMigrationFSM
 	pendingUpdates  []liveMigrationStateUpdate
 	timerC          chan types.WorkloadEndpointID
+	garpC           chan types.WorkloadEndpointID
+	ifaceNames      map[types.WorkloadEndpointID]string
+	newGARPHandle   func(string) (garpHandle, error)
 	convergenceTime time.Duration
 }
 
 func newLiveMigrationMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
 	return &liveMigrationMonitor{
-		roles:           make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
-		fsms:            make(map[types.WorkloadEndpointID]*liveMigrationFSM),
-		timerC:          make(chan types.WorkloadEndpointID, 100),
+		roles:      make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
+		fsms:       make(map[types.WorkloadEndpointID]*liveMigrationFSM),
+		timerC:     make(chan types.WorkloadEndpointID, 100),
+		garpC:      make(chan types.WorkloadEndpointID, 100),
+		ifaceNames: make(map[types.WorkloadEndpointID]string),
+		newGARPHandle: func(ifaceName string) (garpHandle, error) {
+			return pcapgo.NewEthernetHandle(ifaceName)
+		},
 		convergenceTime: convergenceTime,
 	}
 }
@@ -64,6 +86,7 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		m.ifaceNames[id] = msg.Endpoint.Name
 		oldRole := m.roles[id]
 		newRole := msg.Endpoint.LiveMigrationRole
 		m.roles[id] = newRole
@@ -80,6 +103,7 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 	case *proto.WorkloadEndpointRemove:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		delete(m.roles, id)
+		delete(m.ifaceNames, id)
 		m.executeFSM(id, liveMigrationInputDeleted)
 	}
 }
@@ -139,6 +163,7 @@ type liveMigrationFSM struct {
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
 	timer        *time.Timer
+	pcapHandle   garpHandle
 }
 
 func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
@@ -216,9 +241,29 @@ func (f *liveMigrationFSM) emitStateChange(next liveMigrationState) {
 	})
 }
 
-func (f *liveMigrationFSM) startGARPDetection() {}
+func (f *liveMigrationFSM) startGARPDetection() {
+	ifaceName := f.monitor.ifaceNames[f.id]
+	if ifaceName == "" {
+		f.logCtx.Warn("No interface name for workload, skipping GARP detection")
+		return
+	}
+	handle, err := f.monitor.newGARPHandle(ifaceName)
+	if err != nil {
+		f.logCtx.WithError(err).Warn("Failed to open packet capture for GARP detection")
+		return
+	}
+	f.pcapHandle = handle
+	go detectGARP(f.logCtx, f.id, handle, f.monitor.garpC)
+}
 
-func (f *liveMigrationFSM) stopGARPDetection() {}
+func (f *liveMigrationFSM) stopGARPDetection() {
+	if f.pcapHandle != nil {
+		if err := f.pcapHandle.Close(); err != nil {
+			f.logCtx.WithError(err).Debug("Error closing GARP detection handle")
+		}
+		f.pcapHandle = nil
+	}
+}
 
 func (f *liveMigrationFSM) startElevatedRoutingTimer() {
 	f.logCtx.WithField("duration", f.monitor.convergenceTime).Debug("Starting elevated routing timer")
@@ -240,9 +285,61 @@ func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
 	}
 }
 
+// OnGARPDetected is called by the main loop when a GARP/RARP packet is
+// detected on a workload's interface.
+func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
+	m.executeFSM(id, liveMigrationInputGARPDetected)
+}
+
 // OnTimerPop is called by the main loop when a timer fires for a workload.
 func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 	m.executeFSM(id, liveMigrationInputTimerPop)
+}
+
+// detectGARP reads packets from the given handle and sends the workload ID
+// to garpC when a GARP or RARP packet is detected.  It is a one-shot
+// goroutine: it returns after the first detection or when the handle is closed.
+func detectGARP(logCtx *logrus.Entry, id types.WorkloadEndpointID,
+	handle garpHandle, garpC chan<- types.WorkloadEndpointID) {
+	defer handle.Close()
+	packetSource := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)
+	for packet := range packetSource.Packets() {
+		if isGARPOrRARP(packet) {
+			logCtx.Info("Detected GARP/RARP packet on workload interface")
+			select {
+			case garpC <- id:
+			default:
+				logCtx.Warn("GARP detection channel full, dropping notification")
+			}
+			return
+		}
+	}
+}
+
+// isGARPOrRARP returns true if the packet is a RARP (EtherType 0x8035)
+// or a gratuitous ARP (sender IP == target IP).
+func isGARPOrRARP(packet gopacket.Packet) bool {
+	ethLayer := packet.Layer(layers.LayerTypeEthernet)
+	if ethLayer == nil {
+		return false
+	}
+	eth := ethLayer.(*layers.Ethernet)
+
+	if eth.EthernetType == etherTypeRARP {
+		return true
+	}
+
+	if eth.EthernetType == layers.EthernetTypeARP {
+		arpLayer := packet.Layer(layers.LayerTypeARP)
+		if arpLayer != nil {
+			arp := arpLayer.(*layers.ARP)
+			if bytes.Equal(arp.SourceProtAddress, arp.DstProtAddress) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (m *liveMigrationMonitor) CompleteDeferredWork() error {
