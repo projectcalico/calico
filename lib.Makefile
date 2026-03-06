@@ -308,9 +308,9 @@ endif
 # Configure the Calico API group to use. Projects importing this Makefile can override this variable
 # if they need to.
 # Supported values:
-# - crd.projectcalico.org/v1 (default)
-# - projectcalico.org/v3
-CALICO_API_GROUP ?= crd.projectcalico.org/v1
+# - projectcalico.org/v3 (default)
+# - crd.projectcalico.org/v1
+CALICO_API_GROUP ?= projectcalico.org/v3
 
 # Where to find Calico CRD files depends on which API group we are using to back them.
 CALICO_CRD_PATH ?= api/config/crd/
