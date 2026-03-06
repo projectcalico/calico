@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved
 
 package ipsetmember
 
@@ -11,25 +11,22 @@ import (
 
 type Protocol uint8
 
-func ProtocolFromModelProto(p numorstring.Protocol) Protocol {
+func ProtocolFrom(p numorstring.Protocol) Protocol {
 	switch {
-	case strings.ToLower(p.StrVal) == "tcp":
-		return ProtocolTCP
-	case strings.ToLower(p.StrVal) == "udp":
+	case ProtocolUDP.MatchesModelProtocol(p):
 		return ProtocolUDP
-	case strings.ToLower(p.StrVal) == "sctp":
+	case ProtocolSCTP.MatchesModelProtocol(p):
 		return ProtocolSCTP
+	default:
+		return ProtocolTCP
 	}
-	logrus.WithField("protocol", p).Panic("Unknown protocol")
-	return ProtocolNone
 }
 
 func (p Protocol) MatchesModelProtocol(protocol numorstring.Protocol) bool {
 	if protocol.Type == numorstring.NumOrStringNum {
 		if protocol.NumVal == 0 {
-			// TODO (mazdak)
-			// Special case: named ports default to TCP if protocol isn't specified.
-			return p == ProtocolTCP
+			// Special case: named ports default to Any if protocol isn't specified.
+			return p == ProtocolAny
 		}
 		return protocol.NumVal == uint8(p)
 	}

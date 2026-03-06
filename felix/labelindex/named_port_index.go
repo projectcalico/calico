@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -101,7 +101,7 @@ func (d *endpointData) LookupNamedPorts(name string, proto ipsetmember.Protocol)
 		if p.Name == name {
 			if proto == ipsetmember.ProtocolAny {
 				matchingPorts = append(matchingPorts, namedPortContribution{
-					protocol: ipsetmember.ProtocolFromModelProto(p.Protocol),
+					protocol: ipsetmember.ProtocolFrom(p.Protocol),
 					port:     p.Port,
 				})
 			} else if proto.MatchesModelProtocol(p.Protocol) {

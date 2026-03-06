@@ -656,7 +656,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 		})
 	})
 
-	Describe("with a policy with nil protocol and only combines named ports", func() {
+	Describe("pepper with a policy with nil protocol and named ports only", func() {
 		var policy *api.NetworkPolicy
 		BeforeEach(func() {
 			policy = api.NewNetworkPolicy()
