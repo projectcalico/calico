@@ -1494,6 +1494,24 @@ bin/helm: bin/.helm-updated-$(HELM_VERSION)
 KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
 KIND_TEST_BUILD_TAG = test-build
 
+# Docker image names tagged as test-build, passed to the load script. Enterprise
+# extends this list with additional images.
+KIND_IMAGES = \
+	docker.io/tigera/operator:$(KIND_TEST_BUILD_TAG) \
+	calico/node:$(KIND_TEST_BUILD_TAG) \
+	calico/typha:$(KIND_TEST_BUILD_TAG) \
+	calico/apiserver:$(KIND_TEST_BUILD_TAG) \
+	calico/ctl:$(KIND_TEST_BUILD_TAG) \
+	calico/cni:$(KIND_TEST_BUILD_TAG) \
+	calico/csi:$(KIND_TEST_BUILD_TAG) \
+	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG) \
+	calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG) \
+	calico/kube-controllers:$(KIND_TEST_BUILD_TAG) \
+	calico/goldmane:$(KIND_TEST_BUILD_TAG) \
+	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
+	calico/whisker:$(KIND_TEST_BUILD_TAG) \
+	calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
+
 # Stamp-file rules: build and tag each component image as test-build.
 # The combined tar for kind loading is produced at load time by the shared load script.
 KIND_IMAGE_STAMPS = \
@@ -1599,12 +1617,13 @@ kind-deploy: kind-cluster-create
 	GIT_VERSION=$(GIT_VERSION) \
 	CALICO_API_GROUP=$(CALICO_API_GROUP) \
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
+	KIND_IMAGES="$(KIND_IMAGES)" \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
 # Load test-build images onto an existing kind cluster and restart pods.
 .PHONY: kind-reload
 kind-reload: $(KUBECTL)
-	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh
+	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 

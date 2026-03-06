@@ -14,10 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# load_images.sh loads test-build-tagged Docker images onto a kind cluster.
+# load_images.sh loads Docker images onto a kind cluster.
 # It compares local Docker image IDs against what's already on the cluster and only loads
 # images that have changed, which avoids re-transferring unchanged images (~1.4GB) on
 # incremental rebuilds.
+#
+# Usage: load_images.sh <image1> <image2> ...
 #
 # Required environment variables:
 #   KIND      - path to the kind binary
@@ -28,22 +30,13 @@ set -e
 : ${KIND:?KIND must be set to the path of the kind binary}
 : ${KIND_NAME:?KIND_NAME must be set to the name of the kind cluster}
 
-images=(
-    docker.io/tigera/operator:test-build
-    calico/node:test-build
-    calico/typha:test-build
-    calico/apiserver:test-build
-    calico/ctl:test-build
-    calico/cni:test-build
-    calico/csi:test-build
-    calico/node-driver-registrar:test-build
-    calico/pod2daemon-flexvol:test-build
-    calico/kube-controllers:test-build
-    calico/goldmane:test-build
-    calico/webhooks:test-build
-    calico/whisker:test-build
-    calico/whisker-backend:test-build
-)
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <image1> <image2> ..."
+    echo "No images specified."
+    exit 0
+fi
+
+images=("$@")
 
 # Filter to only images that exist locally — not all may have been built.
 local_images=()
