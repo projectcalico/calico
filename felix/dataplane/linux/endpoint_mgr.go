@@ -153,9 +153,10 @@ type endpointManager struct {
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
-	pendingWlEpUpdates  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
-	pendingIfaceUpdates map[string]ifacemonitor.State
-	dirtyPolicyIDs      set.Set[types.PolicyID]
+	pendingWlEpUpdates         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
+	pendingIfaceUpdates        map[string]ifacemonitor.State
+	pendingLiveMigrationStates map[types.WorkloadEndpointID]liveMigrationState
+	dirtyPolicyIDs             set.Set[types.PolicyID]
 
 	// Active state, updated in CompleteDeferredWork.
 	activeWlEndpoints                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -318,9 +319,10 @@ func newEndpointManagerWithShims(
 
 		// Pending updates, we store these up as OnUpdate is called, then process them
 		// in CompleteDeferredWork and transfer the important data to the activeXYX fields.
-		pendingWlEpUpdates:  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		pendingIfaceUpdates: map[string]ifacemonitor.State{},
-		dirtyPolicyIDs:      set.New[types.PolicyID](),
+		pendingWlEpUpdates:         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingIfaceUpdates:        map[string]ifacemonitor.State{},
+		pendingLiveMigrationStates: map[types.WorkloadEndpointID]liveMigrationState{},
+		dirtyPolicyIDs:             set.New[types.PolicyID](),
 
 		activeUpIfaces: set.New[string](),
 
@@ -437,6 +439,16 @@ func (m *endpointManager) OnUpdate(protoBufMsg any) {
 	case *proto.GlobalBGPConfigUpdate:
 		log.Debug("GlobalBGPConfig updated.")
 		m.onBGPConfigUpdate(msg)
+	case *liveMigrationStateUpdate:
+		log.WithFields(log.Fields{
+			"id":    msg.ID,
+			"state": msg.State,
+		}).Debug("Live migration state update")
+		if msg.State == liveMigrationStateBase {
+			delete(m.pendingLiveMigrationStates, msg.ID)
+		} else {
+			m.pendingLiveMigrationStates[msg.ID] = msg.State
+		}
 	}
 }
 

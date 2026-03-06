@@ -21,10 +21,23 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 )
 
-// Live Migration Monitor.
+// liveMigrationStateUpdate is a pseudo-proto message emitted by the liveMigrationMonitor
+// when a per-workload FSM changes state.  It is fanned out to all managers (like
+// ifaceStateUpdate) so that the endpoint manager can adjust routing for live-migrating
+// workloads.
+type liveMigrationStateUpdate struct {
+	ID    types.WorkloadEndpointID
+	State liveMigrationState
+}
+
+// liveMigrationMonitor tracks per-workload live migration state that cannot be inferred
+// statelessly from the datastore.  It sees WorkloadEndpoint updates, extracts the live
+// migration role, and drives a per-workload FSM whose state changes are signalled to the
+// rest of the dataplane as liveMigrationStateUpdate messages.
 type liveMigrationMonitor struct {
-	roles map[types.WorkloadEndpointID]proto.LiveMigrationRole
-	fsms  map[types.WorkloadEndpointID]*liveMigrationFSM
+	roles          map[types.WorkloadEndpointID]proto.LiveMigrationRole
+	fsms           map[types.WorkloadEndpointID]*liveMigrationFSM
+	pendingUpdates []liveMigrationStateUpdate
 }
 
 func newLiveMigrationMonitor() *liveMigrationMonitor {
@@ -34,15 +47,21 @@ func newLiveMigrationMonitor() *liveMigrationMonitor {
 	}
 }
 
+// PendingUpdates returns the accumulated FSM state changes and clears the buffer.
+func (m *liveMigrationMonitor) PendingUpdates() []liveMigrationStateUpdate {
+	updates := m.pendingUpdates
+	m.pendingUpdates = nil
+	return updates
+}
+
 func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
-		oldRole, known := m.roles[id]
+		oldRole := m.roles[id]
 		newRole := msg.Endpoint.LiveMigrationRole
 		m.roles[id] = newRole
-		changed := (!known) || (oldRole != newRole)
-		if changed {
+		if oldRole != newRole {
 			switch newRole {
 			case proto.LiveMigrationRole_NO_ROLE:
 				m.executeFSM(id, liveMigrationInputNoRole)
@@ -54,7 +73,6 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		}
 	case *proto.WorkloadEndpointRemove:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
-		oldRole, known := m.roles[id]
 		delete(m.roles, id)
 		m.executeFSM(id, liveMigrationInputDeleted)
 	}
@@ -65,13 +83,19 @@ func (m *liveMigrationMonitor) executeFSM(id types.WorkloadEndpointID, input liv
 	if !exists {
 		fsm = &liveMigrationFSM{
 			logCtx:       logrus.WithField("id", id),
+			id:           id,
+			monitor:      m,
 			currentState: liveMigrationStateBase,
 		}
+		m.fsms[id] = fsm
 	}
 	fsm.handleInput(input)
+	if fsm.currentState == liveMigrationStateBase {
+		delete(m.fsms, id)
+	}
 }
 
-// Live Migration FSM.
+// liveMigrationInput represents an input event to the per-workload FSM.
 type liveMigrationInput int
 
 const (
@@ -83,17 +107,30 @@ const (
 	liveMigrationInputDeleted
 )
 
+// liveMigrationState represents the current state of the per-workload FSM.
+//
+// FSM table (rows = inputs, columns = current state, cells = next state, empty = no-op):
+//
+//	              Base      Target    Live      TimeWait
+//	Target        Target
+//	GARPDetected            Live
+//	NoRole                            TimeWait  TimeWait
+//	TimerPop                                    Base
+//	Source                  Base      Base      Base
+//	Deleted                 Base      Base      Base
 type liveMigrationState int
 
 const (
 	liveMigrationStateBase liveMigrationState = iota
 	liveMigrationStateTarget
 	liveMigrationStateLive
-	liveMigrationStateDone
+	liveMigrationStateTimeWait
 )
 
 type liveMigrationFSM struct {
 	logCtx       *logrus.Entry
+	id           types.WorkloadEndpointID
+	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
 }
 
@@ -115,22 +152,45 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 			next = liveMigrationStateLive
 			f.stopGARPDetection()
 		case liveMigrationInputNoRole:
-			next = liveMigrationStateLive
+			// Live migration completed but we missed the GARP.  Go straight to
+			// TimeWait to allow routing to settle before reverting to normal.
+			next = liveMigrationStateTimeWait
 			f.stopGARPDetection()
 			f.startElevatedRoutingTimer()
+		case liveMigrationInputSource:
+			next = liveMigrationStateBase
+			f.stopGARPDetection()
+		case liveMigrationInputDeleted:
+			next = liveMigrationStateBase
+			f.stopGARPDetection()
 		}
 	case liveMigrationStateLive:
 		switch input {
 		case liveMigrationInputNoRole:
-			next = liveMigrationStateLive
+			// Live migration complete.  Start the timer to allow routing to
+			// settle everywhere before reverting to normal routing.
+			next = liveMigrationStateTimeWait
 			f.startElevatedRoutingTimer()
-		case liveMigrationInputTimerPop:
-			next = liveMigrationStateDone
 		case liveMigrationInputSource:
-			next = liveMigrationStateDone
+			// Re-migration: this WEP is now the source of a new live migration.
+			next = liveMigrationStateBase
+		case liveMigrationInputDeleted:
+			next = liveMigrationStateBase
 		}
-	case liveMigrationStateDone:
-		// No-op for all inputs.
+	case liveMigrationStateTimeWait:
+		switch input {
+		case liveMigrationInputNoRole:
+			// Already in TimeWait; no-op (timer is already running).
+		case liveMigrationInputTimerPop:
+			next = liveMigrationStateBase
+		case liveMigrationInputSource:
+			// Re-migration: this WEP is now the source of a new live migration.
+			next = liveMigrationStateBase
+			f.stopElevatedRoutingTimer()
+		case liveMigrationInputDeleted:
+			next = liveMigrationStateBase
+			f.stopElevatedRoutingTimer()
+		}
 	}
 
 	if next != f.currentState {
@@ -142,10 +202,23 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 	}
 }
 
-func (f *liveMigrationFSM) emitStateChange(next liveMigrationState) {}
+func (f *liveMigrationFSM) emitStateChange(next liveMigrationState) {
+	f.monitor.pendingUpdates = append(f.monitor.pendingUpdates, liveMigrationStateUpdate{
+		ID:    f.id,
+		State: next,
+	})
+}
 
 func (f *liveMigrationFSM) startGARPDetection() {}
 
 func (f *liveMigrationFSM) stopGARPDetection() {}
 
 func (f *liveMigrationFSM) startElevatedRoutingTimer() {}
+
+func (f *liveMigrationFSM) stopElevatedRoutingTimer() {}
+
+func (m *liveMigrationMonitor) CompleteDeferredWork() error {
+	// Nothing to do; state changes are emitted synchronously via pendingUpdates
+	// and drained by the main loop.
+	return nil
+}

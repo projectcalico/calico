@@ -359,6 +359,8 @@ type InternalDataplane struct {
 	ifaceMonitor *ifacemonitor.InterfaceMonitor
 	ifaceUpdates chan any
 
+	liveMigrationMonitor *liveMigrationMonitor
+
 	endpointStatusCombiner *endpointStatusCombiner
 
 	allManagers             []Manager
@@ -508,6 +510,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		getKubeProxyNftablesEnabled: detectKubeProxyNftablesMode,
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
+	dp.liveMigrationMonitor = newLiveMigrationMonitor()
+	dp.RegisterManager(dp.liveMigrationMonitor)
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 	dp.ifaceMonitor.InSyncCallback = dp.onIfaceInSync
@@ -2433,6 +2437,15 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg any) {
 	d.recordMsgStat(msg)
 	for _, mgr := range d.allManagers {
 		mgr.OnUpdate(msg)
+	}
+	// The live migration monitor may have accumulated FSM state changes from the
+	// message we just fanned out.  Drain them and fan out to all managers as
+	// pseudo-proto messages.
+	for _, update := range d.liveMigrationMonitor.PendingUpdates() {
+		update := update
+		for _, mgr := range d.allManagers {
+			mgr.OnUpdate(&update)
+		}
 	}
 	switch msg.(type) {
 	case *proto.InSync:
