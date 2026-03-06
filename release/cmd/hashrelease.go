@@ -117,13 +117,14 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithOperatorDirectory(operatorDir),
 					operator.WithReleaseBranchPrefix(c.String(operatorReleaseBranchPrefixFlag.Name)),
 					operator.IsHashRelease(),
-					operator.WithImage(c.String(operatorImageFlag.Name)),
+					operator.WithImage(pinned.OperatorCfg.Image),
+					operator.WithRegistry(pinned.OperatorCfg.Registry),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 					operator.WithVersion(data.OperatorVersion()),
 					operator.WithCalicoDirectory(cfg.RepoRootDir),
-					operator.WithTempDirectory(cfg.TmpDir),
+					operator.WithCalicoVersion(data.ProductVersion()),
 				}
 				if reg := c.String(operatorRegistryFlag.Name); reg != "" {
 					operatorOpts = append(operatorOpts, operator.WithRegistry(reg))
@@ -231,7 +232,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.IsHashRelease(),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					operator.WithTempDirectory(cfg.TmpDir),
 				)
 				if !c.Bool(skipOperatorFlag.Name) {
 					if err := o.Publish(); err != nil {

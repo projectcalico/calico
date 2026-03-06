@@ -34,21 +34,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
-var (
-	// Components that do not produce images.
-	noImageComponents = []string{
-		apiComponentName,
-		calicoComponentName,
-		networkingCalicoComponentName,
-	}
-
-	// Components to ignore when generating the operator components file.
-	operatorIgnoreComponents = []string{
-		flannelComponentName,
-		testSignerComponentName,
-		flannelMigrationController,
-	}
-)
+// Components that do not produce images.
+var noImageComponents = []string{
+	apiComponentName,
+	calicoComponentName,
+	networkingCalicoComponentName,
+}
 
 var FlannelComponent = registry.Component{
 	Registry: "quay.io",
@@ -69,8 +60,7 @@ var (
 )
 
 const (
-	pinnedVersionFileName      = "pinned_versions.yml"
-	operatorComponentsFileName = "pinned_components.yml"
+	pinnedVersionFileName = "pinned_versions.yml"
 )
 
 const (
@@ -78,8 +68,6 @@ const (
 	calicoComponentName           = "calico"
 	flannelComponentName          = "flannel"
 	networkingCalicoComponentName = "networking-calico"
-	testSignerComponentName       = "test-signer"
-	flannelMigrationController    = "flannel-migration-controller"
 )
 
 var once sync.Once
@@ -282,46 +270,6 @@ func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 		return fmt.Errorf("failed to encode pinned version file: %w", err)
 	}
 	return nil
-}
-
-// GenerateOperatorComponents generates the components-version.yaml for operator.
-// It also copies the generated file to the output directory if provided.
-func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComponent, string, error) {
-	op := registry.OperatorComponent{}
-	pinnedVersion, err := retrievePinnedVersion(srcDir)
-	if err != nil {
-		return op, "", err
-	}
-
-	// Remove components that are not needed in the operator components file.
-	// These either do not produce images or are not used by the operator.
-	for _, c := range operatorIgnoreComponents {
-		delete(pinnedVersion.Components, c)
-	}
-
-	logrus.Info("Generating operator components file")
-	operatorComponentsFilePath := filepath.Join(srcDir, operatorComponentsFileName)
-	operatorComponentsFile, err := os.Create(operatorComponentsFilePath)
-	if err != nil {
-		return op, "", err
-	}
-	defer func() { _ = operatorComponentsFile.Close() }()
-
-	enc := yaml.NewEncoder(operatorComponentsFile)
-	enc.SetIndent(2)
-	defer func() { _ = enc.Close() }()
-
-	if err := enc.Encode(pinnedVersion); err != nil {
-		return op, "", err
-	}
-	if outputDir != "" {
-		if err := utils.CopyFile(operatorComponentsFilePath, filepath.Join(outputDir, operatorComponentsFileName)); err != nil {
-			return op, "", err
-		}
-	}
-	op.Component = pinnedVersion.TigeraOperator
-	logrus.WithField("file", operatorComponentsFilePath).Info("Operator components file generated successfully")
-	return op, operatorComponentsFilePath, nil
 }
 
 // retrievePinnedVersion retrieves the pinned version from the pinned version file.

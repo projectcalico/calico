@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/containernetworking/cni/pkg/types"
+	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -31,6 +32,35 @@ var (
 	plugin          = "calico-ipam"
 	defaultIPv4Pool = "192.168.0.0/16"
 )
+
+// verifyRoutesPopulatedInResult verifies that routes are correctly populated in the IPAM result.
+// For normal pods (expectNonEmpty=true), it checks that routes exist for all assigned IPs.
+// For migration target pods (expectNonEmpty=false), it checks that routes are empty.
+func verifyRoutesPopulatedInResult(result *cniv1.Result, expectNonEmpty bool) {
+	if expectNonEmpty {
+		// Normal pods should have routes for all assigned IPs
+		Expect(result.Routes).NotTo(BeEmpty(), "Routes should be present for assigned IPs")
+
+		// Verify that each assigned IP has a corresponding route whose destination
+		// network contains the IP. We match by IP containment rather than exact string
+		// equality because older CNI spec versions (< 0.3.0) normalise the IP mask to
+		// /32 (or /128) during result conversion while routes keep the block-level mask.
+		for _, ip := range result.IPs {
+			found := false
+			for _, route := range result.Routes {
+				if route.Dst.Contains(ip.Address.IP) {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(),
+				fmt.Sprintf("Route should exist for IP %s", ip.Address.String()))
+		}
+	} else {
+		// Migration target pods should have empty routes
+		Expect(result.Routes).To(BeEmpty(), "Routes should be empty for migration target pod")
+	}
+}
 
 var _ = Describe("Calico IPAM Tests", func() {
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
@@ -85,6 +115,9 @@ var _ = Describe("Calico IPAM Tests", func() {
 			if expectedIPv6 {
 				Expect(ip6Mask).Should(Equal("ffffffffffffffffffffffffffffffc0"))
 			}
+
+			// Verify that routes are present for each assigned IP
+			verifyRoutesPopulatedInResult(result, true)
 
 			_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "", cid, cniVersion)
 			Expect(exitCode).Should(Equal(0))

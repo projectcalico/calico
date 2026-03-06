@@ -132,7 +132,7 @@ func (srv *server) ListenAndServeCluster() error {
 		return fmt.Errorf("failed to connect to tunnel: %w", err)
 	}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", srv.listenHost, srv.listenPort))
+	listener, err := net.Listen("tcp", net.JoinHostPort(srv.listenHost, srv.listenPort))
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s:%s: %w", srv.listenHost, srv.listenPort, err)
 	}
