@@ -38,10 +38,6 @@ func (c *FakeProjectcalicoV3) ClusterInformations() v3.ClusterInformationInterfa
 	return newFakeClusterInformations(c)
 }
 
-func (c *FakeProjectcalicoV3) DatastoreMigrations() v3.DatastoreMigrationInterface {
-	return newFakeDatastoreMigrations(c)
-}
-
 func (c *FakeProjectcalicoV3) FelixConfigurations() v3.FelixConfigurationInterface {
 	return newFakeFelixConfigurations(c)
 }

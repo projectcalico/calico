@@ -356,9 +356,9 @@ chart: $(CHARTS)
 .PHONY: k8s-test
 ## Run the k8s tests
 k8s-test:
-	$(MAKE) kind-up
+	$(MAKE) -C $(REPO_ROOT) kind-up
 	$(MAKE) kind-k8st-run-test
-	$(MAKE) kind-down
+	$(MAKE) -C $(REPO_ROOT) kind-down
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)

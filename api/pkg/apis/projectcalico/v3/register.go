@@ -87,8 +87,6 @@ var (
 		&StagedKubernetesNetworkPolicyList{},
 		&StagedNetworkPolicy{},
 		&StagedNetworkPolicyList{},
-		&DatastoreMigration{},
-		&DatastoreMigrationList{},
 	}
 )
 
