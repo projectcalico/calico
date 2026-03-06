@@ -1505,6 +1505,7 @@ kind-k8st-setup: $(KIND_SETUP_CHARTS) kind-cluster-create
 	REPO_ROOT=$(REPO_ROOT) \
 	KUBECONFIG=$(KIND_KUBECONFIG) \
 	KIND=$(KIND) \
+	KIND_NAME=$(KIND_NAME) \
 	ARCH=$(ARCH) \
 	GIT_VERSION=$(GIT_VERSION) \
 	CALICO_API_GROUP=$(CALICO_API_GROUP) \
@@ -1514,7 +1515,7 @@ kind-k8st-setup: $(KIND_SETUP_CHARTS) kind-cluster-create
 # Load test-build images onto an existing kind cluster and restart pods.
 .PHONY: load-container-images
 load-container-images: $(KUBECTL)
-	KIND=$(KIND) $(REPO_ROOT)/hack/test/kind/load_images_on_kind_cluster.sh
+	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images_on_kind_cluster.sh
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 

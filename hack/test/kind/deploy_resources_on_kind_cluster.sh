@@ -21,6 +21,7 @@
 # Required environment variables:
 #   REPO_ROOT   - absolute path to the repository root
 #   KIND        - path to the kind binary
+#   KIND_NAME   - name of the kind cluster
 #
 # Optional environment variables:
 #   ARCH              - target architecture (default: amd64)
@@ -42,6 +43,7 @@ trap 'cleanup' SIGINT SIGHUP SIGTERM EXIT
 
 : ${REPO_ROOT:?REPO_ROOT must be set}
 : ${KIND:?KIND must be set}
+: ${KIND_NAME:?KIND_NAME must be set}
 
 INFRA_DIR=${REPO_ROOT}/hack/test/kind/infra
 ARCH=${ARCH:-amd64}
@@ -144,7 +146,7 @@ docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
 echo
 
 echo "Load docker images onto kind cluster"
-KIND=${KIND} ${REPO_ROOT}/hack/test/kind/load_images_on_kind_cluster.sh
+KIND=${KIND} KIND_NAME=${KIND_NAME} ${REPO_ROOT}/hack/test/kind/load_images_on_kind_cluster.sh
 
 echo "Install additional permissions for BGP password"
 ${kubectl} apply -f ${INFRA_DIR}/additional-rbac.yaml

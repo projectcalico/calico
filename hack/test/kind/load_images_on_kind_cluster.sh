@@ -14,16 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# load_images_on_kind_cluster.sh loads test-build-tagged Docker images onto a kind cluster
-# using a single combined tar archive, which is significantly faster than loading each
-# image individually (one containerd import per node instead of N).
+# load_images_on_kind_cluster.sh loads test-build-tagged Docker images onto a kind cluster.
+# It compares local Docker image IDs against what's already on the cluster and only loads
+# images that have changed, which avoids re-transferring unchanged images (~1.4GB) on
+# incremental rebuilds.
 #
 # Required environment variables:
-#   KIND - path to the kind binary
+#   KIND      - path to the kind binary
+#   KIND_NAME - name of the kind cluster to load images onto
 
 set -e
 
 : ${KIND:?KIND must be set to the path of the kind binary}
+: ${KIND_NAME:?KIND_NAME must be set to the name of the kind cluster}
 
 images=(
     docker.io/tigera/operator:test-build
@@ -43,27 +46,64 @@ images=(
 )
 
 # Filter to only images that exist locally — not all may have been built.
-to_load=()
+local_images=()
 for img in "${images[@]}"; do
     if docker image inspect "${img}" &>/dev/null; then
-        to_load+=("${img}")
+        local_images+=("${img}")
     else
         echo "WARNING: ${img} not found locally, skipping"
     fi
 done
 
-if [ ${#to_load[@]} -eq 0 ]; then
+if [ ${#local_images[@]} -eq 0 ]; then
     echo "No images to load."
     exit 0
 fi
 
-echo "Saving ${#to_load[@]} images into a combined archive..."
+# Build a map of image tag -> image ID for images already on the cluster.
+# We only need to check one node since kind load targets all nodes.
+node=$(${KIND} get nodes --name "${KIND_NAME}" | head -1)
+declare -A node_ids
+if [ -n "$node" ]; then
+    while IFS=' ' read -r tag id; do
+        node_ids["$tag"]="$id"
+    done < <(docker exec "$node" crictl images -o json 2>/dev/null | jq -r '.images[] | "\(.repoTags[0]) \(.id)"')
+fi
+
+# Compare local image IDs against the cluster and collect only changed images.
+to_load=()
+skipped=0
+for img in "${local_images[@]}"; do
+    local_id=$(docker image inspect "$img" --format '{{.Id}}')
+
+    # crictl uses fully-qualified names (docker.io/ prefix).
+    if [[ "$img" != *"/"*"/"* ]]; then
+        fq_img="docker.io/$img"
+    else
+        fq_img="$img"
+    fi
+
+    node_id="${node_ids[$fq_img]:-}"
+    if [ "$local_id" = "$node_id" ]; then
+        echo "Unchanged: ${img}"
+        skipped=$((skipped + 1))
+    else
+        to_load+=("$img")
+    fi
+done
+
+if [ ${#to_load[@]} -eq 0 ]; then
+    echo "All ${skipped} images already up to date on cluster."
+    exit 0
+fi
+
+echo "Loading ${#to_load[@]} changed images (${skipped} unchanged, skipped)..."
+
 combined_tar=$(mktemp --suffix=.tar)
 trap "rm -f ${combined_tar}" EXIT
 
 docker save -o "${combined_tar}" "${to_load[@]}"
 
-echo "Loading combined archive onto kind cluster..."
-${KIND} load image-archive "${combined_tar}"
+${KIND} load image-archive "${combined_tar}" --name "${KIND_NAME}"
 
-echo "All ${#to_load[@]} images loaded successfully."
+echo "Loaded ${#to_load[@]} images successfully."
