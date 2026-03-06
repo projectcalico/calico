@@ -35,6 +35,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
@@ -547,6 +548,10 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 	}
 }
 
+// errPodNotFound is returned by getVMIInfoForPod when the pod has been deleted
+// from the API server (e.g., due to parallel CNI DEL calls during live migration).
+var errPodNotFound = fmt.Errorf("pod not found")
+
 // getVMIInfoForPod retrieves KubeVirt VirtualMachineInstance (VMI) information for a given pod.
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
 // Returns (nil, nil) if the pod is not a virt-launcher pod.
@@ -574,6 +579,10 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 	// Get the pod
 	pod, err := k8sClient.CoreV1().Pods(epIDs.Namespace).Get(context.Background(), epIDs.Pod, metav1.GetOptions{})
 	if err != nil {
+		if kerrors.IsNotFound(err) {
+			logger.Info("Pod not found, it may have been deleted")
+			return nil, errPodNotFound
+		}
 		logger.WithError(err).Error("Failed to get pod for VMI detection")
 		return nil, err
 	}
@@ -654,7 +663,15 @@ func cmdDel(args *skel.CmdArgs) error {
 	// Always detect VMI info for logging, but only use VM-based handle when persistence is enabled.
 	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
 	if err != nil {
-		return fmt.Errorf("failed to get VMI info: %w", err)
+		if err == errPodNotFound {
+			// During parallel CNI DEL calls (e.g., live migration), the pod may already be
+			// deleted by the time we look it up. In that case, treat it as a non-VMI pod so
+			// we fall through to the standard release path which handles missing resources
+			// gracefully.
+			logger.Info("Pod already deleted, skipping VMI detection for CNI DEL")
+		} else {
+			return fmt.Errorf("failed to get VMI info: %w", err)
+		}
 	}
 
 	// Combined flag: VMI pod with persistence enabled.
