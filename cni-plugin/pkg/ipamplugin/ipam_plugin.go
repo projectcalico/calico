@@ -17,6 +17,7 @@ package ipamplugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -35,6 +36,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
@@ -43,7 +45,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
@@ -547,6 +549,10 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 	}
 }
 
+// errPodNotFound is returned by getVMIInfoForPod when the pod has been deleted
+// from the API server (e.g., due to parallel CNI DEL calls during live migration).
+var errPodNotFound = fmt.Errorf("pod not found")
+
 // getVMIInfoForPod retrieves KubeVirt VirtualMachineInstance (VMI) information for a given pod.
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
 // Returns (nil, nil) if the pod is not a virt-launcher pod.
@@ -574,6 +580,10 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 	// Get the pod
 	pod, err := k8sClient.CoreV1().Pods(epIDs.Namespace).Get(context.Background(), epIDs.Pod, metav1.GetOptions{})
 	if err != nil {
+		if kerrors.IsNotFound(err) {
+			logger.Info("Pod not found, it may have been deleted")
+			return nil, errPodNotFound
+		}
 		logger.WithError(err).Error("Failed to get pod for VMI detection")
 		return nil, err
 	}
@@ -654,7 +664,14 @@ func cmdDel(args *skel.CmdArgs) error {
 	// Always detect VMI info for logging, but only use VM-based handle when persistence is enabled.
 	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
 	if err != nil {
-		return fmt.Errorf("failed to get VMI info: %w", err)
+		if errors.Is(err, errPodNotFound) {
+			// During parallel CNI DEL calls (e.g., live migration), the pod may already
+			// be deleted by the time we look it up.
+			logger.Info("Pod already deleted, nothing to clean up for CNI DEL")
+			return nil
+		} else {
+			return fmt.Errorf("failed to get VMI info: %w", err)
+		}
 	}
 
 	// Combined flag: VMI pod with persistence enabled.
@@ -798,7 +815,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		for _, ip := range ips {
 			attr, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, ip)
 			if err != nil {
-				if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 					// IP was already released by someone else, treat as no attributes remaining.
 					logger.WithField("ip", ip).Info("IP already released during cleanup, skipping")
 					continue
@@ -822,7 +839,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		if shouldRelease && !anyOwnerAttributesRemain {
 			logger.Info("VM/VMI deletion in progress and all owner attributes empty - releasing IP by handle")
 			if err := calicoClient.IPAM().ReleaseByHandle(ctx, handleID); err != nil {
-				if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 					logger.WithError(err).Error("Failed to release address")
 					return err
 				}
@@ -842,7 +859,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// For non-VM pods, use the standard release logic
 	if err := calicoClient.IPAM().ReleaseByHandle(ctx, handleID); err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			logger.WithError(err).Error("Failed to release address")
 			return err
 		}
@@ -859,7 +876,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	logger.Info("Releasing address using workloadID")
 	if err := calicoClient.IPAM().ReleaseByHandle(ctx, workloadID); err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			logger.WithError(err).Error("Failed to release address")
 			return err
 		}
@@ -910,7 +927,7 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 
 	existingIPs, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)
 	if err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			// Communication or unexpected error - don't fall through to new allocation.
 			logger.WithError(err).Error("Failed to get existing IPs for VM handle")
 			return false, fmt.Errorf("failed to get existing IPs for VM handle %s: %w", handleID, err)
