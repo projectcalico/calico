@@ -1585,16 +1585,12 @@ $(REPO_ROOT)/.stamp.whisker-backend:
 .PHONY: kind-build-images
 kind-build-images: $(KIND_IMAGE_STAMPS)
 
-# Helm chart tarballs needed for kind cluster setup.
-KIND_SETUP_CHARTS=$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
-	$(REPO_ROOT)/bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz \
-	$(REPO_ROOT)/bin/projectcalico.org.v3-$(GIT_VERSION).tgz
-
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
 # already built and tagged as test-build in the local Docker daemon. If a
 # cluster already exists (stamp file present), the creation step is skipped.
 .PHONY: kind-deploy
-kind-deploy: $(KIND_SETUP_CHARTS) kind-cluster-create
+kind-deploy: kind-cluster-create
+	$(MAKE) -C $(REPO_ROOT) chart
 	REPO_ROOT=$(REPO_ROOT) \
 	KUBECONFIG=$(KIND_KUBECONFIG) \
 	KIND=$(KIND) \
