@@ -14,6 +14,8 @@
 
 package uniquelabels
 
+//go:generate go run gen_compact.go
+
 import (
 	"encoding/json"
 	"fmt"
