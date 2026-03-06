@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -24,10 +25,12 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 )
 
+var testConvergenceTime = 30 * time.Second
+
 // testFSM creates a liveMigrationFSM in the given state, wired to a monitor for
 // pendingUpdates capture.
 func testFSM(state liveMigrationState) (*liveMigrationFSM, *liveMigrationMonitor) {
-	m := newLiveMigrationMonitor()
+	m := newLiveMigrationMonitor(testConvergenceTime)
 	id := types.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "test-pod", EndpointId: "ep"}
 	fsm := &liveMigrationFSM{
 		logCtx:       logrus.WithField("id", id),
@@ -129,7 +132,7 @@ func TestFSMTransitionTable(t *testing.T) {
 func TestMonitorOnUpdate(t *testing.T) {
 	t.Run("WEP with TARGET role creates FSM and emits Target", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 
 		updates := m.PendingUpdates()
@@ -140,7 +143,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 	t.Run("role change TARGET→NO_ROLE drives NoRole input", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		m.PendingUpdates() // drain
 
@@ -153,7 +156,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 	t.Run("role change TARGET→SOURCE drives Source input", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		m.PendingUpdates()
 
@@ -166,7 +169,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 	t.Run("same role repeated is no-op", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		m.PendingUpdates()
 
@@ -176,14 +179,14 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 	t.Run("unrelated message type is ignored", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		m.OnUpdate(&proto.HostEndpointUpdate{})
 		g.Expect(m.fsms).To(BeEmpty())
 	})
 
 	t.Run("WorkloadEndpointRemove drives Deleted input", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		m.PendingUpdates()
 
@@ -198,7 +201,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 
 	t.Run("WorkloadEndpointRemove for unknown WEP is safe", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		// Should not panic; FSM is created at Base, gets Deleted (no-op), cleaned up.
 		m.OnUpdate(wepRemove(wepID1))
 		g.Expect(m.PendingUpdates()).To(BeEmpty())
@@ -211,7 +214,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 func TestFSMLifecycle(t *testing.T) {
 	t.Run("FSM created on first input and cleaned up on return to Base", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		g.Expect(m.fsms).To(HaveLen(1))
 
@@ -222,7 +225,7 @@ func TestFSMLifecycle(t *testing.T) {
 
 	t.Run("multiple inputs to same ID reuse FSM", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		m.PendingUpdates()
 
@@ -236,7 +239,7 @@ func TestFSMLifecycle(t *testing.T) {
 
 	t.Run("PendingUpdates drains and clears buffer", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 
 		g.Expect(m.PendingUpdates()).To(HaveLen(1))
@@ -249,7 +252,7 @@ func TestFSMLifecycle(t *testing.T) {
 func TestLiveMigrationScenarios(t *testing.T) {
 	t.Run("missed GARP path: TARGET → NO_ROLE", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		expectUpdate(g, m, liveMigrationStateTarget)
@@ -260,7 +263,7 @@ func TestLiveMigrationScenarios(t *testing.T) {
 
 	t.Run("happy path with GARP: TARGET → GARP → NO_ROLE", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		expectUpdate(g, m, liveMigrationStateTarget)
@@ -274,7 +277,7 @@ func TestLiveMigrationScenarios(t *testing.T) {
 
 	t.Run("re-migration: TARGET → SOURCE", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		expectUpdate(g, m, liveMigrationStateTarget)
@@ -285,7 +288,7 @@ func TestLiveMigrationScenarios(t *testing.T) {
 
 	t.Run("delete during migration: TARGET → Remove", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		expectUpdate(g, m, liveMigrationStateTarget)
@@ -296,7 +299,7 @@ func TestLiveMigrationScenarios(t *testing.T) {
 
 	t.Run("two independent WEPs", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		m.OnUpdate(wepUpdate(wepID2, proto.LiveMigrationRole_TARGET))
@@ -317,7 +320,7 @@ func TestLiveMigrationScenarios(t *testing.T) {
 
 	t.Run("idempotent role update", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		m.PendingUpdates()
@@ -329,7 +332,7 @@ func TestLiveMigrationScenarios(t *testing.T) {
 
 	t.Run("full lifecycle: TARGET → GARP → NO_ROLE → TimerPop", func(t *testing.T) {
 		g := NewWithT(t)
-		m := newLiveMigrationMonitor()
+		m := newLiveMigrationMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		expectUpdate(g, m, liveMigrationStateTarget)
@@ -340,11 +343,65 @@ func TestLiveMigrationScenarios(t *testing.T) {
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
 		expectUpdate(g, m, liveMigrationStateTimeWait)
 
-		m.executeFSM(wepID1, liveMigrationInputTimerPop)
+		m.OnTimerPop(wepID1)
 		expectUpdate(g, m, liveMigrationStateBase)
 
 		// FSM should be cleaned up.
 		g.Expect(m.fsms).To(BeEmpty())
+	})
+}
+
+// --- Section 5: Timer channel delivery ---
+
+func TestLiveMigrationTimer(t *testing.T) {
+	t.Run("timer fires and delivers workload ID to channel", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newLiveMigrationMonitor(50 * time.Millisecond)
+
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+		m.PendingUpdates() // drain
+
+		// Drive to TimeWait via NoRole (starts the timer).
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+		m.PendingUpdates() // drain
+
+		// Wait for timer to fire and deliver the ID.
+		select {
+		case id := <-m.timerC:
+			g.Expect(id).To(Equal(wepID1))
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for timer channel delivery")
+		}
+
+		// Simulate main loop calling OnTimerPop.
+		m.OnTimerPop(wepID1)
+		updates := m.PendingUpdates()
+		g.Expect(updates).To(HaveLen(1))
+		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
+		g.Expect(m.fsms).To(BeEmpty())
+	})
+
+	t.Run("stopElevatedRoutingTimer prevents channel delivery", func(t *testing.T) {
+		m := newLiveMigrationMonitor(500 * time.Millisecond)
+
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+		m.PendingUpdates()
+
+		// Drive to TimeWait (starts timer).
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+		m.PendingUpdates()
+
+		// Now drive to Base via Source (stops timer).
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
+		m.PendingUpdates()
+
+		// Timer should not fire.
+		select {
+		case <-m.timerC:
+			t.Fatal("timer should not have fired after stop")
+		case <-time.After(700 * time.Millisecond):
+			// Expected: no delivery.
+		}
 	})
 }
 

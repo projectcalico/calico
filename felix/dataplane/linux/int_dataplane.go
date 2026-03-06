@@ -78,6 +78,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/throttle"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
@@ -281,6 +282,8 @@ type Config struct {
 	IPv4ElevatedRoutePriority int
 	IPv6NormalRoutePriority   int
 	IPv6ElevatedRoutePriority int
+
+	LiveMigrationRouteConvergenceTime time.Duration
 
 	KubernetesProvider felixconfig.Provider
 
@@ -510,7 +513,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		getKubeProxyNftablesEnabled: detectKubeProxyNftablesMode,
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
-	dp.liveMigrationMonitor = newLiveMigrationMonitor()
+	dp.liveMigrationMonitor = newLiveMigrationMonitor(config.LiveMigrationRouteConvergenceTime)
 	dp.RegisterManager(dp.liveMigrationMonitor)
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
@@ -2310,6 +2313,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onDatastoreMessage(msg)
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
+		case id := <-d.liveMigrationMonitor.timerC:
+			d.onLiveMigrationTimerPop(id)
 		case name := <-d.ipipParentIfaceC:
 			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.noEncapParentIfaceC:
@@ -2474,6 +2479,17 @@ func (d *InternalDataplane) onIfaceMonitorMessage(ifaceUpdate any) {
 	if d.addrsUpdateBatchSize > 0 {
 		summaryAddrBatchSize.Observe(float64(d.addrsUpdateBatchSize))
 	}
+}
+
+func (d *InternalDataplane) onLiveMigrationTimerPop(id types.WorkloadEndpointID) {
+	d.liveMigrationMonitor.OnTimerPop(id)
+	for _, update := range d.liveMigrationMonitor.PendingUpdates() {
+		update := update
+		for _, mgr := range d.allManagers {
+			mgr.OnUpdate(&update)
+		}
+	}
+	d.dataplaneNeedsSync = true
 }
 
 func (d *InternalDataplane) processIfaceUpdate(ifaceUpdate any) {

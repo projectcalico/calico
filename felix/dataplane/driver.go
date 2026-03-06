@@ -426,6 +426,8 @@ func StartDataplaneDriver(
 			IPv6NormalRoutePriority:   configParams.IPv6NormalRoutePriority,
 			IPv6ElevatedRoutePriority: configParams.IPv6ElevatedRoutePriority,
 
+			LiveMigrationRouteConvergenceTime: configParams.LiveMigrationRouteConvergenceTime,
+
 			KubernetesProvider: configParams.KubernetesProvider(),
 			Collector:          collector,
 			LookupsCache:       lc,

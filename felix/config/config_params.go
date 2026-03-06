@@ -467,6 +467,8 @@ type Config struct {
 	IPv6NormalRoutePriority   int `config:"int(1:2147483646);1024"`
 	IPv6ElevatedRoutePriority int `config:"int(1:2147483646);512"`
 
+	LiveMigrationRouteConvergenceTime time.Duration `config:"seconds;30"`
+
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
 	SidecarAccelerationEnabled bool `config:"bool;false"`

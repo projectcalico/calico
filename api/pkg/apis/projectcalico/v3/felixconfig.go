@@ -971,6 +971,12 @@ type FelixConfigurationSpec struct {
 	// optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
 	// [Default: 512]
 	IPv6ElevatedRoutePriority *int `json:"ipv6ElevatedRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+	// LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
+	// VM live migration completes.  This allows routes to converge across the cluster before
+	// reverting to normal priority. [Default: 30s]
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$`
+	LiveMigrationRouteConvergenceTime *metav1.Duration `json:"liveMigrationRouteConvergenceTime,omitempty" configv1timescale:"seconds"`
 
 	// WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]
 	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`

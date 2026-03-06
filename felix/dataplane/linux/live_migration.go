@@ -15,6 +15,8 @@
 package intdataplane
 
 import (
+	"time"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
@@ -35,15 +37,19 @@ type liveMigrationStateUpdate struct {
 // migration role, and drives a per-workload FSM whose state changes are signalled to the
 // rest of the dataplane as liveMigrationStateUpdate messages.
 type liveMigrationMonitor struct {
-	roles          map[types.WorkloadEndpointID]proto.LiveMigrationRole
-	fsms           map[types.WorkloadEndpointID]*liveMigrationFSM
-	pendingUpdates []liveMigrationStateUpdate
+	roles           map[types.WorkloadEndpointID]proto.LiveMigrationRole
+	fsms            map[types.WorkloadEndpointID]*liveMigrationFSM
+	pendingUpdates  []liveMigrationStateUpdate
+	timerC          chan types.WorkloadEndpointID
+	convergenceTime time.Duration
 }
 
-func newLiveMigrationMonitor() *liveMigrationMonitor {
+func newLiveMigrationMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
 	return &liveMigrationMonitor{
-		roles: make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
-		fsms:  make(map[types.WorkloadEndpointID]*liveMigrationFSM),
+		roles:           make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
+		fsms:            make(map[types.WorkloadEndpointID]*liveMigrationFSM),
+		timerC:          make(chan types.WorkloadEndpointID, 100),
+		convergenceTime: convergenceTime,
 	}
 }
 
@@ -132,6 +138,7 @@ type liveMigrationFSM struct {
 	id           types.WorkloadEndpointID
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
+	timer        *time.Timer
 }
 
 func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
@@ -213,9 +220,30 @@ func (f *liveMigrationFSM) startGARPDetection() {}
 
 func (f *liveMigrationFSM) stopGARPDetection() {}
 
-func (f *liveMigrationFSM) startElevatedRoutingTimer() {}
+func (f *liveMigrationFSM) startElevatedRoutingTimer() {
+	f.logCtx.WithField("duration", f.monitor.convergenceTime).Debug("Starting elevated routing timer")
+	id := f.id
+	f.timer = time.AfterFunc(f.monitor.convergenceTime, func() {
+		select {
+		case f.monitor.timerC <- id:
+		default:
+			logrus.WithField("id", id).Warn("Live migration timer channel full, dropping timer pop")
+		}
+	})
+}
 
-func (f *liveMigrationFSM) stopElevatedRoutingTimer() {}
+func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
+	if f.timer != nil {
+		f.logCtx.Debug("Stopping elevated routing timer")
+		f.timer.Stop()
+		f.timer = nil
+	}
+}
+
+// OnTimerPop is called by the main loop when a timer fires for a workload.
+func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
+	m.executeFSM(id, liveMigrationInputTimerPop)
+}
 
 func (m *liveMigrationMonitor) CompleteDeferredWork() error {
 	// Nothing to do; state changes are emitted synchronously via pendingUpdates
