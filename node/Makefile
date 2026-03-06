@@ -356,9 +356,9 @@ chart: $(CHARTS)
 .PHONY: k8s-test
 ## Run the k8s tests
 k8s-test:
-	$(MAKE) kind-test-images kind-setup
+	$(MAKE) kind-up
 	$(MAKE) kind-k8st-run-test
-	$(MAKE) kind-k8st-cleanup
+	$(MAKE) kind-down
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
@@ -373,9 +373,6 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
 	     cd /code/tests/k8st && pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
-
-.PHONY: kind-k8st-cleanup
-kind-k8st-cleanup: kind-cluster-destroy
 
 ###############################################################################
 # CI/CD
