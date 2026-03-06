@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,78 +39,19 @@ var title = cases.Title(language.English)
 const (
 	datastoreBackoff                 = time.Second
 	defaultKubeControllersConfigName = "default"
+
+	defaultReconcilerPeriod = 5 * time.Minute
+	defaultCompactionPeriod = 10 * time.Minute
+	defaultLeakGracePeriod  = 15 * time.Minute
 )
 
-// RunConfig represents the configuration for all controllers and includes
-// merged information from environment variables (Config) and the Calico
-// resource KubeControllersConfiguration
-type RunConfig struct {
-	LogLevelScreen         log.Level
-	Controllers            ControllersConfig
-	EtcdV3CompactionPeriod time.Duration
-	HealthEnabled          bool
-	PrometheusPort         int
-	DebugProfilePort       int32
-}
-
-type ControllersConfig struct {
-	Node             *NodeControllerConfig
-	Policy           *GenericControllerConfig
-	WorkloadEndpoint *GenericControllerConfig
-	ServiceAccount   *GenericControllerConfig
-	Namespace        *GenericControllerConfig
-	LoadBalancer     *LoadBalancerControllerConfig
-	Migration        *MigrationControllerConfig
-}
-
-type MigrationControllerConfig struct {
-	PolicyNameMigrator v3.ControllerMode
-}
-
-type GenericControllerConfig struct {
-	ReconcilerPeriod time.Duration
-	NumberOfWorkers  int
-}
-
-type NodeControllerConfig struct {
-	SyncLabels             bool
-	AutoHostEndpointConfig *AutoHostEndpointConfig
-
-	// Should the Node controller delete Calico nodes?  Generally, this is
-	// true for etcdv3 datastores.
-	DeleteNodes bool
-
-	// The grace period used by the controller to determine if an IP address is leaked.
-	// Set to 0 to disable IP address garbage collection.
-	LeakGracePeriod *v1.Duration
-}
-
-type AutoHostEndpointConfig struct {
-	AutoCreate                bool
-	CreateDefaultHostEndpoint v3.DefaultHostEndpointMode
-	Templates                 []AutoHostEndpointTemplate
-}
-
-type AutoHostEndpointTemplate struct {
-	GenerateName     string
-	InterfaceCIDRs   []string
-	InterfacePattern string
-	Labels           map[string]string
-	NodeSelector     string
-}
-
-type LoadBalancerControllerConfig struct {
-	// AssignIPs indicates if LoadBalancer controller will auto-assign all ip addresses or only if asked to do so via annotation
-	AssignIPs v3.AssignIPs
-}
-
 type RunConfigController struct {
-	out chan RunConfig
+	out chan v3.KubeControllersConfigurationSpec
 }
 
 // ConfigChan returns a channel that sends an initial config snapshot at start
 // of day, and updates whenever the config changes.
-func (r *RunConfigController) ConfigChan() <-chan RunConfig {
+func (r *RunConfigController) ConfigChan() <-chan v3.KubeControllersConfigurationSpec {
 	return r.out
 }
 
@@ -121,28 +62,28 @@ func NewDefaultKubeControllersConfig() *v3.KubeControllersConfiguration {
 	kubeControllersConfig.Spec = v3.KubeControllersConfigurationSpec{
 		LogSeverityScreen:      "Info",
 		HealthChecks:           v3.Enabled,
-		EtcdV3CompactionPeriod: &v1.Duration{Duration: time.Minute * 10},
+		EtcdV3CompactionPeriod: &v1.Duration{Duration: defaultCompactionPeriod},
 		Controllers: v3.ControllersConfig{
 			Node: &v3.NodeControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				ReconcilerPeriod: &v1.Duration{Duration: defaultReconcilerPeriod},
 				SyncLabels:       v3.Enabled,
 				HostEndpoint: &v3.AutoHostEndpointConfig{
 					AutoCreate:                v3.Disabled,
 					CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
 				},
-				LeakGracePeriod: &v1.Duration{Duration: time.Minute * 15},
+				LeakGracePeriod: &v1.Duration{Duration: defaultLeakGracePeriod},
 			},
 			Policy: &v3.PolicyControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				ReconcilerPeriod: &v1.Duration{Duration: defaultReconcilerPeriod},
 			},
 			WorkloadEndpoint: &v3.WorkloadEndpointControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				ReconcilerPeriod: &v1.Duration{Duration: defaultReconcilerPeriod},
 			},
 			ServiceAccount: &v3.ServiceAccountControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				ReconcilerPeriod: &v1.Duration{Duration: defaultReconcilerPeriod},
 			},
 			Namespace: &v3.NamespaceControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				ReconcilerPeriod: &v1.Duration{Duration: defaultReconcilerPeriod},
 			},
 			LoadBalancer: &v3.LoadBalancerControllerConfig{
 				AssignIPs: v3.AllServices,
@@ -156,23 +97,23 @@ func NewDefaultKubeControllersConfig() *v3.KubeControllersConfiguration {
 	return kubeControllersConfig
 }
 
-// NewRunConfigController creates the RunConfigController.  The controller connects
+// NewRunConfigController creates the RunConfigController. The controller connects
 // to the datastore to get the KubeControllersConfiguration resource, merges it with
-// the config from environment variables, and emits RunConfig objects over a channel
-// to push config out to the rest of the controllers.  It also handles setting the
-// KubeControllersConfiguration.Status with the current running configuration
+// the config from environment variables, and emits resolved specs over a channel
+// to push config out to the rest of the controllers. It also handles setting the
+// KubeControllersConfiguration.Status with the current running configuration.
 func NewRunConfigController(ctx context.Context, cfg Config, client clientv3.KubeControllersConfigurationInterface) *RunConfigController {
-	ctrl := &RunConfigController{out: make(chan RunConfig)}
+	ctrl := &RunConfigController{out: make(chan v3.KubeControllersConfigurationSpec)}
 	go syncDatastore(ctx, cfg, client, ctrl.out)
 	return ctrl
 }
 
-func syncDatastore(ctx context.Context, cfg Config, client clientv3.KubeControllersConfigurationInterface, out chan<- RunConfig) {
+func syncDatastore(ctx context.Context, cfg Config, client clientv3.KubeControllersConfigurationInterface, out chan<- v3.KubeControllersConfigurationSpec) {
 	var snapshot *v3.KubeControllersConfiguration
 	var err error
-	var current RunConfig
-	// currentSet tracks whether we've explicitly set `current` to distinguish
-	// so we can tell the difference between its initial state and begin explicitly
+	var current v3.KubeControllersConfigurationSpec
+	// currentSet tracks whether we've explicitly set `current` so we can
+	// tell the difference between its initial state and being explicitly
 	// set to the empty state.
 	var currentSet bool
 	var w watch.Interface
@@ -192,15 +133,12 @@ func syncDatastore(ctx context.Context, cfg Config, client clientv3.KubeControll
 
 MAINLOOP:
 	for {
-		// Check if our context is expired
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			// no-op
 		}
 
-		// if we don't have a snapshot, then try to get one
 		if snapshot == nil {
 			snapshot, err = getOrCreateSnapshot(ctx, client)
 			if err != nil {
@@ -211,12 +149,13 @@ MAINLOOP:
 			}
 		}
 
-		// Ok, we should now have a snapshot.  Combine it with the environment variable
-		// config to get the running config.
-		new, status := mergeConfig(env, cfg, snapshot.Spec)
+		resolved, envReport := resolveSpec(env, cfg.DatastoreType, snapshot.Spec)
+		status := v3.KubeControllersConfigurationStatus{
+			RunningConfig:   &resolved,
+			EnvironmentVars: envReport,
+		}
 
-		// Write the status back to the API datastore, so that end users can inspect the current
-		// running config.
+		// Write the status back so end users can inspect the running config.
 		snapshot.Status = status
 		snapshot, err = client.UpdateStatus(ctx, snapshot, options.SetOptions{})
 		if err != nil {
@@ -226,9 +165,6 @@ MAINLOOP:
 			continue MAINLOOP
 		}
 
-		// With the snapshot updated, get a list of
-		// kubecontrollersconfigurations so we can watch on its resource
-		// version.
 		kccList, err := client.List(ctx, options.ListOptions{Name: defaultKubeControllersConfigName})
 		if err != nil {
 			log.WithError(err).Warn("unable to list KubeControllersConfiguration(default)")
@@ -237,20 +173,17 @@ MAINLOOP:
 			continue MAINLOOP
 		}
 
-		// Is this new running config different than our current?
-		if !currentSet || !reflect.DeepEqual(new, current) {
-			out <- new
+		if !currentSet || !reflect.DeepEqual(resolved, current) {
+			out <- resolved
 			currentSet = true
-			current = new
+			current = resolved
 		}
 
-		// Watch for changes
 		if w != nil {
 			w.Stop()
 		}
 		w, err = client.Watch(ctx, options.ListOptions{ResourceVersion: kccList.ResourceVersion})
 		if err != nil {
-			// Watch failed
 			log.WithError(err).Warn("unable to watch KubeControllersConfigurations")
 			snapshot = nil
 			time.Sleep(datastoreBackoff)
@@ -259,33 +192,27 @@ MAINLOOP:
 		for e := range w.ResultChan() {
 			switch e.Type {
 			case watch.Error:
-				// Watch error; restart from beginning. Note that k8s watches terminate periodically but these
-				// terminate without error - in this case we'll just attempt to watch from the latest snapshot rev.
 				log.WithError(err).Error("error watching KubeControllersConfiguration")
 				snapshot = nil
 				time.Sleep(datastoreBackoff)
 				continue MAINLOOP
 			case watch.Added, watch.Modified:
-				// New snapshot
 				newKCC := e.Object.(*v3.KubeControllersConfiguration)
 				if newKCC.Name != defaultKubeControllersConfigName {
-					// Some non-default object got into the datastore --- calicoctl should
-					// prevent this, but an admin with datastore access might not know better.
-					// Ignore it
 					log.WithField("name", newKCC.Name).Warning("unexpected KubeControllersConfiguration object")
 					continue
 				}
 				snapshot = newKCC
-				new, status = mergeConfig(env, cfg, snapshot.Spec)
+				resolved, envReport = resolveSpec(env, cfg.DatastoreType, snapshot.Spec)
+				status = v3.KubeControllersConfigurationStatus{
+					RunningConfig:   &resolved,
+					EnvironmentVars: envReport,
+				}
 
-				// Update the status, but only if it's different, otherwise
-				// our update will trigger a watch update in an infinite loop
 				if !reflect.DeepEqual(snapshot.Status, status) {
 					snapshot.Status = status
 					snapshot, err = client.UpdateStatus(ctx, snapshot, options.SetOptions{})
 					if err != nil {
-						// this probably means someone else is trying to write to the resource,
-						// so best to just take a breath and start over
 						log.WithError(err).Warn("unable to perform status update on KubeControllersConfiguration(default)")
 						snapshot = nil
 						time.Sleep(datastoreBackoff)
@@ -293,24 +220,16 @@ MAINLOOP:
 					}
 				}
 
-				// Do we need to push an update?
-				if !reflect.DeepEqual(new, current) {
-					out <- new
+				if !reflect.DeepEqual(resolved, current) {
+					out <- resolved
 					currentSet = true
-					current = new
+					current = resolved
 				}
 			case watch.Deleted:
-				// I think in some oddball cases the watcher can set this to nil
-				// so guard against it.
 				if e.Previous != nil {
 					oldKCC := e.Previous.(*v3.KubeControllersConfiguration)
-					// Ignore any object that's not named default
 					if oldKCC.Name == defaultKubeControllersConfigName {
-						// do a full resync, which will recreate a default object
-						// if one doesn't exist
 						snapshot = nil
-						// not an error per-se, so don't bother with sleeping
-						// to backoff
 						continue MAINLOOP
 					}
 				}
@@ -323,16 +242,12 @@ MAINLOOP:
 // or creates and returns a default if it doesn't exist
 func getOrCreateSnapshot(ctx context.Context, kcc clientv3.KubeControllersConfigurationInterface) (*v3.KubeControllersConfiguration, error) {
 	snapshot, err := kcc.Get(ctx, defaultKubeControllersConfigName, options.GetOptions{})
-	// If the default doesn't exist, we'll create it.
 	if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
 		kubeControllersConfig := NewDefaultKubeControllersConfig()
 		snapshot = kubeControllersConfig.DeepCopy()
 		var err2 error
 		snapshot, err2 = kcc.Create(ctx, snapshot, options.SetOptions{})
 		if err2 != nil {
-			// Besides datastore connection errors, we might get a race with
-			// something else creating the resource but this can get handled
-			// in the main retry loop just fine
 			return nil, err2
 		}
 	} else if err != nil {
@@ -341,435 +256,219 @@ func getOrCreateSnapshot(ctx context.Context, kcc clientv3.KubeControllersConfig
 	return snapshot, nil
 }
 
-// mergeConfig takes the environment variables, and resulting config
-func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControllersConfigurationSpec) (RunConfig, v3.KubeControllersConfigurationStatus) {
-	var rCfg RunConfig
-	status := v3.KubeControllersConfigurationStatus{
-		RunningConfig:   &v3.KubeControllersConfigurationSpec{},
-		EnvironmentVars: map[string]string{},
-	}
-	rc := &rCfg.Controllers
+// resolveSpec takes the API spec and applies environment variable overrides,
+// filling in defaults for any unset fields. Returns the fully-resolved spec
+// and a map of environment variables that were set (for status reporting).
+func resolveSpec(env map[string]string, datastoreType string, apiSpec v3.KubeControllersConfigurationSpec) (v3.KubeControllersConfigurationSpec, map[string]string) {
+	resolved := *apiSpec.DeepCopy()
+	report := map[string]string{}
 
-	mergeLogLevel(envVars, &status, &rCfg, apiCfg)
-
-	mergeEnabledControllers(envVars, &status, &rCfg, apiCfg)
-
-	mergeReconcilerPeriod(envVars, &status, &rCfg)
-
-	mergeCompactionPeriod(envVars, &status, &rCfg, apiCfg)
-
-	mergeHealthEnabled(envVars, &status, &rCfg, apiCfg)
-
-	mergeLoadBalancer(&status, &rCfg, apiCfg)
-
-	mergeMigrationController(&status, &rCfg, apiCfg)
-
-	// Merge prometheus information.
-	if apiCfg.PrometheusMetricsPort != nil {
-		rCfg.PrometheusPort = *apiCfg.PrometheusMetricsPort
-	}
-	if apiCfg.DebugProfilePort != nil {
-		rCfg.DebugProfilePort = *apiCfg.DebugProfilePort
-	}
-
-	// Don't bother looking at this unless the node controller is enabled.
-	if rc.Node != nil {
-		mergeSyncNodeLabels(envVars, &status, &rCfg, apiCfg, envCfg)
-
-		mergeAutoHostEndpoints(envVars, &status, &rCfg, apiCfg)
-
-		// There is no env var config for this, so always merge from the API config.
-		if apiCfg.Controllers.Node != nil {
-			rc.Node.LeakGracePeriod = apiCfg.Controllers.Node.LeakGracePeriod
-			status.RunningConfig.Controllers.Node.LeakGracePeriod = apiCfg.Controllers.Node.LeakGracePeriod
+	// Log level
+	if v, ok := env[EnvLogLevel]; ok {
+		report[EnvLogLevel] = v
+		if _, err := log.ParseLevel(v); err != nil {
+			log.WithField(EnvLogLevel, v).Fatal("invalid environment variable value")
 		}
-
-		if envCfg.DatastoreType != "kubernetes" {
-			rc.Node.DeleteNodes = true
-			// This field doesn't have an equivalent in the status
-		}
+		resolved.LogSeverityScreen = title.String(v)
+	}
+	if resolved.LogSeverityScreen == "" {
+		resolved.LogSeverityScreen = "Info"
 	}
 
-	// Number of workers is not exposed on the API, so just use the envCfg for it
-	// NOTE: NodeController doesn't actually use number of workers config, so don't
-	//       bother setting it.
-	if rc.Policy != nil {
-		rc.Policy.NumberOfWorkers = envCfg.PolicyWorkers
-	}
-	if rc.WorkloadEndpoint != nil {
-		rc.WorkloadEndpoint.NumberOfWorkers = envCfg.WorkloadEndpointWorkers
-	}
-	if rc.ServiceAccount != nil {
-		rc.ServiceAccount.NumberOfWorkers = envCfg.ProfileWorkers
-	}
-	if rc.Namespace != nil {
-		rc.Namespace.NumberOfWorkers = envCfg.ProfileWorkers
+	// Enabled controllers — env overrides which controllers are non-nil.
+	if v, ok := env[EnvEnabledControllers]; ok {
+		report[EnvEnabledControllers] = v
+		resolved.Controllers = resolveEnabledControllers(v, resolved.Controllers)
 	}
 
-	return rCfg, status
-}
-
-func mergeLoadBalancer(status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
-	if rCfg.Controllers.LoadBalancer != nil {
-		if apiCfg.Controllers.LoadBalancer != nil {
-			rCfg.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
-			status.RunningConfig.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
-		}
-	}
-}
-
-func mergeMigrationController(status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
-	rCfg.Controllers.Migration = &MigrationControllerConfig{
-		PolicyNameMigrator: v3.ControllerEnabled,
-	}
-	status.RunningConfig.Controllers.Migration = &v3.MigrationControllerConfig{
-		PolicyNameMigrator: v3.ControllerEnabled,
-	}
-
-	// Override from API if set.
-	if apiCfg.Controllers.Migration != nil {
-		if apiCfg.Controllers.Migration.PolicyNameMigrator == v3.ControllerDisabled {
-			rCfg.Controllers.Migration.PolicyNameMigrator = v3.ControllerDisabled
-			status.RunningConfig.Controllers.Migration.PolicyNameMigrator = v3.ControllerDisabled
-		}
-	}
-}
-
-func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
-	// make these names shorter
-	rc := &rCfg.Controllers
-	ac := &apiCfg.Controllers
-	sc := &status.RunningConfig.Controllers
-
-	v, p := envVars[EnvAutoHostEndpoints]
-	if p {
-		status.EnvironmentVars[EnvAutoHostEndpoints] = v
-		if strings.ToLower(v) == "enabled" {
-			rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{
-				AutoCreate:                true,
-				CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
-			}
-		} else if strings.ToLower(v) != "disabled" {
-			log.WithField(EnvAutoHostEndpoints, v).Fatal("invalid environment variable value")
-		}
-	} else {
-		if ac.Node != nil && ac.Node.HostEndpoint != nil {
-			rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{}
-			if ac.Node.HostEndpoint.AutoCreate == v3.Enabled {
-				rc.Node.AutoHostEndpointConfig.AutoCreate = true
-			} else {
-				rc.Node.AutoHostEndpointConfig.AutoCreate = false
-			}
-
-			rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = ac.Node.HostEndpoint.CreateDefaultHostEndpoint
-
-			var templates []AutoHostEndpointTemplate
-			for _, template := range ac.Node.HostEndpoint.Templates {
-				rcTemplate := AutoHostEndpointTemplate{
-					GenerateName:     template.GenerateName,
-					InterfaceCIDRs:   template.InterfaceCIDRs,
-					InterfacePattern: template.InterfacePattern,
-					NodeSelector:     template.NodeSelector,
-					Labels:           template.Labels,
-				}
-
-				templates = append(templates, rcTemplate)
-			}
-			rc.Node.AutoHostEndpointConfig.Templates = templates
-		}
-	}
-
-	if rc.Node.AutoHostEndpointConfig == nil {
-		rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{
-			AutoCreate:                false,
-			CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
-		}
-	} else {
-		sc.Node.HostEndpoint = &v3.AutoHostEndpointConfig{}
-		if rc.Node.AutoHostEndpointConfig.AutoCreate {
-			sc.Node.HostEndpoint.AutoCreate = v3.Enabled
-		} else {
-			sc.Node.HostEndpoint.AutoCreate = v3.Disabled
-		}
-
-		if rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint == "" {
-			rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = v3.DefaultHostEndpointsEnabled
-		}
-
-		sc.Node.HostEndpoint.CreateDefaultHostEndpoint = rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint
-
-		if rc.Node.AutoHostEndpointConfig.Templates != nil {
-			var templates []v3.Template
-			for template := range rc.Node.AutoHostEndpointConfig.Templates {
-				rcTemplate := (rc.Node.AutoHostEndpointConfig.Templates)[template]
-				scTemplate := v3.Template{
-					GenerateName:     rcTemplate.GenerateName,
-					InterfaceCIDRs:   rcTemplate.InterfaceCIDRs,
-					InterfacePattern: rcTemplate.InterfacePattern,
-					NodeSelector:     rcTemplate.NodeSelector,
-					Labels:           rcTemplate.Labels,
-				}
-
-				templates = append(templates, scTemplate)
-			}
-			sc.Node.HostEndpoint.Templates = templates
-		}
-	}
-}
-
-func mergeSyncNodeLabels(envVars map[string]string, status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec, cfg Config) {
-	// make these names shorter
-	rc := &rCfg.Controllers
-	ac := &apiCfg.Controllers
-	sc := &status.RunningConfig.Controllers
-
-	// Don't sync labels in Kubernetes, since the labels are already there
-	if cfg.DatastoreType == "kubernetes" {
-		status.EnvironmentVars["DATASTORE_TYPE"] = "kubernetes"
-		rc.Node.SyncLabels = false
-	} else {
-		// Etcd datastore, are we configured to sync labels?
-		v, p := envVars[EnvSyncNodeLabels]
-		if p {
-			status.EnvironmentVars[EnvSyncNodeLabels] = v
-			snl, err := strconv.ParseBool(v)
-			if err != nil {
-				log.WithField(EnvSyncNodeLabels, v).Fatal("invalid environment variable value")
-			}
-			rc.Node.SyncLabels = snl
-		} else {
-			// No environment variable
-			if ac.Node != nil && ac.Node.SyncLabels == v3.Disabled {
-				rc.Node.SyncLabels = false
-			} else {
-				// includes default case of not included as well
-				rc.Node.SyncLabels = true
-			}
-		}
-	}
-	if rc.Node.SyncLabels {
-		sc.Node.SyncLabels = v3.Enabled
-	} else {
-		sc.Node.SyncLabels = v3.Disabled
-	}
-}
-
-func mergeHealthEnabled(envVars map[string]string, status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
-	v, p := envVars[EnvHealthEnabled]
-	if p {
-		status.EnvironmentVars[EnvHealthEnabled] = v
-		he, err := strconv.ParseBool(v)
-		if err != nil {
-			log.WithField(EnvHealthEnabled, v).Fatal("invalid environment variable value")
-		}
-		rCfg.HealthEnabled = he
-	} else {
-		// Not set on env, use API
-		if apiCfg.HealthChecks != v3.Disabled {
-			// Covers "" and "Enabled", as well as an invalid data, since Enabled is the default
-			rCfg.HealthEnabled = true
-		}
-	}
-	if rCfg.HealthEnabled {
-		status.RunningConfig.HealthChecks = v3.Enabled
-	} else {
-		status.RunningConfig.HealthChecks = v3.Disabled
-	}
-}
-
-func mergeCompactionPeriod(envVars map[string]string, status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
-	v, p := envVars[EnvCompactionPeriod]
-	if p {
-		status.EnvironmentVars[EnvCompactionPeriod] = v
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			log.WithField(EnvCompactionPeriod, v).Fatal("invalid environment variable value")
-		}
-		rCfg.EtcdV3CompactionPeriod = d
-	} else {
-		// Not set on environment variable
-		if apiCfg.EtcdV3CompactionPeriod != nil {
-			rCfg.EtcdV3CompactionPeriod = apiCfg.EtcdV3CompactionPeriod.Duration
-		} else {
-			// Not set on API, use default
-			rCfg.EtcdV3CompactionPeriod = time.Minute * 10
-		}
-	}
-	status.RunningConfig.EtcdV3CompactionPeriod = &v1.Duration{Duration: rCfg.EtcdV3CompactionPeriod}
-}
-
-func mergeReconcilerPeriod(envVars map[string]string, status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig) {
-	// make these names shorter
-	rc := &rCfg.Controllers
-	sc := &status.RunningConfig.Controllers
-
-	v, p := envVars[EnvReconcilerPeriod]
-	if p {
-		status.EnvironmentVars[EnvReconcilerPeriod] = v
+	// Reconciler period — env overrides per-controller API values.
+	if v, ok := env[EnvReconcilerPeriod]; ok {
+		report[EnvReconcilerPeriod] = v
 		d, err := time.ParseDuration(v)
 		if err != nil {
 			log.WithField(EnvReconcilerPeriod, v).Fatal("invalid environment variable value")
 		}
-		// Valid env value, set on every enabled controller
-		// NOTE: Node controller doesn't use a cache, so ignores reconciler period
-		if rc.Policy != nil {
-			rc.Policy.ReconcilerPeriod = d
-			sc.Policy.ReconcilerPeriod = &v1.Duration{Duration: d}
+		dp := &v1.Duration{Duration: d}
+		if resolved.Controllers.Policy != nil {
+			resolved.Controllers.Policy.ReconcilerPeriod = dp
 		}
-		if rc.WorkloadEndpoint != nil {
-			rc.WorkloadEndpoint.ReconcilerPeriod = d
-			sc.WorkloadEndpoint.ReconcilerPeriod = &v1.Duration{Duration: d}
+		if resolved.Controllers.WorkloadEndpoint != nil {
+			resolved.Controllers.WorkloadEndpoint.ReconcilerPeriod = dp
 		}
-		if rc.ServiceAccount != nil {
-			rc.ServiceAccount.ReconcilerPeriod = d
-			sc.ServiceAccount.ReconcilerPeriod = &v1.Duration{Duration: d}
+		if resolved.Controllers.ServiceAccount != nil {
+			resolved.Controllers.ServiceAccount.ReconcilerPeriod = dp
 		}
-		if rc.Namespace != nil {
-			rc.Namespace.ReconcilerPeriod = d
-			sc.Namespace.ReconcilerPeriod = &v1.Duration{Duration: d}
+		if resolved.Controllers.Namespace != nil {
+			resolved.Controllers.Namespace.ReconcilerPeriod = dp
 		}
 	}
-}
 
-func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
-	// make these names shorter
-	rc := &rCfg.Controllers
-	ac := apiCfg.Controllers
-	sc := &status.RunningConfig.Controllers
-	n := ac.Node
-	pol := ac.Policy
-	w := ac.WorkloadEndpoint
-	s := ac.ServiceAccount
-	ns := ac.Namespace
-	lb := ac.LoadBalancer
+	// Compaction period
+	if v, ok := env[EnvCompactionPeriod]; ok {
+		report[EnvCompactionPeriod] = v
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			log.WithField(EnvCompactionPeriod, v).Fatal("invalid environment variable value")
+		}
+		resolved.EtcdV3CompactionPeriod = &v1.Duration{Duration: d}
+	}
+	if resolved.EtcdV3CompactionPeriod == nil {
+		resolved.EtcdV3CompactionPeriod = &v1.Duration{Duration: defaultCompactionPeriod}
+	}
 
-	v, p := envVars[EnvEnabledControllers]
-	if p {
-		status.EnvironmentVars[EnvEnabledControllers] = v
-		for controllerType := range strings.SplitSeq(v, ",") {
-			switch controllerType {
-			case "workloadendpoint":
-				rc.WorkloadEndpoint = &GenericControllerConfig{}
-				sc.WorkloadEndpoint = &v3.WorkloadEndpointControllerConfig{}
-			case "profile", "namespace":
-				rc.Namespace = &GenericControllerConfig{}
-				sc.Namespace = &v3.NamespaceControllerConfig{}
-			case "policy":
-				rc.Policy = &GenericControllerConfig{}
-				sc.Policy = &v3.PolicyControllerConfig{}
-			case "node":
-				rc.Node = &NodeControllerConfig{}
-				sc.Node = &v3.NodeControllerConfig{}
-			case "serviceaccount":
-				rc.ServiceAccount = &GenericControllerConfig{}
-				sc.ServiceAccount = &v3.ServiceAccountControllerConfig{}
-			case "loadbalancer":
-				rc.LoadBalancer = &LoadBalancerControllerConfig{
-					AssignIPs: v3.AllServices,
-				}
-				sc.LoadBalancer = &v3.LoadBalancerControllerConfig{
-					AssignIPs: v3.AllServices,
-				}
-			case "flannelmigration":
-				log.WithField(EnvEnabledControllers, v).Fatal("cannot run flannelmigration with other controllers")
-			default:
-				log.Fatalf("Invalid controller '%s' provided.", controllerType)
+	// Health checks
+	if v, ok := env[EnvHealthEnabled]; ok {
+		report[EnvHealthEnabled] = v
+		he, err := strconv.ParseBool(v)
+		if err != nil {
+			log.WithField(EnvHealthEnabled, v).Fatal("invalid environment variable value")
+		}
+		if he {
+			resolved.HealthChecks = v3.Enabled
+		} else {
+			resolved.HealthChecks = v3.Disabled
+		}
+	}
+	if resolved.HealthChecks != v3.Disabled {
+		resolved.HealthChecks = v3.Enabled
+	}
+
+	// Node-specific settings
+	if resolved.Controllers.Node != nil {
+		// Sync labels — disabled for kubernetes datastore since labels are already there.
+		if datastoreType == "kubernetes" {
+			report["DATASTORE_TYPE"] = "kubernetes"
+			resolved.Controllers.Node.SyncLabels = v3.Disabled
+		} else if v, ok := env[EnvSyncNodeLabels]; ok {
+			report[EnvSyncNodeLabels] = v
+			snl, err := strconv.ParseBool(v)
+			if err != nil {
+				log.WithField(EnvSyncNodeLabels, v).Fatal("invalid environment variable value")
+			}
+			if snl {
+				resolved.Controllers.Node.SyncLabels = v3.Enabled
+			} else {
+				resolved.Controllers.Node.SyncLabels = v3.Disabled
 			}
 		}
-	} else {
-		// No environment variable, use API
-		if n != nil {
-			rc.Node = &NodeControllerConfig{}
-			sc.Node = &v3.NodeControllerConfig{}
-
-			// NOTE: Node controller doesn't use a cache, so doesn't use reconciler period
-			sc.Node.ReconcilerPeriod = nil
-
-			// SyncLabels and AutoHostEndpoint are handled later with their
-			// corresponding environment variables
+		if resolved.Controllers.Node.SyncLabels == "" {
+			resolved.Controllers.Node.SyncLabels = v3.Enabled
 		}
 
-		if pol != nil {
-			rc.Policy = &GenericControllerConfig{}
-			sc.Policy = &v3.PolicyControllerConfig{}
+		// Auto host endpoints
+		if v, ok := env[EnvAutoHostEndpoints]; ok {
+			report[EnvAutoHostEndpoints] = v
+			switch strings.ToLower(v) {
+			case "enabled":
+				resolved.Controllers.Node.HostEndpoint = &v3.AutoHostEndpointConfig{
+					AutoCreate:                v3.Enabled,
+					CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+				}
+			case "disabled":
+				resolved.Controllers.Node.HostEndpoint = &v3.AutoHostEndpointConfig{
+					AutoCreate:                v3.Disabled,
+					CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+				}
+			default:
+				log.WithField(EnvAutoHostEndpoints, v).Fatal("invalid environment variable value")
+			}
+		}
+		if resolved.Controllers.Node.HostEndpoint == nil {
+			resolved.Controllers.Node.HostEndpoint = &v3.AutoHostEndpointConfig{
+				AutoCreate:                v3.Disabled,
+				CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+			}
+		}
+		if resolved.Controllers.Node.HostEndpoint.CreateDefaultHostEndpoint == "" {
+			resolved.Controllers.Node.HostEndpoint.CreateDefaultHostEndpoint = v3.DefaultHostEndpointsEnabled
 		}
 
-		if w != nil {
-			rc.WorkloadEndpoint = &GenericControllerConfig{}
-			sc.WorkloadEndpoint = &v3.WorkloadEndpointControllerConfig{}
-		}
-
-		if s != nil {
-			rc.ServiceAccount = &GenericControllerConfig{}
-			sc.ServiceAccount = &v3.ServiceAccountControllerConfig{}
-		}
-
-		if ns != nil {
-			rc.Namespace = &GenericControllerConfig{}
-			sc.Namespace = &v3.NamespaceControllerConfig{}
-		}
-
-		if lb != nil {
-			rc.LoadBalancer = &LoadBalancerControllerConfig{}
-			sc.LoadBalancer = &v3.LoadBalancerControllerConfig{}
+		// Leak grace period default
+		if resolved.Controllers.Node.LeakGracePeriod == nil {
+			resolved.Controllers.Node.LeakGracePeriod = &v1.Duration{Duration: defaultLeakGracePeriod}
 		}
 	}
 
-	// Set reconciler periods, if enabled
-	if rc.Policy != nil && pol != nil {
-		if pol.ReconcilerPeriod == nil {
-			rc.Policy.ReconcilerPeriod = time.Minute * 5
-		} else {
-			rc.Policy.ReconcilerPeriod = pol.ReconcilerPeriod.Duration
-		}
-		sc.Policy.ReconcilerPeriod = pol.ReconcilerPeriod
-	}
-	if rc.WorkloadEndpoint != nil && w != nil {
-		if w.ReconcilerPeriod == nil {
-			rc.WorkloadEndpoint.ReconcilerPeriod = time.Minute * 5
-		} else {
-			rc.WorkloadEndpoint.ReconcilerPeriod = w.ReconcilerPeriod.Duration
-		}
-		sc.WorkloadEndpoint.ReconcilerPeriod = w.ReconcilerPeriod
-	}
-	if rc.Namespace != nil && ns != nil {
-		if ns.ReconcilerPeriod == nil {
-			rc.Namespace.ReconcilerPeriod = time.Minute * 5
-		} else {
-			rc.Namespace.ReconcilerPeriod = ns.ReconcilerPeriod.Duration
-		}
-		sc.Namespace.ReconcilerPeriod = ns.ReconcilerPeriod
-	}
-	if rc.ServiceAccount != nil && s != nil {
-		if s.ReconcilerPeriod == nil {
-			rc.ServiceAccount.ReconcilerPeriod = time.Minute * 5
-		} else {
-			rc.ServiceAccount.ReconcilerPeriod = s.ReconcilerPeriod.Duration
-		}
-		sc.ServiceAccount.ReconcilerPeriod = s.ReconcilerPeriod
-	}
+	// Fill in default reconciler periods for enabled controllers.
+	fillDefaultReconcilerPeriods(&resolved)
+
+	// Migration controller — participates in the normal enabled/disabled flow.
+	// If the API spec didn't include it and ENABLED_CONTROLLERS wasn't set,
+	// it stays as-is from the API (which may be nil if not in the default config).
+	// The default config enables it.
+
+	return resolved, report
 }
 
-func mergeLogLevel(envVars map[string]string, status *v3.KubeControllersConfigurationStatus, rCfg *RunConfig, apiCfg v3.KubeControllersConfigurationSpec) {
-	v, p := envVars[EnvLogLevel]
-	if p {
-		status.EnvironmentVars[EnvLogLevel] = v
-		l, err := log.ParseLevel(v)
-		if err != nil {
-			log.WithField(EnvLogLevel, v).Fatal("invalid environment variable value")
-		}
-		rCfg.LogLevelScreen = l
-	} else {
-		// No environment variable, check API
-		l, err := log.ParseLevel(apiCfg.LogSeverityScreen)
-		if err == nil {
-			// API valid
-			rCfg.LogLevelScreen = l
-		} else {
-			// API invalid, use default
-			log.WithField("LOG_LEVEL", apiCfg.LogSeverityScreen).Warn("unknown log level, using Info")
-			rCfg.LogLevelScreen = log.InfoLevel
+// resolveEnabledControllers determines which controllers are enabled based on
+// the ENABLED_CONTROLLERS env var. Only listed controllers are enabled; their
+// settings are preserved from the API config if present.
+func resolveEnabledControllers(envVal string, apiControllers v3.ControllersConfig) v3.ControllersConfig {
+	var out v3.ControllersConfig
+	for controllerType := range strings.SplitSeq(envVal, ",") {
+		switch controllerType {
+		case "node":
+			out.Node = apiControllers.Node
+			if out.Node == nil {
+				out.Node = &v3.NodeControllerConfig{}
+			}
+		case "policy":
+			out.Policy = apiControllers.Policy
+			if out.Policy == nil {
+				out.Policy = &v3.PolicyControllerConfig{}
+			}
+		case "workloadendpoint":
+			out.WorkloadEndpoint = apiControllers.WorkloadEndpoint
+			if out.WorkloadEndpoint == nil {
+				out.WorkloadEndpoint = &v3.WorkloadEndpointControllerConfig{}
+			}
+		case "profile", "namespace":
+			out.Namespace = apiControllers.Namespace
+			if out.Namespace == nil {
+				out.Namespace = &v3.NamespaceControllerConfig{}
+			}
+		case "serviceaccount":
+			out.ServiceAccount = apiControllers.ServiceAccount
+			if out.ServiceAccount == nil {
+				out.ServiceAccount = &v3.ServiceAccountControllerConfig{}
+			}
+		case "loadbalancer":
+			out.LoadBalancer = apiControllers.LoadBalancer
+			if out.LoadBalancer == nil {
+				out.LoadBalancer = &v3.LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}
+			}
+		case "migration":
+			out.Migration = apiControllers.Migration
+			if out.Migration == nil {
+				out.Migration = &v3.MigrationControllerConfig{
+					PolicyNameMigrator: v3.ControllerEnabled,
+				}
+			}
+		case "flannelmigration":
+			log.WithField(EnvEnabledControllers, envVal).Fatal("cannot run flannelmigration with other controllers")
+		default:
+			log.Fatalf("Invalid controller '%s' provided.", controllerType)
 		}
 	}
-	status.RunningConfig.LogSeverityScreen = title.String(rCfg.LogLevelScreen.String())
+	return out
+}
+
+// fillDefaultReconcilerPeriods fills in the default reconciler period for any
+// enabled controller that doesn't have one set.
+func fillDefaultReconcilerPeriods(spec *v3.KubeControllersConfigurationSpec) {
+	dp := &v1.Duration{Duration: defaultReconcilerPeriod}
+	if spec.Controllers.Policy != nil && spec.Controllers.Policy.ReconcilerPeriod == nil {
+		spec.Controllers.Policy.ReconcilerPeriod = dp
+	}
+	if spec.Controllers.WorkloadEndpoint != nil && spec.Controllers.WorkloadEndpoint.ReconcilerPeriod == nil {
+		spec.Controllers.WorkloadEndpoint.ReconcilerPeriod = dp
+	}
+	if spec.Controllers.ServiceAccount != nil && spec.Controllers.ServiceAccount.ReconcilerPeriod == nil {
+		spec.Controllers.ServiceAccount.ReconcilerPeriod = dp
+	}
+	if spec.Controllers.Namespace != nil && spec.Controllers.Namespace.ReconcilerPeriod == nil {
+		spec.Controllers.Namespace.ReconcilerPeriod = dp
+	}
 }

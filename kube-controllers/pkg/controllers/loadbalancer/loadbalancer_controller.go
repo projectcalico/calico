@@ -37,7 +37,6 @@ import (
 	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -113,7 +112,7 @@ func (t *allocationTracker) deleteService(svcKey serviceKey) {
 type loadBalancerController struct {
 	calicoClient      client.Interface
 	dataFeed          *utils.DataFeed
-	cfg               config.LoadBalancerControllerConfig
+	cfg               api.LoadBalancerControllerConfig
 	clientSet         kubernetes.Interface
 	syncerUpdates     chan any
 	syncStatus        bapi.SyncStatus
@@ -129,7 +128,7 @@ type loadBalancerController struct {
 }
 
 // NewLoadBalancerController returns a controller which manages Service LoadBalancer objects.
-func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient client.Interface, cfg config.LoadBalancerControllerConfig, serviceInformer cache.SharedIndexInformer, namespaceInformer cache.SharedIndexInformer, dataFeed *utils.DataFeed) *loadBalancerController {
+func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient client.Interface, cfg api.LoadBalancerControllerConfig, serviceInformer cache.SharedIndexInformer, namespaceInformer cache.SharedIndexInformer, dataFeed *utils.DataFeed) *loadBalancerController {
 	c := &loadBalancerController{
 		calicoClient:      calicoClient,
 		cfg:               cfg,

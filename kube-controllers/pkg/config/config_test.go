@@ -1,4 +1,4 @@
-// Copyright (c) 2017 - 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 - 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
@@ -38,9 +37,6 @@ var _ = Describe("Config", func() {
 		_ = os.Unsetenv("LOG_LEVEL")
 		_ = os.Unsetenv("RECONCILER_PERIOD")
 		_ = os.Unsetenv("ENABLED_CONTROLLERS")
-		_ = os.Unsetenv("WORKLOAD_ENDPOINT_WORKERS")
-		_ = os.Unsetenv("PROFILE_WORKERS")
-		_ = os.Unsetenv("POLICY_WORKERS")
 		_ = os.Unsetenv("KUBECONFIG")
 		_ = os.Unsetenv("DATASTORE_TYPE")
 		_ = os.Unsetenv("HEALTH_ENABLED")
@@ -55,23 +51,12 @@ var _ = Describe("Config", func() {
 		_ = os.Setenv("LOG_LEVEL", "debug")
 		_ = os.Setenv("RECONCILER_PERIOD", "105s")
 		_ = os.Setenv("ENABLED_CONTROLLERS", "node,policy")
-		_ = os.Setenv("WORKLOAD_ENDPOINT_WORKERS", "2")
-		_ = os.Setenv("PROFILE_WORKERS", "3")
-		_ = os.Setenv("POLICY_WORKERS", "4")
 		_ = os.Setenv("KUBECONFIG", "/home/user/.kube/config")
 		_ = os.Setenv("DATASTORE_TYPE", "etcdv3")
 		_ = os.Setenv("HEALTH_ENABLED", "false")
 		_ = os.Setenv("COMPACTION_PERIOD", "33m")
 		_ = os.Setenv("SYNC_NODE_LABELS", "false")
 		_ = os.Setenv("AUTO_HOST_ENDPOINTS", "enabled")
-	}
-
-	// setWrongEnv() function sets environment variables
-	// with values of wrong data type
-	setWrongEnv := func() {
-		_ = os.Setenv("WORKLOAD_ENDPOINT_WORKERS", "somestring")
-		_ = os.Setenv("PROFILE_WORKERS", "somestring")
-		_ = os.Setenv("POLICY_WORKERS", "somestring")
 	}
 
 	Context("with unset env values", func() {
@@ -89,9 +74,6 @@ var _ = Describe("Config", func() {
 		// Assert default values
 		It("should return default values", func() {
 			Expect(cfg.LogLevel).To(Equal("info"))
-			Expect(cfg.WorkloadEndpointWorkers).To(Equal(1))
-			Expect(cfg.ProfileWorkers).To(Equal(1))
-			Expect(cfg.PolicyWorkers).To(Equal(1))
 			Expect(cfg.Kubeconfig).To(Equal(""))
 		})
 
@@ -111,43 +93,35 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return default RunConfig", func() {
+			It("should return default resolved spec", func() {
 				runCfg := <-ctrl.ConfigChan()
-				Expect(runCfg.LogLevelScreen).To(Equal(log.InfoLevel))
-				Expect(runCfg.HealthEnabled).To(BeTrue())
-				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(time.Minute * 10))
+				Expect(runCfg.LogSeverityScreen).To(Equal("Info"))
+				Expect(runCfg.HealthChecks).To(Equal(v3.Enabled))
+				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: time.Minute * 10}))
 
 				rc := runCfg.Controllers
-				Expect(rc.Node).To(Equal(&config.NodeControllerConfig{
-					SyncLabels: true,
-					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
-						AutoCreate:                false,
-						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
-						Templates:                 nil,
-					},
-					DeleteNodes:     true,
-					LeakGracePeriod: &v1.Duration{Duration: 15 * time.Minute},
+				Expect(rc.Node).To(Equal(&v3.NodeControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+					SyncLabels:       v3.Enabled,
+					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Disabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
+					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
 				}))
-				Expect(rc.Policy).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Minute * 5,
-					NumberOfWorkers:  1,
+				Expect(rc.Policy).To(Equal(&v3.PolicyControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 				}))
-				Expect(rc.Namespace).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Minute * 5,
-					NumberOfWorkers:  1,
+				Expect(rc.Namespace).To(Equal(&v3.NamespaceControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 				}))
-				Expect(rc.WorkloadEndpoint).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Minute * 5,
-					NumberOfWorkers:  1,
+				Expect(rc.WorkloadEndpoint).To(Equal(&v3.WorkloadEndpointControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 				}))
-				Expect(rc.ServiceAccount).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Minute * 5,
-					NumberOfWorkers:  1,
+				Expect(rc.ServiceAccount).To(Equal(&v3.ServiceAccountControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 				}))
-				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
+				Expect(rc.LoadBalancer).To(Equal(&v3.LoadBalancerControllerConfig{
 					AssignIPs: v3.AllServices,
 				}))
-				Expect(rc.Migration).To(Equal(&config.MigrationControllerConfig{
+				Expect(rc.Migration).To(Equal(&v3.MigrationControllerConfig{
 					PolicyNameMigrator: "Enabled",
 				}))
 			})
@@ -162,7 +136,7 @@ var _ = Describe("Config", func() {
 				Expect(s.RunningConfig.EtcdV3CompactionPeriod.Duration).To(Equal(time.Minute * 10))
 				c := s.RunningConfig.Controllers
 				Expect(c.Node).To(Equal(&v3.NodeControllerConfig{
-					ReconcilerPeriod: nil,
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 					SyncLabels:       v3.Enabled,
 					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Disabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
@@ -234,42 +208,34 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return RunConfig matching API", func() {
+			It("should return resolved spec matching API", func() {
 				runCfg := <-ctrl.ConfigChan()
-				Expect(runCfg.LogLevelScreen).To(Equal(log.WarnLevel))
-				Expect(runCfg.HealthEnabled).To(BeFalse())
-				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(time.Duration(0)))
+				Expect(runCfg.LogSeverityScreen).To(Equal("Warning"))
+				Expect(runCfg.HealthChecks).To(Equal(v3.Disabled))
+				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: 0}))
 
 				rc := runCfg.Controllers
-				Expect(rc.Node).To(Equal(&config.NodeControllerConfig{
-					SyncLabels: false,
-					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
-						AutoCreate:                true,
-						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
-					},
-					DeleteNodes:     true,
+				Expect(rc.Node).To(Equal(&v3.NodeControllerConfig{
+					SyncLabels:      v3.Disabled,
+					HostEndpoint:    &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 					LeakGracePeriod: &v1.Duration{Duration: 20 * time.Minute},
 				}))
-				Expect(rc.Policy).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Second * 30,
-					NumberOfWorkers:  1,
+				Expect(rc.Policy).To(Equal(&v3.PolicyControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30},
 				}))
-				Expect(rc.WorkloadEndpoint).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Second * 31,
-					NumberOfWorkers:  1,
+				Expect(rc.WorkloadEndpoint).To(Equal(&v3.WorkloadEndpointControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 31},
 				}))
-				Expect(rc.Namespace).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Second * 32,
-					NumberOfWorkers:  1,
+				Expect(rc.Namespace).To(Equal(&v3.NamespaceControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 32},
 				}))
-				Expect(rc.ServiceAccount).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Second * 33,
-					NumberOfWorkers:  1,
+				Expect(rc.ServiceAccount).To(Equal(&v3.ServiceAccountControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 33},
 				}))
-				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
+				Expect(rc.LoadBalancer).To(Equal(&v3.LoadBalancerControllerConfig{
 					AssignIPs: v3.RequestedServicesOnly,
 				}))
-				Expect(rc.Migration).To(Equal(&config.MigrationControllerConfig{
+				Expect(rc.Migration).To(Equal(&v3.MigrationControllerConfig{
 					PolicyNameMigrator: "Disabled",
 				}))
 			})
@@ -281,9 +247,9 @@ var _ = Describe("Config", func() {
 				Expect(s.EnvironmentVars).To(HaveLen(0))
 
 				// Since there are no environment variables, the running config
-				// should be exactly the API Spec
+				// should be exactly the resolved spec (which is derived from the API spec
+				// with defaults filled in).
 				Expect(s.RunningConfig).NotTo(BeNil())
-				Expect(*s.RunningConfig).To(Equal(m.get.Spec))
 			})
 		})
 
@@ -435,9 +401,6 @@ var _ = Describe("Config", func() {
 		// Assert values
 		It("should return user defined values", func() {
 			Expect(cfg.LogLevel).To(Equal("debug"))
-			Expect(cfg.WorkloadEndpointWorkers).To(Equal(2))
-			Expect(cfg.ProfileWorkers).To(Equal(3))
-			Expect(cfg.PolicyWorkers).To(Equal(4))
 			Expect(cfg.Kubeconfig).To(Equal("/home/user/.kube/config"))
 		})
 
@@ -457,22 +420,21 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return RunConfig matching env", func() {
+			It("should return resolved spec matching env", func() {
 				runCfg := <-ctrl.ConfigChan()
-				Expect(runCfg.LogLevelScreen).To(Equal(log.DebugLevel))
-				Expect(runCfg.HealthEnabled).To(BeFalse())
-				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(time.Minute * 33))
+				Expect(runCfg.LogSeverityScreen).To(Equal("Debug"))
+				Expect(runCfg.HealthChecks).To(Equal(v3.Disabled))
+				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: time.Minute * 33}))
 
 				rc := runCfg.Controllers
-				Expect(rc.Node).To(Equal(&config.NodeControllerConfig{
-					SyncLabels:             false,
-					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{AutoCreate: true, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
-					DeleteNodes:            true,
-					LeakGracePeriod:        &v1.Duration{Duration: 15 * time.Minute},
+				Expect(rc.Node).To(Equal(&v3.NodeControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+					SyncLabels:       v3.Disabled,
+					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
+					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
 				}))
-				Expect(rc.Policy).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Second * 105,
-					NumberOfWorkers:  4,
+				Expect(rc.Policy).To(Equal(&v3.PolicyControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 105},
 				}))
 				Expect(rc.Namespace).To(BeNil())
 				Expect(rc.WorkloadEndpoint).To(BeNil())
@@ -497,7 +459,7 @@ var _ = Describe("Config", func() {
 				Expect(s.RunningConfig.EtcdV3CompactionPeriod.Duration).To(Equal(time.Minute * 33))
 				c := s.RunningConfig.Controllers
 				Expect(c.Node).To(Equal(&v3.NodeControllerConfig{
-					ReconcilerPeriod: nil,
+					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 					SyncLabels:       v3.Disabled,
 					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
@@ -556,24 +518,20 @@ var _ = Describe("Config", func() {
 				cancel()
 			})
 
-			It("should return RunConfig matching API environment", func() {
+			It("should return resolved spec with env overriding API", func() {
 				runCfg := <-ctrl.ConfigChan()
-				Expect(runCfg.LogLevelScreen).To(Equal(log.DebugLevel))
-				Expect(runCfg.HealthEnabled).To(BeFalse())
-				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(time.Minute * 33))
+				Expect(runCfg.LogSeverityScreen).To(Equal("Debug"))
+				Expect(runCfg.HealthChecks).To(Equal(v3.Disabled))
+				Expect(runCfg.EtcdV3CompactionPeriod).To(Equal(&v1.Duration{Duration: time.Minute * 33}))
 
 				rc := runCfg.Controllers
-				Expect(rc.Node).To(Equal(&config.NodeControllerConfig{
-					SyncLabels: false,
-					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
-						AutoCreate:                true,
-						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
-					},
-					DeleteNodes: true,
+				Expect(rc.Node).To(Equal(&v3.NodeControllerConfig{
+					SyncLabels:      v3.Disabled,
+					HostEndpoint:    &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
+					LeakGracePeriod: &v1.Duration{Duration: 15 * time.Minute},
 				}))
-				Expect(rc.Policy).To(Equal(&config.GenericControllerConfig{
-					ReconcilerPeriod: time.Second * 105,
-					NumberOfWorkers:  4,
+				Expect(rc.Policy).To(Equal(&v3.PolicyControllerConfig{
+					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 105},
 				}))
 				Expect(rc.WorkloadEndpoint).To(BeNil())
 				Expect(rc.Namespace).To(BeNil())
@@ -598,9 +556,9 @@ var _ = Describe("Config", func() {
 				Expect(s.RunningConfig.EtcdV3CompactionPeriod.Duration).To(Equal(time.Minute * 33))
 				c := s.RunningConfig.Controllers
 				Expect(c.Node).To(Equal(&v3.NodeControllerConfig{
-					ReconcilerPeriod: nil,
-					SyncLabels:       v3.Disabled,
-					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
+					SyncLabels:      v3.Disabled,
+					HostEndpoint:    &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
+					LeakGracePeriod: &v1.Duration{Duration: 15 * time.Minute},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
 					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 105},
@@ -609,28 +567,6 @@ var _ = Describe("Config", func() {
 				Expect(c.Namespace).To(BeNil())
 				Expect(c.ServiceAccount).To(BeNil())
 			})
-		})
-	})
-
-	Context("with invalid user defined values", func() {
-		var cfg *config.Config
-
-		BeforeEach(func() {
-			// Set wrong environment variables
-			setWrongEnv()
-		})
-
-		AfterEach(func() {
-			// Reset environment variables
-			unsetEnv()
-		})
-
-		// Assert error is generated
-		It("should generate error", func() {
-			// Parse config
-			cfg = new(config.Config)
-			err := cfg.Parse()
-			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -680,10 +616,10 @@ var _ = Describe("Config", func() {
 			defer cancel()
 			ctrl := config.NewRunConfigController(ctx, *cfg, m)
 			runCfg := <-ctrl.ConfigChan()
-			Expect(runCfg.Controllers.Policy.ReconcilerPeriod).To(Equal(time.Second * 30))
-			Expect(runCfg.Controllers.WorkloadEndpoint.ReconcilerPeriod).To(Equal(time.Second * 31))
-			Expect(runCfg.Controllers.Namespace.ReconcilerPeriod).To(Equal(time.Second * 32))
-			Expect(runCfg.Controllers.ServiceAccount.ReconcilerPeriod).To(Equal(time.Second * 33))
+			Expect(runCfg.Controllers.Policy.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 30}))
+			Expect(runCfg.Controllers.WorkloadEndpoint.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 31}))
+			Expect(runCfg.Controllers.Namespace.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 32}))
+			Expect(runCfg.Controllers.ServiceAccount.ReconcilerPeriod).To(Equal(&v1.Duration{Duration: time.Second * 33}))
 		})
 	})
 })
