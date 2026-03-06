@@ -1,5 +1,8 @@
 PACKAGE_NAME = github.com/projectcalico/calico
 
+# Use v3 CRDs for the kind cluster and e2e tests.
+CALICO_API_GROUP ?= projectcalico.org/v3
+
 include metadata.mk
 include lib.Makefile
 
@@ -47,7 +50,7 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
-	rm -rf ./bin
+	rm -rf ./bin .stamp.*
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
@@ -188,17 +191,21 @@ K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 CLUSTER_ROUTING ?= BIRD
 
+## Build all test images, create a kind cluster, and deploy Calico on it.
+.PHONY: kind-up
+kind-up: kind-build-images kind-deploy
+
 ## Create a kind cluster and run all e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) -C node kind-k8st-setup
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
 	$(MAKE) e2e-run-test
 	$(MAKE) e2e-run-cnp-test
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) -C node kind-k8st-setup
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
 	$(MAKE) e2e-run-cnp-test
 
 ## Run the general e2e tests against a pre-existing kind cluster.
