@@ -444,7 +444,7 @@ TEST_BUILD_TAG=test-build
 
 load-container-images: $(K8ST_IMAGE_STAMPS) $(KUBECTL)
 	# Load all test-build images onto the currently running kind cluster.
-	KIND=$(KIND) $(REPO_ROOT)/hack/test/kind/load_images_on_kind_cluster.sh
+	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images_on_kind_cluster.sh
 	# Restart the Calico containers so they launch with the newly loaded code.
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	# calicoctl is deployed as a pod on the cluster and needs to be recreated.
