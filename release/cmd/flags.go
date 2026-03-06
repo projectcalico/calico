@@ -89,11 +89,6 @@ var (
 		Sources: cli.EnvVars("PUBLISH_GIT"),
 		Value:   true,
 	}
-	newBranchFlag = &cli.StringFlag{
-		Name:    "branch-stream",
-		Sources: cli.EnvVars("RELEASE_BRANCH_STREAM"),
-		Usage:   fmt.Sprintf("The new major and minor versions for the branch to create e.g. vX.Y to create a <release-branch-prefix>-vX.Y branch e.g. v1.37 for %s-v1.37 branch", releaseBranchPrefixFlag.Value),
-	}
 	baseBranchFlag = &cli.StringFlag{
 		Name:    "base-branch",
 		Aliases: []string{"base", "main-branch"},
@@ -220,12 +215,10 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
-	operatorGitFlags   = []cli.Flag{operatorRepoRemoteFlag, operatorOrgFlag, operatorRepoFlag}
-	operatorBuildFlags = []cli.Flag{
-		operatorRepoRemoteFlag, operatorOrgFlag, operatorRepoFlag,
-		operatorBranchFlag, operatorReleaseBranchPrefixFlag, operatorDevTagSuffixFlag,
-		operatorRegistryFlag, operatorImageFlag,
-	}
+	operatorGitFlags   = []cli.Flag{operatorOrgFlag, operatorRepoFlag}
+	operatorBuildFlags = append(operatorGitFlags,
+		operatorBranchFlag, operatorReleaseBranchPrefixFlag,
+		operatorRegistryFlag, operatorImageFlag)
 
 	// Operator git flags
 	operatorOrgFlag = &cli.StringFlag{
@@ -240,13 +233,6 @@ var (
 		Sources: cli.EnvVars("OPERATOR_GIT_REPO"),
 		Value:   operator.DefaultRepoName,
 	}
-	operatorRepoRemoteFlag = &cli.StringFlag{
-		Name:    "operator-git-remote",
-		Usage:   "The remote for Tigera operator git repository",
-		Sources: cli.EnvVars("OPERATOR_GIT_REMOTE"),
-		Value:   operator.DefaultRemote,
-	}
-
 	// Branch/Tag management flags
 	operatorBranchFlag = &cli.StringFlag{
 		Name:    "operator-branch",
@@ -260,25 +246,6 @@ var (
 		Sources: cli.EnvVars("OPERATOR_RELEASE_BRANCH_PREFIX"),
 		Value:   operator.DefaultReleaseBranchPrefix,
 	}
-	operatorDevTagSuffixFlag = &cli.StringFlag{
-		Name:    "operator-dev-tag-suffix",
-		Usage:   "The suffix used to denote development tags for Tigera operator",
-		Sources: cli.EnvVars("OPERATOR_DEV_TAG_SUFFIX"),
-		Value:   operator.DefaultDevTagSuffix,
-	}
-	operatorBaseBranchFlag = &cli.StringFlag{
-		Name:    operatorBranchFlag.Name,
-		Usage:   "The base branch to cut the Tigera operator release branch from",
-		Sources: cli.EnvVars("OPERATOR_BRANCH_BASE"),
-		Value:   operator.DefaultBranchName,
-		Action: func(_ context.Context, c *cli.Command, str string) error {
-			if str != operator.DefaultBranchName {
-				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, operator.DefaultBranchName)
-			}
-			return nil
-		},
-	}
-
 	// Container image flags
 	operatorRegistryFlag = &cli.StringFlag{
 		Name:    "operator-registry",
