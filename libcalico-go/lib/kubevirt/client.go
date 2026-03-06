@@ -18,6 +18,8 @@ package kubevirt
 import (
 	"fmt"
 
+	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
 )
@@ -34,6 +36,23 @@ func NewVirtClient(restConfig *rest.Config) (VirtClientInterface, error) {
 // virtClientAdapter adapts the typed KubeVirt client to our VirtClientInterface.
 type virtClientAdapter struct {
 	client kubevirtcorev1.KubevirtV1Interface
+}
+
+func IsKubeVirtInstalled(discoveryClient discovery.DiscoveryInterface) (bool, error) {
+	apiGroupList, err := discoveryClient.ServerGroups()
+	if err != nil {
+		log.Debugf("Cannot obtain API group list: %s", err)
+		return false, err
+	}
+
+	for _, group := range apiGroupList.Groups {
+		if group.Name == "kubevirt.io" {
+			return true, nil
+		}
+	}
+
+	log.Debugf("Kubevirt is not installed in the cluster")
+	return false, nil
 }
 
 // VirtualMachineInstance implements VirtClientInterface.

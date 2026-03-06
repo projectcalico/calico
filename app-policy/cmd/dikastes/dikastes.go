@@ -28,8 +28,6 @@ import (
 	"time"
 
 	"github.com/docopt/docopt-go"
-	authz_v2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
-	authz_v2alpha "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2alpha"
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -106,11 +104,7 @@ func runServer(arguments map[string]any) {
 	// Check server
 	gs := grpc.NewServer()
 	storeManager := policystore.NewPolicyStoreManager()
-	checkServer := checker.NewServer(ctx, storeManager)
-	authz.RegisterAuthorizationServer(gs, checkServer)
-	checkServerV2 := checkServer.V2Compat()
-	authz_v2alpha.RegisterAuthorizationServer(gs, checkServerV2)
-	authz_v2.RegisterAuthorizationServer(gs, checkServerV2)
+	newCheckServer(ctx, gs, storeManager)
 
 	// Synchronize the policy store
 	opts := uds.GetDialOptions()
@@ -236,4 +230,15 @@ func (h *httpTerminationHandler) RunHTTPServer(addr string, port string) (*http.
 		}
 	})
 	return httpServer, httpServerWg, nil
+}
+
+// newCheckServer creates the ext_authz check server with the default set of
+// check providers and registers it on the given gRPC server. This is the single
+// source of truth for provider registration and is used by both runServer and
+// tests.
+func newCheckServer(ctx context.Context, gs *grpc.Server, storeManager policystore.PolicyStoreManager) {
+	checkServer := checker.NewServer(ctx, storeManager,
+		checker.WithRegisteredCheckProvider(checker.NewALPCheckProvider()),
+	)
+	checkServer.RegisterGRPCServices(gs)
 }

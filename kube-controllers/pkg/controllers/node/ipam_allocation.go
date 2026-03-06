@@ -159,6 +159,14 @@ func (a *allocation) fields() log.Fields {
 		f["pod"] = fmt.Sprintf("%s/%s", ns, pod)
 	}
 
+	if a.isVMAllocation() {
+		ns := a.attrs[ipam.AttributeNamespace]
+		vmi := a.attrs[ipam.AttributeVMIName]
+		if ns != "" && vmi != "" {
+			f["vmi"] = fmt.Sprintf("%s/%s", ns, vmi)
+		}
+	}
+
 	return f
 }
 
@@ -220,6 +228,11 @@ func (a *allocation) isPodIP() bool {
 	pod := a.attrs[ipam.AttributePod]
 
 	return ns != "" && pod != ""
+}
+
+func (a *allocation) isVMAllocation() bool {
+	_, ok := a.attrs[ipam.AttributeVMIName]
+	return ok
 }
 
 func (a *allocation) isTunnelAddress() bool {
@@ -296,9 +309,11 @@ func (t *allocationState) markDirty(node string, reason string) {
 	}
 }
 
-func (t *allocationState) syncComplete() {
-	for node := range t.dirtyNodes {
-		log.WithField("node", node).Debug("Node is no longer dirty")
+// markClean removes a single node from the dirty set after it has been
+// successfully processed.
+func (t *allocationState) markClean(node string, reason string) {
+	if _, ok := t.dirtyNodes[node]; ok {
+		log.WithFields(log.Fields{"node": node, "reason": reason}).Debug("Node is no longer dirty")
 		delete(t.dirtyNodes, node)
 	}
 }
