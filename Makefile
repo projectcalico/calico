@@ -188,17 +188,24 @@ K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 CLUSTER_ROUTING ?= BIRD
 
+## Build all test images, tag them as test-build, and set up a kind cluster with Calico.
+kind-test-cluster: kind-test-images kind-k8st-setup
+
+## Build and tag all component images needed for kind cluster testing.
+kind-test-images:
+	$(MAKE) -C node kind-test-images
+
 ## Create a kind cluster and run all e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) -C node kind-k8st-setup
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-test-cluster
 	$(MAKE) e2e-run-test
 	$(MAKE) e2e-run-cnp-test
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) -C node kind-k8st-setup
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-test-cluster
 	$(MAKE) e2e-run-cnp-test
 
 ## Run the general e2e tests against a pre-existing kind cluster.
