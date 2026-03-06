@@ -158,10 +158,10 @@ clean: clean-windows
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
 	find . -name '*.pyc' -exec rm -f {} +
-	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
+	rm -rf certs *.tar .stamp.* $(NODE_CONTAINER_BIN_DIR)
 	rm -rf $(REMOTE_DEPS)
 	rm -rf filesystem/included-source
-	rm -rf tests/k8st/infra/operator
+	rm -rf $(REPO_ROOT)/hack/test/kind/infra/operator
 	rm -rf dist
 	rm -rf bin
 	# We build these as part of the node build, so clean them as part of the clean.
@@ -292,20 +292,20 @@ $(FELIX_GPL_SOURCE): .felix-gpl-source.created
 ###############################################################################
 # FV Tests
 ###############################################################################
-K8ST_IMAGE_TARS=calico-node.tar \
-	calico-typha.tar \
-	calico-apiserver.tar \
-	calico-cni.tar \
-	pod2daemon.tar \
-	csi.tar \
-	node-driver-registrar.tar \
-	calicoctl.tar \
-	kube-controllers.tar \
-	operator.tar \
-	webhook.tar \
-	whisker.tar \
-	whisker-backend.tar \
-	goldmane.tar
+K8ST_IMAGE_STAMPS=.stamp.calico-node \
+	.stamp.calico-typha \
+	.stamp.calico-apiserver \
+	.stamp.calico-cni \
+	.stamp.pod2daemon \
+	.stamp.csi \
+	.stamp.node-driver-registrar \
+	.stamp.calicoctl \
+	.stamp.kube-controllers \
+	.stamp.operator \
+	.stamp.webhook \
+	.stamp.whisker \
+	.stamp.whisker-backend \
+	.stamp.goldmane
 
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
@@ -369,101 +369,97 @@ chart: $(CHARTS)
 	make -C ../ bin/projectcalico.org.v3-$(GIT_VERSION).tgz
 
 # Tag to use for images built for e2e testing. This must match the image tag used in
-# tests/k8st/infra/calico_versions.yml
+# hack/test/kind/infra/calico_versions.yml
 TEST_BUILD_TAG=test-build
 
-operator.tar: $(K8ST_IMAGE_TARS) tests/k8st/infra/calico_versions.yml
-	cd tests/k8st/infra/ && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
-	docker save --output $@ docker.io/tigera/operator:$(TEST_BUILD_TAG)
+# Stamp-file rules: build and tag each component image as test-build.
+# The combined tar for kind loading is produced at load time by the shared load script.
+.stamp.operator: $(K8ST_IMAGE_STAMPS) $(REPO_ROOT)/hack/test/kind/infra/calico_versions.yml
+	cd $(REPO_ROOT)/hack/test/kind/infra/ && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+	touch $@
 
-calico-node.tar: $(NODE_CONTAINER_CREATED)
+.stamp.calico-node: $(NODE_CONTAINER_CREATED)
 	docker tag $(NODE_IMAGE):latest-$(ARCH) calico/node:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/node:$(TEST_BUILD_TAG)
+	touch $@
 
-calico-typha.tar: ../go.mod $(shell find ../typha -name '*.go') $(shell find ../libcalico-go -name '*.go')
+.stamp.calico-typha: ../go.mod $(shell find ../typha -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../typha image
 	docker tag calico/typha:latest-$(ARCH) calico/typha:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/typha:$(TEST_BUILD_TAG)
+	touch $@
 
-calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go') $(shell find ../libcalico-go -name '*.go')
+.stamp.calico-apiserver: ../go.mod $(shell find ../apiserver -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../apiserver image
 	docker tag calico/apiserver:latest-$(ARCH) calico/apiserver:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/apiserver:$(TEST_BUILD_TAG)
+	touch $@
 
-calico-cni.tar: ../go.mod $(shell find ../cni-plugin -name '*.go') $(shell find ../libcalico-go -name '*.go')
+.stamp.calico-cni: ../go.mod $(shell find ../cni-plugin -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../cni-plugin image
 	docker tag calico/cni:latest-$(ARCH) calico/cni:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/cni:$(TEST_BUILD_TAG)
+	touch $@
 
-csi.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
+.stamp.csi: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
 	make -C ../pod2daemon image
 	docker tag calico/csi:latest-$(ARCH) calico/csi:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/csi:$(TEST_BUILD_TAG)
+	touch $@
 
-node-driver-registrar.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
+.stamp.node-driver-registrar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
 	make -C ../pod2daemon image
 	docker tag calico/node-driver-registrar:latest-$(ARCH) calico/node-driver-registrar:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/node-driver-registrar:$(TEST_BUILD_TAG)
+	touch $@
 
-pod2daemon.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
+.stamp.pod2daemon: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
 	make -C ../pod2daemon image
 	docker tag calico/pod2daemon-flexvol:latest-$(ARCH) calico/pod2daemon-flexvol:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/pod2daemon-flexvol:$(TEST_BUILD_TAG)
+	touch $@
 
-calicoctl.tar: ../go.mod $(shell find ../calicoctl -name '*.go') $(shell find ../libcalico-go -name '*.go')
+.stamp.calicoctl: ../go.mod $(shell find ../calicoctl -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../calicoctl image
 	docker tag calico/ctl:latest-$(ARCH) calico/ctl:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/ctl:$(TEST_BUILD_TAG)
+	touch $@
 
-kube-controllers.tar: ../go.mod $(shell find ../kube-controllers -name '*.go') $(shell find ../libcalico-go -name '*.go')
+.stamp.kube-controllers: ../go.mod $(shell find ../kube-controllers -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../kube-controllers image
 	docker tag calico/kube-controllers:latest-$(ARCH) calico/kube-controllers:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/kube-controllers:$(TEST_BUILD_TAG)
+	touch $@
 
-goldmane.tar: ../go.mod $(shell find ../goldmane -name '*.go')
+.stamp.goldmane: ../go.mod $(shell find ../goldmane -name '*.go')
 	make -C ../goldmane image
 	docker tag calico/goldmane:latest-$(ARCH) calico/goldmane:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/goldmane:$(TEST_BUILD_TAG)
+	touch $@
 
-webhook.tar: ../go.mod $(shell find ../webhooks -name '*.go') $(shell find ../libcalico-go -name '*.go')
+.stamp.webhook: ../go.mod $(shell find ../webhooks -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../webhooks image
 	docker tag calico/webhooks:latest-$(ARCH) calico/webhooks:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/webhooks:$(TEST_BUILD_TAG)
+	touch $@
 
-whisker.tar: ../go.mod $(shell find ../whisker)
+.stamp.whisker: ../go.mod $(shell find ../whisker)
 	make -C ../whisker image
 	docker tag calico/whisker:latest-$(ARCH) calico/whisker:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/whisker:$(TEST_BUILD_TAG)
+	touch $@
 
-whisker-backend.tar: ../go.mod $(shell find ../whisker-backend -name '*.go')
+.stamp.whisker-backend: ../go.mod $(shell find ../whisker-backend -name '*.go')
 	make -C ../whisker-backend image
 	docker tag calico/whisker-backend:latest-$(ARCH) calico/whisker-backend:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/whisker-backend:$(TEST_BUILD_TAG)
+	touch $@
 
-load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
-	# Load the latest tar files onto the currently running kind cluster.
-	KUBECONFIG=$(KIND_KUBECONFIG) KIND=$(KIND) ./tests/k8st/load_images_on_kind_cluster.sh
+load-container-images: $(K8ST_IMAGE_STAMPS) $(KUBECTL)
+	# Load all test-build images onto the currently running kind cluster.
+	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images_on_kind_cluster.sh
 	# Restart the Calico containers so they launch with the newly loaded code.
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	# calicoctl is deployed as a pod on the cluster and needs to be recreated.
-	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f tests/k8st/infra/calicoctl.yaml
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/hack/test/kind/infra/calicoctl.yaml
+
+## Build and tag all component images needed for kind cluster testing.
+.PHONY: kind-test-images
+kind-test-images: $(K8ST_IMAGE_STAMPS)
 
 .PHONY: k8s-test
 ## Run the k8s tests
 k8s-test:
-	$(MAKE) kind-k8st-setup
+	$(MAKE) kind-test-images kind-k8st-setup
 	$(MAKE) kind-k8st-run-test
 	$(MAKE) kind-k8st-cleanup
-
-.PHONY: kind-k8st-setup
-kind-k8st-setup: $(K8ST_IMAGE_TARS) $(CHARTS) kind-cluster-create
-	KUBECONFIG=$(KIND_KUBECONFIG) \
-	KIND=$(KIND) \
-	ARCH=$(ARCH) \
-	GIT_VERSION=$(GIT_VERSION) \
-	CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
-	./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)

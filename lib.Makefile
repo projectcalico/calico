@@ -1489,6 +1489,37 @@ helm: bin/helm
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
 
 ###############################################################################
+# Common functions for setting up a kind cluster with Calico for testing.
+###############################################################################
+KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
+
+# Helm chart tarballs needed for kind cluster setup.
+KIND_SETUP_CHARTS=$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
+	$(REPO_ROOT)/bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz \
+	$(REPO_ROOT)/bin/projectcalico.org.v3-$(GIT_VERSION).tgz
+
+# Deploy Calico on an existing kind cluster. Assumes images are already built
+# and tagged as test-build in the local Docker daemon.
+.PHONY: kind-k8st-setup
+kind-k8st-setup: $(KIND_SETUP_CHARTS) kind-cluster-create
+	REPO_ROOT=$(REPO_ROOT) \
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	KIND=$(KIND) \
+	KIND_NAME=$(KIND_NAME) \
+	ARCH=$(ARCH) \
+	GIT_VERSION=$(GIT_VERSION) \
+	CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
+	$(REPO_ROOT)/hack/test/kind/deploy_resources_on_kind_cluster.sh
+
+# Load test-build images onto an existing kind cluster and restart pods.
+.PHONY: load-container-images
+load-container-images: $(KUBECTL)
+	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images_on_kind_cluster.sh
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
+
+###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)
