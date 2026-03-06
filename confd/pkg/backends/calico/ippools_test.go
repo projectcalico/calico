@@ -143,6 +143,11 @@ func Test_processIPPoolsV4(t *testing.T) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForEnabledIPPools, expected)
 	}
+
+	if config.BGPExportFilterForInternalPeers != nil {
+		t.Errorf("Expected BIRD filter for exporting to internal peers to be nil.\n Generated=%#v",
+			config.BGPExportFilterForInternalPeers)
+	}
 }
 
 func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
@@ -181,7 +186,7 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 	require.NoError(t, err)
 
 	if config.KernelFilterForIPPools != nil {
-		t.Errorf("Expected BIRD filter for programming kernel to be nil")
+		t.Errorf("Expected BIRD filter for programming kernel to be nil:\n Generated=%#v", config.KernelFilterForIPPools)
 	}
 
 	expected := filterExpectedStatements(forExportStatements, "reject")
@@ -194,6 +199,11 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForEnabledIPPools, expected)
+	}
+
+	if config.BGPExportFilterForInternalPeers != nil {
+		t.Errorf("Expected BIRD filter for exporting to internal peers to be nil.\n Generated=%#v",
+			config.BGPExportFilterForInternalPeers)
 	}
 }
 
@@ -266,9 +276,14 @@ func Test_processIPPoolsV6(t *testing.T) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForEnabledIPPools, expected)
 	}
+
+	if config.BGPExportFilterForInternalPeers != nil {
+		t.Errorf("Expected BIRD filter for exporting to internal peers to be nil.\n Generated=%#v",
+			config.BGPExportFilterForInternalPeers)
+	}
 }
 
-func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
+func Test_processIPPoolsV4_FelixProgramsClusterRoutes(t *testing.T) {
 	forKernelStatements := []string{
 		// IPv4 IPIP Encapsulation cases.
 		`  if (net ~ 10.10.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
@@ -343,9 +358,22 @@ func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForEnabledIPPools, expected)
 	}
+
+	expected = []string{
+		// IPv4 IPIP Encapsulation cases.
+		`  if (net ~ 10.10.0.0/16) then { reject; }`,
+		`  if (net ~ 10.12.0.0/16) then { reject; }`,
+		// IPv4 No-Encapsulation case.
+		`  if (net ~ 10.14.0.0/16) then { reject; }`,
+	}
+	slices.Sort(expected)
+	if !reflect.DeepEqual(config.BGPExportFilterForInternalPeers, expected) {
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+			config.BGPExportFilterForInternalPeers, expected)
+	}
 }
 
-func Test_processIPPoolsV6_BGPDisabledWithinCluster(t *testing.T) {
+func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
 	forKernelStatements := []string{
 		// IPv6 IPIP Encapsulation cases.
 		`  if (net ~ dead:beef:10::/64) then { reject; } # Cluster routes are handled by Felix.`,
@@ -419,6 +447,19 @@ func Test_processIPPoolsV6_BGPDisabledWithinCluster(t *testing.T) {
 	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForEnabledIPPools, expected)
+	}
+
+	expected = []string{
+		// IPv6 IPIP Encapsulation cases.
+		`  if (net ~ dead:beef:10::/64) then { reject; }`,
+		`  if (net ~ dead:beef:12::/64) then { reject; }`,
+		// IPv6 No-Encapsulation case.
+		`  if (net ~ dead:beef:14::/64) then { reject; }`,
+	}
+	slices.Sort(expected)
+	if !reflect.DeepEqual(config.BGPExportFilterForInternalPeers, expected) {
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+			config.BGPExportFilterForInternalPeers, expected)
 	}
 }
 
