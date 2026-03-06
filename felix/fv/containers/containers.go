@@ -984,55 +984,39 @@ func (c *Container) BPFNATDump(ipv6 bool) map[string][]string {
 	feMatch := regexp.MustCompile(`(.* port \d+ proto \d+) id (\d+) count.*`)
 
 	lines := strings.Split(out, "\n")
+	front := ""
+	id := ""
+	back := []string(nil)
 	nat := make(map[string][]string)
 
-	// pendingFrontends holds all frontends in the current service group that
-	// have not yet been committed to the map. Backends are printed once per
-	// group after all the frontend lines, so we accumulate frontends until we
-	// see a backend line or move to a different service ID.
-	var pendingFrontends []string
-	var currentID string
 	var beMatch *regexp.Regexp
-	var currentBackends []string
-
-	commitGroup := func() {
-		for _, fe := range pendingFrontends {
-			// Each frontend in the group shares the same backend list.
-			// Make a copy so later appends don't affect already-stored slices.
-			backCopy := append([]string(nil), currentBackends...)
-			nat[fe] = backCopy
-		}
-		pendingFrontends = nil
-		currentBackends = nil
-		currentID = ""
-		beMatch = nil
-	}
 
 	for _, l := range lines {
-		// Check for a backend line belonging to the current group.
-		if beMatch != nil {
+		if front != "" {
 			if be := beMatch.FindStringSubmatch(l); be != nil {
-				currentBackends = append(currentBackends, be[1])
-				continue
+				back = append(back, be[1])
+			} else {
+				nat[front] = back
+				back = []string(nil)
+				front = ""
 			}
 		}
 
-		// Check for a frontend line.
-		if fe := feMatch.FindStringSubmatch(l); fe != nil {
-			newID := fe[2]
-			if currentID != "" && newID != currentID {
-				// Different service ID → commit the previous group first.
-				commitGroup()
+		if front == "" {
+			if fe := feMatch.FindStringSubmatch(l); fe == nil {
+				continue
+			} else {
+				front = fe[1]
+				id = fe[2]
+				beMatch = regexp.MustCompile("\\s+" + id + ":\\d+\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+)")
 			}
-			pendingFrontends = append(pendingFrontends, fe[1])
-			currentID = newID
-			beMatch = regexp.MustCompile("\\s+" + newID + ":\\d+\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+)")
-		} else {
-			commitGroup()
 		}
+
 	}
-	// Commit any group that was still open at end of output.
-	commitGroup()
+
+	if front != "" {
+		nat[front] = back
+	}
 
 	return nat
 }

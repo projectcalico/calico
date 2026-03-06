@@ -29,7 +29,11 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 )
 
+var natDumpGroupByService bool
+
 func init() {
+	natDumpCmd.Flags().BoolVar(&natDumpGroupByService, "group-by-service", false,
+		"group frontends that share the same service ID and print their backends once per group")
 	natCmd.AddCommand(natDumpCmd)
 	natCmd.AddCommand(natAffDumpCmd)
 
@@ -127,7 +131,7 @@ func dump(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		dumpNice[nat.FrontendKeyV6, nat.BackendValueV6](cmd.Printf, filtered, back)
+		dumpNice[nat.FrontendKeyV6, nat.BackendValueV6](cmd.Printf, filtered, back, natDumpGroupByService)
 	} else {
 		natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
 		if err != nil {
@@ -151,7 +155,7 @@ func dump(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		dumpNice[nat.FrontendKey, nat.BackendValue](cmd.Printf, filtered, back)
+		dumpNice[nat.FrontendKey, nat.BackendValue](cmd.Printf, filtered, back, natDumpGroupByService)
 	}
 	return nil
 }
@@ -209,6 +213,49 @@ func filterByServiceID[FK nat.FrontendKeyComparable](natMap map[FK]nat.FrontendV
 type printfFn func(format string, i ...any)
 
 func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf printfFn,
+	natMap map[FK]nat.FrontendValue, back map[nat.BackendKey]BV, groupByService bool) {
+	if groupByService {
+		dumpNiceGrouped(printf, natMap, back)
+		return
+	}
+
+	for nk, nv := range natMap {
+		valCount := nv.Count()
+		count := int(valCount)
+		if valCount == nat.BlackHoleCount {
+			count = -1
+		}
+		local := nv.LocalCount()
+		id := nv.ID()
+		flags := nv.FlagsAsString()
+		if flags != "" {
+			flags = " flags " + flags
+		}
+		printf("%s port %d proto %d id %d count %d local %d%s",
+			nk.Addr(), nk.Port(), nk.Proto(), id, count, local, flags)
+		srcCIDR := nk.SrcCIDR()
+		if srcCIDR.Prefix() != 0 {
+			printf(" src %s", srcCIDR)
+		}
+		printf("\n")
+		for i := 0; i < count; i++ {
+			bk := nat.NewNATBackendKey(id, uint32(i))
+			bv, ok := back[bk]
+			printf("\t%d:%d\t ", id, i)
+			if !ok {
+				printf("is missing\n")
+			} else {
+				ep := net.JoinHostPort(bv.Addr().String(), fmt.Sprint(bv.Port()))
+				printf("%s\n", ep)
+			}
+		}
+	}
+}
+
+// dumpNiceGrouped groups frontends sharing the same service ID and prints their
+// backends just once per group.  Frontend lines are printed first, then the
+// indented backend list follows.
+func dumpNiceGrouped[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf printfFn,
 	natMap map[FK]nat.FrontendValue, back map[nat.BackendKey]BV) {
 	// Group frontend keys by service ID so that siblings sharing the same
 	// backend pool (e.g. ClusterIP + NodePort) are printed together and the
