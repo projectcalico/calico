@@ -22,12 +22,14 @@
 #   REPO_ROOT   - absolute path to the repository root
 #   KIND        - path to the kind binary
 #   KIND_NAME   - name of the kind cluster
+#   KIND_IMAGES - space-separated list of Docker images to load onto the cluster
 #
 # Optional environment variables:
 #   ARCH              - target architecture (default: amd64)
 #   GIT_VERSION       - version for chart lookup (default: git describe)
 #   CALICO_API_GROUP  - which API group to use
 #   CLUSTER_ROUTING   - BIRD (default) or FELIX
+#   VALUES_FILE       - path to helm values file (default: infra/values.yaml)
 
 # Clean up background jobs on exit, and collect diagnostics on failure.
 set -m
@@ -152,7 +154,7 @@ docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
 echo
 
 echo "Load docker images onto kind cluster"
-KIND=${KIND} KIND_NAME=${KIND_NAME} ${REPO_ROOT}/hack/test/kind/load_images.sh
+KIND=${KIND} KIND_NAME=${KIND_NAME} ${REPO_ROOT}/hack/test/kind/load_images.sh ${KIND_IMAGES}
 
 echo "Install additional permissions for BGP password"
 ${kubectl} apply -f ${INFRA_DIR}/additional-rbac.yaml
