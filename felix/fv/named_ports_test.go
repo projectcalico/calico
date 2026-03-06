@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -654,6 +654,63 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 				cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 			})
 		})
+	})
+
+	Describe("with a policy with nil protocol and only combines named ports", func() {
+		var policy *api.NetworkPolicy
+		BeforeEach(func() {
+			policy = api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
+
+			entityRule := api.EntityRule{
+				Ports: []numorstring.Port{
+					numorstring.NamedPort(sharedPortName),
+					numorstring.NamedPort(w0PortName),
+					numorstring.NamedPort(w1PortName),
+				},
+				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
+					w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
+			}
+
+			apiRule := api.Rule{
+				Action:   api.Allow,
+				Protocol: nil,
+			}
+			if testSourcePorts {
+				apiRule.Source = entityRule
+			} else {
+				apiRule.Destination = entityRule
+			}
+			policy.Spec.Ingress = []api.Rule{
+				apiRule,
+			}
+			policy.Spec.Selector = "all()"
+		})
+
+		JustBeforeEach(func() {
+			createPolicy(policy)
+		})
+
+		// This spec establishes a baseline for the connectivity, then the specs below run
+		// with tweaked versions of the policy.
+		expectBaselineConnectivity := func() {
+			cc.ResetExpectations()
+			cc.ExpectSome(w[0], w[1].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[1], w[0].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[1].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[0].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[2].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectNone(w[1], w[3].Port(sharedPort)) // Disallowed by positive selector.
+			cc.ExpectNone(w[2], w[3].Port(sharedPort)) // Disallowed by positive selector.
+			cc.ExpectSome(w[3], w[0].Port(w0Port))     // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[1].Port(w1Port))     // Allowed by named port in list.
+			cc.ExpectNone(w[3], w[2].Port(w2Port))     // Not in ports list.
+			cc.ExpectNone(w[2], w[0].Port(3000))       // Numeric port not in list.
+
+			cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
+		}
+		It("should have expected connectivity", expectBaselineConnectivity)
 	})
 }
 

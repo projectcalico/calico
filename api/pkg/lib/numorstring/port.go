@@ -152,3 +152,12 @@ func (Port) OpenAPISchemaType() []string { return []string{"string"} }
 // the OpenAPI spec of this type.
 // See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
 func (Port) OpenAPISchemaFormat() string { return "int-or-string" }
+
+func AllPortsAreNamed(ports []Port) bool {
+	for _, p := range ports {
+		if len(p.PortName) == 0 {
+			return false
+		}
+	}
+	return true
+}
