@@ -55,7 +55,9 @@ VALUES_FILE=${INFRA_DIR}/values.yaml
 : ${kubectl:=${REPO_ROOT}/hack/test/kind/kubectl}
 
 # collect_diags prints detailed cluster diagnostics on failure.
+# It collects tigerastatus, tigera-operator logs, and logs from failing pods.
 function collect_diags() {
+  # Guard against kubectl not being set yet (failure during variable init).
   local kctl="${kubectl:-${REPO_ROOT}/hack/test/kind/kubectl}"
 
   echo ""
@@ -114,7 +116,9 @@ function collect_diags() {
 function wait_pod_ready() {
   args="$@"
 
+  # Start background process, waiting for the pod to be ready.
   (
+    # Wait in a loop because the command fails fast if the pod isn't visible yet.
     while ! ${kubectl} wait pod --for=condition=Ready --timeout=30s $args; do
       echo "Waiting for pod $args to be ready..."
       ${kubectl} get po -o wide $args || true
@@ -122,6 +126,7 @@ function wait_pod_ready() {
     done;
     ${kubectl} wait pod --for=condition=Ready --timeout=300s $args
   ) & pid=$!
+  # Start a second background process that implements the actual timeout.
   ( sleep 300; kill $pid ) 2>/dev/null & watchdog=$!
   set +e
 
