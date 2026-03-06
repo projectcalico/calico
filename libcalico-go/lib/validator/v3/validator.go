@@ -1295,31 +1295,22 @@ func validateICMPFields(structLevel validator.StructLevel) {
 func validateRule(structLevel validator.StructLevel) {
 	rule := structLevel.Current().Interface().(api.Rule)
 
-	allPortsAreNamed := func(ports []numorstring.Port) bool {
-		for _, p := range ports {
-			if len(p.PortName) == 0 {
-				return false
-			}
-		}
-		return true
-	}
-
 	// If the protocol does not support ports check that the port values have not
 	// been specified.
 	if rule.Protocol == nil {
-		if !allPortsAreNamed(rule.Source.Ports) {
+		if !numorstring.AllPortsAreNamed(rule.Source.Ports) {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
 				"SrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
-		if !allPortsAreNamed(rule.Source.NotPorts) {
+		if !numorstring.AllPortsAreNamed(rule.Source.NotPorts) {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
 				"NotSrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
-		if !allPortsAreNamed(rule.Destination.Ports) {
+		if !numorstring.AllPortsAreNamed(rule.Destination.Ports) {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
 				"DstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
-		if !allPortsAreNamed(rule.Destination.NotPorts) {
+		if !numorstring.AllPortsAreNamed(rule.Destination.NotPorts) {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
 				"NotDstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
