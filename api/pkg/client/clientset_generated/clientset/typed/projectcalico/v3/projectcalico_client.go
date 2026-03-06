@@ -20,6 +20,7 @@ type ProjectcalicoV3Interface interface {
 	BlockAffinitiesGetter
 	CalicoNodeStatusesGetter
 	ClusterInformationsGetter
+	DatastoreMigrationsGetter
 	FelixConfigurationsGetter
 	GlobalNetworkPoliciesGetter
 	GlobalNetworkSetsGetter
@@ -66,6 +67,10 @@ func (c *ProjectcalicoV3Client) CalicoNodeStatuses() CalicoNodeStatusInterface {
 
 func (c *ProjectcalicoV3Client) ClusterInformations() ClusterInformationInterface {
 	return newClusterInformations(c)
+}
+
+func (c *ProjectcalicoV3Client) DatastoreMigrations() DatastoreMigrationInterface {
+	return newDatastoreMigrations(c)
 }
 
 func (c *ProjectcalicoV3Client) FelixConfigurations() FelixConfigurationInterface {

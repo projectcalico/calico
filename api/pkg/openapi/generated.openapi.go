@@ -54,6 +54,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ClusterInformationSpec":             schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Community":                          schema_pkg_apis_projectcalico_v3_Community(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ControllersConfig":                  schema_pkg_apis_projectcalico_v3_ControllersConfig(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigration":                 schema_pkg_apis_projectcalico_v3_DatastoreMigration(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationList":             schema_pkg_apis_projectcalico_v3_DatastoreMigrationList(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationProgress":         schema_pkg_apis_projectcalico_v3_DatastoreMigrationProgress(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationSpec":             schema_pkg_apis_projectcalico_v3_DatastoreMigrationSpec(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationStatus":           schema_pkg_apis_projectcalico_v3_DatastoreMigrationStatus(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.EndpointPort":                       schema_pkg_apis_projectcalico_v3_EndpointPort(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.EntityRule":                         schema_pkg_apis_projectcalico_v3_EntityRule(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.FelixConfiguration":                 schema_pkg_apis_projectcalico_v3_FelixConfiguration(ref),
@@ -2369,6 +2374,220 @@ func schema_pkg_apis_projectcalico_v3_ControllersConfig(ref common.ReferenceCall
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.LoadBalancerControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.MigrationControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.NamespaceControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.NodeControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_DatastoreMigration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DatastoreMigration triggers and tracks the migration of Calico resources from crd.projectcalico.org/v1 CRDs to projectcalico.org/v3 CRDs.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationSpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_DatastoreMigrationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DatastoreMigrationList contains a list of DatastoreMigration resources.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigration"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigration", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_DatastoreMigrationProgress(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DatastoreMigrationProgress tracks the number of resources migrated.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"total": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Total is the total number of v1 resources found.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"migrated": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Migrated is the number of resources successfully migrated to v3.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"skipped": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Skipped is the number of resources skipped (already exist with matching spec).",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"conflicts": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conflicts is the number of resources with spec mismatches.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_DatastoreMigrationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DatastoreMigrationSpec contains the desired state for the migration.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Type is the direction of migration. Only V1ToV3 is supported.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"type"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_DatastoreMigrationStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DatastoreMigrationStatus contains the observed state of the migration.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Phase is the current phase of the migration.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"startedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "StartedAt is the time the migration started.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"completedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CompletedAt is the time the migration completed.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"progress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Progress tracks the overall migration progress.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationProgress"),
+						},
+					},
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions represent the latest available observations of the migration's state.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.DatastoreMigrationProgress", "k8s.io/apimachinery/pkg/apis/meta/v1.Condition", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 

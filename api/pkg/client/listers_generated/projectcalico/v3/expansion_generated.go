@@ -28,6 +28,10 @@ type CalicoNodeStatusListerExpansion interface{}
 // ClusterInformationLister.
 type ClusterInformationListerExpansion interface{}
 
+// DatastoreMigrationListerExpansion allows custom methods to be added to
+// DatastoreMigrationLister.
+type DatastoreMigrationListerExpansion interface{}
+
 // FelixConfigurationListerExpansion allows custom methods to be added to
 // FelixConfigurationLister.
 type FelixConfigurationListerExpansion interface{}
