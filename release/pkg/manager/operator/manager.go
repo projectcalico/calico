@@ -57,9 +57,6 @@ type OperatorManager struct {
 
 	calicoVersion string
 
-	// outputDir is the absolute path to the output directory.
-	outputDir string
-
 	// image is the name of the operator image (e.g. tigera/operator)
 	image string
 
@@ -112,9 +109,18 @@ func (o *OperatorManager) Build() error {
 	if err := o.PreBuildValidation(); err != nil {
 		return err
 	}
-	env, logFields, err := o.buildEnv()
-	if err != nil {
-		return fmt.Errorf("env vars for building operator: %w", err)
+	env, logFields := o.env()
+	logFields["calico_registry"] = o.productRegistry
+	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, o.productRegistry))
+	if o.isHashRelease {
+		if o.calicoVersion != "" {
+			env = append(env, fmt.Sprintf("%s_VERSION=%s", defaultProductEnvPrefix, o.calicoVersion))
+			logFields["calico_version"] = o.calicoVersion
+		}
+		if o.calicoDir != "" {
+			env = append(env, fmt.Sprintf("%s_DIR=%s", defaultProductEnvPrefix, o.calicoDir))
+			logFields["calico_dir"] = o.calicoDir
+		}
 	}
 	logrus.WithFields(logFields).Info("Building operator")
 	out, err := o.make("release", env)
@@ -126,34 +132,20 @@ func (o *OperatorManager) Build() error {
 	return nil
 }
 
-func (o *OperatorManager) buildEnv() ([]string, logrus.Fields, error) {
+func (o *OperatorManager) env() ([]string, logrus.Fields) {
 	logFields := logrus.Fields{
-		"registry":        o.registry,
-		"calico_registry": o.productRegistry,
-		"image":           o.image,
-		"version":         o.version,
+		"registry": o.registry,
+		"image":    o.image,
+		"version":  o.version,
 	}
 	env := append(os.Environ(),
 		fmt.Sprintf("REGISTRY=%s", o.registry),
-		fmt.Sprintf("IMAGE=%s", o.image),
+		fmt.Sprintf("IMAGE_NAME=%s", o.image),
 		fmt.Sprintf("VERSION=%s", o.version),
-		fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, o.productRegistry),
 	)
 	if o.isHashRelease {
 		logFields["hashrelease"] = "true"
 		env = append(env, "HASHRELEASE=true")
-		if o.calicoVersion != "" {
-			env = append(env, fmt.Sprintf("%s_VERSION=%s", defaultProductEnvPrefix, o.calicoVersion))
-			logFields["calico_version"] = o.calicoVersion
-		}
-		if o.calicoDir != "" {
-			env = append(env, fmt.Sprintf("%s_DIR=%s", defaultProductEnvPrefix, o.calicoDir))
-			logFields["calico_dir"] = o.calicoDir
-		}
-		if o.outputDir != "" {
-			env = append(env, fmt.Sprintf("OUTPUT_DIR=%s", o.outputDir))
-			logFields["output_dir"] = o.outputDir
-		}
 	}
 	if len(o.architectures) > 0 {
 		archs := strings.Join(o.architectures, ",")
@@ -163,17 +155,17 @@ func (o *OperatorManager) buildEnv() ([]string, logrus.Fields, error) {
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		env = append(env, "DEBUG=true")
 	}
-	return env, logFields, nil
+	return env, logFields
 }
 
 func (o *OperatorManager) PreBuildValidation() error {
 	if !o.validate {
 		return nil
 	}
-	var errStack error
 	if o.dir == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no repository root specified"))
+		return fmt.Errorf("no repository root specified")
 	}
+	var errStack error
 	dirty, err := utils.GitIsDirty(o.dir)
 	if err != nil {
 		return fmt.Errorf("failed to check if git is dirty: %w", err)
@@ -199,16 +191,33 @@ func (o *OperatorManager) PreBuildValidation() error {
 	return errStack
 }
 
+func (o *OperatorManager) PrePublishValidation() error {
+	if !o.publish {
+		return nil
+	}
+	if o.dir == "" {
+		return fmt.Errorf("no repository root specified")
+	}
+	var errStack error
+	if o.image == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no operator image specified"))
+	}
+	if o.registry == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no operator registry specified"))
+	}
+	if o.version == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no version specified"))
+	}
+	return errStack
+}
+
 func (o *OperatorManager) Publish() error {
 	if !o.publish {
 		logrus.Warn("Skipping publishing operator")
 		return nil
 	}
 
-	env, logFields, err := o.buildEnv()
-	if err != nil {
-		return fmt.Errorf("env vars for publishing operator: %w", err)
-	}
+	env, logFields := o.env()
 	logrus.WithFields(logFields).Info("Publishing operator")
 	out, err := o.make("release-publish", env)
 	if err != nil {
