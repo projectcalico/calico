@@ -1,5 +1,8 @@
 PACKAGE_NAME = github.com/projectcalico/calico
 
+# Use v3 CRDs for the kind cluster and e2e tests.
+CALICO_API_GROUP ?= projectcalico.org/v3
+
 include metadata.mk
 include lib.Makefile
 
