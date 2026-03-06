@@ -380,6 +380,110 @@ func TestAuthorize(t *testing.T) {
 			expectedAllow: true,
 		},
 		{
+			name: "Authorized UPDATE with tier change",
+			ar: v1.AdmissionReview{
+				Request: &v1.AdmissionRequest{
+					UID:  "456",
+					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Object: runtime.RawExtension{
+						Raw: func() []byte {
+							newNP := np.DeepCopy()
+							newNP.Spec.Tier = "security"
+							raw, _ := json.Marshal(newNP)
+							return raw
+						}(),
+					},
+					OldObject: runtime.RawExtension{
+						Raw: npRaw,
+					},
+					Operation: v1.Update,
+					UserInfo:  authv1.UserInfo{Username: "test-user"},
+				},
+			},
+			setupMock: func() {
+				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "security").Return(nil).Once()
+				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(nil).Once()
+			},
+			expectedAllow: true,
+		},
+		{
+			name: "Unauthorized UPDATE - no permission on new tier",
+			ar: v1.AdmissionReview{
+				Request: &v1.AdmissionRequest{
+					UID:  "457",
+					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Object: runtime.RawExtension{
+						Raw: func() []byte {
+							newNP := np.DeepCopy()
+							newNP.Spec.Tier = "security"
+							raw, _ := json.Marshal(newNP)
+							return raw
+						}(),
+					},
+					OldObject: runtime.RawExtension{
+						Raw: npRaw,
+					},
+					Operation: v1.Update,
+					UserInfo:  authv1.UserInfo{Username: "test-user"},
+				},
+			},
+			setupMock: func() {
+				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "security").Return(fmt.Errorf("unauthorized")).Once()
+			},
+			expectedAllow:  false,
+			expectedReason: metav1.StatusReasonForbidden,
+		},
+		{
+			name: "Unauthorized UPDATE - no permission on old tier",
+			ar: v1.AdmissionReview{
+				Request: &v1.AdmissionRequest{
+					UID:  "458",
+					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Object: runtime.RawExtension{
+						Raw: func() []byte {
+							newNP := np.DeepCopy()
+							newNP.Spec.Tier = "security"
+							raw, _ := json.Marshal(newNP)
+							return raw
+						}(),
+					},
+					OldObject: runtime.RawExtension{
+						Raw: npRaw,
+					},
+					Operation: v1.Update,
+					UserInfo:  authv1.UserInfo{Username: "test-user"},
+				},
+			},
+			setupMock: func() {
+				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "security").Return(nil).Once()
+				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(fmt.Errorf("unauthorized")).Once()
+			},
+			expectedAllow:  false,
+			expectedReason: metav1.StatusReasonForbidden,
+		},
+		{
+			name: "Authorized UPDATE without tier change skips old tier check",
+			ar: v1.AdmissionReview{
+				Request: &v1.AdmissionRequest{
+					UID:  "459",
+					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Object: runtime.RawExtension{
+						Raw: npRaw,
+					},
+					OldObject: runtime.RawExtension{
+						Raw: npRaw,
+					},
+					Operation: v1.Update,
+					UserInfo:  authv1.UserInfo{Username: "test-user"},
+				},
+			},
+			setupMock: func() {
+				// Only one call expected since tiers match.
+				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(nil).Once()
+			},
+			expectedAllow: true,
+		},
+		{
 			name: "Unauthorized request",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
