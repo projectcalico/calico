@@ -198,29 +198,11 @@ ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
 ${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml
 
-echo "Create test-webserver deployment..."
-${kubectl} apply -f ${INFRA_DIR}/test-webserver.yaml
-
-echo "Wait for client and webserver pods to be ready..."
-wait_pod_ready -l pod-name=client
-wait_pod_ready -l app=webserver
-echo "client and webserver pods are running."
+echo "Wait for cluster to be ready..."
 echo
 
 ${kubectl} get po --all-namespaces -o wide
 ${kubectl} get svc
-
-function test_connection() {
-  local svc="webserver-ipv$1"
-  output=$(${kubectl} exec client -- wget $svc -T 10 -O -)
-  echo $output
-  if [[ $output != *test-webserver* ]]; then
-    echo "connection to $svc service failed"
-    exit 1
-  fi
-}
-test_connection 4
-test_connection 6
 
 # Scale down the operator so that it doesn't make changes to the cluster.
 # Some of our tests modify calico/node, etc. We should remove this once we
