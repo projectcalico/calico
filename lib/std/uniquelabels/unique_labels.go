@@ -129,9 +129,14 @@ func Make(m map[string]string) Map {
 }
 
 // makeInner builds a Map from a non-nil, non-empty map[string]string.
-// It interns all keys and values once, then tries the compact
-// representation; falls back to a Go map reusing the same handleMap.
+// It first tries to build a compact representation directly without
+// allocating a Go map; falls back to a handleMap when keys are unknown
+// or the key table is full.
 func makeInner(m map[string]string) Map {
+	if result, ok := tryMakeCompactDirect(m); ok {
+		return result
+	}
+	// Slow path: build a handleMap for key registration or fallback.
 	hm := make(handleMap, len(m))
 	for k, v := range m {
 		hm[uniquestr.Make(k)] = uniquestr.Make(v)
@@ -140,6 +145,37 @@ func makeInner(m map[string]string) Map {
 		return Map{ptr: allocCompact(bf, vals)}
 	}
 	return Map{ptr: unsafe.Pointer(&fallbackMap{m: hm})}
+}
+
+// tryMakeCompactDirect attempts to build a compact Map directly from
+// the input map without allocating an intermediate handleMap.  Succeeds
+// when all keys are already in the global key table (the common case
+// after startup).
+func tryMakeCompactDirect(m map[string]string) (Map, bool) {
+	if len(m) > maxKeyTableSize {
+		return Map{}, false
+	}
+	snap := globalKeyTable.currentSnap()
+	var bf uint64
+	var valsByPos [maxKeyTableSize]uniquestr.Handle
+	for k, v := range m {
+		kh := uniquestr.Make(k)
+		pos, found := snap.byHandle[kh]
+		if !found {
+			return Map{}, false
+		}
+		bf |= uint64(1) << pos
+		valsByPos[pos] = uniquestr.Make(v)
+	}
+	// Pack values in bit order.
+	vals := make([]uniquestr.Handle, bits.OnesCount64(bf))
+	remaining := bf
+	for i := range vals {
+		pos := uint(bits.TrailingZeros64(remaining))
+		vals[i] = valsByPos[pos]
+		remaining &= remaining - 1
+	}
+	return Map{ptr: allocCompact(bf|topBit, vals)}, true
 }
 
 // Equals returns true if the map contains the same key/value pairs as the
