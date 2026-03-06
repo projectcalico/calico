@@ -680,7 +680,7 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 		_, _ = data.WriteString(content)
 	}
 
-	return os.WriteFile(file, data.Bytes(), 0644)
+	return os.WriteFile(file, []byte(convertToFoldedScalars(data.String())), 0644)
 }
 
 func indentBlocks(blocks []templateData) []templateData {
@@ -846,6 +846,47 @@ func calculateDefaultBranch(semaphoreDir string) (string, error) {
 
 	logrus.Info("Found no default branch in semaphore.yml, assuming master.")
 	return mainBranchName, nil
+}
+
+// convertToFoldedScalars post-processes generated YAML content to convert
+// long when: "change_in(...)" lines into YAML folded block scalars (>-),
+// with each dependency path on its own line. This makes diffs cleaner and
+// reduces merge conflicts. The >- scalar folds newlines into spaces when
+// parsed, so the resulting value is semantically identical.
+func convertToFoldedScalars(content string) string {
+	lines := strings.Split(content, "\n")
+	var result []string
+	for _, line := range lines {
+		trimmed := strings.TrimRight(line, " \t")
+		if converted, ok := tryConvertWhenToFolded(trimmed); ok {
+			result = append(result, converted...)
+		} else {
+			result = append(result, line)
+		}
+	}
+	return strings.Join(result, "\n")
+}
+
+func tryConvertWhenToFolded(line string) ([]string, bool) {
+	idx := strings.Index(line, `when: "`)
+	if idx < 0 || !strings.Contains(line, "change_in(") || !strings.HasSuffix(line, `)"`) {
+		return nil, false
+	}
+
+	indent := line[:idx]
+	expr := line[idx+len(`when: "`) : len(line)-1]
+	contentIndent := indent + "  "
+
+	// Put each list item on its own line.
+	multiline := strings.ReplaceAll(expr, "','", "',\n"+contentIndent+"'")
+	// Put the options dict on its own line.
+	multiline = strings.ReplaceAll(multiline, "], {", "],\n"+contentIndent+"{")
+
+	fullMultiline := contentIndent + multiline
+	foldedLines := strings.Split(fullMultiline, "\n")
+	result := []string{indent + "when: >-"}
+	result = append(result, foldedLines...)
+	return result, true
 }
 
 func detectExistingDefaultBranch(path string) (string, error) {
