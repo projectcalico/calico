@@ -28,7 +28,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	rcache "github.com/projectcalico/calico/kube-controllers/pkg/cache"
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -50,11 +49,11 @@ type podController struct {
 	calicoClient          client.Interface
 	workloadEndpointCache *WorkloadEndpointCache
 	ctx                   context.Context
-	cfg                   config.GenericControllerConfig
+	reconcilerPeriod      time.Duration
 }
 
 // NewPodController returns a controller which manages Pod objects.
-func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig, informer cache.SharedIndexInformer) controller.Controller {
+func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, reconcilerPeriod time.Duration, informer cache.SharedIndexInformer) controller.Controller {
 	podConverter := converter.NewPodConverter()
 
 	// Function returns map of key->WorkloadEndpointData from the Calico datastore.
@@ -212,7 +211,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 		return nil
 	}
 
-	return &podController{informer, resourceCache, c, &workloadEndpointCache, ctx, cfg}
+	return &podController{informer, resourceCache, c, &workloadEndpointCache, ctx, reconcilerPeriod}
 }
 
 // Run starts the controller.
@@ -241,12 +240,9 @@ func (c *podController) Run(stopCh chan struct{}) {
 	log.Debug("Finished syncing with Kubernetes API (Pods)")
 
 	// Start Calico cache.
-	c.resourceCache.Run(c.cfg.ReconcilerPeriod.String())
+	c.resourceCache.Run(c.reconcilerPeriod.String())
 
-	// Start a number of worker threads to read from the queue.
-	for i := 0; i < c.cfg.NumberOfWorkers; i++ {
-		go c.runWorker()
-	}
+	go c.runWorker()
 	log.Info("Pod/WorkloadEndpoint controller is now running")
 
 	<-stopCh
