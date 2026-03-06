@@ -47,7 +47,7 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
-	rm -rf ./bin
+	rm -rf ./bin .stamp.*
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
@@ -189,11 +189,8 @@ K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 CLUSTER_ROUTING ?= BIRD
 
 ## Build all test images, tag them as test-build, and set up a kind cluster with Calico.
-kind-test-cluster: kind-test-images kind-k8st-setup
-
-## Build and tag all component images needed for kind cluster testing.
-kind-test-images:
-	$(MAKE) -C node kind-test-images
+.PHONY: kind-test-cluster
+kind-test-cluster: kind-test-images kind-setup
 
 ## Create a kind cluster and run all e2e tests.
 e2e-test:

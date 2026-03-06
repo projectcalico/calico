@@ -1492,6 +1492,98 @@ bin/helm: bin/.helm-updated-$(HELM_VERSION)
 # Common functions for setting up a kind cluster with Calico for testing.
 ###############################################################################
 KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
+KIND_TEST_BUILD_TAG = test-build
+
+# Stamp-file rules: build and tag each component image as test-build.
+# The combined tar for kind loading is produced at load time by the shared load script.
+KIND_IMAGE_STAMPS = \
+	$(REPO_ROOT)/.stamp.calico-node \
+	$(REPO_ROOT)/.stamp.calico-typha \
+	$(REPO_ROOT)/.stamp.calico-apiserver \
+	$(REPO_ROOT)/.stamp.calico-cni \
+	$(REPO_ROOT)/.stamp.pod2daemon \
+	$(REPO_ROOT)/.stamp.csi \
+	$(REPO_ROOT)/.stamp.node-driver-registrar \
+	$(REPO_ROOT)/.stamp.calicoctl \
+	$(REPO_ROOT)/.stamp.kube-controllers \
+	$(REPO_ROOT)/.stamp.operator \
+	$(REPO_ROOT)/.stamp.webhook \
+	$(REPO_ROOT)/.stamp.whisker \
+	$(REPO_ROOT)/.stamp.whisker-backend \
+	$(REPO_ROOT)/.stamp.goldmane
+
+$(REPO_ROOT)/.stamp.calico-node:
+	$(MAKE) -C $(REPO_ROOT)/node image
+	docker tag calico/node:latest-$(ARCH) calico/node:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.calico-typha:
+	$(MAKE) -C $(REPO_ROOT)/typha image
+	docker tag calico/typha:latest-$(ARCH) calico/typha:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.calico-apiserver:
+	$(MAKE) -C $(REPO_ROOT)/apiserver image
+	docker tag calico/apiserver:latest-$(ARCH) calico/apiserver:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.calico-cni:
+	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
+	docker tag calico/cni:latest-$(ARCH) calico/cni:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.csi:
+	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+	docker tag calico/csi:latest-$(ARCH) calico/csi:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.node-driver-registrar:
+	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+	docker tag calico/node-driver-registrar:latest-$(ARCH) calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.pod2daemon:
+	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+	docker tag calico/pod2daemon-flexvol:latest-$(ARCH) calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.calicoctl:
+	$(MAKE) -C $(REPO_ROOT)/calicoctl image
+	docker tag calico/ctl:latest-$(ARCH) calico/ctl:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.kube-controllers:
+	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
+	docker tag calico/kube-controllers:latest-$(ARCH) calico/kube-controllers:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.operator: $(filter-out $(REPO_ROOT)/.stamp.operator,$(KIND_IMAGE_STAMPS)) $(KIND_INFRA_DIR)/calico_versions.yml
+	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+	touch $@
+
+$(REPO_ROOT)/.stamp.goldmane:
+	$(MAKE) -C $(REPO_ROOT)/goldmane image
+	docker tag calico/goldmane:latest-$(ARCH) calico/goldmane:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.webhook:
+	$(MAKE) -C $(REPO_ROOT)/webhooks image
+	docker tag calico/webhooks:latest-$(ARCH) calico/webhooks:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.whisker:
+	$(MAKE) -C $(REPO_ROOT)/whisker image
+	docker tag calico/whisker:latest-$(ARCH) calico/whisker:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+$(REPO_ROOT)/.stamp.whisker-backend:
+	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
+	docker tag calico/whisker-backend:latest-$(ARCH) calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
+	touch $@
+
+## Build and tag all component images needed for kind cluster testing.
+.PHONY: kind-test-images
+kind-test-images: $(KIND_IMAGE_STAMPS)
 
 # Helm chart tarballs needed for kind cluster setup.
 KIND_SETUP_CHARTS=$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
@@ -1500,8 +1592,8 @@ KIND_SETUP_CHARTS=$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
 
 # Deploy Calico on an existing kind cluster. Assumes images are already built
 # and tagged as test-build in the local Docker daemon.
-.PHONY: kind-k8st-setup
-kind-k8st-setup: $(KIND_SETUP_CHARTS) kind-cluster-create
+.PHONY: kind-setup
+kind-setup: $(KIND_SETUP_CHARTS) kind-cluster-create
 	REPO_ROOT=$(REPO_ROOT) \
 	KUBECONFIG=$(KIND_KUBECONFIG) \
 	KIND=$(KIND) \
