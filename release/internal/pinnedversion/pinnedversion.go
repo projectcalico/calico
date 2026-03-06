@@ -307,14 +307,14 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 		logrus.WithError(err).Fatal("Failed to get pinned version")
 	}
 	return &hashreleaseserver.Hashrelease{
-		Name:            pinnedVersion.ReleaseName,
-		Hash:            pinnedVersion.Hash,
-		Note:            pinnedVersion.Note,
-		Stream:          version.DeterminePublishStream(productBranch, pinnedVersion.Title),
-		ProductVersion:  pinnedVersion.Title,
-		OperatorVersion: pinnedVersion.TigeraOperator.Version,
-		Source:          filepath.Join(hashreleaseSrcBaseDir, pinnedVersion.Hash),
-		Latest:          latest,
+		Name:           pinnedVersion.ReleaseName,
+		Hash:           pinnedVersion.Hash,
+		Note:           pinnedVersion.Note,
+		Stream:         version.DeterminePublishStream(productBranch, pinnedVersion.Title),
+		ProductVersion: pinnedVersion.Title,
+		Operator:       pinnedVersion.TigeraOperator,
+		Source:         filepath.Join(hashreleaseSrcBaseDir, pinnedVersion.Hash),
+		Latest:         latest,
 	}, nil
 }
 
