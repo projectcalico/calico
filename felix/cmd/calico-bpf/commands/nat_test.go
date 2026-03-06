@@ -39,6 +39,52 @@ func TestNATDump(t *testing.T) {
 	dumpNice(func(format string, i ...any) { fmt.Printf(format, i...) }, nat, back)
 }
 
+// TestDumpNiceGrouping verifies that dumpNice groups frontends sharing the
+// same service ID so the backend list is printed just once per service.
+func TestDumpNiceGrouping(t *testing.T) {
+	natMap := nat2.MapMem{
+		// Two frontends sharing service id=35 (e.g. ClusterIP + NodePort).
+		nat2.NewNATKey(net.IPv4(1, 1, 1, 1), 80, 6):  nat2.NewNATValue(35, 2, 0, 0),
+		nat2.NewNATKey(net.IPv4(10, 0, 0, 1), 80, 6): nat2.NewNATValue(35, 2, 0, 0),
+		// Unrelated service.
+		nat2.NewNATKey(net.IPv4(2, 1, 1, 1), 553, 17): nat2.NewNATValue(107, 1, 0, 0),
+	}
+	back := nat2.BackendMapMem{
+		nat2.NewNATBackendKey(35, 0):  nat2.NewNATBackendValue(net.IPv4(5, 5, 5, 5), 8080),
+		nat2.NewNATBackendKey(35, 1):  nat2.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 8080),
+		nat2.NewNATBackendKey(107, 0): nat2.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 553),
+	}
+
+	var output strings.Builder
+	dumpNice(func(format string, i ...any) { fmt.Fprintf(&output, format, i...) }, natMap, back)
+
+	out := output.String()
+
+	// The backend IPs for service 35 should each appear exactly once.
+	if c := strings.Count(out, "5.5.5.5"); c != 1 {
+		t.Errorf("expected 5.5.5.5 exactly once, got %d times in:\n%s", c, out)
+	}
+	if c := strings.Count(out, "6.6.6.6"); c != 1 {
+		t.Errorf("expected 6.6.6.6 exactly once, got %d times in:\n%s", c, out)
+	}
+
+	// Both frontends for service 35 should be present.
+	if !strings.Contains(out, "1.1.1.1") {
+		t.Errorf("expected 1.1.1.1 in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "10.0.0.1") {
+		t.Errorf("expected 10.0.0.1 in output, got:\n%s", out)
+	}
+
+	// The unrelated service should also be present.
+	if !strings.Contains(out, "2.1.1.1") {
+		t.Errorf("expected 2.1.1.1 in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "7.7.7.7") {
+		t.Errorf("expected 7.7.7.7 in output, got:\n%s", out)
+	}
+}
+
 // TestFilterByServiceID verifies that filterByServiceID returns exactly the
 // frontends that share the same service ID as the requested key, including
 // additional frontends that point to the same backend set.
