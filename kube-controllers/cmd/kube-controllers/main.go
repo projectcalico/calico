@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -95,22 +95,22 @@ func main() {
 	logutils.ConfigureFormatter("kube-controllers")
 
 	// Attempt to load configuration.
-	cfg := new(config.Config)
-	if err := cfg.Parse(); err != nil {
+	envCfg := new(config.Config)
+	if err := envCfg.Parse(); err != nil {
 		log.WithError(err).Fatal("Failed to parse config")
 	}
-	log.WithField("config", cfg).Info("Loaded configuration from environment")
+	log.WithField("config", envCfg).Info("Loaded configuration from environment")
 
 	// Set the log level based on the loaded configuration.
-	logLevel, err := log.ParseLevel(cfg.LogLevel)
+	logLevel, err := log.ParseLevel(envCfg.LogLevel)
 	if err != nil {
-		log.WithError(err).Warnf("error parsing logLevel: %v", cfg.LogLevel)
+		log.WithError(err).Warnf("error parsing logLevel: %v", envCfg.LogLevel)
 		logLevel = log.InfoLevel
 	}
 	log.SetLevel(logLevel)
 
 	// Build clients to be used by the controllers.
-	k8sClientset, libcalicoClient, calicoClient, k8sconfig, err := getClients(cfg.Kubeconfig)
+	k8sClientset, libcalicoClient, calicoClient, k8sconfig, err := getClients(envCfg.Kubeconfig)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to start")
 	}
@@ -167,9 +167,9 @@ func main() {
 		informers:   make([]cache.SharedIndexInformer, 0),
 	}
 
-	dataFeed := utils.NewDataFeed(libcalicoClient, cfg.DatastoreType)
+	dataFeed := utils.NewDataFeed(libcalicoClient, envCfg.DatastoreType)
 
-	var runCfg v3.KubeControllersConfigurationSpec
+	var cfg v3.KubeControllersConfigurationSpec
 	// flannelmigration doesn't use the datastore config API
 	v, ok := os.LookupEnv(config.EnvEnabledControllers)
 	if ok && strings.Contains(v, "flannelmigration") {
@@ -188,39 +188,39 @@ func main() {
 
 		// Set some global defaults for flannelmigration.
 		// Note that we now ignore the HEALTH_ENABLED environment variable in the case of flannel migration.
-		runCfg.HealthChecks = v3.Enabled
-		runCfg.LogSeverityScreen = logLevel.String()
+		cfg.HealthChecks = v3.Enabled
+		cfg.LogSeverityScreen = logLevel.String()
 
 		// This channel will never receive, and thus flannelmigration will never
 		// restart due to a config change.
 		controllerCtrl.restart = make(chan v3.KubeControllersConfigurationSpec)
 	} else {
 		log.Info("Getting initial config snapshot from datastore")
-		cCtrlr := config.NewRunConfigController(ctx, *cfg, libcalicoClient.KubeControllersConfiguration())
-		runCfg = <-cCtrlr.ConfigChan()
+		cCtrlr := config.NewConfigController(ctx, *envCfg, libcalicoClient.KubeControllersConfiguration())
+		cfg = <-cCtrlr.ConfigChan()
 		log.Info("Got initial config snapshot")
 
 		// Any subsequent changes trigger a restart.
 		controllerCtrl.restart = cCtrlr.ConfigChan()
-		controllerCtrl.InitControllers(ctx, runCfg, cfg.DatastoreType, k8sClientset, libcalicoClient, calicoClient, dataFeed, vmInformer, vmiInformer)
+		controllerCtrl.InitControllers(ctx, cfg, envCfg.DatastoreType, k8sClientset, libcalicoClient, calicoClient, dataFeed, vmInformer, vmiInformer)
 	}
 
-	if cfg.DatastoreType == utils.Etcdv3 {
-		go startCompactor(ctx, runCfg.EtcdV3CompactionPeriod.Duration)
+	if envCfg.DatastoreType == utils.Etcdv3 {
+		go startCompactor(ctx, cfg.EtcdV3CompactionPeriod.Duration)
 	}
 
-	if runCfg.HealthChecks == v3.Enabled {
+	if cfg.HealthChecks == v3.Enabled {
 		log.Info("Starting status report routine")
 		go runHealthChecks(ctx, s, k8sClientset, libcalicoClient)
 	}
 
 	// Set the log level from the merged config.
-	if l, err := log.ParseLevel(runCfg.LogSeverityScreen); err == nil {
+	if l, err := log.ParseLevel(cfg.LogSeverityScreen); err == nil {
 		log.SetLevel(l)
 	}
 
-	if runCfg.PrometheusMetricsPort != nil && *runCfg.PrometheusMetricsPort != 0 {
-		port := *runCfg.PrometheusMetricsPort
+	if cfg.PrometheusMetricsPort != nil && *cfg.PrometheusMetricsPort != 0 {
+		port := *cfg.PrometheusMetricsPort
 		log.Infof("Starting Prometheus metrics server on port %d", port)
 		go func() {
 			mux := http.NewServeMux()
@@ -232,8 +232,8 @@ func main() {
 		}()
 	}
 
-	if runCfg.DebugProfilePort != nil && *runCfg.DebugProfilePort != 0 {
-		debugserver.StartDebugPprofServer("0.0.0.0", int(*runCfg.DebugProfilePort))
+	if cfg.DebugProfilePort != nil && *cfg.DebugProfilePort != 0 {
+		debugserver.StartDebugPprofServer("0.0.0.0", int(*cfg.DebugProfilePort))
 	}
 
 	// Run the controllers. This runs until a config change triggers a restart.
