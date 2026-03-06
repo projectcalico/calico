@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved
 
 package ipsetmember
 
@@ -11,11 +11,22 @@ import (
 
 type Protocol uint8
 
+func ProtocolFrom(p numorstring.Protocol) Protocol {
+	switch {
+	case ProtocolUDP.MatchesModelProtocol(p):
+		return ProtocolUDP
+	case ProtocolSCTP.MatchesModelProtocol(p):
+		return ProtocolSCTP
+	default:
+		return ProtocolTCP
+	}
+}
+
 func (p Protocol) MatchesModelProtocol(protocol numorstring.Protocol) bool {
 	if protocol.Type == numorstring.NumOrStringNum {
 		if protocol.NumVal == 0 {
-			// Special case: named ports default to TCP if protocol isn't specified.
-			return p == ProtocolTCP
+			// Special case: named ports default to Any if protocol isn't specified.
+			return p == ProtocolAny
 		}
 		return protocol.NumVal == uint8(p)
 	}
@@ -39,6 +50,8 @@ func (p Protocol) String() string {
 		return "udp"
 	case ProtocolSCTP:
 		return "sctp"
+	case ProtocolAny:
+		return "any"
 	case ProtocolNone:
 		return "none"
 	default:
@@ -51,4 +64,5 @@ const (
 	ProtocolTCP  Protocol = 6
 	ProtocolUDP  Protocol = 17
 	ProtocolSCTP Protocol = 132
+	ProtocolAny  Protocol = 255
 )
