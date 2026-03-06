@@ -1431,7 +1431,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 
 	touch $@
 
-kind-cluster-destroy: $(KIND) $(KUBECTL)
+kind-cluster-destroy kind-down: $(KIND) $(KUBECTL)
 	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
 	# This requires we execute CNI del on pods with pod networking.
 	-$(KIND) delete cluster --name $(KIND_NAME)
@@ -1582,8 +1582,8 @@ $(REPO_ROOT)/.stamp.whisker-backend:
 	touch $@
 
 ## Build and tag all component images needed for kind cluster testing.
-.PHONY: kind-test-images
-kind-test-images: $(KIND_IMAGE_STAMPS)
+.PHONY: kind-build-images
+kind-build-images: $(KIND_IMAGE_STAMPS)
 
 # Helm chart tarballs needed for kind cluster setup.
 KIND_SETUP_CHARTS=$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
@@ -1593,8 +1593,8 @@ KIND_SETUP_CHARTS=$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
 # already built and tagged as test-build in the local Docker daemon. If a
 # cluster already exists (stamp file present), the creation step is skipped.
-.PHONY: kind-setup
-kind-setup: $(KIND_SETUP_CHARTS) kind-cluster-create
+.PHONY: kind-deploy
+kind-deploy: $(KIND_SETUP_CHARTS) kind-cluster-create
 	REPO_ROOT=$(REPO_ROOT) \
 	KUBECONFIG=$(KIND_KUBECONFIG) \
 	KIND=$(KIND) \
@@ -1606,8 +1606,8 @@ kind-setup: $(KIND_SETUP_CHARTS) kind-cluster-create
 	$(REPO_ROOT)/hack/test/kind/deploy_resources_on_kind_cluster.sh
 
 # Load test-build images onto an existing kind cluster and restart pods.
-.PHONY: load-container-images
-load-container-images: $(KUBECTL)
+.PHONY: kind-reload
+kind-reload: $(KUBECTL)
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images_on_kind_cluster.sh
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
