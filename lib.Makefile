@@ -1603,12 +1603,12 @@ kind-deploy: $(KIND_SETUP_CHARTS) kind-cluster-create
 	GIT_VERSION=$(GIT_VERSION) \
 	CALICO_API_GROUP=$(CALICO_API_GROUP) \
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
-	$(REPO_ROOT)/hack/test/kind/deploy_resources_on_kind_cluster.sh
+	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
 # Load test-build images onto an existing kind cluster and restart pods.
 .PHONY: kind-reload
 kind-reload: $(KUBECTL)
-	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images_on_kind_cluster.sh
+	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 

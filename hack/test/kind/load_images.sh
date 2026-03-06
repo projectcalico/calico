@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# load_images_on_kind_cluster.sh loads test-build-tagged Docker images onto a kind cluster.
+# load_images.sh loads test-build-tagged Docker images onto a kind cluster.
 # It compares local Docker image IDs against what's already on the cluster and only loads
 # images that have changed, which avoids re-transferring unchanged images (~1.4GB) on
 # incremental rebuilds.

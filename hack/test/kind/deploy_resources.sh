@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# deploy_resources_on_kind_cluster.sh sets up a kind cluster with Calico installed
+# deploy_resources.sh sets up a kind cluster with Calico installed
 # and ready for testing. It loads images, installs Calico via Helm, and verifies
 # basic connectivity.
 #
@@ -50,7 +50,7 @@ ARCH=${ARCH:-amd64}
 GIT_VERSION=${GIT_VERSION:-$(git -C "${REPO_ROOT}" describe --tags --dirty --always --abbrev=12)}
 HELM=${REPO_ROOT}/bin/helm
 CHART=${REPO_ROOT}/bin/tigera-operator-${GIT_VERSION}.tgz
-VALUES_FILE=${INFRA_DIR}/values.yaml
+VALUES_FILE=${VALUES_FILE:-${INFRA_DIR}/values.yaml}
 
 : ${kubectl:=${REPO_ROOT}/hack/test/kind/kubectl}
 
@@ -152,7 +152,7 @@ docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
 echo
 
 echo "Load docker images onto kind cluster"
-KIND=${KIND} KIND_NAME=${KIND_NAME} ${REPO_ROOT}/hack/test/kind/load_images_on_kind_cluster.sh
+KIND=${KIND} KIND_NAME=${KIND_NAME} ${REPO_ROOT}/hack/test/kind/load_images.sh
 
 echo "Install additional permissions for BGP password"
 ${kubectl} apply -f ${INFRA_DIR}/additional-rbac.yaml
