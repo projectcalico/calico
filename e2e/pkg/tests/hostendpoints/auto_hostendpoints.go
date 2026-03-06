@@ -105,6 +105,13 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 			if !GetAutoHEPsEnabled(originalKCC) {
 				logrus.Info("BeforeEach: auto host endpoints not previously enabled so enabling")
 				// Enabled creation of auto host endpoints and creation of default host endpoints.
+				// Initialise nil pointer fields so we can set the values below.
+				if testKCC.Spec.Controllers.Node == nil {
+					testKCC.Spec.Controllers.Node = &v3.NodeControllerConfig{}
+				}
+				if testKCC.Spec.Controllers.Node.HostEndpoint == nil {
+					testKCC.Spec.Controllers.Node.HostEndpoint = &v3.AutoHostEndpointConfig{}
+				}
 				testKCC.Spec.Controllers.Node.HostEndpoint.AutoCreate = "Enabled"
 				testKCC.Spec.Controllers.Node.HostEndpoint.CreateDefaultHostEndpoint = v3.DefaultHostEndpointsEnabled
 				updateHostEndpointConfig(cli, testKCC)
@@ -127,7 +134,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 
 		ginkgo.AfterEach(func() {
 			// We've updated the kubecontrollersconfiguration, so we need to restore it to its original state.
-			if !reflect.DeepEqual(originalKCC.Spec.Controllers.Node.HostEndpoint, testKCC.Spec.Controllers.Node.HostEndpoint) {
+			if !reflect.DeepEqual(getHostEndpointConfig(originalKCC), getHostEndpointConfig(testKCC)) {
 				logrus.Info("AfterEach: auto host endpoints not previously enabled so disabling")
 				updateHostEndpointConfig(cli, originalKCC)
 				WaitForAutoHEPs(cli, false)
@@ -287,7 +294,15 @@ func updateHostEndpointConfig(client ctrlclient.Client, desiredKCC v3.KubeContro
 	Expect(err).NotTo(HaveOccurred(), "Error getting kubecontrollersconfiguration")
 
 	// Patch the kubecontrollersconfiguration to toggle auto-creation of host endpoints.
-	currentKCC.Spec.Controllers.Node.HostEndpoint = desiredKCC.Spec.Controllers.Node.HostEndpoint
+	if desiredKCC.Spec.Controllers.Node == nil {
+		// Desired config has no Node controller config; clear it on the current KCC too.
+		currentKCC.Spec.Controllers.Node = nil
+	} else {
+		if currentKCC.Spec.Controllers.Node == nil {
+			currentKCC.Spec.Controllers.Node = &v3.NodeControllerConfig{}
+		}
+		currentKCC.Spec.Controllers.Node.HostEndpoint = desiredKCC.Spec.Controllers.Node.HostEndpoint
+	}
 
 	err = client.Update(context.Background(), &currentKCC)
 	Expect(err).NotTo(HaveOccurred(), "Error updating kubecontrollersconfiguration")
@@ -301,16 +316,29 @@ func updateHostEndpointConfig(client ctrlclient.Client, desiredKCC v3.KubeContro
 		}
 
 		// Check if the current configuration matches the desired configuration.
-		if currentKCC.Status.RunningConfig == nil ||
-			currentKCC.Status.RunningConfig.Controllers.Node == nil ||
-			currentKCC.Status.RunningConfig.Controllers.Node.HostEndpoint == nil {
+		if currentKCC.Status.RunningConfig == nil {
 			return fmt.Errorf("kubecontrollersconfiguration status is not yet updated")
 		}
-		if !reflect.DeepEqual(currentKCC.Status.RunningConfig.Controllers.Node.HostEndpoint, desiredKCC.Spec.Controllers.Node.HostEndpoint) {
+		desiredHEP := getHostEndpointConfig(desiredKCC)
+		var runningHEP *v3.AutoHostEndpointConfig
+		if currentKCC.Status.RunningConfig.Controllers.Node != nil {
+			runningHEP = currentKCC.Status.RunningConfig.Controllers.Node.HostEndpoint
+		}
+		if !reflect.DeepEqual(runningHEP, desiredHEP) {
 			return fmt.Errorf("failed to toggle auto-creation of host endpoints")
 		}
 		return nil
 	}, 5*time.Second, 1*time.Second).Should(BeNil())
+}
+
+// getHostEndpointConfig returns the HostEndpoint config from a KCC, or nil if
+// the Node controller config is not set. This is nil-safe unlike direct field
+// access through the pointer chain.
+func getHostEndpointConfig(kcc v3.KubeControllersConfiguration) *v3.AutoHostEndpointConfig {
+	if kcc.Spec.Controllers.Node == nil {
+		return nil
+	}
+	return kcc.Spec.Controllers.Node.HostEndpoint
 }
 
 // GetAutoHEPsEnabled returns true if AutoHEPs are enabled, false otherwise.
