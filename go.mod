@@ -21,8 +21,6 @@ require (
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.9.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
-	github.com/docker/distribution v2.8.3+incompatible
-	github.com/docker/docker v28.5.1+incompatible
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/envoyproxy/go-control-plane/envoy v1.35.0
 	github.com/fsnotify/fsnotify v1.9.0
@@ -123,6 +121,8 @@ require (
 )
 
 require (
+	github.com/docker/distribution v2.8.3+incompatible // indirect
+	github.com/docker/docker v28.5.1+incompatible // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
@@ -212,7 +212,6 @@ require (
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/cli v27.5.0+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.8.2 // indirect
-	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ebitengine/purego v0.9.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
@@ -290,9 +289,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/hashstructure v1.1.0 // indirect
-	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/spdystream v0.5.0 // indirect
-	github.com/moby/sys/atomicwriter v0.1.0 // indirect
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

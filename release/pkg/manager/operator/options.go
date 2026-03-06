@@ -30,9 +30,9 @@ func WithCalicoDirectory(dir string) Option {
 	}
 }
 
-func WithTempDirectory(dir string) Option {
+func WithCalicoVersion(version string) Option {
 	return func(o *OperatorManager) error {
-		o.tmpDir = dir
+		o.calicoVersion = version
 		return nil
 	}
 }
@@ -40,41 +40,6 @@ func WithTempDirectory(dir string) Option {
 func WithOutputDirectory(dir string) Option {
 	return func(o *OperatorManager) error {
 		o.outputDir = dir
-		return nil
-	}
-}
-
-func WithRepoRemote(remote string) Option {
-	return func(o *OperatorManager) error {
-		o.remote = remote
-		return nil
-	}
-}
-
-func WithGithubOrg(org string) Option {
-	return func(o *OperatorManager) error {
-		o.githubOrg = org
-		return nil
-	}
-}
-
-func WithRepoName(name string) Option {
-	return func(o *OperatorManager) error {
-		o.repoName = name
-		return nil
-	}
-}
-
-func WithBranch(branch string) Option {
-	return func(o *OperatorManager) error {
-		o.branch = branch
-		return nil
-	}
-}
-
-func WithDevTagIdentifier(devTag string) Option {
-	return func(o *OperatorManager) error {
-		o.devTagIdentifier = devTag
 		return nil
 	}
 }
