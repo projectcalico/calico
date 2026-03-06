@@ -252,10 +252,8 @@ func (m Map) String() string {
 }
 
 // MarshalJSON implements the json.Marshaler interface.
-// For fallback maps, marshals the handle map directly (Handle implements
-// encoding.TextMarshaler), avoiding an intermediate map[string]string
-// allocation.  For compact maps, writes JSON directly from the bitfield
-// to avoid building an intermediate map.
+// Both compact and fallback maps write JSON directly with sorted keys,
+// avoiding intermediate map allocations and encoding/json reflection.
 func (m Map) MarshalJSON() ([]byte, error) {
 	if m.ptr == nil {
 		return []byte("null"), nil
@@ -263,10 +261,7 @@ func (m Map) MarshalJSON() ([]byte, error) {
 	if cm, ok := m.compact(); ok {
 		return cm.marshalJSON()
 	}
-	// Fallback: marshal the handle map directly; Handle
-	// implements encoding.TextMarshaler so the keys/values
-	// are serialised as strings without an intermediate map.
-	return json.Marshal(m.asFallback().m)
+	return m.asFallback().marshalJSON()
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.  Unmarshalling

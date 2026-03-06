@@ -106,34 +106,53 @@ func (cm compactMap) allHandles(yield func(uniquestr.Handle, uniquestr.Handle) b
 	}
 }
 
-// marshalJSON writes a JSON object directly from the compact bitfield,
-// avoiding an intermediate map[string]string allocation.  Keys are emitted
-// in sorted order to match encoding/json's map key ordering convention.
+// marshalJSON writes a JSON object directly from the compact bitfield.
 func (cm compactMap) marshalJSON() ([]byte, error) {
 	n := cm.len()
 	if n == 0 {
 		return []byte("{}"), nil
 	}
 	snap := globalKeyTable.currentSnap()
-
-	// Collect key-value pairs indexed by position in the values array.
-	// Backing array is compile-time sized so it can be stack-allocated.
-	type kv struct {
-		key, val string
-	}
 	var backing [maxKeyTableSize]kv
 	pairs := backing[:n]
 	bf := cm.keyBits
-	arrayIdx := 0
-	for bf != 0 {
+	for i := range pairs {
 		pos := bits.TrailingZeros64(bf)
-		pairs[arrayIdx] = kv{
+		pairs[i] = kv{
 			key: snap.byIndex[pos].Value(),
-			val: readValueAt(cm.ptr, arrayIdx).Value(),
+			val: readValueAt(cm.ptr, i).Value(),
 		}
 		bf &= bf - 1
-		arrayIdx++
 	}
+	return marshalSortedPairs(pairs)
+}
+
+// marshalJSON writes a JSON object from the fallback handle map.
+func (fm *fallbackMap) marshalJSON() ([]byte, error) {
+	n := len(fm.m)
+	if n == 0 {
+		return []byte("{}"), nil
+	}
+	var backing [maxKeyTableSize]kv
+	// Fallback maps can exceed maxKeyTableSize; heap-allocate if needed.
+	var pairs []kv
+	if n <= maxKeyTableSize {
+		pairs = backing[:n]
+	} else {
+		pairs = make([]kv, n)
+	}
+	i := 0
+	for k, v := range fm.m {
+		pairs[i] = kv{key: k.Value(), val: v.Value()}
+		i++
+	}
+	return marshalSortedPairs(pairs)
+}
+
+type kv struct{ key, val string }
+
+// marshalSortedPairs sorts pairs by key and writes them as a JSON object.
+func marshalSortedPairs(pairs []kv) ([]byte, error) {
 	slices.SortFunc(pairs, func(a, b kv) int {
 		if a.key < b.key {
 			return -1
@@ -143,9 +162,7 @@ func (cm compactMap) marshalJSON() ([]byte, error) {
 		}
 		return 0
 	})
-
-	// Pre-size: 15 keys × ~40 bytes each ≈ 600 bytes typical.
-	buf := make([]byte, 0, n*40)
+	buf := make([]byte, 0, len(pairs)*40)
 	buf = append(buf, '{')
 	for i, p := range pairs {
 		if i > 0 {
