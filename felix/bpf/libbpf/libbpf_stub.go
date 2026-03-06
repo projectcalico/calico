@@ -203,6 +203,7 @@ const (
 	GlobalsSkipEgressRedirect          uint32 = 12345
 	GlobalsIngressPacketRateConfigured uint32 = 12345
 	GlobalsEgressPacketRateConfigured  uint32 = 12345
+	GlobalsUDPGSOLinearize             uint32 = 12345
 	AttachTypeTcxIngress               uint32 = 12345
 	AttachTypeTcxEgress                uint32 = 12345
 	AttachTypeXDP                      uint32 = 12345
