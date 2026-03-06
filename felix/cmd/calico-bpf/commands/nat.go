@@ -51,10 +51,16 @@ var natCmd = &cobra.Command{
 }
 
 var natDumpCmd = &cobra.Command{
-	Use:   "dump",
+	Use:   "dump [<ip> <port> <proto>]",
 	Short: "dumps the nat tables",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 0 && len(args) != 3 {
+			return fmt.Errorf("accepts 0 or 3 args (<ip> <port> <proto>), received %d", len(args))
+		}
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := dump(cmd); err != nil {
+		if err := dump(cmd, args); err != nil {
 			log.WithError(err).Error("Failed to dump NAT maps")
 		}
 	},
@@ -95,7 +101,7 @@ func dumpAff(cmd *cobra.Command) (err error) {
 	return nil
 }
 
-func dump(cmd *cobra.Command) error {
+func dump(cmd *cobra.Command, args []string) error {
 	if ipv6 != nil && *ipv6 {
 		natMap, err := nat.LoadFrontendMapV6(nat.FrontendMapV6())
 		if err != nil {
@@ -107,7 +113,19 @@ func dump(cmd *cobra.Command) error {
 			return err
 		}
 
-		dumpNice[nat.FrontendKeyV6, nat.BackendValueV6](cmd.Printf, natMap, back)
+		filtered := map[nat.FrontendKeyV6]nat.FrontendValue(natMap)
+		if len(args) == 3 {
+			ip, port, proto, err := parseIPPortProto(args)
+			if err != nil {
+				return err
+			}
+			filtered, err = filterByServiceID(natMap, nat.NewNATKeyV6(ip, port, proto))
+			if err != nil {
+				return err
+			}
+		}
+
+		dumpNice[nat.FrontendKeyV6, nat.BackendValueV6](cmd.Printf, filtered, back)
 	} else {
 		natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
 		if err != nil {
@@ -119,9 +137,71 @@ func dump(cmd *cobra.Command) error {
 			return err
 		}
 
-		dumpNice[nat.FrontendKey, nat.BackendValue](cmd.Printf, natMap, back)
+		filtered := map[nat.FrontendKey]nat.FrontendValue(natMap)
+		if len(args) == 3 {
+			ip, port, proto, err := parseIPPortProto(args)
+			if err != nil {
+				return err
+			}
+			filtered, err = filterByServiceID(natMap, nat.NewNATKey(ip, port, proto))
+			if err != nil {
+				return err
+			}
+		}
+
+		dumpNice[nat.FrontendKey, nat.BackendValue](cmd.Printf, filtered, back)
 	}
 	return nil
+}
+
+// parseIPPortProto parses a [<ip>, <port>, <proto>] slice into typed values.
+// proto accepts "tcp", "udp", or a decimal/hex protocol number.
+func parseIPPortProto(args []string) (net.IP, uint16, uint8, error) {
+	ip := net.ParseIP(args[0])
+	if ip == nil {
+		return nil, 0, 0, fmt.Errorf("invalid IP address: %q", args[0])
+	}
+
+	portNum, err := strconv.ParseUint(args[1], 0, 16)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("invalid port number: %q (must be 0-65535)", args[1])
+	}
+
+	var proto uint8
+	switch strings.ToLower(args[2]) {
+	case "udp":
+		proto = 17
+	case "tcp":
+		proto = 6
+	default:
+		protoNum, err := strconv.ParseUint(args[2], 0, 8)
+		if err != nil {
+			return nil, 0, 0, fmt.Errorf("unknown protocol %q", args[2])
+		}
+		proto = uint8(protoNum)
+	}
+
+	return ip, uint16(portNum), proto, nil
+}
+
+// filterByServiceID returns all frontend entries whose service ID matches the
+// service ID of the given filterKey.  This lets callers discover every virtual
+// IP / port / protocol tuple that maps to the same set of backends.
+func filterByServiceID[FK nat.FrontendKeyComparable](natMap map[FK]nat.FrontendValue, filterKey FK) (map[FK]nat.FrontendValue, error) {
+	fv, ok := natMap[filterKey]
+	if !ok {
+		return nil, fmt.Errorf("frontend %v not found in NAT map", filterKey)
+	}
+
+	serviceID := fv.ID()
+
+	result := make(map[FK]nat.FrontendValue)
+	for k, v := range natMap {
+		if v.ID() == serviceID {
+			result[k] = v
+		}
+	}
+	return result, nil
 }
 
 type printfFn func(format string, i ...any)
