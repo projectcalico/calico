@@ -59,7 +59,7 @@ else
 	$(call build_binary, ./cmd/kube-controllers/, $@)
 endif
 
-$(BINDIR)/wrapper-$(ARCH):
+$(BINDIR)/wrapper-$(ARCH): $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
 else
