@@ -35,7 +35,6 @@ func newFakeInformers(stop <-chan struct{}) (cache.SharedIndexInformer, cache.Sh
 	factory := informers.NewSharedInformerFactory(cs, 0)
 	vmInf := factory.Core().V1().ConfigMaps().Informer()
 	vmiInf := factory.Core().V1().Secrets().Informer()
-	factory.Start(stop)
 	return vmInf, vmiInf
 }
 

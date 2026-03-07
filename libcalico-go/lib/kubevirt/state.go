@@ -63,11 +63,11 @@ func InitInformers(createInformers InformerFactory, pollInterval time.Duration, 
 		log.WithError(err).Warn("Failed to create KubeVirt informers, will keep polling")
 	}
 
-	if vmInf == nil {
+	if vmInf == nil || vmiInf == nil {
 		// KubeVirt not found — poll until it appears.
 		ticker := time.NewTicker(pollInterval)
 		defer ticker.Stop()
-		for vmInf == nil {
+		for vmInf == nil || vmiInf == nil {
 			select {
 			case <-stop:
 				return

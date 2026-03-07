@@ -120,10 +120,6 @@ func main() {
 
 	stop := make(chan struct{})
 
-	go kubevirt.InitInformers(func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
-		return kubevirt.TryCreateInformers(k8sconfig, 5*time.Minute)
-	}, 30*time.Second, stop, kubevirtState)
-
 	// Create the context.
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -201,7 +197,7 @@ func main() {
 
 		// any subsequent changes trigger a restart
 		controllerCtrl.restart = cCtrlr.ConfigChan()
-		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, kubevirtState)
+		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, kubevirtState, k8sconfig)
 	}
 
 	if cfg.DatastoreType == utils.Etcdv3 {
@@ -475,6 +471,7 @@ func (cc *controllerControl) InitControllers(
 	v3c clientset.Interface,
 	dataFeed *utils.DataFeed,
 	kubevirtState *kubevirt.KubeVirtState,
+	k8sconfig *rest.Config,
 ) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
@@ -520,6 +517,12 @@ func (cc *controllerControl) InitControllers(
 		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, kubevirtState)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
+
+		// Start lazy KubeVirt informer initialization only when the Node
+		// controller (which owns IPAM GC) is enabled.
+		go kubevirt.InitInformers(func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
+			return kubevirt.TryCreateInformers(k8sconfig, 5*time.Minute)
+		}, 30*time.Second, cc.stop, kubevirtState)
 	}
 	if cfg.Controllers.ServiceAccount != nil {
 		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)
