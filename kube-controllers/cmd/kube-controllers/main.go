@@ -48,6 +48,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/pod"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/tier"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
@@ -499,6 +500,12 @@ func (cc *controllerControl) InitControllers(
 			poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
 			cc.controllers["IPPool"] = poolController
 			cc.registerInformers(poolInformer, blockInformer)
+
+			// Enable the Tier controller, which manages tier deletion via finalizers.
+			tierInformer := calicoFactory.Projectcalico().V3().Tiers().Informer()
+			tierController := tier.NewController(ctx, v3c, tierInformer)
+			cc.controllers["Tier"] = tierController
+			cc.registerInformers(tierInformer)
 		}
 	}
 
