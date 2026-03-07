@@ -226,15 +226,35 @@ remove-kubevirt-crds:
 		echo "KubeVirt CRDs already removed or not present"
 
 
-## Run the unit tests.
-## Mainline tests run without KubeVirt CRDs to ensure non-KubeVirt code paths don't depend on them.
-## KubeVirt-specific tests run separately with CRDs installed.
-ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
-	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
+UT_PREREQS = $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
+
+## Start test infrastructure if not already running. Unlike run-k8s-controller-manager,
+## this is idempotent — it won't tear down and rebuild if the containers are already up.
+.PHONY: ensure-test-infra
+ensure-test-infra:
+	@if ! docker inspect calico-local-controller-manager >/dev/null 2>&1; then \
+		$(MAKE) run-k8s-controller-manager; \
+	fi
+
+## Run all unit tests.
+ut: $(UT_PREREQS) ensure-test-infra
+	$(MAKE) ut-etcd
+	$(MAKE) ut-kdd
+	$(MAKE) ut-kubevirt
+
+## Run unit tests against etcdv3 with CNI spec 0.3.1.
+ut-etcd: $(UT_PREREQS) ensure-test-infra
+	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3 CNI_SPEC_VERSION=0.3.1
+
+## Run unit tests against KDD with CNI spec 1.0.0 (excludes KubeVirt tests).
+ut-kdd: $(UT_PREREQS) ensure-test-infra
 	$(MAKE) remove-kubevirt-crds
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
+
+## Run KubeVirt-specific unit tests against KDD with CNI spec 1.0.0.
+ut-kubevirt: $(UT_PREREQS) ensure-test-infra
 	$(MAKE) install-kubevirt-crds
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
 
 ut-datastore:
 	# The tests need to run as root
@@ -256,29 +276,6 @@ ut-datastore:
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
 
-ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
-	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
-	make stop-etcd
-	make stop-k8s-controller
-
-ut-kdd: run-k8s-controller-manager build $(BIN)/host-local
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
-	make stop-etcd
-	make stop-k8s-controller
-
-## Run the tests in a container (as root) for different CNI spec versions
-## to make sure we don't break backwards compatibility.
-.PHONY: test-cni-versions
-test-cni-versions:
-	for cniversion in "0.2.0" "0.3.1" ; do \
-		if make ut CNI_SPEC_VERSION=$$cniversion; then \
-			echo "CNI version $$cniversion PASSED"; \
-		else \
-			echo "CNI version $$cniversion FAILED"; \
-			exit 1; \
-		fi; \
-	done
-
 ###############################################################################
 # Install test
 ###############################################################################
@@ -298,7 +295,7 @@ test-install-cni: run-k8s-apiserver image pkg/install/install.test
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download build static-checks test-cni-versions image-all test-install-cni
+ci: clean mod-download build static-checks ut image-all test-install-cni
 
 ## Deploys images to registry
 cd: image-all cd-common
