@@ -254,7 +254,8 @@ ut-datastore:
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
+			mkdir -p report && \
+			ginkgo -cover -r --junit-report=cni_plugin_ut.xml --output-dir=report/ -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3

@@ -11,3 +11,7 @@
       - name: "Application Layer Policy: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+    epilogue:
+      always:
+        commands:
+          - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
