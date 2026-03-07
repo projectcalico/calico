@@ -168,6 +168,42 @@ func TestReconcile_DeletingTierWithoutFinalizer(t *testing.T) {
 	}
 }
 
+func TestPolicyCounts_Summary(t *testing.T) {
+	tests := []struct {
+		name     string
+		counts   policyCounts
+		expected string
+	}{
+		{
+			name:     "single GNP",
+			counts:   policyCounts{GlobalNetworkPolicies: 1},
+			expected: "1 GlobalNetworkPolicy",
+		},
+		{
+			name:     "multiple GNPs",
+			counts:   policyCounts{GlobalNetworkPolicies: 3},
+			expected: "3 GlobalNetworkPolicies",
+		},
+		{
+			name:     "mixed types",
+			counts:   policyCounts{GlobalNetworkPolicies: 2, NetworkPolicies: 1, StagedNetworkPolicies: 5},
+			expected: "2 GlobalNetworkPolicies, 1 NetworkPolicy, 5 StagedNetworkPolicies",
+		},
+		{
+			name:     "all types",
+			counts:   policyCounts{GlobalNetworkPolicies: 1, NetworkPolicies: 1, StagedGlobalNetworkPolicies: 1, StagedNetworkPolicies: 1},
+			expected: "1 GlobalNetworkPolicy, 1 NetworkPolicy, 1 StagedGlobalNetworkPolicy, 1 StagedNetworkPolicy",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.counts.summary(); got != tt.expected {
+				t.Fatalf("expected %q, got %q", tt.expected, got)
+			}
+		})
+	}
+}
+
 func TestSetCondition(t *testing.T) {
 	tier := &v3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "test"},

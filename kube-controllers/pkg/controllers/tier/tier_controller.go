@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
@@ -117,15 +118,15 @@ func (c *TierController) Reconcile(t *v3.Tier) error {
 	}
 
 	// Count remaining policies across all four policy types that reference this tier.
-	remaining, err := c.countPoliciesInTier(t.Name)
+	counts, err := c.countPoliciesInTier(t.Name)
 	if err != nil {
 		logCtx.WithError(err).Error("Failed to count policies in tier")
 		return err
 	}
 
-	if remaining > 0 {
-		logCtx.WithField("remaining", remaining).Info("Policies still exist in tier, updating status")
-		return c.setTerminatingCondition(t, remaining)
+	if counts.total() > 0 {
+		logCtx.WithField("remaining", counts.total()).Info("Policies still exist in tier, updating status")
+		return c.setTerminatingCondition(t, counts)
 	}
 
 	// No policies left — remove the finalizer to allow deletion.
@@ -138,52 +139,85 @@ func (c *TierController) Reconcile(t *v3.Tier) error {
 	return nil
 }
 
+// policyCounts tracks the number of policies referencing a tier, broken down by kind.
+type policyCounts struct {
+	GlobalNetworkPolicies       int
+	NetworkPolicies             int
+	StagedGlobalNetworkPolicies int
+	StagedNetworkPolicies       int
+}
+
+func (p policyCounts) total() int {
+	return p.GlobalNetworkPolicies + p.NetworkPolicies + p.StagedGlobalNetworkPolicies + p.StagedNetworkPolicies
+}
+
+// summary returns a concise breakdown of remaining policy counts by kind,
+// e.g. "3 GlobalNetworkPolicies, 1 NetworkPolicy".
+func (p policyCounts) summary() string {
+	var parts []string
+	if p.GlobalNetworkPolicies > 0 {
+		parts = append(parts, fmt.Sprintf("%d GlobalNetworkPolic%s", p.GlobalNetworkPolicies, pluralY(p.GlobalNetworkPolicies)))
+	}
+	if p.NetworkPolicies > 0 {
+		parts = append(parts, fmt.Sprintf("%d NetworkPolic%s", p.NetworkPolicies, pluralY(p.NetworkPolicies)))
+	}
+	if p.StagedGlobalNetworkPolicies > 0 {
+		parts = append(parts, fmt.Sprintf("%d StagedGlobalNetworkPolic%s", p.StagedGlobalNetworkPolicies, pluralY(p.StagedGlobalNetworkPolicies)))
+	}
+	if p.StagedNetworkPolicies > 0 {
+		parts = append(parts, fmt.Sprintf("%d StagedNetworkPolic%s", p.StagedNetworkPolicies, pluralY(p.StagedNetworkPolicies)))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func pluralY(n int) string {
+	if n == 1 {
+		return "y"
+	}
+	return "ies"
+}
+
 // countPoliciesInTier uses field selectors to count all policies that reference the given tier.
-func (c *TierController) countPoliciesInTier(tierName string) (int, error) {
+func (c *TierController) countPoliciesInTier(tierName string) (policyCounts, error) {
 	ctx := c.ctx
 	fieldSelector := fmt.Sprintf("spec.tier=%s", tierName)
 	opts := metav1.ListOptions{FieldSelector: fieldSelector}
+	var counts policyCounts
 
-	total := 0
-
-	// GlobalNetworkPolicies (cluster-scoped)
 	gnpList, err := c.cli.ProjectcalicoV3().GlobalNetworkPolicies().List(ctx, opts)
 	if err != nil {
-		return 0, fmt.Errorf("listing GlobalNetworkPolicies: %v", err)
+		return counts, fmt.Errorf("listing GlobalNetworkPolicies: %v", err)
 	}
-	total += len(gnpList.Items)
+	counts.GlobalNetworkPolicies = len(gnpList.Items)
 
-	// NetworkPolicies (namespaced — list across all namespaces)
 	npList, err := c.cli.ProjectcalicoV3().NetworkPolicies("").List(ctx, opts)
 	if err != nil {
-		return 0, fmt.Errorf("listing NetworkPolicies: %v", err)
+		return counts, fmt.Errorf("listing NetworkPolicies: %v", err)
 	}
-	total += len(npList.Items)
+	counts.NetworkPolicies = len(npList.Items)
 
-	// StagedGlobalNetworkPolicies (cluster-scoped)
 	sgnpList, err := c.cli.ProjectcalicoV3().StagedGlobalNetworkPolicies().List(ctx, opts)
 	if err != nil {
-		return 0, fmt.Errorf("listing StagedGlobalNetworkPolicies: %v", err)
+		return counts, fmt.Errorf("listing StagedGlobalNetworkPolicies: %v", err)
 	}
-	total += len(sgnpList.Items)
+	counts.StagedGlobalNetworkPolicies = len(sgnpList.Items)
 
-	// StagedNetworkPolicies (namespaced)
 	snpList, err := c.cli.ProjectcalicoV3().StagedNetworkPolicies("").List(ctx, opts)
 	if err != nil {
-		return 0, fmt.Errorf("listing StagedNetworkPolicies: %v", err)
+		return counts, fmt.Errorf("listing StagedNetworkPolicies: %v", err)
 	}
-	total += len(snpList.Items)
+	counts.StagedNetworkPolicies = len(snpList.Items)
 
-	return total, nil
+	return counts, nil
 }
 
 // setTerminatingCondition updates the tier's status to indicate it's terminating with remaining policies.
-func (c *TierController) setTerminatingCondition(t *v3.Tier, remaining int) error {
+func (c *TierController) setTerminatingCondition(t *v3.Tier, counts policyCounts) error {
 	cond := metav1.Condition{
 		Type:               "Ready",
 		Status:             metav1.ConditionFalse,
 		Reason:             "Terminating",
-		Message:            fmt.Sprintf("Tier is being deleted. %d policies still reference this tier and must be removed before deletion can complete.", remaining),
+		Message:            fmt.Sprintf("Waiting for policies to be removed: %s", counts.summary()),
 		LastTransitionTime: metav1.Now(),
 	}
 
