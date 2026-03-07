@@ -365,10 +365,10 @@ EOF
         kubectl("delete pod/%s -n %s" % (self.name, self.ns))
 
     def wait_ready(self):
-        kubectl("wait --for=condition=ready pod/%s -n %s --timeout=300s" % (self.name, self.ns))
+        kubectl("wait --for=condition=ready pod/%s -n %s --timeout=60s" % (self.name, self.ns))
 
     def wait_not_ready(self):
-        kubectl("wait --for=condition=Ready=false pod/%s -n %s --timeout=300s" % (self.name, self.ns))
+        kubectl("wait --for=condition=Ready=false pod/%s -n %s --timeout=60s" % (self.name, self.ns))
 
     @property
     def ip(self):
