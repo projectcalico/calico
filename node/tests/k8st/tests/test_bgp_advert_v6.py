@@ -93,17 +93,12 @@ protocol bgp Mesh_with_node_2 from bgp_template {
 
 class _TestBGPAdvertV6(TestBaseV6):
 
-    def setUp(self):
-        super(_TestBGPAdvertV6, self).setUp()
-
-        # Create bgp test namespace
-        self.ns = "bgp-test"
-        self.create_namespace(self.ns)
-
-        self.nodes, self.ipv4s, self.ipv6s = node_info()
-        self.external_node_ip = start_external_node_with_bgp(
+    @classmethod
+    def setUpClass(cls):
+        cls.nodes, cls.ipv4s, cls.ipv6s = node_info()
+        cls.external_node_ip = start_external_node_with_bgp(
             "kube-node-extra",
-            bird6_peer_config=self.get_bird_conf(),
+            bird6_peer_config=cls.get_bird_conf(),
         )
 
         # Establish BGPPeer from cluster nodes to node-extra
@@ -113,19 +108,26 @@ kind: BGPPeer
 metadata:
   name: node-extra.peer%s
 EOF
-""" % self.get_extra_peer_spec())
+""" % cls.get_extra_peer_spec())
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            run("docker rm -f kube-node-extra")
+        except subprocess.CalledProcessError:
+            pass
+        calicoctl("delete bgppeer node-extra.peer", allow_fail=True)
+
+    def setUp(self):
+        super(_TestBGPAdvertV6, self).setUp()
+        self.ns = "bgp-test"
+        self.create_namespace(self.ns)
 
     def tearDown(self):
         super(_TestBGPAdvertV6, self).tearDown()
         self.delete_and_confirm(self.ns, "ns")
-        try:
-            # Delete the extra node.
-            run("docker rm -f kube-node-extra")
-        except subprocess.CalledProcessError:
-            pass
 
-        # Delete BGPPeers.
-        calicoctl("delete bgppeer node-extra.peer", allow_fail=True)
+        # Delete RR-specific BGPPeer (created by some tests).
         calicoctl("delete bgppeer peer-with-rr", allow_fail=True)
 
         # Restore node-to-node mesh.
@@ -204,16 +206,18 @@ class TestBGPAdvertV6(_TestBGPAdvertV6):
     # - The peerings from the external node to each cluster node are
     #   configured by self.get_bird_conf().
 
-    def get_bird_conf(self):
-        return bird_conf % (self.ipv6s[0], self.ipv6s[1],
-                            self.ipv6s[2], self.ipv6s[3])
+    @classmethod
+    def get_bird_conf(cls):
+        return bird_conf % (cls.ipv6s[0], cls.ipv6s[1],
+                            cls.ipv6s[2], cls.ipv6s[3])
 
-    def get_extra_peer_spec(self):
+    @classmethod
+    def get_extra_peer_spec(cls):
         return """
 spec:
   peerIP: %s
   asNumber: 64512
-""" % self.external_node_ip
+""" % cls.external_node_ip
 
     def test_cluster_ip_advertisement(self):
         """
@@ -533,16 +537,18 @@ class TestBGPAdvertV6RR(_TestBGPAdvertV6):
     #           configured by BGPPeer         Peering <- is configured
     #           peer-with-rr                  in get_bird_conf().
 
-    def get_bird_conf(self):
-        return bird_conf_rr % self.ipv6s[2]
+    @classmethod
+    def get_bird_conf(cls):
+        return bird_conf_rr % cls.ipv6s[2]
 
-    def get_extra_peer_spec(self):
+    @classmethod
+    def get_extra_peer_spec(cls):
         return """
 spec:
   node: %s
   peerIP: %s
   asNumber: 64512
-""" % (self.nodes[2], self.external_node_ip)
+""" % (cls.nodes[2], cls.external_node_ip)
 
     def test_rr(self):
         # Create ExternalTrafficPolicy Local service with one endpoint on node-1
