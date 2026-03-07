@@ -32,4 +32,5 @@
     epilogue:
       always:
         commands:
+          - 'python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true'
           - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'

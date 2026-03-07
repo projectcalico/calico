@@ -230,11 +230,11 @@ remove-kubevirt-crds:
 ## Mainline tests run without KubeVirt CRDs to ensure non-KubeVirt code paths don't depend on them.
 ## KubeVirt-specific tests run separately with CRDs installed.
 ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
-	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
+	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3 JUNIT_REPORT_NAME=cni_plugin_ut_etcd.xml
 	$(MAKE) remove-kubevirt-crds
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes JUNIT_REPORT_NAME=cni_plugin_ut_kdd.xml GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
 	$(MAKE) install-kubevirt-crds
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes JUNIT_REPORT_NAME=cni_plugin_ut_kubevirt.xml GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
 
 ut-datastore:
 	# The tests need to run as root
@@ -255,7 +255,7 @@ ut-datastore:
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
 			mkdir -p report && \
-			ginkgo -cover -r --junit-report=cni_plugin_ut.xml --output-dir=report/ -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
+			ginkgo -cover -r --junit-report=$(JUNIT_REPORT_NAME) --output-dir=report/ -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
