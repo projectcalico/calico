@@ -3189,7 +3189,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			watch.Stop()
 		})
 		It("should handle a list for many cluster network policies in Admin tier with a revision", func() {
-			for i := 3; i < 1000; i++ {
+			// Create enough policies to trigger pagination (page size is 500).
+			for i := 3; i < 550; i++ {
 				createTestClusterNetworkPolicy(fmt.Sprintf("test-cluster-net-policy-%d", i), clusternetpolicy.AdminTier)
 			}
 			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy}, "")
@@ -3198,7 +3199,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 		})
 		It("should handle a list for many cluster network policies in Baseline tier with a revision", func() {
-			for i := 3; i < 1000; i++ {
+			// Create enough policies to trigger pagination (page size is 500).
+			for i := 3; i < 550; i++ {
 				createTestClusterNetworkPolicy(fmt.Sprintf("test-cluster-net-policy-%d", i), clusternetpolicy.BaselineTier)
 			}
 			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesClusterNetworkPolicy}, "")
@@ -3247,7 +3249,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			watch.Stop()
 		})
 		It("should handle a list for many network policies with a revision", func() {
-			for i := 3; i < 1000; i++ {
+			// Create enough policies to trigger pagination (page size is 500).
+			for i := 3; i < 550; i++ {
 				createTestNetworkPolicy(fmt.Sprintf("test-net-policy-%d", i))
 			}
 			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, "")
