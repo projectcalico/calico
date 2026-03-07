@@ -76,7 +76,8 @@ ut:
 .PHONY: ut
 ## Run only Unit Tests.
 fv:
-	$(DOCKER_GO_BUILD) go test ./tests/fv/... -cover -count 1
+	mkdir -p report
+	$(DOCKER_GO_BUILD) gotestsum --junitfile report/guardian_fv.xml -- ./tests/fv/... -cover -count 1
 
 ##########################################################################################
 # CI/CD
