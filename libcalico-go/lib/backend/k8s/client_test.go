@@ -1112,7 +1112,11 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing all Tiers, using an invalid revision", func() {
-			_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindTier}, fmt.Sprintf("1%s", kvp2b.Revision))
+			// Use a short timeout context - the API server will wait for the invalid (too-high)
+			// resource version to appear, which would take ~43s with the default timeout.
+			shortCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			_, err := c.List(shortCtx, model.ResourceListOptions{Kind: apiv3.KindTier}, fmt.Sprintf("1%s", kvp2b.Revision))
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -1307,7 +1311,11 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing all Global Network Policies, using an invalid revision", func() {
-			_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy}, fmt.Sprintf("1%s", kvp2b.Revision))
+			// Use a short timeout context - the API server will wait for the invalid (too-high)
+			// resource version to appear, which would take ~43s with the default timeout.
+			shortCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			_, err := c.List(shortCtx, model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy}, fmt.Sprintf("1%s", kvp2b.Revision))
 			Expect(err).To(HaveOccurred())
 		})
 
