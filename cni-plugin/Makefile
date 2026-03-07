@@ -266,18 +266,16 @@ ut-kdd: run-k8s-controller-manager build $(BIN)/host-local
 	make stop-etcd
 	make stop-k8s-controller
 
-## Run the tests in a container (as root) for different CNI spec versions
-## to make sure we don't break backwards compatibility.
+## Run the tests against etcdv3 (CNI spec 0.3.1) and KDD (CNI spec 1.0.0)
+## to cover both datastore backends and old/new CNI spec versions without
+## running the full cross-product.
 .PHONY: test-cni-versions
-test-cni-versions:
-	for cniversion in "0.2.0" "0.3.1" ; do \
-		if make ut CNI_SPEC_VERSION=$$cniversion; then \
-			echo "CNI version $$cniversion PASSED"; \
-		else \
-			echo "CNI version $$cniversion FAILED"; \
-			exit 1; \
-		fi; \
-	done
+test-cni-versions: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
+	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3 CNI_SPEC_VERSION=0.3.1
+	$(MAKE) remove-kubevirt-crds
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
+	$(MAKE) install-kubevirt-crds
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
 
 ###############################################################################
 # Install test
