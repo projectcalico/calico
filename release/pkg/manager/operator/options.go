@@ -37,13 +37,6 @@ func WithCalicoVersion(version string) Option {
 	}
 }
 
-func WithOutputDirectory(dir string) Option {
-	return func(o *OperatorManager) error {
-		o.outputDir = dir
-		return nil
-	}
-}
-
 func WithReleaseBranchPrefix(prefix string) Option {
 	return func(o *OperatorManager) error {
 		o.releaseBranchPrefix = prefix
