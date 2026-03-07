@@ -147,7 +147,7 @@ func TestServePrometheusMetricsHTTPS(t *testing.T) {
 			select {
 			case err := <-done:
 				recordConnectionError(err)
-			case <-time.After(1 * time.Second):
+			case <-time.After(200 * time.Millisecond):
 				// Success: the server is still running.
 			}
 			close(done)
@@ -229,7 +229,7 @@ func getResponseFromMetricsEndpoint(client *http.Client, host string, port int) 
 	var resp *http.Response
 	var err error
 	maxRetries := 10
-	retryDelay := 100 * time.Millisecond
+	retryDelay := 10 * time.Millisecond
 
 	for range maxRetries {
 		resp, err = client.Get(fmt.Sprintf("https://%s:%d/metrics", host, port))
@@ -287,7 +287,7 @@ func generateCA() ([]byte, []byte, error) {
 		BasicConstraintsValid: true,
 	}
 
-	caPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	caPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -336,7 +336,7 @@ func generateCert(caCertPEM, caKeyPEM []byte) ([]byte, []byte, error) {
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 	}
 
-	certPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	certPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, nil, err
 	}
