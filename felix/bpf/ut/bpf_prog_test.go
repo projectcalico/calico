@@ -28,6 +28,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
@@ -298,14 +299,26 @@ type testLogger interface {
 }
 
 func startBPFLogging() *exec.Cmd {
-	cmd := exec.Command("/usr/bin/bpftool", "prog", "tracelog")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Start()
+	// Write BPF trace logs to a file rather than os.Stdout/os.Stderr.
+	// When the test binary runs in a pipeline (bpf_ut.test |& gotestsum),
+	// inheriting stdout/stderr means bpftool holds the pipe open even after
+	// the test binary exits, causing gotestsum to block forever.
+	f, err := os.Create("/tmp/bpf-trace.log")
 	if err != nil {
-		log.WithError(err).Warn("Failed to start bpf log collection")
+		log.WithError(err).Warn("Failed to create BPF trace log file")
 		return nil
 	}
+	cmd := exec.Command("/usr/bin/bpftool", "prog", "tracelog")
+	cmd.Stdout = f
+	cmd.Stderr = f
+	err = cmd.Start()
+	if err != nil {
+		log.WithError(err).Warn("Failed to start bpf log collection")
+		f.Close()
+		return nil
+	}
+	// Close our copy of the file; bpftool has its own fd now.
+	f.Close()
 	return cmd
 }
 
@@ -318,9 +331,19 @@ func stopBPFLogging(cmd *exec.Cmd) {
 		log.WithError(err).Warn("Failed to send SIGTERM to bpftool")
 		return
 	}
-	err = cmd.Wait()
-	if err != nil {
-		log.WithError(err).Warn("Failed to wait for bpftool")
+	// Wait with a timeout; bpftool may be blocked in ring_buffer_wait
+	// and not respond to SIGTERM promptly.
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err = <-done:
+		if err != nil {
+			log.WithError(err).Warn("bpftool exited with error")
+		}
+	case <-time.After(3 * time.Second):
+		log.Warn("bpftool did not exit after SIGTERM, sending SIGKILL")
+		_ = cmd.Process.Kill()
+		<-done
 	}
 }
 
