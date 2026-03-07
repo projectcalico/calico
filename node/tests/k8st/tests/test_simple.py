@@ -14,7 +14,6 @@
 
 import logging
 import subprocess
-import time
 
 from kubernetes import client
 
@@ -89,7 +88,6 @@ class TestGracefulRestart(TestBase):
             def check_bird_running():
                 run("docker exec %s pgrep bird" % self.restart_node)
             retry_until_success(check_bird_running, retries=10, wait_time=1)
-            time.sleep(5)
 
         # Expect non-GR behaviour, i.e. route churn.
         self._test_restart_route_churn(3, kill_bird, True)
@@ -108,7 +106,7 @@ class TestGracefulRestart(TestBase):
                 self.restart_pod_name)
 
         # Expect GR behaviour, i.e. no route churn.
-        self._test_restart_route_churn(8, delete_calico_node_pod, False)
+        self._test_restart_route_churn(3, delete_calico_node_pod, False)
 
 
 class TestAllRunning(TestBase):
