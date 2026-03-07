@@ -29,3 +29,7 @@
             value: projectcalico.org/v3
           - name: GINKGO_SKIP
             value: "etcdv3 backend"
+    epilogue:
+      always:
+        commands:
+          - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
