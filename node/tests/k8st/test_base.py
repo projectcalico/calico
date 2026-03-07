@@ -222,7 +222,7 @@ class TestBase(TestCase):
                 # Success
                 pass
 
-        retry_until_success(is_it_gone_yet, retries=10, wait_time=10, function_args=[name, resource_type])
+        retry_until_success(is_it_gone_yet, retries=30, wait_time=2, function_args=[name, resource_type])
 
     class StillThere(Exception):
         pass
@@ -248,14 +248,17 @@ class TestBase(TestCase):
         api.replace_namespaced_daemon_set(ds, ns, node_ds)
 
         # Wait until the DaemonSet reports that all nodes have been updated.
-        while True:
-            time.sleep(10)
+        start = time.time()
+        while time.time() - start < 120:
             node_ds = api.read_namespaced_daemon_set_status("calico-node", "calico-system")
             logger.info("%d/%d nodes updated",
                       node_ds.status.updated_number_scheduled,
                       node_ds.status.desired_number_scheduled)
             if node_ds.status.updated_number_scheduled == node_ds.status.desired_number_scheduled:
                 break
+            time.sleep(3)
+        else:
+            raise Exception("DaemonSet %s/%s failed to roll out within 120s" % (ns, ds))
 
     def scale_deployment(self, deployment, ns, replicas):
         return kubectl("scale deployment %s -n %s --replicas %s" %
@@ -362,10 +365,10 @@ EOF
         kubectl("delete pod/%s -n %s" % (self.name, self.ns))
 
     def wait_ready(self):
-        kubectl("wait --for=condition=ready pod/%s -n %s --timeout=300s" % (self.name, self.ns))
+        kubectl("wait --for=condition=ready pod/%s -n %s --timeout=60s" % (self.name, self.ns))
 
     def wait_not_ready(self):
-        kubectl("wait --for=condition=Ready=false pod/%s -n %s --timeout=300s" % (self.name, self.ns))
+        kubectl("wait --for=condition=Ready=false pod/%s -n %s --timeout=60s" % (self.name, self.ns))
 
     @property
     def ip(self):

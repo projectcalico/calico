@@ -22,7 +22,6 @@ from tests.k8st.utils.utils import start_external_node_with_bgp, \
 
 _log = logging.getLogger(__name__)
 
-attempts = 10
 
 bird_conf = """
 # Template for all BGP clients
@@ -283,8 +282,7 @@ EOF
 # """ % self.external_node_ip)
 
             # Connectivity to nginx-local should always succeed.
-            for i in range(attempts):
-              retry_until_success(curl, retries=200, wait_time=5, function_args=[local_svc_ip])
+            retry_until_success(curl, function_args=[local_svc_ip])
 
             # NOTE: Unlike in the IPv6 case (in test_bgp_advert.py) we cannot successfully test that
             # connectivity to nginx-cluster is load-balanced across all nodes (and hence, with the
@@ -296,8 +294,7 @@ EOF
             self.scale_deployment(local_svc, self.ns, 4)
             self.wait_for_deployment(local_svc, self.ns)
             self.assert_ecmp_routes(local_svc_ip, [self.ipv6s[1], self.ipv6s[2], self.ipv6s[3]])
-            for i in range(attempts):
-              retry_until_success(curl, function_args=[local_svc_ip])
+            retry_until_success(curl, function_args=[local_svc_ip])
 
             # Delete both services.
             self.delete_and_confirm(local_svc, "svc", self.ns)
