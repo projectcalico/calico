@@ -250,7 +250,7 @@ class TestBase(TestCase):
         # Wait until the DaemonSet reports that all nodes have been updated.
         start = time.time()
         while time.time() - start < 120:
-            node_ds = api.read_namespaced_daemon_set_status("calico-node", "calico-system")
+            node_ds = api.read_namespaced_daemon_set_status(ds, ns)
             logger.info("%d/%d nodes updated",
                       node_ds.status.updated_number_scheduled,
                       node_ds.status.desired_number_scheduled)
