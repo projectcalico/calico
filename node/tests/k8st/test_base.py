@@ -248,14 +248,17 @@ class TestBase(TestCase):
         api.replace_namespaced_daemon_set(ds, ns, node_ds)
 
         # Wait until the DaemonSet reports that all nodes have been updated.
-        while True:
-            time.sleep(10)
+        start = time.time()
+        while time.time() - start < 120:
             node_ds = api.read_namespaced_daemon_set_status("calico-node", "calico-system")
             logger.info("%d/%d nodes updated",
                       node_ds.status.updated_number_scheduled,
                       node_ds.status.desired_number_scheduled)
             if node_ds.status.updated_number_scheduled == node_ds.status.desired_number_scheduled:
                 break
+            time.sleep(3)
+        else:
+            raise Exception("DaemonSet %s/%s failed to roll out within 120s" % (ns, ds))
 
     def scale_deployment(self, deployment, ns, replicas):
         return kubectl("scale deployment %s -n %s --replicas %s" %
