@@ -149,7 +149,7 @@ func TestAllHandles(t *testing.T) {
 	}
 }
 
-func sameUnderlyingMap(a, b Map) bool {
+func sameBackingPtr(a, b Map) bool {
 	return a.ptr == b.ptr
 }
 
@@ -161,7 +161,7 @@ func TestMakeCacheHit(t *testing.T) {
 	m2 := Make(input)
 
 	// Both calls should return the same underlying allocation from the cache.
-	if !sameUnderlyingMap(m1, m2) {
+	if !sameBackingPtr(m1, m2) {
 		t.Errorf("expected Make to return cached Map on repeat call")
 	}
 }
@@ -171,7 +171,7 @@ func TestMakeCacheMiss(t *testing.T) {
 	m1 := Make(map[string]string{"a": "b"})
 	m2 := Make(map[string]string{"x": "y"})
 
-	if sameUnderlyingMap(m1, m2) {
+	if sameBackingPtr(m1, m2) {
 		t.Errorf("different inputs should produce different Map instances")
 	}
 }
@@ -195,7 +195,7 @@ func TestMakeCacheEviction(t *testing.T) {
 	if !ok {
 		t.Fatal("expected cache hit for input1")
 	}
-	if !sameUnderlyingMap(cached, m1) {
+	if !sameBackingPtr(cached, m1) {
 		t.Fatal("cached map should be the same instance")
 	}
 
@@ -430,12 +430,7 @@ func TestCompactEqualsRegular(t *testing.T) {
 		t.Fatal("expected compact representation after reset")
 	}
 
-	// Build a fallback map manually.
-	hm := make(handleMap, len(input))
-	for k, v := range input {
-		hm[uniquestr.Make(k)] = uniquestr.Make(v)
-	}
-	fb := Map{ptr: unsafeFallback(hm)}
+	fb := makeFallback(input)
 
 	if !compact.Equals(fb) {
 		t.Error("compact and fallback with same content should be equal")
@@ -445,10 +440,6 @@ func TestCompactEqualsRegular(t *testing.T) {
 	}
 }
 
-// unsafeFallback is a test helper to create a fallback Map's data pointer.
-func unsafeFallback(hm handleMap) unsafe.Pointer {
-	return unsafe.Pointer(&fallbackMap{m: hm})
-}
 
 func TestCompactManyKeys(t *testing.T) {
 	unsafeTestOnlyReset()
