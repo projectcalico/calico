@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -328,8 +327,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			Eventually(getRuleFunc(tc.Felixes[0], "APE0|gnp/default.ep1-1-allow-all"), "10s", "1s").ShouldNot(HaveOccurred())
 			Eventually(getRuleFunc(tc.Felixes[1], "APE0|gnp/default.ep1-1-allow-all"), "10s", "1s").Should(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
-			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
+			Consistently(func() error {
+				for _, f := range tc.Felixes {
+					if err := getRuleFunc(f, "staged")(); err == nil {
+						return fmt.Errorf("found staged rules on %s", f.Hostname)
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		} else {
 			checkNat := func() bool {
 				for _, f := range tc.Felixes {
@@ -346,10 +351,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_2.InterfaceName, "ingress", "default", "tier1.np1-1")
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
+			Consistently(func() error {
+				for _, c := range []struct {
+					f     *infrastructure.Felix
+					iface string
+				}{
+					{tc.Felixes[0], ep1_1.InterfaceName},
+					{tc.Felixes[1], ep2_1.InterfaceName},
+				} {
+					for _, hook := range []string{"ingress", "egress"} {
+						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
+							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+						}
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
 
 		if !bpfEnabled {
@@ -788,18 +805,36 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
-			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
+			Consistently(func() error {
+				for _, f := range tc.Felixes {
+					if err := getRuleFunc(f, "staged")(); err == nil {
+						return fmt.Errorf("found staged rules on %s", f.Hostname)
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		} else {
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
+			Consistently(func() error {
+				for _, c := range []struct {
+					f     *infrastructure.Felix
+					iface string
+				}{
+					{tc.Felixes[0], ep1_1.InterfaceName},
+					{tc.Felixes[1], ep2_1.InterfaceName},
+				} {
+					for _, hook := range []string{"ingress", "egress"} {
+						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
+							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+						}
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
 	})
 
@@ -821,18 +856,36 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
-			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
+			Consistently(func() error {
+				for _, f := range tc.Felixes {
+					if err := getRuleFunc(f, "staged")(); err == nil {
+						return fmt.Errorf("found staged rules on %s", f.Hostname)
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		} else {
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
+			Consistently(func() error {
+				for _, c := range []struct {
+					f     *infrastructure.Felix
+					iface string
+				}{
+					{tc.Felixes[0], ep1_1.InterfaceName},
+					{tc.Felixes[1], ep2_1.InterfaceName},
+				} {
+					for _, hook := range []string{"ingress", "egress"} {
+						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
+							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+						}
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
 	}
 
@@ -851,21 +904,37 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
-			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
+			Consistently(func() error {
+				for _, f := range tc.Felixes {
+					if err := getRuleFunc(f, "staged")(); err == nil {
+						return fmt.Errorf("found staged rules on %s", f.Hostname)
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		} else {
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
+			Consistently(func() error {
+				for _, c := range []struct {
+					f     *infrastructure.Felix
+					iface string
+				}{
+					{tc.Felixes[0], ep1_1.InterfaceName},
+					{tc.Felixes[1], ep2_1.InterfaceName},
+				} {
+					for _, hook := range []string{"ingress", "egress"} {
+						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
+							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+						}
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
-
-		time.Sleep(3 * time.Second)
 	}
 
 	configureStagedDrop := func() {
@@ -883,8 +952,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
-			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
+			Consistently(func() error {
+				for _, f := range tc.Felixes {
+					if err := getRuleFunc(f, "staged")(); err == nil {
+						return fmt.Errorf("found staged rules on %s", f.Hostname)
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		} else {
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
@@ -892,10 +967,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
+			Consistently(func() error {
+				for _, c := range []struct {
+					f     *infrastructure.Felix
+					iface string
+				}{
+					{tc.Felixes[0], ep1_1.InterfaceName},
+					{tc.Felixes[1], ep2_1.InterfaceName},
+				} {
+					for _, hook := range []string{"ingress", "egress"} {
+						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
+							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+						}
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
 	}
 
@@ -1399,8 +1486,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
-			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
+			Consistently(func() error {
+				for _, f := range tc.Felixes {
+					if err := getRuleFunc(f, "staged")(); err == nil {
+						return fmt.Errorf("found staged rules on %s", f.Hostname)
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		} else {
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
@@ -1408,10 +1501,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
+			Consistently(func() error {
+				for _, c := range []struct {
+					f     *infrastructure.Felix
+					iface string
+				}{
+					{tc.Felixes[0], ep1_1.InterfaceName},
+					{tc.Felixes[1], ep2_1.InterfaceName},
+				} {
+					for _, hook := range []string{"ingress", "egress"} {
+						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
+							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+						}
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
 	})
 
@@ -1505,8 +1610,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
-			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
+			Consistently(func() error {
+				for _, f := range tc.Felixes {
+					if err := getRuleFunc(f, "staged")(); err == nil {
+						return fmt.Errorf("found staged rules on %s", f.Hostname)
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		} else {
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
@@ -1514,13 +1625,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
+			Consistently(func() error {
+				for _, c := range []struct {
+					f     *infrastructure.Felix
+					iface string
+				}{
+					{tc.Felixes[0], ep1_1.InterfaceName},
+					{tc.Felixes[1], ep2_1.InterfaceName},
+				} {
+					for _, hook := range []string{"ingress", "egress"} {
+						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
+							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+						}
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
-
-		time.Sleep(5 * time.Second)
 	}
 
 	configureStagedPass := func() {
@@ -1564,21 +1685,37 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|np/default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(getRuleFunc(tc.Felixes[0], "staged"), "5s", "1s").Should(HaveOccurred())
-			Consistently(getRuleFunc(tc.Felixes[1], "staged"), "5s", "1s").Should(HaveOccurred())
+			Consistently(func() error {
+				for _, f := range tc.Felixes {
+					if err := getRuleFunc(f, "staged")(); err == nil {
+						return fmt.Errorf("found staged rules on %s", f.Hostname)
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		} else {
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress", "default", "tier1.np1-1")
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
-			Consistently(bpfDumpPolicy(tc.Felixes[1], ep2_1.InterfaceName, "egress"), "5s", "1s").ShouldNot(ContainSubstring("staged"))
+			Consistently(func() error {
+				for _, c := range []struct {
+					f     *infrastructure.Felix
+					iface string
+				}{
+					{tc.Felixes[0], ep1_1.InterfaceName},
+					{tc.Felixes[1], ep2_1.InterfaceName},
+				} {
+					for _, hook := range []string{"ingress", "egress"} {
+						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
+							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+						}
+					}
+				}
+				return nil
+			}, "5s", "1s").ShouldNot(HaveOccurred())
 		}
-
-		time.Sleep(5 * time.Second)
 	}
 
 	It("get expected flow logs with pending policies", func() {
