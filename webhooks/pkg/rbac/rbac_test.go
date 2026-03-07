@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -33,7 +32,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 
-
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
 
@@ -46,7 +44,6 @@ func (m *MockTierAuthorizer) AuthorizeTierOperation(ctx context.Context, policyN
 	args := m.Called(ctx, policyName, tierName)
 	return args.Error(0)
 }
-
 
 func init() {
 	// Add Calico v3 types to the scheme for parsePolicy to work.
