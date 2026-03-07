@@ -220,7 +220,13 @@ final_result=0
 # JOB_TIMEOUT_MINUTES can be set to match the Semaphore execution_time_limit;
 # the watchdog fires 5 minutes before that to leave time for cleanup.
 : "${JOB_TIMEOUT_MINUTES:=60}"
-watchdog_seconds=$(( (JOB_TIMEOUT_MINUTES - 5) * 60 ))
+if [ "$JOB_TIMEOUT_MINUTES" -le 5 ] 2>/dev/null; then
+  echo "WARNING: JOB_TIMEOUT_MINUTES ($JOB_TIMEOUT_MINUTES) is too low for watchdog, disabling."
+  watchdog_seconds=0
+else
+  watchdog_seconds=$(( (JOB_TIMEOUT_MINUTES - 5) * 60 ))
+fi
+if [ "$watchdog_seconds" -gt 0 ]; then
 (
   sleep "$watchdog_seconds"
   echo
@@ -235,9 +241,14 @@ watchdog_seconds=$(( (JOB_TIMEOUT_MINUTES - 5) * 60 ))
       # Generate a JUnit XML report for the timed-out batch so it shows up
       # in Semaphore test results as a clear failure.
       batch_formatted="$(format_batch_for_log "$batch")"
+      if [ "$batch" = "ut" ]; then
+        report_type="ut"
+      else
+        report_type="fv"
+      fi
       report_dir="$artifacts_dir/$batch/report"
       mkdir -p "$report_dir"
-      cat > "$report_dir/felix_fv_timeout_${batch_formatted}.xml" <<JUNIT_EOF
+      cat > "$report_dir/felix_${report_type}_timeout_${batch_formatted}.xml" <<JUNIT_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
   <testsuite name="batch-${batch}" tests="1" failures="1" errors="0" time="$watchdog_seconds">
@@ -256,6 +267,7 @@ JUNIT_EOF
   echo "==============================================================="
 ) &
 watchdog_pid=$!
+fi
 
 # Give the batches time to emit their start-up logs.
 sleep 5
@@ -281,8 +293,10 @@ for i in "${!batches[@]}"; do
 done
 
 # Cancel the watchdog if all batches finished in time.
-kill "$watchdog_pid" 2>/dev/null || true
-wait "$watchdog_pid" 2>/dev/null || true
+if [ -n "${watchdog_pid:-}" ]; then
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+fi
 
 echo
 echo "===== Shutting down test monitors ====="
