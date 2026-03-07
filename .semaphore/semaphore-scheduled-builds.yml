@@ -926,6 +926,8 @@ blocks:
               value: "bpf-25.10-nft-no-fv-with-ut"
             - name: FELIX_FV_BPFATTACHTYPE
               value: "tc"
+            - name: JOB_TIMEOUT_MINUTES
+              value: "30"
           commands:
             - source felix/.semaphore/fv-prologue
             # Only run the UT that checks that the precompiled BPF binaries are loadable.
@@ -1205,6 +1207,9 @@ blocks:
         - name: "Node: kind-cluster tests"
           execution_time_limit:
             minutes: 120
+          env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "120"
           commands:
             - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:

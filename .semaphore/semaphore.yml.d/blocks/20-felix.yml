@@ -273,6 +273,8 @@
             value: "bpf-25.10-nft-no-fv-with-ut"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
+          - name: JOB_TIMEOUT_MINUTES
+            value: "30"
         commands:
           - source felix/.semaphore/fv-prologue
           # Only run the UT that checks that the precompiled BPF binaries are loadable.
