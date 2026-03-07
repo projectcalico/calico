@@ -882,10 +882,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
 
-					time.Sleep(5 * time.Second)
 					Eventually(func() error {
 						return readPolicy(policy.Name, api.Deny)
-					}, "5s", "100ms").ShouldNot(HaveOccurred())
+					}, "10s", "100ms").ShouldNot(HaveOccurred())
 
 					if wireguardEnabledV4 {
 						cc.ExpectNone(wlsV4[0], wlsV4[1])
