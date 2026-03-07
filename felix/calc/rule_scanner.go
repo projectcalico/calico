@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -380,13 +380,9 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 
 	// Named ports on our endpoints have a protocol attached but our rules have the protocol at
 	// the top level.  Convert that to a protocol that we can use with the IP set calculation logic.
-	namedPortProto := ipsetmember.ProtocolTCP
+	namedPortProto := ipsetmember.ProtocolAny
 	if rule.Protocol != nil {
-		if ipsetmember.ProtocolUDP.MatchesModelProtocol(*rule.Protocol) {
-			namedPortProto = ipsetmember.ProtocolUDP
-		} else if ipsetmember.ProtocolSCTP.MatchesModelProtocol(*rule.Protocol) {
-			namedPortProto = ipsetmember.ProtocolSCTP
-		}
+		namedPortProto = ipsetmember.ProtocolFrom(*rule.Protocol)
 	}
 
 	// Convert each named port into an IP set definition.  As an optimization, if there's a selector
