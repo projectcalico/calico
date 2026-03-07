@@ -97,25 +97,7 @@ EOF
 
     def setUp(self):
         super(TestBGPFilter, self).setUp()
-
-        # Create test namespace (fresh per test for isolation)
-        self.ns = "bgpfilter-test"
-        self.create_namespace(self.ns)
-
         self.egress_calico_pod = self.get_calico_node_pod(self.egress_node)
-
-    def tearDown(self):
-        teardown_exception = None
-        try:
-            super(TestBGPFilter, self).tearDown()
-        except Exception as e:
-            _log.error("Exception during tearDown: %s", e)
-            teardown_exception = e
-
-        self.delete_and_confirm(self.ns, "ns")
-
-        if teardown_exception:
-            raise teardown_exception
 
     def _check_route_in_cluster_bird(self, calicoPod, route, peerIP, ipv6=False, globalPeer=False, present=True):
         """Check that a route is present/not present in a (in-cluster) calico-node bird instance"""
