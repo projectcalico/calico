@@ -19,9 +19,14 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func TestKubevirt(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	gomega.RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "KubeVirt Suite")
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/kubevirt_suite.xml"
+	ginkgo.RunSpecs(t, "KubeVirt Suite", suiteConfig, reporterConfig)
 }

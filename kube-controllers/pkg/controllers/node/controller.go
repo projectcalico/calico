@@ -53,10 +53,6 @@ type NodeController struct {
 	podInformer  cache.SharedIndexInformer
 	k8sClientset *kubernetes.Clientset
 
-	// kubevirtState provides thread-safe access to KubeVirt VM/VMI cache indexers.
-	// Indexers may be populated lazily if KubeVirt is installed after startup.
-	kubevirtState *kubevirt.KubeVirtState
-
 	// For accessing Calico datastore.
 	calicoClient client.Interface
 	dataFeed     *utils.DataFeed
@@ -77,14 +73,13 @@ func NewNodeController(ctx context.Context,
 	kubevirtState *kubevirt.KubeVirtState,
 ) controller.Controller {
 	nc := &NodeController{
-		ctx:           ctx,
-		cfg:           cfg,
-		calicoClient:  calicoClient,
-		k8sClientset:  k8sClientset,
-		dataFeed:      dataFeed,
-		nodeInformer:  nodeInformer,
-		podInformer:   podInformer,
-		kubevirtState: kubevirtState,
+		ctx:          ctx,
+		cfg:          cfg,
+		calicoClient: calicoClient,
+		k8sClientset: k8sClientset,
+		dataFeed:     dataFeed,
+		nodeInformer: nodeInformer,
+		podInformer:  podInformer,
 	}
 
 	// Store functions to call on node deletion.
