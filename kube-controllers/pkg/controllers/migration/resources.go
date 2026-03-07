@@ -81,6 +81,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.Tier).Spec, b.(*apiv3.Tier).Spec)
 		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.Tiers().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.Tiers().Update(ctx, obj.(*apiv3.Tier), metav1.UpdateOptions{})
+			return err
+		},
 	})
 
 	// 2. FelixConfiguration
@@ -113,6 +128,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.FelixConfiguration).Spec, b.(*apiv3.FelixConfiguration).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.FelixConfigurations().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.FelixConfigurations().Update(ctx, obj.(*apiv3.FelixConfiguration), metav1.UpdateOptions{})
+			return err
 		},
 	})
 
@@ -147,6 +177,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.BGPConfiguration).Spec, b.(*apiv3.BGPConfiguration).Spec)
 		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.BGPConfigurations().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.BGPConfigurations().Update(ctx, obj.(*apiv3.BGPConfiguration), metav1.UpdateOptions{})
+			return err
+		},
 	})
 
 	// 4. KubeControllersConfiguration
@@ -179,6 +224,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.KubeControllersConfiguration).Spec, b.(*apiv3.KubeControllersConfiguration).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.KubeControllersConfigurations().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.KubeControllersConfigurations().Update(ctx, obj.(*apiv3.KubeControllersConfiguration), metav1.UpdateOptions{})
+			return err
 		},
 	})
 
@@ -213,6 +273,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.IPPool).Spec, b.(*apiv3.IPPool).Spec)
 		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.IPPools().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.IPPools().Update(ctx, obj.(*apiv3.IPPool), metav1.UpdateOptions{})
+			return err
+		},
 	})
 
 	// 6. IPReservation
@@ -245,6 +320,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.IPReservation).Spec, b.(*apiv3.IPReservation).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.IPReservations().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.IPReservations().Update(ctx, obj.(*apiv3.IPReservation), metav1.UpdateOptions{})
+			return err
 		},
 	})
 
@@ -279,6 +369,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.BGPPeer).Spec, b.(*apiv3.BGPPeer).Spec)
 		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.BGPPeers().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.BGPPeers().Update(ctx, obj.(*apiv3.BGPPeer), metav1.UpdateOptions{})
+			return err
+		},
 	})
 
 	// 8. BGPFilter
@@ -311,6 +416,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.BGPFilter).Spec, b.(*apiv3.BGPFilter).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.BGPFilters().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.BGPFilters().Update(ctx, obj.(*apiv3.BGPFilter), metav1.UpdateOptions{})
+			return err
 		},
 	})
 
@@ -345,6 +465,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.GlobalNetworkPolicy).Spec, b.(*apiv3.GlobalNetworkPolicy).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.GlobalNetworkPolicies().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.GlobalNetworkPolicies().Update(ctx, obj.(*apiv3.GlobalNetworkPolicy), metav1.UpdateOptions{})
+			return err
 		},
 	})
 
@@ -385,6 +520,22 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.NetworkPolicy).Spec, b.(*apiv3.NetworkPolicy).Spec)
 		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.NetworkPolicies("").List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			t := obj.(*apiv3.NetworkPolicy)
+			_, err := pc.NetworkPolicies(t.Namespace).Update(ctx, t, metav1.UpdateOptions{})
+			return err
+		},
 	})
 
 	// 11. StagedGlobalNetworkPolicy (with policy name migration)
@@ -418,6 +569,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.StagedGlobalNetworkPolicy).Spec, b.(*apiv3.StagedGlobalNetworkPolicy).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.StagedGlobalNetworkPolicies().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.StagedGlobalNetworkPolicies().Update(ctx, obj.(*apiv3.StagedGlobalNetworkPolicy), metav1.UpdateOptions{})
+			return err
 		},
 	})
 
@@ -458,6 +624,22 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.StagedNetworkPolicy).Spec, b.(*apiv3.StagedNetworkPolicy).Spec)
 		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.StagedNetworkPolicies("").List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			t := obj.(*apiv3.StagedNetworkPolicy)
+			_, err := pc.StagedNetworkPolicies(t.Namespace).Update(ctx, t, metav1.UpdateOptions{})
+			return err
+		},
 	})
 
 	// 13. StagedKubernetesNetworkPolicy (namespaced)
@@ -496,6 +678,22 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.StagedKubernetesNetworkPolicy).Spec, b.(*apiv3.StagedKubernetesNetworkPolicy).Spec)
 		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.StagedKubernetesNetworkPolicies("").List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			t := obj.(*apiv3.StagedKubernetesNetworkPolicy)
+			_, err := pc.StagedKubernetesNetworkPolicies(t.Namespace).Update(ctx, t, metav1.UpdateOptions{})
+			return err
+		},
 	})
 
 	// 14. HostEndpoint
@@ -529,6 +727,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.HostEndpoint).Spec, b.(*apiv3.HostEndpoint).Spec)
 		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.HostEndpoints().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.HostEndpoints().Update(ctx, obj.(*apiv3.HostEndpoint), metav1.UpdateOptions{})
+			return err
+		},
 	})
 
 	// 15. GlobalNetworkSet
@@ -561,6 +774,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.GlobalNetworkSet).Spec, b.(*apiv3.GlobalNetworkSet).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.GlobalNetworkSets().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.GlobalNetworkSets().Update(ctx, obj.(*apiv3.GlobalNetworkSet), metav1.UpdateOptions{})
+			return err
 		},
 	})
 
@@ -600,6 +828,22 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.NetworkSet).Spec, b.(*apiv3.NetworkSet).Spec)
 		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.NetworkSets("").List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			t := obj.(*apiv3.NetworkSet)
+			_, err := pc.NetworkSets(t.Namespace).Update(ctx, t, metav1.UpdateOptions{})
+			return err
+		},
 	})
 
 	// 17. IPAMConfiguration (v1 is "IPAMConfig", v3 is "IPAMConfiguration")
@@ -632,6 +876,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.IPAMConfiguration).Spec, b.(*apiv3.IPAMConfiguration).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.IPAMConfigurations().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.IPAMConfigurations().Update(ctx, obj.(*apiv3.IPAMConfiguration), metav1.UpdateOptions{})
+			return err
 		},
 	})
 
@@ -666,75 +925,28 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.BlockAffinity).Spec, b.(*apiv3.BlockAffinity).Spec)
 		},
-	})
-
-	// 19. IPAMBlock (IPAM)
-	Register(ResourceMigrator{
-		Kind:  KindIPAMBlock,
-		Order: OrderIPAM,
-		ListV1: func(ctx context.Context, bc api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, bc, KindIPAMBlock)
-		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.IPAMBlock)
-			v3 := &apiv3.IPAMBlock{
-				TypeMeta:   newV3TypeMeta(KindIPAMBlock),
-				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
-				Spec:       *v1.Spec.DeepCopy(),
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.BlockAffinities().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
 			}
-			copyLabelsAndAnnotations(v1, v3)
-			return v3, nil
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
 		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPAMBlocks().Create(ctx, obj.(*apiv3.IPAMBlock), metav1.CreateOptions{})
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.BlockAffinities().Update(ctx, obj.(*apiv3.BlockAffinity), metav1.UpdateOptions{})
 			return err
 		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			obj, err := pc.IPAMBlocks().Get(ctx, name, metav1.GetOptions{})
-			if kerrors.IsNotFound(err) {
-				return nil, nil
-			}
-			return obj, err
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.IPAMBlock).Spec, b.(*apiv3.IPAMBlock).Spec)
-		},
 	})
 
-	// 20. IPAMHandle (IPAM)
-	Register(ResourceMigrator{
-		Kind:  KindIPAMHandle,
-		Order: OrderIPAM,
-		ListV1: func(ctx context.Context, bc api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, bc, KindIPAMHandle)
-		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.IPAMHandle)
-			v3 := &apiv3.IPAMHandle{
-				TypeMeta:   newV3TypeMeta(KindIPAMHandle),
-				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
-				Spec:       *v1.Spec.DeepCopy(),
-			}
-			copyLabelsAndAnnotations(v1, v3)
-			return v3, nil
-		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPAMHandles(obj.GetNamespace()).Create(ctx, obj.(*apiv3.IPAMHandle), metav1.CreateOptions{})
-			return err
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			obj, err := pc.IPAMHandles(namespace).Get(ctx, name, metav1.GetOptions{})
-			if kerrors.IsNotFound(err) {
-				return nil, nil
-			}
-			return obj, err
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.IPAMHandle).Spec, b.(*apiv3.IPAMHandle).Spec)
-		},
-	})
+	// TODO: IPAMBlock and IPAMHandle use a different list model (BlockListOptions,
+	// etc.) in libcalico-go and can't be listed via ResourceListOptions. These need
+	// special handling that will be added in a follow-up.
 
-	// 21. CalicoNodeStatus
+	// 19. CalicoNodeStatus
 	Register(ResourceMigrator{
 		Kind:  apiv3.KindCalicoNodeStatus,
 		Order: OrderCalicoNodeStatus,
@@ -764,6 +976,21 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
 			return reflect.DeepEqual(a.(*apiv3.CalicoNodeStatus).Spec, b.(*apiv3.CalicoNodeStatus).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.CalicoNodeStatuses().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.CalicoNodeStatuses().Update(ctx, obj.(*apiv3.CalicoNodeStatus), metav1.UpdateOptions{})
+			return err
 		},
 	})
 }

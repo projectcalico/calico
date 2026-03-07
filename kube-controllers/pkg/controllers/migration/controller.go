@@ -27,7 +27,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	apiregv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
@@ -35,12 +35,6 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 )
-
-var datastoreMigrationGVR = schema.GroupVersionResource{
-	Group:    "projectcalico.org",
-	Version:  "v3",
-	Resource: "datastoremigrations",
-}
 
 // NewController creates a new migration controller. It watches for DatastoreMigration CRs
 // and drives the v1-to-v3 CRD migration state machine.
@@ -93,7 +87,6 @@ func (c *migrationController) Run(stop chan struct{}) {
 }
 
 func (c *migrationController) reconcile() error {
-	// Look for a DatastoreMigration CR.
 	dm, err := c.getDatastoreMigration("v1-to-v3")
 	if err != nil {
 		if kerrors.IsNotFound(err) {
@@ -108,16 +101,16 @@ func (c *migrationController) reconcile() error {
 	})
 
 	switch dm.Status.Phase {
-	case "", apiv3.DatastoreMigrationPhasePending:
+	case "", DatastoreMigrationPhasePending:
 		return c.handlePending(logCtx, dm)
-	case apiv3.DatastoreMigrationPhaseMigrating:
+	case DatastoreMigrationPhaseMigrating:
 		return c.handleMigrating(logCtx, dm)
-	case apiv3.DatastoreMigrationPhaseConverged:
+	case DatastoreMigrationPhaseConverged:
 		return c.handleConverged(logCtx, dm)
-	case apiv3.DatastoreMigrationPhaseComplete:
+	case DatastoreMigrationPhaseComplete:
 		logCtx.Debug("Migration already complete")
 		return nil
-	case apiv3.DatastoreMigrationPhaseFailed:
+	case DatastoreMigrationPhaseFailed:
 		logCtx.Debug("Migration has failed, no further action")
 		return nil
 	default:
@@ -126,7 +119,7 @@ func (c *migrationController) reconcile() error {
 }
 
 // handlePending validates prerequisites and transitions to Migrating.
-func (c *migrationController) handlePending(logCtx *log.Entry, dm *apiv3.DatastoreMigration) error {
+func (c *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration is pending, validating prerequisites")
 
 	// Validate that the APIService exists (we're running in API server mode).
@@ -141,13 +134,13 @@ func (c *migrationController) handlePending(logCtx *log.Entry, dm *apiv3.Datasto
 
 	// Transition to Migrating.
 	now := metav1.Now()
-	dm.Status.Phase = apiv3.DatastoreMigrationPhaseMigrating
+	dm.Status.Phase = DatastoreMigrationPhaseMigrating
 	dm.Status.StartedAt = &now
 	return c.updateStatus(dm)
 }
 
 // handleMigrating runs the core migration logic.
-func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *apiv3.DatastoreMigration) error {
+func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration in progress")
 
 	// Step 1: Delete the APIService to route v3 requests to CRDs.
@@ -170,6 +163,7 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *apiv3.Datas
 	totalSkipped := 0
 	totalCount := 0
 	var allConflicts []string
+	uidMap := make(map[types.UID]types.UID)
 
 	for _, m := range migrators {
 		result, err := MigrateResourceType(c.ctx, c.backendClient, m)
@@ -181,10 +175,19 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *apiv3.Datas
 		totalSkipped += result.Skipped
 		allConflicts = append(allConflicts, result.Conflicts...)
 		totalCount += result.Migrated + result.Skipped + len(result.Conflicts)
+		for oldUID, newUID := range result.UIDMapping {
+			uidMap[oldUID] = newUID
+		}
+	}
+
+	// Second pass: remap OwnerReference UIDs that point to Calico resources.
+	if err := RemapOwnerReferences(c.ctx, uidMap, migrators); err != nil {
+		c.setFailedStatus(dm, fmt.Sprintf("failed remapping OwnerReferences: %v", err))
+		return c.updateStatus(dm)
 	}
 
 	// Update progress.
-	dm.Status.Progress = apiv3.DatastoreMigrationProgress{
+	dm.Status.Progress = DatastoreMigrationProgress{
 		Total:     totalCount,
 		Migrated:  totalMigrated,
 		Skipped:   totalSkipped,
@@ -209,7 +212,7 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *apiv3.Datas
 	}
 
 	// No conflicts — transition to Converged.
-	dm.Status.Phase = apiv3.DatastoreMigrationPhaseConverged
+	dm.Status.Phase = DatastoreMigrationPhaseConverged
 	logCtx.Info("Migration converged, unlocking datastore")
 
 	// Step 4: Unlock the datastore.
@@ -221,10 +224,10 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *apiv3.Datas
 }
 
 // handleConverged transitions to Complete after the operator detects v3 CRDs.
-func (c *migrationController) handleConverged(logCtx *log.Entry, dm *apiv3.DatastoreMigration) error {
+func (c *migrationController) handleConverged(logCtx *log.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration converged, transitioning to Complete")
 	now := metav1.Now()
-	dm.Status.Phase = apiv3.DatastoreMigrationPhaseComplete
+	dm.Status.Phase = DatastoreMigrationPhaseComplete
 	dm.Status.CompletedAt = &now
 	return c.updateStatus(dm)
 }
@@ -295,8 +298,8 @@ func (c *migrationController) unlockDatastore(logCtx *log.Entry) error {
 	return nil
 }
 
-func (c *migrationController) setFailedStatus(dm *apiv3.DatastoreMigration, message string) {
-	dm.Status.Phase = apiv3.DatastoreMigrationPhaseFailed
+func (c *migrationController) setFailedStatus(dm *DatastoreMigration, message string) {
+	dm.Status.Phase = DatastoreMigrationPhaseFailed
 	dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
 		Type:               "Failed",
 		Status:             metav1.ConditionTrue,
@@ -306,10 +309,9 @@ func (c *migrationController) setFailedStatus(dm *apiv3.DatastoreMigration, mess
 	})
 }
 
-// getDatastoreMigration retrieves a DatastoreMigration CR by name using the dynamic client,
-// since the DatastoreMigration type doesn't have generated deep copy methods yet.
-func (c *migrationController) getDatastoreMigration(name string) (*apiv3.DatastoreMigration, error) {
-	uns, err := c.dynamicClient.Resource(datastoreMigrationGVR).Get(c.ctx, name, metav1.GetOptions{})
+// getDatastoreMigration retrieves a DatastoreMigration CR by name using the dynamic client.
+func (c *migrationController) getDatastoreMigration(name string) (*DatastoreMigration, error) {
+	uns, err := c.dynamicClient.Resource(DatastoreMigrationGVR).Get(c.ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -317,30 +319,28 @@ func (c *migrationController) getDatastoreMigration(name string) (*apiv3.Datasto
 }
 
 // updateStatus updates the status subresource of a DatastoreMigration CR.
-func (c *migrationController) updateStatus(dm *apiv3.DatastoreMigration) error {
+func (c *migrationController) updateStatus(dm *DatastoreMigration) error {
 	uns, err := datastoreMigrationToUnstructured(dm)
 	if err != nil {
 		return fmt.Errorf("converting DatastoreMigration to unstructured: %v", err)
 	}
-	_, err = c.dynamicClient.Resource(datastoreMigrationGVR).UpdateStatus(c.ctx, uns, metav1.UpdateOptions{})
+	_, err = c.dynamicClient.Resource(DatastoreMigrationGVR).UpdateStatus(c.ctx, uns, metav1.UpdateOptions{})
 	return err
 }
 
-// unstructuredToDatastoreMigration converts an unstructured object to a DatastoreMigration.
-func unstructuredToDatastoreMigration(uns *unstructured.Unstructured) (*apiv3.DatastoreMigration, error) {
+func unstructuredToDatastoreMigration(uns *unstructured.Unstructured) (*DatastoreMigration, error) {
 	data, err := uns.MarshalJSON()
 	if err != nil {
 		return nil, err
 	}
-	dm := &apiv3.DatastoreMigration{}
+	dm := &DatastoreMigration{}
 	if err := json.Unmarshal(data, dm); err != nil {
 		return nil, err
 	}
 	return dm, nil
 }
 
-// datastoreMigrationToUnstructured converts a DatastoreMigration to an unstructured object.
-func datastoreMigrationToUnstructured(dm *apiv3.DatastoreMigration) (*unstructured.Unstructured, error) {
+func datastoreMigrationToUnstructured(dm *DatastoreMigration) (*unstructured.Unstructured, error) {
 	data, err := json.Marshal(dm)
 	if err != nil {
 		return nil, err
