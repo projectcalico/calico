@@ -113,7 +113,7 @@ var _ = Describe("IPAM controller UTs", func() {
 	var c *IPAMController
 	var cli client.Interface
 	var cs kubernetes.Interface
-	var kubevirtState *kubevirt.KubeVirtState
+	var deferredInformers *kubevirt.DeferredInformers
 	var vmIndexer cache.Indexer
 	var vmiIndexer cache.Indexer
 	var stopChan chan struct{}
@@ -129,8 +129,8 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		vmIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 		vmiIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-		kubevirtState = &kubevirt.KubeVirtState{}
-		kubevirtState.Set(vmIndexer, vmiIndexer)
+		deferredInformers = &kubevirt.DeferredInformers{}
+		deferredInformers.SetIndexers(vmIndexer, vmiIndexer)
 
 		// Create a node indexer with the fake clientset
 		factory := informers.NewSharedInformerFactory(cs, 0)
@@ -176,7 +176,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), kubevirtState)
+		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers)
 
 		// For testing, speed up update batching.
 		c.consolidationWindow = 1 * time.Millisecond
@@ -292,9 +292,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		})
 
 		It("should treat allocation as valid if KubeVirt indexers are nil (KubeVirt not installed)", func() {
-			// Create a controller with an empty KubeVirtState (no indexers set).
-			nilKvState := &kubevirt.KubeVirtState{}
-			c.kubevirtState = nilKvState
+			// Create a DeferredInformers with no indexers set (KubeVirt not installed).
+			c.deferredInformers = &kubevirt.DeferredInformers{}
 			c.Start(stopChan)
 
 			allocation := makeVMIAllocation("default", "some-vm")

@@ -52,35 +52,29 @@ func newFakeInformerFactory(nilCount int, stop <-chan struct{}) kubevirt.Informe
 	}
 }
 
-var _ = Describe("KubeVirtState", func() {
-	It("should return nil before Set is called", func() {
-		kubevirtState := &kubevirt.KubeVirtState{}
-		vm, vmi := kubevirtState.Get()
-		Expect(vm).To(BeNil())
-		Expect(vmi).To(BeNil())
+var _ = Describe("DeferredInformers", func() {
+	It("should return nil before SetIndexers is called", func() {
+		di := &kubevirt.DeferredInformers{}
+		Expect(di.VMIndexer()).To(BeNil())
+		Expect(di.VMInstanceIndexer()).To(BeNil())
 	})
 
-	It("should return indexers after Set", func() {
-		kubevirtState := &kubevirt.KubeVirtState{}
+	It("should return indexers after SetIndexers", func() {
+		di := &kubevirt.DeferredInformers{}
 		vmIdx := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 		vmiIdx := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 
-		kubevirtState.Set(vmIdx, vmiIdx)
+		di.SetIndexers(vmIdx, vmiIdx)
 
-		vm, vmi := kubevirtState.Get()
-		Expect(vm).To(Equal(vmIdx))
-		Expect(vmi).To(Equal(vmiIdx))
+		Expect(di.VMIndexer()).To(Equal(vmIdx))
+		Expect(di.VMInstanceIndexer()).To(Equal(vmiIdx))
 	})
 })
 
-var _ = Describe("InitInformers", func() {
-	var (
-		kubevirtState *kubevirt.KubeVirtState
-		stop          chan struct{}
-	)
+var _ = Describe("NewDeferredInformers", func() {
+	var stop chan struct{}
 
 	BeforeEach(func() {
-		kubevirtState = &kubevirt.KubeVirtState{}
 		stop = make(chan struct{})
 	})
 
@@ -90,47 +84,27 @@ var _ = Describe("InitInformers", func() {
 
 	It("should publish indexers immediately when KubeVirt is present at startup", func() {
 		factory := newFakeInformerFactory(0, stop)
+		di := kubevirt.NewDeferredInformers(factory, 10*time.Millisecond, stop)
 
-		done := make(chan struct{})
-		go func() {
-			kubevirt.InitInformers(factory, 10*time.Millisecond, stop, kubevirtState)
-			close(done)
-		}()
-
-		Eventually(done, 5*time.Second).Should(BeClosed())
-
-		vm, vmi := kubevirtState.Get()
-		Expect(vm).NotTo(BeNil())
-		Expect(vmi).NotTo(BeNil())
+		Eventually(func() cache.Indexer { return di.VMIndexer() }, 5*time.Second).ShouldNot(BeNil())
+		Expect(di.VMInstanceIndexer()).NotTo(BeNil())
 	})
 
 	It("should poll and publish indexers when KubeVirt appears after startup", func() {
 		factory := newFakeInformerFactory(5, stop)
+		di := kubevirt.NewDeferredInformers(factory, 10*time.Millisecond, stop)
 
-		done := make(chan struct{})
-		go func() {
-			kubevirt.InitInformers(factory, 10*time.Millisecond, stop, kubevirtState)
-			close(done)
-		}()
-
-		Eventually(done, 5*time.Second).Should(BeClosed())
-
-		vm, vmi := kubevirtState.Get()
-		Expect(vm).NotTo(BeNil())
-		Expect(vmi).NotTo(BeNil())
+		Eventually(func() cache.Indexer { return di.VMIndexer() }, 5*time.Second).ShouldNot(BeNil())
+		Expect(di.VMInstanceIndexer()).NotTo(BeNil())
 	})
 
-	It("should exit without publishing when stop is closed before KubeVirt appears", func() {
+	It("should not publish indexers when stop is closed before KubeVirt appears", func() {
 		// Factory always returns nil — KubeVirt never appears.
 		factory := func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
 			return nil, nil, nil
 		}
 
-		done := make(chan struct{})
-		go func() {
-			kubevirt.InitInformers(factory, 10*time.Millisecond, stop, kubevirtState)
-			close(done)
-		}()
+		di := kubevirt.NewDeferredInformers(factory, 10*time.Millisecond, stop)
 
 		// Let it poll a few times, then stop.
 		time.Sleep(50 * time.Millisecond)
@@ -138,11 +112,11 @@ var _ = Describe("InitInformers", func() {
 		// Reopen stop so AfterEach doesn't double-close.
 		stop = make(chan struct{})
 
-		Eventually(done, 5*time.Second).Should(BeClosed())
+		// Give the goroutine time to exit.
+		time.Sleep(20 * time.Millisecond)
 
-		vm, vmi := kubevirtState.Get()
-		Expect(vm).To(BeNil())
-		Expect(vmi).To(BeNil())
+		Expect(di.VMIndexer()).To(BeNil())
+		Expect(di.VMInstanceIndexer()).To(BeNil())
 	})
 
 	It("should recover from errors and eventually publish indexers", func() {
@@ -156,16 +130,9 @@ var _ = Describe("InitInformers", func() {
 			return vm, vmi, nil
 		}
 
-		done := make(chan struct{})
-		go func() {
-			kubevirt.InitInformers(factory, 10*time.Millisecond, stop, kubevirtState)
-			close(done)
-		}()
+		di := kubevirt.NewDeferredInformers(factory, 10*time.Millisecond, stop)
 
-		Eventually(done, 5*time.Second).Should(BeClosed())
-
-		vm, vmi := kubevirtState.Get()
-		Expect(vm).NotTo(BeNil())
-		Expect(vmi).NotTo(BeNil())
+		Eventually(func() cache.Indexer { return di.VMIndexer() }, 5*time.Second).ShouldNot(BeNil())
+		Expect(di.VMInstanceIndexer()).NotTo(BeNil())
 	})
 })

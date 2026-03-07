@@ -70,7 +70,7 @@ func NewNodeController(ctx context.Context,
 	cfg config.NodeControllerConfig,
 	nodeInformer, podInformer cache.SharedIndexInformer,
 	dataFeed *utils.DataFeed,
-	kubevirtState *kubevirt.KubeVirtState,
+	deferredInformers *kubevirt.DeferredInformers,
 ) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
@@ -86,7 +86,7 @@ func NewNodeController(ctx context.Context,
 	nodeDeletionFuncs := []func(*v1.Node){}
 	podDeletionFuncs := []func(*v1.Pod){}
 
-	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer(), kubevirtState)
+	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers)
 	nc.ipamCtrl.RegisterWith(nc.dataFeed)
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
 	podDeletionFuncs = append(podDeletionFuncs, nc.ipamCtrl.OnKubernetesPodDeleted)

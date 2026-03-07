@@ -125,7 +125,7 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, kubevirtState *kubevirt.KubeVirtState) *IPAMController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, deferredInformers *kubevirt.DeferredInformers) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -154,10 +154,10 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 	)
 
 	return &IPAMController{
-		client:        c,
-		clientset:     cs,
-		config:        cfg,
-		kubevirtState: kubevirtState,
+		client:            c,
+		clientset:         cs,
+		config:            cfg,
+		deferredInformers: deferredInformers,
 
 		syncChan: syncChan,
 
@@ -202,10 +202,10 @@ type IPAMController struct {
 	nodeLister v1lister.NodeLister
 	config     config.NodeControllerConfig
 
-	// kubevirtState provides thread-safe access to KubeVirt VM/VMI cache indexers.
-	// The indexers may be populated lazily after startup if KubeVirt is
-	// installed after kube-controllers.
-	kubevirtState *kubevirt.KubeVirtState
+	// deferredInformers provides thread-safe access to KubeVirt VM/VMI cache
+	// indexers. The indexers may be populated lazily after startup if KubeVirt
+	// is installed after kube-controllers.
+	deferredInformers *kubevirt.DeferredInformers
 
 	syncStatus bapi.SyncStatus
 
@@ -1095,7 +1095,8 @@ func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
 	vmiName := a.attrs[ipam.AttributeVMIName]
 	logc := log.WithFields(a.fields())
 
-	vmIndexer, vmiIndexer := c.kubevirtState.Get()
+	vmIndexer := c.deferredInformers.VMIndexer()
+	vmiIndexer := c.deferredInformers.VMInstanceIndexer()
 
 	// If we can't reason about it, don't GC it.
 	// (We can tighten this later once attrs are guaranteed.)
