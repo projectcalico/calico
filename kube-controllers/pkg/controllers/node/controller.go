@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 )
 
 const (
@@ -52,9 +53,9 @@ type NodeController struct {
 	podInformer  cache.SharedIndexInformer
 	k8sClientset *kubernetes.Clientset
 
-	// Optional KubeVirt informers for VM/VMI resources (nil if KubeVirt is not installed).
-	vmInformer  cache.SharedIndexInformer
-	vmiInformer cache.SharedIndexInformer
+	// kubevirtState provides thread-safe access to KubeVirt VM/VMI cache indexers.
+	// Indexers may be populated lazily if KubeVirt is installed after startup.
+	kubevirtState *kubevirt.KubeVirtState
 
 	// For accessing Calico datastore.
 	calicoClient client.Interface
@@ -73,33 +74,24 @@ func NewNodeController(ctx context.Context,
 	cfg config.NodeControllerConfig,
 	nodeInformer, podInformer cache.SharedIndexInformer,
 	dataFeed *utils.DataFeed,
-	vmInformer, vmiInformer cache.SharedIndexInformer,
+	kubevirtState *kubevirt.KubeVirtState,
 ) controller.Controller {
 	nc := &NodeController{
-		ctx:          ctx,
-		cfg:          cfg,
-		calicoClient: calicoClient,
-		k8sClientset: k8sClientset,
-		dataFeed:     dataFeed,
-		nodeInformer: nodeInformer,
-		podInformer:  podInformer,
-		vmInformer:   vmInformer,
-		vmiInformer:  vmiInformer,
+		ctx:           ctx,
+		cfg:           cfg,
+		calicoClient:  calicoClient,
+		k8sClientset:  k8sClientset,
+		dataFeed:      dataFeed,
+		nodeInformer:  nodeInformer,
+		podInformer:   podInformer,
+		kubevirtState: kubevirtState,
 	}
 
 	// Store functions to call on node deletion.
 	nodeDeletionFuncs := []func(*v1.Node){}
 	podDeletionFuncs := []func(*v1.Pod){}
 
-	// Create the IPAM controller. Pass KubeVirt cache indexers if available.
-	var vmIdx, vmiIdx cache.Indexer
-	if vmInformer != nil {
-		vmIdx = vmInformer.GetIndexer()
-	}
-	if vmiInformer != nil {
-		vmiIdx = vmiInformer.GetIndexer()
-	}
-	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer(), vmIdx, vmiIdx)
+	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer(), kubevirtState)
 	nc.ipamCtrl.RegisterWith(nc.dataFeed)
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
 	podDeletionFuncs = append(podDeletionFuncs, nc.ipamCtrl.OnKubernetesPodDeleted)
@@ -191,19 +183,6 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 	if !cache.WaitForNamedCacheSync("pods", stopCh, c.podInformer.HasSynced) {
 		log.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
-	}
-
-	if c.vmInformer != nil {
-		if !cache.WaitForNamedCacheSync("virtualmachines", stopCh, c.vmInformer.HasSynced) {
-			log.Info("Failed to sync KubeVirt VM resources, received signal for controller to shut down.")
-			return
-		}
-	}
-	if c.vmiInformer != nil {
-		if !cache.WaitForNamedCacheSync("virtualmachineinstances", stopCh, c.vmiInformer.HasSynced) {
-			log.Info("Failed to sync KubeVirt VMI resources, received signal for controller to shut down.")
-			return
-		}
 	}
 
 	log.Debug("Finished syncing with Kubernetes API (Nodes and Pods)")

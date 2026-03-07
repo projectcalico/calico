@@ -114,13 +114,9 @@ func main() {
 		log.WithError(err).Fatal("Failed to start")
 	}
 
-	// KubeVirt informers are optional — only created if KubeVirt is installed.
-	// NOTE: KubeVirt detection only runs at startup. If KubeVirt CRDs are added
-	// to a running cluster, this pod must be restarted to pick them up.
-	vmInformer, vmiInformer, err := kubevirt.TryCreateInformers(k8sconfig, 5*time.Minute)
-	if err != nil {
-		log.WithError(err).Warn("Failed to create KubeVirt informers, proceeding without KubeVirt IPAM GC support")
-	}
+	// KubeVirt state holds VM/VMI cache indexers, populated lazily if KubeVirt
+	// is not yet installed when kube-controllers starts.
+	kubevirtState := &kubevirt.KubeVirtState{}
 
 	stop := make(chan struct{})
 
@@ -201,7 +197,7 @@ func main() {
 
 		// any subsequent changes trigger a restart
 		controllerCtrl.restart = cCtrlr.ConfigChan()
-		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, vmInformer, vmiInformer)
+		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, kubevirtState, k8sconfig)
 	}
 
 	if cfg.DatastoreType == utils.Etcdv3 {
@@ -474,7 +470,8 @@ func (cc *controllerControl) InitControllers(
 	calicoClient client.Interface,
 	v3c clientset.Interface,
 	dataFeed *utils.DataFeed,
-	vmInformer, vmiInformer cache.SharedIndexInformer,
+	kubevirtState *kubevirt.KubeVirtState,
+	k8sconfig *rest.Config,
 ) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
@@ -517,12 +514,15 @@ func (cc *controllerControl) InitControllers(
 		cc.controllers["NetworkPolicy"] = policyController
 	}
 	if cfg.Controllers.Node != nil {
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, vmInformer, vmiInformer)
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, kubevirtState)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
-		if vmInformer != nil {
-			cc.registerInformers(vmInformer, vmiInformer)
-		}
+
+		// Start lazy KubeVirt informer initialization only when the Node
+		// controller (which owns IPAM GC) is enabled.
+		go kubevirt.InitInformers(func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
+			return kubevirt.TryCreateInformers(k8sconfig, 5*time.Minute)
+		}, 30*time.Second, cc.stop, kubevirtState)
 	}
 	if cfg.Controllers.ServiceAccount != nil {
 		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)
