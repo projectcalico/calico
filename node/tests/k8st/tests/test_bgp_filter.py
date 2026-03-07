@@ -35,29 +35,25 @@ protocol bgp Mesh_with_node_1 from bgp_template {
 """
 
 class TestBGPFilter(TestBase):
-    def setUp(self):
-        super(TestBGPFilter, self).setUp()
-
-        # Create test namespace
-        self.ns = "bgpfilter-test"
-        self.create_namespace(self.ns)
-
-        self.nodes, self.ips, self.ip6s = node_info()
-        self.egress_node = self.nodes[1]
-        self.egress_node_ip = self.ips[1]
-        self.egress_node_ip6 = self.ip6s[1]
-        self.external_node_ip = start_external_node_with_bgp(
+    @classmethod
+    def setUpClass(cls):
+        # Create external BGP nodes and peers once for all tests in this
+        # class. This is expensive (~30-60s per node) so we avoid
+        # recreating them for each test method.
+        cls.nodes, cls.ips, cls.ip6s = node_info()
+        cls.egress_node = cls.nodes[1]
+        cls.egress_node_ip = cls.ips[1]
+        cls.egress_node_ip6 = cls.ip6s[1]
+        cls.external_node_ip = start_external_node_with_bgp(
             "kube-node-extra",
-            bird_peer_config=self._get_bird_conf(),
+            bird_peer_config=bird_conf % cls.egress_node_ip,
         )
-        self.external_node_ip6 = start_external_node_with_bgp(
+        cls.external_node_ip6 = start_external_node_with_bgp(
             "kube-node-extra-v6",
-            bird6_peer_config=self._get_bird_conf(ipv6=True),
+            bird6_peer_config=bird_conf % cls.egress_node_ip6,
         )
 
-        kubectl("label node %s egress=true --overwrite" % self.egress_node)
-
-        self.egress_calico_pod = self.get_calico_node_pod(self.egress_node)
+        kubectl("label node %s egress=true --overwrite" % cls.egress_node)
 
         # Establish BGPPeer from cluster nodes to node-extra
         kubectl("""apply -f - << EOF
@@ -70,7 +66,7 @@ spec:
   asNumber: 64512
   nodeSelector: "egress == 'true'"
 EOF
-""" % self.external_node_ip)
+""" % cls.external_node_ip)
 
         kubectl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
@@ -82,45 +78,44 @@ spec:
   asNumber: 64512
   nodeSelector: "egress == 'true'"
 EOF
-""" % self.external_node_ip6)
+""" % cls.external_node_ip6)
 
-    def tearDown(self):
-        # Ensure that we always attempt to run the base class tearDown, storing the
-        # exception if it fails and re-raising it after we've done our own teardown.
-        teardown_exception = None
+    @classmethod
+    def tearDownClass(cls):
         try:
-            super(TestBGPFilter, self).tearDown()
-        except Exception as e:
-            # Log the error, but don't block further teardown steps.
-            _log.error("Exception during tearDown: %s", e)
-            teardown_exception = e
-
-        self.delete_and_confirm(self.ns, "ns")
-
-        try:
-            # Delete the extra node.
             run("docker rm -f kube-node-extra")
         except subprocess.CalledProcessError:
             pass
 
         try:
-            # Delete the extra node.
             run("docker rm -f kube-node-extra-v6")
         except subprocess.CalledProcessError:
             pass
 
-        # Delete BGPPeers.
         kubectl("delete bgppeer node-extra.peer", allow_fail=True)
         kubectl("delete bgppeer node-extra-v6.peer", allow_fail=True)
 
+    def setUp(self):
+        super(TestBGPFilter, self).setUp()
+
+        # Create test namespace (fresh per test for isolation)
+        self.ns = "bgpfilter-test"
+        self.create_namespace(self.ns)
+
+        self.egress_calico_pod = self.get_calico_node_pod(self.egress_node)
+
+    def tearDown(self):
+        teardown_exception = None
+        try:
+            super(TestBGPFilter, self).tearDown()
+        except Exception as e:
+            _log.error("Exception during tearDown: %s", e)
+            teardown_exception = e
+
+        self.delete_and_confirm(self.ns, "ns")
+
         if teardown_exception:
             raise teardown_exception
-
-    def _get_bird_conf(self, ipv6=False):
-        if ipv6:
-            return bird_conf % (self.egress_node_ip6)
-
-        return bird_conf % (self.egress_node_ip)
 
     def _check_route_in_cluster_bird(self, calicoPod, route, peerIP, ipv6=False, globalPeer=False, present=True):
         """Check that a route is present/not present in a (in-cluster) calico-node bird instance"""
@@ -135,7 +130,7 @@ EOF
             if result is not None and not present:
                 raise Exception('route present when it should not be')
             return result
-        result = retry_until_success(fn, wait_time=3)
+        result = retry_until_success(fn, retries=10, wait_time=3)
         return result
 
     def _assert_route_present_in_cluster_bird(self, calicoPod, route, peerIP, ipv6=False, globalPeer=False):
@@ -155,7 +150,7 @@ EOF
             if result is not None and not present:
                 raise Exception('route present when it should not be')
             return result
-        result = retry_until_success(fn, wait_time=3)
+        result = retry_until_success(fn, retries=10, wait_time=3)
         return result
 
     def _assert_route_present_in_external_bird(self, birdContainer, birdPeer, routeRegex, peerIPRegex, ipv6=False):
