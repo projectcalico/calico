@@ -1127,6 +1127,10 @@ blocks:
               value: "projectcalico.org/v3"
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Libraries (lib)
     run:
       when: "true or change_in(['/lib/'], {pipeline_file: 'ignore'})"
