@@ -32,13 +32,15 @@ func TestForwardConnections(t *testing.T) {
 
 		var wg sync.WaitGroup
 		wg.Go(func() {
-			dst1, err = lst1.Accept()
-			Expect(err).ShouldNot(HaveOccurred())
+			var acceptErr error
+			dst1, acceptErr = lst1.Accept()
+			Expect(acceptErr).ShouldNot(HaveOccurred())
 		})
 
 		wg.Go(func() {
-			dst2, err = lst2.Accept()
-			Expect(err).ShouldNot(HaveOccurred())
+			var acceptErr error
+			dst2, acceptErr = lst2.Accept()
+			Expect(acceptErr).ShouldNot(HaveOccurred())
 		})
 
 		t.Log("Connecting to the localhost listeners")
