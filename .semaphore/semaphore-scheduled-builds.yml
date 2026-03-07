@@ -1206,6 +1206,10 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "Node: multi-arch build"
     run:
       when: "true"
