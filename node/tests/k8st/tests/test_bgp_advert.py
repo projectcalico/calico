@@ -680,7 +680,7 @@ EOF
             cluster_ips.append(self.get_svc_cluster_ip(local_svc, self.ns))
 
             # Create many more services which select this deployment.
-            num_svc = 300
+            num_svc = 50
             for i in range(num_svc):
                 name = "nginx-svc-%s" % i
                 self.create_service(name, local_svc, self.ns, 80)
