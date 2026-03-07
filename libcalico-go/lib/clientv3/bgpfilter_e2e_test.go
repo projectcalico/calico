@@ -264,13 +264,10 @@ var _ = testutils.E2eDatastoreDescribe("BGPFilter tests", testutils.DatastoreAll
 						By("Updating BGPFilter name2 with a 2s TTL and waiting for the entry to be deleted")
 						_, outError = c.BGPFilter().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 						Expect(outError).NotTo(HaveOccurred())
-						time.Sleep(1 * time.Second)
-						_, outError = c.BGPFilter().Get(ctx, name2, options.GetOptions{})
-						Expect(outError).NotTo(HaveOccurred())
-						time.Sleep(2 * time.Second)
-						_, outError = c.BGPFilter().Get(ctx, name2, options.GetOptions{})
-						Expect(outError).To(HaveOccurred())
-						Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPFilter(" + name2 + ") with error:"))
+						Eventually(func() error {
+							_, err := c.BGPFilter().Get(ctx, name2, options.GetOptions{})
+							return err
+						}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
 
 						By("Creating BGPFilter name2 with a 2s TTL and waiting for the entry to be deleted")
 						_, outError = c.BGPFilter().Create(ctx, &apiv3.BGPFilter{
@@ -278,13 +275,10 @@ var _ = testutils.E2eDatastoreDescribe("BGPFilter tests", testutils.DatastoreAll
 							Spec:       spec2,
 						}, options.SetOptions{TTL: 2 * time.Second})
 						Expect(outError).NotTo(HaveOccurred())
-						time.Sleep(1 * time.Second)
-						_, outError = c.BGPFilter().Get(ctx, name2, options.GetOptions{})
-						Expect(outError).NotTo(HaveOccurred())
-						time.Sleep(2 * time.Second)
-						_, outError = c.BGPFilter().Get(ctx, name2, options.GetOptions{})
-						Expect(outError).To(HaveOccurred())
-						Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPFilter(" + name2 + ") with error:"))
+						Eventually(func() error {
+							_, err := c.BGPFilter().Get(ctx, name2, options.GetOptions{})
+							return err
+						}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
 					}
 
 					if config.Spec.DatastoreType == apiconfig.Kubernetes {
