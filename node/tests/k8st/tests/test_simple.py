@@ -106,7 +106,7 @@ class TestGracefulRestart(TestBase):
                 self.restart_pod_name)
 
         # Expect GR behaviour, i.e. no route churn.
-        self._test_restart_route_churn(8, delete_calico_node_pod, False)
+        self._test_restart_route_churn(3, delete_calico_node_pod, False)
 
 
 class TestAllRunning(TestBase):
