@@ -36,6 +36,10 @@ class DiagsCollector(object):
         pass
 
     def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            # Test passed, no need to collect diagnostics.
+            return
+
         # Print out diagnostics for the test. These will go to screen
         # on test failure.
         _log.info("===================================================")
