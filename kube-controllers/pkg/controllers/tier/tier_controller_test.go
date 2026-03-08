@@ -272,4 +272,3 @@ func actionSummary(actions []k8stesting.Action) string {
 	}
 	return s
 }
-

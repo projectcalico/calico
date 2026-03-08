@@ -235,4 +235,3 @@ func expectTierDeleted(cli ctrlclient.Client, name string) {
 		return fmt.Errorf("tier %s still exists", name)
 	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "tier should be deleted")
 }
-
