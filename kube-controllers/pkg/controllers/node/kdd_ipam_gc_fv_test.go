@@ -206,15 +206,18 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		// Clean up KubeControllersConfiguration.
 		_, _ = calicoClient.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{})
 
-		// Clean up node.
-		_ = k8sClient.CoreV1().Nodes().Delete(ctx, "node-a", metav1.DeleteOptions{})
-
-		// Clean up pods and wait for them to be gone.
-		_ = k8sClient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+		// Clean up pods before the node so they don't become orphaned.
+		// If the node is deleted first, pods assigned to it become orphaned
+		// and the kube-controller-manager's pod GC takes ~50s to clean them up.
+		zero := int64(0)
+		_ = k8sClient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{})
 		Eventually(func() bool {
 			pods, _ := k8sClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
 			return len(pods.Items) == 0
-		}, 60*time.Second, 500*time.Millisecond).Should(BeTrue())
+		}, 30*time.Second, 500*time.Millisecond).Should(BeTrue())
+
+		// Clean up node after pods are gone.
+		_ = k8sClient.CoreV1().Nodes().Delete(ctx, "node-a", metav1.DeleteOptions{})
 	})
 
 	It("should NOT clean up tunnel IP allocations", func() {
@@ -780,15 +783,16 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		// Clean up KubeControllersConfiguration.
 		_, _ = calicoClient.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{})
 
-		// Clean up node.
-		_ = k8sClient.CoreV1().Nodes().Delete(ctx, "node-a", metav1.DeleteOptions{})
-
-		// Clean up pods and wait for them to be gone.
-		_ = k8sClient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+		// Clean up pods before the node so they don't become orphaned.
+		zero := int64(0)
+		_ = k8sClient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{})
 		Eventually(func() bool {
 			pods, _ := k8sClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
 			return len(pods.Items) == 0
-		}, 60*time.Second, 500*time.Millisecond).Should(BeTrue())
+		}, 30*time.Second, 500*time.Millisecond).Should(BeTrue())
+
+		// Clean up node after pods are gone.
+		_ = k8sClient.CoreV1().Nodes().Delete(ctx, "node-a", metav1.DeleteOptions{})
 	})
 
 	It("should NOT clean up empty blocks within the grace period", func() {
