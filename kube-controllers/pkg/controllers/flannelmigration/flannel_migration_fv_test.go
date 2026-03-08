@@ -157,11 +157,11 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, func() {
 		// Clean up ConfigMaps
 		_ = k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).Delete(ctx, "calico-config", metav1.DeleteOptions{})
 
-		// Clean up IPAM blocks
+		// Clean up IPAM blocks — must use DeleteKVP for KDD mode
 		blocks, _ := bc.List(ctx, model.BlockListOptions{}, "")
 		if blocks != nil {
 			for _, kvp := range blocks.KVPairs {
-				_, _ = bc.Delete(ctx, kvp.Key, kvp.Revision)
+				_, _ = bc.DeleteKVP(ctx, kvp)
 			}
 		}
 
@@ -169,7 +169,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, func() {
 		affs, _ := bc.List(ctx, model.BlockAffinityListOptions{}, "")
 		if affs != nil {
 			for _, kvp := range affs.KVPairs {
-				_, _ = bc.Delete(ctx, kvp.Key, kvp.Revision)
+				_, _ = bc.DeleteKVP(ctx, kvp)
 			}
 		}
 
@@ -177,7 +177,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, func() {
 		handles, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
 		if handles != nil {
 			for _, kvp := range handles.KVPairs {
-				_, _ = bc.Delete(ctx, kvp.Key, kvp.Revision)
+				_, _ = bc.DeleteKVP(ctx, kvp)
 			}
 		}
 
