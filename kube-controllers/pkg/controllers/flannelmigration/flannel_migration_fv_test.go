@@ -144,77 +144,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, func() {
 	})
 
 	AfterEach(func() {
-		ctx := context.Background()
-
-		// Clean up DaemonSets created by tests
-		dsList, _ := k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).List(ctx, metav1.ListOptions{})
-		if dsList != nil {
-			for i := range dsList.Items {
-				_ = k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).Delete(ctx, dsList.Items[i].Name, metav1.DeleteOptions{})
-			}
-		}
-
-		// Clean up ConfigMaps
-		_ = k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).Delete(ctx, "calico-config", metav1.DeleteOptions{})
-
-		// Clean up IPAM blocks — must use DeleteKVP for KDD mode
-		blocks, _ := bc.List(ctx, model.BlockListOptions{}, "")
-		if blocks != nil {
-			for _, kvp := range blocks.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-
-		// Clean up IPAM affinities
-		affs, _ := bc.List(ctx, model.BlockAffinityListOptions{}, "")
-		if affs != nil {
-			for _, kvp := range affs.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-
-		// Clean up IPAM handles
-		handles, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
-		if handles != nil {
-			for _, kvp := range handles.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-
-		// Clean up nodes
-		nodeList, _ := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-		if nodeList != nil {
-			for _, node := range nodeList.Items {
-				_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
-			}
-		}
-
-		// Clean up IP pools
-		pools, _ := calicoClient.IPPools().List(ctx, options.ListOptions{})
-		if pools != nil {
-			for _, pool := range pools.Items {
-				_, _ = calicoClient.IPPools().Delete(ctx, pool.Name, options.DeleteOptions{})
-			}
-		}
-
-		// Clean up KubeControllersConfiguration
-		_, _ = calicoClient.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{})
-
-		// Clean up FelixConfigurations created by migration controller
-		felixConfigs, _ := calicoClient.FelixConfigurations().List(ctx, options.ListOptions{})
-		if felixConfigs != nil {
-			for _, fc := range felixConfigs.Items {
-				_, _ = calicoClient.FelixConfigurations().Delete(ctx, fc.Name, options.DeleteOptions{})
-			}
-		}
-
-		// Clean up Calico Nodes created by migration controller
-		calicoNodes, _ := calicoClient.Nodes().List(ctx, options.ListOptions{})
-		if calicoNodes != nil {
-			for _, cn := range calicoNodes.Items {
-				_, _ = calicoClient.Nodes().Delete(ctx, cn.Name, options.DeleteOptions{})
-			}
-		}
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, false, false)
 	})
 
 	Context("Should migrate FV tests", func() {

@@ -148,32 +148,11 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, func() {
 	})
 
 	AfterEach(func() {
-		ctx := context.Background()
 		// Stop the per-spec controller instance.
 		if nodeController != nil {
 			nodeController.Stop()
 		}
-		// Clean up host endpoints.
-		heps, _ := c.HostEndpoints().List(ctx, options.ListOptions{})
-		if heps != nil {
-			for _, hep := range heps.Items {
-				_, _ = c.HostEndpoints().Delete(ctx, hep.Name, options.DeleteOptions{})
-			}
-		}
-		// Clean up k8s nodes.
-		nodes, _ := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-		for _, node := range nodes.Items {
-			_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
-		}
-		// Clean up calico nodes.
-		cNodes, _ := c.Nodes().List(ctx, options.ListOptions{})
-		if cNodes != nil {
-			for _, node := range cNodes.Items {
-				_, _ = c.Nodes().Delete(ctx, node.Name, options.DeleteOptions{})
-			}
-		}
-		// Clean up KubeControllersConfiguration.
-		_, _ = c.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{})
+		testutils.CleanupAllResources(context.Background(), k8sClient, c, nil, false, false)
 	})
 
 	It("should create and sync hostendpoints for Calico nodes", func() {

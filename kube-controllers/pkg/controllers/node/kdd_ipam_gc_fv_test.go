@@ -171,53 +171,8 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 	})
 
 	AfterEach(func() {
-		ctx := context.Background()
-
-		// Stop the controller.
 		controller.Stop()
-
-		// Clean up IPAM blocks - MUST use DeleteKVP in KDD mode
-		blocks, _ := bc.List(ctx, model.BlockListOptions{}, "")
-		if blocks != nil {
-			for _, kvp := range blocks.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-
-		// Clean up IPAM affinities - MUST use DeleteKVP in KDD mode
-		affs, _ := bc.List(ctx, model.BlockAffinityListOptions{}, "")
-		if affs != nil {
-			for _, kvp := range affs.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-
-		// Clean up IPAM handles - MUST use DeleteKVP in KDD mode
-		handles, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
-		if handles != nil {
-			for _, kvp := range handles.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-
-		// Clean up IP pool.
-		_, _ = calicoClient.IPPools().Delete(ctx, "test-ipam-gc-ippool", options.DeleteOptions{})
-
-		// Clean up KubeControllersConfiguration.
-		_, _ = calicoClient.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{})
-
-		// Clean up pods before the node so they don't become orphaned.
-		// If the node is deleted first, pods assigned to it become orphaned
-		// and the kube-controller-manager's pod GC takes ~50s to clean them up.
-		zero := int64(0)
-		_ = k8sClient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{})
-		Eventually(func() bool {
-			pods, _ := k8sClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
-			return len(pods.Items) == 0
-		}, 30*time.Second, 500*time.Millisecond).Should(BeTrue())
-
-		// Clean up node after pods are gone.
-		_ = k8sClient.CoreV1().Nodes().Delete(ctx, "node-a", metav1.DeleteOptions{})
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, true, false)
 	})
 
 	It("should NOT clean up tunnel IP allocations", func() {
@@ -748,51 +703,8 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 	})
 
 	AfterEach(func() {
-		ctx := context.Background()
-
-		// Stop the controller.
 		controller.Stop()
-
-		// Clean up IPAM blocks - MUST use DeleteKVP in KDD mode
-		blocks, _ := bc.List(ctx, model.BlockListOptions{}, "")
-		if blocks != nil {
-			for _, kvp := range blocks.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-
-		// Clean up IPAM affinities - MUST use DeleteKVP in KDD mode
-		affs, _ := bc.List(ctx, model.BlockAffinityListOptions{}, "")
-		if affs != nil {
-			for _, kvp := range affs.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-
-		// Clean up IPAM handles - MUST use DeleteKVP in KDD mode
-		handles, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
-		if handles != nil {
-			for _, kvp := range handles.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-
-		// Clean up IP pool.
-		_, _ = calicoClient.IPPools().Delete(ctx, "test-ipam-gc-ippool", options.DeleteOptions{})
-
-		// Clean up KubeControllersConfiguration.
-		_, _ = calicoClient.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{})
-
-		// Clean up pods before the node so they don't become orphaned.
-		zero := int64(0)
-		_ = k8sClient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{})
-		Eventually(func() bool {
-			pods, _ := k8sClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
-			return len(pods.Items) == 0
-		}, 30*time.Second, 500*time.Millisecond).Should(BeTrue())
-
-		// Clean up node after pods are gone.
-		_ = k8sClient.CoreV1().Nodes().Delete(ctx, "node-a", metav1.DeleteOptions{})
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, true, false)
 	})
 
 	It("should NOT clean up empty blocks within the grace period", func() {

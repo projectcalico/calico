@@ -86,24 +86,7 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", Ordered
 	})
 
 	AfterEach(func() {
-		// Clean up NetworkPolicies and Calico NetworkPolicies between specs.
-		nsList, _ := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
-		if nsList != nil {
-			for _, ns := range nsList.Items {
-				npList, _ := k8sClient.NetworkingV1().NetworkPolicies(ns.Name).List(context.Background(), metav1.ListOptions{})
-				if npList != nil {
-					for _, np := range npList.Items {
-						_ = k8sClient.NetworkingV1().NetworkPolicies(ns.Name).Delete(context.Background(), np.Name, metav1.DeleteOptions{})
-					}
-				}
-				cnpList, _ := calicoClient.NetworkPolicies().List(context.Background(), options.ListOptions{Namespace: ns.Name})
-				if cnpList != nil {
-					for _, cnp := range cnpList.Items {
-						_, _ = calicoClient.NetworkPolicies().Delete(context.Background(), ns.Name, cnp.Name, options.DeleteOptions{})
-					}
-				}
-			}
-		}
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, false, false)
 	})
 
 	Context("NetworkPolicy FV tests", func() {
