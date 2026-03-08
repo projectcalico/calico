@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
+var _ = Describe("Calico node controller FV tests (KDD mode)", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -52,9 +52,11 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 		bc                backend.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		kconfigfile       string
+		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -63,8 +65,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
@@ -97,12 +98,48 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		ctx := context.Background()
+		// Clean up k8s nodes.
+		nodes, _ := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		for _, node := range nodes.Items {
+			_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
+		}
+		// Clean up IPAM data — must use DeleteKVP for KDD mode.
+		kvps, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
+		if kvps != nil {
+			for _, kvp := range kvps.KVPairs {
+				_, _ = bc.DeleteKVP(ctx, kvp)
+			}
+		}
+		kvps, _ = bc.List(ctx, model.BlockAffinityListOptions{}, "")
+		if kvps != nil {
+			for _, kvp := range kvps.KVPairs {
+				_, _ = bc.DeleteKVP(ctx, kvp)
+			}
+		}
+		kvps, _ = bc.List(ctx, model.BlockListOptions{}, "")
+		if kvps != nil {
+			for _, kvp := range kvps.KVPairs {
+				_, _ = bc.DeleteKVP(ctx, kvp)
+			}
+		}
+		// Clean up IP pools.
+		pools, _ := calicoClient.IPPools().List(ctx, options.ListOptions{})
+		if pools != nil {
+			for _, pool := range pools.Items {
+				_, _ = calicoClient.IPPools().Delete(ctx, pool.Name, options.DeleteOptions{})
+			}
+		}
 	})
 
 	Context("Mainline FV tests", func() {
@@ -404,7 +441,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 	})
 })
 
-var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
+var _ = Describe("Calico node controller FV tests (etcd mode)", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -412,12 +449,13 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		removeKubeconfig  func()
 	)
 
 	const kNodeName = "k8snodename"
 	const cNodeName = "caliconodename"
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -426,8 +464,8 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		var kconfigfile string
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		// Run the controller.
 		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
@@ -450,12 +488,68 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		ctx := context.Background()
+		// Clean up k8s nodes.
+		nodes, _ := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		for _, node := range nodes.Items {
+			_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
+		}
+		// Clean up calico nodes.
+		cNodes, _ := calicoClient.Nodes().List(ctx, options.ListOptions{})
+		if cNodes != nil {
+			for _, node := range cNodes.Items {
+				_, _ = calicoClient.Nodes().Delete(ctx, node.Name, options.DeleteOptions{})
+			}
+		}
+		// Clean up BGP peers.
+		peers, _ := calicoClient.BGPPeers().List(ctx, options.ListOptions{})
+		if peers != nil {
+			for _, peer := range peers.Items {
+				_, _ = calicoClient.BGPPeers().Delete(ctx, peer.Name, options.DeleteOptions{})
+			}
+		}
+		// Clean up IP pools.
+		pools, _ := calicoClient.IPPools().List(ctx, options.ListOptions{})
+		if pools != nil {
+			for _, pool := range pools.Items {
+				_, _ = calicoClient.IPPools().Delete(ctx, pool.Name, options.DeleteOptions{})
+			}
+		}
+		// Clean up workload endpoints.
+		weps, _ := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
+		if weps != nil {
+			for _, wep := range weps.Items {
+				_, _ = calicoClient.WorkloadEndpoints().Delete(ctx, wep.Namespace, wep.Name, options.DeleteOptions{})
+			}
+		}
+		// Clean up felix configurations.
+		felixConfigs, _ := calicoClient.FelixConfigurations().List(ctx, options.ListOptions{})
+		if felixConfigs != nil {
+			for _, fc := range felixConfigs.Items {
+				if fc.Name != "default" {
+					_, _ = calicoClient.FelixConfigurations().Delete(ctx, fc.Name, options.DeleteOptions{})
+				}
+			}
+		}
+		// Clean up BGP configurations.
+		bgpConfigs, _ := calicoClient.BGPConfigurations().List(ctx, options.ListOptions{})
+		if bgpConfigs != nil {
+			for _, bc := range bgpConfigs.Items {
+				if bc.Name != "default" {
+					_, _ = calicoClient.BGPConfigurations().Delete(ctx, bc.Name, options.DeleteOptions{})
+				}
+			}
+		}
 	})
 
 	Context("Node FV tests", func() {
