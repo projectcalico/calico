@@ -44,25 +44,29 @@ func handleConnection(t *testing.T, listener net.Listener) {
 }
 
 func TestDial(t *testing.T) {
-	setupTest(t)
-	address := "localhost:8080"
-
 	t.Run("Dial Plain TCP", func(t *testing.T) {
-		listener, err := net.Listen("tcp", address)
+		setupTest(t)
+
+		listener, err := net.Listen("tcp", "localhost:0")
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = listener.Close() }()
 
+		done := make(chan struct{})
 		go func() {
+			defer close(done)
 			handleConnection(t, listener)
 		}()
 
-		dialer, err := tunnel.NewTLSSessionDialer(address, nil)
+		dialer, err := tunnel.NewTLSSessionDialer(listener.Addr().String(), nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		assertExpectations(t, dialer)
+		<-done
 	})
 
 	t.Run("Dial TLS", func(t *testing.T) {
+		setupTest(t)
+
 		tmpDir := os.TempDir()
 
 		serverCrt, serverKey := utils.CreateKeyCertPair(tmpDir)
@@ -74,11 +78,13 @@ func TestDial(t *testing.T) {
 			t.Fatalf("Failed to load server certificate and key: %v", err)
 		}
 
-		listener, err := tls.Listen("tcp", address, &tls.Config{Certificates: []tls.Certificate{cert}})
+		listener, err := tls.Listen("tcp", "localhost:0", &tls.Config{Certificates: []tls.Certificate{cert}})
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = listener.Close() }()
 
+		done := make(chan struct{})
 		go func() {
+			defer close(done)
 			handleConnection(t, listener)
 		}()
 
@@ -88,11 +94,12 @@ func TestDial(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		certPool.AppendCertsFromPEM(caCert)
 
-		dialer, err := tunnel.NewTLSSessionDialer(address, &tls.Config{
+		dialer, err := tunnel.NewTLSSessionDialer(listener.Addr().String(), &tls.Config{
 			RootCAs: certPool,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		assertExpectations(t, dialer)
+		<-done
 	})
 }
 
