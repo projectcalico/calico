@@ -1619,9 +1619,39 @@ kind-deploy: kind-cluster-create
 	KIND_IMAGES="$(KIND_IMAGES)" \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
-# Load test-build images onto an existing kind cluster and restart pods.
+# Rebuild stale images, load changed ones onto an existing kind cluster, and
+# restart pods. Invalidates a stamp when any tracked source file under the
+# component directory (or libcalico-go/api) is newer than the stamp.
 .PHONY: kind-reload
 kind-reload: $(KUBECTL)
+	@for stamp in $(KIND_IMAGE_STAMPS); do \
+		comp=$$(basename $$stamp | sed 's/^\.stamp\.//'); \
+		dir=""; \
+		case $$comp in \
+			calico-node)   dir=node ;; \
+			calico-typha)  dir=typha ;; \
+			calico-apiserver) dir=apiserver ;; \
+			calico-cni)    dir=cni-plugin ;; \
+			pod2daemon)    dir=pod2daemon ;; \
+			csi)           dir=pod2daemon ;; \
+			node-driver-registrar) dir=pod2daemon ;; \
+			calicoctl)     dir=calicoctl ;; \
+			kube-controllers) dir=kube-controllers ;; \
+			operator)      dir=. ;; \
+			webhook)       dir=webhooks ;; \
+			whisker)       dir=whisker ;; \
+			whisker-backend) dir=whisker-backend ;; \
+			goldmane)      dir=goldmane ;; \
+		esac; \
+		if [ -n "$$dir" ] && [ -f "$$stamp" ]; then \
+			newer=$$(find $(REPO_ROOT)/$$dir $(REPO_ROOT)/libcalico-go $(REPO_ROOT)/api -newer $$stamp \( -name '*.go' -o -name 'Dockerfile*' -o -name 'Makefile' \) 2>/dev/null | head -1); \
+			if [ -n "$$newer" ]; then \
+				echo "Invalidating $$stamp ($$newer is newer)"; \
+				rm -f $$stamp; \
+			fi; \
+		fi; \
+	done
+	$(MAKE) kind-build-images
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
