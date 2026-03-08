@@ -52,6 +52,10 @@ type NodeController struct {
 	podInformer  cache.SharedIndexInformer
 	k8sClientset *kubernetes.Clientset
 
+	// Optional KubeVirt informers for VM/VMI resources (nil if KubeVirt is not installed).
+	vmInformer  cache.SharedIndexInformer
+	vmiInformer cache.SharedIndexInformer
+
 	// For accessing Calico datastore.
 	calicoClient client.Interface
 	dataFeed     *utils.DataFeed
@@ -70,6 +74,7 @@ func NewNodeController(ctx context.Context,
 	cfg config.NodeControllerConfig,
 	nodeInformer, podInformer cache.SharedIndexInformer,
 	dataFeed *utils.DataFeed,
+	vmInformer, vmiInformer cache.SharedIndexInformer,
 ) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
@@ -79,14 +84,23 @@ func NewNodeController(ctx context.Context,
 		dataFeed:     dataFeed,
 		nodeInformer: nodeInformer,
 		podInformer:  podInformer,
+		vmInformer:   vmInformer,
+		vmiInformer:  vmiInformer,
 	}
 
 	// Store functions to call on node deletion.
 	nodeDeletionFuncs := []func(*v1.Node){}
 	podDeletionFuncs := []func(*v1.Pod){}
 
-	// Create the IPAM controller.
-	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer())
+	// Create the IPAM controller. Pass KubeVirt cache indexers if available.
+	var vmIdx, vmiIdx cache.Indexer
+	if vmInformer != nil {
+		vmIdx = vmInformer.GetIndexer()
+	}
+	if vmiInformer != nil {
+		vmiIdx = vmiInformer.GetIndexer()
+	}
+	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer(), vmIdx, vmiIdx)
 	nc.ipamCtrl.RegisterWith(nc.dataFeed)
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
 	podDeletionFuncs = append(podDeletionFuncs, nc.ipamCtrl.OnKubernetesPodDeleted)
@@ -182,6 +196,19 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 	if !cache.WaitForNamedCacheSync("pods", stopCh, c.podInformer.HasSynced) {
 		log.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
+	}
+
+	if c.vmInformer != nil {
+		if !cache.WaitForNamedCacheSync("virtualmachines", stopCh, c.vmInformer.HasSynced) {
+			log.Info("Failed to sync KubeVirt VM resources, received signal for controller to shut down.")
+			return
+		}
+	}
+	if c.vmiInformer != nil {
+		if !cache.WaitForNamedCacheSync("virtualmachineinstances", stopCh, c.vmiInformer.HasSynced) {
+			log.Info("Failed to sync KubeVirt VMI resources, received signal for controller to shut down.")
+			return
+		}
 	}
 
 	log.Debug("Finished syncing with Kubernetes API (Nodes and Pods)")

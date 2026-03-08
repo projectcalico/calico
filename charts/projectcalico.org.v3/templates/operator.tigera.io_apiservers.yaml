@@ -2592,6 +2592,37 @@ spec:
                                         enum:
                                           - calico-webhooks
                                         type: string
+                                      ports:
+                                        description: |-
+                                          Ports allows customization of the calico-webhooks container's ports.
+                                          If specified, this overrides the default container port configuration.
+                                          If omitted, the calico-webhooks Deployment will use its default port (6443).
+                                        items:
+                                          description:
+                                            CalicoWebhooksDeploymentContainerPort
+                                            defines a port override for a calico-webhooks
+                                            container.
+                                          properties:
+                                            containerPort:
+                                              description: |-
+                                                Number of port to expose on the pod's IP address.
+                                                This must be a valid port number, 0 < x < 65536.
+                                              format: int32
+                                              maximum: 65535
+                                              minimum: 1
+                                              type: integer
+                                            name:
+                                              description: |-
+                                                Name is an enum which identifies the calico-webhooks Deployment container port by name.
+                                                Supported values are: calico-webhooks
+                                              enum:
+                                                - calico-webhooks
+                                              type: string
+                                          required:
+                                            - containerPort
+                                            - name
+                                          type: object
+                                        type: array
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -2658,6 +2689,13 @@ spec:
                                       - name
                                     type: object
                                   type: array
+                                hostNetwork:
+                                  description: |-
+                                    HostNetwork forces the webhook pod to use the host's network namespace.
+                                    When true, the webhook pod will run with hostNetwork=true and DNSPolicy=ClusterFirstWithHostNet.
+                                    When nil or omitted, the operator auto-detects whether host networking is required
+                                    (e.g., for EKS/TKG with Calico CNI).
+                                  type: boolean
                                 nodeSelector:
                                   additionalProperties:
                                     type: string

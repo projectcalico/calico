@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,17 @@ import (
 )
 
 const DefaultBPFLogByteLimit = 64 * 1024 * 1024
+
+// retryBackoff sleeps for the given delay and returns the next delay,
+// doubling each time up to maxDelay.
+func retryBackoff(current, maxDelay time.Duration) time.Duration {
+	time.Sleep(current)
+	next := current * 2
+	if next > maxDelay {
+		next = maxDelay
+	}
+	return next
+}
 
 type K8sDatastoreInfra struct {
 	etcdContainer        *containers.Container
@@ -356,6 +367,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	log.Info("Started API server")
 
 	start := time.Now()
+	delay := 100 * time.Millisecond
 	for {
 		var err error
 		kds.K8sClient, err = kubernetes.NewForConfig(&rest.Config{
@@ -371,13 +383,14 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to create k8s client.")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 	log.Info("Got k8s client")
 
 	// Allow anonymous connections to the API server.  We also use this command to wait
 	// for the API server to be up.
 	start = time.Now()
+	delay = 100 * time.Millisecond
 	for {
 		err := kds.k8sApiContainer.ExecMayFail(
 			"kubectl", "create", "clusterrolebinding",
@@ -401,11 +414,12 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to install role binding")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 	log.Info("Added role binding.")
 
 	start = time.Now()
+	delay = 500 * time.Millisecond
 	for {
 		_, err := kds.K8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 		if err == nil {
@@ -415,7 +429,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to list namespaces.")
 			return nil, err
 		}
-		time.Sleep(500 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 	log.Info("List namespaces successfully.")
 
@@ -438,6 +452,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	kds.BadEndpoint = fmt.Sprintf("https://%s:1234", kds.containerGetIPForURL(kds.k8sApiContainer))
 
 	start = time.Now()
+	delay = 100 * time.Millisecond
 	groupVersion := os.Getenv("CALICO_API_GROUP")
 	for {
 		var resp *http.Response
@@ -448,6 +463,10 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 		if err != nil || resp.StatusCode != 200 {
 			log.WithError(err).WithField("status", resp.StatusCode).Warn("Waiting for API server to respond to requests")
 		}
+		// Back off harder on 429 to give the API server time to recover.
+		if resp.StatusCode == http.StatusTooManyRequests && delay < 1*time.Second {
+			delay = 1 * time.Second
+		}
 		resp.Body.Close()
 		if err == nil {
 			break
@@ -456,13 +475,14 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("API server is not responding to requests")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 
 	log.Info("API server is up.")
 
 	kds.CertFileName = "/tmp/" + kds.k8sApiContainer.Name + ".crt"
 	start = time.Now()
+	delay = 100 * time.Millisecond
 	for {
 		// Make sure any retry is clean.
 		_ = os.Remove(kds.CertFileName)
@@ -477,7 +497,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 				log.WithError(err).Error("Failed to get API server cert")
 				return nil, err
 			}
-			time.Sleep(100 * time.Millisecond)
+			delay = retryBackoff(delay, 5*time.Second)
 			continue
 		}
 		// Sometimes the very first felix container that we start fails to
@@ -487,7 +507,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			if time.Since(start) > 120*time.Second {
 				return nil, err
 			}
-			time.Sleep(100 * time.Millisecond)
+			delay = retryBackoff(delay, 5*time.Second)
 			continue
 		}
 		if f, err := os.Open(kds.CertFileName); err != nil {
@@ -495,7 +515,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			if time.Since(start) > 120*time.Second {
 				return nil, err
 			}
-			time.Sleep(100 * time.Millisecond)
+			delay = retryBackoff(delay, 5*time.Second)
 			continue
 		} else {
 			err := f.Sync()
@@ -509,6 +529,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	log.Info("Got API server cert.")
 
 	start = time.Now()
+	delay = 100 * time.Millisecond
 	for {
 		kds.calicoClient, err = client.New(apiconfig.CalicoAPIConfig{
 			Spec: apiconfig.CalicoAPIConfigSpec{
@@ -537,11 +558,12 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to initialise calico client")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 
 	log.Info("Wait for creating default service account")
 	start = time.Now()
+	delay = 100 * time.Millisecond
 	for {
 		_, err := kds.K8sClient.CoreV1().ServiceAccounts("default").Get(context.Background(), "default", metav1.GetOptions{})
 		if err == nil {
@@ -551,7 +573,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to get default service account.")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 
 	log.Info("Controller manager is up. k8s datastore setup is done")

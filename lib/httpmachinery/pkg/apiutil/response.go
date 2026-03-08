@@ -187,6 +187,7 @@ type jsonErrorResponseWriter struct {
 }
 
 func (rs *jsonErrorResponseWriter) WriteResponse(ctx apicontext.Context, status int, w http.ResponseWriter) error {
+	w.WriteHeader(status)
 	writeJSONResponse(w, ErrorResponse{Error: rs.error})
 	return nil
 }
