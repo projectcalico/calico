@@ -16,13 +16,16 @@ package migration
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 func TestMigratedPolicyName(t *testing.T) {
@@ -87,13 +90,22 @@ func TestCopyLabelsAndAnnotations(t *testing.T) {
 // mockBackendClient is a simple mock of the api.Client interface for testing.
 type mockBackendClient struct {
 	api.Client
-	resources map[string][]*model.KVPair
+	resources   map[string][]*model.KVPair
+	ipamBlocks  []*model.KVPair
+	ipamHandles []*model.KVPair
 }
 
 func (m *mockBackendClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	rlo := list.(model.ResourceListOptions)
-	kvps := m.resources[rlo.Kind]
-	return &model.KVPairList{KVPairs: kvps}, nil
+	switch list.(type) {
+	case model.BlockListOptions:
+		return &model.KVPairList{KVPairs: m.ipamBlocks}, nil
+	case model.IPAMHandleListOptions:
+		return &model.KVPairList{KVPairs: m.ipamHandles}, nil
+	default:
+		rlo := list.(model.ResourceListOptions)
+		kvps := m.resources[rlo.Kind]
+		return &model.KVPairList{KVPairs: kvps}, nil
+	}
 }
 
 func TestMigrateResourceType_NewResources(t *testing.T) {
@@ -277,6 +289,151 @@ func TestMigrateResourceType_Conflict(t *testing.T) {
 	}
 }
 
+func TestListV1IPAMBlocks(t *testing.T) {
+	_, cidr, _ := net.ParseCIDR("10.0.0.0/26")
+	cnetCIDR := cnet.IPNet{IPNet: *cidr}
+	blockUID := types.UID("block-uid-1")
+
+	bc := &mockBackendClient{
+		ipamBlocks: []*model.KVPair{
+			{
+				Key: model.BlockKey{CIDR: cnetCIDR},
+				Value: &model.AllocationBlock{
+					CIDR:        cnetCIDR,
+					Affinity:    strPtr("host:node-1"),
+					Allocations: []*int{intPtr(0), nil, nil},
+					Unallocated: []int{1, 2},
+					Attributes: []model.AllocationAttribute{
+						{HandleID: strPtr("handle-1"), ActiveOwnerAttrs: map[string]string{"pod": "test-pod"}},
+					},
+					SequenceNumber:              5,
+					SequenceNumberForAllocation: map[string]uint64{"0": 3},
+					Deleted:                     false,
+				},
+				Revision: "12345",
+				UID:      &blockUID,
+			},
+		},
+	}
+
+	ctx := context.Background()
+	result, err := listV1IPAMBlocks(ctx, bc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.KVPairs) != 1 {
+		t.Fatalf("expected 1 KVPair, got %d", len(result.KVPairs))
+	}
+
+	kvp := result.KVPairs[0]
+
+	// Verify the key is a ResourceKey with the CIDR-derived name.
+	rk, ok := kvp.Key.(model.ResourceKey)
+	if !ok {
+		t.Fatalf("expected ResourceKey, got %T", kvp.Key)
+	}
+	if rk.Kind != KindIPAMBlock {
+		t.Errorf("expected kind %s, got %s", KindIPAMBlock, rk.Kind)
+	}
+	if rk.Name != "10-0-0-0-26" {
+		t.Errorf("expected name 10-0-0-0-26, got %s", rk.Name)
+	}
+
+	// Verify the value is a v3 IPAMBlock with the right spec.
+	block, ok := kvp.Value.(*apiv3.IPAMBlock)
+	if !ok {
+		t.Fatalf("expected *apiv3.IPAMBlock, got %T", kvp.Value)
+	}
+	if block.Name != "10-0-0-0-26" {
+		t.Errorf("expected name 10-0-0-0-26, got %s", block.Name)
+	}
+	if block.UID != blockUID {
+		t.Errorf("expected UID %s, got %s", blockUID, block.UID)
+	}
+	if block.Spec.CIDR != "10.0.0.0/26" {
+		t.Errorf("expected CIDR 10.0.0.0/26, got %s", block.Spec.CIDR)
+	}
+	if block.Spec.Affinity == nil || *block.Spec.Affinity != "host:node-1" {
+		t.Errorf("expected affinity host:node-1, got %v", block.Spec.Affinity)
+	}
+	if len(block.Spec.Attributes) != 1 {
+		t.Errorf("expected 1 attribute, got %d", len(block.Spec.Attributes))
+	}
+	if block.Spec.SequenceNumber != 5 {
+		t.Errorf("expected sequence number 5, got %d", block.Spec.SequenceNumber)
+	}
+}
+
+func TestListV1IPAMHandles(t *testing.T) {
+	handleUID := types.UID("handle-uid-1")
+
+	bc := &mockBackendClient{
+		ipamHandles: []*model.KVPair{
+			{
+				Key: model.IPAMHandleKey{HandleID: "k8s-pod-network.abc123"},
+				Value: &model.IPAMHandle{
+					HandleID: "k8s-pod-network.abc123",
+					Block:    map[string]int{"10.0.0.0/26": 3},
+					Deleted:  false,
+				},
+				Revision: "67890",
+				UID:      &handleUID,
+			},
+		},
+	}
+
+	ctx := context.Background()
+	result, err := listV1IPAMHandles(ctx, bc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.KVPairs) != 1 {
+		t.Fatalf("expected 1 KVPair, got %d", len(result.KVPairs))
+	}
+
+	kvp := result.KVPairs[0]
+
+	// Verify the key is a ResourceKey.
+	rk, ok := kvp.Key.(model.ResourceKey)
+	if !ok {
+		t.Fatalf("expected ResourceKey, got %T", kvp.Key)
+	}
+	if rk.Kind != KindIPAMHandle {
+		t.Errorf("expected kind %s, got %s", KindIPAMHandle, rk.Kind)
+	}
+	if rk.Name != "k8s-pod-network.abc123" {
+		t.Errorf("expected name k8s-pod-network.abc123, got %s", rk.Name)
+	}
+
+	// Verify the value is a v3 IPAMHandle with the right spec.
+	handle, ok := kvp.Value.(*apiv3.IPAMHandle)
+	if !ok {
+		t.Fatalf("expected *apiv3.IPAMHandle, got %T", kvp.Value)
+	}
+	if handle.Name != "k8s-pod-network.abc123" {
+		t.Errorf("expected name k8s-pod-network.abc123, got %s", handle.Name)
+	}
+	if handle.UID != handleUID {
+		t.Errorf("expected UID %s, got %s", handleUID, handle.UID)
+	}
+	if handle.Spec.HandleID != "k8s-pod-network.abc123" {
+		t.Errorf("expected HandleID k8s-pod-network.abc123, got %s", handle.Spec.HandleID)
+	}
+	if handle.Spec.Block["10.0.0.0/26"] != 3 {
+		t.Errorf("expected block count 3 for 10.0.0.0/26, got %d", handle.Spec.Block["10.0.0.0/26"])
+	}
+}
+
 func floatPtr(f float64) *float64 {
 	return &f
+}
+
+func strPtr(s string) *string {
+	return &s
+}
+
+func intPtr(i int) *int {
+	return &i
 }

@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // Kind constants for IPAM types that don't have exported Kind constants in the v3 API package.
@@ -942,11 +943,105 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 	})
 
-	// TODO: IPAMBlock and IPAMHandle use a different list model (BlockListOptions,
-	// etc.) in libcalico-go and can't be listed via ResourceListOptions. These need
-	// special handling that will be added in a follow-up.
+	// 19. IPAMBlock — uses BlockListOptions instead of ResourceListOptions, so ListV1
+	// converts the model.AllocationBlock values back to v3 IPAMBlock objects.
+	Register(ResourceMigrator{
+		Kind:  KindIPAMBlock,
+		Order: OrderIPAM,
+		ListV1: func(ctx context.Context, bc api.Client) (*model.KVPairList, error) {
+			return listV1IPAMBlocks(ctx, bc)
+		},
+		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+			v1 := kvp.Value.(*apiv3.IPAMBlock)
+			v3 := &apiv3.IPAMBlock{
+				TypeMeta:   newV3TypeMeta(KindIPAMBlock),
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+		CreateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.IPAMBlocks().Create(ctx, obj.(*apiv3.IPAMBlock), metav1.CreateOptions{})
+			return err
+		},
+		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
+			obj, err := pc.IPAMBlocks().Get(ctx, name, metav1.GetOptions{})
+			if kerrors.IsNotFound(err) {
+				return nil, nil
+			}
+			return obj, err
+		},
+		SpecsEqual: func(a, b metav1.Object) bool {
+			return reflect.DeepEqual(a.(*apiv3.IPAMBlock).Spec, b.(*apiv3.IPAMBlock).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.IPAMBlocks().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.IPAMBlocks().Update(ctx, obj.(*apiv3.IPAMBlock), metav1.UpdateOptions{})
+			return err
+		},
+	})
 
-	// 19. CalicoNodeStatus
+	// 20. IPAMHandle — uses IPAMHandleListOptions instead of ResourceListOptions, so
+	// ListV1 converts the model.IPAMHandle values back to v3 IPAMHandle objects.
+	Register(ResourceMigrator{
+		Kind:  KindIPAMHandle,
+		Order: OrderIPAM,
+		ListV1: func(ctx context.Context, bc api.Client) (*model.KVPairList, error) {
+			return listV1IPAMHandles(ctx, bc)
+		},
+		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+			v1 := kvp.Value.(*apiv3.IPAMHandle)
+			v3 := &apiv3.IPAMHandle{
+				TypeMeta:   newV3TypeMeta(KindIPAMHandle),
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+		CreateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.IPAMHandles("").Create(ctx, obj.(*apiv3.IPAMHandle), metav1.CreateOptions{})
+			return err
+		},
+		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
+			obj, err := pc.IPAMHandles("").Get(ctx, name, metav1.GetOptions{})
+			if kerrors.IsNotFound(err) {
+				return nil, nil
+			}
+			return obj, err
+		},
+		SpecsEqual: func(a, b metav1.Object) bool {
+			return reflect.DeepEqual(a.(*apiv3.IPAMHandle).Spec, b.(*apiv3.IPAMHandle).Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.IPAMHandles("").List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			_, err := pc.IPAMHandles("").Update(ctx, obj.(*apiv3.IPAMHandle), metav1.UpdateOptions{})
+			return err
+		},
+	})
+
+	// 21. CalicoNodeStatus
 	Register(ResourceMigrator{
 		Kind:  apiv3.KindCalicoNodeStatus,
 		Order: OrderCalicoNodeStatus,
@@ -993,6 +1088,96 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return err
 		},
 	})
+}
+
+// listV1IPAMBlocks lists v1 IPAMBlocks using BlockListOptions (since IPAMBlock
+// can't be listed via ResourceListOptions), then converts the returned
+// model.AllocationBlock values back to v3 IPAMBlock objects so they work with
+// the generic MigrateResourceType function.
+func listV1IPAMBlocks(ctx context.Context, bc api.Client) (*model.KVPairList, error) {
+	v1List, err := bc.List(ctx, model.BlockListOptions{}, "")
+	if err != nil {
+		return nil, err
+	}
+	result := &model.KVPairList{
+		KVPairs:  make([]*model.KVPair, 0, len(v1List.KVPairs)),
+		Revision: v1List.Revision,
+	}
+	for _, kvp := range v1List.KVPairs {
+		block := kvp.Value.(*model.AllocationBlock)
+		name := names.CIDRToName(block.CIDR)
+
+		attrs := make([]apiv3.AllocationAttribute, len(block.Attributes))
+		for i, a := range block.Attributes {
+			attrs[i] = apiv3.AllocationAttribute{
+				HandleID:            a.HandleID,
+				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
+				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+			}
+		}
+
+		v3Block := &apiv3.IPAMBlock{
+			TypeMeta:   newV3TypeMeta(KindIPAMBlock),
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Spec: apiv3.IPAMBlockSpec{
+				CIDR:                        block.CIDR.String(),
+				Affinity:                    block.Affinity,
+				AffinityClaimTime:           block.AffinityClaimTime,
+				Allocations:                 block.Allocations,
+				Unallocated:                 block.Unallocated,
+				Attributes:                  attrs,
+				SequenceNumber:              block.SequenceNumber,
+				SequenceNumberForAllocation: block.SequenceNumberForAllocation,
+				Deleted:                     block.Deleted,
+			},
+		}
+		if kvp.UID != nil {
+			v3Block.UID = *kvp.UID
+		}
+		result.KVPairs = append(result.KVPairs, &model.KVPair{
+			Key:      model.ResourceKey{Kind: KindIPAMBlock, Name: name},
+			Value:    v3Block,
+			Revision: kvp.Revision,
+		})
+	}
+	return result, nil
+}
+
+// listV1IPAMHandles lists v1 IPAMHandles using IPAMHandleListOptions (since
+// IPAMHandle can't be listed via ResourceListOptions), then converts the
+// returned model.IPAMHandle values back to v3 IPAMHandle objects.
+func listV1IPAMHandles(ctx context.Context, bc api.Client) (*model.KVPairList, error) {
+	v1List, err := bc.List(ctx, model.IPAMHandleListOptions{}, "")
+	if err != nil {
+		return nil, err
+	}
+	result := &model.KVPairList{
+		KVPairs:  make([]*model.KVPair, 0, len(v1List.KVPairs)),
+		Revision: v1List.Revision,
+	}
+	for _, kvp := range v1List.KVPairs {
+		handle := kvp.Value.(*model.IPAMHandle)
+		name := kvp.Key.(model.IPAMHandleKey).HandleID
+
+		v3Handle := &apiv3.IPAMHandle{
+			TypeMeta:   newV3TypeMeta(KindIPAMHandle),
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Spec: apiv3.IPAMHandleSpec{
+				HandleID: handle.HandleID,
+				Block:    handle.Block,
+				Deleted:  handle.Deleted,
+			},
+		}
+		if kvp.UID != nil {
+			v3Handle.UID = *kvp.UID
+		}
+		result.KVPairs = append(result.KVPairs, &model.KVPair{
+			Key:      model.ResourceKey{Kind: KindIPAMHandle, Name: name},
+			Value:    v3Handle,
+			Revision: kvp.Revision,
+		})
+	}
+	return result, nil
 }
 
 // convertClusterInformation converts a v1 ClusterInformation to a v3 object,
