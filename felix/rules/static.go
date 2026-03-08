@@ -1360,8 +1360,10 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *generic
 	// Apply strict RPF check to packets from workload interfaces.  This prevents
 	// workloads from spoofing their IPs.  Note: non-privileged containers can't
 	// usually spoof but privileged containers and VMs can.
+	// Note: we use Drop() instead of IptablesFilterDenyAction() because REJECT is
+	// not a valid target in the raw table.
 	rules = append(rules,
-		r.RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, r.IptablesFilterDenyAction())...)
+		r.RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, r.Drop())...)
 
 	rules = append(rules,
 		// Send non-workload traffic to the untracked policy chains.
