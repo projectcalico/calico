@@ -60,9 +60,6 @@ var _ = describe.CalicoDescribe(
 
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
-
-			// Ensure a clean starting environment before each test.
-			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred())
 		})
 
 		// Before each test, perform the following steps:
@@ -127,7 +124,7 @@ var _ = describe.CalicoDescribe(
 			By("Creating a default-deny policy selecting both namespaces")
 			var defaultDenyPriority float64 = 5000
 			defaultDenyGNP := v3.NewGlobalNetworkPolicy()
-			defaultDenyGNP.Name = "default-deny-all"
+			defaultDenyGNP.Name = utils.GenerateRandomName("default-deny-all")
 			defaultDenyGNP.Spec.Order = &defaultDenyPriority
 			defaultDenyGNP.Spec.NamespaceSelector = testNamespacesOnly
 			err = cli.Create(ctx, defaultDenyGNP)
@@ -146,7 +143,7 @@ var _ = describe.CalicoDescribe(
 			By("Creating global network policy which allows pods to access kube-dns")
 			var dnsPriority float64 = 400
 			allowEgressToDNS := v3.NewGlobalNetworkPolicy()
-			allowEgressToDNS.Name = "allow-egress-to-kube-dns"
+			allowEgressToDNS.Name = utils.GenerateRandomName("allow-egress-to-dns")
 			allowEgressToDNS.Spec.Order = &dnsPriority
 			allowEgressToDNS.Spec.NamespaceSelector = testNamespacesOnly
 			allowEgressToDNS.Spec.Egress = []v3.Rule{
@@ -308,7 +305,7 @@ var _ = describe.CalicoDescribe(
 
 			np := &v3.GlobalNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "allow-through-namespace-selector",
+					Name: utils.GenerateRandomName("allow-through-ns-sel"),
 				},
 				Spec: v3.GlobalNetworkPolicySpec{
 					NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", ns.Name),

@@ -56,6 +56,10 @@ var _ = Describe("IPAM migration handling", func() {
 							"node": nodeName,
 							"type": "ipipTunnelAddress",
 						},
+						AlternateOwnerAttrs: map[string]string{
+							"node": nodeName,
+							"type": "ipipTunnelAddress",
+						},
 					},
 				},
 			},
@@ -110,6 +114,7 @@ var _ = Describe("IPAM migration handling", func() {
 		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes).To(HaveLen(1))
 		Expect(*migrateIPAM.IPAMBlocks[0].Value.Attributes[0].HandleID).To(Equal(fmt.Sprintf("ipip-tunnel-addr-%s", newNodeName)))
 		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].ActiveOwnerAttrs["node"]).To(Equal(newNodeName))
+		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].AlternateOwnerAttrs["node"]).To(Equal(newNodeName))
 
 		// Check that the block affinity attributes were changed correctly
 		newAffinityKey := model.BlockAffinityKey{
@@ -156,6 +161,7 @@ var _ = Describe("IPAM migration handling", func() {
 		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes).To(HaveLen(1))
 		Expect(*migrateIPAM.IPAMBlocks[0].Value.Attributes[0].HandleID).To(Equal(fmt.Sprintf("ipip-tunnel-addr-%s", nodeName)))
 		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].ActiveOwnerAttrs["node"]).To(Equal(nodeName))
+		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].AlternateOwnerAttrs["node"]).To(Equal(nodeName))
 
 		// Check that the block affinity attributes were not changed
 		newAffinityKeyPath, err := model.KeyToDefaultPath(affinity1.Key)

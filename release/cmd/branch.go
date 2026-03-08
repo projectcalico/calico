@@ -17,14 +17,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 // The branch command suite is used to manage branches.
@@ -77,43 +75,6 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					branch.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					branch.WithPublish(c.Bool(gitPublishFlag.Name)))
 				return m.CutReleaseBranch()
-			},
-		},
-		// Cut a new operator release branch
-		{
-			Name:  "cut-operator",
-			Usage: fmt.Sprintf("Cut a new operator release branch from %s", utils.DefaultBranch),
-			Flags: append(operatorGitFlags,
-				operatorBaseBranchFlag,
-				operatorReleaseBranchPrefixFlag,
-				operatorDevTagSuffixFlag,
-				newBranchFlag,
-				gitPublishFlag,
-				skipValidationFlag,
-			),
-			Action: func(_ context.Context, c *cli.Command) error {
-				configureLogging("branch-cut-operator.log")
-
-				// Clone the operator repository
-				operatorDir := filepath.Join(cfg.TmpDir, operator.DefaultRepoName)
-				if err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBaseBranchFlag.Name), operatorDir); err != nil {
-					return err
-				}
-
-				// Create operator manager
-				m := operator.NewManager(
-					operator.WithOperatorDirectory(operatorDir),
-					operator.WithRepoRemote(c.String(operatorRepoRemoteFlag.Name)),
-					operator.WithGithubOrg(c.String(operatorOrgFlag.Name)),
-					operator.WithRepoName(c.String(operatorRepoFlag.Name)),
-					operator.WithBranch(operatorBaseBranchFlag.Name),
-					operator.WithDevTagIdentifier(operatorDevTagSuffixFlag.Name),
-					operator.WithReleaseBranchPrefix(c.String(operatorReleaseBranchPrefixFlag.Name)),
-					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					operator.WithPublish(c.Bool(gitPublishFlag.Name)),
-				)
-
-				return m.CutBranch(c.String(newBranchFlag.Name))
 			},
 		},
 	}

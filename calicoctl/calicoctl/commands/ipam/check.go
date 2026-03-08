@@ -693,16 +693,28 @@ func formatAttrs(attribute model.AllocationAttribute) string {
 	if attribute.HandleID != nil {
 		primary = *attribute.HandleID
 	}
+
+	result := fmt.Sprintf("Main:%s Extra:%s", primary, kvsFormat(attribute.ActiveOwnerAttrs))
+
+	if len(attribute.AlternateOwnerAttrs) > 0 {
+		result = fmt.Sprintf("%s Alternate:%s", result, kvsFormat(attribute.AlternateOwnerAttrs))
+	}
+
+	return result
+}
+
+// kvsFormat formats a map as a sorted, comma-separated list of key=value pairs.
+func kvsFormat(m map[string]string) string {
 	var keys []string
-	for k := range attribute.ActiveOwnerAttrs {
+	for k := range m {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	var kvs []string
 	for _, k := range keys {
-		kvs = append(kvs, fmt.Sprintf("%s=%s", k, attribute.ActiveOwnerAttrs[k]))
+		kvs = append(kvs, fmt.Sprintf("%s=%s", k, m[k]))
 	}
-	return fmt.Sprintf("Main:%s Extra:%s", primary, strings.Join(kvs, ","))
+	return strings.Join(kvs, ",")
 }
 
 type ownerRecord struct {

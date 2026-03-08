@@ -109,3 +109,69 @@ func TestJSONStreamResponse(t *testing.T) {
 	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
 	Expect(w.Body.String()).To(Equal("data: {\"rspField\":\"foo\"}\n\ndata: {\"rspField\":\"bar\"}\n\n"))
 }
+
+func TestJSONErrorResponse(t *testing.T) {
+	setupTest(t)
+
+	type Request struct {
+		ReqField string `urlQuery:"reqField"`
+	}
+	type Response struct {
+		RespField string `json:"rspField"`
+	}
+
+	hdlr := apiutil.NewJSONListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
+		return apiutil.NewListOrStreamResponse[Response]().
+			SetStatus(http.StatusInternalServerError).
+			SetError("Internal Server Error")
+	})
+
+	w := httptest.NewRecorder()
+
+	r, err := http.NewRequest(http.MethodGet, "foobar", nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	values := r.URL.Query()
+	values.Set("reqField", "value")
+	r.URL.RawQuery = values.Encode()
+
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
+
+	Expect(w.Code).To(Equal(http.StatusInternalServerError))
+	Expect(testutil.MustUnmarshal[apiutil.ErrorResponse](t, w.Body.Bytes())).To(Equal(&apiutil.ErrorResponse{
+		Error: "Internal Server Error",
+	}))
+}
+
+func TestJSONListErrorResponse(t *testing.T) {
+	setupTest(t)
+
+	type Request struct {
+		ReqField string `urlQuery:"reqField"`
+	}
+	type Response struct {
+		RespField string `json:"rspField"`
+	}
+
+	hdlr := apiutil.NewJSONListHandler(func(ctx apicontext.Context, params Request) apiutil.ListResponse[Response] {
+		return apiutil.NewListResponse[Response]().
+			SetStatus(http.StatusInternalServerError).
+			SetError("Internal Server Error")
+	})
+
+	w := httptest.NewRecorder()
+
+	r, err := http.NewRequest(http.MethodGet, "foobar", nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	values := r.URL.Query()
+	values.Set("reqField", "value")
+	r.URL.RawQuery = values.Encode()
+
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
+
+	Expect(w.Code).To(Equal(http.StatusInternalServerError))
+	Expect(testutil.MustUnmarshal[apiutil.ErrorResponse](t, w.Body.Bytes())).To(Equal(&apiutil.ErrorResponse{
+		Error: "Internal Server Error",
+	}))
+}
