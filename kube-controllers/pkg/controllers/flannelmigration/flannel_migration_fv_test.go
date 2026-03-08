@@ -199,6 +199,22 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, func() {
 
 		// Clean up KubeControllersConfiguration
 		_, _ = calicoClient.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{})
+
+		// Clean up FelixConfigurations created by migration controller
+		felixConfigs, _ := calicoClient.FelixConfigurations().List(ctx, options.ListOptions{})
+		if felixConfigs != nil {
+			for _, fc := range felixConfigs.Items {
+				_, _ = calicoClient.FelixConfigurations().Delete(ctx, fc.Name, options.DeleteOptions{})
+			}
+		}
+
+		// Clean up Calico Nodes created by migration controller
+		calicoNodes, _ := calicoClient.Nodes().List(ctx, options.ListOptions{})
+		if calicoNodes != nil {
+			for _, cn := range calicoNodes.Items {
+				_, _ = calicoClient.Nodes().Delete(ctx, cn.Name, options.DeleteOptions{})
+			}
+		}
 	})
 
 	Context("Should migrate FV tests", func() {
