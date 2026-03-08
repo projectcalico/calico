@@ -69,8 +69,22 @@ type DatastoreMigrationStatus struct {
 }
 
 type DatastoreMigrationProgress struct {
+	TotalTypes     int    `json:"totalTypes,omitempty"`
+	CompletedTypes int    `json:"completedTypes,omitempty"`
+	CurrentType    string `json:"currentType,omitempty"`
+
 	Total     int `json:"total,omitempty"`
 	Migrated  int `json:"migrated,omitempty"`
 	Skipped   int `json:"skipped,omitempty"`
 	Conflicts int `json:"conflicts,omitempty"`
+
+	TypeDetails []TypeMigrationProgress `json:"typeDetails,omitempty"`
+}
+
+// TypeMigrationProgress tracks the result for a single resource type.
+type TypeMigrationProgress struct {
+	Kind      string `json:"kind"`
+	Migrated  int    `json:"migrated,omitempty"`
+	Skipped   int    `json:"skipped,omitempty"`
+	Conflicts int    `json:"conflicts,omitempty"`
 }

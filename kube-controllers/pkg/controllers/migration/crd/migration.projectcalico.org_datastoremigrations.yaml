@@ -16,12 +16,23 @@ spec:
         - jsonPath: .status.phase
           name: Phase
           type: string
-        - jsonPath: .status.progress.total
-          name: Total
+        - jsonPath: .status.progress.completedTypes
+          name: Types Done
           type: integer
+        - jsonPath: .status.progress.totalTypes
+          name: Types Total
+          type: integer
+        - jsonPath: .status.progress.currentType
+          name: Current Type
+          type: string
+          priority: 1
         - jsonPath: .status.progress.migrated
           name: Migrated
           type: integer
+        - jsonPath: .status.progress.skipped
+          name: Skipped
+          type: integer
+          priority: 1
         - jsonPath: .status.progress.conflicts
           name: Conflicts
           type: integer
@@ -92,14 +103,35 @@ spec:
                   type: string
                 progress:
                   properties:
-                    conflicts:
+                    totalTypes:
+                      type: integer
+                    completedTypes:
+                      type: integer
+                    currentType:
+                      type: string
+                    total:
                       type: integer
                     migrated:
                       type: integer
                     skipped:
                       type: integer
-                    total:
+                    conflicts:
                       type: integer
+                    typeDetails:
+                      items:
+                        properties:
+                          kind:
+                            type: string
+                          migrated:
+                            type: integer
+                          skipped:
+                            type: integer
+                          conflicts:
+                            type: integer
+                        required:
+                          - kind
+                        type: object
+                      type: array
                   type: object
                 startedAt:
                   format: date-time

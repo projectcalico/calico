@@ -427,9 +427,29 @@ echo ""
 echo "  --- DatastoreMigration Status ---"
 ${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3
 echo ""
+echo "  Wide output (includes priority columns):"
+${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o wide
+echo ""
 ${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status}' | python3 -m json.tool 2>/dev/null || \
   ${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status}'
 echo ""
+
+# Verify per-type progress was reported.
+type_count=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status.progress.typeDetails}' 2>/dev/null | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+completed_types=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status.progress.completedTypes}' 2>/dev/null || echo "0")
+total_types=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status.progress.totalTypes}' 2>/dev/null || echo "0")
+
+if [ "$type_count" -gt 0 ]; then
+  pass "Per-type progress reported ($type_count types in typeDetails)"
+else
+  fail "No per-type progress in typeDetails"
+fi
+
+if [ "$completed_types" -gt 0 ] && [ "$completed_types" = "$total_types" ]; then
+  pass "All resource types completed (completedTypes=$completed_types, totalTypes=$total_types)"
+else
+  fail "Type completion mismatch (completedTypes=$completed_types, totalTypes=$total_types)"
+fi
 
 echo ""
 echo "  --- Checking migrated resources ---"

@@ -192,39 +192,54 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 		return migrators[i].Order < migrators[j].Order
 	})
 
-	totalMigrated := 0
-	totalSkipped := 0
-	totalCount := 0
 	var allConflicts []string
 	uidMap := make(map[types.UID]types.UID)
 
-	for _, m := range migrators {
+	// Initialize progress tracking.
+	dm.Status.Progress = DatastoreMigrationProgress{
+		TotalTypes:  len(migrators),
+		TypeDetails: make([]TypeMigrationProgress, 0, len(migrators)),
+	}
+
+	for i, m := range migrators {
+		// Update current-type progress before starting each type.
+		dm.Status.Progress.CurrentType = m.Kind
+		dm.Status.Progress.CompletedTypes = i
+		if err := c.updateStatus(dm); err != nil {
+			logCtx.WithError(err).Warn("Failed to update progress status")
+		}
+
 		result, err := MigrateResourceType(c.ctx, c.backendClient, m)
 		if err != nil {
 			c.setFailedStatus(dm, fmt.Sprintf("failed migrating %s: %v", m.Kind, err))
 			return c.updateStatus(dm)
 		}
-		totalMigrated += result.Migrated
-		totalSkipped += result.Skipped
+
+		dm.Status.Progress.Migrated += result.Migrated
+		dm.Status.Progress.Skipped += result.Skipped
+		dm.Status.Progress.Total += result.Migrated + result.Skipped + len(result.Conflicts)
+		dm.Status.Progress.Conflicts += len(result.Conflicts)
+		dm.Status.Progress.TypeDetails = append(dm.Status.Progress.TypeDetails, TypeMigrationProgress{
+			Kind:      m.Kind,
+			Migrated:  result.Migrated,
+			Skipped:   result.Skipped,
+			Conflicts: len(result.Conflicts),
+		})
+
 		allConflicts = append(allConflicts, result.Conflicts...)
-		totalCount += result.Migrated + result.Skipped + len(result.Conflicts)
 		for oldUID, newUID := range result.UIDMapping {
 			uidMap[oldUID] = newUID
 		}
 	}
 
+	// Mark all types complete.
+	dm.Status.Progress.CompletedTypes = len(migrators)
+	dm.Status.Progress.CurrentType = ""
+
 	// Second pass: remap OwnerReference UIDs that point to Calico resources.
 	if err := RemapOwnerReferences(c.ctx, uidMap, migrators); err != nil {
 		c.setFailedStatus(dm, fmt.Sprintf("failed remapping OwnerReferences: %v", err))
 		return c.updateStatus(dm)
-	}
-
-	// Update progress.
-	dm.Status.Progress = DatastoreMigrationProgress{
-		Total:     totalCount,
-		Migrated:  totalMigrated,
-		Skipped:   totalSkipped,
-		Conflicts: len(allConflicts),
 	}
 
 	// Update conditions for conflicts.
@@ -556,13 +571,23 @@ func (c *migrationController) getDatastoreMigration(name string) (*DatastoreMigr
 }
 
 // updateStatus updates the status subresource of a DatastoreMigration CR.
+// It updates dm in-place with the server's response (including new ResourceVersion)
+// so callers can continue making updates without re-fetching.
 func (c *migrationController) updateStatus(dm *DatastoreMigration) error {
 	uns, err := datastoreMigrationToUnstructured(dm)
 	if err != nil {
 		return fmt.Errorf("converting DatastoreMigration to unstructured: %v", err)
 	}
-	_, err = c.dynamicClient.Resource(DatastoreMigrationGVR).UpdateStatus(c.ctx, uns, metav1.UpdateOptions{})
-	return err
+	updated, err := c.dynamicClient.Resource(DatastoreMigrationGVR).UpdateStatus(c.ctx, uns, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	refreshed, err := unstructuredToDatastoreMigration(updated)
+	if err != nil {
+		return fmt.Errorf("parsing updated DatastoreMigration: %v", err)
+	}
+	*dm = *refreshed
+	return nil
 }
 
 // updateMetadata updates the metadata (annotations, finalizers, labels) of a
