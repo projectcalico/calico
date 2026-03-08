@@ -24,9 +24,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -35,57 +38,27 @@ import (
 
 var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", Ordered, func() {
 	var (
-		etcd              *containers.Container
-		kubeControllers   *containers.Container
-		apiserver         *containers.Container
-		calicoClient      client.Interface
-		k8sClient         *kubernetes.Clientset
-		controllerManager *containers.Container
-		removeKubeconfig  func()
+		etcd         *containers.Container
+		calicoClient client.Interface
+		k8sClient    *fake.Clientset
+		stopCh       chan struct{}
 	)
 
 	BeforeAll(func() {
-		// Run etcd.
+		// Run etcd for the Calico datastore.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
-
-		// Run apiserver.
-		apiserver = testutils.RunK8sApiserver(etcd.IP)
-
-		// Write out a kubeconfig file
-		var kconfigfile string
-		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
-
-		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
-
-		var err error
-		k8sClient, err = testutils.GetK8sClient(kconfigfile)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Wait for the apiserver to be available.
-		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
-			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
-
-		// Run controller manager.  Empirically it can take around 10s until the
-		// controller manager is ready to create default service accounts, even
-		// when the k8s image has already been downloaded to run the API
-		// server.  We use Eventually to allow for possible delay when doing
-		// initial pod creation below.
-		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
 	AfterAll(func() {
 		_ = calicoClient.Close()
-		controllerManager.Stop()
-		kubeControllers.Stop()
-		apiserver.Stop()
 		etcd.Stop()
-		removeKubeconfig()
 	})
 
 	AfterEach(func() {
+		close(stopCh)
+
+		// Clean up Calico profiles.
 		ctx := context.Background()
 		profList, err := calicoClient.Profiles().List(ctx, options.ListOptions{})
 		if err != nil {
@@ -95,20 +68,6 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", Ordere
 			for _, prof := range profList.Items {
 				if _, err := calicoClient.Profiles().Delete(ctx, prof.Name, options.DeleteOptions{}); err != nil {
 					log.WithError(err).WithField("profile", prof.Name).Debug("Failed to delete profile during cleanup")
-				}
-			}
-		}
-		saList, err := k8sClient.CoreV1().ServiceAccounts("default").List(ctx, metav1.ListOptions{})
-		if err != nil {
-			log.WithError(err).Warn("Failed to list service accounts during cleanup")
-		}
-		if saList != nil {
-			for _, sa := range saList.Items {
-				if sa.Name == "default" {
-					continue
-				}
-				if err := k8sClient.CoreV1().ServiceAccounts("default").Delete(ctx, sa.Name, metav1.DeleteOptions{}); err != nil {
-					log.WithError(err).WithField("sa", sa.Name).Debug("Failed to delete service account during cleanup")
 				}
 			}
 		}
@@ -124,16 +83,29 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", Ordere
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      saName,
 					Namespace: nsName,
+					UID:       types.UID("aa844ac0-87c8-440a-b270-307cdba8fd25"),
 					Labels: map[string]string{
 						"peanut": "butter",
 					},
 				},
 			}
-			Eventually(func() error {
-				_, err := k8sClient.CoreV1().ServiceAccounts(nsName).Create(context.Background(),
-					sa, metav1.CreateOptions{})
-				return err
-			}, time.Second*10, 500*time.Millisecond).ShouldNot(HaveOccurred())
+
+			// Create the K8s objects before starting the controller so the
+			// informer's initial List picks them up deterministically,
+			// avoiding any race with watch establishment.
+			k8sClient = fake.NewSimpleClientset(sa)
+			stopCh = make(chan struct{})
+
+			ctrl := serviceaccount.NewServiceAccountController(
+				context.Background(),
+				k8sClient,
+				calicoClient,
+				config.GenericControllerConfig{
+					ReconcilerPeriod: time.Second,
+					NumberOfWorkers:  1,
+				},
+			)
+			go ctrl.Run(stopCh)
 
 			Eventually(func() *api.Profile {
 				profile, _ := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
