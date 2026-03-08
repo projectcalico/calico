@@ -97,6 +97,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.Tiers().Update(ctx, obj.(*apiv3.Tier), metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.Tiers().Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 2. FelixConfiguration
@@ -144,6 +147,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
 			_, err := pc.FelixConfigurations().Update(ctx, obj.(*apiv3.FelixConfiguration), metav1.UpdateOptions{})
 			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.FelixConfigurations().Delete(ctx, name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -193,6 +199,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.BGPConfigurations().Update(ctx, obj.(*apiv3.BGPConfiguration), metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.BGPConfigurations().Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 4. KubeControllersConfiguration
@@ -240,6 +249,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
 			_, err := pc.KubeControllersConfigurations().Update(ctx, obj.(*apiv3.KubeControllersConfiguration), metav1.UpdateOptions{})
 			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.KubeControllersConfigurations().Delete(ctx, name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -289,6 +301,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.IPPools().Update(ctx, obj.(*apiv3.IPPool), metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.IPPools().Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 6. IPReservation
@@ -336,6 +351,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
 			_, err := pc.IPReservations().Update(ctx, obj.(*apiv3.IPReservation), metav1.UpdateOptions{})
 			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.IPReservations().Delete(ctx, name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -385,6 +403,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.BGPPeers().Update(ctx, obj.(*apiv3.BGPPeer), metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.BGPPeers().Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 8. BGPFilter
@@ -432,6 +453,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
 			_, err := pc.BGPFilters().Update(ctx, obj.(*apiv3.BGPFilter), metav1.UpdateOptions{})
 			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.BGPFilters().Delete(ctx, name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -481,6 +505,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
 			_, err := pc.GlobalNetworkPolicies().Update(ctx, obj.(*apiv3.GlobalNetworkPolicy), metav1.UpdateOptions{})
 			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.GlobalNetworkPolicies().Delete(ctx, name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -537,6 +564,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.NetworkPolicies(t.Namespace).Update(ctx, t, metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.NetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 11. StagedGlobalNetworkPolicy (with policy name migration)
@@ -585,6 +615,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
 			_, err := pc.StagedGlobalNetworkPolicies().Update(ctx, obj.(*apiv3.StagedGlobalNetworkPolicy), metav1.UpdateOptions{})
 			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.StagedGlobalNetworkPolicies().Delete(ctx, name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -641,6 +674,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.StagedNetworkPolicies(t.Namespace).Update(ctx, t, metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.StagedNetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 13. StagedKubernetesNetworkPolicy (namespaced)
@@ -695,6 +731,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.StagedKubernetesNetworkPolicies(t.Namespace).Update(ctx, t, metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.StagedKubernetesNetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 14. HostEndpoint
@@ -743,6 +782,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.HostEndpoints().Update(ctx, obj.(*apiv3.HostEndpoint), metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.HostEndpoints().Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 15. GlobalNetworkSet
@@ -790,6 +832,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
 			_, err := pc.GlobalNetworkSets().Update(ctx, obj.(*apiv3.GlobalNetworkSet), metav1.UpdateOptions{})
 			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.GlobalNetworkSets().Delete(ctx, name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -845,6 +890,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.NetworkSets(t.Namespace).Update(ctx, t, metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.NetworkSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 17. IPAMConfiguration (v1 is "IPAMConfig", v3 is "IPAMConfiguration")
@@ -893,6 +941,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.IPAMConfigurations().Update(ctx, obj.(*apiv3.IPAMConfiguration), metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.IPAMConfigurations().Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 18. BlockAffinity (IPAM)
@@ -940,6 +991,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
 			_, err := pc.BlockAffinities().Update(ctx, obj.(*apiv3.BlockAffinity), metav1.UpdateOptions{})
 			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.BlockAffinities().Delete(ctx, name, metav1.DeleteOptions{})
 		},
 	})
 
@@ -990,6 +1044,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.IPAMBlocks().Update(ctx, obj.(*apiv3.IPAMBlock), metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.IPAMBlocks().Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 20. IPAMHandle — uses IPAMHandleListOptions instead of ResourceListOptions, so
@@ -1039,6 +1096,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			_, err := pc.IPAMHandles("").Update(ctx, obj.(*apiv3.IPAMHandle), metav1.UpdateOptions{})
 			return err
 		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.IPAMHandles("").Delete(ctx, name, metav1.DeleteOptions{})
+		},
 	})
 
 	// 21. CalicoNodeStatus
@@ -1086,6 +1146,9 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
 			_, err := pc.CalicoNodeStatuses().Update(ctx, obj.(*apiv3.CalicoNodeStatus), metav1.UpdateOptions{})
 			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.CalicoNodeStatuses().Delete(ctx, name, metav1.DeleteOptions{})
 		},
 	})
 }

@@ -64,6 +64,9 @@ type ResourceMigrator struct {
 
 	// UpdateV3 updates a v3 resource (used for OwnerReference remapping).
 	UpdateV3 func(ctx context.Context, obj metav1.Object) error
+
+	// DeleteV3 deletes a v3 resource by name and namespace.
+	DeleteV3 func(ctx context.Context, name, namespace string) error
 }
 
 // MigrationResult tracks the result of migrating a single resource type.

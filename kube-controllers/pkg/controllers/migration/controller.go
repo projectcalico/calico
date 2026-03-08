@@ -363,7 +363,7 @@ func (c *migrationController) handleAbort(logCtx *log.Entry, dm *DatastoreMigrat
 func (c *migrationController) cleanupPartialV3Resources(logCtx *log.Entry) {
 	migrators := GetRegistry()
 	for _, m := range migrators {
-		if m.ListV3 == nil {
+		if m.ListV3 == nil || m.DeleteV3 == nil {
 			continue
 		}
 		v3List, err := m.ListV3(c.ctx)
@@ -371,16 +371,21 @@ func (c *migrationController) cleanupPartialV3Resources(logCtx *log.Entry) {
 			logCtx.WithError(err).WithField("kind", m.Kind).Warn("Failed to list v3 resources for cleanup")
 			continue
 		}
+		deleted := 0
 		for _, obj := range v3List {
 			name := obj.GetName()
 			ns := obj.GetNamespace()
-			logCtx.WithFields(log.Fields{"kind": m.Kind, "name": name, "namespace": ns}).Debug("Deleting partial v3 resource")
-			// Use the dynamic client with the v3 GVR to delete, since the
-			// typed clients don't expose Delete on all types uniformly.
-			// For the prototype, we skip actual deletion and just log. A
-			// production implementation would use DeleteV3 on the migrator.
+			if err := m.DeleteV3(c.ctx, name, ns); err != nil {
+				if !kerrors.IsNotFound(err) {
+					logCtx.WithError(err).WithFields(log.Fields{"kind": m.Kind, "name": name, "namespace": ns}).Warn("Failed to delete v3 resource during abort")
+				}
+				continue
+			}
+			deleted++
 		}
-		logCtx.WithFields(log.Fields{"kind": m.Kind, "count": len(v3List)}).Info("Found partial v3 resources for cleanup")
+		if deleted > 0 {
+			logCtx.WithFields(log.Fields{"kind": m.Kind, "deleted": deleted}).Info("Deleted partial v3 resources")
+		}
 	}
 }
 
