@@ -267,6 +267,7 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 		var getErr error
 		existing, getErr = m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
 		if getErr != nil && isRetryable(getErr) {
+			migrationRetries.WithLabelValues(m.Kind, "get").Inc()
 			item.logCtx.WithError(getErr).Debug("Retrying GetV3")
 			return false, nil
 		}
@@ -296,6 +297,7 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 				return true, createErr
 			}
 			if isRetryable(createErr) {
+				migrationRetries.WithLabelValues(m.Kind, "create").Inc()
 				item.logCtx.WithError(createErr).Debug("Retrying CreateV3")
 				return false, nil
 			}
@@ -320,6 +322,7 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 		var getErr error
 		created, getErr = m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
 		if getErr != nil && isRetryable(getErr) {
+			migrationRetries.WithLabelValues(m.Kind, "get").Inc()
 			item.logCtx.WithError(getErr).Debug("Retrying read-back GetV3")
 			return false, nil
 		}

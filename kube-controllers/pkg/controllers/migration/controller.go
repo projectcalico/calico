@@ -169,6 +169,7 @@ func (c *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 	now := metav1.Now()
 	dm.Status.Phase = DatastoreMigrationPhaseMigrating
 	dm.Status.StartedAt = &now
+	setPhaseMetric(DatastoreMigrationPhaseMigrating)
 	return c.updateStatus(dm)
 }
 
@@ -209,11 +210,18 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 			logCtx.WithError(err).Warn("Failed to update progress status")
 		}
 
+		typeStart := time.Now()
 		result, err := MigrateResourceType(c.ctx, c.backendClient, m)
+		migrationTypeDuration.WithLabelValues(m.Kind).Observe(time.Since(typeStart).Seconds())
 		if err != nil {
+			migrationResourceErrors.WithLabelValues(m.Kind).Inc()
 			c.setFailedStatus(dm, fmt.Sprintf("failed migrating %s: %v", m.Kind, err))
 			return c.updateStatus(dm)
 		}
+
+		migrationResourcesTotal.WithLabelValues(m.Kind, "migrated").Add(float64(result.Migrated))
+		migrationResourcesTotal.WithLabelValues(m.Kind, "skipped").Add(float64(result.Skipped))
+		migrationResourcesTotal.WithLabelValues(m.Kind, "conflict").Add(float64(len(result.Conflicts)))
 
 		dm.Status.Progress.Migrated += result.Migrated
 		dm.Status.Progress.Skipped += result.Skipped
@@ -259,8 +267,14 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 		return c.updateStatus(dm)
 	}
 
+	// Record total migration duration.
+	if dm.Status.StartedAt != nil {
+		migrationDuration.Observe(time.Since(dm.Status.StartedAt.Time).Seconds())
+	}
+
 	// No conflicts — transition to Converged.
 	dm.Status.Phase = DatastoreMigrationPhaseConverged
+	setPhaseMetric(DatastoreMigrationPhaseConverged)
 	logCtx.Info("Migration converged, unlocking datastore")
 
 	// Step 4: Unlock the datastore.
@@ -277,6 +291,7 @@ func (c *migrationController) handleConverged(logCtx *log.Entry, dm *DatastoreMi
 	now := metav1.Now()
 	dm.Status.Phase = DatastoreMigrationPhaseComplete
 	dm.Status.CompletedAt = &now
+	setPhaseMetric(DatastoreMigrationPhaseComplete)
 	return c.updateStatus(dm)
 }
 
@@ -557,6 +572,7 @@ func (c *migrationController) unlockDatastore(logCtx *log.Entry) error {
 
 func (c *migrationController) setFailedStatus(dm *DatastoreMigration, message string) {
 	dm.Status.Phase = DatastoreMigrationPhaseFailed
+	setPhaseMetric(DatastoreMigrationPhaseFailed)
 	dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
 		Type:               "Failed",
 		Status:             metav1.ConditionTrue,
