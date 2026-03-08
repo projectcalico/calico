@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("kube-controllers metrics FV tests", func() {
+var _ = Describe("kube-controllers metrics FV tests", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -53,9 +53,10 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
 		v3CRDs            bool
+		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -63,8 +64,8 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		var kconfigfile string
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		var err error
 		k8sClient, err = testutils.GetK8sClient(kconfigfile)
@@ -160,12 +161,13 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		}, 10*time.Second, 1*time.Second).ShouldNot(BeNil())
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
 	})
 
 	It("should export metrics for IPAM state", func() {

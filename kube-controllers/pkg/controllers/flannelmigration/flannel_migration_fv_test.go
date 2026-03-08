@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ const (
 
 var emptyLabel = map[string]string{}
 
-var _ = Describe("flannel-migration-controller FV test", func() {
+var _ = Describe("flannel-migration-controller FV test", Ordered, func() {
 	var (
 		etcd                *containers.Container
 		migrationController *containers.Container
@@ -87,7 +87,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 		migrationController.Stop()
 	}
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -118,7 +118,17 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
+	})
 
+	AfterAll(func() {
+		_ = calicoClient.Close()
+		controllerManager.Stop()
+		apiserver.Stop()
+		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	BeforeEach(func() {
 		// Initialise a new Flannel cluster
 		flannelCluster = testutils.NewFlannelCluster(k8sClient, "192.168.0.0/16")
 
@@ -134,12 +144,61 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 	})
 
 	AfterEach(func() {
-		_ = calicoClient.Close()
-		flannelCluster.Reset()
-		controllerManager.Stop()
-		apiserver.Stop()
-		etcd.Stop()
-		removeKubeconfig()
+		ctx := context.Background()
+
+		// Clean up DaemonSets created by tests
+		dsList, _ := k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).List(ctx, metav1.ListOptions{})
+		if dsList != nil {
+			for i := range dsList.Items {
+				_ = k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).Delete(ctx, dsList.Items[i].Name, metav1.DeleteOptions{})
+			}
+		}
+
+		// Clean up ConfigMaps
+		_ = k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).Delete(ctx, "calico-config", metav1.DeleteOptions{})
+
+		// Clean up IPAM blocks
+		blocks, _ := bc.List(ctx, model.BlockListOptions{}, "")
+		if blocks != nil {
+			for _, kvp := range blocks.KVPairs {
+				_, _ = bc.Delete(ctx, kvp.Key, kvp.Revision)
+			}
+		}
+
+		// Clean up IPAM affinities
+		affs, _ := bc.List(ctx, model.BlockAffinityListOptions{}, "")
+		if affs != nil {
+			for _, kvp := range affs.KVPairs {
+				_, _ = bc.Delete(ctx, kvp.Key, kvp.Revision)
+			}
+		}
+
+		// Clean up IPAM handles
+		handles, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
+		if handles != nil {
+			for _, kvp := range handles.KVPairs {
+				_, _ = bc.Delete(ctx, kvp.Key, kvp.Revision)
+			}
+		}
+
+		// Clean up nodes
+		nodeList, _ := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if nodeList != nil {
+			for _, node := range nodeList.Items {
+				_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
+			}
+		}
+
+		// Clean up IP pools
+		pools, _ := calicoClient.IPPools().List(ctx, options.ListOptions{})
+		if pools != nil {
+			for _, pool := range pools.Items {
+				_, _ = calicoClient.IPPools().Delete(ctx, pool.Name, options.DeleteOptions{})
+			}
+		}
+
+		// Clean up KubeControllersConfiguration
+		_, _ = calicoClient.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{})
 	})
 
 	Context("Should migrate FV tests", func() {
