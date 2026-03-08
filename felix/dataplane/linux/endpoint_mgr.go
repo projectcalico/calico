@@ -141,6 +141,8 @@ type endpointManager struct {
 	actions      generictables.ActionFactory
 	filterMaps   nftables.MapsDataplane
 
+	ifceHandler nftables.InterfaceHandler
+
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
 	pendingWlEpUpdates  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -238,6 +240,7 @@ func newEndpointManager(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
+	ifces nftables.InterfaceHandler,
 	bpfEnabled bool,
 	bpfAttachType apiv3.BPFAttachOption,
 	bpfEndpointManager hepListener,
@@ -261,6 +264,7 @@ func newEndpointManager(
 		os.Stat,
 		defaultRPFilter,
 		filterMaps,
+		ifces,
 		bpfEnabled,
 		bpfAttachType,
 		bpfEndpointManager,
@@ -286,6 +290,7 @@ func newEndpointManagerWithShims(
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
+	ifces nftables.InterfaceHandler,
 	bpfEnabled bool,
 	bpfAttachType apiv3.BPFAttachOption,
 	bpfEndpointManager hepListener,
@@ -311,6 +316,7 @@ func newEndpointManagerWithShims(
 		bpfEnabled:             bpfEnabled,
 		bpfAttachType:          bpfAttachType,
 		filterMaps:             filterMaps,
+		ifceHandler:            ifces,
 		bpfEndpointManager:     bpfEndpointManager,
 		floatingIPsEnabled:     floatingIPsEnabled,
 
@@ -887,6 +893,15 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+
+			if m.ifceHandler != nil {
+				// Update the flowtable handler with the current set of workload interfaces.
+				wlIfces := make([]string, 0, len(fromMappings))
+				for i := range fromMappings {
+					wlIfces = append(wlIfces, i)
+				}
+				m.ifceHandler.SetWorkloadInterfaces(wlIfces)
+			}
 		}
 
 		// Rewrite the dispatch chains if they've changed.
