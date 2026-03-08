@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ var (
 	retryInterval = 100 * time.Millisecond
 )
 
-var _ = Describe("IPAM garbage collection FV tests with short leak grace period", func() {
+var _ = Describe("IPAM garbage collection FV tests with short leak grace period", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		controller        *containers.Container
@@ -57,10 +57,12 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		bc                backend.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		kconfigfile       string
+		removeKubeconfig  func()
 		nodeA             string
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -69,8 +71,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
@@ -149,16 +150,48 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
-		// Delete the IP pool.
-		_, err := calicoClient.IPPools().Delete(context.Background(), "test-ipam-gc-ippool", options.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		controller.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		ctx := context.Background()
+
+		// Clean up IPAM blocks - MUST use DeleteKVP in KDD mode
+		blocks, _ := bc.List(ctx, model.BlockListOptions{}, "")
+		if blocks != nil {
+			for _, kvp := range blocks.KVPairs {
+				_, _ = bc.DeleteKVP(ctx, kvp)
+			}
+		}
+
+		// Clean up IPAM affinities - MUST use DeleteKVP in KDD mode
+		affs, _ := bc.List(ctx, model.BlockAffinityListOptions{}, "")
+		if affs != nil {
+			for _, kvp := range affs.KVPairs {
+				_, _ = bc.DeleteKVP(ctx, kvp)
+			}
+		}
+
+		// Clean up IPAM handles - MUST use DeleteKVP in KDD mode
+		handles, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
+		if handles != nil {
+			for _, kvp := range handles.KVPairs {
+				_, _ = bc.DeleteKVP(ctx, kvp)
+			}
+		}
+
+		// Clean up pods and wait for them to be gone
+		_ = k8sClient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+		Eventually(func() bool {
+			pods, _ := k8sClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
+			return len(pods.Items) == 0
+		}, 30*time.Second, 500*time.Millisecond).Should(BeTrue())
 	})
 
 	It("should NOT clean up tunnel IP allocations", func() {
@@ -565,7 +598,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 	})
 })
 
-var _ = Describe("IPAM garbage collection FV tests with long leak grace period", func() {
+var _ = Describe("IPAM garbage collection FV tests with long leak grace period", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		controller        *containers.Container
@@ -579,7 +612,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -668,17 +701,48 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
-		// Delete the IP pool.
-		_, err := calicoClient.IPPools().Delete(context.Background(), "test-ipam-gc-ippool", options.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		controller.Stop()
 		apiserver.Stop()
 		etcd.Stop()
 		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		ctx := context.Background()
+
+		// Clean up IPAM blocks - MUST use DeleteKVP in KDD mode
+		blocks, _ := bc.List(ctx, model.BlockListOptions{}, "")
+		if blocks != nil {
+			for _, kvp := range blocks.KVPairs {
+				_, _ = bc.DeleteKVP(ctx, kvp)
+			}
+		}
+
+		// Clean up IPAM affinities - MUST use DeleteKVP in KDD mode
+		affs, _ := bc.List(ctx, model.BlockAffinityListOptions{}, "")
+		if affs != nil {
+			for _, kvp := range affs.KVPairs {
+				_, _ = bc.DeleteKVP(ctx, kvp)
+			}
+		}
+
+		// Clean up IPAM handles - MUST use DeleteKVP in KDD mode
+		handles, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
+		if handles != nil {
+			for _, kvp := range handles.KVPairs {
+				_, _ = bc.DeleteKVP(ctx, kvp)
+			}
+		}
+
+		// Clean up pods and wait for them to be gone
+		_ = k8sClient.CoreV1().Pods("default").DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+		Eventually(func() bool {
+			pods, _ := k8sClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
+			return len(pods.Items) == 0
+		}, 30*time.Second, 500*time.Millisecond).Should(BeTrue())
 	})
 
 	It("should NOT clean up empty blocks within the grace period", func() {

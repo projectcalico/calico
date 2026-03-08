@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() {
+var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -40,10 +40,10 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() 
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
-		err               error
+		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -52,12 +52,13 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() 
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		var kconfigfile string
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		// Run the controller.
 		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
 
+		var err error
 		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -75,12 +76,34 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() 
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		// Clean up NetworkPolicies and Calico NetworkPolicies between specs.
+		nsList, _ := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+		if nsList != nil {
+			for _, ns := range nsList.Items {
+				npList, _ := k8sClient.NetworkingV1().NetworkPolicies(ns.Name).List(context.Background(), metav1.ListOptions{})
+				if npList != nil {
+					for _, np := range npList.Items {
+						_ = k8sClient.NetworkingV1().NetworkPolicies(ns.Name).Delete(context.Background(), np.Name, metav1.DeleteOptions{})
+					}
+				}
+				cnpList, _ := calicoClient.NetworkPolicies().List(context.Background(), options.ListOptions{Namespace: ns.Name})
+				if cnpList != nil {
+					for _, cnp := range cnpList.Items {
+						_, _ = calicoClient.NetworkPolicies().Delete(context.Background(), ns.Name, cnp.Name, options.DeleteOptions{})
+					}
+				}
+			}
+		}
 	})
 
 	Context("NetworkPolicy FV tests", func() {

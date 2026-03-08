@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func() {
+var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -40,9 +40,10 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func()
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -51,8 +52,8 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func()
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		var kconfigfile string
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
 
@@ -74,12 +75,32 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func()
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		// Clean up profiles and service accounts between specs.
+		profList, _ := calicoClient.Profiles().List(context.Background(), options.ListOptions{})
+		if profList != nil {
+			for _, prof := range profList.Items {
+				_, _ = calicoClient.Profiles().Delete(context.Background(), prof.Name, options.DeleteOptions{})
+			}
+		}
+		saList, _ := k8sClient.CoreV1().ServiceAccounts("default").List(context.Background(), metav1.ListOptions{})
+		if saList != nil {
+			for _, sa := range saList.Items {
+				if sa.Name == "default" {
+					continue
+				}
+				_ = k8sClient.CoreV1().ServiceAccounts("default").Delete(context.Background(), sa.Name, metav1.DeleteOptions{})
+			}
+		}
 	})
 
 	Context("mainline functionality", func() {
