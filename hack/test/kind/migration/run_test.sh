@@ -300,9 +300,9 @@ ${kubectl} apply --server-side --force-conflicts -f "${REPO_ROOT}/api/config/crd
 echo "  v3 CRDs installed"
 
 ###############################################################################
-# Step 5: Create the DatastoreMigration CR
+# Step 5: Install migration CRD
 ###############################################################################
-log "Step 5: Triggering migration"
+log "Step 5: Installing migration CRD"
 
 # Install the DatastoreMigration CRD (separate from the v3 Calico CRDs — it lives
 # in the migration.projectcalico.org group to avoid APIService conflicts).
@@ -315,7 +315,12 @@ if ! ${kubectl} get crd datastoremigrations.migration.projectcalico.org &>/dev/n
 fi
 echo "  DatastoreMigration CRD verified"
 
-# Create the migration CR.
+###############################################################################
+# Step 6: Disruption test — force-kill kube-controllers during migration
+###############################################################################
+log "Step 6: Disruption test — force-kill kube-controllers during migration"
+
+# Create the migration CR to kick things off.
 cat <<'EOF' | ${kubectl} apply -f -
 apiVersion: migration.projectcalico.org/v1
 kind: DatastoreMigration
@@ -326,10 +331,35 @@ spec:
 EOF
 echo "  DatastoreMigration CR 'v1-to-v3' created"
 
+# Wait for migration to enter the Migrating phase, then force-delete the pod.
+echo "  Waiting for Migrating phase before killing the pod..."
+for i in $(seq 1 60); do
+  phase=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+  if [ "$phase" = "Migrating" ] || [ "$phase" = "Converged" ] || [ "$phase" = "Complete" ]; then
+    echo "  Phase reached: $phase (after ${i}s)"
+    break
+  fi
+  sleep 1
+done
+
+# Only force-kill if migration hasn't already completed.
+phase=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+if [ "$phase" = "Migrating" ]; then
+  echo "  Force-deleting kube-controllers pod..."
+  ${kubectl} delete pod -n calico-system -l k8s-app=calico-kube-controllers --force --grace-period=0 2>/dev/null
+  echo "  Pod deleted, waiting for replacement..."
+  ${kubectl} wait --for=condition=Available --timeout=120s deployment/calico-kube-controllers -n calico-system
+  echo "  kube-controllers restarted"
+elif [ "$phase" = "Converged" ] || [ "$phase" = "Complete" ]; then
+  echo "  Migration already past Migrating phase ($phase), skipping disruption"
+else
+  echo "  WARNING: Migration never reached Migrating phase (phase: $phase), skipping disruption"
+fi
+
 ###############################################################################
-# Step 6: Wait for migration to complete
+# Step 7: Wait for migration to complete
 ###############################################################################
-log "Step 6: Waiting for migration to complete"
+log "Step 7: Waiting for migration to complete"
 
 TIMEOUT=300
 INTERVAL=5
@@ -372,10 +402,26 @@ if [ $elapsed -ge $TIMEOUT ]; then
   exit 1
 fi
 
+# Verify the finalizer was added during the Pending phase.
+finalizers=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.metadata.finalizers}' 2>/dev/null || echo "")
+if echo "$finalizers" | grep -q "migration.projectcalico.org/v1-crd-cleanup"; then
+  pass "Finalizer present on DatastoreMigration CR"
+else
+  fail "Finalizer not found on DatastoreMigration CR (got: $finalizers)"
+fi
+
+# Verify the saved APIService annotation exists.
+saved_apisvc=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.metadata.annotations.migration\.projectcalico\.org/saved-apiservice}' 2>/dev/null || echo "")
+if [ -n "$saved_apisvc" ]; then
+  pass "Saved APIService annotation present on DatastoreMigration CR"
+else
+  fail "Saved APIService annotation not found on DatastoreMigration CR"
+fi
+
 ###############################################################################
-# Step 7: Verify migration results
+# Step 8: Verify migration results
 ###############################################################################
-log "Step 7: Verifying migration results"
+log "Step 8: Verifying migration results"
 
 echo ""
 echo "  --- DatastoreMigration Status ---"
@@ -498,9 +544,9 @@ else
 fi
 
 ###############################################################################
-# Step 8: Verify continuous connectivity
+# Step 9: Verify continuous connectivity
 ###############################################################################
-log "Step 8: Verifying continuous connectivity during migration"
+log "Step 9: Verifying continuous connectivity during migration"
 
 # Give the client a few more seconds to log post-migration probes.
 sleep 5
@@ -528,6 +574,44 @@ else
     echo "  Failed probe timestamps:"
     echo "$client_logs" | grep "^PROBE_FAIL" | head -20
   fi
+fi
+
+###############################################################################
+# Step 10: Test v1 CRD cleanup via CR deletion (post-completion)
+###############################################################################
+log "Step 10: Testing v1 CRD cleanup via CR deletion"
+
+# Count v1 CRDs before deletion.
+v1_crd_count_before=$(${kubectl} get crd -o name 2>/dev/null | grep "crd.projectcalico.org" | wc -l)
+echo "  v1 CRDs before cleanup: $v1_crd_count_before"
+
+if [ "$v1_crd_count_before" -gt 0 ]; then
+  # Delete the DatastoreMigration CR. The finalizer should trigger v1 CRD cleanup.
+  echo "  Deleting DatastoreMigration CR (triggers v1 CRD cleanup via finalizer)..."
+  ${kubectl} delete datastoremigration.migration.projectcalico.org v1-to-v3 --timeout=120s
+
+  # Verify the CR is gone.
+  if ${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 &>/dev/null; then
+    fail "DatastoreMigration CR still exists after delete"
+  else
+    pass "DatastoreMigration CR deleted successfully"
+  fi
+
+  # Give the CRD deletions a moment to propagate.
+  sleep 5
+
+  # Verify v1 CRDs are gone.
+  v1_crd_count_after=$(${kubectl} get crd -o name 2>/dev/null | grep "crd.projectcalico.org" | wc -l)
+  echo "  v1 CRDs after cleanup: $v1_crd_count_after"
+  if [ "$v1_crd_count_after" -eq 0 ]; then
+    pass "All v1 CRDs (crd.projectcalico.org) deleted by finalizer"
+  else
+    fail "v1 CRDs still remain after cleanup (before: $v1_crd_count_before, after: $v1_crd_count_after)"
+    ${kubectl} get crd -o name 2>/dev/null | grep "crd.projectcalico.org" || true
+  fi
+else
+  echo "  No v1 CRDs found, skipping cleanup test"
+  pass "No v1 CRDs to clean up (already removed)"
 fi
 
 ###############################################################################
