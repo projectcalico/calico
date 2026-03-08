@@ -90,19 +90,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", Ordered, func() {
 	})
 
 	AfterEach(func() {
-		// Clean up pods and workload endpoints between specs.
-		podList, _ := k8sClient.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
-		if podList != nil {
-			for _, pod := range podList.Items {
-				_ = k8sClient.CoreV1().Pods("default").Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
-			}
-		}
-		wepList, _ := calicoClient.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
-		if wepList != nil {
-			for _, wep := range wepList.Items {
-				_, _ = calicoClient.WorkloadEndpoints().Delete(context.Background(), wep.Namespace, wep.Name, options.DeleteOptions{})
-			}
-		}
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, false, false)
 	})
 
 	It("should not overwrite a workload endpoint's container ID", func() {

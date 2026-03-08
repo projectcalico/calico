@@ -108,38 +108,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", Ordered, func() {
 	})
 
 	AfterEach(func() {
-		ctx := context.Background()
-		// Clean up k8s nodes.
-		nodes, _ := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-		for _, node := range nodes.Items {
-			_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
-		}
-		// Clean up IPAM data — must use DeleteKVP for KDD mode.
-		kvps, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
-		if kvps != nil {
-			for _, kvp := range kvps.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-		kvps, _ = bc.List(ctx, model.BlockAffinityListOptions{}, "")
-		if kvps != nil {
-			for _, kvp := range kvps.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-		kvps, _ = bc.List(ctx, model.BlockListOptions{}, "")
-		if kvps != nil {
-			for _, kvp := range kvps.KVPairs {
-				_, _ = bc.DeleteKVP(ctx, kvp)
-			}
-		}
-		// Clean up IP pools.
-		pools, _ := calicoClient.IPPools().List(ctx, options.ListOptions{})
-		if pools != nil {
-			for _, pool := range pools.Items {
-				_, _ = calicoClient.IPPools().Delete(ctx, pool.Name, options.DeleteOptions{})
-			}
-		}
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, false, false)
 	})
 
 	Context("Mainline FV tests", func() {
@@ -498,58 +467,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", Ordered, func() 
 	})
 
 	AfterEach(func() {
-		ctx := context.Background()
-		// Clean up k8s nodes.
-		nodes, _ := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-		for _, node := range nodes.Items {
-			_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
-		}
-		// Clean up calico nodes.
-		cNodes, _ := calicoClient.Nodes().List(ctx, options.ListOptions{})
-		if cNodes != nil {
-			for _, node := range cNodes.Items {
-				_, _ = calicoClient.Nodes().Delete(ctx, node.Name, options.DeleteOptions{})
-			}
-		}
-		// Clean up BGP peers.
-		peers, _ := calicoClient.BGPPeers().List(ctx, options.ListOptions{})
-		if peers != nil {
-			for _, peer := range peers.Items {
-				_, _ = calicoClient.BGPPeers().Delete(ctx, peer.Name, options.DeleteOptions{})
-			}
-		}
-		// Clean up IP pools.
-		pools, _ := calicoClient.IPPools().List(ctx, options.ListOptions{})
-		if pools != nil {
-			for _, pool := range pools.Items {
-				_, _ = calicoClient.IPPools().Delete(ctx, pool.Name, options.DeleteOptions{})
-			}
-		}
-		// Clean up workload endpoints.
-		weps, _ := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
-		if weps != nil {
-			for _, wep := range weps.Items {
-				_, _ = calicoClient.WorkloadEndpoints().Delete(ctx, wep.Namespace, wep.Name, options.DeleteOptions{})
-			}
-		}
-		// Clean up felix configurations.
-		felixConfigs, _ := calicoClient.FelixConfigurations().List(ctx, options.ListOptions{})
-		if felixConfigs != nil {
-			for _, fc := range felixConfigs.Items {
-				if fc.Name != "default" {
-					_, _ = calicoClient.FelixConfigurations().Delete(ctx, fc.Name, options.DeleteOptions{})
-				}
-			}
-		}
-		// Clean up BGP configurations.
-		bgpConfigs, _ := calicoClient.BGPConfigurations().List(ctx, options.ListOptions{})
-		if bgpConfigs != nil {
-			for _, bc := range bgpConfigs.Items {
-				if bc.Name != "default" {
-					_, _ = calicoClient.BGPConfigurations().Delete(ctx, bc.Name, options.DeleteOptions{})
-				}
-			}
-		}
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, false, true)
 	})
 
 	Context("Node FV tests", func() {
