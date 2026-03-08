@@ -17,6 +17,7 @@ package migration
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -126,7 +127,10 @@ func TestMigrateResourceType_NewResources(t *testing.T) {
 		},
 	}
 
-	var created []string
+	var (
+		created []string
+		mu      sync.Mutex
+	)
 	migrator := ResourceMigrator{
 		Kind:  apiv3.KindTier,
 		Order: OrderTiers,
@@ -141,7 +145,9 @@ func TestMigrateResourceType_NewResources(t *testing.T) {
 			}, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
+			mu.Lock()
 			created = append(created, obj.GetName())
+			mu.Unlock()
 			return nil
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {

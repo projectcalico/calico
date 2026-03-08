@@ -19,12 +19,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -107,6 +109,25 @@ func migratedPolicyName(name, tier string) string {
 // conservative default; on clusters with a healthy API server, higher values
 // (20-50) would be safe.
 const defaultWorkerCount = 10
+
+// retryBackoff defines the backoff parameters for retrying transient API errors
+// during resource migration (e.g., server timeouts, throttling, connection resets).
+var retryBackoff = wait.Backoff{
+	Duration: 200 * time.Millisecond,
+	Factor:   2.0,
+	Jitter:   0.1,
+	Steps:    5,
+	Cap:      10 * time.Second,
+}
+
+// isRetryable returns true for errors that are likely transient and worth retrying.
+func isRetryable(err error) bool {
+	return kerrors.IsServerTimeout(err) ||
+		kerrors.IsTimeout(err) ||
+		kerrors.IsTooManyRequests(err) ||
+		kerrors.IsServiceUnavailable(err) ||
+		kerrors.IsInternalError(err)
+}
 
 // migrationWorkItem holds a pre-converted v3 object ready for the worker pool
 // to create or conflict-check.
@@ -235,12 +256,22 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 }
 
 // migrateOneResource handles the create/check/conflict logic for a single
-// resource. It is called concurrently from the worker pool.
+// resource. It is called concurrently from the worker pool. Transient API
+// errors are retried with exponential backoff.
 func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationWorkItem) migrationWorkResult {
 	v3Obj := item.v3Obj
 
-	// Check if a v3 resource already exists.
-	existing, err := m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+	// Check if a v3 resource already exists (with retry).
+	var existing metav1.Object
+	err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		var getErr error
+		existing, getErr = m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+		if getErr != nil && isRetryable(getErr) {
+			item.logCtx.WithError(getErr).Debug("Retrying GetV3")
+			return false, nil
+		}
+		return true, getErr
+	})
 	if err != nil {
 		return migrationWorkResult{
 			err: fmt.Errorf("checking existing v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
@@ -257,8 +288,21 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 		return migrationWorkResult{conflict: conflict}
 	}
 
-	// Create the v3 resource.
-	err = m.CreateV3(ctx, v3Obj)
+	// Create the v3 resource (with retry).
+	err = wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		createErr := m.CreateV3(ctx, v3Obj)
+		if createErr != nil {
+			if kerrors.IsAlreadyExists(createErr) {
+				return true, createErr
+			}
+			if isRetryable(createErr) {
+				item.logCtx.WithError(createErr).Debug("Retrying CreateV3")
+				return false, nil
+			}
+			return true, createErr
+		}
+		return true, nil
+	})
 	if err != nil {
 		if kerrors.IsAlreadyExists(err) {
 			item.logCtx.Debug("v3 resource was created concurrently, skipping")
@@ -270,8 +314,17 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 	}
 	item.logCtx.Debug("Successfully migrated resource")
 
-	// Read back the created resource to get the server-assigned UID.
-	created, err := m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+	// Read back the created resource to get the server-assigned UID (with retry).
+	var created metav1.Object
+	err = wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		var getErr error
+		created, getErr = m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+		if getErr != nil && isRetryable(getErr) {
+			item.logCtx.WithError(getErr).Debug("Retrying read-back GetV3")
+			return false, nil
+		}
+		return true, getErr
+	})
 	if err != nil {
 		return migrationWorkResult{
 			err: fmt.Errorf("reading back created v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
