@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -98,7 +99,33 @@ func migratedPolicyName(name, tier string) string {
 	return name
 }
 
-// MigrateResourceType runs the migration for a single resource type using the given migrator.
+// defaultWorkerCount is the number of concurrent workers for creating v3
+// resources within a single resource type. The design doc suggests 10 as a
+// conservative default; on clusters with a healthy API server, higher values
+// (20-50) would be safe.
+const defaultWorkerCount = 10
+
+// migrationWorkItem holds a pre-converted v3 object ready for the worker pool
+// to create or conflict-check.
+type migrationWorkItem struct {
+	v1UID  types.UID
+	v3Obj  metav1.Object
+	logCtx *log.Entry
+}
+
+// migrationWorkResult holds the outcome of processing a single work item.
+type migrationWorkResult struct {
+	migrated bool
+	skipped  bool
+	conflict string
+	v1UID    types.UID
+	v3UID    types.UID
+	err      error
+}
+
+// MigrateResourceType runs the migration for a single resource type using the
+// given migrator. It lists and converts resources sequentially, then fans out
+// create/check operations to a bounded worker pool for concurrency.
 func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator) (*MigrationResult, error) {
 	logCtx := log.WithField("kind", m.Kind)
 	logCtx.Info("Starting migration for resource type")
@@ -107,22 +134,18 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 		UIDMapping: make(map[types.UID]types.UID),
 	}
 
+	// Phase 1: List all v1 resources and convert to v3 objects sequentially.
 	v1List, err := m.ListV1(ctx, bc)
 	if err != nil {
 		return nil, fmt.Errorf("listing v1 %s resources: %v", m.Kind, err)
 	}
 	logCtx.WithField("count", len(v1List.KVPairs)).Info("Listed v1 resources")
 
+	workItems := make([]migrationWorkItem, 0, len(v1List.KVPairs))
 	for _, kvp := range v1List.KVPairs {
 		key := kvp.Key.(model.ResourceKey)
 		v1Src := kvp.Value.(metav1.Object)
 		v1UID := v1Src.GetUID()
-		entryLog := logCtx.WithFields(log.Fields{
-			"v1UID":     v1UID,
-			"ownerRefs": len(v1Src.GetOwnerReferences()),
-			"name":      key.Name,
-			"namespace": key.Namespace,
-		})
 
 		v3Obj, err := m.Convert(kvp)
 		if err != nil {
@@ -136,45 +159,66 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 			v3Obj.SetOwnerReferences(ownerRefs)
 		}
 
-		// Check if a v3 resource already exists.
-		existing, err := m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
-		if err != nil {
-			return nil, fmt.Errorf("checking existing v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err)
-		}
+		entryLog := logCtx.WithFields(log.Fields{
+			"v1UID":     v1UID,
+			"ownerRefs": len(v1Src.GetOwnerReferences()),
+			"name":      key.Name,
+			"namespace": key.Namespace,
+		})
 
-		if existing != nil {
-			if m.SpecsEqual(v3Obj, existing) {
-				entryLog.Debug("v3 resource already exists with matching spec, skipping")
-				result.Skipped++
-				result.UIDMapping[v1UID] = existing.GetUID()
-				continue
+		workItems = append(workItems, migrationWorkItem{
+			v1UID:  v1UID,
+			v3Obj:  v3Obj,
+			logCtx: entryLog,
+		})
+	}
+
+	// Phase 2: Fan out create/check operations to a bounded worker pool.
+	workers := defaultWorkerCount
+	if len(workItems) < workers {
+		workers = len(workItems)
+	}
+	if workers == 0 {
+		logCtx.Info("No resources to migrate")
+		return result, nil
+	}
+
+	workCh := make(chan migrationWorkItem, len(workItems))
+	for _, item := range workItems {
+		workCh <- item
+	}
+	close(workCh)
+
+	resultCh := make(chan migrationWorkResult, len(workItems))
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			for item := range workCh {
+				resultCh <- migrateOneResource(ctx, m, item)
 			}
-			conflict := fmt.Sprintf("%s/%s: v3 resource exists with different spec", m.Kind, v3Obj.GetName())
-			entryLog.Warn(conflict)
-			result.Conflicts = append(result.Conflicts, conflict)
-			continue
-		}
+		}()
+	}
+	wg.Wait()
+	close(resultCh)
 
-		// Create the v3 resource.
-		err = m.CreateV3(ctx, v3Obj)
-		if err != nil {
-			if kerrors.IsAlreadyExists(err) {
-				entryLog.Debug("v3 resource was created concurrently, skipping")
-				result.Skipped++
-				continue
-			}
-			return nil, fmt.Errorf("creating v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err)
+	// Phase 3: Aggregate results.
+	for r := range resultCh {
+		if r.err != nil {
+			return nil, r.err
 		}
-		entryLog.Debug("Successfully migrated resource")
-		result.Migrated++
-
-		// Read back the created resource to get the server-assigned UID.
-		created, err := m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
-		if err != nil {
-			return nil, fmt.Errorf("reading back created v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err)
+		if r.migrated {
+			result.Migrated++
 		}
-		if created != nil {
-			result.UIDMapping[v1UID] = created.GetUID()
+		if r.skipped {
+			result.Skipped++
+		}
+		if r.conflict != "" {
+			result.Conflicts = append(result.Conflicts, r.conflict)
+		}
+		if r.v1UID != "" && r.v3UID != "" {
+			result.UIDMapping[r.v1UID] = r.v3UID
 		}
 	}
 
@@ -185,6 +229,56 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 	}).Info("Completed migration for resource type")
 
 	return result, nil
+}
+
+// migrateOneResource handles the create/check/conflict logic for a single
+// resource. It is called concurrently from the worker pool.
+func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationWorkItem) migrationWorkResult {
+	v3Obj := item.v3Obj
+
+	// Check if a v3 resource already exists.
+	existing, err := m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+	if err != nil {
+		return migrationWorkResult{
+			err: fmt.Errorf("checking existing v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
+		}
+	}
+
+	if existing != nil {
+		if m.SpecsEqual(v3Obj, existing) {
+			item.logCtx.Debug("v3 resource already exists with matching spec, skipping")
+			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: existing.GetUID()}
+		}
+		conflict := fmt.Sprintf("%s/%s: v3 resource exists with different spec", m.Kind, v3Obj.GetName())
+		item.logCtx.Warn(conflict)
+		return migrationWorkResult{conflict: conflict}
+	}
+
+	// Create the v3 resource.
+	err = m.CreateV3(ctx, v3Obj)
+	if err != nil {
+		if kerrors.IsAlreadyExists(err) {
+			item.logCtx.Debug("v3 resource was created concurrently, skipping")
+			return migrationWorkResult{skipped: true}
+		}
+		return migrationWorkResult{
+			err: fmt.Errorf("creating v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
+		}
+	}
+	item.logCtx.Debug("Successfully migrated resource")
+
+	// Read back the created resource to get the server-assigned UID.
+	created, err := m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+	if err != nil {
+		return migrationWorkResult{
+			err: fmt.Errorf("reading back created v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
+		}
+	}
+	var v3UID types.UID
+	if created != nil {
+		v3UID = created.GetUID()
+	}
+	return migrationWorkResult{migrated: true, v1UID: item.v1UID, v3UID: v3UID}
 }
 
 // isCalicoAPIGroup returns true if the given API group is a Calico group
