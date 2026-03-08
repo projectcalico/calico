@@ -108,11 +108,7 @@ GIT_VERSION=${GIT_VERSION:-`git describe --tags --dirty --always --abbrev=12`}
 HELM=../bin/helm
 CHART=../bin/tigera-operator-$GIT_VERSION.tgz
 
-# Determine the helm values file to use based on the CALICO_API_GROUP env var.
 VALUES_FILE=$TEST_DIR/infra/values.yaml
-if [ "$CALICO_API_GROUP" == "projectcalico.org/v3" ]; then
-  VALUES_FILE=$TEST_DIR/infra/values-v3-crds.yaml
-fi
 
 # kubectl binary.
 : ${kubectl:=../hack/test/kind/kubectl}
@@ -165,6 +161,14 @@ wait_pod_ready calicoctl -n kube-system
 
 echo "Calico is running."
 echo
+
+if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
+  echo "Patching FelixConfiguration to configure Felix program cluster routes"
+  ${kubectl} patch felixconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Enabled"}}'
+
+  echo "Apply BGPConfiguration to configure BIRD to not program cluster routes"
+  ${kubectl} apply -f $TEST_DIR/infra/bgpconfig.yaml
+fi
 
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
 ${kubectl} create ns metallb-system || true

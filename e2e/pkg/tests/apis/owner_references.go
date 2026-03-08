@@ -44,13 +44,9 @@ var _ = describe.CalicoDescribe(
 		)
 
 		ginkgo.BeforeEach(func() {
-			// Ensure a clean starting environment before each test.
 			var err error
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
-
-			// Ensure a clean starting environment before each test.
-			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred())
 
 			ctx = context.Background()
 		})

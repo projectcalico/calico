@@ -83,7 +83,10 @@ type IPAMConfigurationSpec struct {
 	// maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction).
 	// When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses
 	// when their underlying pods are recreated during VM operations.
-	// When Disabled, VMs receive new IP addresses whenever their pods are recreated.
+	// When Disabled, VMs receive new IP addresses whenever their pods are recreated,
+	// and creating a live migration target pod is not supported because the migration
+	// target pod requires the same IP as the source pod, which is only possible with
+	// address persistence.
 	// Defaults to Enabled if not specified.
 	// +kubebuilder:validation:Enum=Enabled;Disabled
 	// +optional

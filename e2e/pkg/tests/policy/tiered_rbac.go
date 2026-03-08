@@ -93,8 +93,6 @@ var _ = describe.CalicoDescribe(
 			adminCli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(utils.CleanDatastore(adminCli)).ShouldNot(HaveOccurred())
-
 			By("Creating test tiers")
 			for _, t := range []struct {
 				name  string

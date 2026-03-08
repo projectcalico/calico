@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,9 +57,6 @@ var _ = describe.CalicoDescribe(
 				var err error
 				cli, err = client.New(f.ClientConfig())
 				Expect(err).NotTo(HaveOccurred())
-
-				// Ensure a clean starting environment before each test.
-				Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred())
 
 				checker = conncheck.NewConnectionTester(f)
 				server = conncheck.NewServer("server", f.Namespace)
@@ -202,10 +199,10 @@ var _ = describe.CalicoDescribe(
 
 					allowDNSPolicy := &v3.GlobalNetworkPolicy{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "allow-kube-dns",
+							Name: utils.GenerateRandomName("allow-kube-dns"),
 						},
 						Spec: v3.GlobalNetworkPolicySpec{
-							Selector: "all()",
+							NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", f.Namespace.Name),
 							Egress: []v3.Rule{
 								{
 									// For the majority of cluster provisioners, this will be kube-dns.
