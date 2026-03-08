@@ -56,7 +56,7 @@ spec:
                         type: string
                       port:
                         maximum: 65535
-                        minimum: 0
+                        minimum: 1
                         type: integer
                       protocol:
                         anyOf:
@@ -76,6 +76,13 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: at least one of interfaceName or expectedIPs must be specified
+                  rule:
+                    (has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs)
+                    && size(self.expectedIPs) > 0)
+                - message: node must be specified
+                  rule: has(self.node) && size(self.node) > 0
           required:
             - metadata
             - spec

@@ -81,10 +81,14 @@ type IPPoolStatus struct {
 }
 
 // IPPoolSpec contains the specification for an IPPool resource.
+// +kubebuilder:validation:XValidation:rule="!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode) == 0 || size(self.vxlanMode) == 0",message="ipipMode and vxlanMode cannot both be enabled"
+// +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) == 0 || self.vxlanMode == 'Never')",message="LoadBalancer IP pool cannot have IPIP or VXLAN enabled"
+// +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')",message="LoadBalancer cannot be combined with Workload or Tunnel allowed uses"
 type IPPoolSpec struct {
 	// The pool CIDR.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="CIDR cannot be changed; follow IP pool migration guide to avoid corruption."
 	CIDR string `json:"cidr" validate:"net"`
 
 	// Contains configuration for VXLAN tunneling for this pool.
@@ -109,6 +113,7 @@ type IPPoolSpec struct {
 	// or equal to the size of the pool CIDR.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=128
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Block size cannot be changed; follow IP pool migration guide to avoid corruption."
 	BlockSize int `json:"blockSize,omitempty"`
 
 	// Allows IPPool to allocate for a specific node by label selector.
@@ -120,6 +125,7 @@ type IPPoolSpec struct {
 
 	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
 	// ["Tunnel", "Workload"] for back-compatibility
+	// +kubebuilder:validation:MaxItems=10
 	// +listType=set
 	AllowedUses []IPPoolAllowedUse `json:"allowedUses,omitempty" validate:"omitempty"`
 
