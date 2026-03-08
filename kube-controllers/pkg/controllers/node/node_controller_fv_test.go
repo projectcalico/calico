@@ -114,23 +114,23 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", Ordered, func() {
 		for _, node := range nodes.Items {
 			_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
 		}
-		// Clean up IPAM data.
+		// Clean up IPAM data — must use DeleteKVP for KDD mode.
 		kvps, _ := bc.List(ctx, model.IPAMHandleListOptions{}, "")
 		if kvps != nil {
 			for _, kvp := range kvps.KVPairs {
-				_, _ = bc.Delete(ctx, kvp.Key, kvp.Revision)
+				_, _ = bc.DeleteKVP(ctx, kvp)
 			}
 		}
 		kvps, _ = bc.List(ctx, model.BlockAffinityListOptions{}, "")
 		if kvps != nil {
 			for _, kvp := range kvps.KVPairs {
-				_, _ = bc.Delete(ctx, kvp.Key, kvp.Revision)
+				_, _ = bc.DeleteKVP(ctx, kvp)
 			}
 		}
 		kvps, _ = bc.List(ctx, model.BlockListOptions{}, "")
 		if kvps != nil {
 			for _, kvp := range kvps.KVPairs {
-				_, _ = bc.Delete(ctx, kvp.Key, kvp.Revision)
+				_, _ = bc.DeleteKVP(ctx, kvp)
 			}
 		}
 		// Clean up IP pools.
