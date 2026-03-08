@@ -155,7 +155,7 @@ func TestWatchFlows(t *testing.T) {
 
 	zerotime := time.Unix(0, 0)
 	var flows []whiskerv1.FlowResponse
-	for _, data := range strings.Split(recorder.Body.String(), "\n\n") {
+	for data := range strings.SplitSeq(recorder.Body.String(), "\n\n") {
 		if len(data) == 0 {
 			continue
 		}

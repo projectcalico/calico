@@ -16,7 +16,6 @@ package fv_test
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -132,16 +131,16 @@ var _ = BeforeSuite(func() {
 
 func configureManualSharding() error {
 	currentBatch, err := strconv.Atoi(os.Getenv("FV_BATCH"))
-	if err != nil {
-		return err
+	if err != nil || currentBatch < 1 {
+		return fmt.Errorf("invalid FV_BATCH value: %s", os.Getenv("FV_BATCH"))
 	}
 	totalBatches, err := strconv.Atoi(os.Getenv("FV_NUM_BATCHES"))
-	if err != nil {
-		return err
+	if err != nil || totalBatches < 1 {
+		return fmt.Errorf("invalid FV_NUM_BATCHES value: %s", os.Getenv("FV_NUM_BATCHES"))
 	}
 
-	if totalBatches <= 1 || currentBatch <= 0 {
-		return errors.New("invalid FV_BATCH or FV_NUM_BATCHES environment variable")
+	if totalBatches < currentBatch {
+		return fmt.Errorf("totalBatches (%d) cannot be less than currentBatch (%d)", totalBatches, currentBatch)
 	}
 
 	fmt.Printf("[SHARD-INIT] Manual Sharding Active: Running Batch %d of %d\n", currentBatch, totalBatches)

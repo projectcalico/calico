@@ -86,7 +86,7 @@ type NodeConfigKeyFn func(node, name string) model.Key
 type GlobalConfigKeyFn func(name string) model.Key
 
 // Convert an arbitrary value to the value used in the v1 model.
-type ConfigFieldValueToV1ModelValue func(value interface{}) interface{}
+type ConfigFieldValueToV1ModelValue func(value any) any
 
 var (
 	globalConfigName        = "default"
@@ -184,7 +184,7 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 	// Create a KVP for each field in the Spec struct.
 	var kvps []*model.KVPair
 	numFields := len(c.names)
-	for i := 0; i < numFields; i++ {
+	for i := range numFields {
 		fieldInfo := c.specType.Field(i)
 		name := getConfigName(fieldInfo)
 
@@ -208,9 +208,9 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 
 		// Extract the field value and dereference pointers, storing a nil value if the pointer is nil
 		// or if it's a zero length string.
-		var value interface{}
+		var value any
 		field := specValue.Field(i)
-		if field.Kind() == reflect.Ptr {
+		if field.Kind() == reflect.Pointer {
 			if !field.IsNil() {
 				value = field.Elem().Interface()
 			}
@@ -245,11 +245,11 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 					value = strings.Join(vt, ",")
 				case map[string]string:
 					// Make it a comma separate list of key value pairs
-					var kvp string
+					var kvp strings.Builder
 					for k, v := range vt {
-						kvp += k + "=" + v + ","
+						kvp.WriteString(k + "=" + v + ",")
 					}
-					value = kvp
+					value = kvp.String()
 				default:
 					value = fmt.Sprintf("%v", vt)
 				}
@@ -268,7 +268,7 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 	// on previous requests.  This ensures we send deletes for them in case our previous
 	// settings had it set.  The WatcherSyncer handles gracefully multiple deletes for
 	// the same key, so it doesn't matter if it wasn't previously set.
-	var value interface{}
+	var value any
 	for name := range c.additionalNames {
 		// If we have an override for this additional config option then use that value,
 		// otherwise leave the value as nil to ensure we delete the option if it was

@@ -42,15 +42,15 @@ func AutoDetectCIDR(method string, version int, k8sNode *v1.Node, getInterfaces 
 		// Autodetect the IP by enumerating all interfaces (excluding
 		// known internal interfaces).
 		return autoDetectCIDRFirstFound(version)
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_INTERFACE) {
+	} else if after, ok := strings.CutPrefix(method, AUTODETECTION_METHOD_INTERFACE); ok {
 		// Autodetect the IP from the specified interface.
-		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_INTERFACE)
+		ifStr := after
 		// Regexes are passed in as a string separated by ","
 		ifRegexes := regexp.MustCompile(`\s*,\s*`).Split(ifStr, -1)
 		return autoDetectCIDRByInterface(ifRegexes, version)
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CIDR) {
+	} else if after, ok := strings.CutPrefix(method, AUTODETECTION_METHOD_CIDR); ok {
 		// Autodetect the IP by filtering interface by its address.
-		cidrStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CIDR)
+		cidrStr := after
 		// CIDRs are passed in as a string separated by ","
 		matches := []cnet.IPNet{}
 		for _, r := range regexp.MustCompile(`\s*,\s*`).Split(cidrStr, -1) {
@@ -62,15 +62,15 @@ func AutoDetectCIDR(method string, version int, k8sNode *v1.Node, getInterfaces 
 			matches = append(matches, *cidr)
 		}
 		return autoDetectCIDRByCIDR(matches, version)
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CAN_REACH) {
+	} else if after, ok := strings.CutPrefix(method, AUTODETECTION_METHOD_CAN_REACH); ok {
 		// Autodetect the IP by connecting a UDP socket to a supplied address.
-		destStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
+		destStr := after
 		return autoDetectCIDRByReach(destStr, version)
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE) {
+	} else if after, ok := strings.CutPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE); ok {
 		// Autodetect the Ip by enumerating all interfaces (excluding
 		// known internal interfaces and any interfaces whose name
 		// matches the given regexes).
-		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE)
+		ifStr := after
 		// Regexes are passed in as a string separated by ","
 		ifRegexes := regexp.MustCompile(`\s*,\s*`).Split(ifStr, -1)
 		return autoDetectCIDRBySkipInterface(ifRegexes, version)

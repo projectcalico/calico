@@ -148,7 +148,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 		// ourselves to in the resync code.
 		tx := f.NewTransaction()
 		tx.Add(&knftables.Table{})
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			tx.Add(&knftables.Set{
 				Name: fmt.Sprintf("set-%d", i),
 				Type: "ipv4_addr",

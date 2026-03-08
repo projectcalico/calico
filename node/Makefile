@@ -70,10 +70,6 @@ BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.xz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 
-# Versions and locations of dependencies used in tests.
-TEST_CONTAINER_NAME_VER?=latest
-TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
-
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
@@ -134,7 +130,7 @@ MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/
 # Variables used by the tests
 ST_TO_RUN?=tests/st/
 K8ST_TO_RUN?=tests/
-# Can exclude the slower tests with "-a '!slow'"
+# Can exclude the slower tests with "-m 'not slow'"
 ST_OPTIONS?=
 
 K8ST_REPORT_FILENAME ?= k8s-tests.xml
@@ -466,6 +462,7 @@ kind-k8st-setup: $(K8ST_IMAGE_TARS) $(CHARTS) kind-cluster-create
 	ARCH=$(ARCH) \
 	GIT_VERSION=$(GIT_VERSION) \
 	CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
 	./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test

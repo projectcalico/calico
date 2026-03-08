@@ -38,6 +38,7 @@ type NetworkPolicyList struct {
 // +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:resource:shortName={cnp,caliconetworkpolicy}
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
+// +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
 
 type NetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`

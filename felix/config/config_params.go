@@ -17,11 +17,13 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net"
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -581,22 +583,16 @@ func (config *Config) Copy() *Config {
 
 	// Copy the internal state over as a deep copy.
 	cp.internalOverrides = map[string]string{}
-	for k, v := range config.internalOverrides {
-		cp.internalOverrides[k] = v
-	}
+	maps.Copy(cp.internalOverrides, config.internalOverrides)
 
 	cp.sourceToRawConfig = map[Source]map[string]string{}
 	for k, v := range config.sourceToRawConfig {
 		cp.sourceToRawConfig[k] = map[string]string{}
-		for k2, v2 := range v {
-			cp.sourceToRawConfig[k][k2] = v2
-		}
+		maps.Copy(cp.sourceToRawConfig[k], v)
 	}
 
 	cp.rawValues = map[string]string{}
-	for k, v := range config.rawValues {
-		cp.rawValues[k] = v
-	}
+	maps.Copy(cp.rawValues, config.rawValues)
 
 	return &cp
 }
@@ -616,9 +612,7 @@ func (config *Config) ToConfigUpdate() *proto.ConfigUpdate {
 	buf.SourceToRawConfig = map[uint32]*proto.RawConfig{}
 	for source, c := range config.sourceToRawConfig {
 		kvs := map[string]string{}
-		for k, v := range c {
-			kvs[k] = v
-		}
+		maps.Copy(kvs, c)
 		buf.SourceToRawConfig[uint32(source)] = &proto.RawConfig{
 			Source: source.String(),
 			Config: kvs,
@@ -626,9 +620,7 @@ func (config *Config) ToConfigUpdate() *proto.ConfigUpdate {
 	}
 
 	buf.Config = map[string]string{}
-	for k, v := range config.rawValues {
-		buf.Config[k] = v
-	}
+	maps.Copy(buf.Config, config.rawValues)
 
 	return &buf
 }
@@ -639,9 +631,7 @@ func (config *Config) UpdateFromConfigUpdate(configUpdate *proto.ConfigUpdate) (
 	for sourceInt, c := range configUpdate.GetSourceToRawConfig() {
 		source := Source(sourceInt)
 		config.sourceToRawConfig[source] = map[string]string{}
-		for k, v := range c.GetConfig() {
-			config.sourceToRawConfig[source][k] = v
-		}
+		maps.Copy(config.sourceToRawConfig[source], c.GetConfig())
 	}
 	// Note: the ConfigUpdate also carries the rawValues, but we recalculate those by calling resolve(),
 	// which tells us if anything changed as a result.
@@ -702,11 +692,9 @@ func (config *Config) OpenstackActive() bool {
 		log.Debug("OpenStack metadata port set to non-default, assuming OpenStack active")
 		return true
 	}
-	for _, prefix := range config.InterfacePrefixes() {
-		if prefix == "tap" {
-			log.Debug("Interface prefix list contains 'tap', assuming OpenStack")
-			return true
-		}
+	if slices.Contains(config.InterfacePrefixes(), "tap") {
+		log.Debug("Interface prefix list contains 'tap', assuming OpenStack")
+		return true
 	}
 	log.Debug("No evidence this is an OpenStack deployment; disabling OpenStack special-cases")
 	return false
@@ -715,8 +703,8 @@ func (config *Config) OpenstackActive() bool {
 // KubernetesProvider attempts to parse the kubernetes provider, e.g. AKS out of the ClusterType.
 // The ClusterType is a string which contains a set of comma-separated values in no particular order.
 func (config *Config) KubernetesProvider() Provider {
-	settings := strings.Split(config.ClusterType, ",")
-	for _, s := range settings {
+	settings := strings.SplitSeq(config.ClusterType, ",")
+	for s := range settings {
 		p, err := newProvider(s)
 		if err == nil {
 			log.WithFields(log.Fields{"clusterType": config.ClusterType, "provider": p}).Debug(
@@ -793,7 +781,7 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 
 			log.Infof("Parsing value for %v: %v (from %v)",
 				name, rawValue, source)
-			var value interface{}
+			var value any
 			if strings.ToLower(rawValue) == "none" {
 				// Special case: we allow a value of "none" to force the value to
 				// the zero value for a field.  The zero value often differs from
@@ -843,7 +831,7 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 	}
 
 	changedFields = set.New[string]()
-	kind := reflect.TypeOf(Config{})
+	kind := reflect.TypeFor[Config]()
 	for ii := 0; ii < kind.NumField(); ii++ {
 		field := kind.Field(ii)
 		tag := field.Tag.Get("config")
@@ -883,7 +871,7 @@ func SafeParamsEqual(a any, b any) bool {
 		if len(a) != len(b) {
 			return false
 		}
-		for i := 0; i < len(a); i++ {
+		for i := range a {
 			if (a[i] == nil) || (b[i] == nil) {
 				if a[i] == b[i] {
 					continue
@@ -1026,173 +1014,172 @@ func Params() map[string]Param {
 	return knownParams
 }
 
+var metaRegexp = regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
+	`([^;]*)(?:;` +
+	`([^;]*))?$`)
+
+func ParamForField(fieldName string, tag string) (param Param, defaultStr, flags string) {
+	captures := metaRegexp.FindStringSubmatch(tag)
+	if len(captures) == 0 {
+		log.Panicf("Failed to parse metadata for config param %v", fieldName)
+	}
+	log.Debugf("%v: metadata captures: %#v", fieldName, captures)
+	kind := captures[1]       // Type: "int|oneof|bool|port-list|..."
+	kindParams := captures[2] // Parameters for the type: e.g. for oneof "http,https"
+	defaultStr = captures[3]  // Default value e.g "1.0"
+	flags = captures[4]
+	switch kind {
+	case "bool":
+		param = &BoolParam{}
+	case "*bool":
+		param = &BoolPtrParam{}
+	case "int":
+		intParam := &IntParam{}
+		for r := range strings.SplitSeq(kindParams, ",") {
+			minAndMax := strings.Split(r, ":")
+			paramMin := mustParseOptionalInt(minAndMax[0], math.MinInt, fieldName)
+			paramMax := math.MaxInt
+			if len(minAndMax) == 2 {
+				paramMax = mustParseOptionalInt(minAndMax[1], math.MaxInt, fieldName)
+			}
+			intParam.Ranges = append(intParam.Ranges, MinMax{Min: paramMin, Max: paramMax})
+		}
+		param = intParam
+	case "int32":
+		param = &Int32Param{}
+	case "mark-bitmask":
+		param = &MarkBitmaskParam{}
+	case "float":
+		param = &FloatParam{}
+	case "seconds":
+		paramMin := math.MinInt
+		paramMax := math.MaxInt
+		var err error
+		if kindParams != "" {
+			minAndMax := strings.Split(kindParams, ":")
+			paramMin, err = strconv.Atoi(minAndMax[0])
+			if err != nil {
+				log.Panicf("Failed to parse min value for %v", fieldName)
+			}
+			paramMax, err = strconv.Atoi(minAndMax[1])
+			if err != nil {
+				log.Panicf("Failed to parse max value for %v", fieldName)
+			}
+		}
+		param = &SecondsParam{Min: paramMin, Max: paramMax}
+	case "millis":
+		param = &MillisParam{}
+	case "iface-list":
+		param = &RegexpParam{
+			Regexp: IfaceListRegexp,
+			Msg:    "invalid Linux interface name",
+		}
+	case "iface-list-regexp":
+		param = &RegexpPatternListParam{
+			NonRegexpElemRegexp: NonRegexpIfaceElemRegexp,
+			RegexpElemRegexp:    RegexpIfaceElemRegexp,
+			Delimiter:           ",",
+			Msg:                 "list contains invalid Linux interface name or regex pattern",
+			Schema:              "Comma-delimited list of Linux interface names/regex patterns. Regex patterns must start/end with `/`.",
+		}
+	case "log-rate":
+		param = &RegexpParam{
+			Regexp: LogActionRateRegexp,
+			Msg:    "invalid log rate limit",
+		}
+	case "regexp":
+		param = &RegexpPatternParam{
+			Flags: strings.Split(kindParams, ","),
+		}
+	case "iface-param":
+		param = &RegexpParam{
+			Regexp: IfaceParamRegexp,
+			Msg:    "invalid Linux interface parameter",
+		}
+	case "file":
+		param = &FileParam{
+			MustExist:  strings.Contains(kindParams, "must-exist"),
+			Executable: strings.Contains(kindParams, "executable"),
+		}
+	case "authority":
+		param = &RegexpParam{
+			Regexp: AuthorityRegexp,
+			Msg:    "invalid URL authority",
+		}
+	case "ipv4":
+		param = &Ipv4Param{}
+	case "ipv6":
+		param = &Ipv6Param{}
+	case "endpoint-list":
+		param = &EndpointListParam{}
+	case "port-list":
+		param = &PortListParam{}
+	case "portrange":
+		param = &PortRangeParam{}
+	case "portrange-list":
+		param = &PortRangeListParam{}
+	case "hostname":
+		param = &RegexpParam{
+			Regexp: HostnameRegexp,
+			Msg:    "invalid hostname",
+		}
+	case "host-address":
+		param = &RegexpParam{
+			Regexp: HostAddressRegexp,
+			Msg:    "invalid host address",
+		}
+	case "region":
+		param = &RegionParam{}
+	case "oneof":
+		options := strings.Split(kindParams, ",")
+		lowerCaseToCanon := make(map[string]string)
+		for _, option := range options {
+			lowerCaseToCanon[strings.ToLower(option)] = option
+		}
+		param = &OneofListParam{
+			lowerCaseOptionsToCanonical: lowerCaseToCanon,
+		}
+	case "string":
+		param = &RegexpParam{
+			Regexp: StringRegexp,
+			Msg:    "invalid string",
+		}
+	case "cidr-list":
+		param = &CIDRListParam{}
+	case "server-list":
+		param = &ServerListParam{}
+	case "string-slice":
+		param = &StringSliceParam{}
+	case "interface-name-slice":
+		param = &StringSliceParam{ValidationRegex: InterfaceRegex}
+	case "iface-filter-slice":
+		param = &StringSliceParam{ValidationRegex: IfaceParamRegexp}
+	case "route-table-range":
+		param = &RouteTableRangeParam{}
+	case "route-table-ranges":
+		param = &RouteTableRangesParam{}
+	case "keyvaluelist":
+		param = &KeyValueListParam{}
+	case "keydurationlist":
+		param = &KeyDurationListParam{}
+	default:
+		log.Panicf("Unknown type of parameter: %v", kind)
+		panic("Unknown type of parameter") // Unreachable, keep the linter happy.
+	}
+	return
+}
+
 func loadParams() {
 	knownParams = make(map[string]Param)
 	config := Config{}
-	kind := reflect.TypeOf(config)
-	metaRegexp := regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
-		`([^;]*)(?:;` +
-		`([^;]*))?$`)
+	kind := reflect.TypeFor[Config]()
 	for ii := 0; ii < kind.NumField(); ii++ {
 		field := kind.Field(ii)
 		tag := field.Tag.Get("config")
 		if tag == "" {
 			continue
 		}
-		captures := metaRegexp.FindStringSubmatch(tag)
-		if len(captures) == 0 {
-			log.Panicf("Failed to parse metadata for config param %v", field.Name)
-		}
-		log.Debugf("%v: metadata captures: %#v", field.Name, captures)
-		kind := captures[1]       // Type: "int|oneof|bool|port-list|..."
-		kindParams := captures[2] // Parameters for the type: e.g. for oneof "http,https"
-		defaultStr := captures[3] // Default value e.g "1.0"
-		flags := captures[4]
-		var param Param
-		switch kind {
-		case "bool":
-			param = &BoolParam{}
-		case "*bool":
-			param = &BoolPtrParam{}
-		case "int":
-			intParam := &IntParam{}
-			paramMin := math.MinInt
-			paramMax := math.MaxInt
-			if kindParams != "" {
-				for _, r := range strings.Split(kindParams, ",") {
-					minAndMax := strings.Split(r, ":")
-					paramMin = mustParseOptionalInt(minAndMax[0], math.MinInt, field.Name)
-					if len(minAndMax) == 2 {
-						paramMax = mustParseOptionalInt(minAndMax[1], math.MinInt, field.Name)
-					}
-					intParam.Ranges = append(intParam.Ranges, MinMax{Min: paramMin, Max: paramMax})
-				}
-			} else {
-				intParam.Ranges = []MinMax{{Min: paramMin, Max: paramMax}}
-			}
-			param = intParam
-		case "int32":
-			param = &Int32Param{}
-		case "mark-bitmask":
-			param = &MarkBitmaskParam{}
-		case "float":
-			param = &FloatParam{}
-		case "seconds":
-			paramMin := math.MinInt
-			paramMax := math.MaxInt
-			var err error
-			if kindParams != "" {
-				minAndMax := strings.Split(kindParams, ":")
-				paramMin, err = strconv.Atoi(minAndMax[0])
-				if err != nil {
-					log.Panicf("Failed to parse min value for %v", field.Name)
-				}
-				paramMax, err = strconv.Atoi(minAndMax[1])
-				if err != nil {
-					log.Panicf("Failed to parse max value for %v", field.Name)
-				}
-			}
-			param = &SecondsParam{Min: paramMin, Max: paramMax}
-		case "millis":
-			param = &MillisParam{}
-		case "iface-list":
-			param = &RegexpParam{
-				Regexp: IfaceListRegexp,
-				Msg:    "invalid Linux interface name",
-			}
-		case "iface-list-regexp":
-			param = &RegexpPatternListParam{
-				NonRegexpElemRegexp: NonRegexpIfaceElemRegexp,
-				RegexpElemRegexp:    RegexpIfaceElemRegexp,
-				Delimiter:           ",",
-				Msg:                 "list contains invalid Linux interface name or regex pattern",
-				Schema:              "Comma-delimited list of Linux interface names/regex patterns. Regex patterns must start/end with `/`.",
-			}
-		case "log-rate":
-			param = &RegexpParam{
-				Regexp: LogActionRateRegexp,
-				Msg:    "invalid log rate limit",
-			}
-		case "regexp":
-			param = &RegexpPatternParam{
-				Flags: strings.Split(kindParams, ","),
-			}
-		case "iface-param":
-			param = &RegexpParam{
-				Regexp: IfaceParamRegexp,
-				Msg:    "invalid Linux interface parameter",
-			}
-		case "file":
-			param = &FileParam{
-				MustExist:  strings.Contains(kindParams, "must-exist"),
-				Executable: strings.Contains(kindParams, "executable"),
-			}
-		case "authority":
-			param = &RegexpParam{
-				Regexp: AuthorityRegexp,
-				Msg:    "invalid URL authority",
-			}
-		case "ipv4":
-			param = &Ipv4Param{}
-		case "ipv6":
-			param = &Ipv6Param{}
-		case "endpoint-list":
-			param = &EndpointListParam{}
-		case "port-list":
-			param = &PortListParam{}
-		case "portrange":
-			param = &PortRangeParam{}
-		case "portrange-list":
-			param = &PortRangeListParam{}
-		case "hostname":
-			param = &RegexpParam{
-				Regexp: HostnameRegexp,
-				Msg:    "invalid hostname",
-			}
-		case "host-address":
-			param = &RegexpParam{
-				Regexp: HostAddressRegexp,
-				Msg:    "invalid host address",
-			}
-		case "region":
-			param = &RegionParam{}
-		case "oneof":
-			options := strings.Split(kindParams, ",")
-			lowerCaseToCanon := make(map[string]string)
-			for _, option := range options {
-				lowerCaseToCanon[strings.ToLower(option)] = option
-			}
-			param = &OneofListParam{
-				lowerCaseOptionsToCanonical: lowerCaseToCanon,
-			}
-		case "string":
-			param = &RegexpParam{
-				Regexp: StringRegexp,
-				Msg:    "invalid string",
-			}
-		case "cidr-list":
-			param = &CIDRListParam{}
-		case "server-list":
-			param = &ServerListParam{}
-		case "string-slice":
-			param = &StringSliceParam{}
-		case "interface-name-slice":
-			param = &StringSliceParam{ValidationRegex: InterfaceRegex}
-		case "iface-filter-slice":
-			param = &StringSliceParam{ValidationRegex: IfaceParamRegexp}
-		case "route-table-range":
-			param = &RouteTableRangeParam{}
-		case "route-table-ranges":
-			param = &RouteTableRangesParam{}
-		case "keyvaluelist":
-			param = &KeyValueListParam{}
-		case "keydurationlist":
-			param = &KeyDurationListParam{}
-		default:
-			log.Panicf("Unknown type of parameter: %v", kind)
-			panic("Unknown type of parameter") // Unreachable, keep the linter happy.
-		}
-
+		param, defaultStr, flags := ParamForField(field.Name, tag)
 		metadata := param.GetMetadata()
 		metadata.Name = field.Name
 		metadata.Type = field.Type.String()
@@ -1251,9 +1238,7 @@ func (config *Config) UseNodeResourceUpdates() bool {
 
 func (config *Config) RawValues() map[string]string {
 	cp := map[string]string{}
-	for k, v := range config.rawValues {
-		cp[k] = v
-	}
+	maps.Copy(cp, config.rawValues)
 	return cp
 }
 
@@ -1311,7 +1296,7 @@ func New() *Config {
 
 type Param interface {
 	GetMetadata() *Metadata
-	Parse(raw string) (result interface{}, err error)
+	Parse(raw string) (result any, err error)
 	setDefault(*Config)
 	SchemaDescription() string
 }

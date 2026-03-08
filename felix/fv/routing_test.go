@@ -879,7 +879,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
-				for i := 0; i < 3; i++ {
+				for i := range 3 {
 					f := felixes[i]
 					cc.ExpectSome(f, w[i])          // Host to local workload.
 					cc.ExpectSome(f, w[(i+1)%3])    // Host to next node's workload
@@ -937,7 +937,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
-				for i := 0; i < 3; i++ {
+				for i := range 3 {
 					f := felixes[i]
 					cc.ExpectSome(f, w[0])
 					cc.ExpectSome(f, w[1])

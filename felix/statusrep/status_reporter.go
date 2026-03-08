@@ -29,7 +29,7 @@ import (
 type EndpointStatusReporter struct {
 	hostname           string
 	region             string
-	endpointUpdates    <-chan interface{}
+	endpointUpdates    <-chan any
 	stop               chan bool
 	datastore          datastore
 	epStatusIDToStatus map[model.Key]string
@@ -49,7 +49,7 @@ type pendingUpdate struct {
 
 func NewEndpointStatusReporter(hostname string,
 	region string,
-	endpointUpdates <-chan interface{},
+	endpointUpdates <-chan any,
 	datastore datastore,
 	reportingDelay time.Duration,
 	resyncInterval time.Duration) *EndpointStatusReporter {
@@ -75,7 +75,7 @@ func NewEndpointStatusReporter(hostname string,
 // the tickers to be mocked for UT.
 func newEndpointStatusReporterWithTickerChans(hostname string,
 	region string,
-	endpointUpdates <-chan interface{},
+	endpointUpdates <-chan any,
 	datastore datastore,
 	resyncTicker stoppable,
 	resyncTickerChan <-chan time.Time,

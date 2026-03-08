@@ -192,7 +192,7 @@ func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
 	// Create 1000 pods.
 	createNamespace(clientset, nsName, nil)
 	log.Info("Creating pods:")
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		createPod(clientset, d, nsName, podSpec{})
 	}
 	log.Info("Done")

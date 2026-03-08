@@ -29,8 +29,8 @@ func NewStagedNetworkPolicyClient(r rest.Interface, group BackingAPIGroup) K8sRe
 	return &customResourceClient{
 		restClient:      r,
 		resource:        StagedNetworkPolicyResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.StagedNetworkPolicy{}),
-		k8sListType:     reflect.TypeOf(apiv3.StagedNetworkPolicyList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.StagedNetworkPolicy](),
+		k8sListType:     reflect.TypeFor[apiv3.StagedNetworkPolicyList](),
 		kind:            apiv3.KindStagedNetworkPolicy,
 		namespaced:      true,
 		apiGroup:        group,

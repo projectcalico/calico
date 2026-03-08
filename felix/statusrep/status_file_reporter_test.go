@@ -107,7 +107,7 @@ func clearDir(dirPath string) {
 
 var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 	logrus.SetLevel(logrus.DebugLevel)
-	var endpointUpdatesC chan interface{}
+	var endpointUpdatesC chan any
 	var ctx context.Context
 	var cancel context.CancelFunc
 	var doneC chan struct{}
@@ -141,7 +141,7 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		filename = filepath.Join(statusDir, mapKey)
 		logrus.Infof("get filename %s", filename)
 
-		endpointUpdatesC = make(chan interface{})
+		endpointUpdatesC = make(chan any)
 		ctx, cancel = context.WithCancel(context.Background())
 		doneC = make(chan struct{})
 	})

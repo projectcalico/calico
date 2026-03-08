@@ -24,7 +24,7 @@ import (
 )
 
 var _ = DescribeTable("Endpoint list parameter parsing",
-	func(raw string, expected interface{}) {
+	func(raw string, expected any) {
 		p := config.EndpointListParam{config.Metadata{
 			Name: "Endpoints",
 		}}
@@ -42,7 +42,7 @@ var _ = DescribeTable("Endpoint list parameter parsing",
 )
 
 var _ = DescribeTable("CIDR list parameter parsing",
-	func(raw string, expected interface{}, expectSuccess bool) {
+	func(raw string, expected any, expectSuccess bool) {
 		p := config.CIDRListParam{config.Metadata{
 			Name: "CIDRs",
 		}}
@@ -126,7 +126,7 @@ var _ = DescribeTable("IPv6 list parameter parsing",
 )
 
 var _ = DescribeTable("String Slice parameter with InterfaceRegex parsing",
-	func(raw string, expected interface{}, expectSuccess bool) {
+	func(raw string, expected any, expectSuccess bool) {
 		p := config.StringSliceParam{config.Metadata{
 			Name: "StringSliceParam",
 		}, config.InterfaceRegex,
@@ -150,7 +150,7 @@ var _ = DescribeTable("String Slice parameter with InterfaceRegex parsing",
 )
 
 var _ = DescribeTable("String Slice parameter with IfaceParamRegexp parsing",
-	func(raw string, expected interface{}, expectSuccess bool) {
+	func(raw string, expected any, expectSuccess bool) {
 		p := config.StringSliceParam{config.Metadata{
 			Name: "StringSliceParam",
 		}, config.IfaceParamRegexp,

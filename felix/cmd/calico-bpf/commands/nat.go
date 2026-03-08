@@ -124,7 +124,7 @@ func dump(cmd *cobra.Command) error {
 	return nil
 }
 
-type printfFn func(format string, i ...interface{})
+type printfFn func(format string, i ...any)
 
 func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf printfFn,
 	natMap map[FK]nat.FrontendValue, back map[nat.BackendKey]BV) {

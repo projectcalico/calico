@@ -43,7 +43,7 @@ func makeSvcEpsPair(svcIdx, epCnt, port int, opts ...K8sServicePortOption) (k8sp
 	)
 
 	eps := make([]k8sp.Endpoint, epCnt)
-	for j := 0; j < epCnt; j++ {
+	for j := range epCnt {
 		eps[j] = NewEndpointInfo("11.1.1.1", j+1)
 	}
 
@@ -65,7 +65,7 @@ func makeState(svcCnt, epCnt int, opts ...K8sServicePortOption) DPSyncerState {
 		EpsMap: make(k8sp.EndpointsMap, epCnt),
 	}
 
-	for i := 0; i < svcCnt; i++ {
+	for i := range svcCnt {
 		sk := makeSvcKey(i)
 		state.SvcMap[sk], state.EpsMap[sk] = makeSvcEpsPair(i, epCnt, 1234, opts...)
 	}
@@ -236,7 +236,7 @@ func BenchmarkServiceUpdate(b *testing.B) {
 
 	dynaNodePort := func() K8sServicePortOption {
 		np := 0
-		return func(s interface{}) {
+		return func(s any) {
 			np = (np + 1) % 30000
 			K8sSvcWithNodePort(30000 + np)(s)
 		}

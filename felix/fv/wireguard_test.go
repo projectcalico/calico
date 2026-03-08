@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"regexp"
@@ -41,7 +42,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -191,7 +192,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					// Swap route entry to match between workloads.
 					routeEntriesV6[0], routeEntriesV6[1] = routeEntriesV6[1], routeEntriesV6[0]
 				}
-				for i := 0; i < nodeCount; i++ {
+				for i := range nodeCount {
 					wgBootstrapEvents = topologyContainers.Felixes[i].WatchStdoutFor(
 						regexp.MustCompile(".*(Cleared wireguard public key from datastore|Wireguard public key not set in datastore).+"),
 					)
@@ -435,7 +436,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					for _, felix := range topologyContainers.Felixes {
 						if wireguardEnabledV4 {
 							var wgPubKeyOrig string
-							var node *v3.Node
+							var node *internalapi.Node
 							var err error
 
 							// Get the original public-key.
@@ -471,7 +472,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						}
 						if wireguardEnabledV6 {
 							var wgPubKeyOrig string
-							var node *v3.Node
+							var node *internalapi.Node
 							var err error
 
 							// Get the original public-key.
@@ -1527,8 +1528,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 			Eventually(func() []int {
 				var handshakes []int
 				out, _ := felix.ExecOutput("wg", "show", wireguardInterfaceNameDefault, "latest-handshakes")
-				peers := strings.Split(out, "\n")
-				for _, peer := range peers {
+				peers := strings.SplitSeq(out, "\n")
+				for peer := range peers {
 					parts := strings.Split(peer, "\t")
 					if len(parts) == 2 {
 						h, _ := strconv.Atoi(parts[1])
@@ -1658,7 +1659,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		cc.ResetExpectations()
 
 		By("checking same node pod-to-pod connectivity")
-		for felixIdx := 0; felixIdx < nodeCount; felixIdx++ {
+		for felixIdx := range nodeCount {
 			cc.ExpectSome(wlsByHost[felixIdx][0], wlsByHost[felixIdx][1])
 		}
 
@@ -1728,9 +1729,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	topologyOptions.ExtraEnvVars["FELIX_IPTABLESMARKMASK"] = "4294934528" // 0xffff8000
 
 	for _, envs := range extraEnvs {
-		for k, v := range envs {
-			topologyOptions.ExtraEnvVars[k] = v
-		}
+		maps.Copy(topologyOptions.ExtraEnvVars, envs)
 	}
 
 	// Enable Wireguard.

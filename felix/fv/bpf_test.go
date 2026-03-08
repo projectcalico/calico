@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,7 +57,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -542,7 +543,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			var (
 				hostW   *workload.Workload
 				w       [2]*workload.Workload
-				wepCopy [2]*libapi.WorkloadEndpoint
+				wepCopy [2]*internalapi.WorkloadEndpoint
 			)
 
 			if !testOpts.connTimeEnabled {
@@ -566,7 +567,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					testOpts.protocol)
 
 				// Start a couple of workloads so we can check workload-to-workload and workload-to-host.
-				for i := 0; i < 2; i++ {
+				for i := range 2 {
 					wIP := fmt.Sprintf("10.65.0.%d", i+2)
 					if testOpts.ipv6 {
 						wIP = fmt.Sprintf("dead:beef::%d", i+2)
@@ -1961,8 +1962,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Starting permanent connection")
 						pc := w[0][0].StartPersistentConnection(w[1][0].IP, 8055, workload.PersistentConnectionOpts{
 							MonitorConnectivity: true,
+							Timeout:             60 * time.Second,
 						})
-						defer pc.Stop()
 
 						expectPongs := func() {
 							EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
@@ -1999,12 +2000,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Should no longer get pongs when using the spoof interface")
 						expectNoPongs()
 
-						// Move WEP to spoof interface
+						// Switch back to eth0 and stop the persistent connection
+						// cleanly before the WEP move.  RemoveFromInfra triggers
+						// WorkloadRemoveScannerTCP which marks the CT entry with
+						// FlagSendRST, causing BPF to RST the connection and the
+						// test-connection tool to exit with Fatal.
+						w[0][0].UseSpoofInterface(false)
+						expectPongs()
+						pc.Stop()
+
+						// Move WEP to spoof interface.  This simulates a pod being
+						// removed and a new pod being created on the spoof interface.
+						// Verify that new connections work on the new interface.
+						w[0][0].UseSpoofInterface(true)
 						w[0][0].RemoveFromInfra(infra)
 						w[0][0].RemoveSpoofWEPFromInfra(infra)
 						w[0][0].ConfigureInInfraAsSpoofInterface(infra)
-						By("Should get pongs again after switching WEP to spoof iface")
-						expectPongs()
+						By("Should have connectivity via new connections after WEP move to spoof iface")
+						cc.Expect(Some, w[0][0], w[1][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
 					})
 				}
 
@@ -3558,19 +3573,23 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								natFtKey = nat.NewNATKey(net.ParseIP(ip), port, numericProto)
 								family = 4
 							}
-							Eventually(func() bool {
-								m, be, _ := dumpNATMapsAny(family, tc.Felixes[1])
+							// Check all felixes. In the shared-cgroup FV environment,
+							// felix-0's CTLB program intercepts connects from all
+							// containers, so its NAT maps must be synced too.
+							for _, f := range tc.Felixes {
+								Eventually(func() bool {
+									m, be, _ := dumpNATMapsAny(family, f)
 
-								v, ok := m[natFtKey]
-								if !ok || v.Count() == 0 {
-									return false
-								}
+									v, ok := m[natFtKey]
+									if !ok || v.Count() == 0 {
+										return false
+									}
 
-								beKey := nat.NewNATBackendKey(v.ID(), 0)
-
-								_, ok = be[beKey]
-								return ok
-							}, 5*time.Second).Should(BeTrue())
+									beKey := nat.NewNATBackendKey(v.ID(), 0)
+									_, ok = be[beKey]
+									return ok
+								}, 5*time.Second).Should(BeTrue())
+							}
 						})
 
 						By("Making sure that backend is ready")
@@ -4313,8 +4332,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 										arpRegexp := regexp.MustCompile(fmt.Sprintf(".*%s : (.*) -> (.*)", felixIP(1)))
 
-										lines := strings.Split(out, "\n")
-										for _, l := range lines {
+										lines := strings.SplitSeq(out, "\n")
+										for l := range lines {
 											if strings.Contains(l, felixIP(1)) {
 												MACs := arpRegexp.FindStringSubmatch(l)
 												Expect(MACs).To(HaveLen(3))
@@ -6312,14 +6331,14 @@ func conntrackFlushWorkloadEntries(felixes []*infrastructure.Felix) func() {
 	}
 }
 
-func conntrackChecks(felixes []*infrastructure.Felix) []interface{} {
+func conntrackChecks(felixes []*infrastructure.Felix) []any {
 	if felixes[0].ExpectedIPIPTunnelAddr != "" ||
 		felixes[0].ExpectedWireguardTunnelAddr != "" ||
 		felixes[0].ExpectedWireguardV6TunnelAddr != "" {
 		return nil
 	}
 
-	return []interface{}{
+	return []any{
 		CheckWithInit(conntrackFlushWorkloadEntries(felixes)),
 		CheckWithFinalTest(conntrackCheck(felixes)),
 		CheckWithBeforeRetry(conntrackFlushWorkloadEntries(felixes)),
@@ -6385,13 +6404,7 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	lines := strings.Split(out, "\n")
 	rtRE := regexp.MustCompile(ip + " .* dev bpfin.cali")
 
-	for _, l := range lines {
-		if rtRE.MatchString(l) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(lines, rtRE.MatchString)
 }
 
 func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool, polType string, ipFamily proto.IPVersion) bool {
@@ -6466,6 +6479,21 @@ func bpfCheckIfGlobalNetworkPolicyProgrammedV6(felix *infrastructure.Felix, ifac
 }
 
 func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
+	var (
+		out string
+		err error
+	)
+
+	if felix.TopologyOptions.EnableIPv6 {
+		out, err = felix.ExecOutput("calico-bpf", "-6", "policy", "dump", iface, hook)
+	} else {
+		out, err = felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook)
+	}
+	Expect(err).NotTo(HaveOccurred())
+	return out
+}
+
+func bpfDumpPolicyAsm(felix *infrastructure.Felix, iface, hook string) string {
 	var (
 		out string
 		err error

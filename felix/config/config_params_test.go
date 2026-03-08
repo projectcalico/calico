@@ -16,6 +16,7 @@ package config_test
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"reflect"
 	"regexp"
@@ -121,7 +122,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 	})
 })
 
-func fieldsByName(example interface{}) map[string]reflect.StructField {
+func fieldsByName(example any) map[string]reflect.StructField {
 	fields := map[string]reflect.StructField{}
 	t := reflect.TypeOf(example)
 	for i := 0; i < t.NumField(); i++ {
@@ -220,7 +221,7 @@ var (
 )
 
 var _ = DescribeTable("Config parsing",
-	func(key, value string, expected interface{}, errorExpected ...bool) {
+	func(key, value string, expected any, errorExpected ...bool) {
 		cfg := config.New()
 		_, err := cfg.UpdateFrom(map[string]string{key: value}, config.EnvironmentVariable)
 		configPtr := reflect.ValueOf(cfg)
@@ -539,7 +540,7 @@ var _ = DescribeTable("Config parsing",
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",
-	func(clusterType, metadataAddr, metadataPort, ifacePrefixes interface{}, expected bool) {
+	func(clusterType, metadataAddr, metadataPort, ifacePrefixes any, expected bool) {
 		c := config.New()
 		values := make(map[string]string)
 		if clusterType != nil {
@@ -934,3 +935,60 @@ var _ = DescribeTable("SafeParamsEqual",
 		false,
 	),
 )
+
+var _ = Describe("ParamForField", func() {
+	It("int(0);1024", func() {
+		param, defaultStr, flags := config.ParamForField("TestField", "int(0);1024")
+		Expect(param).To(BeAssignableToTypeOf(&config.IntParam{}))
+		intParam := param.(*config.IntParam)
+		Expect(intParam.Ranges).To(HaveLen(1))
+		Expect(intParam.Ranges[0].Min).To(BeNumerically("==", 0))
+		Expect(intParam.Ranges[0].Max).To(BeNumerically("==", math.MaxInt))
+		Expect(defaultStr).To(Equal("1024"))
+		Expect(flags).To(Equal(""))
+	})
+	It("int(1:2147483646);512", func() {
+		param, defaultStr, flags := config.ParamForField("TestField6", "int(1:2147483646);512")
+		Expect(param).To(BeAssignableToTypeOf(&config.IntParam{}))
+		intParam := param.(*config.IntParam)
+		Expect(intParam.Ranges).To(HaveLen(1))
+		Expect(intParam.Ranges[0].Min).To(BeNumerically("==", 1))
+		Expect(intParam.Ranges[0].Max).To(BeNumerically("==", 2147483646))
+		Expect(defaultStr).To(Equal("512"))
+		Expect(flags).To(Equal(""))
+	})
+	It("defaults a mis-parsed max to MaxInt, not MinInt", func() {
+		param, defaultStr, flags := config.ParamForField("TestField", "int(0:);1024")
+		Expect(param).To(BeAssignableToTypeOf(&config.IntParam{}))
+		intParam := param.(*config.IntParam)
+		Expect(intParam.Ranges).To(HaveLen(1))
+		Expect(intParam.Ranges[0].Min).To(BeNumerically("==", 0))
+		Expect(intParam.Ranges[0].Max).To(BeNumerically("==", math.MaxInt))
+		Expect(defaultStr).To(Equal("1024"))
+		Expect(flags).To(Equal(""))
+	})
+	It("does not copy min and max across comma-separated ranges", func() {
+		param, defaultStr, flags := config.ParamForField("TestField", "int(10:22,15:,:63);1024")
+		Expect(param).To(BeAssignableToTypeOf(&config.IntParam{}))
+		intParam := param.(*config.IntParam)
+		Expect(intParam.Ranges).To(HaveLen(3))
+		Expect(intParam.Ranges[0].Min).To(BeNumerically("==", 10))
+		Expect(intParam.Ranges[0].Max).To(BeNumerically("==", 22))
+		Expect(intParam.Ranges[1].Min).To(BeNumerically("==", 15))
+		Expect(intParam.Ranges[1].Max).To(BeNumerically("==", math.MaxInt))
+		Expect(intParam.Ranges[2].Min).To(BeNumerically("==", math.MinInt))
+		Expect(intParam.Ranges[2].Max).To(BeNumerically("==", 63))
+		Expect(defaultStr).To(Equal("1024"))
+		Expect(flags).To(Equal(""))
+	})
+	It("handles int with no params", func() {
+		param, defaultStr, flags := config.ParamForField("TestField", "int();1024")
+		Expect(param).To(BeAssignableToTypeOf(&config.IntParam{}))
+		intParam := param.(*config.IntParam)
+		Expect(intParam.Ranges).To(HaveLen(1))
+		Expect(intParam.Ranges[0].Min).To(BeNumerically("==", math.MinInt))
+		Expect(intParam.Ranges[0].Max).To(BeNumerically("==", math.MaxInt))
+		Expect(defaultStr).To(Equal("1024"))
+		Expect(flags).To(Equal(""))
+	})
+})

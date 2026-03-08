@@ -78,7 +78,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 			out, err := felix.ExecOutput(saveCommand, "-t", "filter")
 			Expect(err).NotTo(HaveOccurred())
 			var cidrBlockLines []string
-			for _, line := range strings.Split(out, "\n") {
+			for line := range strings.SplitSeq(out, "\n") {
 				if strings.Contains(line, "-A cali-cidr-block") {
 					cidrBlockLines = append(cidrBlockLines, line)
 				}

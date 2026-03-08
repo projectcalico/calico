@@ -626,7 +626,7 @@ var _ = Describe("BPF Syncer", func() {
 			val, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			count := val.Count()
-			for i := uint32(0); i < count; i++ {
+			for i := range count {
 				Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val.ID(), i)))
 			}
 
@@ -650,7 +650,7 @@ var _ = Describe("BPF Syncer", func() {
 			val, ok = svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val.Count()).To(Equal(uint32(0)))
-			for i := uint32(0); i < count; i++ {
+			for i := range count {
 				Expect(eps.m).NotTo(HaveKey(nat.NewNATBackendKey(val.ID(), i)))
 			}
 		}))

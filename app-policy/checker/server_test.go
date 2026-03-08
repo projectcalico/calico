@@ -15,12 +15,10 @@
 package checker
 
 import (
-	"context"
 	"testing"
 
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	. "github.com/onsi/gomega"
-	"google.golang.org/genproto/googleapis/rpc/status"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
@@ -29,29 +27,32 @@ import (
 
 func TestCheckNoStore(t *testing.T) {
 	RegisterTestingT(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	stores := policystore.NewPolicyStoreManager()
-	uut := NewServer(ctx, stores)
+	uut := NewServer(ctx, stores,
+		WithRegisteredCheckProvider(NewALPCheckProvider()),
+	)
 
 	req := &authz.CheckRequest{}
 	resp, err := uut.Check(ctx, req)
 	Expect(err).To(BeNil())
-	// No provider is registerted, as such the status code is UNKNOWN
-	Expect(resp.GetStatus().GetCode()).To(Equal(UNKNOWN))
+	// Endpoint is nil so the ALP provider is not enabled; response stays at initial INTERNAL.
+	Expect(resp.GetStatus().GetCode()).To(Equal(INTERNAL))
 }
 
 func TestCheckStore(t *testing.T) {
 	RegisterTestingT(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	stores := policystore.NewPolicyStoreManager()
-	uut := NewServer(ctx, stores)
+	uut := NewServer(ctx, stores,
+		WithRegisteredCheckProvider(NewALPCheckProvider()),
+	)
 
-	store := policystore.NewPolicyStoreManager()
-	store.DoWithLock(func(s *policystore.PolicyStore) {
+	// Mark in-sync so writes go to the active store, then populate it.
+	stores.OnInSync()
+	stores.DoWithLock(func(s *policystore.PolicyStore) {
 		s.Endpoint = &proto.WorkloadEndpoint{
 			ProfileIds: []string{"default"},
 		}
@@ -69,11 +70,7 @@ func TestCheckStore(t *testing.T) {
 		},
 	}}
 
-	chk := func() *authz.CheckResponse {
-		rsp, err := uut.Check(ctx, req)
-		Expect(err).ToNot(HaveOccurred())
-		return rsp
-	}
-	// No provider is registerted, as such the status code is UNKNOWN
-	Eventually(chk).Should(Equal(&authz.CheckResponse{Status: &status.Status{Code: UNKNOWN}}))
+	resp, err := uut.Check(ctx, req)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(resp.GetStatus().GetCode()).To(Equal(OK))
 }

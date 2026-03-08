@@ -80,7 +80,7 @@ func TestEtcdHealthCheckerSuccess(t *testing.T) {
 	var resp *http.Response
 	var err error
 	retryInterval := 500 * time.Millisecond
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		resp, err = c.Get(clientconfig.Host + "/healthz")
 		if err != nil || http.StatusOK != resp.StatusCode {
 			success = false
@@ -315,14 +315,12 @@ func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("Error on watch")
 	}
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for e := range wIface.ResultChan() {
 			fmt.Println("Watch object: ", e)
 			break
 		}
-	}()
+	})
 
 	err = policyClient.Delete(ctx, defaultTierPolicyName, metav1.DeleteOptions{})
 	if err != nil {
@@ -512,14 +510,12 @@ func testStagedNetworkPolicyClient(client calicoclient.Interface, name string) e
 		return fmt.Errorf("Error on watch")
 	}
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for e := range wIface.ResultChan() {
 			fmt.Println("Watch object: ", e)
 			break
 		}
-	}()
+	})
 
 	err = policyClient.Delete(ctx, defaultTierPolicyName, metav1.DeleteOptions{})
 	if err != nil {
@@ -1076,14 +1072,12 @@ func testNetworkSetClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("Error on watch")
 	}
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for e := range wIface.ResultChan() {
 			fmt.Println("Watch object: ", e)
 			break
 		}
-	}()
+	})
 
 	err = networkSetClient.Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
@@ -1265,7 +1259,7 @@ func testHostEndpointClient(client calicoclient.Interface, name string) error {
 	// watch for 2 events
 	go func() {
 		defer done.Done()
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			select {
 			case e := <-w.ResultChan():
 				events = append(events, e)
@@ -1277,7 +1271,7 @@ func testHostEndpointClient(client calicoclient.Interface, name string) error {
 	}()
 
 	// Create two HostEndpoints
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		hep := createTestHostEndpoint(fmt.Sprintf("hep%d", i), "192.168.0.1", "test-node")
 		_, err = hostEndpointClient.Create(ctx, hep, metav1.CreateOptions{})
 		if err != nil {
@@ -1752,7 +1746,7 @@ func testKubeControllersConfigurationClient(client calicoclient.Interface) error
 	// watch for 2 events
 	go func() {
 		defer done.Done()
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			select {
 			case e := <-w.ResultChan():
 				events = append(events, e)
@@ -2265,7 +2259,7 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", bgpFilter, bgpFilterNew)
 	}
 
-	for i := 0; i < size; i++ {
+	for i := range size {
 		if bgpFilterNew.Spec.ExportV4[i] != bgpFilter.Spec.ExportV4[i] {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ExportV4: \n%+v\n%+v",
 				bgpFilter.Spec.ExportV4, bgpFilterNew.Spec.ExportV4)

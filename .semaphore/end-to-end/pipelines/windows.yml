@@ -4,7 +4,7 @@ name: banzai-calico Windows
 
 agent:
   machine:
-    type: c1-standard-1
+    type: f1-standard-2
     os_image: ubuntu2204
 
 execution_time_limit:
@@ -24,88 +24,89 @@ global_job_config:
     - name: CREATE_WINDOWS_NODES
       value: "true"
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=\[sig-calico\].*\[RunsOnWindows\]
+      value: --ginkgo.focus=(\[sig-calico\].*\[RunsOnWindows\]) --ginkgo.skip=(\[LinuxOnly\])
     - name: FUNCTIONAL_AREA
       value: "windows.yml"
     - name: USE_PRIVATE_REGISTRY
       value: "true"
     - name: PRIVATE_REGISTRY
       value: "quay.io/"
+    - name: INSTALLER
+      value: "operator"
+    - name: RUN_LOCAL_TESTS # run e2e tests from locally built binary
+      value: "true"
 
 # Dimensions
-# Provisioners: aws-kubeadm, gcp-kubeadm, rancher
+# Provisioners: azr-aso, azr-aks
 # Installer: operator
-# Windows OS: Windows Server 1809, Windows Server 2022
-# k8s Versions: stable-3, stable-1, stable
+# Windows OS: Windows Server 2022
+# k8s Versions: stable-1, stable
 # linux dataplane: bpf, iptables, nftables
-# encapsulation: vxlan, none
+# encapsulation: vxlan, no-encap
+# CNI: Calico, Azure CNI
 
 # Runs:
-# aws-kubeadm, 1809, stable-3, iptables, none
-# gcp-kubeadm, 2022, stable, bpf, vxlan
-# gcp-rancher, 2022, stable-1, nftables, none
+# azr-aso, 2022, stable, bpf, vxlan
+# azr-aso, 2022, stable-1, nftables, vxlan
+# azr-aks, 2022, stable-1, iptables, no-encap, azure CNI
 
 blocks:
   - name: Calico Windows
     dependencies: []
     task:
       jobs:
-        - name: aws-kubeadm, 1809, stable-3, iptables, none
+        - name: "azr-aso, 2022, stable, bpf, vxlan"
           execution_time_limit:
             hours: 5
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
-              value: aws-kubeadm
-            - name: WINDOWS_OS_VERSION
-              value: "1809"
+              value: azr-aso
             - name: K8S_VERSION
-              value: stable-3
-            - name: DATAPLANE
-              value: CalicoIptables
-            - name: ENCAPSULATION_TYPE
-              value: None
-            - name: VPC_SUBNETS
-              value: '["172.16.101.0/24"]' # single subnet because no encapsulation is being used
-
-        - name: gcp-kubeadm, 2022, stable, bpf, vxlan
-          execution_time_limit:
-            hours: 5
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          env_vars:
-            - name: PROVISIONER
-              value: gcp-kubeadm
-            - name: WINDOWS_OS_VERSION
-              value: "2022"
-            - name: K8S_VERSION
-              value: stable
+              value: stable-1
             - name: DATAPLANE
               value: CalicoBPF
             - name: ENCAPSULATION_TYPE
               value: VXLAN
+            - name: WINDOWS_OS
+              value: "2022"
 
-        - name: gcp-rancher, 2022, stable-1, nftables, vxlan
+        - name: "azr-aso, 2022, stable-1, nftables, vxlan"
           execution_time_limit:
             hours: 5
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
-              value: gcp-rancher
-            - name: WINDOWS_OS_VERSION
-              value: "2022"
+              value: azr-aso
             - name: K8S_VERSION
               value: stable-1
             - name: DATAPLANE
               value: CalicoNftables
             - name: ENCAPSULATION_TYPE
               value: VXLAN
-            - name: RKE_VERSION # Don't just update these versions, need k8s and rke versions to match.
-              value: "v1.8.6" # https://github.com/rancher/rke/releases/tag/v1.8.6
+            - name: WINDOWS_OS
+              value: "2022"
+
+        - name: "azr-aks, 2022, stable-1, iptables, no encap, azure CNI"
+          execution_time_limit:
+            hours: 5
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: azr-aks
             - name: K8S_VERSION
-              value: "v1.32.7" # RKE 1.8.6 supports: v1.30.14-rancher1-1, v1.31.11-rancher1-1, v1.32.7-rancher1-1
+              value: stable-1
+            - name: DATAPLANE
+              value: CalicoIptables
+            - name: ENCAPSULATION_TYPE
+              value: "None"
+            - name: WINDOWS_OS
+              value: "2022"
+            - name: USE_VENDORED_CNI
+              value: "true"
 
 promotions:
   - name: Cleanup jobs

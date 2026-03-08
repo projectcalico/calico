@@ -70,7 +70,7 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 		}
 		if update.Value != nil {
 			val := reflect.ValueOf(update.Value)
-			if val.Kind() == reflect.Ptr {
+			if val.Kind() == reflect.Pointer {
 				elem := val.Elem()
 				if elem.Kind() == reflect.Struct {
 					if err := validatorFunc(elem.Interface()); err != nil {

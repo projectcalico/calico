@@ -15,6 +15,7 @@
 package ownershippol
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/vishvananda/netlink"
@@ -127,10 +128,8 @@ func (d *MainTableOwnershipPolicy) RouteIsOurs(ifaceName string, route *netlink.
 	// This covers:
 	// - VXLAN "same-subnet" routes via the host's main NIC.
 	// - Special no-interface routes such as blackhole/prohibit.
-	for _, protocol := range d.ExclusiveRouteProtocols {
-		if route.Protocol == protocol {
-			return true
-		}
+	if slices.Contains(d.ExclusiveRouteProtocols, route.Protocol) {
+		return true
 	}
 
 	// "No-interface" special routes can only be ours if they have one
@@ -150,24 +149,12 @@ func (d *MainTableOwnershipPolicy) RouteIsOurs(ifaceName string, route *netlink.
 		// more permissive protocol value here because we already know that
 		// this is one of our interfaces so the route is very likely to be
 		// ours.
-		for _, protocol := range d.AllRouteProtocols {
-			if route.Protocol == protocol {
-				return true
-			}
-		}
-		// Calico interface but not our route.
-		return false
+		return slices.Contains(d.AllRouteProtocols, route.Protocol)
 	}
 
 	// Check if this route goes to one of our tunnel/special purpose
 	// interfaces.  These are always ours.
-	for _, iface := range d.CalicoSpecialInterfaces {
-		if ifaceName == iface {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(d.CalicoSpecialInterfaces, ifaceName)
 }
 
 var _ routetable.OwnershipPolicy = (*MainTableOwnershipPolicy)(nil)

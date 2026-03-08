@@ -1,0 +1,248 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package kubevirt_test
+
+import (
+	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
+	fakekubevirt "github.com/projectcalico/calico/libcalico-go/lib/kubevirt/fake"
+)
+
+// TestGetPodVMIInfo_NotVirtLauncherPod tests that non-virt-launcher pods return nil.
+func TestGetPodVMIInfo_NotVirtLauncherPod(t *testing.T) {
+	fakeClient := fakekubevirt.NewFakeVirtClient()
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "regular-pod",
+			Namespace: "default",
+			UID:       "pod-123",
+		},
+	}
+
+	info, err := kubevirt.GetPodVMIInfo(pod, fakeClient)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if info != nil {
+		t.Errorf("Expected nil info for non-virt-launcher pod, got: %+v", info)
+	}
+}
+
+// TestGetPodVMIInfo_VirtLauncherPod tests that virt-launcher pods are correctly identified.
+func TestGetPodVMIInfo_VirtLauncherPod(t *testing.T) {
+	fakeClient := fakekubevirt.NewFakeVirtClient()
+
+	vmiUID := "vmi-12345"
+	vmiName := "test-vmi"
+	podUID := "pod-67890"
+	namespace := "default"
+
+	// Create a VMI
+	vmi := fakekubevirt.NewVMIBuilder(vmiName, namespace, vmiUID).
+		WithActivePod(podUID, "node1").
+		Build()
+	fakeClient.AddVMI(vmi)
+
+	// Create a pod owned by the VMI
+	controllerTrue := true
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "virt-launcher-test-vmi-abcde",
+			Namespace: namespace,
+			UID:       types.UID(podUID),
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "kubevirt.io/v1",
+					Kind:       "VirtualMachineInstance",
+					Name:       vmiName,
+					UID:        types.UID(vmiUID),
+					Controller: &controllerTrue,
+				},
+			},
+		},
+	}
+
+	info, err := kubevirt.GetPodVMIInfo(pod, fakeClient)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if info == nil {
+		t.Fatal("Expected PodVMIInfo, got nil")
+	}
+
+	if info.GetName() != vmiName {
+		t.Errorf("Expected VMI name %s, got %s", vmiName, info.GetName())
+	}
+	if info.GetVMIUID() != vmiUID {
+		t.Errorf("Expected VMI UID %s, got %s", vmiUID, info.GetVMIUID())
+	}
+	if info.VMIResource == nil {
+		t.Error("Expected VMIResource to be non-nil")
+	}
+	if info.IsMigrationTarget() {
+		t.Error("Expected IsMigrationTarget to be false")
+	}
+}
+
+// TestGetPodVMIInfo_MigrationTargetPod tests migration target pod detection.
+func TestGetPodVMIInfo_MigrationTargetPod(t *testing.T) {
+	fakeClient := fakekubevirt.NewFakeVirtClient()
+
+	vmiUID := "vmi-12345"
+	vmiName := "test-vmi"
+	sourcePodUID := "pod-source"
+	targetPodUID := "pod-target"
+	targetPodName := "virt-launcher-test-vmi-target"
+	migrationUID := "migration-99999"
+	migrationName := "test-migration"
+	namespace := "default"
+
+	// Create a VMI with migration in progress
+	vmi := fakekubevirt.NewVMIBuilder(vmiName, namespace, vmiUID).
+		WithActivePod(sourcePodUID, "node1").
+		WithActivePod(targetPodUID, "node2").
+		WithMigration(migrationUID, "virt-launcher-test-vmi-source", targetPodName).
+		Build()
+	fakeClient.AddVMI(vmi)
+
+	// Create the VMIM resource to reflect a realistic migration scenario.
+	vmim := &kubevirtv1.VirtualMachineInstanceMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      migrationName,
+			Namespace: namespace,
+			UID:       types.UID(migrationUID),
+		},
+		Spec: kubevirtv1.VirtualMachineInstanceMigrationSpec{
+			VMIName: vmiName,
+		},
+	}
+	fakeClient.AddMigration(vmim)
+
+	// Create target pod with migration label
+	controllerTrue := true
+	targetPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      targetPodName,
+			Namespace: namespace,
+			UID:       types.UID(targetPodUID),
+			Labels: map[string]string{
+				kubevirt.LabelKubeVirtMigrationJobUID: migrationUID,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "kubevirt.io/v1",
+					Kind:       "VirtualMachineInstance",
+					Name:       vmiName,
+					UID:        types.UID(vmiUID),
+					Controller: &controllerTrue,
+				},
+			},
+		},
+	}
+
+	info, err := kubevirt.GetPodVMIInfo(targetPod, fakeClient)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if info == nil {
+		t.Fatal("Expected PodVMIInfo, got nil")
+	}
+
+	if !info.IsMigrationTarget() {
+		t.Error("Expected IsMigrationTarget to be true")
+	}
+	if info.GetVMIMigrationUID() != migrationUID {
+		t.Errorf("Expected migration UID %s, got %s", migrationUID, info.GetVMIMigrationUID())
+	}
+}
+
+// TestGetPodVMIInfo_VMIBeingDeleted tests VMI deletion detection.
+func TestGetPodVMIInfo_VMIBeingDeleted(t *testing.T) {
+	fakeClient := fakekubevirt.NewFakeVirtClient()
+
+	vmiUID := "vmi-12345"
+	vmiName := "test-vmi"
+	vmUID := "vm-12345"
+	vmName := "test-vm"
+	podUID := "pod-67890"
+	namespace := "default"
+
+	// Create a VM with deletion timestamp
+	now := metav1.Now()
+	vm := &kubevirtv1.VirtualMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              vmName,
+			Namespace:         namespace,
+			UID:               types.UID(vmUID),
+			DeletionTimestamp: &now,
+		},
+	}
+	fakeClient.AddVM(vm)
+
+	// Create a VMI with ownerReference to the VM
+	controllerTrue := true
+	blockOwnerDeletion := true
+	vmi := fakekubevirt.NewVMIBuilder(vmiName, namespace, vmiUID).
+		WithActivePod(podUID, "node1").
+		Build()
+	vmi.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion:         "kubevirt.io/v1",
+			Kind:               "VirtualMachine",
+			Name:               vmName,
+			UID:                types.UID(vmUID),
+			Controller:         &controllerTrue,
+			BlockOwnerDeletion: &blockOwnerDeletion,
+		},
+	}
+	fakeClient.AddVMI(vmi)
+
+	// Create a pod owned by the VMI
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "virt-launcher-test-vmi-abcde",
+			Namespace: namespace,
+			UID:       types.UID(podUID),
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "kubevirt.io/v1",
+					Kind:       "VirtualMachineInstance",
+					Name:       vmiName,
+					UID:        types.UID(vmiUID),
+					Controller: &controllerTrue,
+				},
+			},
+		},
+	}
+
+	info, err := kubevirt.GetPodVMIInfo(pod, fakeClient)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if info == nil {
+		t.Fatal("Expected PodVMIInfo, got nil")
+	}
+
+	if !info.IsVMObjectDeletionInProgress() {
+		t.Error("Expected IsVMObjectDeletionInProgress to be true")
+	}
+}

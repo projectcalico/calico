@@ -4,10 +4,8 @@ agent:
   machine:
     type: f1-standard-2
     os_image: ubuntu2204
-
 execution_time_limit:
   minutes: 30
-
 global_job_config:
   secrets:
     - name: k8s-e2e-push
@@ -17,7 +15,7 @@ global_job_config:
       # Log into quay.io with the tigeradev credentials (to push to quay.io/tigeradev/rapidclient)
       - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       - checkout
-
+      - ssh-add ~/.ssh/id_rsa
 blocks:
   - name: Publish e2e test utility images
     dependencies: []

@@ -31,19 +31,15 @@ func TestForwardConnections(t *testing.T) {
 		defer func() { _ = lst2.Close() }()
 
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			dst1, err = lst1.Accept()
 			Expect(err).ShouldNot(HaveOccurred())
-		}()
+		})
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			dst2, err = lst2.Accept()
 			Expect(err).ShouldNot(HaveOccurred())
-		}()
+		})
 
 		t.Log("Connecting to the localhost listeners")
 		src1, err := net.Dial("tcp", lst1.Addr().String())
@@ -54,11 +50,9 @@ func TestForwardConnections(t *testing.T) {
 
 		wg.Wait()
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			conn.Forward(dst1, src2)
-		}()
+		})
 
 		request := "request"
 		response := "response"

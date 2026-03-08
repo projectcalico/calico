@@ -55,9 +55,9 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 	// Function returns map of profile_name:object stored by policy controller
 	// in the Calico datastore. Identifies controller written objects by
 	// their naming convention.
-	listFunc := func() (map[string]interface{}, error) {
+	listFunc := func() (map[string]any, error) {
 		log.Debugf("Listing profiles from Calico datastore")
-		filteredProfiles := make(map[string]interface{})
+		filteredProfiles := make(map[string]any)
 
 		// Get all profile objects from Calico datastore.
 		profileList, err := c.Profiles().List(ctx, options.ListOptions{})
@@ -83,7 +83,7 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 	// Create a Cache to store Profiles in.
 	cacheArgs := rcache.ResourceCacheArgs{
 		ListFunc:    listFunc,
-		ObjectType:  reflect.TypeOf(api.Profile{}),
+		ObjectType:  reflect.TypeFor[api.Profile](),
 		LogTypeDesc: "Namespace",
 	}
 	ccache := rcache.NewResourceCache(cacheArgs)
@@ -98,7 +98,7 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 		ObjectType:    &v1.Namespace{},
 		ResyncPeriod:  0,
 		Handler: cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
+			AddFunc: func(obj any) {
 				log.Debugf("Got ADD event for Namespace: %#v", obj)
 				profile, err := namespaceConverter.Convert(obj)
 				if err != nil {
@@ -110,7 +110,7 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 				k := namespaceConverter.GetKey(profile)
 				ccache.Set(k, profile)
 			},
-			UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+			UpdateFunc: func(oldObj any, newObj any) {
 				log.Debugf("Got UPDATE event for Namespace")
 				log.Debugf("Old object: \n%#v\n", oldObj)
 				log.Debugf("New object: \n%#v\n", newObj)
@@ -132,7 +132,7 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 				k := namespaceConverter.GetKey(profile)
 				ccache.Set(k, profile)
 			},
-			DeleteFunc: func(obj interface{}) {
+			DeleteFunc: func(obj any) {
 				// Convert the namespace into a Profile.
 				log.Debugf("Got DELETE event for namespace: %#v", obj)
 				profile, err := namespaceConverter.Convert(obj)

@@ -32,7 +32,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
@@ -69,8 +69,9 @@ func (d *LinuxDataplane) DoNetworking(
 	result *cniv1.Result,
 	desiredVethName string,
 	routes []*net.IPNet,
-	endpoint *api.WorkloadEndpoint,
+	endpoint *internalapi.WorkloadEndpoint,
 	annotations map[string]string,
+	skipHostSideRoutes bool,
 ) (hostVethName, contVethMAC string, err error) {
 	hostVethName = desiredVethName
 	d.logger.Infof("Setting the host side veth name to %s", hostVethName)
@@ -99,10 +100,15 @@ func (d *LinuxDataplane) DoNetworking(
 		return "", "", fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
 	}
 
-	// Add the routes to host veth in the host namespace.
-	err = SetupRoutes(hostNlHandle, hostVeth, result)
-	if err != nil {
-		return "", "", fmt.Errorf("error adding host side routes for interface: %s, error: %s", hostVeth.Attrs().Name, err)
+	// Add the routes to host veth in the host namespace unless explicitly skipped
+	// (e.g., for KubeVirt migration target pods where Felix will program the route)
+	if !skipHostSideRoutes {
+		err = SetupRoutes(hostNlHandle, hostVeth, result)
+		if err != nil {
+			return "", "", fmt.Errorf("error adding host side routes for interface: %s, error: %s", hostVeth.Attrs().Name, err)
+		}
+	} else {
+		d.logger.Info("Skipping host-side route setup (skipHostSideRoutes=true)")
 	}
 
 	return hostVethName, contVethMAC, err
@@ -310,7 +316,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			// after these sysctls
 			var err error
 			var addresses []netlink.Addr
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				if i > 0 {
 					time.Sleep(50 * time.Millisecond)
 					d.logger.Info("Retry lookup of host-side IPv6 link local address...")

@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest/fake"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -47,7 +47,7 @@ var _ = Describe("ipamBlockClient tests with fake REST client", func() {
 
 	It("should list all (v3)", func() {
 		l, err := client.List(context.TODO(), model.ResourceListOptions{
-			Kind: libapiv3.KindIPAMBlock,
+			Kind: internalapi.KindIPAMBlock,
 		}, "")
 
 		// Expect an error since the client is not implemented.

@@ -120,7 +120,7 @@ func newIPIPManagerWithShims(
 	return m
 }
 
-func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
+func (m *ipipManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
@@ -166,8 +166,10 @@ func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetabl
 	}
 
 	return &routetable.Target{
-		Type:     routetable.TargetTypeOnLink,
-		CIDR:     cidr,
+		Type: routetable.TargetTypeOnLink,
+		RouteKey: routetable.RouteKey{
+			CIDR: cidr,
+		},
 		GW:       ip.FromString(remoteAddr),
 		Protocol: m.routeProtocol,
 		MTU:      m.dpConfig.IPIPMTU,

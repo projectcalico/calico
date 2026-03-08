@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/ip"
+	felixproto "github.com/projectcalico/calico/felix/proto"
 )
 
 var _ = Describe("BPF service type change", func() {
@@ -101,6 +102,9 @@ var _ = Describe("BPF service type change", func() {
 
 	BeforeEach(func() {
 		p, _ = proxy.StartKubeProxy(k8s, "test-node", bpfMaps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSize(maglevLUTSize))
+		// Unblock start(), which blocks on the initial host metadata update.
+		p.OnUpdate(&felixproto.HostMetadataV4V6Update{Hostname: "dummy"})
+		Expect(p.CompleteDeferredWork()).To(Succeed())
 		p.OnHostIPsUpdate([]net.IP{initIP})
 	})
 

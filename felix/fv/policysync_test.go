@@ -266,7 +266,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 						})
 
 						doChurn := func(wlIndexes ...int) {
-							for i := 0; i < 100; i++ {
+							for i := range 100 {
 								wlIdx := wlIndexes[i%len(wlIndexes)]
 								By(fmt.Sprintf("Churn %d; targeting workload %d", i, wlIdx))
 

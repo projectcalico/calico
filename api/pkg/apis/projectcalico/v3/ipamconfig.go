@@ -39,6 +39,9 @@ type IPAMConfigurationList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster,shortName={ipamconfig,ipamconfigs}
+// +kubebuilder:printcolumn:name="StrictAffinity",type=boolean,JSONPath=".spec.strictAffinity",description="Whether borrowing IP addresses is allowed"
+// +kubebuilder:printcolumn:name="MaxBlocksPerHost",type=integer,JSONPath=".spec.maxBlocksPerHost",description="The max number of blocks that can be affine to each host"
+// +kubebuilder:printcolumn:name="AutoAllocateBlocks",type=boolean,JSONPath=".spec.autoAllocateBlocks",description="Whether or not to auto allocate blocks to hosts"
 
 // IPAMConfiguration contains information about a block for IP address assignment.
 type IPAMConfiguration struct {
@@ -47,6 +50,15 @@ type IPAMConfiguration struct {
 
 	Spec IPAMConfigurationSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
+
+// VMAddressPersistence controls whether KubeVirt VirtualMachine workloads
+// maintain persistent IP addresses across VM lifecycle events.
+type VMAddressPersistence string
+
+const (
+	VMAddressPersistenceEnabled  VMAddressPersistence = "Enabled"
+	VMAddressPersistenceDisabled VMAddressPersistence = "Disabled"
+)
 
 // IPAMConfigurationSpec contains the specification for an IPAMConfiguration resource.
 type IPAMConfigurationSpec struct {
@@ -66,6 +78,19 @@ type IPAMConfigurationSpec struct {
 	// Whether or not to auto allocate blocks to hosts.
 	// +kubebuilder:default=true
 	AutoAllocateBlocks bool `json:"autoAllocateBlocks"`
+
+	// KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
+	// maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction).
+	// When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses
+	// when their underlying pods are recreated during VM operations.
+	// When Disabled, VMs receive new IP addresses whenever their pods are recreated,
+	// and creating a live migration target pod is not supported because the migration
+	// target pod requires the same IP as the source pod, which is only possible with
+	// address persistence.
+	// Defaults to Enabled if not specified.
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +optional
+	KubeVirtVMAddressPersistence *VMAddressPersistence `json:"kubeVirtVMAddressPersistence,omitempty"`
 }
 
 // NewIPAMConfiguration creates a new (zeroed) IPAMConfiguration struct with the TypeMetadata initialised to the current

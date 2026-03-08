@@ -186,6 +186,11 @@ spec:
                     x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
+                programClusterRoutes:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 serviceClusterIPs:
                   items:
                     properties:
@@ -1974,8 +1979,10 @@ spec:
                   type: string
                 programClusterRoutes:
                   description: |-
-                    ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
-                    Felix always programs VXLAN routes. [Default: Disabled]
+                    ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
+                    when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
+                    it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
+                    Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
                   enum:
                     - Enabled
                     - Disabled
@@ -2911,6 +2918,10 @@ spec:
                 attributes:
                   items:
                     properties:
+                      alternate:
+                        additionalProperties:
+                          type: string
+                        type: object
                       handle_id:
                         type: string
                       secondary:
@@ -2980,6 +2991,11 @@ spec:
               properties:
                 autoAllocateBlocks:
                   type: boolean
+                kubeVirtVMAddressPersistence:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 maxBlocksPerHost:
                   maximum: 2147483647
                   minimum: 0
@@ -3457,6 +3473,8 @@ spec:
           type: object
       served: true
       storage: true
+      subresources:
+        status: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -6534,6 +6552,12 @@ rules:
       - update
       # watch for changes
       - watch
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - kubecontrollersconfigurations/status
+    verbs:
+      - get
+      - update
   # Needed for policy name migrator.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
@@ -6741,6 +6765,14 @@ rules:
       - daemonsets
     verbs:
       - get
+  # For monitoring KubeVirt live migration.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # CNI cluster role

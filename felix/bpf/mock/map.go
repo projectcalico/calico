@@ -18,6 +18,7 @@ package mock
 
 import (
 	"fmt"
+	maps0 "maps"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -96,9 +97,7 @@ func (m *Map) copyContents() map[string]string {
 	m.Lock()
 	defer m.Unlock()
 	contentsCopy := map[string]string{}
-	for k, v := range m.Contents {
-		contentsCopy[k] = v
-	}
+	maps0.Copy(contentsCopy, m.Contents)
 	return contentsCopy
 }
 

@@ -174,7 +174,7 @@ var _ = Describe("wireguard metrics", func() {
 			Expect(err).ToNot(HaveOccurred())
 		}
 
-		data := map[string]interface{}{
+		data := map[string]any{
 			"pubkey":     mockPeers[0].peer.PublicKey.String(),
 			"peerkey":    mockPeers[1].peer.PublicKey.String(),
 			"endpoint":   mockPeers[1].peer.Endpoint.String(),

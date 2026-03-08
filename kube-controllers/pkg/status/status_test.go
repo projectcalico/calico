@@ -103,7 +103,7 @@ var _ = Describe("Status pkg UTs", func() {
 		By("status file should handle a lot of concurrent not-ready updates for a lot of keys", func() {
 			wg := sync.WaitGroup{}
 			wg.Add(100)
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				go func(j int) {
 					st.SetReady("anykey"+strconv.Itoa(j), false, "reason"+strconv.Itoa(j))
 					wg.Done()
@@ -129,7 +129,7 @@ var _ = Describe("Status pkg UTs", func() {
 			wg := sync.WaitGroup{}
 			wg.Add(200)
 			go st.SetReady("anykey", true, "reason")
-			for i := 0; i < 200; i++ {
+			for i := range 200 {
 				go func(j int) {
 					st.SetReady("anykey"+strconv.Itoa(j), true, "reason"+strconv.Itoa(j))
 					wg.Done()

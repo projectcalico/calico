@@ -79,7 +79,7 @@ func (b *RestoreInputBuilder) EndTransaction() {
 }
 
 // writeFormattedLine writes a line to the internal buffer, appending a new line.
-func (b *RestoreInputBuilder) writeFormattedLine(format string, args ...interface{}) {
+func (b *RestoreInputBuilder) writeFormattedLine(format string, args ...any) {
 	_, err := fmt.Fprintf(&b.buf, format, args...)
 	if err != nil {
 		log.WithError(err).Panic("Failed to write to in-memory buffer")

@@ -28,7 +28,7 @@ type CIDRTrie struct {
 type CIDRNode struct {
 	cidr     CIDR
 	children [2]*CIDRNode
-	data     interface{}
+	data     any
 }
 
 func NewCIDRTrie() *CIDRTrie {
@@ -94,10 +94,10 @@ func deleteInternal(n *CIDRNode, cidr CIDR) *CIDRNode {
 
 type CIDRTrieEntry struct {
 	CIDR CIDR
-	Data interface{}
+	Data any
 }
 
-func (t *CIDRTrie) Get(cidr CIDR) interface{} {
+func (t *CIDRTrie) Get(cidr CIDR) any {
 	return t.root.get(cidr)
 }
 
@@ -111,7 +111,7 @@ func (t *CIDRTrie) LookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry
 }
 
 // LPM does a longest prefix match on the trie
-func (t *CIDRTrie) LPM(cidr CIDR) (CIDR, interface{}) {
+func (t *CIDRTrie) LPM(cidr CIDR) (CIDR, any) {
 	n := t.root
 	var match *CIDRNode
 
@@ -180,7 +180,7 @@ func (n *CIDRNode) lookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry
 	return child.lookupPath(buffer, cidr)
 }
 
-func (n *CIDRNode) get(cidr CIDR) interface{} {
+func (n *CIDRNode) get(cidr CIDR) any {
 	node := n.getNode(cidr, false)
 	if node == nil {
 		return nil
@@ -295,7 +295,7 @@ func (n *CIDRNode) appendTo(s []CIDRTrieEntry) []CIDRTrieEntry {
 	return s
 }
 
-func (n *CIDRNode) visit(f func(cidr CIDR, data interface{}) bool) bool {
+func (n *CIDRNode) visit(f func(cidr CIDR, data any) bool) bool {
 	if n == nil {
 		return true
 	}
@@ -317,7 +317,7 @@ func (t *CIDRTrie) ToSlice() []CIDRTrieEntry {
 	return t.root.appendTo(nil)
 }
 
-func (t *CIDRTrie) Visit(f func(cidr CIDR, data interface{}) bool) {
+func (t *CIDRTrie) Visit(f func(cidr CIDR, data any) bool) {
 	t.root.visit(f)
 }
 
@@ -370,7 +370,7 @@ func (t *CIDRTrie) ClosestDescendants(buf []CIDR, parent CIDR) []CIDR {
 	return buf
 }
 
-func (t *CIDRTrie) Update(cidr CIDR, value interface{}) {
+func (t *CIDRTrie) Update(cidr CIDR, value any) {
 	if value == nil {
 		logrus.Panic("Can't store nil in a CIDRTrie")
 	}
@@ -455,24 +455,13 @@ func CommonPrefix(a, b CIDR) CIDR {
 }
 
 func V4CommonPrefix(a, b V4CIDR) V4CIDR {
-	var result V4CIDR
-	var maxLen uint8
-	if b.prefix < a.prefix {
-		maxLen = b.prefix
-	} else {
-		maxLen = a.prefix
-	}
-
 	a32 := a.addr.AsUint32()
 	b32 := b.addr.AsUint32()
 
 	xored := a32 ^ b32 // Has a zero bit wherever the two values are the same.
 	commonPrefixLen := uint8(bits.LeadingZeros32(xored))
-	if commonPrefixLen > maxLen {
-		result.prefix = maxLen
-	} else {
-		result.prefix = commonPrefixLen
-	}
+	var result V4CIDR
+	result.prefix = min(commonPrefixLen, min(b.prefix, a.prefix))
 
 	mask := uint32(0xffffffff) << (32 - result.prefix)
 	commonPrefix32 := mask & a32
@@ -482,15 +471,6 @@ func V4CommonPrefix(a, b V4CIDR) V4CIDR {
 }
 
 func V6CommonPrefix(a, b V6CIDR) V6CIDR {
-	var result V6CIDR
-	var maxLen uint8
-
-	if b.prefix < a.prefix {
-		maxLen = b.prefix
-	} else {
-		maxLen = a.prefix
-	}
-
 	a_h, a_l := a.addr.AsUint64Pair()
 	b_h, b_l := b.addr.AsUint64Pair()
 
@@ -499,17 +479,15 @@ func V6CommonPrefix(a, b V6CIDR) V6CIDR {
 
 	commonPrefixLen := uint8(bits.LeadingZeros64(xored_h))
 
+	var result V6CIDR
+	maxLen := min(b.prefix, a.prefix)
 	if xored_h == 0 {
 		// This means a_h == b_h and commonPrefixLen will be > 64. The first
 		// 8 bytes of the result will be equal to a_h (and b_h), last 8 will
 		// be the common prefix of a_l and b_l.
 		commonPrefixLen = 64 + uint8(bits.LeadingZeros64(xored_l))
 		binary.BigEndian.PutUint64(result.addr[:8], a_h)
-		if commonPrefixLen > maxLen {
-			result.prefix = maxLen
-		} else {
-			result.prefix = commonPrefixLen
-		}
+		result.prefix = min(commonPrefixLen, maxLen)
 		mask := uint64(0xffffffffffffffff) << (128 - result.prefix)
 		commonPrefix64 := mask & a_l
 		binary.BigEndian.PutUint64(result.addr[8:], commonPrefix64)
@@ -517,11 +495,7 @@ func V6CommonPrefix(a, b V6CIDR) V6CIDR {
 		// This means commonPrefixLen will be < 64. Just the first 8 bytes of
 		// the result will be filled with the common prefix of a_h and b_h,
 		// last 8 will be 0.
-		if commonPrefixLen > maxLen {
-			result.prefix = maxLen
-		} else {
-			result.prefix = commonPrefixLen
-		}
+		result.prefix = min(commonPrefixLen, maxLen)
 		mask := uint64(0xffffffffffffffff) << (64 - result.prefix)
 		commonPrefix64 := mask & a_h
 		binary.BigEndian.PutUint64(result.addr[:8], commonPrefix64)

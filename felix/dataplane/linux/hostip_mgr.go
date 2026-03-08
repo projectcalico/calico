@@ -77,7 +77,7 @@ func (m *hostIPManager) getCurrentMembers() []string {
 	return members
 }
 
-func (m *hostIPManager) OnUpdate(msg interface{}) {
+func (m *hostIPManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
 	case *ifaceAddrsUpdate:
 		log.WithField("update", msg).Info("Interface addrs changed.")

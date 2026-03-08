@@ -67,7 +67,7 @@ type PolicySetMetadata struct {
 
 // PolicySetsDataplane is a interface for managing a plane of policySet objects
 type PolicySetsDataplane interface {
-	AddOrReplacePolicySet(setId string, policy interface{})
+	AddOrReplacePolicySet(setId string, policy any)
 	RemovePolicySet(setId string)
 	NewRule(isInbound bool, priority uint16) *hns.ACLPolicy
 	GetPolicySetRules(setIds []string, isInbound, endOfTierDrop bool) (rules []*hns.ACLPolicy)
@@ -81,7 +81,7 @@ type policySet struct {
 	PolicySetMetadata
 	// the original policy received from the datastore, which could be
 	// either a Profile or a Policy.
-	Policy interface{}
+	Policy any
 	// Each member of the Policy set is a hns ACLRule computed from the
 	// Policy. When this Policy set needs to be applied, this set of
 	// rules is what will be sent to hns for enforcement.

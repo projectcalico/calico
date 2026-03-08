@@ -26,6 +26,10 @@ spec:
           jsonPath: .spec.node
           name: Node
           type: string
+        - description: The type of block affinity
+          jsonPath: .spec.type
+          name: Type
+          type: string
       name: v3
       schema:
         openAPIV3Schema:

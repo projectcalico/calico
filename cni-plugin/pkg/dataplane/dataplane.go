@@ -26,7 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -38,8 +38,9 @@ type Dataplane interface {
 		result *cniv1.Result,
 		desiredVethName string,
 		routes []*net.IPNet,
-		endpoint *api.WorkloadEndpoint,
+		endpoint *internalapi.WorkloadEndpoint,
 		annotations map[string]string,
+		skipHostSideRoutes bool,
 	) (hostVethName, contVethMAC string, err error)
 
 	CleanUpNamespace(args *skel.CmdArgs) error

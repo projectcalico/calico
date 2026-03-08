@@ -155,7 +155,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Checking host to workload connectivity
 				// Skipping due to known issue with tunnel IPs not being programmed in WEP mode
 				if vxlanTunnelSupported(vxlanMode, routeSource) {
-					for i := 0; i < 3; i++ {
+					for i := range 3 {
 						f := felixes[i]
 						cc.ExpectSome(f, w[0])
 						cc.ExpectSome(f, w[1])
@@ -921,7 +921,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
-				for i := 0; i < 3; i++ {
+				for i := range 3 {
 					f := felixes[i]
 					cc.ExpectSome(f, w[0])
 					cc.ExpectSome(f, w[1])
@@ -1011,7 +1011,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 				// Host to workload connectivity.
 				if vxlanTunnelSupported(vxlanMode, routeSource) {
-					for i := 0; i < 3; i++ {
+					for i := range 3 {
 						f := felixes[i]
 						cc.ExpectSome(f, w[0])
 						cc.ExpectSome(f, w[1])

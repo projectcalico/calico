@@ -32,10 +32,10 @@ import (
 
 var _ = Describe("Server", func() {
 	var uut *policysync.Server
-	var joins chan interface{}
+	var joins chan any
 
 	BeforeEach(func() {
-		joins = make(chan interface{})
+		joins = make(chan any)
 		uut = policysync.NewServer(joins, nil, policysync.NewUIDAllocator().NextUID)
 	})
 
@@ -75,7 +75,7 @@ var _ = Describe("Server", func() {
 			Context("with unstreamed updates", func() {
 				BeforeEach(func() {
 					// Queue up 10 messages. This should not block because the updates channel should be buffered.
-					for i := 0; i < 10; i++ {
+					for range 10 {
 						updates <- &proto.ToDataplane{}
 					}
 				})
@@ -87,7 +87,7 @@ var _ = Describe("Server", func() {
 					})
 
 					It("should drain updates channel, send leave request and end Sync", func() {
-						for i := 0; i < 10; i++ {
+						for range 10 {
 							updates <- &proto.ToDataplane{}
 						}
 						j := <-joins
@@ -105,7 +105,7 @@ var _ = Describe("Server", func() {
 					})
 
 					It("send pending updates, leave request and end Sync", func() {
-						for i := 0; i < 10; i++ {
+						for range 10 {
 							<-output
 						}
 						j := <-joins
@@ -148,11 +148,11 @@ func (*testSyncStream) Context() context.Context {
 	return &testContext{}
 }
 
-func (*testSyncStream) SendMsg(m interface{}) error {
+func (*testSyncStream) SendMsg(m any) error {
 	panic("not implemented")
 }
 
-func (*testSyncStream) RecvMsg(m interface{}) error {
+func (*testSyncStream) RecvMsg(m any) error {
 	panic("not implemented")
 }
 
@@ -174,7 +174,7 @@ const WorkloadName = "servertest"
 const Namespace = "default"
 const WorkloadID = "default/servertest"
 
-func (*testContext) Value(key interface{}) interface{} {
+func (*testContext) Value(key any) any {
 	// Server accesses the peer value only.
 	peer := &peer.Peer{AuthInfo: binder.Credentials{
 		Uid:            "test",

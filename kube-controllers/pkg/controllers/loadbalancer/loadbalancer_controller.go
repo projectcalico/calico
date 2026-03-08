@@ -115,9 +115,9 @@ type loadBalancerController struct {
 	dataFeed          *utils.DataFeed
 	cfg               config.LoadBalancerControllerConfig
 	clientSet         kubernetes.Interface
-	syncerUpdates     chan interface{}
+	syncerUpdates     chan any
 	syncStatus        bapi.SyncStatus
-	syncChan          chan interface{}
+	syncChan          chan any
 	serviceUpdates    chan serviceKey
 	ipPools           map[string]api.IPPool
 	serviceInformer   cache.SharedIndexInformer
@@ -135,8 +135,8 @@ func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient clie
 		cfg:               cfg,
 		clientSet:         clientset,
 		dataFeed:          dataFeed,
-		syncerUpdates:     make(chan interface{}, utils.BatchUpdateSize),
-		syncChan:          make(chan interface{}, 1),
+		syncerUpdates:     make(chan any, utils.BatchUpdateSize),
+		syncChan:          make(chan any, 1),
 		serviceUpdates:    make(chan serviceKey, utils.BatchUpdateSize),
 		ipPools:           make(map[string]api.IPPool),
 		serviceInformer:   serviceInformer,
@@ -181,7 +181,7 @@ func (c *loadBalancerController) Run(stopCh chan struct{}) {
 	log.Info("Stopping Service controller")
 }
 
-func (c *loadBalancerController) onServiceAdd(objNew interface{}) {
+func (c *loadBalancerController) onServiceAdd(objNew any) {
 	if svc, ok := objNew.(*v1.Service); ok {
 		svcKey, err := serviceKeyFromService(svc)
 		if err != nil {
@@ -191,7 +191,7 @@ func (c *loadBalancerController) onServiceAdd(objNew interface{}) {
 	}
 }
 
-func (c *loadBalancerController) onServiceUpdate(objNew interface{}, objOld interface{}) {
+func (c *loadBalancerController) onServiceUpdate(objNew any, objOld any) {
 	if svc, ok := objNew.(*v1.Service); ok {
 		svcKey, err := serviceKeyFromService(svc)
 		if err != nil {
@@ -201,7 +201,7 @@ func (c *loadBalancerController) onServiceUpdate(objNew interface{}, objOld inte
 	}
 }
 
-func (c *loadBalancerController) onServiceDelete(objNew interface{}) {
+func (c *loadBalancerController) onServiceDelete(objNew any) {
 	if svc, ok := objNew.(*v1.Service); ok {
 		svcKey, err := serviceKeyFromService(svc)
 		if err != nil {
@@ -262,7 +262,7 @@ func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{})
 	}
 }
 
-func (c *loadBalancerController) handleUpdate(update interface{}) {
+func (c *loadBalancerController) handleUpdate(update any) {
 	switch update := update.(type) {
 	case bapi.SyncStatus:
 		c.syncStatus = update
@@ -290,17 +290,22 @@ func (c *loadBalancerController) handleUpdate(update interface{}) {
 }
 
 func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
-	if kvp.Value == nil {
+	block, ok := kvp.Value.(*model.AllocationBlock)
+	if !ok {
+		log.WithField("key", kvp.Key.String()).Errorf("unexpected type for AllocationBlock value: %T", kvp.Value)
+		c.allocationTracker.deleteBlock(kvp.Key.String())
+		return
+	}
+	if block == nil {
 		c.allocationTracker.deleteBlock(kvp.Key.String())
 		return
 	}
 
-	affinity := kvp.Value.(*model.AllocationBlock).Affinity
-	block := kvp.Value.(*model.AllocationBlock)
+	affinity := block.Affinity
 	key := kvp.Key.String()
 
-	if affinity != nil && *affinity != fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
-		c.allocationTracker.deleteBlock(kvp.Key.String())
+	if affinity == nil || *affinity != fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
+		c.allocationTracker.deleteBlock(key)
 		return
 	}
 
@@ -308,21 +313,21 @@ func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
 
 	for i := range block.Allocations {
 		if block.Allocations[i] != nil {
-			if _, ok := block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeNamespace]; !ok {
-				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeNamespace, *block.Attributes[*block.Allocations[i]].AttrPrimary)
+			if _, ok := block.Attributes[*block.Allocations[i]].ActiveOwnerAttrs[ipam.AttributeNamespace]; !ok {
+				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeNamespace, *block.Attributes[*block.Allocations[i]].HandleID)
 				continue
 			}
 
-			if _, ok := block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeService]; !ok {
-				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeService, *block.Attributes[*block.Allocations[i]].AttrPrimary)
+			if _, ok := block.Attributes[*block.Allocations[i]].ActiveOwnerAttrs[ipam.AttributeService]; !ok {
+				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeService, *block.Attributes[*block.Allocations[i]].HandleID)
 				continue
 			}
 
 			ip := block.OrdinalToIP(i)
 			svcKey := serviceKey{
-				handle:    *block.Attributes[*block.Allocations[i]].AttrPrimary,
-				namespace: block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeNamespace],
-				name:      block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeService],
+				handle:    *block.Attributes[*block.Allocations[i]].HandleID,
+				namespace: block.Attributes[*block.Allocations[i]].ActiveOwnerAttrs[ipam.AttributeNamespace],
+				name:      block.Attributes[*block.Allocations[i]].ActiveOwnerAttrs[ipam.AttributeService],
 			}
 
 			c.allocationTracker.assignAddressToBlock(key, ip.String(), svcKey)
@@ -1015,7 +1020,7 @@ func (c *loadBalancerController) poolForIP(ipAddr string) (*api.IPPool, error) {
 	return nil, nil
 }
 
-func kick(c chan<- interface{}) {
+func kick(c chan<- any) {
 	select {
 	case c <- nil:
 		// pass
