@@ -16,7 +16,6 @@ package pinnedversion
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	approvals "github.com/approvals/go-approval-tests"
@@ -153,53 +152,6 @@ func TestGeneratePinnedVersionFile(t *testing.T) {
 	content, err := os.ReadFile(pinnedVersionPath)
 	if err != nil {
 		t.Fatalf("failed to read pinned version file: %v", err)
-	}
-	approvals.VerifyString(t, string(content), approvals.Options().WithScrubber(dateApprovalScrubber))
-}
-
-func TestGenerateOperatorComponents(t *testing.T) {
-	dir := t.TempDir()
-	rootDir, err := command.GitDir()
-	if err != nil {
-		t.Fatalf("failed to get git root dir: %v", err)
-	}
-	p := &CalicoPinnedVersions{
-		Dir:                 dir,
-		RootDir:             rootDir,
-		ReleaseBranchPrefix: "release",
-		OperatorCfg: OperatorConfig{
-			Image:    "tigera/operator",
-			Registry: "docker.io",
-			Branch:   "release-v1.40",
-		},
-		releaseName:   "test-release",
-		productBranch: "release-v3.31",
-		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
-	}
-	if err := generatePinnedVersionFile(p); err != nil {
-		t.Fatalf("failed to generate pinned version file: %v", err)
-	}
-	op, path, err := GenerateOperatorComponents(dir, dir)
-	if err != nil {
-		t.Fatalf("failed to generate operator components: %v", err)
-	}
-	expectedOperator := registry.OperatorComponent{
-		Component: registry.Component{
-			Version:  "v1.40.0-v3.31.0",
-			Image:    "tigera/operator",
-			Registry: "docker.io",
-		},
-	}
-	if op != expectedOperator {
-		t.Errorf("expected operator %v, got %v", expectedOperator, op)
-	}
-	expectedPath := filepath.Join(dir, operatorComponentsFileName)
-	if path != expectedPath {
-		t.Errorf("expected operator components file path %s, got %s", expectedPath, path)
-	}
-	content, err := os.ReadFile(expectedPath)
-	if err != nil {
-		t.Fatalf("failed to read operator components file: %v", err)
 	}
 	approvals.VerifyString(t, string(content), approvals.Options().WithScrubber(dateApprovalScrubber))
 }

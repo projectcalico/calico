@@ -100,6 +100,10 @@ blocks:
               value: "aws-kubeadm"
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
+            - name: USE_API_SERVER
+              value: "false"
+            - name: K8S_VERSION
+              value: "stable-3"
 
         - name: AWS single subnet
           execution_time_limit:
@@ -162,6 +166,8 @@ blocks:
               value: "Enabled"
             - name: KUBE_PROXY_MANAGEMENT
               value: "Enabled"
+            - name: USE_API_SERVER
+              value: "false"
 
         - name: GCP BPF DP encap w/ NodeLocal DNSCache
           execution_time_limit:

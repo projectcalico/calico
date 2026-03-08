@@ -1,0 +1,316 @@
+#!/bin/bash
+
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# analyze-test-failures - Discover failed test batches and run
+# fv-tests-guru-sem-integration to analyze them and inject results
+# into JUnit XML reports.
+#
+# Usage:
+#   FV mode (from repo root):  felix/.semaphore/analyze-test-failures
+#   UT mode (from felix/):     ./.semaphore/analyze-test-failures --ut
+#
+# Never let analysis failures block report publishing.
+# Intentionally no set -e.
+
+# Kill switch: set FV_TESTS_GURU_ENABLED=false to disable.
+if [ "${FV_TESTS_GURU_ENABLED}" = "false" ]; then
+    echo "analyze-test-failures: Disabled via FV_TESTS_GURU_ENABLED=false, skipping."
+    exit 0
+fi
+
+# Download fv-tests-guru-sem-integration from private GitHub release if not already on PATH.
+if ! command -v fv-tests-guru-sem-integration &>/dev/null; then
+    if [ -z "${FV_TESTS_GURU_GITHUB_TOKEN}" ]; then
+        echo "analyze-test-failures: fv-tests-guru-sem-integration not on PATH and FV_TESTS_GURU_GITHUB_TOKEN not set, skipping."
+        exit 0
+    fi
+
+    FV_TESTS_GURU_VERSION="${FV_TESTS_GURU_VERSION:-latest}"
+    FV_TESTS_GURU_REPO="tigera/fv-tests-guru"
+    FV_TESTS_GURU_BIN="${HOME}/bin/fv-tests-guru-sem-integration"
+    mkdir -p "${HOME}/bin"
+    export PATH="${HOME}/bin:${PATH}"
+
+    echo "analyze-test-failures: Downloading fv-tests-guru-sem-integration (${FV_TESTS_GURU_VERSION}) from ${FV_TESTS_GURU_REPO}..."
+
+    if [ "$FV_TESTS_GURU_VERSION" = "latest" ]; then
+        release_url="https://api.github.com/repos/${FV_TESTS_GURU_REPO}/releases/latest"
+    else
+        release_url="https://api.github.com/repos/${FV_TESTS_GURU_REPO}/releases/tags/${FV_TESTS_GURU_VERSION}"
+    fi
+
+    # Get the download URL, asset name, and checksums URL from the release.
+    release_json=$(curl -sf \
+        -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
+        -H "Accept: application/vnd.github.v3+json" \
+        "$release_url") || true
+
+    asset_info=$(echo "$release_json" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for asset in data.get('assets', []):
+    name = asset['name']
+    if 'linux' in name and 'amd64' in name:
+        print(asset['url'] + ' ' + name)
+        break
+" 2>/dev/null) || true
+
+    checksums_url=$(echo "$release_json" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for asset in data.get('assets', []):
+    if asset['name'] == 'checksums.txt':
+        print(asset['url'])
+        break
+" 2>/dev/null) || true
+
+    download_url="${asset_info%% *}"
+    asset_name="${asset_info#* }"
+
+    if [ -z "$download_url" ]; then
+        echo "analyze-test-failures: Failed to find fv-tests-guru-sem-integration release asset, skipping."
+        exit 0
+    fi
+
+    tmp_download=$(mktemp /tmp/fv-tests-guru-download-XXXXXX)
+
+    if ! curl -sfL \
+        -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
+        -H "Accept: application/octet-stream" \
+        "$download_url" \
+        -o "$tmp_download"; then
+        echo "analyze-test-failures: Failed to download fv-tests-guru-sem-integration asset, skipping."
+        rm -f "$tmp_download"
+        exit 0
+    fi
+
+    # Verify SHA256 checksum.
+    if [ -n "$checksums_url" ]; then
+        tmp_checksums=$(mktemp /tmp/fv-tests-guru-checksums-XXXXXX)
+        if curl -sfL \
+            -H "Authorization: token ${FV_TESTS_GURU_GITHUB_TOKEN}" \
+            -H "Accept: application/octet-stream" \
+            "$checksums_url" \
+            -o "$tmp_checksums" && [ -s "$tmp_checksums" ]; then
+            expected_hash=$(grep "$asset_name" "$tmp_checksums" | awk '{print $1}')
+            actual_hash=$(sha256sum "$tmp_download" | awk '{print $1}')
+            if [ -z "$expected_hash" ]; then
+                echo "analyze-test-failures: No checksum found for $asset_name in checksums.txt, skipping."
+                rm -f "$tmp_download" "$tmp_checksums"
+                exit 0
+            fi
+            if [ "$expected_hash" != "$actual_hash" ]; then
+                echo "analyze-test-failures: SHA256 mismatch for $asset_name (expected=$expected_hash, got=$actual_hash), skipping."
+                rm -f "$tmp_download" "$tmp_checksums"
+                exit 0
+            fi
+            echo "analyze-test-failures: SHA256 verified for $asset_name."
+        else
+            echo "analyze-test-failures: Failed to download checksums.txt, skipping."
+            rm -f "$tmp_download" "$tmp_checksums"
+            exit 0
+        fi
+        rm -f "$tmp_checksums"
+    else
+        echo "analyze-test-failures: No checksums.txt in release, skipping."
+        rm -f "$tmp_download"
+        exit 0
+    fi
+
+    # Handle .tar.gz / .tgz archives vs bare binaries.
+    case "$asset_name" in
+        *.tar.gz|*.tgz)
+            echo "analyze-test-failures: Extracting fv-tests-guru-sem-integration from archive ${asset_name}..."
+            tmp_extract=$(mktemp -d /tmp/fv-tests-guru-extract-XXXXXX)
+            if tar -xzf "$tmp_download" -C "$tmp_extract"; then
+                extracted_bin=$(find "$tmp_extract" -name 'fv-tests-guru-sem-integration' -type f | head -1)
+                if [ -n "$extracted_bin" ] && mv "$extracted_bin" "$FV_TESTS_GURU_BIN" && chmod +x "$FV_TESTS_GURU_BIN"; then
+                    : # success
+                else
+                    echo "analyze-test-failures: fv-tests-guru-sem-integration binary not found inside archive, skipping."
+                    rm -rf "$tmp_extract" "$tmp_download"
+                    exit 0
+                fi
+            else
+                echo "analyze-test-failures: Failed to extract archive, skipping."
+                rm -rf "$tmp_extract" "$tmp_download"
+                exit 0
+            fi
+            rm -rf "$tmp_extract"
+            ;;
+        *)
+            if ! mv "$tmp_download" "$FV_TESTS_GURU_BIN" || ! chmod +x "$FV_TESTS_GURU_BIN"; then
+                echo "analyze-test-failures: Failed to install fv-tests-guru-sem-integration binary, skipping."
+                rm -f "$tmp_download"
+                exit 0
+            fi
+            ;;
+    esac
+
+    rm -f "$tmp_download"
+    echo "analyze-test-failures: Installed fv-tests-guru-sem-integration to $FV_TESTS_GURU_BIN"
+fi
+
+# has_failures - Check if any XML file contains <failure> elements.
+has_failures() {
+    grep -ql '<failure' "$@" 2>/dev/null
+}
+
+# json_escape - Escape a string for safe embedding in JSON.
+json_escape() {
+    python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$1" 2>/dev/null || echo '""'
+}
+
+UT_MODE=false
+if [ "$1" = "--ut" ]; then
+    UT_MODE=true
+fi
+
+# Build the JSON config by discovering failed batches.
+batches_json=""
+batch_count=0
+
+if [ "$UT_MODE" = true ]; then
+    ############################################
+    # UT mode: cwd = felix/
+    ############################################
+    echo "analyze-test-failures: Running in UT mode."
+    CALICO_REPO="$(cd .. && pwd)"
+
+    XML_FILES=(./report/*.xml)
+    if [ ${#XML_FILES[@]} -eq 0 ] || [ ! -f "${XML_FILES[0]}" ]; then
+        echo "analyze-test-failures: No XML reports found in ./report/, skipping."
+        exit 0
+    fi
+
+    if ! has_failures "${XML_FILES[@]}"; then
+        echo "analyze-test-failures: No failures found in UT XML reports, skipping."
+        exit 0
+    fi
+
+    LOG_FILE="../artifacts/ut.log"
+    if [ ! -f "$LOG_FILE" ]; then
+        echo "analyze-test-failures: UT log file not found at $LOG_FILE, skipping."
+        exit 0
+    fi
+
+    # Build XML array.
+    xml_json="["
+    first=true
+    for xf in "${XML_FILES[@]}"; do
+        [ -f "$xf" ] || continue
+        $first || xml_json+=","
+        xml_json+=$(json_escape "$xf")
+        first=false
+    done
+    xml_json+="]"
+
+    batches_json=$(printf '{
+      "log": %s,
+      "xmls": %s,
+      "diags_log": %s
+    }' "$(json_escape "$LOG_FILE")" "$xml_json" "$(json_escape "../artifacts/test-ut-DIAGS.log")")
+    batch_count=1
+else
+    ############################################
+    # FV mode: cwd = repo root
+    ############################################
+    echo "analyze-test-failures: Running in FV mode."
+    CALICO_REPO="$(pwd)"
+
+    ARTIFACTS_DIR="./artifacts"
+    if [ ! -d "$ARTIFACTS_DIR" ]; then
+        echo "analyze-test-failures: No artifacts directory found, skipping."
+        exit 0
+    fi
+
+    for batch_dir in "$ARTIFACTS_DIR"/*/; do
+        [ -d "$batch_dir" ] || continue
+        batch_name="$(basename "$batch_dir")"
+
+        xml_files=("${batch_dir}report/"*.xml)
+        [ -f "${xml_files[0]}" ] || continue
+
+        if ! has_failures "${xml_files[@]}"; then
+            continue
+        fi
+
+        # Map batch name to log file.
+        if [ "$batch_name" = "ut" ]; then
+            log_file="$ARTIFACTS_DIR/test-ut.log"
+        else
+            if [[ "$batch_name" =~ ^[0-9]+$ ]]; then
+                formatted_batch=$(printf "%03d" "$batch_name")
+            else
+                formatted_batch="$batch_name"
+            fi
+            log_file="$ARTIFACTS_DIR/test-${formatted_batch}.log"
+            if [ ! -f "$log_file" ]; then
+                log_file="$ARTIFACTS_DIR/test-${formatted_batch}-FAILED.log"
+            fi
+        fi
+
+        if [ ! -f "$log_file" ]; then
+            echo "analyze-test-failures: Log file not found for batch $batch_name, skipping."
+            continue
+        fi
+
+        # Build XML array for this batch.
+        xml_json="["
+        first=true
+        for xf in "${xml_files[@]}"; do
+            [ -f "$xf" ] || continue
+            $first || xml_json+=","
+            xml_json+=$(json_escape "$xf")
+            first=false
+        done
+        xml_json+="]"
+
+        # DIAGS.log path.
+        if [[ "$batch_name" =~ ^[0-9]+$ ]]; then
+            diags_batch=$(printf "%03d" "$batch_name")
+        else
+            diags_batch="$batch_name"
+        fi
+        diags_log="$ARTIFACTS_DIR/test-${diags_batch}-DIAGS.log"
+
+        [ $batch_count -gt 0 ] && batches_json+=","
+        batches_json+=$(printf '{
+      "log": %s,
+      "xmls": %s,
+      "diags_log": %s
+    }' "$(json_escape "$log_file")" "$xml_json" "$(json_escape "$diags_log")")
+        batch_count=$((batch_count + 1))
+    done
+fi
+
+if [ $batch_count -eq 0 ]; then
+    echo "analyze-test-failures: No failures found, skipping."
+    exit 0
+fi
+
+echo "analyze-test-failures: Found $batch_count failed batch(es), running fv-tests-guru-sem-integration..."
+
+printf '{
+  "calico_repo": %s,
+  "ut_mode": %s,
+  "max_parallel": 4,
+  "max_timeout": "6m",
+  "batches": [%s]
+}' "$(json_escape "$CALICO_REPO")" "$UT_MODE" "$batches_json" \
+  | timeout 660 fv-tests-guru-sem-integration || true
+
+echo "analyze-test-failures: Done."
