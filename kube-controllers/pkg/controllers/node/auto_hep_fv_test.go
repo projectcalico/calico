@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Auto Hostendpoint FV tests", func() {
+var _ = Describe("Auto Hostendpoint FV tests", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		nodeController    *containers.Container
@@ -110,7 +110,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		},
 	}}
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		c = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -139,13 +139,41 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = c.Close()
 		controllerManager.Stop()
-		nodeController.Stop()
 		apiserver.Stop()
 		etcd.Stop()
 		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		ctx := context.Background()
+		// Stop the per-spec controller instance.
+		if nodeController != nil {
+			nodeController.Stop()
+		}
+		// Clean up host endpoints.
+		heps, _ := c.HostEndpoints().List(ctx, options.ListOptions{})
+		if heps != nil {
+			for _, hep := range heps.Items {
+				_, _ = c.HostEndpoints().Delete(ctx, hep.Name, options.DeleteOptions{})
+			}
+		}
+		// Clean up k8s nodes.
+		nodes, _ := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		for _, node := range nodes.Items {
+			_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
+		}
+		// Clean up calico nodes.
+		cNodes, _ := c.Nodes().List(ctx, options.ListOptions{})
+		if cNodes != nil {
+			for _, node := range cNodes.Items {
+				_, _ = c.Nodes().Delete(ctx, node.Name, options.DeleteOptions{})
+			}
+		}
+		// Clean up KubeControllersConfiguration.
+		_, _ = c.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{})
 	})
 
 	It("should create and sync hostendpoints for Calico nodes", func() {

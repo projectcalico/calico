@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
+var _ = Describe("Calico pod controller FV tests (etcd mode)", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -44,9 +44,10 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -55,8 +56,8 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		var kconfigfile string
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		// Run the controller.
 		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
@@ -79,12 +80,29 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		// Clean up pods and workload endpoints between specs.
+		podList, _ := k8sClient.CoreV1().Pods("default").List(context.Background(), metav1.ListOptions{})
+		if podList != nil {
+			for _, pod := range podList.Items {
+				_ = k8sClient.CoreV1().Pods("default").Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
+			}
+		}
+		wepList, _ := calicoClient.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
+		if wepList != nil {
+			for _, wep := range wepList.Items {
+				_, _ = calicoClient.WorkloadEndpoints().Delete(context.Background(), wep.Namespace, wep.Name, options.DeleteOptions{})
+			}
+		}
 	})
 
 	It("should not overwrite a workload endpoint's container ID", func() {
