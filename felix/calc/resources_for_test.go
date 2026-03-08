@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -371,6 +371,20 @@ var policy1_tier1_order20 = model.Policy{
 
 var policy1_order20 = model.Policy{
 	Tier:     "default",
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []model.Rule{
+		{SrcSelector: allSelector},
+	},
+	OutboundRules: []model.Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"ingress", "egress"},
+}
+
+// A variation of policy1_order20 but in tier-2 instead of default tier.
+var policy1_tier2_order20 = model.Policy{
+	Tier:     "tier-2",
 	Order:    &order20,
 	Selector: "a == 'a'",
 	InboundRules: []model.Rule{
