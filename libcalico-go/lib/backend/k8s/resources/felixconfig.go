@@ -29,8 +29,8 @@ func NewFelixConfigClient(r rest.Interface, group BackingAPIGroup) K8sResourceCl
 	return &customResourceClient{
 		restClient:      r,
 		resource:        FelixConfigResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.FelixConfiguration{}),
-		k8sListType:     reflect.TypeOf(apiv3.FelixConfigurationList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.FelixConfiguration](),
+		k8sListType:     reflect.TypeFor[apiv3.FelixConfigurationList](),
 		kind:            apiv3.KindFelixConfiguration,
 		apiGroup:        group,
 	}

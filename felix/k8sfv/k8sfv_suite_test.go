@@ -19,9 +19,8 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/logutils"
@@ -41,8 +40,9 @@ func init() {
 	flag.StringVar(&codeLevel, "code-level", "", "")
 }
 
-func TestK8sFV(t *testing.T) {
-	RegisterFailHandler(Fail)
+func TestMain(t *testing.T) {
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
 	// The run-test script runs this file from k8sfv/output.
 	nameTypha := ""
 	fileTypha := ""
@@ -50,6 +50,6 @@ func TestK8sFV(t *testing.T) {
 		nameTypha = " (typha)"
 		fileTypha = "typha_"
 	}
-	junitReporter := reporters.NewJUnitReporter("../../report/felix_k8sfv_" + fileTypha + "suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "k8sfv tests"+nameTypha, []Reporter{junitReporter})
+	reporterConfig.JUnitReport = "../../report/felix_k8sfv_" + fileTypha + "suite.xml"
+	ginkgo.RunSpecs(t, "k8sfv tests"+nameTypha, suiteConfig, reporterConfig)
 }

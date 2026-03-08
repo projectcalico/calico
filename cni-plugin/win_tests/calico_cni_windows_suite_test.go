@@ -18,9 +18,8 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -30,12 +29,13 @@ func init() {
 }
 
 func TestCalicoCni(t *testing.T) {
-	RegisterFailHandler(Fail)
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
 	reportPath := os.Getenv("REPORT")
 	if reportPath == "" {
 		// Default the report path if not specified.
 		reportPath = "../report/windows_suite.xml"
 	}
-	junitReporter := reporters.NewJUnitReporter(reportPath)
-	RunSpecsWithDefaultAndCustomReporters(t, "CNI suite (Windows)", []Reporter{junitReporter})
+	reporterConfig.JUnitReport = reportPath
+	ginkgo.RunSpecs(t, "CNI suite (Windows)", suiteConfig, reporterConfig)
 }

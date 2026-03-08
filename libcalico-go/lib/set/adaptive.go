@@ -16,6 +16,7 @@ package set
 
 import (
 	"iter"
+	"slices"
 	"unsafe"
 )
 
@@ -93,11 +94,9 @@ func (a *Adaptive[T]) Add(item T) {
 		tSlice := a.loadSliceFromPointer()
 
 		// First scan to see if the item is already present.
-		for _, t := range tSlice {
-			if t == item {
-				// The element is already in the set.
-				return
-			}
+		if slices.Contains(tSlice, item) {
+			// The element is already in the set.
+			return
 		}
 
 		// If we get here, need to add the element to the set.
@@ -229,12 +228,7 @@ func (a *Adaptive[T]) Contains(t T) bool {
 		tSlice := a.loadSliceFromPointer()
 
 		// Scan for the item.
-		for _, v := range tSlice {
-			if v == t {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(tSlice, t)
 	}
 }
 

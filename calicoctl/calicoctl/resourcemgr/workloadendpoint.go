@@ -17,15 +17,15 @@ package resourcemgr
 import (
 	"context"
 
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func init() {
 	registerResource(
-		api.NewWorkloadEndpoint(),
-		api.NewWorkloadEndpointList(),
+		internalapi.NewWorkloadEndpoint(),
+		internalapi.NewWorkloadEndpointList(),
 		true,
 		[]string{"workloadendpoint", "workloadendpoints", "wep", "weps"},
 		[]string{"WORKLOAD", "NODE", "NETWORKS", "INTERFACE"},
@@ -43,23 +43,23 @@ func init() {
 			"INTERFACE":    "{{.Spec.InterfaceName}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
+			r := resource.(*internalapi.WorkloadEndpoint)
 			return client.WorkloadEndpoints().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
+			r := resource.(*internalapi.WorkloadEndpoint)
 			return client.WorkloadEndpoints().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
+			r := resource.(*internalapi.WorkloadEndpoint)
 			return client.WorkloadEndpoints().Delete(ctx, r.Namespace, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
+			r := resource.(*internalapi.WorkloadEndpoint)
 			return client.WorkloadEndpoints().Get(ctx, r.Namespace, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
+			r := resource.(*internalapi.WorkloadEndpoint)
 			return client.WorkloadEndpoints().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Namespace: r.Namespace, Name: r.Name})
 		},
 	)

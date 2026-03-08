@@ -17,7 +17,7 @@ package proxy_test
 import (
 	"net"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 var _ = Describe("BPF kube-proxy", func() {
@@ -87,6 +88,9 @@ var _ = Describe("BPF kube-proxy", func() {
 
 		k8s := fake.NewClientset(testSvc, testSvcEps)
 		p, _ = proxy.StartKubeProxy(k8s, "test-node", maps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSize(maglevLUTSize))
+		// Unblock start(), which blocks on the initial host metadata update.
+		p.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "dummy"})
+		Expect(p.CompleteDeferredWork()).To(Succeed())
 	})
 
 	AfterEach(func() {

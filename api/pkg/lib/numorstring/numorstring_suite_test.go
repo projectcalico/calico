@@ -16,13 +16,13 @@ package numorstring_test
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 )
 
 func TestNumorstring(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/numorstring_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Numorstring Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/numorstring_suite.xml"
+	ginkgo.RunSpecs(t, "Numorstring Suite", suiteConfig, reporterConfig)
 }

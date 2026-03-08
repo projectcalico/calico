@@ -25,8 +25,8 @@ import (
 
 type WorkloadEndpoint struct {
 	unversioned.TypeMetadata
-	Metadata WorkloadEndpointMetadata `json:"metadata,omitempty"`
-	Spec     WorkloadEndpointSpec     `json:"spec,omitempty"`
+	Metadata WorkloadEndpointMetadata `json:"metadata"`
+	Spec     WorkloadEndpointSpec     `json:"spec"`
 }
 
 func (t WorkloadEndpoint) GetResourceMetadata() unversioned.ResourceMetadata {
@@ -151,7 +151,7 @@ func NewWorkloadEndpoint() *WorkloadEndpoint {
 // from List() enumerations in the client interface.
 type WorkloadEndpointList struct {
 	unversioned.TypeMetadata
-	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Metadata unversioned.ListMetadata `json:"metadata"`
 	Items    []WorkloadEndpoint       `json:"items" validate:"dive"`
 }
 

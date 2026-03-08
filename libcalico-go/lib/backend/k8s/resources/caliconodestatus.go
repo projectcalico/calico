@@ -29,8 +29,8 @@ func NewCalicoNodeStatusClient(r rest.Interface, group BackingAPIGroup) K8sResou
 	return &customResourceClient{
 		restClient:      r,
 		resource:        CalicoNodeStatusResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.CalicoNodeStatus{}),
-		k8sListType:     reflect.TypeOf(apiv3.CalicoNodeStatusList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.CalicoNodeStatus](),
+		k8sListType:     reflect.TypeFor[apiv3.CalicoNodeStatusList](),
 		kind:            apiv3.KindCalicoNodeStatus,
 		apiGroup:        group,
 	}

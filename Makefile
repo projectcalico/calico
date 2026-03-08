@@ -8,6 +8,7 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		--net=host \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
@@ -68,6 +69,9 @@ check-images-availability: bin/crane bin/yq
 check-language:
 	./hack/check-language.sh
 
+check-ginkgo-v2:
+	./hack/check-ginkgo-v2.sh
+
 check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
 	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
@@ -106,7 +110,7 @@ get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERA
 	cd ./charts/crd.projectcalico.org.v1/templates/ && \
 	for file in operator.tigera.io_*.yaml; do \
 		echo "downloading $$file from operator repo"; \
-		curl -fsSL https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; \
+		curl -fsSL https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/imports/crds/operator/$${file} -o $${file}; \
 		cp $${file} ../../projectcalico.org.v3/templates/$${file}; \
 	done
 	$(MAKE) fix-changed
@@ -179,25 +183,27 @@ image:
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
 E2E_SKIP ?= ""
+E2E_PROCS ?= 4
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
+CLUSTER_ROUTING ?= BIRD
 
 ## Create a kind cluster and run all e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
-	$(MAKE) -C node kind-k8st-setup
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) -C node kind-k8st-setup
 	$(MAKE) e2e-run-test
 	$(MAKE) e2e-run-cnp-test
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
-	$(MAKE) -C node kind-k8st-setup
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) -C node kind-k8st-setup
 	$(MAKE) e2e-run-cnp-test
 
 ## Run the general e2e tests against a pre-existing kind cluster.
 e2e-run-test:
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS) -ginkgo.skip=$(E2E_SKIP)
+	KUBECONFIG=$(KIND_KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) -focus=$(E2E_FOCUS) -skip=$(E2E_SKIP) ./e2e/bin/k8s/e2e.test
 
 ## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
 e2e-run-cnp-test:
@@ -241,7 +247,7 @@ create-release-branch: release/bin/release
 
 # Test the release code
 release-test:
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r release/pkg
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.

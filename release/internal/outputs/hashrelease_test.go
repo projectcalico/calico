@@ -22,6 +22,7 @@ import (
 	approvals "github.com/approvals/go-approval-tests"
 
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
 )
 
@@ -32,11 +33,15 @@ func TestPublishedHashrelease(t *testing.T) {
 		t.Parallel()
 		td := t.TempDir()
 		h := &PublishedHashrelease{Hashrelease: &hashreleaseserver.Hashrelease{
-			Name:            "2026-01-06-v3-32-vertigo",
-			Hash:            "v3.32.0-0.dev-527-g92e0cd84e375-v1.42.0-0.dev-16-g3a924017cc9f",
-			Stream:          "master",
-			ProductVersion:  "v3.32.0-0.dev-527-g92e0cd84e375",
-			OperatorVersion: "v1.42.0-0.dev-16-g3a924017cc9f",
+			Name:           "2026-01-06-v3-32-vertigo",
+			Hash:           "v3.32.0-0.dev-527-g92e0cd84e375-v1.42.0-0.dev-16-g3a924017cc9f",
+			Stream:         "master",
+			ProductVersion: "v3.32.0-0.dev-527-g92e0cd84e375",
+			Operator: registry.Component{
+				Registry: "quay.io",
+				Image:    "tigera/operator",
+				Version:  "v1.42.0-0.dev-16-g3a924017cc9f",
+			},
 		}}
 
 		gotPath, err := h.Write(td)
@@ -60,11 +65,15 @@ func TestPublishedHashrelease(t *testing.T) {
 		td := t.TempDir()
 		h := &PublishedHashrelease{
 			Hashrelease: &hashreleaseserver.Hashrelease{
-				Name:            "2026-01-06-v3-32-vertigo",
-				Hash:            "v3.32.0-0.dev-527-g92e0cd84e375-v1.42.0-0.dev-16-g3a924017cc9f",
-				Stream:          "master",
-				ProductVersion:  "v3.32.0-0.dev-527-g92e0cd84e375",
-				OperatorVersion: "v1.42.0-0.dev-16-g3a924017cc9f",
+				Name:           "2026-01-06-v3-32-vertigo",
+				Hash:           "v3.32.0-0.dev-527-g92e0cd84e375-v1.42.0-0.dev-16-g3a924017cc9f",
+				Stream:         "master",
+				ProductVersion: "v3.32.0-0.dev-527-g92e0cd84e375",
+				Operator: registry.Component{
+					Registry: "quay.io",
+					Image:    "tigera/operator",
+					Version:  "v1.42.0-0.dev-16-g3a924017cc9f",
+				},
 			},
 			SlackResponse: &slack.MessageResponse{
 				Channel:   "C123ABC456",

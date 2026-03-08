@@ -33,7 +33,7 @@ func TestIP4Defrag(t *testing.T) {
 
 	data := make([]byte, 2000)
 
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		data[i*2] = byte(uint16(i) >> 8)
 		data[i*2+1] = byte(uint16(i) & 0xff)
 	}
@@ -145,7 +145,7 @@ func TestIP4Defrag(t *testing.T) {
 		payloadL := pktR.ApplicationLayer()
 		data := payloadL.Payload()
 
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			Expect(data[i*2]).To(Equal(byte(uint16(i)>>8)), fmt.Sprintf("wrong at index %d", i*2))
 			Expect(data[i*2+1]).To(Equal(byte(uint16(i)&0xff)), fmt.Sprintf("wrong at index %d", i*2+1))
 		}

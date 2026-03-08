@@ -1153,7 +1153,14 @@ func (t *NftablesTable) applyUpdates() error {
 	// Invalidate the in-memory dataplane state so that we reload on the next write. This ensures we have the correct handles
 	// in-memory for each of the objects we've just written. nftables requires an object's handle in order to
 	// perform update or delete operations.
-	t.InvalidateDataplaneCache("post-write")
+	//
+	// Skip invalidation for disabled tables that have finished cleanup (no chains left in the dataplane).
+	// These tables only exist to remove leftover nftables state when switching to iptables mode. Once cleanup
+	// is confirmed, there's no need to reload state on every apply cycle — doing so would fork nft processes
+	// on every iteration for no useful work.
+	if !t.disabled || len(t.chainToDataplaneHashes) != 0 {
+		t.InvalidateDataplaneCache("post-write")
+	}
 	return nil
 }
 

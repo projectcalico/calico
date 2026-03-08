@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/knftables"
 
@@ -242,7 +242,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		// ourselves to in the resync code.
 		tx := f.NewTransaction()
 		tx.Add(&knftables.Table{})
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			tx.Add(&knftables.Map{
 				Name: fmt.Sprintf("map-%d", i),
 				Type: "ifname : verdict",

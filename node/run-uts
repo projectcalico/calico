@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# Turn off the annoying ginkgo warning.
-# TODO: We should actually upgrade ginkgo!
-export ACK_GINKGO_RC=true
-
 if [ -z "$1" ]; then 
 	echo "No packages need to be tested"
 	exit 0
@@ -30,7 +26,7 @@ for PKG in "$@"; do
 	HAS_TESTS=$(find ${PKG} -name "*_test.go")
 	if [ ! -z "${HAS_TESTS}" ]; then 
 		echo "Running tests for package: ${PKG}";
-		ginkgo -r -skipPackage=${SKIP} ${GINKGO_ARGS} ${PKG} || {
+		ginkgo -r -skip-package=${SKIP} ${GINKGO_ARGS} ${PKG} || {
 			failed_packages+="${PKG} ";
 			((RC++))
 		}

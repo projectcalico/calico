@@ -57,7 +57,7 @@ func newServiceLoopManager(
 	}
 }
 
-func (m *serviceLoopManager) OnUpdate(protoBufMsg interface{}) {
+func (m *serviceLoopManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.GlobalBGPConfigUpdate:
 		m.pendingGlobalBGPConfig = msg

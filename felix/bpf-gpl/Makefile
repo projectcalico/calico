@@ -1,5 +1,5 @@
 # Project Calico BPF dataplane build scripts.
-# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 # Disable implicit rules.
@@ -58,6 +58,7 @@ LD := llc
 UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 UT_OBJS+=ut/ip_parse_test_v6.o
+UT_OBJS+=ut/tcp_rst_v6.o
 
 XDP_MAP_HEADERS := jump.h
 COMMON_MAP_HEADERS := counters.h ifstate.h perf_types.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
@@ -220,6 +221,10 @@ ut/ip_parse_test_v6.ll: ut/ip_parse_test.c
 	$(CC) $(UT_CFLAGS) $(CFLAGS) -DIPVER6 -c $< -o $@
 ut/ip_parse_test_v6.o: ut/ip_parse_test_v6.ll
 	$(LINK)
+ut/tcp_rst_v6.ll: ut/tcp_rst.c
+	$(CC) $(UT_CFLAGS) $(CFLAGS) -DIPVER6 -c $< -o $@
+ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
+	$(LINK)
 
 %_v4.ll: %.c %.d calculate-flags
 	$(COMPILE)
@@ -308,7 +313,7 @@ bin:
 .PRECIOUS: %.d %_v6.d
 
 COMPILE_DEPS=set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
+		$(CC) -MP -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
@@ -321,7 +326,7 @@ endif
 clean:
 	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll *_map_stub.c
 
-# Fixes an issue where make thinks these .h files are dependencies that need
-# to be built. Just include them as a noop in order to trick make.
+# TODO: remove these catch-all rules once all .d files have been regenerated
+# with -MP (above).  They handle stale .d files that predate the -MP flag.
 /usr/include/%.h:
 	@echo "No need to build $@"

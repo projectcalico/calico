@@ -29,8 +29,8 @@ func NewClusterInfoClient(r rest.Interface, group BackingAPIGroup) K8sResourceCl
 	return &customResourceClient{
 		restClient:      r,
 		resource:        ClusterInfoResourceName,
-		k8sResourceType: reflect.TypeOf(apiv3.ClusterInformation{}),
-		k8sListType:     reflect.TypeOf(apiv3.ClusterInformationList{}),
+		k8sResourceType: reflect.TypeFor[apiv3.ClusterInformation](),
+		k8sListType:     reflect.TypeFor[apiv3.ClusterInformationList](),
 		kind:            apiv3.KindClusterInformation,
 		apiGroup:        group,
 	}

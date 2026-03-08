@@ -19,8 +19,7 @@ import (
 	"fmt"
 	"net"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -31,6 +30,7 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -38,7 +38,7 @@ import (
 // Simulating ipamClient Interface
 type ipamClientWindows struct {
 	client            bapi.Client
-	pools             ipPoolAccessor
+	pools             ipamtestutils.IPPoolAccessor
 	blockReaderWriter blockReaderWriter
 }
 
@@ -51,7 +51,7 @@ func (c ipamClientWindows) GetAssignmentBlockCIDR(ctx context.Context, addr cnet
 }
 
 var (
-	ipPoolsWindows  = &ipPoolAccessor{pools: map[string]pool{}}
+	ipPoolsWindows  = &ipamtestutils.IPPoolAccessor{Pools: map[string]ipamtestutils.Pool{}}
 	rsvdAttrWindows = &HostReservedAttr{
 		StartOfBlock: 3,
 		EndOfBlock:   1,
@@ -89,7 +89,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		var err error
 		bc, err = backend.NewClient(config)
 		Expect(err).NotTo(HaveOccurred())
-		ic = NewIPAMClient(bc, ipPoolsWindows, &fakeReservations{})
+		ic = NewIPAMClient(bc, ipPoolsWindows, &ipamtestutils.FakeReservations{})
 
 		// If running in KDD mode, extract the k8s clientset.
 		if config.Spec.DatastoreType == "kubernetes" {
@@ -104,7 +104,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		applyNode(bc, kc, "Windows-TestHost-1", nil)
 		defer deleteNode(bc, kc, "Windows-TestHost-1")
 
-		ipPoolsWindows.pools["100.0.0.0/24"] = pool{cidr: "100.0.0.0/24", enabled: true, blockSize: 26}
+		ipPoolsWindows.Pools["100.0.0.0/24"] = ipamtestutils.Pool{CIDR: "100.0.0.0/24", Enabled: true, BlockSize: 26}
 
 		fromPool := cnet.MustParseNetwork("100.0.0.0/24")
 
@@ -131,7 +131,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 	// Test Case: Reserved IPs should not be allocated
 	//            test case is only written for IPv4
 	DescribeTable("Windows: IPAM AutoAssign should not assign reserved IPs",
-		func(host string, cleanEnv bool, pools []pool, usePool string, inv4 int, expv4 int, expError error, windowsHost string) {
+		func(host string, cleanEnv bool, pools []ipamtestutils.Pool, usePool string, inv4 int, expv4 int, expError error, windowsHost string) {
 			if cleanEnv {
 				bc.Clean()
 				deleteAllPoolsWindows()
@@ -141,7 +141,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			defer setAffinity(ic, false)
 
 			for _, v := range pools {
-				ipPoolsWindows.pools[v.cidr] = pool{cidr: v.cidr, enabled: v.enabled, blockSize: v.blockSize}
+				ipPoolsWindows.Pools[v.CIDR] = ipamtestutils.Pool{CIDR: v.CIDR, Enabled: v.Enabled, BlockSize: v.BlockSize}
 			}
 
 			// Host must exist before trying to autoassign to it
@@ -189,7 +189,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		//	   					      100.0.0.64, 100.0.0.65, 100.0.0.66, 100.0.0.127,
 		//                                                    100.0.0.128, 100.0.0.129, 100.0.0.130, 100.0.0.191,
 		//                                                    100.0.0.192, 100.0.0.193, 100.0.0.194, 100.0.0.255 IPs.
-		Entry("256 v4 ", "testHost", true, []pool{{cidr: "100.0.0.0/24", blockSize: 26, enabled: true}}, "100.0.0.0/24", 256, 240, nil, "windows"),
+		Entry("256 v4 ", "testHost", true, []ipamtestutils.Pool{{CIDR: "100.0.0.0/24", BlockSize: 26, Enabled: true}}, "100.0.0.0/24", 256, 240, nil, "windows"),
 	)
 
 	// This test is to check if Windows host runs out of IPs from the block with which it has affinity, then IPs from other blocks should not be assigned.
@@ -220,7 +220,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		})
 
 		It("Windows: Should not be able to assign IPs from non-affine block for Windows and Linux", func() {
-			ipPoolsWindows.pools["100.0.0.0/24"] = pool{cidr: "100.0.0.0/24", enabled: true, blockSize: 26}
+			ipPoolsWindows.Pools["100.0.0.0/24"] = ipamtestutils.Pool{CIDR: "100.0.0.0/24", Enabled: true, BlockSize: 26}
 
 			fromPool := cnet.MustParseNetwork("100.0.0.0/24")
 
@@ -355,8 +355,8 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		// Call once in order to assign an IP address and create a block.
 		It("Windows: should have assigned an IP address with no error", func() {
 			deleteAllPoolsWindows()
-			ipPoolsWindows.pools["100.0.0.0/24"] = pool{cidr: "100.0.0.0/24", enabled: true, blockSize: 26}
-			ipPoolsWindows.pools["200.0.0.0/24"] = pool{cidr: "200.0.0.0/24", enabled: true, blockSize: 26}
+			ipPoolsWindows.Pools["100.0.0.0/24"] = ipamtestutils.Pool{CIDR: "100.0.0.0/24", Enabled: true, BlockSize: 26}
+			ipPoolsWindows.Pools["200.0.0.0/24"] = ipamtestutils.Pool{CIDR: "200.0.0.0/24", Enabled: true, BlockSize: 26}
 			ctx := context.WithValue(context.Background(), "windowsHost", "windows")
 			v4ia, _, outErr := ic.AutoAssign(ctx, args)
 			Expect(outErr).NotTo(HaveOccurred())
@@ -484,7 +484,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 	})
 
 	DescribeTable("Windows: AutoAssign: requested IPs vs returned IPs",
-		func(host string, cleanEnv bool, pools []pool, rsvd *HostReservedAttr, usePool string, inv4, inv6 int, expv4ia, expv6ia *IPAMAssignments, expError error) {
+		func(host string, cleanEnv bool, pools []ipamtestutils.Pool, rsvd *HostReservedAttr, usePool string, inv4, inv6 int, expv4ia, expv6ia *IPAMAssignments, expError error) {
 			if cleanEnv {
 				bc.Clean()
 				deleteAllPoolsWindows()
@@ -494,7 +494,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			defer setAffinity(ic, false)
 
 			for _, v := range pools {
-				ipPoolsWindows.pools[v.cidr] = pool{cidr: v.cidr, enabled: v.enabled, blockSize: v.blockSize}
+				ipPoolsWindows.Pools[v.CIDR] = ipamtestutils.Pool{CIDR: v.CIDR, Enabled: v.Enabled, BlockSize: v.BlockSize}
 			}
 
 			// Host must exist before trying to autoassign to it
@@ -544,9 +544,9 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		},
 
 		// Test 1: AutoAssign 256 IPv4, 256 IPv6 - expect 240 IPv4 + IPv6 addresses.
-		Entry("256 v4 256 v6", "testHost", true, []pool{
-			{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-			{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+		Entry("256 v4 256 v6", "testHost", true, []ipamtestutils.Pool{
+			{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true},
+			{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 		}, rsvdAttrWindows, "192.168.1.0/24", 256, 256,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 240),
@@ -565,7 +565,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			nil),
 
 		// Test 2: AutoAssign 257 IPv4, 0 IPv6 - expect 240 IPv4 addresses, no IPv6, and no error.
-		Entry("257 v4 0 v6", "testHost", true, []pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true}}, rsvdAttrWindows, "192.168.1.0/24", 257, 0,
+		Entry("257 v4 0 v6", "testHost", true, []ipamtestutils.Pool{{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true}}, rsvdAttrWindows, "192.168.1.0/24", 257, 0,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 240),
 				IPVersion:        4,
@@ -576,9 +576,9 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			nil, nil),
 
 		// Test 3: AutoAssign 0 IPv4, 257 IPv6 - expect 240 IPv6 addresses, no IPv4, and no error.
-		Entry("0 v4 257 v6", "testHost", true, []pool{
-			{cidr: "192.168.1.0/24", blockSize: 26, enabled: true},
-			{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true},
+		Entry("0 v4 257 v6", "testHost", true, []ipamtestutils.Pool{
+			{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true},
+			{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true},
 		}, rsvdAttrWindows, "192.168.1.0/24", 0, 257, nil,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 240),
@@ -590,12 +590,12 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			nil),
 
 		// Test 4: AutoAssign with invalid HostReserveAttr should return error.
-		Entry("1 v4 0 v6", "testHost", true, []pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true}}, rsvdAttrTooBig, "192.168.1.0/24", 1, 0, nil, nil, ErrNoQualifiedPool),
+		Entry("1 v4 0 v6", "testHost", true, []ipamtestutils.Pool{{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true}}, rsvdAttrTooBig, "192.168.1.0/24", 1, 0, nil, nil, ErrNoQualifiedPool),
 
-		Entry("0 v4 1 v6", "testHost", true, []pool{{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}}, rsvdAttrTooBig, "fd80:24e2:f998:72d6::/120", 0, 1, nil, nil, ErrNoQualifiedPool),
+		Entry("0 v4 1 v6", "testHost", true, []ipamtestutils.Pool{{CIDR: "fd80:24e2:f998:72d6::/120", BlockSize: 122, Enabled: true}}, rsvdAttrTooBig, "fd80:24e2:f998:72d6::/120", 0, 1, nil, nil, ErrNoQualifiedPool),
 
 		// Test 5 AutoAssign 240 IPv4, expect 240 IPv4 and empty IPAMAssingments.Msgs
-		Entry("240 v4 0 v6", "testHost", true, []pool{{cidr: "192.168.1.0/24", blockSize: 26, enabled: true}}, rsvdAttrWindows, "192.168.1.0/24", 240, 0,
+		Entry("240 v4 0 v6", "testHost", true, []ipamtestutils.Pool{{CIDR: "192.168.1.0/24", BlockSize: 26, Enabled: true}}, rsvdAttrWindows, "192.168.1.0/24", 240, 0,
 			&IPAMAssignments{
 				IPs:              make([]cnet.IPNet, 240),
 				IPVersion:        4,
@@ -618,12 +618,12 @@ func setAffinity(ic Interface, affinity bool) {
 
 func deleteAllPoolsWindows() {
 	log.Infof("Windows: Deleting all pools")
-	ipPoolsWindows.pools = map[string]pool{}
+	ipPoolsWindows.Pools = map[string]ipamtestutils.Pool{}
 }
 
 func applyPoolWindows(cidr string, enabled bool) {
-	log.Infof("Windows: Adding pool: %s, enabled: %v", cidr, enabled)
-	ipPoolsWindows.pools[cidr] = pool{enabled: enabled}
+	log.Infof("Windows: Adding pool: %s, Enabled: %v", cidr, enabled)
+	ipPoolsWindows.Pools[cidr] = ipamtestutils.Pool{Enabled: enabled}
 }
 
 // checkWindowsIP() receives an IP and block size and returns bool -
@@ -638,7 +638,7 @@ func checkWindowsValidIP(ip net.IP, blockSize uint) bool {
 	var ipBinary uint32
 	ipBinary = 0
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		ipBinary = ipBinary << 8
 
 		ipBinary = ipBinary | uint32(ipv4[i])
@@ -652,7 +652,7 @@ func checkWindowsValidIP(ip net.IP, blockSize uint) bool {
 }
 
 // Return boolean after checking if the valid handle is allocated
-func isValidWindowsHandle(backend bapi.Client, ipPoolsWindows *ipPoolAccessor, ip net.IP, ctx context.Context) bool {
+func isValidWindowsHandle(backend bapi.Client, ipPoolsWindows *ipamtestutils.IPPoolAccessor, ip net.IP, ctx context.Context) bool {
 	c := &ipamClientWindows{
 		client: backend,
 		pools:  *ipPoolsWindows,
@@ -682,10 +682,10 @@ func isValidWindowsHandle(backend bapi.Client, ipPoolsWindows *ipPoolAccessor, i
 		attrs := block.Attributes[*attrIdx]
 		// If primary attribute is not nil then it must contain "windows-reserved-IPAM-handle"
 		// Primary attribute will be set only for reserved IPs.
-		if attrs.AttrPrimary == nil {
+		if attrs.HandleID == nil {
 			return false
 		}
-		if *attrs.AttrPrimary == "windows-reserved-ipam-handle" {
+		if *attrs.HandleID == "windows-reserved-ipam-handle" {
 			return true
 		}
 	}

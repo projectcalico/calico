@@ -74,6 +74,7 @@ type AttachPoint struct {
 	AttachType                  apiv3.BPFAttachOption
 	IngressPacketRateConfigured bool
 	EgressPacketRateConfigured  bool
+	UDPGSOLinearize             bool
 	DSCP                        int8
 	MaglevLUTSize               uint32
 	ProgramsMap                 maps.Map
@@ -488,13 +489,17 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
 	}
 
+	if ap.UDPGSOLinearize {
+		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
+	}
+
 	globalData.HostTunnelIPv4 = globalData.HostIPv4
 	globalData.HostTunnelIPv6 = globalData.HostIPv6
 
 	copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
 	copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
 
-	for i := 0; i < len(globalData.Jumps); i++ {
+	for i := range len(globalData.Jumps) {
 		globalData.Jumps[i] = 0xffffffff   /* uint32(-1) */
 		globalData.JumpsV6[i] = 0xffffffff /* uint32(-1) */
 	}

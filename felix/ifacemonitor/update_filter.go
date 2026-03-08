@@ -69,7 +69,7 @@ func FilterUpdates(ctx context.Context,
 
 	type timestampedUpd struct {
 		ReadyAt time.Time
-		Update  interface{} // RouteUpdate or LinkUpdate
+		Update  any // RouteUpdate or LinkUpdate
 	}
 
 	updatesByIfaceIdx := map[int][]timestampedUpd{}

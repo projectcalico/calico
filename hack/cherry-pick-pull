@@ -170,31 +170,39 @@ function return_to_kansas {
 }
 trap return_to_kansas EXIT
 
-function make-a-pr() {
-  echo
-  echo "+++ Creating a pull request on GitHub at ${GITHUB_USER}:${NEWBRANCH}"
-
-  local rel="$(basename "${BRANCH}")"
-
-  # Shorten release-calient-v3.xx to v3.xx.
-  local relshort="${rel#release-}"
-  relshort="${relshort#calient-}"
-
-  # Build up the PR text.
+# Pure text-processing function: builds the PR title, body, and labels from
+# pre-fetched PR metadata.  Makes NO gh/git calls so it can be unit-tested
+# with canned input.
+#
+# Inputs (must be set before calling):
+#   rel               - release branch basename (e.g. "release-v3.14")
+#   PULL_TITLES[]     - array of PR titles
+#   PULL_BODIES[]     - array of PR bodies
+#   PULL_LABELS[]     - array of PR labels (one element per PR, labels
+#                       within each element separated by newlines)
+#   PULLLINK[]        - array of PR links (e.g. "org/repo#123")
+#   SRC_MAIN_REPO_ORG, SRC_MAIN_REPO_NAME
+#   DST_MAIN_REPO_ORG, DST_MAIN_REPO_NAME
+#   EXTRA_LABELS      - (optional) extra comma-separated labels to append
+#
+# Outputs (set after calling):
+#   NEW_PR_TITLE       - generated PR title (without [relshort] prefix)
+#   NEW_PR_BODY        - generated PR body
+#   NEW_PR_LABELS      - generated comma-separated labels
+function build-pr-description() {
   local new_labels=""
   local new_body=""
-  local new_header=$'## Cherry-pick history\n'
+  local new_header=$'**Cherry-pick history**\n'
   local new_title=""
   local idx=0
 
-  if [[ "${#PULLS[@]}" -gt 1 ]]; then
+  if [[ "${#PULL_TITLES[@]}" -gt 1 ]]; then
     new_header+="- Pick onto **$rel**:"$'\n'
   fi
-  for pullnumber in "${PULLS[@]}"; do
-    local pull_json=$(gh pr view -R "${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}" "${pullnumber}" --json title,body,labels)
-    local pull_title=$(echo "${pull_json}" | jq -r '.title')
-    local pull_body=$(echo "${pull_json}" | jq -r '.body')
-    local pull_labels=$(echo "${pull_json}" | jq -r '.labels[].name' | paste -sd$'\n')
+  for idx in "${!PULL_TITLES[@]}"; do
+    local pull_title="${PULL_TITLES[$idx]}"
+    local pull_body="${PULL_BODIES[$idx]}"
+    local pull_labels="${PULL_LABELS[$idx]}"
     new_labels+="${pull_labels}"$'\n'
     local stripped_title=$(echo "${pull_title}" | sed 's/^\[.*\] //') # Remove any previous branch tag prefix [...]
 
@@ -213,7 +221,7 @@ function make-a-pr() {
       ')
     done
 
-    if [[ "${#PULLS[@]}" -gt 1 ]]; then
+    if [[ "${#PULL_TITLES[@]}" -gt 1 ]]; then
       new_header+="  - ${PULLLINK[idx]}"$'\n'
     else
       new_header+="- Pick onto **$rel**: ${PULLLINK[idx]}"$'\n'
@@ -223,18 +231,23 @@ function make-a-pr() {
       new_title+="; "
     fi
     new_title+="${stripped_title}"
-    if [[ "${#PULLS[@]}" -gt 1 ]]; then
+    if [[ "${#PULL_TITLES[@]}" -gt 1 ]]; then
       # Picking multiple PRs, so use a separator and link to each PR.
       new_body+=$'\n---\n'
-      new_body+="# $pull_title (${PULLLINK[idx]})"$'\n'
+      new_body+="**$pull_title** (${PULLLINK[idx]})"$'\n'
     else
-      # If there's only one PR, strip off any previous cherry-pick title.
-      # This gives a nice result when cherry-picking a previous pick.
-      pull_body=$(echo "${pull_body}" | head -n 1 | grep -v "## Cherry-pick history";
-                  echo "${pull_body}" | tail -n +2 )
+      # If the body already starts with a cherry-pick history header, strip
+      # it (the old bullets remain in place and stack beneath ours).
+      # Otherwise add a blank line to separate the new header from the body.
+      local first_line
+      first_line=$(echo "${pull_body}" | head -n1)
+      if [[ "${first_line}" == "## Cherry-pick history" || "${first_line}" == "**Cherry-pick history**" ]]; then
+        pull_body=$(echo "${pull_body}" | tail -n +2)
+      else
+        new_header+=$'\n'
+      fi
     fi
     new_body+="${pull_body}"
-    idx=$((idx + 1))
   done
 
   new_labels=$(echo -e "${new_labels}" | sort -u | grep '.' | grep -v 'cherry-pick-candidate' | paste -sd,)
@@ -246,12 +259,37 @@ function make-a-pr() {
     fi
   fi
 
-  pr_body_file="$(mktemp -t prtext.XXXX)" # cleaned in return_to_kansas
+  NEW_PR_TITLE="${new_title}"
+  NEW_PR_BODY="${new_header}${new_body}"$'\n'"${META_BLOCK:-}"
+  NEW_PR_LABELS="${new_labels}"
+}
 
-  cat >"${pr_body_file}" <<EOF
-${new_header}${new_body}
-${META_BLOCK:-}
-EOF
+function make-a-pr() {
+  echo
+  echo "+++ Creating a pull request on GitHub at ${GITHUB_USER}:${NEWBRANCH}"
+
+  local rel="$(basename "${BRANCH}")"
+
+  # Shorten release-calient-v3.xx to v3.xx.
+  local relshort="${rel#release-}"
+  relshort="${relshort#calient-}"
+
+  # Fetch PR metadata from GitHub.
+  local -a PULL_TITLES=()
+  local -a PULL_BODIES=()
+  local -a PULL_LABELS=()
+  for pullnumber in "${PULLS[@]}"; do
+    local pull_json=$(gh pr view -R "${SRC_MAIN_REPO_ORG}/${SRC_MAIN_REPO_NAME}" "${pullnumber}" --json title,body,labels)
+    PULL_TITLES+=( "$(echo "${pull_json}" | jq -r '.title')" )
+    PULL_BODIES+=( "$(echo "${pull_json}" | jq -r '.body')" )
+    PULL_LABELS+=( "$(echo "${pull_json}" | jq -r '.labels[].name' | paste -sd$'\n')" )
+  done
+
+  # Build the PR description (pure text processing, no API calls).
+  build-pr-description
+
+  pr_body_file="$(mktemp -t prtext.XXXX)" # cleaned in return_to_kansas
+  printf '%s\n' "${NEW_PR_BODY}" >"${pr_body_file}"
 
   if [[ -n "${DRY_RUN}" ]]; then
     echo "!!! Skipping PR creation. PR text would have been:"
@@ -265,14 +303,14 @@ EOF
       head_ref="${NEWBRANCH}"
     fi
 
-    echo "+++ Creating PR into ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}. Running: gh pr create -t \"[${relshort}] ${new_title}\" -F \"${pr_body_file}\" --repo \"${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}\" -H \"${head_ref}\" -B \"${rel}\" -l \"${new_labels}\""
+    echo "+++ Creating PR into ${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}. Running: gh pr create -t \"[${relshort}] ${NEW_PR_TITLE}\" -F \"${pr_body_file}\" --repo \"${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}\" -H \"${head_ref}\" -B \"${rel}\" -l \"${NEW_PR_LABELS}\""
     gh pr create \
-      -t "[${relshort}] ${new_title}" \
+      -t "[${relshort}] ${NEW_PR_TITLE}" \
       -F "${pr_body_file}" \
       --repo "${DST_MAIN_REPO_ORG}/${DST_MAIN_REPO_NAME}" \
       -H "${head_ref}" \
       -B "${rel}" \
-      -l "${new_labels}"
+      -l "${NEW_PR_LABELS}"
   fi
 }
 

@@ -48,25 +48,53 @@ type Map struct {
 	m handleMap
 }
 
+// EquivalentTo reports whether this Map contains exactly the same entries as
+// the given map[string]string. Iterates the Map's handles, converting back to
+// strings via pointer dereference rather than iterating the input map (which
+// would require uniquestr.Make per key lookup).
+func (i Map) EquivalentTo(m map[string]string) bool {
+	if i.IsNil() != (m == nil) {
+		return false
+	}
+	if len(m) != i.Len() {
+		return false
+	}
+	for k, v := range i.AllStrings() {
+		if mv, ok := m[k]; !ok || mv != v {
+			return false
+		}
+	}
+	return true
+}
+
 // Make makes an interned copy of the given map.  In order to benefit from
 // interning the map, the original map must be discarded and only the interned
 // copy should be kept.
 //
 // If passed nil, returns the zero value of Map.  If passed an empty map,
 // returns the singleton Empty.
+//
+// Make caches recently-returned Maps so that repeated calls with the same input
+// return the same Map, avoiding redundant handleMap allocations.
 func Make(m map[string]string) Map {
-	var hm handleMap
 	if m == nil {
 		return Nil
 	}
 	if len(m) == 0 {
 		return Empty
 	}
-	hm = make(handleMap, len(m))
-	for k, v := range m {
-		hm[uniquestr.Make(k)] = uniquestr.Make(v)
+
+	if cached, hash, ok := recentCache.Lookup(m); ok {
+		return cached
+	} else {
+		hm := make(handleMap, len(m))
+		for k, v := range m {
+			hm[uniquestr.Make(k)] = uniquestr.Make(v)
+		}
+		result := Map{m: hm}
+		recentCache.Store(hash, result)
+		return result
 	}
-	return Map{m: hm}
 }
 
 // Equals returns true if the map contains the same key/value pairs as the

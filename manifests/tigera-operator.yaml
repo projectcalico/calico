@@ -435,6 +435,18 @@ rules:
     verbs:
       - list
       - watch
+  # The operator needs permissions to create and update validating webhook configuration.
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # Add the appropriate pod security policy permissions
   - apiGroups:
       - policy
@@ -455,11 +467,21 @@ rules:
       - create
       - update
       - delete
+  # For Tiers controller, the operator needs to read/watch access to NetworkPolicies and GlobalNetworkPolicies.
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - networkpolicies
+      - globalnetworkpolicies
+    verbs:
+      - get
+      - list
+      - watch
   # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
     resourceNames:
-      - allow-tigera.*
+      - calico-system.*
     resources:
       - tier.networkpolicies
       - tier.globalnetworkpolicies
@@ -470,11 +492,20 @@ rules:
       - create
       - update
       - delete
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - tier.networkpolicies
+      - tier.globalnetworkpolicies
+    verbs:
+      - list
+      - watch
+      - get
   # For tiered network policy actions, tigera-apiserver requires get authorization on the associated tier.
   - apiGroups:
       - projectcalico.org
     resourceNames:
-      - allow-tigera
+      - calico-system
     resources:
       - tiers
     verbs:
@@ -487,6 +518,7 @@ rules:
     resources:
       - tiers
     verbs:
+      - get
       - create
       - list
       - watch
@@ -560,6 +592,16 @@ rules:
       - update
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
+  # For monitoring KubeVirt live migration.  The operator does not do this itself, but needs to
+  # be able to assign this RBAC to Typha and calico-node.
+  - apiGroups:
+      - kubevirt.io
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator.yaml
 kind: ClusterRoleBinding

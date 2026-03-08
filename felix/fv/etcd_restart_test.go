@@ -22,7 +22,7 @@ import (
 	"syscall"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -129,7 +129,7 @@ var _ = infrastructure.DatastoreDescribe("etcd connection interruption", []apico
 				Expect(err).NotTo(HaveOccurred())
 				logrus.WithField("output", out).WithError(err).Info("Conntrack entries")
 				found := false
-				for _, line := range strings.Split(out, "\n") {
+				for line := range strings.SplitSeq(out, "\n") {
 					matches := portRegexp.FindStringSubmatch(line)
 					if len(matches) < 2 {
 						continue

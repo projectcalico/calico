@@ -83,7 +83,7 @@ func (l logrusKlog) Enabled(level int) bool {
 	return int64(level) == logLevel
 }
 
-func toLogrusFields(keysAndValues ...interface{}) logrus.Fields {
+func toLogrusFields(keysAndValues ...any) logrus.Fields {
 	fields := logrus.Fields{}
 	for i := 0; i < len(keysAndValues); i += 2 {
 		key := fmt.Sprintf("%v", keysAndValues[i])

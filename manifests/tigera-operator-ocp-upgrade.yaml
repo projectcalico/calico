@@ -468,6 +468,18 @@ rules:
     verbs:
       - list
       - watch
+  # The operator needs permissions to create and update validating webhook configuration.
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
       - config.openshift.io
@@ -547,11 +559,21 @@ rules:
       - list
       - watch
       - delete
+  # For Tiers controller, the operator needs to read/watch access to NetworkPolicies and GlobalNetworkPolicies.
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - networkpolicies
+      - globalnetworkpolicies
+    verbs:
+      - get
+      - list
+      - watch
   # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
     resourceNames:
-      - allow-tigera.*
+      - calico-system.*
     resources:
       - tier.networkpolicies
       - tier.globalnetworkpolicies
@@ -562,11 +584,20 @@ rules:
       - create
       - update
       - delete
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - tier.networkpolicies
+      - tier.globalnetworkpolicies
+    verbs:
+      - list
+      - watch
+      - get
   # For tiered network policy actions, tigera-apiserver requires get authorization on the associated tier.
   - apiGroups:
       - projectcalico.org
     resourceNames:
-      - allow-tigera
+      - calico-system
     resources:
       - tiers
     verbs:
@@ -579,6 +610,7 @@ rules:
     resources:
       - tiers
     verbs:
+      - get
       - create
       - list
       - watch
@@ -652,6 +684,16 @@ rules:
       - update
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
+  # For monitoring KubeVirt live migration.  The operator does not do this itself, but needs to
+  # be able to assign this RBAC to Typha and calico-node.
+  - apiGroups:
+      - kubevirt.io
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -765,84 +807,4 @@ spec:
           volumeMounts:
             - name: calico-resources
               mountPath: /calico-resources
----
-# This MutatingAdmissionPolicyBinding binds the network policy mutation to the relevant resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
-kind: MutatingAdmissionPolicyBinding
-metadata:
-  name: set-networkpolicy-types-binding
-spec:
-  policyName: policy.projectcalico.org
-  matchResources:
-    resourceRules:
-      - apiGroups: ["projectcalico.org"]
-        apiVersions: ["v3"]
-        operations: ["CREATE", "UPDATE"]
-        resources:
-          - networkpolicies
-          - globalnetworkpolicies
-          - stagednetworkpolicies
-          - stagedglobalnetworkpolicies
-          - stagedkubernetesnetworkpolicies
----
-# This MutatingAdmissionPolicy performs defaulting for Calico policy types.
-apiVersion: admissionregistration.k8s.io/v1beta1
-kind: MutatingAdmissionPolicy
-metadata:
-  name: "policy.projectcalico.org"
-spec:
-  paramKind:
-    kind: NetworkPolicy
-    apiVersion: projectcalico.org/v3
-  matchConditions:
-    # Apply this mutation only if the 'types' field is missing.
-    - name: missing-types
-      expression: "!has(object.spec.types)"
-  matchConstraints:
-    resourceRules:
-      - apiGroups: ["projectcalico.org"]
-        apiVersions: ["v3"]
-        operations: ["CREATE", "UPDATE"]
-        resources:
-          - networkpolicies
-          - globalnetworkpolicies
-          - stagednetworkpolicies
-          - stagedglobalnetworkpolicies
-          - stagedkubernetesnetworkpolicies
-  failurePolicy: Fail
-  reinvocationPolicy: IfNeeded
-  variables:
-    # Determine the policy types based on the presence of ingress and egress rules.
-    # If both are present, set types to ["Ingress", "Egress"].
-    # If only ingress is present, set types to ["Ingress"].
-    # If only egress is present, set types to ["Egress"].
-    # If neither is present, default to ["Ingress"] for backward compatibility with policies from before types were required.
-    - name: defaultTypes
-      expression: |
-        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
-        has(object.spec.egress) ? ["Egress"] : ["Ingress"]
-
-    # The logic for StagedKubernetesNetworkPolicy is slightly different from the above:
-    # - If both ingress and egress are present, set types to ["Ingress", "Egress"].
-    # - If only ingress is present, set types to ["Ingress"].
-    # - If only egress is present, set types to ["Ingress", "Egress"].
-    # - If neither is present, default to ["Ingress"] for backward compatibility.
-    - name: defaultKubeTypes
-      expression: |
-        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
-        has(object.spec.egress) ? ["Ingress", "Egress"] : ["Ingress"]
-
-  mutations:
-    # Add the calculated 'types' field to the spec.
-    - patchType: "JSONPatch"
-      jsonPatch:
-        expression: |
-          [
-            JSONPatch{
-              op: "add",
-              path: "/spec/types",
-              path: object.kind == "StagedKubernetesNetworkPolicy" ? "/spec/policyTypes" : "/spec/types",
-              value: object.kind == "StagedKubernetesNetworkPolicy" ? variables.defaultKubeTypes : variables.defaultTypes
-            }
-          ]
 ---

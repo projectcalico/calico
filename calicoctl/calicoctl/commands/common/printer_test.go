@@ -19,8 +19,7 @@ import (
 	"context"
 	"errors"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -36,11 +35,11 @@ var nilSlice []int
 var nilMap map[string]string
 
 var _ = DescribeTable("Testing joinAndTruncate",
-	func(items interface{}, separator string, maxLength int, expected string) {
+	func(items any, separator string, maxLength int, expected string) {
 		result := joinAndTruncate(items, separator, maxLength)
 		Expect(result).To(Equal(expected))
 	},
-	Entry("nil interface", interface{}(nil), ",", 0, ""),
+	Entry("nil interface", any(nil), ",", 0, ""),
 	Entry("nil map", nilMap, ",", 0, ""),
 	Entry("empty map", make(map[string]string), ",", 0, ""),
 	Entry("map with one kv", map[string]string{"a": "b"}, ",", 0, "a=b"),

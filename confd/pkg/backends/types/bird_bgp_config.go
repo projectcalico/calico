@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package types
 
 // BirdBGPConfig represents the processed BGP configuration for templates
@@ -28,6 +29,10 @@ type BirdBGPConfig struct {
 	ListenAddress    string
 	ListenPort       string
 	DirectInterfaces string // Complete interface pattern string for protocol direct
+
+	BGPExportFilterForDisabledIPPools []string
+	BGPExportFilterForEnabledIPPools  []string
+	KernelFilterForIPPools            []string
 }
 
 // BirdBGPPeer represents a processed BGP peer configuration

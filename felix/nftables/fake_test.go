@@ -57,6 +57,9 @@ type fakeNFT struct {
 
 	// Allow overriding the next ListElements response for one or more sets to be an error.
 	ListElementsErrors map[string]error
+
+	// Track the number of List calls (simulates nft process spawns).
+	ListCallCount int
 }
 
 func (f *fakeNFT) Reset() {
@@ -135,6 +138,8 @@ func (f *fakeNFT) List(ctx context.Context, objectType string) ([]string, error)
 func (f *fakeNFT) preList() {
 	f.lock.Lock()
 	defer f.lock.Unlock()
+
+	f.ListCallCount++
 
 	if f.PreList != nil {
 		logrus.Info("Calling PreList")

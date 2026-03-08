@@ -69,7 +69,7 @@ func newHostsIPSetManager(
 	}
 }
 
-func (m *hostsIPSetManager) OnUpdate(protoBufMsg interface{}) {
+func (m *hostsIPSetManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataV4V6Update:
 		if (m.ipVersion == 4 && msg.Ipv4Addr == "") || (m.ipVersion == 6 && msg.Ipv6Addr == "") {

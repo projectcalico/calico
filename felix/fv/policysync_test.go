@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -266,7 +266,7 @@ var _ = infrastructure.DatastoreDescribe("_POL-SYNC_ _BPF-SAFE_ policy sync API 
 						})
 
 						doChurn := func(wlIndexes ...int) {
-							for i := 0; i < 100; i++ {
+							for i := range 100 {
 								wlIdx := wlIndexes[i%len(wlIndexes)]
 								By(fmt.Sprintf("Churn %d; targeting workload %d", i, wlIdx))
 
