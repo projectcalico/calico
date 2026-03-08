@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -309,6 +309,7 @@ func (slc *ServiceLookupsCache) onServiceUpdate(update api.Update, k model.Resou
 	} else {
 		slc.suh.AddOrUpdateService(k, update.Value.(*kapiv1.Service))
 	}
+	gaugeServicesCacheLength.Set(float64(len(slc.suh.services)))
 }
 
 func (slc *ServiceLookupsCache) GetServiceSpecFromResourceKey(key model.ResourceKey) (kapiv1.ServiceSpec, bool) {

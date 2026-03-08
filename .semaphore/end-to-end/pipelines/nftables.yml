@@ -90,6 +90,32 @@ blocks:
             - name: ENCAPSULATION_TYPE
               value: "VXLAN"
 
+        - name: Native v3 CRDs (GCP)
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: "gcp-kubeadm"
+            - name: K8S_VERSION
+              value: "stable"
+            - name: USE_API_SERVER
+              value: "false"
+
+        - name: Native v3 CRDs (AWS)
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-kubeadm"
+            - name: K8S_VERSION
+              value: "stable-3"
+            - name: USE_API_SERVER
+              value: "false"
+
   - name: Nftables mode, EKS
     dependencies: []
     task:

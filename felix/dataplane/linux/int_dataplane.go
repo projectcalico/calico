@@ -726,6 +726,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	dataplaneFeatures := featureDetector.GetFeatures()
+
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option
 		if config.BPFEnabled && bpfutils.BTFEnabled {
