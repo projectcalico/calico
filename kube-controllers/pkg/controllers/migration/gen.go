@@ -13,6 +13,6 @@
 // limitations under the License.
 
 //go:generate controller-gen crd paths=. output:crd:dir=crd
-//go:generate sed -i s/name:\ migration$/name:\ v1/ crd/migration.projectcalico.org_datastoremigrations.yaml
+//go:generate bash -c "sed -i 's/name: migration$/name: v1beta1/' crd/migration.projectcalico.org_datastoremigrations.yaml"
 
 package migration

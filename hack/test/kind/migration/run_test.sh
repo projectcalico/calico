@@ -325,7 +325,7 @@ log "Step 6: Disruption test — force-kill kube-controllers during migration"
 
 # Create the migration CR to kick things off.
 cat <<'EOF' | ${kubectl} apply -f -
-apiVersion: migration.projectcalico.org/v1
+apiVersion: migration.projectcalico.org/v1beta1
 kind: DatastoreMigration
 metadata:
   name: v1-to-v3
