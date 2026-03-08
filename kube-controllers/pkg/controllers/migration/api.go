@@ -40,6 +40,7 @@ const (
 	DatastoreMigrationPhaseFailed    DatastoreMigrationPhase = "Failed"
 )
 
+// +kubebuilder:validation:Enum=V1ToV3
 type DatastoreMigrationType string
 
 const (
@@ -48,6 +49,18 @@ const (
 
 // DatastoreMigration triggers and tracks the migration of Calico resources
 // from crd.projectcalico.org/v1 CRDs to projectcalico.org/v3 CRDs.
+//
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Types Done",type=integer,JSONPath=`.status.progress.completedTypes`
+// +kubebuilder:printcolumn:name="Types Total",type=integer,JSONPath=`.status.progress.totalTypes`
+// +kubebuilder:printcolumn:name="Current Type",type=string,JSONPath=`.status.progress.currentType`,priority=1
+// +kubebuilder:printcolumn:name="Migrated",type=integer,JSONPath=`.status.progress.migrated`
+// +kubebuilder:printcolumn:name="Skipped",type=integer,JSONPath=`.status.progress.skipped`,priority=1
+// +kubebuilder:printcolumn:name="Conflicts",type=integer,JSONPath=`.status.progress.conflicts`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type DatastoreMigration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -56,7 +69,17 @@ type DatastoreMigration struct {
 	Status DatastoreMigrationStatus `json:"status,omitempty"`
 }
 
+// DatastoreMigrationList contains a list of DatastoreMigration resources.
+//
+// +kubebuilder:object:root=true
+type DatastoreMigrationList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []DatastoreMigration `json:"items"`
+}
+
 type DatastoreMigrationSpec struct {
+	// +kubebuilder:validation:Required
 	Type DatastoreMigrationType `json:"type"`
 }
 
