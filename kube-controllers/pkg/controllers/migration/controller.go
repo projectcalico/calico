@@ -182,6 +182,13 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 		return err
 	}
 
+	// Re-fetch after metadata update to avoid stale ResourceVersion.
+	refreshed, err := c.getDatastoreMigration(dm.Name)
+	if err != nil {
+		return fmt.Errorf("re-fetching DatastoreMigration after APIService save: %v", err)
+	}
+	*dm = *refreshed
+
 	// Step 2: Create v3 ClusterInformation with DatastoreReady=false to lock the datastore.
 	if err := c.lockDatastore(logCtx); err != nil {
 		return err
