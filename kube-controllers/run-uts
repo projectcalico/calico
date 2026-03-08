@@ -29,7 +29,7 @@ for PKG in "$@"; do
 		echo "Running tests for package: ${PKG}";
 		# Generate a unique JUnit report name from the package path.
 		REPORT_NAME=$(echo "${PKG}" | tr '/./' '_' | sed 's/^_//')
-		${PKG}/ut.test --junit-report=report/${REPORT_NAME}.xml ${GINKGO_ARGS} || ((RC++))
+		${PKG}/ut.test --ginkgo.junit-report=report/${REPORT_NAME}.xml ${GINKGO_ARGS} || ((RC++))
 	else
 		echo "WARNING: No tests to run in ${PKG}, skipping"
 	fi
