@@ -28,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 const (
@@ -56,8 +57,8 @@ type Hashrelease struct {
 	// ProductVersion is the product version in the hashrelease
 	ProductVersion string `yaml:"version"`
 
-	// OperatorVersion is the operator version for the hashrelease
-	OperatorVersion string `yaml:"operator"`
+	// Operator is the operator for the hashrelease
+	Operator registry.Component `yaml:"operator"`
 
 	// Source is the source of hashrelease content on the local filesystem
 	Source string `yaml:"source,omitempty"`

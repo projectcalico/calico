@@ -1962,8 +1962,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Starting permanent connection")
 						pc := w[0][0].StartPersistentConnection(w[1][0].IP, 8055, workload.PersistentConnectionOpts{
 							MonitorConnectivity: true,
+							Timeout:             60 * time.Second,
 						})
-						defer pc.Stop()
 
 						expectPongs := func() {
 							EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
@@ -2000,12 +2000,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Should no longer get pongs when using the spoof interface")
 						expectNoPongs()
 
-						// Move WEP to spoof interface
+						// Switch back to eth0 and stop the persistent connection
+						// cleanly before the WEP move.  RemoveFromInfra triggers
+						// WorkloadRemoveScannerTCP which marks the CT entry with
+						// FlagSendRST, causing BPF to RST the connection and the
+						// test-connection tool to exit with Fatal.
+						w[0][0].UseSpoofInterface(false)
+						expectPongs()
+						pc.Stop()
+
+						// Move WEP to spoof interface.  This simulates a pod being
+						// removed and a new pod being created on the spoof interface.
+						// Verify that new connections work on the new interface.
+						w[0][0].UseSpoofInterface(true)
 						w[0][0].RemoveFromInfra(infra)
 						w[0][0].RemoveSpoofWEPFromInfra(infra)
 						w[0][0].ConfigureInInfraAsSpoofInterface(infra)
-						By("Should get pongs again after switching WEP to spoof iface")
-						expectPongs()
+						By("Should have connectivity via new connections after WEP move to spoof iface")
+						cc.Expect(Some, w[0][0], w[1][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
 					})
 				}
 
