@@ -502,10 +502,15 @@ func (cc *controllerControl) InitControllers(
 			cc.registerInformers(poolInformer, blockInformer)
 
 			// Enable the Tier controller, which manages tier deletion via finalizers.
+			// It watches tiers and all policy types so it can react to policy deletions.
 			tierInformer := calicoFactory.Projectcalico().V3().Tiers().Informer()
-			tierController := tier.NewController(ctx, v3c, tierInformer)
+			gnpInformer := calicoFactory.Projectcalico().V3().GlobalNetworkPolicies().Informer()
+			npInformer := calicoFactory.Projectcalico().V3().NetworkPolicies().Informer()
+			sgnpInformer := calicoFactory.Projectcalico().V3().StagedGlobalNetworkPolicies().Informer()
+			snpInformer := calicoFactory.Projectcalico().V3().StagedNetworkPolicies().Informer()
+			tierController := tier.NewController(ctx, v3c, tierInformer, gnpInformer, npInformer, sgnpInformer, snpInformer)
 			cc.controllers["Tier"] = tierController
-			cc.registerInformers(tierInformer)
+			cc.registerInformers(tierInformer, gnpInformer, npInformer, sgnpInformer, snpInformer)
 		}
 	}
 

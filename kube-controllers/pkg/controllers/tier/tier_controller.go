@@ -34,24 +34,28 @@ import (
 // When a tier is created, it adds a finalizer. When a tier is being deleted, it checks whether
 // any policies still reference the tier and updates the tier's status accordingly. Once all
 // policies are removed (by the user), it removes the finalizer to allow the tier to be deleted.
+//
+// The controller also watches all policy types (GNP, NP, SGNP, SNP) so that when a policy is
+// deleted, it re-reconciles the owning tier to check whether the finalizer can be removed.
 type TierController struct {
-	ctx          context.Context
-	cli          clientset.Interface
-	tierInformer cache.SharedIndexInformer
+	ctx       context.Context
+	cli       clientset.Interface
+	informers []cache.SharedIndexInformer
 }
 
 func NewController(
 	ctx context.Context,
 	cli clientset.Interface,
 	tierInformer cache.SharedIndexInformer,
+	policyInformers ...cache.SharedIndexInformer,
 ) controller.Controller {
 	c := &TierController{
-		ctx:          ctx,
-		cli:          cli,
-		tierInformer: tierInformer,
+		ctx:       ctx,
+		cli:       cli,
+		informers: append([]cache.SharedIndexInformer{tierInformer}, policyInformers...),
 	}
 
-	handlers := cache.ResourceEventHandlerFuncs{
+	tierHandlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
 			tier := obj.(*v3.Tier)
 			logrus.WithField("name", tier.Name).Info("Handling tier add")
@@ -74,18 +78,74 @@ func NewController(
 			}
 		},
 	}
-	if _, err := tierInformer.AddEventHandler(handlers); err != nil {
+	if _, err := tierInformer.AddEventHandler(tierHandlers); err != nil {
 		logrus.WithError(err).Fatal("Failed to register event handler for Tier")
 	}
 
+	// Watch policy resources so that when a policy is deleted, we re-reconcile the
+	// owning tier (which may now be ready to have its finalizer removed).
+	policyHandlers := cache.ResourceEventHandlerFuncs{
+		DeleteFunc: func(obj any) {
+			tierName := tierNameFromPolicy(obj)
+			if tierName == "" {
+				return
+			}
+			c.reconcileTierByName(tierName)
+		},
+	}
+	for _, inf := range policyInformers {
+		if _, err := inf.AddEventHandler(policyHandlers); err != nil {
+			logrus.WithError(err).Fatal("Failed to register policy event handler for Tier controller")
+		}
+	}
+
 	return c
+}
+
+// tierNameFromPolicy extracts the tier name from a policy object. All Calico policy types
+// have a Spec.Tier field. Returns empty string if the tier cannot be determined.
+func tierNameFromPolicy(obj any) string {
+	if d, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		obj = d.Obj
+	}
+	switch p := obj.(type) {
+	case *v3.GlobalNetworkPolicy:
+		return p.Spec.Tier
+	case *v3.NetworkPolicy:
+		return p.Spec.Tier
+	case *v3.StagedGlobalNetworkPolicy:
+		return p.Spec.Tier
+	case *v3.StagedNetworkPolicy:
+		return p.Spec.Tier
+	default:
+		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unknown policy type in tier controller")
+		return ""
+	}
+}
+
+// reconcileTierByName fetches the tier from the API and reconciles it.
+func (c *TierController) reconcileTierByName(name string) {
+	logCtx := logrus.WithField("name", name)
+	tier, err := c.cli.ProjectcalicoV3().Tiers().Get(c.ctx, name, metav1.GetOptions{})
+	if err != nil {
+		logCtx.WithError(err).Debug("Failed to get tier for policy-triggered reconcile")
+		return
+	}
+	logCtx.Info("Policy deleted, re-reconciling tier")
+	if err := c.Reconcile(tier); err != nil {
+		logCtx.WithError(err).Error("Error reconciling tier after policy deletion")
+	}
 }
 
 func (c *TierController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	logrus.Info("Starting Tier controller")
-	if !cache.WaitForNamedCacheSync("tiers", stopCh, c.tierInformer.HasSynced) {
+	syncFuncs := make([]cache.InformerSynced, len(c.informers))
+	for i, inf := range c.informers {
+		syncFuncs[i] = inf.HasSynced
+	}
+	if !cache.WaitForNamedCacheSync("tiers", stopCh, syncFuncs...) {
 		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
 	}
