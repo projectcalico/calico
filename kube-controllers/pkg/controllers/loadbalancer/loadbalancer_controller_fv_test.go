@@ -193,30 +193,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", Ordered,
 	})
 
 	AfterEach(func() {
-		ctx := context.Background()
-
-		// Clean up services in the test namespace
-		svcs, _ := k8sClient.CoreV1().Services(testNamespace).List(ctx, metav1.ListOptions{})
-		if svcs != nil {
-			for i := range svcs.Items {
-				_ = k8sClient.CoreV1().Services(testNamespace).Delete(ctx, svcs.Items[i].Name, metav1.DeleteOptions{})
-			}
-		}
-
-		// Clean up IP pools
-		pools, _ := calicoClient.IPPools().List(ctx, options.ListOptions{})
-		if pools != nil {
-			for _, pool := range pools.Items {
-				_, _ = calicoClient.IPPools().Delete(ctx, pool.Name, options.DeleteOptions{})
-			}
-		}
-
-		// Clean up the test namespace and wait for deletion
-		_ = k8sClient.CoreV1().Namespaces().Delete(ctx, testNamespace, metav1.DeleteOptions{})
-		Eventually(func() bool {
-			_, err := k8sClient.CoreV1().Namespaces().Get(ctx, testNamespace, metav1.GetOptions{})
-			return err != nil
-		}, 30*time.Second, 500*time.Millisecond).Should(BeTrue())
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, false, false)
 	})
 
 	Context("Service LoadBalancer FV tests - LoadBalancer AllServices mode", func() {

@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -103,13 +104,14 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, func() {
 
 	AfterEach(func() {
 		ctx := context.Background()
-		// Stop the per-spec controller instance.
 		if nodeController != nil {
 			nodeController.Stop()
 		}
-		// Clean up IPAM allocations by releasing all handles/blocks/affinities.
-		// Since this is etcd mode, we can list and delete directly.
-		cNodes, _ := c.Nodes().List(ctx, options.ListOptions{})
+		// Release IPAM allocations via the etcd-mode IPAM client.
+		cNodes, err := c.Nodes().List(ctx, options.ListOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to list Calico nodes during IPAM cleanup")
+		}
 		if cNodes != nil {
 			for _, node := range cNodes.Items {
 				affinityCfg := ipam.AffinityConfig{AffinityType: ipam.AffinityTypeHost, Host: node.Name}
@@ -119,15 +121,21 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, func() {
 		_ = c.IPAM().ReleaseByHandle(ctx, "handleA")
 		_ = c.IPAM().ReleaseByHandle(ctx, "handleB")
 		_ = c.IPAM().ReleaseByHandle(ctx, "handleC")
-		// Clean up k8s nodes.
-		nodes, _ := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-		for _, node := range nodes.Items {
-			_ = k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
+		// Only clean up nodes — the IP pool is shared across specs via BeforeAll.
+		nodes, err := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to list k8s nodes during cleanup")
 		}
-		// Clean up calico nodes.
+		for _, node := range nodes.Items {
+			if err := k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
+				log.WithError(err).WithField("node", node.Name).Debug("Failed to delete k8s node during cleanup")
+			}
+		}
 		if cNodes != nil {
 			for _, node := range cNodes.Items {
-				_, _ = c.Nodes().Delete(ctx, node.Name, options.DeleteOptions{})
+				if _, err := c.Nodes().Delete(ctx, node.Name, options.DeleteOptions{}); err != nil {
+					log.WithError(err).WithField("node", node.Name).Debug("Failed to delete Calico node during cleanup")
+				}
 			}
 		}
 	})

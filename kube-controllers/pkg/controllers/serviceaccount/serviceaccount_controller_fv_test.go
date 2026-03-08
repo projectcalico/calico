@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -85,20 +86,30 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", Ordere
 	})
 
 	AfterEach(func() {
-		// Clean up profiles and service accounts between specs.
-		profList, _ := calicoClient.Profiles().List(context.Background(), options.ListOptions{})
+		ctx := context.Background()
+		profList, err := calicoClient.Profiles().List(ctx, options.ListOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to list profiles during cleanup")
+		}
 		if profList != nil {
 			for _, prof := range profList.Items {
-				_, _ = calicoClient.Profiles().Delete(context.Background(), prof.Name, options.DeleteOptions{})
+				if _, err := calicoClient.Profiles().Delete(ctx, prof.Name, options.DeleteOptions{}); err != nil {
+					log.WithError(err).WithField("profile", prof.Name).Debug("Failed to delete profile during cleanup")
+				}
 			}
 		}
-		saList, _ := k8sClient.CoreV1().ServiceAccounts("default").List(context.Background(), metav1.ListOptions{})
+		saList, err := k8sClient.CoreV1().ServiceAccounts("default").List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to list service accounts during cleanup")
+		}
 		if saList != nil {
 			for _, sa := range saList.Items {
 				if sa.Name == "default" {
 					continue
 				}
-				_ = k8sClient.CoreV1().ServiceAccounts("default").Delete(context.Background(), sa.Name, metav1.DeleteOptions{})
+				if err := k8sClient.CoreV1().ServiceAccounts("default").Delete(ctx, sa.Name, metav1.DeleteOptions{}); err != nil {
+					log.WithError(err).WithField("sa", sa.Name).Debug("Failed to delete service account during cleanup")
+				}
 			}
 		}
 	})
