@@ -141,15 +141,23 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("creating a serviceaccount for the test", func() {
-			sa := &v1.ServiceAccount{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "default",
-					Namespace: "default",
-				},
-			}
+		By("ensuring a serviceaccount exists for the test", func() {
 			Eventually(func() error {
-				_, err := k8sClient.CoreV1().ServiceAccounts("default").Create(
+				_, err := k8sClient.CoreV1().ServiceAccounts("default").Get(
+					context.Background(),
+					"default",
+					metav1.GetOptions{},
+				)
+				if err == nil {
+					return nil
+				}
+				sa := &v1.ServiceAccount{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "default",
+						Namespace: "default",
+					},
+				}
+				_, err = k8sClient.CoreV1().ServiceAccounts("default").Create(
 					context.Background(),
 					sa,
 					metav1.CreateOptions{},
@@ -707,15 +715,23 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("creating a serviceaccount for the test", func() {
-			sa := &v1.ServiceAccount{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "default",
-					Namespace: "default",
-				},
-			}
+		By("ensuring a serviceaccount exists for the test", func() {
 			Eventually(func() error {
-				_, err := k8sClient.CoreV1().ServiceAccounts("default").Create(
+				_, err := k8sClient.CoreV1().ServiceAccounts("default").Get(
+					context.Background(),
+					"default",
+					metav1.GetOptions{},
+				)
+				if err == nil {
+					return nil
+				}
+				sa := &v1.ServiceAccount{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "default",
+						Namespace: "default",
+					},
+				}
+				_, err = k8sClient.CoreV1().ServiceAccounts("default").Create(
 					context.Background(),
 					sa,
 					metav1.CreateOptions{},
