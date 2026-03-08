@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
+var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", Ordered, func() {
 	var (
 		etcd                   *containers.Container
 		loadbalancercontroller *containers.Container
@@ -44,6 +44,8 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 		calicoClient           client.Interface
 		k8sClient              *kubernetes.Clientset
 		controllerManager      *containers.Container
+		removeKubeconfig       func()
+		kconfigfile            string
 	)
 
 	const testNamespace = "test-loadbalancer-ns"
@@ -150,7 +152,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 		},
 	}
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -159,8 +161,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		loadbalancercontroller = testutils.RunLoadBalancerController(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
 
@@ -182,12 +183,17 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		loadbalancercontroller.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, false, false)
 	})
 
 	Context("Service LoadBalancer FV tests - LoadBalancer AllServices mode", func() {
@@ -389,6 +395,9 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 
 			Eventually(func() string {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
+				if service == nil || len(service.Status.LoadBalancer.Ingress) == 0 {
+					return ""
+				}
 				return service.Status.LoadBalancer.Ingress[0].IP
 			}, time.Second*15, 500*time.Millisecond).Should(Equal(v4poolManualIP))
 		})
@@ -414,6 +423,9 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 
 			Eventually(func() string {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
+				if service == nil || len(service.Status.LoadBalancer.Ingress) == 0 {
+					return ""
+				}
 				return service.Status.LoadBalancer.Ingress[0].IP
 			}, time.Second*15, 500*time.Millisecond).Should(Equal(specificIpFromAutomaticPool))
 		})

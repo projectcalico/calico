@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -32,7 +33,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func() {
+var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -40,9 +41,10 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func()
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -51,8 +53,8 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func()
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		var kconfigfile string
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
 
@@ -74,12 +76,42 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func()
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		ctx := context.Background()
+		profList, err := calicoClient.Profiles().List(ctx, options.ListOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to list profiles during cleanup")
+		}
+		if profList != nil {
+			for _, prof := range profList.Items {
+				if _, err := calicoClient.Profiles().Delete(ctx, prof.Name, options.DeleteOptions{}); err != nil {
+					log.WithError(err).WithField("profile", prof.Name).Debug("Failed to delete profile during cleanup")
+				}
+			}
+		}
+		saList, err := k8sClient.CoreV1().ServiceAccounts("default").List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to list service accounts during cleanup")
+		}
+		if saList != nil {
+			for _, sa := range saList.Items {
+				if sa.Name == "default" {
+					continue
+				}
+				if err := k8sClient.CoreV1().ServiceAccounts("default").Delete(ctx, sa.Name, metav1.DeleteOptions{}); err != nil {
+					log.WithError(err).WithField("sa", sa.Name).Debug("Failed to delete service account during cleanup")
+				}
+			}
+		}
 	})
 
 	Context("mainline functionality", func() {

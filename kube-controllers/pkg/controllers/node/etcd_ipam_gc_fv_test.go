@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -34,7 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
+var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, func() {
 	var (
 		etcd              *containers.Container
 		nodeController    *containers.Container
@@ -49,7 +50,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 	const kNodeName = "k8snodename"
 	const cNodeName = "calinodename"
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		c = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -89,17 +90,54 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		// Delete the IP pool.
 		_, err := c.IPPools().Delete(context.Background(), "test-ippool", options.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		_ = c.Close()
 		controllerManager.Stop()
-		nodeController.Stop()
 		apiserver.Stop()
 		etcd.Stop()
 		cleanupKubeconfig()
+	})
+
+	AfterEach(func() {
+		ctx := context.Background()
+		if nodeController != nil {
+			nodeController.Stop()
+		}
+		// Release IPAM allocations via the etcd-mode IPAM client.
+		cNodes, err := c.Nodes().List(ctx, options.ListOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to list Calico nodes during IPAM cleanup")
+		}
+		if cNodes != nil {
+			for _, node := range cNodes.Items {
+				affinityCfg := ipam.AffinityConfig{AffinityType: ipam.AffinityTypeHost, Host: node.Name}
+				_ = c.IPAM().ReleaseHostAffinities(ctx, affinityCfg, true)
+			}
+		}
+		_ = c.IPAM().ReleaseByHandle(ctx, "handleA")
+		_ = c.IPAM().ReleaseByHandle(ctx, "handleB")
+		_ = c.IPAM().ReleaseByHandle(ctx, "handleC")
+		// Only clean up nodes — the IP pool is shared across specs via BeforeAll.
+		nodes, err := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to list k8s nodes during cleanup")
+		}
+		for _, node := range nodes.Items {
+			if err := k8sClient.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{}); err != nil {
+				log.WithError(err).WithField("node", node.Name).Debug("Failed to delete k8s node during cleanup")
+			}
+		}
+		if cNodes != nil {
+			for _, node := range cNodes.Items {
+				if _, err := c.Nodes().Delete(ctx, node.Name, options.DeleteOptions{}); err != nil {
+					log.WithError(err).WithField("node", node.Name).Debug("Failed to delete Calico node during cleanup")
+				}
+			}
+		}
 	})
 
 	// This test makes sure our IPAM garbage collection properly handles when the Kubernetes node name
