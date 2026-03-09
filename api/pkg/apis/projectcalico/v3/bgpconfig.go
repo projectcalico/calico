@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -146,6 +146,14 @@ type BGPConfigurationSpec struct {
 	// It is recommended to use a link-local address.
 	// +optional
 	LocalWorkloadPeeringIPV6 string `json:"localWorkloadPeeringIPV6,omitempty" validate:"omitempty,ipv6"`
+
+	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
+	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,
+	// confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route.
+	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Enabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +optional
+	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.

@@ -21,7 +21,7 @@ clean:
 	@find ../ -name '*release*.log' -delete
 	@find . -name '*.received.*' -delete
 
-bin/release: $(shell find . -name "*.go")
+bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl")
 	@mkdir -p bin && \
 	$(call build_binary, ./cmd, bin/release)
 

@@ -58,9 +58,6 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			// Ensure a clean starting environment before each test.
-			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred())
-
 			// Create a default-deny policy. We don't bother to explicitly delete this after since it will get wiped when the
 			// namespace is deleted.
 			By("Creating a default-deny policy.")

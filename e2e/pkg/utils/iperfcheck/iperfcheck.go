@@ -52,12 +52,20 @@ type Peer struct {
 	name       string
 	namespace  *v1.Namespace
 	labels     map[string]string
+	nodeName   string
 	pod        *v1.Pod
 	customizer func(*v1.Pod)
 }
 
 // PeerOption configures a Peer.
 type PeerOption func(*Peer)
+
+// WithNodeName pins the peer pod to the given node.
+func WithNodeName(nodeName string) PeerOption {
+	return func(p *Peer) {
+		p.nodeName = nodeName
+	}
+}
 
 // WithPeerLabels sets additional labels on the peer pod.
 func WithPeerLabels(labels map[string]string) PeerOption {
@@ -210,12 +218,15 @@ func (t *IperfTester) Stop() {
 
 // measureConfig holds options for a single bandwidth measurement.
 type measureConfig struct {
-	reverse       bool
-	duration      int
-	omitSeconds   int
-	retries       int
-	retryInterval time.Duration
-	port          int
+	reverse         bool
+	duration        int
+	omitSeconds     int
+	retries         int
+	retryInterval   time.Duration
+	port            int
+	udp             bool
+	packetLength    int
+	targetBandwidth string
 }
 
 // MeasureOption configures a bandwidth measurement.
@@ -255,6 +266,27 @@ func WithRetries(n int, interval time.Duration) MeasureOption {
 func WithPort(port int) MeasureOption {
 	return func(c *measureConfig) {
 		c.port = port
+	}
+}
+
+// WithUDP enables UDP mode (-u flag) for the iperf3 client.
+func WithUDP() MeasureOption {
+	return func(c *measureConfig) {
+		c.udp = true
+	}
+}
+
+// WithPacketLength sets the UDP packet size in bytes (-l flag).
+func WithPacketLength(n int) MeasureOption {
+	return func(c *measureConfig) {
+		c.packetLength = n
+	}
+}
+
+// WithTargetBandwidth sets the target send bandwidth (-b flag), e.g. "100M".
+func WithTargetBandwidth(bw string) MeasureOption {
+	return func(c *measureConfig) {
+		c.targetBandwidth = bw
 	}
 }
 
@@ -306,6 +338,15 @@ func (t *IperfTester) MeasureBandwidth(client, server *Peer, opts ...MeasureOpti
 			serverIP, cfg.port, cfg.duration, cfg.omitSeconds)
 		if cfg.reverse {
 			clientCmd += " -R"
+		}
+		if cfg.udp {
+			clientCmd += " -u"
+			if cfg.packetLength > 0 {
+				clientCmd += fmt.Sprintf(" -l %d", cfg.packetLength)
+			}
+			if cfg.targetBandwidth != "" {
+				clientCmd += fmt.Sprintf(" -b %s", cfg.targetBandwidth)
+			}
 		}
 
 		// Timeout = duration + omit + buffer.
@@ -370,6 +411,9 @@ func createPeerPod(f *framework.Framework, peer *Peer) (*v1.Pod, error) {
 		},
 	}
 
+	if peer.nodeName != "" {
+		pod.Spec.NodeName = peer.nodeName
+	}
 	if peer.customizer != nil {
 		peer.customizer(pod)
 	}
@@ -398,6 +442,10 @@ type iperf3Result struct {
 		SumReceived struct {
 			BitsPerSecond float64 `json:"bits_per_second"`
 		} `json:"sum_received"`
+		// Sum is used by UDP results (iperf3 reports under "sum" rather than "sum_received" for UDP).
+		Sum struct {
+			BitsPerSecond float64 `json:"bits_per_second"`
+		} `json:"sum"`
 	} `json:"end"`
 }
 
@@ -408,8 +456,14 @@ func parseIperf3JSON(output string) (*Result, error) {
 		return nil, fmt.Errorf("failed to parse iperf3 JSON: %w", err)
 	}
 
+	avgRate := raw.End.SumReceived.BitsPerSecond
+	if avgRate == 0 {
+		// UDP results report under "sum" rather than "sum_received".
+		avgRate = raw.End.Sum.BitsPerSecond
+	}
+
 	result := &Result{
-		AverageRate: raw.End.SumReceived.BitsPerSecond,
+		AverageRate: avgRate,
 	}
 	if len(raw.Intervals) > 0 {
 		result.PeakRate = raw.Intervals[0].Sum.BitsPerSecond

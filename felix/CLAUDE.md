@@ -169,6 +169,18 @@ make fv-nft GINKGO_FOCUS="TestName"
 
 Runs FV tests with the nftables backend enabled (`FELIX_FV_NFTABLES=Enabled`).
 
+### Diagnosing Test Failures with fv-tests-guru
+
+[fv-tests-guru](https://github.com/tigera/fv-tests-guru) is an AI-powered tool that parses Felix FV/UT failure logs and runs AI analysis to diagnose root causes. It reads its Gemini API key from `~/.fv-tests-guru/gemini-key`.
+
+**When asked to analyze a test failure log file, always run fv-tests-guru FIRST** (if available — check with `which fv-tests-guru`) — it is the most efficient way to identify the failing test(s), extract relevant context, and get an initial diagnosis. Use its output to guide subsequent investigation (reading test code, checking source changes, etc.). If fv-tests-guru is not installed, skip it and proceed with manual analysis.
+
+```bash
+fv-tests-guru -debug-logfile <log-path> -ai-provider gemini -calico-repo <path-to-calico-repo-root> -max-timeout 1m40s
+```
+
+Add `-ut` for unit test logs. Use `-extra-context "..."` to provide hints about the branch under test.
+
 ## BPF Dataplane
 
 ### BPF Code Structure
