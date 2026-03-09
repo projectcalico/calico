@@ -25,8 +25,9 @@ global_job_config:
     # Using tests that usually pass.
     # So we're running the Conformance tests, some RBAC tests, and some Observe tests.
     # and skipping the slow, disruptive, and some other tests that are not relevant to Calico OSS
+    # Temporarily skip Feature:AutoHEPs due to nil-pointer panic (see PR #12014). Remove once fix is backported to release-v3.30.
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)
+      value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|Feature:AutoHEPs)
     - name: K8S_VERSION
       value: "stable-3"
     - name: FUNCTIONAL_AREA
@@ -394,7 +395,7 @@ blocks:
               value: "true"
               # The extra skip here is for the upstream DNS tests.  They require access to pods via the control plane, and with Calico CNI, the EKS control plane can't access pods.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.........DNS)
+              value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.........DNS|Feature:AutoHEPs)
 
         # operator, awscni, stable-1, amd64, bpf, ipv4, EKS, kdd, amazonlinux2, no-kube-proxy,
         - name: EKS w/ aws CNI
