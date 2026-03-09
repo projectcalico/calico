@@ -405,6 +405,12 @@ message WorkloadBpfSkipRedir {
   bool Ingress = 2;
 }
 
+enum LiveMigrationRole {
+  NO_ROLE = 0;
+  SOURCE = 1;
+  TARGET = 2;
+}
+
 message WorkloadEndpoint {
   string state = 1;
   string name = 2;
@@ -421,6 +427,7 @@ message WorkloadEndpoint {
   LocalBGPPeer local_bgp_peer = 13;
   WorkloadBpfSkipRedir skip_redir = 14;
   repeated QoSPolicy qos_policies = 15;
+  LiveMigrationRole live_migration_role = 16;
 }
 
 message QoSControls {

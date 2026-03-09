@@ -904,6 +904,64 @@ must be disabled.
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Enabled` |
 
+### `IPv4ElevatedRoutePriority` (config file) / `ipv4ElevatedRoutePriority` (YAML)
+
+Route Priority value for an elevated priority Calico-programmed IPv4 route. Note, higher
+values mean lower priority. Elevated priority is used during VM live migration, and for
+optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IPv4ElevatedRoutePriority` |
+| Encoding (env var/config file) | Integer: [1,2147483646] |
+| Default value (above encoding) | `512` |
+| `FelixConfiguration` field | `ipv4ElevatedRoutePriority` (YAML) `IPv4ElevatedRoutePriority` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,2147483646] |
+| Default value (YAML) | `512` |
+
+### `IPv4NormalRoutePriority` (config file) / `ipv4NormalRoutePriority` (YAML)
+
+Route Priority value for a normal priority Calico-programmed IPv4 route. Note, higher
+values mean lower priority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IPv4NormalRoutePriority` |
+| Encoding (env var/config file) | Integer: [1,2147483646] |
+| Default value (above encoding) | `1024` |
+| `FelixConfiguration` field | `ipv4NormalRoutePriority` (YAML) `IPv4NormalRoutePriority` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,2147483646] |
+| Default value (YAML) | `1024` |
+
+### `IPv6ElevatedRoutePriority` (config file) / `ipv6ElevatedRoutePriority` (YAML)
+
+Route Priority value for an elevated priority Calico-programmed IPv6 route. Note, higher
+values mean lower priority. Elevated priority is used during VM live migration, and for
+optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IPv6ElevatedRoutePriority` |
+| Encoding (env var/config file) | Integer: [1,2147483646] |
+| Default value (above encoding) | `512` |
+| `FelixConfiguration` field | `ipv6ElevatedRoutePriority` (YAML) `IPv6ElevatedRoutePriority` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,2147483646] |
+| Default value (YAML) | `512` |
+
+### `IPv6NormalRoutePriority` (config file) / `ipv6NormalRoutePriority` (YAML)
+
+Route Priority value for a normal priority Calico-programmed IPv6 route. Note, higher
+values mean lower priority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IPv6NormalRoutePriority` |
+| Encoding (env var/config file) | Integer: [1,2147483646] |
+| Default value (above encoding) | `1024` |
+| `FelixConfiguration` field | `ipv6NormalRoutePriority` (YAML) `IPv6NormalRoutePriority` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,2147483646] |
+| Default value (YAML) | `1024` |
+
 ### `InterfaceExclude` (config file) / `interfaceExclude` (YAML)
 
 A comma-separated list of interface names that should be excluded when Felix is resolving
@@ -964,6 +1022,21 @@ Controls whether Felix enables support for IPv6 (if supported by the in-use data
 | `FelixConfiguration` field | `ipv6Support` (YAML) `IPv6Support` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
+
+### `LiveMigrationRouteConvergenceTime` (config file) / `liveMigrationRouteConvergenceTime` (YAML)
+
+The time to keep elevated route priority after a
+VM live migration completes. This allows routes to converge across the cluster before
+reverting to normal priority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LiveMigrationRouteConvergenceTime` |
+| Encoding (env var/config file) | Seconds (floating point) |
+| Default value (above encoding) | `30` (30s) |
+| `FelixConfiguration` field | `liveMigrationRouteConvergenceTime` (YAML) `LiveMigrationRouteConvergenceTime` (Go API) |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
+| Default value (YAML) | `30s` |
 
 ### `MTUIfacePattern` (config file) / `mtuIfacePattern` (YAML)
 

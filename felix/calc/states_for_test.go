@@ -20,6 +20,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
@@ -3271,6 +3272,81 @@ var wireguardV4V6 = empty.withKVUpdates(
 		},
 	}...,
 )
+
+// Live migration states.  These test that LiveMigration resources correctly set the
+// live_migration_role field on proto.WorkloadEndpoint.
+
+var (
+	// LiveMigration resource keys.
+	liveMigrationKey1 = ResourceKey{
+		Kind:      internalapi.KindLiveMigration,
+		Name:      "lm-1",
+		Namespace: "default",
+	}
+
+	// A remote WEP name that doesn't match any local WEP.
+	remoteWEPName = k8stypes.NamespacedName{Name: "remote-wep"}
+
+	// NamespacedNames matching localWlEpKey1 (WorkloadID "wl1" → name="wl1", namespace="").
+	localWlEp1NN = k8stypes.NamespacedName{Name: "wl1"}
+
+	// A selector that matches localWlEp1's labels (has label "a").
+	liveMigrationTargetSelector = "has(a)"
+)
+
+// Case 1: Local WEP is a live migration source.
+var localEp1WithPolicyLMSource = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: liveMigrationKey1, Value: &internalapi.LiveMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      liveMigrationKey1.Name,
+			Namespace: liveMigrationKey1.Namespace,
+		},
+		Spec: internalapi.LiveMigrationSpec{
+			Source: &localWlEp1NN,
+			Destination: &internalapi.WorkloadEndpointIdentifier{
+				NamespacedName: &remoteWEPName,
+			},
+		},
+	}},
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_SOURCE,
+).withName("ep1 local, policy, LM source")
+
+// Case 2: Local WEP is a live migration target (by direct name).
+var localEp1WithPolicyLMTargetByName = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: liveMigrationKey1, Value: &internalapi.LiveMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      liveMigrationKey1.Name,
+			Namespace: liveMigrationKey1.Namespace,
+		},
+		Spec: internalapi.LiveMigrationSpec{
+			Source: &remoteWEPName,
+			Destination: &internalapi.WorkloadEndpointIdentifier{
+				NamespacedName: &localWlEp1NN,
+			},
+		},
+	}},
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withName("ep1 local, policy, LM target by name")
+
+// Case 3: Local WEP is a live migration target (by selector).
+var localEp1WithPolicyLMTargetBySelector = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: liveMigrationKey1, Value: &internalapi.LiveMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      liveMigrationKey1.Name,
+			Namespace: liveMigrationKey1.Namespace,
+		},
+		Spec: internalapi.LiveMigrationSpec{
+			Source: &remoteWEPName,
+			Destination: &internalapi.WorkloadEndpointIdentifier{
+				Selector: &liveMigrationTargetSelector,
+			},
+		},
+	}},
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withName("ep1 local, policy, LM target by selector")
 
 type StateList []State
 
