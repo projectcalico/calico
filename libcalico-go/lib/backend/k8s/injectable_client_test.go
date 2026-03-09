@@ -21,24 +21,48 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+	fakerest "k8s.io/client-go/rest/fake"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
+// newTestClientOptions builds a ClientOptions with a fake clientset and a fake REST
+// client, sufficient for testing core k8s resource operations through the backend.
+func newTestClientOptions() (ClientOptions, *fake.Clientset) {
+	fakeClientset := fake.NewSimpleClientset()
+	fakeREST := &fakerest.RESTClient{
+		NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
+		GroupVersion: schema.GroupVersion{
+			Group:   "crd.projectcalico.org",
+			Version: "v1",
+		},
+		VersionedAPIPath: "/apis",
+	}
+	return ClientOptions{
+		ClientSet:  fakeClientset,
+		RESTClient: fakeREST,
+	}, fakeClientset
+}
+
 // TestNewWithOptions verifies that a backend client created via NewWithOptions
 // with a fake k8s clientset can perform basic CRUD on nodes.
 func TestNewWithOptions(t *testing.T) {
 	ctx := context.Background()
-	fakeClientset := fake.NewSimpleClientset()
+	opts, fakeClientset := newTestClientOptions()
 
-	c := NewWithOptions(ClientOptions{
-		ClientSet: fakeClientset,
-	}).(*KubeClient)
+	c, err := NewWithOptions(opts)
+	if err != nil {
+		t.Fatalf("NewWithOptions failed: %v", err)
+	}
+	kc := c.(*KubeClient)
 
 	// Seed a k8s Node through the fake clientset.
-	_, err := fakeClientset.CoreV1().Nodes().Create(ctx, &corev1.Node{
+	_, err = fakeClientset.CoreV1().Nodes().Create(ctx, &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "test-node",
 			Labels: map[string]string{"env": "test"},
@@ -49,7 +73,7 @@ func TestNewWithOptions(t *testing.T) {
 	}
 
 	// The backend should be able to read it back via its model key.
-	kvp, err := c.Get(ctx, model.ResourceKey{Name: "test-node", Kind: internalapi.KindNode}, "")
+	kvp, err := kc.Get(ctx, model.ResourceKey{Name: "test-node", Kind: internalapi.KindNode}, "")
 	if err != nil {
 		t.Fatalf("failed to get node through backend: %v", err)
 	}
@@ -62,7 +86,7 @@ func TestNewWithOptions(t *testing.T) {
 	}
 
 	// List should return the node.
-	kvps, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
+	kvps, err := kc.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
 	if err != nil {
 		t.Fatalf("failed to list nodes: %v", err)
 	}
@@ -77,7 +101,7 @@ func TestNewWithOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to seed second node: %v", err)
 	}
-	kvps, err = c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
+	kvps, err = kc.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
 	if err != nil {
 		t.Fatalf("failed to list nodes: %v", err)
 	}
@@ -91,7 +115,7 @@ func TestNewWithOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to delete node: %v", err)
 	}
-	kvps, err = c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
+	kvps, err = kc.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, "")
 	if err != nil {
 		t.Fatalf("failed to list nodes after delete: %v", err)
 	}
@@ -104,14 +128,16 @@ func TestNewWithOptions(t *testing.T) {
 // works through the injected backend.
 func TestNewWithOptions_KubernetesNetworkPolicy(t *testing.T) {
 	ctx := context.Background()
-	fakeClientset := fake.NewSimpleClientset()
+	opts, fakeClientset := newTestClientOptions()
 
-	c := NewWithOptions(ClientOptions{
-		ClientSet: fakeClientset,
-	}).(*KubeClient)
+	c, err := NewWithOptions(opts)
+	if err != nil {
+		t.Fatalf("NewWithOptions failed: %v", err)
+	}
+	kc := c.(*KubeClient)
 
 	// Seed a namespace and network policy.
-	_, err := fakeClientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+	_, err = fakeClientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
 	}, metav1.CreateOptions{})
 	if err != nil {
@@ -128,7 +154,7 @@ func TestNewWithOptions_KubernetesNetworkPolicy(t *testing.T) {
 	}
 
 	// List k8s network policies through the backend.
-	kvps, err := c.List(ctx, model.ResourceListOptions{
+	kvps, err := kc.List(ctx, model.ResourceListOptions{
 		Kind:      model.KindKubernetesNetworkPolicy,
 		Namespace: "default",
 	}, "")
@@ -143,12 +169,33 @@ func TestNewWithOptions_KubernetesNetworkPolicy(t *testing.T) {
 // TestNewWithOptions_ClientSetExposed verifies that the ClientSet field is the
 // same fake we injected.
 func TestNewWithOptions_ClientSetExposed(t *testing.T) {
-	fakeClientset := fake.NewSimpleClientset()
-	c := NewWithOptions(ClientOptions{
-		ClientSet: fakeClientset,
-	}).(*KubeClient)
+	opts, fakeClientset := newTestClientOptions()
 
-	if c.ClientSet != fakeClientset {
+	c, err := NewWithOptions(opts)
+	if err != nil {
+		t.Fatalf("NewWithOptions failed: %v", err)
+	}
+	kc := c.(*KubeClient)
+
+	if kc.ClientSet != fakeClientset {
 		t.Error("expected ClientSet to be the injected fake")
+	}
+}
+
+// TestNewWithOptions_RequiredFields verifies that NewWithOptions returns an error
+// when required fields are missing.
+func TestNewWithOptions_RequiredFields(t *testing.T) {
+	_, fakeClientset := newTestClientOptions()
+
+	// Missing both required fields.
+	_, err := NewWithOptions(ClientOptions{})
+	if err == nil {
+		t.Error("expected error when ClientSet is nil")
+	}
+
+	// Missing RESTClient.
+	_, err = NewWithOptions(ClientOptions{ClientSet: fakeClientset})
+	if err == nil {
+		t.Error("expected error when RESTClient is nil")
 	}
 }
