@@ -18,7 +18,7 @@ include ../lib.Makefile
 ###############################################################################
 
 
-SRC_FILES=$(shell find -name '*.go')
+## SRC_FILES is auto-populated from local-deps.txt by lib.Makefile.
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
@@ -158,6 +158,7 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 $(FLEXVOL_IMAGE): $(FLEXVOL_CONTAINER_MARKER)
+IMAGE_DEPS = flexvol/docker-image/Dockerfile csidriver/Dockerfile node-driver-registrar-docker/Dockerfile
 $(FLEXVOL_CONTAINER_CREATED): flexvol/docker-image/Dockerfile bin/flexvol-$(ARCH)
 	cp ../LICENSE.md bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=bin -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f flexvol/docker-image/Dockerfile .

@@ -22,11 +22,14 @@ LOCAL_CHECKS = LIBBPF_FILE_CREATED
 LIBBPF_A=../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 
-# Complete list of files from other directories that we need to build calico/node.
-REMOTE_DEPS = $(LIBBPF_A) \
-	      filesystem/usr/lib/calico/bpf \
-	      filesystem/etc/calico/confd/conf.d \
-	      filesystem/etc/calico/confd/templates
+## BUILD_DEPS are intermediate build artifacts needed by the image (also used by clean).
+BUILD_DEPS = $(LIBBPF_A) \
+	     filesystem/usr/lib/calico/bpf \
+	     filesystem/etc/calico/confd/conf.d \
+	     filesystem/etc/calico/confd/templates
+
+## IMAGE_DEPS lists non-Go files the calico/node image depends on.
+IMAGE_DEPS = ./Dockerfile.$(ARCH) $(BUILD_DEPS)
 
 # Run these tests against the projectcalico.org/v3 API group by default.
 CALICO_API_GROUP ?= projectcalico.org/v3
@@ -141,16 +144,9 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-# Source golang files on which compiling the calico-node binary depends.
-SRC_FILES=$(shell find ./pkg -name '*.go') \
-	  $(shell find ./cmd -name '*.go') \
-	  $(shell find ../felix -name '*.go') \
-	  $(shell find ../app-policy -name '*.go') \
-	  $(shell find ../typha -name '*.go') \
-	  $(shell find ../felix -name '*.[ch]') \
-	  $(shell find ../libcalico-go -name '*.go') \
-	  $(shell find ../goldmane -name '*.go') \
-	  $(shell find ../confd -name '*.go')
+## SRC_FILES is auto-populated from local-deps.txt by lib.Makefile.
+## Append non-Go sources that also affect the build.
+SRC_FILES += $(shell find ../felix -name '*.[ch]')
 
 ## Clean enough that a new release build will be clean
 clean: clean-windows
@@ -159,7 +155,7 @@ clean: clean-windows
 	find . -name '.*.published*' -type f -delete
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
-	rm -rf $(REMOTE_DEPS)
+	rm -rf $(BUILD_DEPS)
 	rm -rf filesystem/included-source
 	rm -rf tests/k8st/infra/operator
 	rm -rf dist
@@ -262,13 +258,14 @@ dist/LICENSE: ../LICENSE.md
 	mkdir -p dist
 	cp ../LICENSE.md $@
 
-image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
-$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
+image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER) | register
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
 	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
 	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
