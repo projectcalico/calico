@@ -89,6 +89,7 @@ protobuf:
 generate:
 	$(MAKE) gen-semaphore-yaml
 	$(MAKE) gen-deps-files
+	$(MAKE) gen-local-deps-files
 	$(MAKE) protobuf
 	$(MAKE) -C lib gen-files
 	$(MAKE) -C api gen-files
