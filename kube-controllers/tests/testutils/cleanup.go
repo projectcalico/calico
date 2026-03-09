@@ -18,14 +18,15 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -117,13 +118,13 @@ func cleanupK8sPods(ctx context.Context, k8sClient kubernetes.Interface) {
 		if err := k8sClient.CoreV1().Pods(ns.Name).DeleteCollection(ctx, metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{}); err != nil {
 			log.WithError(err).WithField("namespace", ns.Name).Warn("Failed to delete pods during cleanup")
 		}
-		Eventually(func() bool {
+		waitForDeletion(30*time.Second, 500*time.Millisecond, func() (bool, error) {
 			pods, err := k8sClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{})
 			if err != nil {
-				return false
+				return false, err
 			}
-			return len(pods.Items) == 0
-		}, 30*time.Second, 500*time.Millisecond).Should(BeTrue(), "Timed out waiting for pods to be deleted in namespace %s", ns.Name)
+			return len(pods.Items) == 0, nil
+		})
 	}
 }
 
@@ -187,13 +188,26 @@ func cleanupK8sNamespaces(ctx context.Context, k8sClient kubernetes.Interface) {
 		log.WithError(err).Warn("Failed to list namespaces during cleanup")
 		return
 	}
+	var deleted []string
 	for _, ns := range nsList.Items {
 		if ns.Name == "default" || ns.Name == "kube-system" || ns.Name == "kube-public" || ns.Name == "kube-node-lease" {
 			continue
 		}
 		if err := k8sClient.CoreV1().Namespaces().Delete(ctx, ns.Name, metav1.DeleteOptions{}); err != nil {
 			log.WithError(err).WithField("namespace", ns.Name).Debug("Failed to delete namespace during cleanup")
+		} else {
+			deleted = append(deleted, ns.Name)
 		}
+	}
+	for _, name := range deleted {
+		n := name
+		waitForDeletion(30*time.Second, 500*time.Millisecond, func() (bool, error) {
+			_, err := k8sClient.CoreV1().Namespaces().Get(ctx, n, metav1.GetOptions{})
+			if k8serrors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		})
 	}
 }
 
@@ -229,10 +243,23 @@ func cleanupIPPools(ctx context.Context, c client.Interface) {
 		log.WithError(err).Warn("Failed to list IP pools during cleanup")
 		return
 	}
+	var deleted []string
 	for _, pool := range pools.Items {
 		if _, err := c.IPPools().Delete(ctx, pool.Name, options.DeleteOptions{}); err != nil {
 			log.WithError(err).WithField("pool", pool.Name).Debug("Failed to delete IP pool during cleanup")
+		} else {
+			deleted = append(deleted, pool.Name)
 		}
+	}
+	for _, name := range deleted {
+		n := name
+		waitForDeletion(30*time.Second, 500*time.Millisecond, func() (bool, error) {
+			_, err := c.IPPools().Get(ctx, n, options.GetOptions{})
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				return true, nil
+			}
+			return false, err
+		})
 	}
 }
 
@@ -316,6 +343,28 @@ func cleanupCalicoNetworkPolicies(ctx context.Context, c client.Interface) {
 	for _, np := range nsList.Items {
 		if _, err := c.NetworkPolicies().Delete(ctx, np.Namespace, np.Name, options.DeleteOptions{}); err != nil {
 			log.WithError(err).WithField("policy", np.Name).Debug("Failed to delete Calico NetworkPolicy during cleanup")
+		}
+	}
+}
+
+// waitForDeletion polls until checkGone returns true or the timeout expires.
+func waitForDeletion(timeout, interval time.Duration, checkGone func() (bool, error)) {
+	deadline := time.After(timeout)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-deadline:
+			log.Warn("Timed out waiting for resource deletion during cleanup")
+			return
+		case <-ticker.C:
+			gone, err := checkGone()
+			if err != nil {
+				log.WithError(err).Debug("Error checking resource deletion")
+			}
+			if gone {
+				return
+			}
 		}
 	}
 }
