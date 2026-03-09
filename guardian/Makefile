@@ -70,12 +70,12 @@ $(GUARDIAN_CONTAINER_CREATED): docker-image/guardian/Dockerfile $(BINDIR)/guardi
 .PHONY: ut
 ## Run only Unit Tests.
 ut:
-	$(DOCKER_GO_BUILD) go test ./pkg/... -cover -count 1
+	$(DOCKER_GO_BUILD) go test -race ./pkg/... -cover -count 1
 
 .PHONY: ut
 ## Run only Unit Tests.
 fv:
-	$(DOCKER_GO_BUILD) go test ./tests/fv/... -cover -count 1
+	$(DOCKER_GO_BUILD) go test -race ./tests/fv/... -cover -count 1
 
 ##########################################################################################
 # CI/CD
