@@ -440,7 +440,6 @@ func TestCompactEqualsRegular(t *testing.T) {
 	}
 }
 
-
 func TestCompactManyKeys(t *testing.T) {
 	unsafeTestOnlyReset()
 	// Create a map with many keys and verify the compact representation.
