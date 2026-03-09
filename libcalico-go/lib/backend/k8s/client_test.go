@@ -1112,8 +1112,11 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing all Tiers, using an invalid revision", func() {
-			// Use a short timeout context - the API server will wait for the invalid (too-high)
-			// resource version to appear, which would take ~43s with the default timeout.
+			// Prepend "1" to make a resource version far higher than anything in the datastore.
+			// The API server will wait for this version to become available before timing out
+			// with a 504, which would take ~43s with the default timeout. Use a short context
+			// to avoid waiting that long.
+			// See: https://kubernetes.io/docs/reference/using-api/api-concepts/#unavailable-resource-versions
 			shortCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 			invalidRev := fmt.Sprintf("1%s", kvp2b.Revision)
