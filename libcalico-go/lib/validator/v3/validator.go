@@ -1300,19 +1300,19 @@ func validateRule(structLevel validator.StructLevel) {
 	if rule.Protocol == nil {
 		if !numorstring.AllPortsAreNamed(rule.Source.Ports) {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-				"SrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+				"Source.Ports", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
 		if !numorstring.AllPortsAreNamed(rule.Source.NotPorts) {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-				"NotSrcPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+				"Source.NotPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
 		if !numorstring.AllPortsAreNamed(rule.Destination.Ports) {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-				"DstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+				"Destination.Ports", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
 		if !numorstring.AllPortsAreNamed(rule.Destination.NotPorts) {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-				"NotDstPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+				"Destination.NotPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
 	} else { // Protocol != nil
 		if !rule.Protocol.SupportsPorts() {
