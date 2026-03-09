@@ -148,7 +148,7 @@ bin/list-gnp: examples/list-gnp/main.go
 .PHONY:ut
 ut: setup-envtest
 	$(DOCKER_RUN) \
-		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
+		-v $$(ls -d $(ENVTEST_DIR)/k8s/$(ENVTEST_K8S_MINOR)*-$(BUILDOS)-$(BUILDARCH)):/envtest:ro \
 		-e KUBEBUILDER_ASSETS=/envtest \
 		$(CALICO_BUILD) \
 		sh -c 'go test -count=1 ./...'

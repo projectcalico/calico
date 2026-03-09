@@ -1401,7 +1401,8 @@ stop-k8s-controller-manager:
 ENVTEST_DIR ?= $(CURDIR)/hack/test/envtest
 # Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
 # Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
-ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+ENVTEST_K8S_MINOR ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2)
+ENVTEST_K8S_VERSION ?= $(ENVTEST_K8S_MINOR).x
 ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
 
 ## Download envtest binaries (kube-apiserver, etcd) for use by tests that use controller-runtime envtest.
