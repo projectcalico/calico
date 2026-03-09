@@ -292,7 +292,15 @@ func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
 }
 
 // OnTimerPop is called by the main loop when a timer fires for a workload.
+// The timer may fire just before stopElevatedRoutingTimer() is called, so we
+// guard against stale deliveries by checking the FSM still exists and is in
+// TimeWait before driving it.
 func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
+	fsm, exists := m.fsms[id]
+	if !exists || fsm.currentState != liveMigrationStateTimeWait {
+		logrus.WithField("id", id).Debug("Ignoring stale timer pop for workload not in TimeWait")
+		return
+	}
 	m.executeFSM(id, liveMigrationInputTimerPop)
 }
 
@@ -301,7 +309,9 @@ func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 // goroutine: it returns after the first detection or when the handle is closed.
 func detectGARP(logCtx *logrus.Entry, id types.WorkloadEndpointID,
 	handle garpHandle, garpC chan<- types.WorkloadEndpointID) {
-	defer handle.Close()
+	// Note: handle is NOT defer-closed here. The FSM owns the handle lifecycle via
+	// stopGARPDetection(), which closes the handle and causes packetSource.Packets() to return,
+	// ending this goroutine.
 	packetSource := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)
 	for packet := range packetSource.Packets() {
 		if isGARPOrRARP(packet) {

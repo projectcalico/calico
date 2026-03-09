@@ -32,9 +32,9 @@ const EPCompDataKindLiveMigration = EndpointComputedDataKind("LiveMigration")
 type sourceOrTarget int
 
 const (
-	SOURCE sourceOrTarget = iota
-	TARGET
-	SOURCE_OR_TARGET
+	source sourceOrTarget = iota
+	target
+	numSourceOrTarget
 )
 
 // LiveMigrationCalculator tracks local workload endpoints and LiveMigration resources and
@@ -45,7 +45,7 @@ type LiveMigrationCalculator struct {
 	onEndpointComputedData EndpointComputedDataUpdater
 	weps                   map[types.NamespacedName]*wepData
 	liveMigrations         map[model.ResourceKey]internalapi.LiveMigration
-	directNameKeys         [SOURCE_OR_TARGET]map[types.NamespacedName]set.Set[model.ResourceKey]
+	directNameKeys         [numSourceOrTarget]map[types.NamespacedName]set.Set[model.ResourceKey]
 	selectorKeys           map[string]set.Set[model.ResourceKey]
 
 	// pendingSelectorMatches tracks WEPs that were matched by a computed selector callback
@@ -61,7 +61,7 @@ type wepData struct {
 	// Keys of LiveMigration resources that directly say this WEP is a live migration source or
 	// target.  Normally there should only be one LiveMigration resource mentioning a given WEP,
 	// i.e. in the union of both these sets.  But we've coded to allow for transient overlaps.
-	directNameKeys [SOURCE_OR_TARGET]set.Set[model.ResourceKey]
+	directNameKeys [numSourceOrTarget]set.Set[model.ResourceKey]
 
 	// Whether there is a current LiveMigration resource with destination selector matching this
 	// WEP (as determined by the active rules calculator).
@@ -72,10 +72,10 @@ func (wepData *wepData) liveMigrationRole() proto.LiveMigrationRole {
 	if wepData.targetSelectorMatching {
 		return proto.LiveMigrationRole_TARGET
 	}
-	if wepData.directNameKeys[TARGET].Len() > 0 {
+	if wepData.directNameKeys[target].Len() > 0 {
 		return proto.LiveMigrationRole_TARGET
 	}
-	if wepData.directNameKeys[SOURCE].Len() > 0 {
+	if wepData.directNameKeys[source].Len() > 0 {
 		return proto.LiveMigrationRole_SOURCE
 	}
 	return proto.LiveMigrationRole_NO_ROLE
@@ -90,7 +90,7 @@ func NewLiveMigrationCalculator(
 		onEndpointComputedData: onEndpointComputedDataUpdater,
 		weps:                   map[types.NamespacedName]*wepData{},
 		liveMigrations:         map[model.ResourceKey]internalapi.LiveMigration{},
-		directNameKeys: [SOURCE_OR_TARGET]map[types.NamespacedName]set.Set[model.ResourceKey]{
+		directNameKeys: [numSourceOrTarget]map[types.NamespacedName]set.Set[model.ResourceKey]{
 			map[types.NamespacedName]set.Set[model.ResourceKey]{},
 			map[types.NamespacedName]set.Set[model.ResourceKey]{},
 		},
@@ -190,16 +190,16 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			// First time we're seeing this WEP.
 			wepData := &wepData{
 				key: key,
-				directNameKeys: [SOURCE_OR_TARGET]set.Set[model.ResourceKey]{
+				directNameKeys: [numSourceOrTarget]set.Set[model.ResourceKey]{
 					set.New[model.ResourceKey](),
 					set.New[model.ResourceKey](),
 				},
 			}
-			if lmc.directNameKeys[SOURCE][namespacedName] != nil {
-				wepData.directNameKeys[SOURCE].AddSet(lmc.directNameKeys[SOURCE][namespacedName])
+			if lmc.directNameKeys[source][namespacedName] != nil {
+				wepData.directNameKeys[source].AddSet(lmc.directNameKeys[source][namespacedName])
 			}
-			if lmc.directNameKeys[TARGET][namespacedName] != nil {
-				wepData.directNameKeys[TARGET].AddSet(lmc.directNameKeys[TARGET][namespacedName])
+			if lmc.directNameKeys[target][namespacedName] != nil {
+				wepData.directNameKeys[target].AddSet(lmc.directNameKeys[target][namespacedName])
 			}
 			if lmc.pendingSelectorMatches.Contains(namespacedName) {
 				wepData.targetSelectorMatching = true
@@ -218,14 +218,14 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 		}
 
 		// If we already had a LiveMigration with this key, get the names it indicated.
-		old := [SOURCE_OR_TARGET]types.NamespacedName{}
+		old := [numSourceOrTarget]types.NamespacedName{}
 		oldSelector := ""
 		if existing, ok := lmc.liveMigrations[key]; ok {
 			if existing.Spec.Source != nil {
-				old[SOURCE] = *existing.Spec.Source
+				old[source] = *existing.Spec.Source
 			}
 			if existing.Spec.Destination != nil && existing.Spec.Destination.NamespacedName != nil {
-				old[TARGET] = *existing.Spec.Destination.NamespacedName
+				old[target] = *existing.Spec.Destination.NamespacedName
 			}
 			if existing.Spec.Destination != nil && existing.Spec.Destination.Selector != nil {
 				oldSelector = *existing.Spec.Destination.Selector
@@ -233,16 +233,16 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 		}
 
 		// Now check the new LiveMigration state.
-		new := [SOURCE_OR_TARGET]types.NamespacedName{}
+		new := [numSourceOrTarget]types.NamespacedName{}
 		newSelector := ""
 		if update.Value != nil {
 			lm := update.Value.(*internalapi.LiveMigration)
 			lmc.liveMigrations[key] = *lm
 			if lm.Spec.Source != nil {
-				new[SOURCE] = *lm.Spec.Source
+				new[source] = *lm.Spec.Source
 			}
 			if lm.Spec.Destination != nil && lm.Spec.Destination.NamespacedName != nil {
-				new[TARGET] = *lm.Spec.Destination.NamespacedName
+				new[target] = *lm.Spec.Destination.NamespacedName
 			}
 			if lm.Spec.Destination != nil && lm.Spec.Destination.Selector != nil {
 				newSelector = *lm.Spec.Destination.Selector
@@ -260,7 +260,7 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 		// and its target; and will never transition from referencing a WEP as
 		// source to referencing that same WEP as target, or vice versa.  Hence it's
 		// correct to process the source and target fields independently here.
-		for sourceOrTarget := range SOURCE_OR_TARGET {
+		for sourceOrTarget := range numSourceOrTarget {
 			if new[sourceOrTarget] != old[sourceOrTarget] {
 				if old[sourceOrTarget].Name != "" {
 					lmc.unrefDirectName(old[sourceOrTarget], key, sourceOrTarget)
@@ -297,7 +297,7 @@ func (lmc *LiveMigrationCalculator) withRoleUpdateIfNeeded(wepData *wepData, upd
 }
 
 func (lmc *LiveMigrationCalculator) indicateRole(key model.WorkloadEndpointKey, role proto.LiveMigrationRole) {
-	lmc.onEndpointComputedData(key, EPCompDataKindLiveMigration, &LiveMigrationRole{role: role})
+	lmc.onEndpointComputedData(key, EPCompDataKindLiveMigration, &liveMigrationRole{role: role})
 }
 
 func (lmc *LiveMigrationCalculator) OnPolicyMatch(_ model.PolicyKey, _ model.EndpointKey)        {}
@@ -342,10 +342,10 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, ep
 	}
 }
 
-type LiveMigrationRole struct {
+type liveMigrationRole struct {
 	role proto.LiveMigrationRole
 }
 
-func (lmr *LiveMigrationRole) ApplyTo(wep *proto.WorkloadEndpoint) {
+func (lmr *liveMigrationRole) ApplyTo(wep *proto.WorkloadEndpoint) {
 	wep.LiveMigrationRole = lmr.role
 }

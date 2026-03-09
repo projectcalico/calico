@@ -229,7 +229,7 @@ type NftablesTable struct {
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
 
-	// ourChainsRegexp matches the names of chains that belong to this specicific table.
+	// ourChainsRegexp matches the names of chains that belong to this specific table.
 	ourChainsRegexp *regexp.Regexp
 
 	// Record when we did our most recent reads and writes of the table.  We use these to
@@ -429,6 +429,8 @@ func NewARPTable(
 	options TableOptions,
 	required bool,
 ) *NftablesTable {
+	// Match dynamically-programmed chains ("cali-arp-*" for workload and dispatch chains)
+	// and base chains ("filter-OUTPUT", prefixed by the table layer name).
 	ourChainsRegexp := regexp.MustCompile("^(cali|filter)-.*")
 
 	inserts := map[string][]generictables.Rule{}

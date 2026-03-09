@@ -48,7 +48,7 @@ func newTestLMCEnv() *testLMCEnv {
 	env.lmc = NewLiveMigrationCalculator(
 		arc,
 		func(key model.WorkloadEndpointKey, kind EndpointComputedDataKind, data EndpointComputedData) {
-			lmr := data.(*LiveMigrationRole)
+			lmr := data.(*liveMigrationRole)
 			env.roleEvents = append(env.roleEvents, roleEvent{key: key, role: lmr.role})
 		},
 	)

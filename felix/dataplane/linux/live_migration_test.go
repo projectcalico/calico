@@ -86,8 +86,6 @@ func wepRemove(id types.WorkloadEndpointID) *proto.WorkloadEndpointRemove {
 // --- Section 1: Exhaustive FSM transition table ---
 
 func TestFSMTransitionTable(t *testing.T) {
-	g := NewWithT(t)
-
 	tests := []struct {
 		name      string
 		from      liveMigrationState
@@ -129,6 +127,7 @@ func TestFSMTransitionTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
 			fsm, m := testFSM(tt.from)
 			fsm.handleInput(tt.input)
 
