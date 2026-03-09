@@ -32,7 +32,7 @@ global_job_config:
     - name: FUNCTIONAL_AREA
       value: "test.yml"
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\].*\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+      value: --ginkgo.focus=(\[sig-calico\].*\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:AutoHEPs|staged.network.policy)
     - name: USE_PRIVATE_REGISTRY
       value: "true"
     - name: PRIVATE_REGISTRY

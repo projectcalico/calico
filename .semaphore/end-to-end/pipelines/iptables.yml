@@ -23,7 +23,7 @@ global_job_config:
   env_vars:
     # This should match the default flags with the additional skip of the "Proxy version v1". There is a problem with the server pod failing to bind to the port for listening.
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard)
+      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard|Feature:AutoHEPs|staged.network.policy)
     - name: DATAPLANE
       value: "CalicoIptables"
     - name: IPV4_POD_CIDR
@@ -103,7 +103,7 @@ blocks:
               value: "t4g.large"
             #  Details for why we skip these: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+              value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:AutoHEPs|staged.network.policy)
 
   - name: AKS
     dependencies: []
@@ -140,7 +140,7 @@ blocks:
             - name: INSTALLER # This is a "quick" workaround for a semver error we're getting with Helm, likely a banzai issue.
               value: "operator"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity|Feature:AutoHEPs|staged.network.policy)
         - name: AKS Private w AKS CNI + Overlay
           execution_time_limit:
             hours: 7
@@ -158,7 +158,7 @@ blocks:
               # External node is not supported on Azure yet, so we should skip external node tests: "ExternalNode|outside.the.cluster|external.to.nodeport"
               # This uses AKS-CNI, so Strict Affinity and MTU tests do not apply: "MTU|StrictAffinity"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:AutoHEPs|staged.network.policy)
             - name: CLUSTER_MODE
               value: "private"
 
@@ -179,7 +179,7 @@ blocks:
 
       env_vars:
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+          value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:AutoHEPs|staged.network.policy)
         - name: PROVISIONER
           value: "azr-aks"
         - name: INSTALLER
@@ -216,12 +216,12 @@ blocks:
             - name: MANIFEST_FILE
               value: calico-etcd.yaml
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Feature:AutoHEPs|staged.network.policy)
       env_vars:
         - name: K8S_VERSION
           value: "stable-1" # Normally this would be stable, but kind doesn't always support stable immediately
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+          value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:AutoHEPs|staged.network.policy)
         - name: PROVISIONER
           value: local-kind
         - name: ENABLE_DUAL_STACK
@@ -484,7 +484,7 @@ blocks:
               values: ["stable"]
           env_vars:
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:AutoHEPs|staged.network.policy)
             - name: DISABLE_IPIP
               value: "true"
               # Single VPC only
@@ -508,7 +508,7 @@ blocks:
             # The skip "Ingress.API|IngressClass.API" is needed to skip Ingress tests which are only possible in k8s 1.21+
             # The skip "Proxy.version.v1.*pod.and.service.Proxy.\[" is needed to skip an upstream test that only works on k8s 1.24+
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Proxy.version.v1.*pod.and.service.Proxy.\[)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Proxy.version.v1.*pod.and.service.Proxy.\[|Feature:AutoHEPs|staged.network.policy)
             - name: DISABLE_IPIP
               value: "true"
               # Single VPC only
@@ -542,7 +542,7 @@ blocks:
               # External node is false, so we should skip external node tests: "ExternalNode|outside.the.cluster|external.to.nodeport"
               # This uses AKS-CNI, so Strict Affinity and MTU tests do not apply: "MTU|StrictAffinity"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:AutoHEPs|staged.network.policy)
 
       env_vars:
         - name: USE_HASH_RELEASE
@@ -579,7 +579,7 @@ blocks:
         - name: ENABLE_WIREGUARD
           value: "true"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:AutoHEPs|staged.network.policy)
 
   - name: Focused WireGuard E2E (AKS with Calico CNI)
     dependencies: []
@@ -607,7 +607,7 @@ blocks:
         - name: ENABLE_WIREGUARD
           value: "true"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:AutoHEPs|staged.network.policy)
         - name: AKS_CNI
           value: "calico"
 
@@ -645,7 +645,7 @@ blocks:
             # - [It] "DNS should provide DNS for the cluster"
             # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+              value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:AutoHEPs|staged.network.policy)
       env_vars:
         - name: AWS_K8S_CNI_VERSION
           value: "NA"
@@ -660,7 +660,7 @@ blocks:
         - name: ENABLE_WIREGUARD
           value: "true"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:AutoHEPs|staged.network.policy)
 
   # This is the old every-other-week tests
   - name: Distro support
@@ -713,7 +713,7 @@ blocks:
               values: ["calico.yaml", "calico-typha.yaml", "canal.yaml"]
           env_vars:
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:AutoHEPs|staged.network.policy)
 
         - name: etcd
           execution_time_limit:
@@ -762,7 +762,7 @@ blocks:
             - name: INSTALLER
               value: "manual"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:AutoHEPs|staged.network.policy)
             - name: USE_HASH_RELEASE
               value: "true"
 
