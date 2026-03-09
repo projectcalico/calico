@@ -1070,6 +1070,7 @@ blocks:
     task:
       prologue:
         commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
           - cd third_party/istio-ztunnel
       jobs:
         - name: "Linux amd64"
@@ -1086,6 +1087,7 @@ blocks:
           type: s1-aws-arm64-2
       prologue:
         commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
           - cd third_party/istio-ztunnel
       jobs:
         - name: "Linux arm64"
@@ -1100,6 +1102,7 @@ blocks:
     task:
       prologue:
         commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
           - cd third_party/istio-ztunnel
       jobs:
         - name: "Linux multi-arch manifest"
@@ -1113,6 +1116,7 @@ blocks:
     task:
       prologue:
         commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
           - cd istio
       jobs:
         - name: "Istio: CI"
