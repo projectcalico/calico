@@ -160,7 +160,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var configParams *config.Config
 	var typhaDiscoverer *discovery.Discoverer
 	var numClientsCreated int
-	var k8sClientSet *kubernetes.Clientset
+	var k8sClientSet kubernetes.Interface
 	var kubernetesVersion string
 configRetry:
 	for {
