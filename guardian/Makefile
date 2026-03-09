@@ -22,9 +22,7 @@ include ../lib.Makefile
 BRANCH_NAME ?= $(PIN_BRANCH)
 
 BINDIR        ?= bin
-SRC_FILES = $(shell find . -name '*.go') \
-		$(shell find ../api/pkg -name '*.go') \
-		$(shell find ../libcalico-go/lib/logutils -name '*.go')
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 
 ##########################################################################################
 # BUILD
@@ -59,7 +57,8 @@ sub-image-%:
 image: $(BUILD_IMAGES)
 
 $(GUARDIAN_IMAGE): $(GUARDIAN_CONTAINER_CREATED)
-$(GUARDIAN_CONTAINER_CREATED): docker-image/guardian/Dockerfile $(BINDIR)/guardian-$(ARCH)
+IMAGE_DEPS = docker-image/guardian/Dockerfile
+$(GUARDIAN_CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/guardian-$(ARCH)
 	$(DOCKER_BUILD) -t $(GUARDIAN_IMAGE):latest-$(ARCH) -f docker-image/guardian/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(GUARDIAN_IMAGE)
 	touch $@

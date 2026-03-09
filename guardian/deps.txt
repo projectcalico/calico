@@ -1,6 +1,5 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
-This file contains the list of modules that this package depends on
-in order to trigger CI on changes
+Run 'make gen-deps-files' to regenerate.
 
 go 1.25.7
 github.com/beorn7/perks v1.0.1
@@ -49,3 +48,20 @@ sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 sigs.k8s.io/yaml v1.6.0
+
+local:api/pkg/apis/projectcalico/v3
+local:api/pkg/lib/numorstring
+local:crypto/pkg/tls
+local:guardian/cmd/guardian
+local:guardian/pkg/asyncutil
+local:guardian/pkg/config
+local:guardian/pkg/conn
+local:guardian/pkg/cryptoutils
+local:guardian/pkg/daemon
+local:guardian/pkg/server
+local:guardian/pkg/tunnel
+local:lib/std/chanutil
+local:lib/std/cryptoutils
+local:lib/std/time
+local:libcalico-go/lib/logutils
+local:pkg/buildinfo

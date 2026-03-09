@@ -5,7 +5,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/app-policy
 ###############################################################################
 
 GENERATED_FILES=../felix/proto/felixbackend.pb.go proto/healthz.pb.go
-SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
@@ -18,6 +17,9 @@ BUILD_IMAGES ?= $(DIKASTES_IMAGE)
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ##############################################################################
 include ../lib.Makefile
+
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
+SRC_FILES += $(GENERATED_FILES)
 
 CONTAINER_CREATED=.image.created-$(ARCH)
 CONTAINER_FIPS_CREATED=.image.created-$(ARCH)-fips
@@ -127,12 +129,13 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 $(DIKASTES_IMAGE): $(CONTAINER_MARKER)
-$(CONTAINER_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH) bin/LICENSE
+# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
+$(CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH) bin/LICENSE | register
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(CONTAINER_FIPS_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH) bin/LICENSE
+$(CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH) bin/LICENSE | register
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
