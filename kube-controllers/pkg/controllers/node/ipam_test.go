@@ -2003,7 +2003,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			scalePodInformer := scaleFactory.Core().V1().Pods().Informer()
 			scaleNodeInformer := scaleFactory.Core().V1().Nodes().Informer()
 			scaleFactory.Start(stopChan)
-			cache.WaitForCacheSync(stopChan, scalePodInformer.HasSynced, scaleNodeInformer.HasSynced)
+			Expect(cache.WaitForCacheSync(stopChan, scalePodInformer.HasSynced, scaleNodeInformer.HasSynced)).To(BeTrue(), "informer caches failed to sync")
 
 			scalePodIndexer = scalePodInformer.GetIndexer()
 			scaleNodeIndexer = scaleNodeInformer.GetIndexer()

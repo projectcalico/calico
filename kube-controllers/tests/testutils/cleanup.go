@@ -101,6 +101,15 @@ func cleanupK8sNodes(ctx context.Context, k8sClient kubernetes.Interface) {
 			log.WithError(err).WithField("node", node.Name).Debug("Failed to delete k8s node during cleanup")
 		}
 	}
+	if len(nodes.Items) > 0 {
+		waitForDeletion(10*time.Second, 500*time.Millisecond, func() (bool, error) {
+			nl, err := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return false, err
+			}
+			return len(nl.Items) == 0, nil
+		})
+	}
 }
 
 func cleanupK8sPods(ctx context.Context, k8sClient kubernetes.Interface) {
