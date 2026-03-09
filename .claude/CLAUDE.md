@@ -108,6 +108,8 @@ make gen-manifests          # Update manifests/ from helm charts
 make gen-semaphore-yaml     # Regenerate .semaphore/semaphore.yml from templates
 ```
 
+**After modifying API types** (e.g., `api/pkg/apis/projectcalico/v3/felixconfig.go`), run `make generate` — it regenerates OpenAPI specs, CRDs, deep copy, Felix config docs, manifests, and runs `fix-changed`. See also `hack/docs/adding-an-api.md`.
+
 ## Generated Files (DO NOT edit directly)
 
 | Generated file | Edit this instead | Regenerate with |
