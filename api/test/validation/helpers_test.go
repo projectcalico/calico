@@ -31,20 +31,6 @@ func uniqueName(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, nameCounter.Add(1))
 }
 
-// mustCreate creates an object and registers cleanup to delete it.
-func mustCreate(t *testing.T, obj client.Object) {
-	t.Helper()
-	ctx := context.Background()
-	if err := testClient.Create(ctx, obj); err != nil {
-		t.Fatalf("expected creation to succeed but got: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := testClient.Delete(context.Background(), obj); err != nil {
-			t.Errorf("failed to clean up object: %v", err)
-		}
-	})
-}
-
 // expectCreateFails asserts that creating the object fails and the error contains msgSubstring.
 func expectCreateFails(t *testing.T, obj client.Object, msgSubstring string) {
 	t.Helper()
