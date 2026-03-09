@@ -24,7 +24,7 @@ import (
 )
 
 // DeleteNamespace deletes the namespace and waits for it to complete.
-func DeleteNamespace(client *kubernetes.Clientset, name string) {
+func DeleteNamespace(client kubernetes.Interface, name string) {
 	var zero int64
 	err := client.CoreV1().Namespaces().Delete(context.Background(), name, metav1.DeleteOptions{
 		GracePeriodSeconds: &zero,
