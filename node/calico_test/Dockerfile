@@ -63,7 +63,7 @@ RUN apk add --no-cache \
     tshark
 
 # Install etcdctl
-RUN curl -sfL https://github.com/coreos/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | \
+RUN curl -sSfL --retry 5 https://github.com/coreos/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | \
     tar xz --strip-components 1 -C /usr/local/bin etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl
 
 COPY requirements.txt /requirements.txt
