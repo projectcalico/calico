@@ -129,12 +129,6 @@ var _ = describe.CalicoDescribe(
 			defaultDenyGNP.Spec.NamespaceSelector = testNamespacesOnly
 			err = cli.Create(ctx, defaultDenyGNP)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(ctx, defaultDenyGNP)
-				if err != nil {
-					framework.Failf("failed to delete resource: %s", err)
-				}
-			}()
 
 			// Create a GlobalNetworkPolicy that allows any pods access to DNS. This is needed so
 			// that pods can lookup service IPs by service name in subsequent steps.
@@ -165,12 +159,6 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(ctx, allowEgressToDNS)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(ctx, allowEgressToDNS)
-				if err != nil {
-					framework.Failf("failed to delete resource: %s", err)
-				}
-			}()
 
 			By("Checking the default deny is functioning")
 			checker.ResetExpectations()
@@ -186,12 +174,6 @@ var _ = describe.CalicoDescribe(
 			isolateNamespaceA := newNamespaceIsolationPolicy(policyName, nsA.Name, namespaceASelector, namespaceASelector)
 			err = cli.Create(ctx, isolateNamespaceA)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(ctx, isolateNamespaceA)
-				if err != nil {
-					framework.Failf("failed to delete resource: %s", err)
-				}
-			}()
 
 			// Create a policy which prevents ingress and egress traffic to / from pods in
 			// namespace B, unless the traffic is from / to another pod in namespace B.
@@ -201,12 +183,6 @@ var _ = describe.CalicoDescribe(
 			isolateNamespaceB := newNamespaceIsolationPolicy(policyNameB, nsB.Name, namespaceBSelector, namespaceBSelector)
 			err = cli.Create(ctx, isolateNamespaceB)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(ctx, isolateNamespaceB)
-				if err != nil {
-					framework.Failf("failed to delete resource: %s", err)
-				}
-			}()
 
 			By("Checking clients can only communicate within their own Namespace")
 			checker.ResetExpectations()
@@ -226,10 +202,6 @@ var _ = describe.CalicoDescribe(
 			defaultDeny := newDefaultDenyIngressPolicy(ns.Name)
 			err = cli.Create(ctx, defaultDeny)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(ctx, defaultDeny)
-				Expect(err).NotTo(HaveOccurred())
-			}()
 
 			// Verify the default deny.
 			checker.ExpectFailure(client1, server1.ClusterIP())
@@ -269,12 +241,6 @@ var _ = describe.CalicoDescribe(
 
 			err = cli.Create(ctx, np)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(ctx, np)
-				if err != nil {
-					framework.Failf("failed to delete resource: %s", err)
-				}
-			}()
 
 			// Verify the policy allows traffic.
 			checker.ResetExpectations()
@@ -291,10 +257,6 @@ var _ = describe.CalicoDescribe(
 			defaultDeny := newDefaultDenyIngressPolicy(ns.Name)
 			err := cli.Create(ctx, defaultDeny)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(ctx, defaultDeny)
-				Expect(err).NotTo(HaveOccurred())
-			}()
 			logrus.Info("Applied default-deny policy.")
 
 			// Verify the default deny.
@@ -331,12 +293,6 @@ var _ = describe.CalicoDescribe(
 
 			err = cli.Create(ctx, np)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				err := cli.Delete(ctx, np)
-				if err != nil {
-					framework.Failf("failed to delete resource: %s", err)
-				}
-			}()
 
 			// Verify the policy allows traffic.
 			checker.ResetExpectations()
@@ -368,9 +324,6 @@ var _ = describe.CalicoDescribe(
 
 			err := cli.Create(context.Background(), defaultDeny)
 			Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				Expect(cli.Delete(context.Background(), defaultDeny)).NotTo(HaveOccurred())
-			}()
 
 			By("checking client not able to contact the server since deny egress rule created.")
 			checker.ExpectFailure(client1, server1.ClusterIP())
