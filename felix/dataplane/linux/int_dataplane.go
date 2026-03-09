@@ -359,6 +359,7 @@ type InternalDataplane struct {
 	allManagers             []Manager
 	managersWithRouteTables []ManagerWithRouteTables
 	managersWithRouteRules  []ManagerWithRouteRules
+	managersWithApply       []ManagerWithApply
 	ruleRenderer            rules.RuleRenderer
 
 	// datastoreInSync is set to true after we receive the "in sync" message from the datastore.
@@ -1695,6 +1696,15 @@ type ManagerWithRouteRules interface {
 	GetRouteRules() []routeRules
 }
 
+// ManagerWithApply is a Manager that has a separate Apply() method for work that should
+// happen after IP sets have been written to the dataplane.  This is used by the BPF
+// endpoint manager to ensure that BPF programs are only attached to interfaces after
+// IP sets are up-to-date, preventing spurious deny flow logs.
+type ManagerWithApply interface {
+	Manager
+	Apply() error
+}
+
 type routeRules interface {
 	SetRule(rule *routerule.Rule)
 	RemoveRule(rule *routerule.Rule)
@@ -1732,6 +1742,11 @@ func (d *InternalDataplane) RegisterManager(mgr Manager) {
 	if ok {
 		log.WithField("manager", mgr).Debug("registering ManagerWithRouteRules")
 		d.managersWithRouteRules = append(d.managersWithRouteRules, rulesMgr)
+	}
+	applyMgr, ok := mgr.(ManagerWithApply)
+	if ok {
+		log.WithField("manager", reflect.TypeOf(mgr).Name()).Debug("registering ManagerWithApply")
+		d.managersWithApply = append(d.managersWithApply, applyMgr)
 	}
 	d.allManagers = append(d.allManagers, mgr)
 }
@@ -2734,6 +2749,20 @@ func (d *InternalDataplane) apply() {
 
 	// Wait for the IP sets update to finish.  We can't update iptables until it has.
 	ipSetsWG.Wait()
+
+	// Now that IP sets are in place, apply any managers that need to run after IP sets.
+	// In particular, BPF program attachment must happen after IP set updates so that
+	// policy rules referencing IP sets don't produce spurious denies for newly-added
+	// workloads whose IPs are freshly added to IP sets.
+	for _, mgr := range d.managersWithApply {
+		err := mgr.Apply()
+		if err != nil {
+			log.WithField("manager", reflect.TypeOf(mgr).Name()).WithError(err).Debug(
+				"couldn't apply manager, will try again later")
+			d.dataplaneNeedsSync = true
+		}
+		d.reportHealth()
+	}
 
 	// Update tables, this should sever any references to now-unused IP sets.
 	var reschedDelayMutex sync.Mutex
