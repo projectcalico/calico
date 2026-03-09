@@ -130,18 +130,18 @@ func init() {
 			Protocol:    &protoTCP,
 			NotDstPorts: []numorstring.Port{numorstring.NamedPort("foo")},
 		}, true),
-		Entry("should reject src named ports with no protocol (m)", model.Rule{
+		Entry("should accept src named ports with no protocol (m)", model.Rule{
 			SrcPorts: []numorstring.Port{numorstring.NamedPort("foo")},
-		}, false),
-		Entry("should reject dst named ports with no protocol (m)", model.Rule{
+		}, true),
+		Entry("should accept dst named ports with no protocol (m)", model.Rule{
 			DstPorts: []numorstring.Port{numorstring.NamedPort("foo")},
-		}, false),
-		Entry("should reject !src named ports with no protocol (m)", model.Rule{
+		}, true),
+		Entry("should accept !src named ports with no protocol (m)", model.Rule{
 			NotSrcPorts: []numorstring.Port{numorstring.NamedPort("foo")},
-		}, false),
-		Entry("should reject !dst named ports with no protocol (m)", model.Rule{
+		}, true),
+		Entry("should accept !dst named ports with no protocol (m)", model.Rule{
 			NotDstPorts: []numorstring.Port{numorstring.NamedPort("foo")},
-		}, false),
+		}, true),
 		// Check that we tell the validator to "dive" and validate the port too.
 		Entry("should reject src named ports with min and max (m)", model.Rule{
 			Protocol: &protoTCP,
@@ -753,6 +753,20 @@ func init() {
 					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, false),
+		Entry("should accept Rule with dest named ports and no protocol",
+			api.Rule{
+				Action: "allow",
+				Destination: api.EntityRule{
+					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
+				},
+			}, true),
+		Entry("should accept Rule with !src named ports and no protocol",
+			api.Rule{
+				Action: "allow",
+				Source: api.EntityRule{
+					NotPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+				},
+			}, true),
 		Entry("should reject Rule with invalid port (port 0)",
 			api.Rule{
 				Action:   "allow",
