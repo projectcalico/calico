@@ -57,7 +57,7 @@ var (
 
 type KubeClient struct {
 	// Main Kubernetes clients.
-	ClientSet *kubernetes.Clientset
+	ClientSet kubernetes.Interface
 
 	// Client for interacting with K8S Cluster Network Policy.
 	k8sClusterPolicyClient *netpolicyclient.PolicyV1alpha2Client
@@ -327,6 +327,94 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	}
 
 	return c, nil
+}
+
+// KubeClientOpts provides options for creating a KubeClient from pre-existing clients,
+// allowing dependency injection for testing.
+type KubeClientOpts struct {
+	ClientSet  kubernetes.Interface
+	RESTClient rest.Interface
+	Group      resources.BackingAPIGroup
+	UsePodCIDR bool
+}
+
+// NewKubeClientFromClients creates a new KubeClient from pre-existing clients. This is useful
+// for testing, where you want to inject fake clients rather than connecting to a real API server.
+func NewKubeClientFromClients(opts KubeClientOpts) api.Client {
+	c := &KubeClient{
+		ClientSet:             opts.ClientSet,
+		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
+		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
+		clientsByListType:     make(map[reflect.Type]resources.K8sResourceClient),
+	}
+
+	// Register CRD-backed resources if a REST client was provided.
+	if opts.RESTClient != nil {
+		for _, r := range []struct {
+			kind      string
+			newClient func(rest.Interface, resources.BackingAPIGroup) resources.K8sResourceClient
+		}{
+			{apiv3.KindIPPool, resources.NewIPPoolClient},
+			{apiv3.KindIPReservation, resources.NewIPReservationClient},
+			{apiv3.KindGlobalNetworkPolicy, resources.NewGlobalNetworkPolicyClient},
+			{apiv3.KindStagedGlobalNetworkPolicy, resources.NewStagedGlobalNetworkPolicyClient},
+			{apiv3.KindGlobalNetworkSet, resources.NewGlobalNetworkSetClient},
+			{apiv3.KindNetworkPolicy, resources.NewNetworkPolicyClient},
+			{apiv3.KindStagedNetworkPolicy, resources.NewStagedNetworkPolicyClient},
+			{apiv3.KindStagedKubernetesNetworkPolicy, resources.NewStagedKubernetesNetworkPolicyClient},
+			{apiv3.KindNetworkSet, resources.NewNetworkSetClient},
+			{apiv3.KindTier, resources.NewTierClient},
+			{apiv3.KindBGPPeer, resources.NewBGPPeerClient},
+			{apiv3.KindBGPConfiguration, resources.NewBGPConfigClient},
+			{apiv3.KindFelixConfiguration, resources.NewFelixConfigClient},
+			{apiv3.KindClusterInformation, resources.NewClusterInfoClient},
+			{apiv3.KindHostEndpoint, resources.NewHostEndpointClient},
+			{apiv3.KindKubeControllersConfiguration, resources.NewKubeControllersConfigClient},
+			{apiv3.KindCalicoNodeStatus, resources.NewCalicoNodeStatusClient},
+			{apiv3.KindBlockAffinity, resources.NewBlockAffinityClientV3},
+			{apiv3.KindBGPFilter, resources.NewBGPFilterClient},
+			{apiv3.KindIPAMConfiguration, resources.NewIPAMConfigClientV3},
+		} {
+			c.registerResourceClient(resourceKeyType, resourceListType, r.kind, r.newClient(opts.RESTClient, opts.Group))
+		}
+
+		if !opts.UsePodCIDR {
+			c.registerResourceClient(
+				reflect.TypeFor[model.BlockAffinityKey](),
+				reflect.TypeFor[model.BlockAffinityListOptions](),
+				internalapi.KindBlockAffinity,
+				resources.NewBlockAffinityClientV1(opts.RESTClient, opts.Group),
+			)
+			c.registerResourceClient(
+				reflect.TypeFor[model.IPAMConfigKey](),
+				nil,
+				internalapi.KindIPAMConfig,
+				resources.NewIPAMConfigClientV1(opts.RESTClient, opts.Group),
+			)
+			c.registerResourceClient(
+				reflect.TypeFor[model.BlockKey](),
+				reflect.TypeFor[model.BlockListOptions](),
+				internalapi.KindIPAMBlock,
+				resources.NewIPAMBlockClient(opts.RESTClient, opts.Group),
+			)
+			c.registerResourceClient(
+				reflect.TypeFor[model.IPAMHandleKey](),
+				reflect.TypeFor[model.IPAMHandleListOptions](),
+				internalapi.KindIPAMHandle,
+				resources.NewIPAMHandleClient(opts.RESTClient, opts.Group),
+			)
+		}
+	}
+
+	// Register core Kubernetes API-backed resources.
+	c.registerResourceClient(resourceKeyType, resourceListType, model.KindKubernetesService, resources.NewServiceClient(opts.ClientSet))
+	c.registerResourceClient(resourceKeyType, resourceListType, model.KindKubernetesEndpointSlice, resources.NewKubernetesEndpointSliceClient(opts.ClientSet))
+	c.registerResourceClient(resourceKeyType, resourceListType, internalapi.KindWorkloadEndpoint, resources.NewWorkloadEndpointClient(opts.ClientSet))
+	c.registerResourceClient(resourceKeyType, resourceListType, internalapi.KindNode, resources.NewNodeClient(opts.ClientSet, opts.UsePodCIDR))
+	c.registerResourceClient(resourceKeyType, resourceListType, apiv3.KindProfile, resources.NewProfileClient(opts.ClientSet))
+	c.registerResourceClient(resourceKeyType, resourceListType, model.KindKubernetesNetworkPolicy, resources.NewKubernetesNetworkPolicyClient(opts.ClientSet))
+
+	return c
 }
 
 // deduplicate removes any duplicated values and returns a new slice, keeping the order unchanged

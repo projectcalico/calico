@@ -73,7 +73,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	// tests.
 	var bc bapi.Client
 	var ic Interface
-	var kc *kubernetes.Clientset
+	var kc kubernetes.Interface
 	var reservations *ipamtestutils.FakeReservations
 	BeforeEach(func() {
 		var err error
@@ -4567,11 +4567,11 @@ func deletePool(cidr string) {
 	delete(ipPools.Pools, cidr)
 }
 
-func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) {
+func applyNode(c bapi.Client, kc kubernetes.Interface, host string, labels map[string]string) {
 	ipamtestutils.ApplyNode(c, kc, host, labels)
 }
 
-func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
+func deleteNode(c bapi.Client, kc kubernetes.Interface, host string) {
 	if kc != nil {
 		err := kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
 		if err != nil && !kerrors.IsNotFound(err) {

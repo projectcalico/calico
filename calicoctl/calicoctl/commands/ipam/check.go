@@ -99,7 +99,7 @@ Description:
 
 	// Get a kube-client. If this is a kdd cluster, we can pull this from the backend.
 	// Otherwise, we need to build one ourselves.
-	var kubeClient *kubernetes.Clientset
+	var kubeClient kubernetes.Interface
 	if kc, ok := bc.(*k8s.KubeClient); ok {
 		// Pull from the kdd client.
 		kubeClient = kc.ClientSet
