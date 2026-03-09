@@ -151,6 +151,10 @@ type endpointManager struct {
 	actions      generictables.ActionFactory
 	filterMaps   nftables.MapsDataplane
 
+	// ARP proxy suppression table (nftables ARP family). nil for IPv6.
+	arpTable Table
+	arpMaps  nftables.MapsDataplane
+
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
 	pendingWlEpUpdates         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -165,6 +169,8 @@ type endpointManager struct {
 	activeWlIDToChains               map[types.WorkloadEndpointID][]*generictables.Chain
 	activeWlDispatchChains           map[string]*generictables.Chain
 	activeEPMarkDispatchChains       map[string]*generictables.Chain
+	activeARPChains                  map[types.WorkloadEndpointID][]*generictables.Chain
+	activeARPDispatchChains          map[string]*generictables.Chain
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
 
 	activePolicySelectors map[types.PolicyID]string
@@ -249,6 +255,8 @@ func newEndpointManager(
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
+	arpTable Table,
+	arpMaps nftables.MapsDataplane,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
 		cfg,
@@ -267,6 +275,8 @@ func newEndpointManager(
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsMgr,
+		arpTable,
+		arpMaps,
 	)
 }
 
@@ -287,6 +297,8 @@ func newEndpointManagerWithShims(
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
+	arpTable Table,
+	arpMaps nftables.MapsDataplane,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(cfg.wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -304,6 +316,9 @@ func newEndpointManagerWithShims(
 		wlIfacesRegexp:     wlIfacesRegexp,
 		filterMaps:         filterMaps,
 		bpfEndpointManager: bpfEndpointManager,
+
+		arpTable: arpTable,
+		arpMaps:  arpMaps,
 
 		newMatch: newMatchFn,
 		actions:  actions,
@@ -360,6 +375,8 @@ func newEndpointManagerWithShims(
 		activeHostMangleDispatchChains: map[string]*generictables.Chain{},
 		activeHostRawDispatchChains:    map[string]*generictables.Chain{},
 		activeEPMarkDispatchChains:     map[string]*generictables.Chain{},
+		activeARPChains:                map[types.WorkloadEndpointID][]*generictables.Chain{},
+		activeARPDispatchChains:        map[string]*generictables.Chain{},
 		needToCheckDispatchChains:      true, // Need to do start-of-day update.
 		needToCheckEndpointMarkChains:  true, // Need to do start-of-day update.
 		needToCheckLocalBGPPeerIP:      true, // Need to do start-of-day update.
@@ -707,6 +724,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.callbacks.InvokeRemoveWorkload(oldWorkload)
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
+		m.removeWorkloadARPChains(id)
 		delete(m.pendingLiveMigrationStates, id)
 		if oldWorkload != nil {
 			m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
@@ -777,6 +795,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 				}
 				adminUp := workload.State == "active"
+				m.updateWorkloadARPChains(id, workload)
 				if !m.cfg.bpfEnabled {
 					m.updateWorkloadEndpointChains(id, workload, adminUp)
 
@@ -899,6 +918,37 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		}
 	}
 
+	// Update ARP dispatch chains unconditionally (works across all dataplane modes).
+	if m.arpTable != nil && m.needToCheckDispatchChains {
+		// Build ARP dispatch vmap: ifaceName → "goto cali-arp-<ifname>"
+		arpMappings := make(map[string][]string)
+		for _, wl := range m.activeWlEndpoints {
+			if len(wl.Ipv4Nets) == 0 {
+				continue
+			}
+			chainName := rules.EndpointChainName(rules.WorkloadARPPfx, wl.Name, nftables.MaxChainNameLength)
+			arpMappings[wl.Name] = []string{fmt.Sprintf("goto %s", chainName)}
+		}
+		m.arpMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesARPDispatchMap, Type: nftables.MapTypeInterfaceMatch}, arpMappings)
+
+		// Build the ARP dispatch chain with a vmap lookup.
+		arpDispatchChain := &generictables.Chain{
+			Name: rules.ChainARPDispatch,
+			Rules: []generictables.Rule{
+				{
+					Match: nftables.Match().OutInterfaceVMAP(rules.NftablesARPDispatchMap),
+				},
+			},
+		}
+		m.updateDispatchChains(m.activeARPDispatchChains, []*generictables.Chain{arpDispatchChain}, m.arpTable)
+
+		if m.cfg.bpfEnabled {
+			// In BPF mode, the filter dispatch block below is skipped,
+			// so clear the flag here.
+			m.needToCheckDispatchChains = false
+		}
+	}
+
 	if !m.cfg.bpfEnabled && m.needToCheckDispatchChains {
 		if m.filterMaps != nil {
 			// Update dispatch verdict maps if needed.
@@ -962,6 +1012,52 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 	)
 	m.filterTable.UpdateChains(chains)
 	m.activeWlIDToChains[id] = chains
+}
+
+// updateWorkloadARPChains programs ARP proxy suppression chains for a workload.
+// These drop ARP replies from the host that contain the workload's own IP as the
+// ARP source, preventing the host's proxy ARP from confusing the workload.
+func (m *endpointManager) updateWorkloadARPChains(
+	id types.WorkloadEndpointID,
+	workload *proto.WorkloadEndpoint,
+) {
+	if m.arpTable == nil {
+		return
+	}
+
+	maxLen := nftables.MaxChainNameLength
+	chainName := rules.EndpointChainName(rules.WorkloadARPPfx, workload.Name, maxLen)
+
+	var arpRules []generictables.Rule
+	for _, cidr := range workload.Ipv4Nets {
+		// Strip the CIDR suffix (e.g. /32) to get the bare IP.
+		ipAddr := strings.Split(cidr, "/")[0]
+		if ipAddr == "" {
+			continue
+		}
+		arpRules = append(arpRules, generictables.Rule{
+			Match:  nftables.Match().OutInterface(workload.Name).ARPOperation("reply").ARPSrcIP(ipAddr),
+			Action: nftables.DropAction{},
+		})
+	}
+
+	chain := &generictables.Chain{
+		Name:  chainName,
+		Rules: arpRules,
+	}
+	m.arpTable.UpdateChains([]*generictables.Chain{chain})
+	m.activeARPChains[id] = []*generictables.Chain{chain}
+}
+
+// removeWorkloadARPChains removes ARP proxy suppression chains for a workload.
+func (m *endpointManager) removeWorkloadARPChains(id types.WorkloadEndpointID) {
+	if m.arpTable == nil {
+		return
+	}
+	if chains, ok := m.activeARPChains[id]; ok {
+		m.arpTable.RemoveChains(chains)
+		delete(m.activeARPChains, id)
+	}
 }
 
 type tierGroupFilter int

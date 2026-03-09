@@ -889,6 +889,8 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				hepListener,
 				common.NewCallbacks(),
 				linkAddrsMgr,
+				nil, // arpTable
+				nil, // arpMaps
 			)
 		})
 

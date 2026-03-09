@@ -338,6 +338,7 @@ type InternalDataplane struct {
 	natTables       []generictables.Table
 	rawTables       []generictables.Table
 	filterTables    []generictables.Table
+	arpTables       []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
 	ipipParentIfaceC chan string
@@ -1101,6 +1102,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 	}
 
+	// Create nftables ARP table for proxy ARP suppression (always enabled, regardless of dataplane mode).
+	arpTableOptions := nftables.TableOptions{
+		RefreshInterval:  config.TableRefreshInterval,
+		LookPathOverride: config.LookPathOverride,
+		OnStillAlive:     dp.reportHealth,
+		OpRecorder:       dp.loopSummarizer,
+		NewDataplane:     config.NewNftablesDataplane,
+	}
+	arpRootTable := nftables.NewARPTable("calico-arp", rules.RuleHashPrefix, featureDetector, arpTableOptions, false)
+	var arpFilterTable generictables.Table
+	var arpMaps nftables.MapsDataplane
+	if arpRootTable != nil {
+		arpFilterTable = nftables.NewTableLayer("filter", arpRootTable)
+		arpMaps = arpFilterTable.(nftables.MapsDataplane)
+		dp.allTables = append(dp.allTables, arpRootTable)
+		dp.arpTables = append(dp.arpTables, arpFilterTable)
+	}
+
 	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
@@ -1128,6 +1147,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsManagerV4,
+		arpFilterTable,
+		arpMaps,
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -1338,6 +1359,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			nil,
 			callbacks,
 			linkAddrsManagerV6,
+			nil, // arpTable - ARP is IPv4 only
+			nil, // arpMaps
 		))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
@@ -2105,6 +2128,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			}})
 		}
 	}
+
+	for _, t := range d.arpTables {
+		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
+			Match:  nftables.Match(),
+			Action: nftables.Actions().Jump(rules.ChainARPDispatch),
+		}})
+	}
 }
 
 // setUpIptablesBPFEarly that need to be written asap
@@ -2215,6 +2245,12 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		t.InsertOrAppendRules("POSTROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
 			Action: d.actions.Jump(rules.ChainManglePostrouting),
+		}})
+	}
+	for _, t := range d.arpTables {
+		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
+			Match:  nftables.Match(),
+			Action: nftables.Actions().Jump(rules.ChainARPDispatch),
 		}})
 	}
 	if d.xdpState != nil {
