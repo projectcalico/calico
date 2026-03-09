@@ -24,6 +24,5 @@ import (
 func Test(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/converter_suite.xml"
 	ginkgo.RunSpecs(t, "Converter Suite", suiteConfig, reporterConfig)
 }

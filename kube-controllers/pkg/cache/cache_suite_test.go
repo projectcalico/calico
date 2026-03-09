@@ -24,6 +24,5 @@ import (
 func TestCache(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/cache_suite.xml"
 	ginkgo.RunSpecs(t, "Cache Suite", suiteConfig, reporterConfig)
 }
