@@ -71,7 +71,8 @@ sub-image-%:
 image: $(BUILD_IMAGES)
 
 $(ENVOY_GATEWAY_IMAGE): $(ENVOY_GATEWAY_IMAGE_CREATED)
-$(ENVOY_GATEWAY_IMAGE_CREATED): register Dockerfile build
+# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
+$(ENVOY_GATEWAY_IMAGE_CREATED): Dockerfile build | register
 	$(DOCKER_BUILD) -t $(ENVOY_GATEWAY_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
