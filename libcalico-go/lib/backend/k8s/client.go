@@ -57,7 +57,7 @@ var (
 
 type KubeClient struct {
 	// Main Kubernetes clients.
-	ClientSet *kubernetes.Clientset
+	ClientSet kubernetes.Interface
 
 	// Client for interacting with K8S Cluster Network Policy.
 	k8sClusterPolicyClient *netpolicyclient.PolicyV1alpha2Client
@@ -76,10 +76,173 @@ type KubeClient struct {
 	clientsByListType map[reflect.Type]resources.K8sResourceClient
 }
 
+// newKubeClient creates a new KubeClient with the given clientset and initializes the resource maps.
+func newKubeClient(cs kubernetes.Interface) *KubeClient {
+	return &KubeClient{
+		ClientSet:             cs,
+		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
+		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
+		clientsByListType:     make(map[reflect.Type]resources.K8sResourceClient),
+	}
+}
+
+// registerCRDClients registers all Calico CRD-backed resource clients.
+func (c *KubeClient) registerCRDClients(restClient rest.Interface, group resources.BackingAPIGroup) {
+	type crdResource struct {
+		kind      string
+		newClient func(rest.Interface, resources.BackingAPIGroup) resources.K8sResourceClient
+	}
+	crdResources := []crdResource{
+		{apiv3.KindIPPool, resources.NewIPPoolClient},
+		{apiv3.KindIPReservation, resources.NewIPReservationClient},
+		{apiv3.KindGlobalNetworkPolicy, resources.NewGlobalNetworkPolicyClient},
+		{apiv3.KindStagedGlobalNetworkPolicy, resources.NewStagedGlobalNetworkPolicyClient},
+		{apiv3.KindGlobalNetworkSet, resources.NewGlobalNetworkSetClient},
+		{apiv3.KindNetworkPolicy, resources.NewNetworkPolicyClient},
+		{apiv3.KindStagedNetworkPolicy, resources.NewStagedNetworkPolicyClient},
+		{apiv3.KindStagedKubernetesNetworkPolicy, resources.NewStagedKubernetesNetworkPolicyClient},
+		{apiv3.KindNetworkSet, resources.NewNetworkSetClient},
+		{apiv3.KindTier, resources.NewTierClient},
+		{apiv3.KindBGPPeer, resources.NewBGPPeerClient},
+		{apiv3.KindBGPConfiguration, resources.NewBGPConfigClient},
+		{apiv3.KindFelixConfiguration, resources.NewFelixConfigClient},
+		{apiv3.KindClusterInformation, resources.NewClusterInfoClient},
+		{apiv3.KindHostEndpoint, resources.NewHostEndpointClient},
+		{apiv3.KindKubeControllersConfiguration, resources.NewKubeControllersConfigClient},
+		{apiv3.KindCalicoNodeStatus, resources.NewCalicoNodeStatusClient},
+		{apiv3.KindBlockAffinity, resources.NewBlockAffinityClientV3},
+		{apiv3.KindBGPFilter, resources.NewBGPFilterClient},
+		{apiv3.KindIPAMConfiguration, resources.NewIPAMConfigClientV3},
+	}
+	for _, r := range crdResources {
+		c.registerResourceClient(
+			resourceKeyType,
+			resourceListType,
+			r.kind,
+			r.newClient(restClient, group),
+		)
+	}
+}
+
+// registerCoreClients registers resource clients backed by core Kubernetes APIs or third-party APIs.
+func (c *KubeClient) registerCoreClients(
+	cs kubernetes.Interface,
+	cnpClient *netpolicyclient.PolicyV1alpha2Client,
+	vmimClientFactory func(namespace string) resources.VMIMClient,
+) {
+	if vmimClientFactory != nil {
+		c.registerResourceClient(
+			resourceKeyType,
+			resourceListType,
+			internalapi.KindLiveMigration,
+			resources.NewLiveMigrationClient(vmimClientFactory),
+		)
+	}
+	c.registerResourceClient(
+		resourceKeyType,
+		resourceListType,
+		model.KindKubernetesService,
+		resources.NewServiceClient(cs),
+	)
+	c.registerResourceClient(
+		resourceKeyType,
+		resourceListType,
+		model.KindKubernetesEndpointSlice,
+		resources.NewKubernetesEndpointSliceClient(cs),
+	)
+	c.registerResourceClient(
+		resourceKeyType,
+		resourceListType,
+		internalapi.KindWorkloadEndpoint,
+		resources.NewWorkloadEndpointClient(cs),
+	)
+	c.registerResourceClient(
+		resourceKeyType,
+		resourceListType,
+		apiv3.KindProfile,
+		resources.NewProfileClient(cs),
+	)
+	c.registerResourceClient(
+		resourceKeyType,
+		resourceListType,
+		model.KindKubernetesNetworkPolicy,
+		resources.NewKubernetesNetworkPolicyClient(cs),
+	)
+	if cnpClient != nil {
+		c.registerResourceClient(
+			resourceKeyType,
+			resourceListType,
+			model.KindKubernetesClusterNetworkPolicy,
+			resources.NewKubernetesClusterNetworkPolicyClient(cnpClient),
+		)
+	}
+}
+
+// registerNodeClient registers the node resource client.
+func (c *KubeClient) registerNodeClient(cs kubernetes.Interface, usePodCIDR bool) {
+	c.registerResourceClient(
+		resourceKeyType,
+		resourceListType,
+		internalapi.KindNode,
+		resources.NewNodeClient(cs, usePodCIDR),
+	)
+}
+
+// registerIPAMClients registers IPAM-related resource clients.
+func (c *KubeClient) registerIPAMClients(restClient rest.Interface, group resources.BackingAPIGroup, usePodCIDR bool) {
+	if usePodCIDR {
+		return
+	}
+	log.Debug("Calico is configured to use calico-ipam")
+	c.registerResourceClient(
+		reflect.TypeFor[model.BlockAffinityKey](),
+		reflect.TypeFor[model.BlockAffinityListOptions](),
+		internalapi.KindBlockAffinity,
+		resources.NewBlockAffinityClientV1(restClient, group),
+	)
+	c.registerResourceClient(
+		reflect.TypeFor[model.IPAMConfigKey](),
+		nil,
+		internalapi.KindIPAMConfig,
+		resources.NewIPAMConfigClientV1(restClient, group),
+	)
+	c.registerResourceClient(
+		reflect.TypeFor[model.BlockKey](),
+		reflect.TypeFor[model.BlockListOptions](),
+		internalapi.KindIPAMBlock,
+		resources.NewIPAMBlockClient(restClient, group),
+	)
+	c.registerResourceClient(
+		reflect.TypeFor[model.IPAMHandleKey](),
+		reflect.TypeFor[model.IPAMHandleListOptions](),
+		internalapi.KindIPAMHandle,
+		resources.NewIPAMHandleClient(restClient, group),
+	)
+}
+
+// KubeClientOpts provides options for creating a KubeClient from pre-existing clients,
+// allowing dependency injection for testing.
+type KubeClientOpts struct {
+	ClientSet  kubernetes.Interface
+	RESTClient rest.Interface
+	Group      resources.BackingAPIGroup
+	UsePodCIDR bool
+}
+
+// NewKubeClientFromClients creates a new KubeClient from pre-existing clients. This is useful
+// for testing, where you want to inject fake clients.
+func NewKubeClientFromClients(opts KubeClientOpts) api.Client {
+	c := newKubeClient(opts.ClientSet)
+	if opts.RESTClient != nil {
+		c.registerCRDClients(opts.RESTClient, opts.Group)
+		c.registerIPAMClients(opts.RESTClient, opts.Group, opts.UsePodCIDR)
+	}
+	c.registerCoreClients(opts.ClientSet, nil, nil)
+	c.registerNodeClient(opts.ClientSet, opts.UsePodCIDR)
+	return c
+}
+
 func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
-	// Whether or not we are writing to projectcalico.org/v3 resources. If true, we're running in
-	// "no API server" mode where the v3 resources are backed by CRDs directly. Otherwise, we're running
-	// with the Calico API server and should instead use crd.projectcalico.org/v1 resources directly.
 	group := BackendAPIGroup(ca)
 	log.WithField("apiGroup", group).Info("Using API group for CRD backend")
 
@@ -88,7 +251,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, err
 	}
 
-	restClient, err := restClient(*config, group)
+	crdRestClient, err := restClient(*config, group)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build CRD client: %v", err)
 	}
@@ -98,234 +261,18 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, fmt.Errorf("Failed to build ClusterNetworkPolicy client: %v", err)
 	}
 
-	c := &KubeClient{
-		ClientSet:             cs,
-		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
-		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
-		clientsByListType:     make(map[reflect.Type]resources.K8sResourceClient),
-	}
-
-	// These resources are backed by Calico custom resource definitions (CRDs). Whether they are
-	// backed by projectcalico.org/v3 or crd.projectcalico.org/v1 is configurable.
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindIPPool,
-		resources.NewIPPoolClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindIPReservation,
-		resources.NewIPReservationClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindGlobalNetworkPolicy,
-		resources.NewGlobalNetworkPolicyClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindStagedGlobalNetworkPolicy,
-		resources.NewStagedGlobalNetworkPolicyClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindGlobalNetworkSet,
-		resources.NewGlobalNetworkSetClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindNetworkPolicy,
-		resources.NewNetworkPolicyClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindStagedNetworkPolicy,
-		resources.NewStagedNetworkPolicyClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindStagedKubernetesNetworkPolicy,
-		resources.NewStagedKubernetesNetworkPolicyClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindNetworkSet,
-		resources.NewNetworkSetClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindTier,
-		resources.NewTierClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindBGPPeer,
-		resources.NewBGPPeerClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindBGPConfiguration,
-		resources.NewBGPConfigClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindFelixConfiguration,
-		resources.NewFelixConfigClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindClusterInformation,
-		resources.NewClusterInfoClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindHostEndpoint,
-		resources.NewHostEndpointClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindKubeControllersConfiguration,
-		resources.NewKubeControllersConfigClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindCalicoNodeStatus,
-		resources.NewCalicoNodeStatusClient(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindBlockAffinity,
-		resources.NewBlockAffinityClientV3(restClient, group),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindBGPFilter,
-		resources.NewBGPFilterClient(restClient, group),
-	)
-	// IPAMConfig can come to us from two places:
-	// - The lib/ipam code, which uses the older v1 API 'IPAMConfig'
-	// - The lib/clientv3 code, which uses the newer v3 API 'IPAMConfiguration'
-	// We always register the v3 client, but also register the v1 client for the
-	// older IPAM code below if it's in use.
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindIPAMConfiguration,
-		resources.NewIPAMConfigClientV3(restClient, group),
-	)
-
-	// These resources are backed directly by core Kubernetes APIs or third-party
-	// APIs, and do not use CRDs.
 	kvClient, err := kubevirtclient.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build KubeVirt client: %v", err)
 	}
-	c.registerResourceClient(
-		reflect.TypeOf(model.ResourceKey{}),
-		reflect.TypeOf(model.ResourceListOptions{}),
-		internalapi.KindLiveMigration,
-		resources.NewLiveMigrationClient(func(namespace string) resources.VMIMClient {
-			return kvClient.VirtualMachineInstanceMigrations(namespace)
-		}),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		model.KindKubernetesService,
-		resources.NewServiceClient(cs),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		model.KindKubernetesEndpointSlice,
-		resources.NewKubernetesEndpointSliceClient(cs),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		internalapi.KindWorkloadEndpoint,
-		resources.NewWorkloadEndpointClient(cs),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		internalapi.KindNode,
-		resources.NewNodeClient(cs, ca.K8sUsePodCIDR),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		apiv3.KindProfile,
-		resources.NewProfileClient(cs),
-	)
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		model.KindKubernetesNetworkPolicy,
-		resources.NewKubernetesNetworkPolicyClient(cs),
-	)
 
-	c.registerResourceClient(
-		reflect.TypeFor[model.ResourceKey](),
-		reflect.TypeFor[model.ResourceListOptions](),
-		model.KindKubernetesClusterNetworkPolicy,
-		resources.NewKubernetesClusterNetworkPolicyClient(cnpClient),
-	)
-
-	if !ca.K8sUsePodCIDR {
-		// Using Calico IPAM - use CRDs to back IPAM resources.
-		log.Debug("Calico is configured to use calico-ipam")
-
-		// lib/ipam uses different types for these resources, so register them separately
-		// from the v3 resources already registered above.
-		c.registerResourceClient(
-			reflect.TypeFor[model.BlockAffinityKey](),
-			reflect.TypeFor[model.BlockAffinityListOptions](),
-			internalapi.KindBlockAffinity,
-			resources.NewBlockAffinityClientV1(restClient, group),
-		)
-		c.registerResourceClient(
-			reflect.TypeFor[model.IPAMConfigKey](),
-			nil,
-			internalapi.KindIPAMConfig,
-			resources.NewIPAMConfigClientV1(restClient, group),
-		)
-
-		// These do not get registered as part of the v3 API, and are only
-		// accessed from the lib/ipam code.
-		c.registerResourceClient(
-			reflect.TypeFor[model.BlockKey](),
-			reflect.TypeFor[model.BlockListOptions](),
-			internalapi.KindIPAMBlock,
-			resources.NewIPAMBlockClient(restClient, group),
-		)
-		c.registerResourceClient(
-			reflect.TypeFor[model.IPAMHandleKey](),
-			reflect.TypeFor[model.IPAMHandleListOptions](),
-			internalapi.KindIPAMHandle,
-			resources.NewIPAMHandleClient(restClient, group),
-		)
-	}
-
+	c := newKubeClient(cs)
+	c.registerCRDClients(crdRestClient, group)
+	c.registerCoreClients(cs, cnpClient, func(namespace string) resources.VMIMClient {
+		return kvClient.VirtualMachineInstanceMigrations(namespace)
+	})
+	c.registerNodeClient(cs, ca.K8sUsePodCIDR)
+	c.registerIPAMClients(crdRestClient, group, ca.K8sUsePodCIDR)
 	return c, nil
 }
 
