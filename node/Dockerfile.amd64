@@ -44,7 +44,7 @@ COPY patches/svlogd_use_0644_permission_instead_of_0744.patch /svlogd_use_0644_p
 
 # runit is not available in ubi or AlmaLinux repos so build it.
 # get it from the debian repos as the official website doesn't support https
-RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}.orig.tar.gz | tar xz -C /root && \
+RUN curl -sfL --retry 3 https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}.orig.tar.gz | tar xz -C /root && \
     cd /root/admin/runit-${RUNIT_VER} && \
     patch -p1 < /svlogd_use_0644_permission_instead_of_0744.patch && \
     package/compile
