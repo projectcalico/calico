@@ -27,9 +27,9 @@ type kvIndexers struct {
 	vmi cache.Indexer
 }
 
-// InformerFactory creates KubeVirt VM and VMI informers.
+// GetIndexerFunc creates KubeVirt VM and VMI informers.
 // Returns (nil, nil, nil) when KubeVirt is not installed.
-type InformerFactory func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error)
+type GetIndexerFunc func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error)
 
 // DeferredInformers provides thread-safe access to KubeVirt cache indexers
 // that may be populated lazily if KubeVirt is installed after startup.
@@ -42,7 +42,7 @@ type DeferredInformers struct {
 // goroutine that polls for KubeVirt, creates informers, and publishes their
 // indexers once synced. If KubeVirt is already installed, the informers are
 // created immediately.
-func NewDeferredInformers(createInformers InformerFactory, pollInterval time.Duration, stop <-chan struct{}) *DeferredInformers {
+func NewDeferredInformers(createInformers GetIndexerFunc, pollInterval time.Duration, stop <-chan struct{}) *DeferredInformers {
 	d := &DeferredInformers{}
 	go d.initInformers(createInformers, pollInterval, stop)
 	return d
@@ -68,16 +68,23 @@ func (d *DeferredInformers) VMInstanceIndexer() cache.Indexer {
 	return idx.vmi
 }
 
-// SetIndexers atomically publishes the VM and VMI indexers. Exported for use
-// in tests.
-func (d *DeferredInformers) SetIndexers(vm, vmi cache.Indexer) {
+// NewDeferredInformersWithIndexers creates a DeferredInformers pre-populated
+// with the given indexers. Intended for use in tests.
+func NewDeferredInformersWithIndexers(vm, vmi cache.Indexer) *DeferredInformers {
+	d := &DeferredInformers{}
+	d.setIndexers(vm, vmi)
+	return d
+}
+
+// setIndexers atomically publishes the VM and VMI indexers.
+func (d *DeferredInformers) setIndexers(vm, vmi cache.Indexer) {
 	d.indexers.Store(&kvIndexers{vm: vm, vmi: vmi})
 }
 
 // initInformers detects KubeVirt, creates VM/VMI informers, and publishes
 // their indexers. If KubeVirt is not installed at call time it polls every
 // pollInterval until it appears or stop is closed.
-func (d *DeferredInformers) initInformers(createInformers InformerFactory, pollInterval time.Duration, stop <-chan struct{}) {
+func (d *DeferredInformers) initInformers(createInformers GetIndexerFunc, pollInterval time.Duration, stop <-chan struct{}) {
 	// Try immediately first.
 	vmInf, vmiInf, err := createInformers()
 	if err != nil {
@@ -108,6 +115,6 @@ func (d *DeferredInformers) initInformers(createInformers InformerFactory, pollI
 		log.Warn("Failed to sync KubeVirt informers")
 		return
 	}
-	d.SetIndexers(vmInf.GetIndexer(), vmiInf.GetIndexer())
+	d.setIndexers(vmInf.GetIndexer(), vmiInf.GetIndexer())
 	log.Info("KubeVirt informers synced, VM-aware IPAM GC enabled")
 }

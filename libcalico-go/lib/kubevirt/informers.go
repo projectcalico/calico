@@ -88,3 +88,11 @@ func TryCreateInformers(restConfig *rest.Config, resyncPeriod time.Duration) (ca
 	log.Info("Created KubeVirt VM and VMI informers")
 	return vmInformer, vmiInformer, nil
 }
+
+// NewIndexerFunc returns a GetIndexerFunc that calls TryCreateInformers with
+// the given config and resync period.
+func NewIndexerFunc(restConfig *rest.Config, resyncPeriod time.Duration) GetIndexerFunc {
+	return func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
+		return TryCreateInformers(restConfig, resyncPeriod)
+	}
+}

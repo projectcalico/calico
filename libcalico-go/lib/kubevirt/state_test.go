@@ -38,9 +38,9 @@ func newFakeInformers(stop <-chan struct{}) (cache.SharedIndexInformer, cache.Sh
 	return vmInf, vmiInf
 }
 
-// newFakeInformerFactory returns an InformerFactory that returns nil for the
+// newFakeInformerFactory returns a GetIndexerFunc that returns nil for the
 // first nilCount calls, then returns real (fake) informers.
-func newFakeInformerFactory(nilCount int, stop <-chan struct{}) kubevirt.InformerFactory {
+func newFakeInformerFactory(nilCount int, stop <-chan struct{}) kubevirt.GetIndexerFunc {
 	var calls atomic.Int32
 	return func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
 		n := int(calls.Add(1))
@@ -53,18 +53,17 @@ func newFakeInformerFactory(nilCount int, stop <-chan struct{}) kubevirt.Informe
 }
 
 var _ = Describe("DeferredInformers", func() {
-	It("should return nil before SetIndexers is called", func() {
+	It("should return nil before indexers are set", func() {
 		di := &kubevirt.DeferredInformers{}
 		Expect(di.VMIndexer()).To(BeNil())
 		Expect(di.VMInstanceIndexer()).To(BeNil())
 	})
 
-	It("should return indexers after SetIndexers", func() {
-		di := &kubevirt.DeferredInformers{}
+	It("should return indexers after NewDeferredInformersWithIndexers", func() {
 		vmIdx := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 		vmiIdx := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 
-		di.SetIndexers(vmIdx, vmiIdx)
+		di := kubevirt.NewDeferredInformersWithIndexers(vmIdx, vmiIdx)
 
 		Expect(di.VMIndexer()).To(Equal(vmIdx))
 		Expect(di.VMInstanceIndexer()).To(Equal(vmiIdx))

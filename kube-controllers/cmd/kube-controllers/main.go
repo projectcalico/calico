@@ -509,9 +509,7 @@ func (cc *controllerControl) InitControllers(
 		cc.controllers["NetworkPolicy"] = policyController
 	}
 	if cfg.Controllers.Node != nil {
-		deferredInformers := kubevirt.NewDeferredInformers(func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
-			return kubevirt.TryCreateInformers(k8sconfig, 5*time.Minute)
-		}, 30*time.Second, cc.stop)
+		deferredInformers := kubevirt.NewDeferredInformers(kubevirt.NewIndexerFunc(k8sconfig, 5*time.Minute), 30*time.Second, cc.stop)
 		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, deferredInformers)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)

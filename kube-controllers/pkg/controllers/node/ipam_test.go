@@ -129,8 +129,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		vmIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 		vmiIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
-		deferredInformers = &kubevirt.DeferredInformers{}
-		deferredInformers.SetIndexers(vmIndexer, vmiIndexer)
+		deferredInformers = kubevirt.NewDeferredInformersWithIndexers(vmIndexer, vmiIndexer)
 
 		// Create a node indexer with the fake clientset
 		factory := informers.NewSharedInformerFactory(cs, 0)
