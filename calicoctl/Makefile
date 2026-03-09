@@ -24,7 +24,7 @@ include ../lib.Makefile
 
 CALICOCTL_DIR=calicoctl
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
-## SRC_FILES is auto-populated from local-deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean

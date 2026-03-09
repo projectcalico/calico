@@ -363,26 +363,27 @@ DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
 ###############################################################################
-# Source file dependency tracking via local-deps.txt
+# Source file dependency tracking via deps.txt
 #
-# Each component can have a local-deps.txt listing the repo-root-relative Go
-# package directories it depends on. If present, SRC_FILES is automatically
-# populated with all .go files in those directories. Components can append
-# extra non-Go dependencies (e.g., BPF .c/.h files) after including lib.Makefile.
+# Each component's deps.txt contains both external module dependencies and
+# local in-repo package directories (prefixed with "local:"). If deps.txt
+# has local entries, SRC_FILES is automatically populated with all .go files
+# in those directories. Components can append extra non-Go dependencies
+# (e.g., BPF .c/.h files) after including lib.Makefile.
 #
 # IMAGE_DEPS lists non-Go files that the Docker image depends on (Dockerfiles,
 # config templates, scripts, etc.). Components should override or append to
 # this variable and include $(IMAGE_DEPS) in their .image.created prereqs.
 ###############################################################################
-ifneq ($(wildcard local-deps.txt),)
-SRC_FILES := $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep -v '^\#' local-deps.txt)) -name '*.go' 2>/dev/null)
+ifneq ($(wildcard deps.txt),)
+SRC_FILES := $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
 endif
 
 IMAGE_DEPS ?= Dockerfile
 
-# Expand a local-deps.txt file to the list of .go files in those directories.
+# Expand a component's deps.txt local entries to the list of .go files.
 # Usage: $(call local-deps-go-files,<component-dir>)
-local-deps-go-files = $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep -v '^\#' $(REPO_ROOT)/$(1)/local-deps.txt)) -name '*.go' 2>/dev/null)
+local-deps-go-files = $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' $(REPO_ROOT)/$(1)/deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
 
 # A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
 .PHONY: force-rebuild

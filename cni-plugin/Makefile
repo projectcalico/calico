@@ -15,7 +15,7 @@ BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 ###############################################################################
 include ../lib.Makefile
 
-## SRC_FILES is auto-populated from local-deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 

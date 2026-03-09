@@ -16,7 +16,7 @@ include ../lib.Makefile
 
 ###############################################################################
 
-## SRC_FILES is auto-populated from local-deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 
 # Touchfile created when we make the typha image.
 TYPHA_CONTAINER_CREATED=.calico_typha.created-$(ARCH)

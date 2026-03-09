@@ -18,7 +18,7 @@ BUILD_IMAGES ?= $(DIKASTES_IMAGE)
 ##############################################################################
 include ../lib.Makefile
 
-## SRC_FILES is auto-populated from local-deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 SRC_FILES += $(GENERATED_FILES)
 
 CONTAINER_CREATED=.image.created-$(ARCH)

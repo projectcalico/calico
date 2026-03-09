@@ -56,7 +56,7 @@ EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/c
 ###############################################################################
 include ../lib.Makefile
 
-## SRC_FILES is auto-populated from local-deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 ## Append non-Go sources that also affect the build.
 SRC_FILES += $(GENERATED_FILES)
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')

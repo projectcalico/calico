@@ -16,7 +16,7 @@ BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 ###############################################################################
 include ../lib.Makefile
 
-## SRC_FILES is auto-populated from local-deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 KUBE_CONTROLLER_CONTAINER_CREATED=.image.created-$(ARCH)
 KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=.image.created-$(ARCH)-fips
 

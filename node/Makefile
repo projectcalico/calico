@@ -144,7 +144,7 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-## SRC_FILES is auto-populated from local-deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 ## Append non-Go sources that also affect the build.
 SRC_FILES += $(shell find ../felix -name '*.[ch]')
 
