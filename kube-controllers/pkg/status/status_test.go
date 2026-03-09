@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -127,8 +127,11 @@ var _ = Describe("Status pkg UTs", func() {
 
 		By("status file should handle a lot of concurrent ready updates for all of the keys (plus more)", func() {
 			wg := sync.WaitGroup{}
-			wg.Add(200)
-			go st.SetReady("anykey", true, "reason")
+			wg.Add(201)
+			go func() {
+				st.SetReady("anykey", true, "reason")
+				wg.Done()
+			}()
 			for i := range 200 {
 				go func(j int) {
 					st.SetReady("anykey"+strconv.Itoa(j), true, "reason"+strconv.Itoa(j))
