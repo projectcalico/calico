@@ -542,7 +542,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: name, State: state, Index: index})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			if state == ifacemonitor.StateUp && (bpfEpMgr.isDataIface(name) || bpfEpMgr.isWorkloadIface(name)) {
 				ExpectWithOffset(1, ifStateMap.ContainsKey(ifstate.NewKey(uint32(index)).AsBytes())).To(BeTrue())
@@ -561,7 +561,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bpfEpMgr.OnHEPUpdate(hostIfaceToEp)
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -574,7 +574,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -587,7 +587,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -612,7 +612,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bpfEpMgr.OnUpdate(update)
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -629,7 +629,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bpfEpMgr.OnUpdate(update)
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -642,7 +642,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -655,7 +655,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -1187,7 +1187,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			newBpfEpMgr(false)
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1282,7 +1282,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				genHEPUpdate("bond1", newHEP)()
 				err = bpfEpMgr.CompleteDeferredWork()
 				Expect(err).NotTo(HaveOccurred())
-				err = bpfEpMgr.Apply()
+				err = bpfEpMgr.ApplyBPFPrograms()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dp.programAttached("eth11:ingress")).To(BeFalse())
 				Expect(dp.programAttached("eth11:egress")).To(BeFalse())
@@ -1341,7 +1341,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				genHEPUpdate("bond0", newHEP)()
 				err := bpfEpMgr.CompleteDeferredWork()
 				Expect(err).NotTo(HaveOccurred())
-				err = bpfEpMgr.Apply()
+				err = bpfEpMgr.ApplyBPFPrograms()
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(dp.programAttached("bond0:ingress")).To(BeTrue())
@@ -1360,7 +1360,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				genHEPUpdate("bond0", hostEp)()
 				err = bpfEpMgr.CompleteDeferredWork()
 				Expect(err).NotTo(HaveOccurred())
-				err = bpfEpMgr.Apply()
+				err = bpfEpMgr.ApplyBPFPrograms()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dp.programAttached("bond0:ingress")).To(BeTrue())
 				Expect(dp.programAttached("bond0:egress")).To(BeTrue())
@@ -1402,7 +1402,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				err := bpfEpMgr.CompleteDeferredWork()
 				Expect(err).NotTo(HaveOccurred())
-				err = bpfEpMgr.Apply()
+				err = bpfEpMgr.ApplyBPFPrograms()
 				Expect(err).NotTo(HaveOccurred())
 
 				// We inherited dp from the previous bpfEpMgr and it has eth0
@@ -1422,7 +1422,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				err := bpfEpMgr.CompleteDeferredWork()
 				Expect(err).NotTo(HaveOccurred())
-				err = bpfEpMgr.Apply()
+				err = bpfEpMgr.ApplyBPFPrograms()
 				Expect(err).NotTo(HaveOccurred())
 
 				// We inherited dp from the previous bpfEpMgr and it has eth0
@@ -1437,7 +1437,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				err = bpfEpMgr.CompleteDeferredWork()
 				Expect(err).NotTo(HaveOccurred())
-				err = bpfEpMgr.Apply()
+				err = bpfEpMgr.ApplyBPFPrograms()
 				Expect(err).NotTo(HaveOccurred())
 
 				// We inherited dp from the previous bpfEpMgr and it has eth0
@@ -1620,7 +1620,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(bpfEpMgr.dirtyRules.Contains(ingRuleMatchId)).To(BeTrue())
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(bpfEpMgr.dirtyRules.Contains(ingRuleMatchId)).NotTo(BeTrue())
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
@@ -1638,7 +1638,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(bpfEpMgr.polNameToMatchIDs).To(HaveLen(0))
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
 			_, err = rcMap.Get(k)
@@ -1690,7 +1690,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(2))
 			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
@@ -1704,7 +1704,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(2))
 			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
@@ -1719,7 +1719,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(2))
 			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
@@ -1732,7 +1732,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(1))
 			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
@@ -1743,7 +1743,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(0))
 
@@ -1755,7 +1755,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(2))
 			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
@@ -1767,7 +1767,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(0))
 		})
@@ -1793,7 +1793,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(countersMap.Contents).To(HaveLen(0))
@@ -1814,7 +1814,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 12345)()
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(countersMap.Contents).To(HaveLen(0))
@@ -1856,7 +1856,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ifStateMap.IsEmpty()).To(BeTrue())
@@ -1936,7 +1936,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(dumpIfstateMap(ifStateMap)).To(Equal(map[int]string{
@@ -1988,7 +1988,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			// XDP gets cleaned up because it's a WEP, ingress keeps its
@@ -2046,7 +2046,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Everything collides but the allocations are non-deterministic
@@ -2112,7 +2112,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Everything collides but the allocations are non-deterministic
@@ -2159,7 +2159,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(123).AsBytes())).To(BeFalse())
@@ -2176,21 +2176,21 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				err := bpfEpMgr.CompleteDeferredWork()
 				Expect(err).NotTo(HaveOccurred())
-				err = bpfEpMgr.Apply()
+				err = bpfEpMgr.ApplyBPFPrograms()
 				Expect(err).NotTo(HaveOccurred())
 
 				genIfaceUpdate(name, ifacemonitor.StateDown, 1000+i)()
 
 				err = bpfEpMgr.CompleteDeferredWork()
 				Expect(err).NotTo(HaveOccurred())
-				err = bpfEpMgr.Apply()
+				err = bpfEpMgr.ApplyBPFPrograms()
 				Expect(err).NotTo(HaveOccurred())
 
 				genWLUpdateEpRemove(name)()
 
 				err = bpfEpMgr.CompleteDeferredWork()
 				Expect(err).NotTo(HaveOccurred())
-				err = bpfEpMgr.Apply()
+				err = bpfEpMgr.ApplyBPFPrograms()
 				Expect(err).NotTo(HaveOccurred())
 			}
 			end := bpfEpMgr.getNumEPs()
@@ -2203,7 +2203,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
@@ -2215,7 +2215,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
@@ -2226,7 +2226,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			checkIfState(15, "cali12345", flags)
@@ -2238,7 +2238,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
@@ -2250,7 +2250,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(uint32(15)).AsBytes())).To(BeFalse())
 
@@ -2258,7 +2258,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
@@ -2271,14 +2271,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
@@ -2290,7 +2290,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
@@ -2299,7 +2299,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
@@ -2311,21 +2311,21 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
@@ -2373,7 +2373,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ifStateMap.IsEmpty()).To(BeTrue())
@@ -2454,7 +2454,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(dumpIfstateMap(ifStateMap)).To(Equal(map[int]string{
@@ -2509,7 +2509,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			// XDP gets cleaned up because it's a WEP, ingress keeps its
@@ -2567,7 +2567,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Everything collides but the allocations are non-deterministic
@@ -2638,7 +2638,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Everything collides but the allocations are non-deterministic
@@ -2690,7 +2690,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(123).AsBytes())).To(BeFalse())
@@ -2704,7 +2704,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready
@@ -2716,7 +2716,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready
@@ -2727,7 +2727,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			checkIfState(15, "cali12345", flags)
@@ -2739,7 +2739,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready
@@ -2751,7 +2751,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(uint32(15)).AsBytes())).To(BeFalse())
 
@@ -2759,7 +2759,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready
@@ -2772,14 +2772,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
@@ -2791,7 +2791,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
@@ -2800,7 +2800,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
@@ -2812,21 +2812,21 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready
@@ -2852,7 +2852,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(jumpMapIng.Contents).To(HaveLen(2)) // 2x policy and 2x filter
@@ -2863,7 +2863,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(jumpMapIng.Contents).To(HaveLen(0))
@@ -2883,7 +2883,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(jumpMapIng.Contents).To(HaveLen(2)) // 2x policy and 2x filter
@@ -2894,7 +2894,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(jumpMapIng.Contents).To(HaveLen(0))
@@ -2914,7 +2914,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(jumpMapIng.Contents).To(HaveLen(2)) // 2x policy and 2x filter
@@ -2931,7 +2931,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(len(jumpCopyContentsIngress)).To(Equal(len(jumpMapIng.Contents)))
@@ -2985,7 +2985,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			err = bpfEpMgr.Apply()
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(len(jumpCopyContentsIngress)).To(Equal(len(jumpMapIng.Contents)))

@@ -1735,11 +1735,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	return nil
 }
 
-// Apply attaches BPF programs to interfaces and updates related dataplane state.
-// It is called from the main apply loop after IP sets have been written to the
-// dataplane, ensuring that policy rules referencing IP sets don't produce spurious
+// ApplyBPFPrograms attaches BPF programs to interfaces and updates related dataplane
+// state.  It is called from the main apply loop after IP sets have been written to
+// the dataplane, ensuring that policy rules referencing IP sets don't produce spurious
 // denies for newly-added workloads whose IPs are freshly added to IP sets.
-func (m *bpfEndpointManager) Apply() error {
+func (m *bpfEndpointManager) ApplyBPFPrograms() error {
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
 	if m.bpfPolicyDebugEnabled {
