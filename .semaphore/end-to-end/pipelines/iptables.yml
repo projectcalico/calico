@@ -22,6 +22,7 @@ global_job_config:
     - name: banzai-secrets
   env_vars:
     # This should match the default flags with the additional skip of the "Proxy version v1". There is a problem with the server pod failing to bind to the port for listening.
+    # Temporarily skip Feature:AutoHEPs due to nil-pointer panic (see PR #12014). Remove once fix is backported to release-v3.30.
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard|Feature:AutoHEPs)
     - name: DATAPLANE

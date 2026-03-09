@@ -25,6 +25,7 @@ global_job_config:
     # Using tests that usually pass.
     # So we're running the Conformance tests, some RBAC tests, and some Observe tests.
     # and skipping the slow, disruptive, and some other tests that are not relevant to Calico OSS
+    # Temporarily skip Feature:AutoHEPs due to nil-pointer panic (see PR #12014). Remove once fix is backported to release-v3.30.
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|Feature:AutoHEPs)
     - name: K8S_VERSION

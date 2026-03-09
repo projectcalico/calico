@@ -22,6 +22,7 @@ global_job_config:
     - name: banzai-secrets
   env_vars:
     # The skips for sig-* are tests that are not relevant to OSS Calico
+    # Temporarily skip Feature:AutoHEPs due to nil-pointer panic (see PR #12014). Remove once fix is backported to release-v3.30.
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard|Feature:AutoHEPs)
     - name: K8S_VERSION

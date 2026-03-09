@@ -31,6 +31,7 @@ global_job_config:
       value: calico
     - name: FUNCTIONAL_AREA
       value: "test.yml"
+    # Temporarily skip Feature:AutoHEPs due to nil-pointer panic (see PR #12014). Remove once fix is backported to release-v3.30.
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=(\[sig-calico\].*\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:AutoHEPs)
     - name: USE_PRIVATE_REGISTRY
