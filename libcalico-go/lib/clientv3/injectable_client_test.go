@@ -20,23 +20,45 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+	fakerest "k8s.io/client-go/rest/fake"
 
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
+// newTestBackend builds a backend client with a fake clientset and REST client
+// for testing the clientv3 injection stack.
+func newTestBackend(t *testing.T) (bapi.Client, *fake.Clientset) {
+	t.Helper()
+	fakeClientset := fake.NewSimpleClientset()
+	fakeREST := &fakerest.RESTClient{
+		NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
+		GroupVersion: schema.GroupVersion{
+			Group:   "crd.projectcalico.org",
+			Version: "v1",
+		},
+		VersionedAPIPath: "/apis",
+	}
+	be, err := k8s.NewWithOptions(k8s.ClientOptions{
+		ClientSet:  fakeClientset,
+		RESTClient: fakeREST,
+	})
+	if err != nil {
+		t.Fatalf("NewWithOptions failed: %v", err)
+	}
+	return be, fakeClientset
+}
+
 // TestNewFromBackend_NodeList verifies the full injection stack: fake clientset ->
 // NewWithOptions backend -> NewFromBackend clientv3 -> Nodes().List().
 func TestNewFromBackend_NodeList(t *testing.T) {
 	ctx := context.Background()
-	fakeClientset := fake.NewSimpleClientset()
-
-	// Build the full stack.
-	be := k8s.NewWithOptions(k8s.ClientOptions{
-		ClientSet: fakeClientset,
-	})
+	be, fakeClientset := newTestBackend(t)
 	calicoClient := NewFromBackend(be)
 
 	// Seed nodes through the fake clientset.
@@ -76,10 +98,7 @@ func TestNewFromBackend_NodeList(t *testing.T) {
 
 // TestNewFromBackend_BackendAccessor verifies that Backend() returns the injected backend.
 func TestNewFromBackend_BackendAccessor(t *testing.T) {
-	fakeClientset := fake.NewSimpleClientset()
-	be := k8s.NewWithOptions(k8s.ClientOptions{
-		ClientSet: fakeClientset,
-	})
+	be, _ := newTestBackend(t)
 	calicoClient := NewFromBackend(be)
 
 	// The Backend() method isn't on the Interface, but is on the concrete type.
