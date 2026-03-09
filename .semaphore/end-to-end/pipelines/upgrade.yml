@@ -47,8 +47,10 @@ global_job_config:
     # Using tests that usually pass.
     # So we're running the Conformance tests, some RBAC tests, and some Observe tests.
     # and skipping the slow, disruptive, and some other tests that are not relevant to Calico OSS
+    # Temporarily skip Feature:AutoHEPs (nil-pointer panic, see PR #12014) and staged.network.policy (Whisker not installed).
+    # Remove these skips once fixes are backported to release-v3.30.
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)
+      value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|Feature:AutoHEPs|staged.network.policy)
     - name: USE_PRIVATE_REGISTRY
       value: "true"
     - name: PRIVATE_REGISTRY
@@ -89,7 +91,7 @@ blocks:
               value: aws-eks
               # The extra skips here are for upstream tests that require access to pods via the control plane, and with Calico CNI, the EKS control plane can't access pods.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1)
+              value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1|Feature:AutoHEPs|staged.network.policy)
           matrix:
             - env_var: K8S_VERSION
               values: ["stable-1"]
