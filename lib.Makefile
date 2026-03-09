@@ -1429,6 +1429,7 @@ ENVTEST_DIR ?= $(CURDIR)/hack/test/envtest
 # Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
 ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
+ENVTEST_ASSETS = $(shell ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) 2>/dev/null | tail -1)
 
 ## Download envtest binaries (kube-apiserver, etcd) for use by tests that use controller-runtime envtest.
 ## Uses $(DOCKER_RUN) directly (not DOCKER_GO_BUILD) so that callers who override
