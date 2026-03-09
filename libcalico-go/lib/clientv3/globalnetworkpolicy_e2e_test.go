@@ -287,10 +287,13 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 				By("Updating GlobalNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.GlobalNetworkPolicies().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				Eventually(func() error {
+				Eventually(func() string {
 					_, err := c.GlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-					return err
-				}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: GlobalNetworkPolicy(" + name2 + ") with error:"))
 
 				By("Creating GlobalNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.GlobalNetworkPolicies().Create(ctx, &apiv3.GlobalNetworkPolicy{
@@ -298,10 +301,13 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				Eventually(func() error {
+				Eventually(func() string {
 					_, err := c.GlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-					return err
-				}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: GlobalNetworkPolicy(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {

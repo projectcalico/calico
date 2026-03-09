@@ -229,7 +229,7 @@ func getResponseFromMetricsEndpoint(client *http.Client, host string, port int) 
 	var resp *http.Response
 	var err error
 	maxRetries := 10
-	retryDelay := 10 * time.Millisecond
+	retryDelay := 100 * time.Millisecond
 
 	for range maxRetries {
 		resp, err = client.Get(fmt.Sprintf("https://%s:%d/metrics", host, port))

@@ -221,10 +221,13 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 				By("Updating GlobalNetworkSet name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.GlobalNetworkSets().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				Eventually(func() error {
+				Eventually(func() string {
 					_, err := c.GlobalNetworkSets().Get(ctx, name2, options.GetOptions{})
-					return err
-				}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: GlobalNetworkSet(" + name2 + ") with error:"))
 
 				By("Creating GlobalNetworkSet name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.GlobalNetworkSets().Create(ctx, &apiv3.GlobalNetworkSet{
@@ -232,10 +235,13 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				Eventually(func() error {
+				Eventually(func() string {
 					_, err := c.GlobalNetworkSets().Get(ctx, name2, options.GetOptions{})
-					return err
-				}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: GlobalNetworkSet(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {

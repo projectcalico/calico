@@ -231,10 +231,13 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 			By("Updating Profile name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.Profiles().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 			Expect(outError).NotTo(HaveOccurred())
-			Eventually(func() error {
+			Eventually(func() string {
 				_, err := c.Profiles().Get(ctx, name2, options.GetOptions{})
-				return err
-			}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: Profile(" + name2 + ") with error:"))
 
 			By("Creating Profile name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.Profiles().Create(ctx, &apiv3.Profile{
@@ -242,10 +245,13 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 				Spec:       spec2,
 			}, options.SetOptions{TTL: 2 * time.Second})
 			Expect(outError).NotTo(HaveOccurred())
-			Eventually(func() error {
+			Eventually(func() string {
 				_, err := c.Profiles().Get(ctx, name2, options.GetOptions{})
-				return err
-			}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: Profile(" + name2 + ") with error:"))
 
 			By("Attempting to deleting Profile (name2) again")
 			_, outError = c.Profiles().Delete(ctx, name2, options.DeleteOptions{})

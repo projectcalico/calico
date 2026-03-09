@@ -233,10 +233,13 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			By("Updating HostEndpoint name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.HostEndpoints().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 			Expect(outError).NotTo(HaveOccurred())
-			Eventually(func() error {
+			Eventually(func() string {
 				_, err := c.HostEndpoints().Get(ctx, name2, options.GetOptions{})
-				return err
-			}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: HostEndpoint(" + name2 + ") with error:"))
 
 			By("Creating HostEndpoint name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.HostEndpoints().Create(ctx, &apiv3.HostEndpoint{
@@ -244,10 +247,13 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 				Spec:       spec2,
 			}, options.SetOptions{TTL: 2 * time.Second})
 			Expect(outError).NotTo(HaveOccurred())
-			Eventually(func() error {
+			Eventually(func() string {
 				_, err := c.HostEndpoints().Get(ctx, name2, options.GetOptions{})
-				return err
-			}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: HostEndpoint(" + name2 + ") with error:"))
 
 			By("Attempting to deleting HostEndpoint (name2) again")
 			_, outError = c.HostEndpoints().Delete(ctx, name2, options.DeleteOptions{})

@@ -1116,7 +1116,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			// resource version to appear, which would take ~43s with the default timeout.
 			shortCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			_, err := c.List(shortCtx, model.ResourceListOptions{Kind: apiv3.KindTier}, fmt.Sprintf("1%s", kvp2b.Revision))
+			invalidRev := fmt.Sprintf("1%s", kvp2b.Revision)
+			_, err := c.List(shortCtx, model.ResourceListOptions{Kind: apiv3.KindTier}, invalidRev)
 			Expect(err).To(HaveOccurred())
 		})
 

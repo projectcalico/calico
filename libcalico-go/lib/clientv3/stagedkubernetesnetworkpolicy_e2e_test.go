@@ -353,10 +353,13 @@ var _ = testutils.E2eDatastoreDescribe("StagedKubernetesNetworkPolicy tests", te
 				By("Updating StagedKubernetesNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedKubernetesNetworkPolicies().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				Eventually(func() error {
+				Eventually(func() string {
 					_, err := c.StagedKubernetesNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-					return err
-				}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: StagedKubernetesNetworkPolicy(" + namespace2 + "/" + name2 + ") with error:"))
 
 				By("Creating StagedKubernetesNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedKubernetesNetworkPolicies().Create(ctx, &apiv3.StagedKubernetesNetworkPolicy{
@@ -364,10 +367,13 @@ var _ = testutils.E2eDatastoreDescribe("StagedKubernetesNetworkPolicy tests", te
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				Eventually(func() error {
+				Eventually(func() string {
 					_, err := c.StagedKubernetesNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-					return err
-				}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: StagedKubernetesNetworkPolicy(" + namespace2 + "/" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {

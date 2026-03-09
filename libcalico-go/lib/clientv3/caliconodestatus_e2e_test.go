@@ -372,10 +372,13 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 				By("Updating CalicoNodeStatus name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.CalicoNodeStatus().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				Eventually(func() error {
+				Eventually(func() string {
 					_, err := c.CalicoNodeStatus().Get(ctx, name2, options.GetOptions{})
-					return err
-				}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: CalicoNodeStatus(" + name2 + ") with error:"))
 
 				By("Creating CalicoNodeStatus name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.CalicoNodeStatus().Create(ctx, &apiv3.CalicoNodeStatus{
@@ -384,10 +387,13 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 					Status:     status2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				Eventually(func() error {
+				Eventually(func() string {
 					_, err := c.CalicoNodeStatus().Get(ctx, name2, options.GetOptions{})
-					return err
-				}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: CalicoNodeStatus(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
