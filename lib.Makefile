@@ -82,6 +82,9 @@ endif
 
 # Enable binfmt adding support for miscellaneous binary formats.
 # This is only needed when running non-native binaries.
+# Marked .PHONY since it produces no file; use as an order-only prerequisite
+# (| register) to avoid triggering unnecessary rebuilds.
+.PHONY: register
 register:
 ifneq ($(BUILDARCH),$(ARCH))
 	docker run --privileged --rm calico/binfmt:qemu-v10.1.3 --install all || true
@@ -308,9 +311,9 @@ endif
 # Configure the Calico API group to use. Projects importing this Makefile can override this variable
 # if they need to.
 # Supported values:
-# - crd.projectcalico.org/v1 (default)
-# - projectcalico.org/v3
-CALICO_API_GROUP ?= crd.projectcalico.org/v1
+# - projectcalico.org/v3 (default)
+# - crd.projectcalico.org/v1
+CALICO_API_GROUP ?= projectcalico.org/v3
 
 # Where to find Calico CRD files depends on which API group we are using to back them.
 CALICO_CRD_PATH ?= api/config/crd/
@@ -358,6 +361,24 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
+
+###############################################################################
+# Source file dependency tracking via local-deps.txt
+#
+# Each component can have a local-deps.txt listing the repo-root-relative Go
+# package directories it depends on. If present, SRC_FILES is automatically
+# populated with all .go files in those directories. Components can append
+# extra non-Go dependencies (e.g., BPF .c/.h files) after including lib.Makefile.
+#
+# IMAGE_DEPS lists non-Go files that the Docker image depends on (Dockerfiles,
+# config templates, scripts, etc.). Components should override or append to
+# this variable and include $(IMAGE_DEPS) in their .image.created prereqs.
+###############################################################################
+ifneq ($(wildcard local-deps.txt),)
+SRC_FILES := $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep -v '^\#' local-deps.txt)) -name '*.go' 2>/dev/null)
+endif
+
+IMAGE_DEPS ?= Dockerfile
 
 # A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
 .PHONY: force-rebuild
@@ -1431,7 +1452,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 
 	touch $@
 
-kind-cluster-destroy: $(KIND) $(KUBECTL)
+kind-cluster-destroy kind-down: $(KIND) $(KUBECTL)
 	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
 	# This requires we execute CNI del on pods with pod networking.
 	-$(KIND) delete cluster --name $(KIND_NAME)
@@ -1487,6 +1508,124 @@ bin/.helm-updated-$(HELM_VERSION): bin/helm-$(HELM_VERSION)
 helm: bin/helm
 	@echo "helm: $^"
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
+
+###############################################################################
+# Common functions for setting up a kind cluster with Calico for testing.
+###############################################################################
+KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
+KIND_TEST_BUILD_TAG = test-build
+
+# Docker image names tagged as test-build, passed to the load script.
+KIND_IMAGES = \
+	docker.io/tigera/operator:$(KIND_TEST_BUILD_TAG) \
+	calico/node:$(KIND_TEST_BUILD_TAG) \
+	calico/typha:$(KIND_TEST_BUILD_TAG) \
+	calico/apiserver:$(KIND_TEST_BUILD_TAG) \
+	calico/ctl:$(KIND_TEST_BUILD_TAG) \
+	calico/cni:$(KIND_TEST_BUILD_TAG) \
+	calico/csi:$(KIND_TEST_BUILD_TAG) \
+	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG) \
+	calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG) \
+	calico/kube-controllers:$(KIND_TEST_BUILD_TAG) \
+	calico/goldmane:$(KIND_TEST_BUILD_TAG) \
+	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
+	calico/whisker:$(KIND_TEST_BUILD_TAG) \
+	calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
+
+# Expand a local-deps.txt file to the list of .go files in those directories.
+# Usage: $(call local-deps-go-files,<component-dir>)
+local-deps-go-files = $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep -v '^\#' $(REPO_ROOT)/$(1)/local-deps.txt)) -name '*.go' 2>/dev/null)
+
+# .image.created markers: the per-component image build stamp files.
+# Each depends on its source files via local-deps.txt so Make knows when
+# to rebuild. The sub-make handles the actual build; we just ensure it
+# runs when sources are newer.
+KIND_IMAGE_MARKERS = \
+	$(REPO_ROOT)/node/.image.created-$(ARCH) \
+	$(REPO_ROOT)/typha/.image.created-$(ARCH) \
+	$(REPO_ROOT)/apiserver/.image.created-$(ARCH) \
+	$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH) \
+	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH) \
+	$(REPO_ROOT)/calicoctl/.image.created-$(ARCH) \
+	$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH) \
+	$(REPO_ROOT)/goldmane/.image.created-$(ARCH) \
+	$(REPO_ROOT)/webhooks/.image.created-$(ARCH) \
+	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
+	$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH)
+
+$(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
+	$(MAKE) -C $(REPO_ROOT)/node image
+
+$(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
+	$(MAKE) -C $(REPO_ROOT)/typha image
+
+$(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
+	$(MAKE) -C $(REPO_ROOT)/apiserver image
+
+$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
+	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
+
+$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
+	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+
+$(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
+	$(MAKE) -C $(REPO_ROOT)/calicoctl image
+
+$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
+	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
+
+$(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
+	$(MAKE) -C $(REPO_ROOT)/goldmane image
+
+$(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
+	$(MAKE) -C $(REPO_ROOT)/webhooks image
+
+$(REPO_ROOT)/whisker/.image.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/whisker image
+
+$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
+	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
+
+# Operator is built from a separate repo/branch and depends on all other
+# images being built first.
+$(REPO_ROOT)/.stamp.operator: $(KIND_IMAGE_MARKERS) $(KIND_INFRA_DIR)/calico_versions.yml
+	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+	touch $@
+
+## Build all component images needed for kind cluster testing, then tag them.
+.PHONY: kind-build-images
+kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
+	@for img in calico/node calico/typha calico/apiserver calico/cni \
+	    calico/csi calico/node-driver-registrar calico/pod2daemon-flexvol \
+	    calico/ctl calico/kube-controllers calico/goldmane \
+	    calico/webhooks calico/whisker calico/whisker-backend; do \
+	  docker tag $$img:latest-$(ARCH) $$img:$(KIND_TEST_BUILD_TAG) 2>/dev/null || true; \
+	done
+
+# Create a kind cluster and deploy Calico on it via Helm. Assumes images are
+# already built and tagged as test-build in the local Docker daemon. If a
+# cluster already exists (stamp file present), the creation step is skipped.
+.PHONY: kind-deploy
+kind-deploy: kind-cluster-create
+	$(MAKE) -C $(REPO_ROOT) chart
+	REPO_ROOT=$(REPO_ROOT) \
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	KIND=$(KIND) \
+	KIND_NAME=$(KIND_NAME) \
+	ARCH=$(ARCH) \
+	GIT_VERSION=$(GIT_VERSION) \
+	CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
+	KIND_IMAGES="$(KIND_IMAGES)" \
+	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
+
+# Rebuild any images whose source files have changed, load onto the kind
+# cluster, and restart pods.
+.PHONY: kind-reload
+kind-reload: kind-build-images
+	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 
 ###############################################################################
 # Common functions for launching a local etcd instance.
