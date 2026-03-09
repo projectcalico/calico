@@ -6,6 +6,7 @@
   task:
     prologue:
       commands:
+        - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
         - cd third_party/istio-ztunnel
     jobs:
       - name: "Linux amd64"
@@ -22,6 +23,7 @@
         type: s1-aws-arm64-2
     prologue:
       commands:
+        - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
         - cd third_party/istio-ztunnel
     jobs:
       - name: "Linux arm64"
@@ -36,6 +38,7 @@
   task:
     prologue:
       commands:
+        - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
         - cd third_party/istio-ztunnel
     jobs:
       - name: "Linux multi-arch manifest"
@@ -50,6 +53,7 @@
   task:
     prologue:
       commands:
+        - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
         - cd istio
     jobs:
       - name: "Istio: CI"

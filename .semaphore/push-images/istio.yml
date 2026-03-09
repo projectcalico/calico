@@ -21,6 +21,7 @@ global_job_config:
       - retry git fetch --unshallow
       - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
       - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - ssh-add ~/.ssh/id_rsa
 blocks:
