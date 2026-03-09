@@ -12,8 +12,7 @@ BUILD_IMAGES ?= $(ZTUNNEL_IMAGE)
 ZTUNNEL_VERSION = 1.28.1
 
 # required for ci/cd
-BRANCH_NAME = v$(ZTUNNEL_VERSION)-$(BRANCH_NAME)
-LATEST_IMAGE_TAG = $(BRANCH_NAME)
+LATEST_IMAGE_TAG = v$(ZTUNNEL_VERSION)-$(BRANCH_NAME)
 
 ##############################################################################
 # Include lib.Makefile before anything else
