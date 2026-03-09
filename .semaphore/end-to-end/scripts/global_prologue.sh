@@ -42,7 +42,7 @@ RANDOM_TOKEN2=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 4 || true)
 echo "[INFO] random tokens: ${RANDOM_TOKEN1} ${RANDOM_TOKEN2}"
 
 echo "[INFO] Installing jq..."
-sudo apt-get -o Acquire::Retries=5 update  -y
+sudo apt-get -o Acquire::Retries=5 update -y
 sudo apt-get install -o Acquire::Retries=5 jq -y
 
 echo "[INFO] exporting default env vars..."
@@ -113,7 +113,7 @@ echo "[INFO] installing google cloud sdk..."
 gcloud_cmd_c1="echo \"deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main\" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list"
 gcloud_cmd_c1="$gcloud_cmd_c1 && curl --retry 9 --retry-all-errors -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$gcloud_cmd_c1"; fi
-sudo apt-get -o Acquire::Retries=5 update  -y || true; sudo apt-get install -o Acquire::Retries=5 google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin -y || true
+sudo apt-get -o Acquire::Retries=5 update -y || true; sudo apt-get install -o Acquire::Retries=5 google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin -y || true
 
 echo "[INFO] activating google service account..."
 export GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-$HOME/secrets/banzai-google-service-account.json}
@@ -127,7 +127,7 @@ export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --filter="region~'
 # Install python3-pip without requiring manual confirmation (-y flag).
 # Explicitly restart all necessary services using needrestart to ensure daemons using outdated libraries are refreshed.
 pip_install_cmd="echo \"[INFO] installing pip beforehand for c1...\""
-pip_install_cmd="$pip_install_cmd; echo \"[INFO] Installing pip3...\" && sudo apt-get -o Acquire::Retries=5 update  && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 python3-pip -y && sudo needrestart -r a"
+pip_install_cmd="$pip_install_cmd; echo \"[INFO] Installing pip3...\" && sudo apt-get -o Acquire::Retries=5 update && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 python3-pip -y && sudo needrestart -r a"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* && $SEMAPHORE_AGENT_MACHINE_OS_IMAGE == "ubuntu2204" ]]; then eval "$pip_install_cmd"; fi
 
 aws_cli_cmd="echo \"[INFO] installing AWS CLI using pip3...\""
