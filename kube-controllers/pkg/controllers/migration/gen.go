@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate controller-gen crd paths=. output:crd:dir=crd
-//go:generate bash -c "sed -i 's/name: migration$/name: v1beta1/' crd/migration.projectcalico.org_datastoremigrations.yaml"
+// CRD generation is handled by the gen-files Makefile target rather than
+// go-generate directives, so it runs inside the Docker build container with
+// the correct controller-gen version.
 
 package migration

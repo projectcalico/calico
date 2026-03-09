@@ -30,12 +30,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	apiregv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (
@@ -48,6 +52,23 @@ const (
 	// savedAPIServiceAnnotation holds the serialized APIService object so it
 	// can be restored on abort.
 	savedAPIServiceAnnotation = "migration.projectcalico.org/saved-apiservice"
+
+	// defaultMigrationName is the well-known name of the DatastoreMigration CR.
+	defaultMigrationName = "v1-to-v3"
+
+	// apiServiceName is the name of the aggregated APIService for v3.projectcalico.org.
+	apiServiceName = "v3.projectcalico.org"
+
+	// clusterInfoName is the well-known name of the ClusterInformation resource.
+	clusterInfoName = "default"
+
+	// Condition types used in DatastoreMigration status.
+	conditionTypeConflict = "Conflict"
+	conditionTypeFailed   = "Failed"
+
+	// Condition reasons used in DatastoreMigration status.
+	conditionReasonResourceMismatch = "ResourceMismatch"
+	conditionReasonMigrationError   = "MigrationError"
 )
 
 // NewController creates a new migration controller. It watches for DatastoreMigration CRs
@@ -67,8 +88,14 @@ func NewController(
 		v3Client:      v3Client,
 		dynamicClient: dynamicClient,
 		apiregClient:  apiregClient,
+		migClient:     newMigrationClient(dynamicClient),
 	}
 }
+
+// resyncPeriod controls how frequently the informer re-lists all resources.
+// This ensures the Converged phase gets periodic re-checks (future-proofing
+// for Felix/Typha active-API-group detection).
+const resyncPeriod = 60 * time.Second
 
 type migrationController struct {
 	ctx           context.Context
@@ -77,31 +104,81 @@ type migrationController struct {
 	v3Client      calicov3.ProjectcalicoV3Interface
 	dynamicClient dynamic.Interface
 	apiregClient  apiregv1client.ApiregistrationV1Interface
+	migClient     *migrationClient
+	queue         workqueue.TypedRateLimitingInterface[string]
 }
 
 func (c *migrationController) Run(stop chan struct{}) {
 	log.Info("Starting datastore migration controller")
 	defer log.Info("Stopping datastore migration controller")
 
-	// Poll for DatastoreMigration CRs. In a production implementation, this would use
-	// an informer/watch, but for the prototype a simple poll loop is sufficient.
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+	c.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
+	defer c.queue.ShutDown()
 
-	for {
-		select {
-		case <-stop:
-			return
-		case <-ticker.C:
-			if err := c.reconcile(); err != nil {
-				log.WithError(err).Error("Migration reconcile error")
-			}
-		}
+	factory := dynamicinformer.NewDynamicSharedInformerFactory(c.dynamicClient, resyncPeriod)
+	informer := factory.ForResource(DatastoreMigrationGVR).Informer()
+
+	handler := cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			c.enqueue(obj)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			c.enqueue(newObj)
+		},
+		DeleteFunc: func(obj interface{}) {
+			c.enqueue(obj)
+		},
+	}
+	informer.AddEventHandler(handler)
+
+	ctx, cancel := context.WithCancel(c.ctx)
+	defer cancel()
+
+	go informer.Run(ctx.Done())
+
+	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
+		log.Error("Failed to sync informer cache")
+		return
+	}
+	log.Info("Migration informer cache synced")
+
+	go func() {
+		<-stop
+		cancel()
+	}()
+
+	for c.processNextWorkItem() {
 	}
 }
 
+func (c *migrationController) enqueue(obj interface{}) {
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		log.WithError(err).Error("Failed to get key for object")
+		return
+	}
+	c.queue.Add(key)
+}
+
+func (c *migrationController) processNextWorkItem() bool {
+	key, shutdown := c.queue.Get()
+	if shutdown {
+		return false
+	}
+	defer c.queue.Done(key)
+
+	if err := c.reconcile(); err != nil {
+		log.WithError(err).Error("Migration reconcile error")
+		c.queue.AddRateLimited(key)
+		return true
+	}
+
+	c.queue.Forget(key)
+	return true
+}
+
 func (c *migrationController) reconcile() error {
-	dm, err := c.getDatastoreMigration("v1-to-v3")
+	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			return nil
@@ -149,20 +226,98 @@ func (c *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 		}
 		// Re-fetch after metadata update to avoid conflicts.
 		var err error
-		dm, err = c.getDatastoreMigration(dm.Name)
+		dm, err = c.migClient.Get(c.ctx, dm.Name)
 		if err != nil {
 			return fmt.Errorf("re-fetching DatastoreMigration after finalizer: %v", err)
 		}
 	}
 
-	// Validate that the APIService exists (we're running in API server mode).
-	_, err := c.apiregClient.APIServices().Get(c.ctx, "v3.projectcalico.org", metav1.GetOptions{})
+	// Pre-validation: check that v1 CRDs exist.
+	crdClient := c.dynamicClient.Resource(crdGVR)
+	crdList, err := crdClient.List(c.ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("listing CRDs for pre-validation: %v", err)
+	}
+	v1CRDCount := 0
+	for _, crd := range crdList.Items {
+		group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+		if group == "crd.projectcalico.org" {
+			v1CRDCount++
+		}
+	}
+	if v1CRDCount == 0 {
+		c.setFailedStatus(dm, "no v1 CRDs (crd.projectcalico.org) found — nothing to migrate")
+		return c.updateStatus(dm)
+	}
+	logCtx.WithField("v1CRDs", v1CRDCount).Info("Found v1 CRDs to migrate")
+
+	// Pre-validation: check the APIService.
+	apiSvc, err := c.apiregClient.APIServices().Get(c.ctx, apiServiceName, metav1.GetOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			logCtx.Warn("APIService v3.projectcalico.org not found — may not be needed or already partially complete")
+			logCtx.Warn("APIService v3.projectcalico.org not found — may not be running with API server aggregation")
 		} else {
 			return fmt.Errorf("checking APIService: %v", err)
 		}
+	} else if apiSvc.Labels != nil && apiSvc.Labels["kube-aggregator.kubernetes.io/automanaged"] == "true" {
+		c.setFailedStatus(dm, "APIService v3.projectcalico.org is automanaged (CRD-backed), not aggregated — migration requires an aggregated API server")
+		return c.updateStatus(dm)
+	}
+
+	// Detect install namespace.
+	installNamespace := "kube-system"
+	_, err = c.k8sClient.CoreV1().Namespaces().Get(c.ctx, "calico-system", metav1.GetOptions{})
+	if err == nil {
+		installNamespace = "calico-system"
+	}
+
+	// Detect install type (operator vs manifest).
+	installType := "manifest"
+	for _, ns := range []string{installNamespace, "tigera-operator"} {
+		_, err = c.k8sClient.AppsV1().Deployments(ns).Get(c.ctx, "tigera-operator", metav1.GetOptions{})
+		if err == nil {
+			installType = "operator"
+			break
+		}
+	}
+	logCtx.WithFields(log.Fields{
+		"installNamespace": installNamespace,
+		"installType":      installType,
+	}).Info("Detected installation details")
+
+	// Pre-check conflicts: for each registered migrator, list v1 resources, convert,
+	// and check if v3 equivalents exist with different specs. Log warnings only.
+	migrators := GetRegistry()
+	preCheckConflicts := 0
+	for _, m := range migrators {
+		if m.ListV1 == nil || m.Convert == nil || m.GetV3 == nil || m.SpecsEqual == nil {
+			continue
+		}
+		v1List, err := m.ListV1(c.ctx, c.backendClient)
+		if err != nil {
+			logCtx.WithError(err).WithField("kind", m.Kind).Warn("Failed to list v1 resources for pre-check")
+			continue
+		}
+		for _, kvp := range v1List.KVPairs {
+			v3Obj, err := m.Convert(kvp)
+			if err != nil {
+				continue
+			}
+			existing, err := m.GetV3(c.ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+			if err != nil || existing == nil {
+				continue
+			}
+			if !m.SpecsEqual(v3Obj, existing) {
+				preCheckConflicts++
+				logCtx.WithFields(log.Fields{
+					"kind": m.Kind,
+					"name": v3Obj.GetName(),
+				}).Warn("Pre-check: v3 resource exists with different spec (will be reported as conflict during migration)")
+			}
+		}
+	}
+	if preCheckConflicts > 0 {
+		logCtx.WithField("preCheckConflicts", preCheckConflicts).Warn("Pre-check found potential conflicts — migration will proceed but conflicts will be reported")
 	}
 
 	// Transition to Migrating.
@@ -183,7 +338,7 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 	}
 
 	// Re-fetch after metadata update to avoid stale ResourceVersion.
-	refreshed, err := c.getDatastoreMigration(dm.Name)
+	refreshed, err := c.migClient.Get(c.ctx, dm.Name)
 	if err != nil {
 		return fmt.Errorf("re-fetching DatastoreMigration after APIService save: %v", err)
 	}
@@ -209,6 +364,8 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 		TypeDetails: make([]TypeMigrationProgress, 0, len(migrators)),
 	}
 
+	// TODO: Consider batching status updates in memory and committing once at the
+	// end (or per-type) instead of updating status before each type.
 	for i, m := range migrators {
 		// Update current-type progress before starting each type.
 		dm.Status.Progress.CurrentType = m.Kind
@@ -261,9 +418,9 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 	dm.Status.Conditions = nil
 	for _, conflict := range allConflicts {
 		dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
-			Type:               "Conflict",
+			Type:               conditionTypeConflict,
 			Status:             metav1.ConditionTrue,
-			Reason:             "ResourceMismatch",
+			Reason:             conditionReasonResourceMismatch,
 			Message:            conflict,
 			LastTransitionTime: metav1.Now(),
 		})
@@ -292,7 +449,17 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 	return c.updateStatus(dm)
 }
 
-// handleConverged transitions to Complete after the operator detects v3 CRDs.
+// handleConverged transitions to Complete once the operator and components have
+// switched over to the new API version.
+//
+// TODO: Detect that components have actually switched to v3 before transitioning
+// to Complete. The agreed approach is:
+//   - Felix and Typha will report their active API group (e.g., via a status field
+//     on their respective CRDs or a shared ConfigMap).
+//   - This controller should poll those reports on each resync (60s) and only
+//     transition to Complete once all Felix/Typha instances report reading from
+//     projectcalico.org/v3 CRDs.
+//   - Until that mechanism is implemented, this transitions immediately.
 func (c *migrationController) handleConverged(logCtx *log.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration converged, transitioning to Complete")
 	now := metav1.Now()
@@ -314,7 +481,12 @@ func (c *migrationController) handleDeletion(logCtx *log.Entry, dm *DatastoreMig
 	return c.handleAbort(logCtx, dm)
 }
 
-// handleCompletedCleanup deletes v1 CRDs after a successful migration.
+// handleCompletedCleanup deletes v1 CRDs once the DatastoreMigration object
+// has been deleted and is finalizing.
+//
+// TODO: If this errors, we won't get another deletion event. The poll loop will
+// retry since the finalizer is still present, but we should verify this works
+// reliably.
 func (c *migrationController) handleCompletedCleanup(logCtx *log.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration complete, cleaning up v1 CRDs")
 
@@ -361,9 +533,15 @@ func (c *migrationController) handleAbort(logCtx *log.Entry, dm *DatastoreMigrat
 	// them up avoids confusion on retry.
 	c.cleanupPartialV3Resources(logCtx)
 
-	// Step 2: Delete the v3 ClusterInformation if it was created with
+	// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
+	// reading from crd.projectcalico.org/v1 resume normal operation.
+	if err := c.setV1ClusterInfoReady(logCtx, true); err != nil {
+		logCtx.WithError(err).Warn("Failed to restore v1 ClusterInformation during abort (may not exist)")
+	}
+
+	// Step 3: Delete the v3 ClusterInformation if it was created with
 	// DatastoreReady=false, so components don't stay paused after restore.
-	if err := c.v3Client.ClusterInformations().Delete(c.ctx, "default", metav1.DeleteOptions{}); err != nil {
+	if err := c.v3Client.ClusterInformations().Delete(c.ctx, clusterInfoName, metav1.DeleteOptions{}); err != nil {
 		if !kerrors.IsNotFound(err) {
 			logCtx.WithError(err).Warn("Failed to delete v3 ClusterInformation during abort")
 		}
@@ -371,7 +549,7 @@ func (c *migrationController) handleAbort(logCtx *log.Entry, dm *DatastoreMigrat
 		logCtx.Info("Deleted v3 ClusterInformation")
 	}
 
-	// Step 3: Restore the aggregated APIService from the saved annotation.
+	// Step 4: Restore the aggregated APIService from the saved annotation.
 	if err := c.restoreAPIService(logCtx, dm); err != nil {
 		logCtx.WithError(err).Error("Failed to restore APIService during abort")
 		return fmt.Errorf("restoring APIService: %v", err)
@@ -415,7 +593,7 @@ func (c *migrationController) cleanupPartialV3Resources(logCtx *log.Entry) {
 // DatastoreMigration CR, then deletes it. If the APIService is already gone
 // (e.g., controller restarted mid-migration), this is a no-op.
 func (c *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *DatastoreMigration) error {
-	apiSvc, err := c.apiregClient.APIServices().Get(c.ctx, "v3.projectcalico.org", metav1.GetOptions{})
+	apiSvc, err := c.apiregClient.APIServices().Get(c.ctx, apiServiceName, metav1.GetOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			logCtx.Debug("APIService already deleted")
@@ -455,14 +633,14 @@ func (c *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *Dat
 		logCtx.Info("Saved APIService to annotation")
 
 		// Re-fetch to avoid stale resourceVersion after metadata update.
-		dm, err = c.getDatastoreMigration(dm.Name)
+		dm, err = c.migClient.Get(c.ctx, dm.Name)
 		if err != nil {
 			return fmt.Errorf("re-fetching after saving APIService: %v", err)
 		}
 	}
 
 	// Delete the APIService.
-	err = c.apiregClient.APIServices().Delete(c.ctx, "v3.projectcalico.org", metav1.DeleteOptions{})
+	err = c.apiregClient.APIServices().Delete(c.ctx, apiServiceName, metav1.DeleteOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			logCtx.Debug("APIService already deleted")
@@ -477,7 +655,7 @@ func (c *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *Dat
 // restoreAPIService recreates the aggregated APIService from the saved annotation.
 func (c *migrationController) restoreAPIService(logCtx *log.Entry, dm *DatastoreMigration) error {
 	// Check if an aggregated APIService already exists (e.g., operator recreated it).
-	existing, err := c.apiregClient.APIServices().Get(c.ctx, "v3.projectcalico.org", metav1.GetOptions{})
+	existing, err := c.apiregClient.APIServices().Get(c.ctx, apiServiceName, metav1.GetOptions{})
 	if err == nil {
 		if existing.Labels == nil || existing.Labels["kube-aggregator.kubernetes.io/automanaged"] != "true" {
 			logCtx.Info("Aggregated APIService already exists, skipping restore")
@@ -486,7 +664,7 @@ func (c *migrationController) restoreAPIService(logCtx *log.Entry, dm *Datastore
 		// The existing one is automanaged (CRD-backed). Delete it so we can
 		// recreate the aggregated one.
 		logCtx.Info("Deleting automanaged APIService to restore aggregated one")
-		if err := c.apiregClient.APIServices().Delete(c.ctx, "v3.projectcalico.org", metav1.DeleteOptions{}); err != nil {
+		if err := c.apiregClient.APIServices().Delete(c.ctx, apiServiceName, metav1.DeleteOptions{}); err != nil {
 			if !kerrors.IsNotFound(err) {
 				return fmt.Errorf("deleting automanaged APIService: %v", err)
 			}
@@ -521,18 +699,19 @@ func (c *migrationController) restoreAPIService(logCtx *log.Entry, dm *Datastore
 	return nil
 }
 
-// lockDatastore creates or updates the v3 ClusterInformation with DatastoreReady=false
-// to signal components to pause and retain cached dataplane state.
+// lockDatastore creates or updates both v3 and v1 ClusterInformation with
+// DatastoreReady=false to signal components to pause and retain cached dataplane state.
 func (c *migrationController) lockDatastore(logCtx *log.Entry) error {
+	// Lock v3 ClusterInformation.
 	ready := false
 	ci := &apiv3.ClusterInformation{
-		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName},
 		Spec: apiv3.ClusterInformationSpec{
 			DatastoreReady: &ready,
 		},
 	}
 
-	existing, err := c.v3Client.ClusterInformations().Get(c.ctx, "default", metav1.GetOptions{})
+	existing, err := c.v3Client.ClusterInformations().Get(c.ctx, clusterInfoName, metav1.GetOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			_, err = c.v3Client.ClusterInformations().Create(c.ctx, ci, metav1.CreateOptions{})
@@ -540,29 +719,32 @@ func (c *migrationController) lockDatastore(logCtx *log.Entry) error {
 				return fmt.Errorf("creating v3 ClusterInformation: %v", err)
 			}
 			logCtx.Info("Created v3 ClusterInformation with DatastoreReady=false")
-			return nil
+		} else {
+			return fmt.Errorf("getting v3 ClusterInformation: %v", err)
 		}
-		return fmt.Errorf("getting v3 ClusterInformation: %v", err)
+	} else if existing.Spec.DatastoreReady == nil || *existing.Spec.DatastoreReady {
+		existing.Spec.DatastoreReady = &ready
+		_, err = c.v3Client.ClusterInformations().Update(c.ctx, existing, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("updating v3 ClusterInformation: %v", err)
+		}
+		logCtx.Info("Set DatastoreReady=false on v3 ClusterInformation")
+	} else {
+		logCtx.Debug("v3 ClusterInformation already locked")
 	}
 
-	if existing.Spec.DatastoreReady != nil && !*existing.Spec.DatastoreReady {
-		logCtx.Debug("Datastore already locked")
-		return nil
+	// Lock v1 ClusterInformation via the backend client.
+	if err := c.setV1ClusterInfoReady(logCtx, false); err != nil {
+		logCtx.WithError(err).Warn("Failed to lock v1 ClusterInformation (may not exist)")
 	}
 
-	existing.Spec.DatastoreReady = &ready
-	_, err = c.v3Client.ClusterInformations().Update(c.ctx, existing, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("updating v3 ClusterInformation: %v", err)
-	}
-	logCtx.Info("Set DatastoreReady=false on v3 ClusterInformation")
 	return nil
 }
 
-// unlockDatastore sets DatastoreReady=true on the v3 ClusterInformation,
-// signaling components to resume normal operation reading from v3 CRDs.
+// unlockDatastore sets DatastoreReady=true on both v3 and v1 ClusterInformation,
+// signaling components to resume normal operation.
 func (c *migrationController) unlockDatastore(logCtx *log.Entry) error {
-	existing, err := c.v3Client.ClusterInformations().Get(c.ctx, "default", metav1.GetOptions{})
+	existing, err := c.v3Client.ClusterInformations().Get(c.ctx, clusterInfoName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("getting v3 ClusterInformation for unlock: %v", err)
 	}
@@ -571,9 +753,43 @@ func (c *migrationController) unlockDatastore(logCtx *log.Entry) error {
 	existing.Spec.DatastoreReady = &ready
 	_, err = c.v3Client.ClusterInformations().Update(c.ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
-		return fmt.Errorf("unlocking datastore: %v", err)
+		return fmt.Errorf("unlocking v3 datastore: %v", err)
 	}
 	logCtx.Info("Set DatastoreReady=true on v3 ClusterInformation")
+
+	// Unlock v1 ClusterInformation via the backend client.
+	if err := c.setV1ClusterInfoReady(logCtx, true); err != nil {
+		logCtx.WithError(err).Warn("Failed to unlock v1 ClusterInformation (may not exist)")
+	}
+
+	return nil
+}
+
+// setV1ClusterInfoReady sets DatastoreReady on the v1 ClusterInformation via the
+// libcalico-go backend client. If the v1 resource doesn't exist, this is a no-op.
+func (c *migrationController) setV1ClusterInfoReady(logCtx *log.Entry, ready bool) error {
+	key := model.ResourceKey{
+		Kind: apiv3.KindClusterInformation,
+		Name: clusterInfoName,
+	}
+	kvp, err := c.backendClient.Get(c.ctx, key, "")
+	if err != nil {
+		return fmt.Errorf("getting v1 ClusterInformation: %v", err)
+	}
+
+	ci := kvp.Value.(*apiv3.ClusterInformation)
+	if ci.Spec.DatastoreReady != nil && *ci.Spec.DatastoreReady == ready {
+		logCtx.WithField("ready", ready).Debug("v1 ClusterInformation already at desired state")
+		return nil
+	}
+
+	ci.Spec.DatastoreReady = &ready
+	kvp.Value = ci
+	_, err = c.backendClient.Update(c.ctx, kvp)
+	if err != nil {
+		return fmt.Errorf("updating v1 ClusterInformation: %v", err)
+	}
+	logCtx.WithField("ready", ready).Info("Updated v1 ClusterInformation DatastoreReady")
 	return nil
 }
 
@@ -581,38 +797,21 @@ func (c *migrationController) setFailedStatus(dm *DatastoreMigration, message st
 	dm.Status.Phase = DatastoreMigrationPhaseFailed
 	setPhaseMetric(DatastoreMigrationPhaseFailed)
 	dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
-		Type:               "Failed",
+		Type:               conditionTypeFailed,
 		Status:             metav1.ConditionTrue,
-		Reason:             "MigrationError",
+		Reason:             conditionReasonMigrationError,
 		Message:            message,
 		LastTransitionTime: metav1.Now(),
 	})
-}
-
-// getDatastoreMigration retrieves a DatastoreMigration CR by name using the dynamic client.
-func (c *migrationController) getDatastoreMigration(name string) (*DatastoreMigration, error) {
-	uns, err := c.dynamicClient.Resource(DatastoreMigrationGVR).Get(c.ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return unstructuredToDatastoreMigration(uns)
 }
 
 // updateStatus updates the status subresource of a DatastoreMigration CR.
 // It updates dm in-place with the server's response (including new ResourceVersion)
 // so callers can continue making updates without re-fetching.
 func (c *migrationController) updateStatus(dm *DatastoreMigration) error {
-	uns, err := datastoreMigrationToUnstructured(dm)
-	if err != nil {
-		return fmt.Errorf("converting DatastoreMigration to unstructured: %v", err)
-	}
-	updated, err := c.dynamicClient.Resource(DatastoreMigrationGVR).UpdateStatus(c.ctx, uns, metav1.UpdateOptions{})
+	refreshed, err := c.migClient.UpdateStatus(c.ctx, dm)
 	if err != nil {
 		return err
-	}
-	refreshed, err := unstructuredToDatastoreMigration(updated)
-	if err != nil {
-		return fmt.Errorf("parsing updated DatastoreMigration: %v", err)
 	}
 	*dm = *refreshed
 	return nil
@@ -622,11 +821,7 @@ func (c *migrationController) updateStatus(dm *DatastoreMigration) error {
 // DatastoreMigration CR. This uses Update (not UpdateStatus) to persist
 // metadata changes like annotations and finalizers.
 func (c *migrationController) updateMetadata(dm *DatastoreMigration) error {
-	uns, err := datastoreMigrationToUnstructured(dm)
-	if err != nil {
-		return fmt.Errorf("converting DatastoreMigration to unstructured: %v", err)
-	}
-	_, err = c.dynamicClient.Resource(DatastoreMigrationGVR).Update(c.ctx, uns, metav1.UpdateOptions{})
+	_, err := c.migClient.Update(c.ctx, dm)
 	return err
 }
 
@@ -656,30 +851,6 @@ func hasFinalizer(dm *DatastoreMigration) bool {
 		}
 	}
 	return false
-}
-
-func unstructuredToDatastoreMigration(uns *unstructured.Unstructured) (*DatastoreMigration, error) {
-	data, err := uns.MarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	dm := &DatastoreMigration{}
-	if err := json.Unmarshal(data, dm); err != nil {
-		return nil, err
-	}
-	return dm, nil
-}
-
-func datastoreMigrationToUnstructured(dm *DatastoreMigration) (*unstructured.Unstructured, error) {
-	data, err := json.Marshal(dm)
-	if err != nil {
-		return nil, err
-	}
-	uns := &unstructured.Unstructured{}
-	if err := uns.UnmarshalJSON(data); err != nil {
-		return nil, err
-	}
-	return uns, nil
 }
 
 // crdGVR is the GVR for CustomResourceDefinition objects.

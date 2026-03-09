@@ -19,8 +19,25 @@
 package migration
 
 import (
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // SchemeGroupVersion is the group version used to register the migration API objects.
 var SchemeGroupVersion = schema.GroupVersion{Group: Group, Version: Version}
+
+var (
+	// SchemeBuilder collects functions to add types to the scheme.
+	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
+
+	// AddToScheme applies all stored SchemeBuilder functions to a scheme.
+	AddToScheme = SchemeBuilder.AddToScheme
+)
+
+func addKnownTypes(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(SchemeGroupVersion,
+		&DatastoreMigration{},
+		&DatastoreMigrationList{},
+	)
+	return nil
+}

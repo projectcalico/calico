@@ -16,6 +16,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -94,6 +95,7 @@ type mockBackendClient struct {
 	resources   map[string][]*model.KVPair
 	ipamBlocks  []*model.KVPair
 	ipamHandles []*model.KVPair
+	clusterInfo *model.KVPair
 }
 
 func (m *mockBackendClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
@@ -107,6 +109,23 @@ func (m *mockBackendClient) List(ctx context.Context, list model.ListInterface, 
 		kvps := m.resources[rlo.Kind]
 		return &model.KVPairList{KVPairs: kvps}, nil
 	}
+}
+
+func (m *mockBackendClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	rk, ok := key.(model.ResourceKey)
+	if ok && rk.Kind == apiv3.KindClusterInformation && m.clusterInfo != nil {
+		return m.clusterInfo, nil
+	}
+	return nil, fmt.Errorf("not found: %v", key)
+}
+
+func (m *mockBackendClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	rk, ok := kvp.Key.(model.ResourceKey)
+	if ok && rk.Kind == apiv3.KindClusterInformation {
+		m.clusterInfo = kvp
+		return kvp, nil
+	}
+	return nil, fmt.Errorf("not found: %v", kvp.Key)
 }
 
 func TestMigrateResourceType_NewResources(t *testing.T) {

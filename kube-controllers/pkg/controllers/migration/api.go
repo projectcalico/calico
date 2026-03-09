@@ -30,21 +30,41 @@ var DatastoreMigrationGVR = schema.GroupVersionResource{
 	Resource: "datastoremigrations",
 }
 
+// DatastoreMigrationPhase represents the current state of a datastore migration.
 type DatastoreMigrationPhase string
 
 const (
-	DatastoreMigrationPhasePending   DatastoreMigrationPhase = "Pending"
+	// DatastoreMigrationPhasePending indicates the migration CR has been created but
+	// prerequisites have not yet been validated and migration has not started.
+	DatastoreMigrationPhasePending DatastoreMigrationPhase = "Pending"
+
+	// DatastoreMigrationPhaseMigrating indicates the controller is actively copying
+	// resources from v1 CRDs to v3 CRDs. The datastore is locked (DatastoreReady=false)
+	// during this phase.
 	DatastoreMigrationPhaseMigrating DatastoreMigrationPhase = "Migrating"
+
+	// DatastoreMigrationPhaseConverged indicates all resources have been migrated
+	// successfully with no conflicts and the datastore has been unlocked.
 	DatastoreMigrationPhaseConverged DatastoreMigrationPhase = "Converged"
-	DatastoreMigrationPhaseComplete  DatastoreMigrationPhase = "Complete"
-	DatastoreMigrationPhaseFailed    DatastoreMigrationPhase = "Failed"
+
+	// DatastoreMigrationPhaseComplete indicates the migration is fully finished.
+	// Deleting the CR in this phase triggers cleanup of v1 CRDs.
+	DatastoreMigrationPhaseComplete DatastoreMigrationPhase = "Complete"
+
+	// DatastoreMigrationPhaseFailed indicates the migration encountered an
+	// unrecoverable error. The CR must be deleted (triggering rollback) and
+	// recreated to retry.
+	DatastoreMigrationPhaseFailed DatastoreMigrationPhase = "Failed"
 )
 
+// DatastoreMigrationKind identifies the type of migration to perform.
 // +kubebuilder:validation:Enum=V1ToV3
-type DatastoreMigrationType string
+type DatastoreMigrationKind string
 
 const (
-	DatastoreMigrationTypeV1ToV3 DatastoreMigrationType = "V1ToV3"
+	// DatastoreMigrationKindV1ToV3 migrates resources from crd.projectcalico.org/v1
+	// CRDs to projectcalico.org/v3 CRDs.
+	DatastoreMigrationKindV1ToV3 DatastoreMigrationKind = "V1ToV3"
 )
 
 // DatastoreMigration triggers and tracks the migration of Calico resources
@@ -78,36 +98,61 @@ type DatastoreMigrationList struct {
 	Items           []DatastoreMigration `json:"items"`
 }
 
+// DatastoreMigrationSpec defines the desired migration behavior.
+//
+// TODO: Add a mechanism to trigger rollback (e.g., a spec field or deleting the
+// CR while in a non-Complete phase triggers abort via finalizer, but we may want
+// an explicit rollback action).
 type DatastoreMigrationSpec struct {
+	// Kind specifies the migration to perform (e.g., V1ToV3).
 	// +kubebuilder:validation:Required
-	Type DatastoreMigrationType `json:"type"`
+	Kind DatastoreMigrationKind `json:"kind"`
 }
 
+// DatastoreMigrationStatus reports the observed state of the migration.
 type DatastoreMigrationStatus struct {
-	Phase       DatastoreMigrationPhase    `json:"phase,omitempty"`
-	StartedAt   *metav1.Time               `json:"startedAt,omitempty"`
-	CompletedAt *metav1.Time               `json:"completedAt,omitempty"`
-	Progress    DatastoreMigrationProgress `json:"progress,omitempty"`
-	Conditions  []metav1.Condition         `json:"conditions,omitempty"`
+	// Phase is the current phase of the migration state machine.
+	Phase DatastoreMigrationPhase `json:"phase,omitempty"`
+	// StartedAt is the timestamp when the migration transitioned to Migrating.
+	StartedAt *metav1.Time `json:"startedAt,omitempty"`
+	// CompletedAt is the timestamp when the migration transitioned to Complete.
+	CompletedAt *metav1.Time `json:"completedAt,omitempty"`
+	// Progress tracks per-type and aggregate migration counters.
+	Progress DatastoreMigrationProgress `json:"progress,omitempty"`
+	// Conditions report conflicts and errors encountered during migration.
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
+// DatastoreMigrationProgress tracks aggregate and per-type migration counters.
 type DatastoreMigrationProgress struct {
-	TotalTypes     int    `json:"totalTypes,omitempty"`
-	CompletedTypes int    `json:"completedTypes,omitempty"`
-	CurrentType    string `json:"currentType,omitempty"`
+	// TotalTypes is the number of resource types to migrate.
+	TotalTypes int `json:"totalTypes,omitempty"`
+	// CompletedTypes is the number of resource types that have been fully processed.
+	CompletedTypes int `json:"completedTypes,omitempty"`
+	// CurrentType is the resource kind currently being migrated, or empty if done.
+	CurrentType string `json:"currentType,omitempty"`
 
-	Total     int `json:"total,omitempty"`
-	Migrated  int `json:"migrated,omitempty"`
-	Skipped   int `json:"skipped,omitempty"`
+	// Total is the total number of resources processed across all types.
+	Total int `json:"total,omitempty"`
+	// Migrated is the number of resources successfully copied to v3.
+	Migrated int `json:"migrated,omitempty"`
+	// Skipped is the number of resources that already existed in v3 with matching content.
+	Skipped int `json:"skipped,omitempty"`
+	// Conflicts is the number of resources that existed in v3 with different content.
 	Conflicts int `json:"conflicts,omitempty"`
 
+	// TypeDetails contains per-resource-type migration results.
 	TypeDetails []TypeMigrationProgress `json:"typeDetails,omitempty"`
 }
 
-// TypeMigrationProgress tracks the result for a single resource type.
+// TypeMigrationProgress tracks the migration result for a single resource kind.
 type TypeMigrationProgress struct {
-	Kind      string `json:"kind"`
-	Migrated  int    `json:"migrated,omitempty"`
-	Skipped   int    `json:"skipped,omitempty"`
-	Conflicts int    `json:"conflicts,omitempty"`
+	// Kind is the Calico resource kind (e.g., "NetworkPolicy", "GlobalNetworkPolicy").
+	Kind string `json:"kind"`
+	// Migrated is the number of resources of this kind successfully copied to v3.
+	Migrated int `json:"migrated,omitempty"`
+	// Skipped is the number of resources of this kind that already existed in v3 with matching content.
+	Skipped int `json:"skipped,omitempty"`
+	// Conflicts is the number of resources of this kind that existed in v3 with different content.
+	Conflicts int `json:"conflicts,omitempty"`
 }
