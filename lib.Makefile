@@ -380,10 +380,6 @@ endif
 
 IMAGE_DEPS ?= Dockerfile
 
-# Expand a local-deps.txt file to the list of .go files in those directories.
-# Usage: $(call local-deps-go-files,<component-dir>)
-local-deps-go-files = $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep -v '^\#' $(REPO_ROOT)/$(1)/local-deps.txt)) -name '*.go' 2>/dev/null)
-
 # A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
 .PHONY: force-rebuild
 force-rebuild:
@@ -1536,96 +1532,75 @@ KIND_IMAGES = \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
 
-# Stamp-file rules: build and tag each component image as test-build.
-# The combined tar for kind loading is produced at load time by the shared load script.
-KIND_IMAGE_STAMPS = \
-	$(REPO_ROOT)/.stamp.calico-node \
-	$(REPO_ROOT)/.stamp.calico-typha \
-	$(REPO_ROOT)/.stamp.calico-apiserver \
-	$(REPO_ROOT)/.stamp.calico-cni \
-	$(REPO_ROOT)/.stamp.pod2daemon \
-	$(REPO_ROOT)/.stamp.csi \
-	$(REPO_ROOT)/.stamp.node-driver-registrar \
-	$(REPO_ROOT)/.stamp.calicoctl \
-	$(REPO_ROOT)/.stamp.kube-controllers \
-	$(REPO_ROOT)/.stamp.operator \
-	$(REPO_ROOT)/.stamp.webhook \
-	$(REPO_ROOT)/.stamp.whisker \
-	$(REPO_ROOT)/.stamp.whisker-backend \
-	$(REPO_ROOT)/.stamp.goldmane
+# Expand a local-deps.txt file to the list of .go files in those directories.
+# Usage: $(call local-deps-go-files,<component-dir>)
+local-deps-go-files = $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep -v '^\#' $(REPO_ROOT)/$(1)/local-deps.txt)) -name '*.go' 2>/dev/null)
 
-$(REPO_ROOT)/.stamp.calico-node:
+# .image.created markers: the per-component image build stamp files.
+# Each depends on its source files via local-deps.txt so Make knows when
+# to rebuild. The sub-make handles the actual build; we just ensure it
+# runs when sources are newer.
+KIND_IMAGE_MARKERS = \
+	$(REPO_ROOT)/node/.image.created-$(ARCH) \
+	$(REPO_ROOT)/typha/.image.created-$(ARCH) \
+	$(REPO_ROOT)/apiserver/.image.created-$(ARCH) \
+	$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH) \
+	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH) \
+	$(REPO_ROOT)/calicoctl/.image.created-$(ARCH) \
+	$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH) \
+	$(REPO_ROOT)/goldmane/.image.created-$(ARCH) \
+	$(REPO_ROOT)/webhooks/.image.created-$(ARCH) \
+	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
+	$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH)
+
+$(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
-	docker tag calico/node:latest-$(ARCH) calico/node:$(KIND_TEST_BUILD_TAG)
-	touch $@
 
-$(REPO_ROOT)/.stamp.calico-typha:
+$(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
 	$(MAKE) -C $(REPO_ROOT)/typha image
-	docker tag calico/typha:latest-$(ARCH) calico/typha:$(KIND_TEST_BUILD_TAG)
-	touch $@
 
-$(REPO_ROOT)/.stamp.calico-apiserver:
+$(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
 	$(MAKE) -C $(REPO_ROOT)/apiserver image
-	docker tag calico/apiserver:latest-$(ARCH) calico/apiserver:$(KIND_TEST_BUILD_TAG)
-	touch $@
 
-$(REPO_ROOT)/.stamp.calico-cni:
+$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
 	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
-	docker tag calico/cni:latest-$(ARCH) calico/cni:$(KIND_TEST_BUILD_TAG)
-	touch $@
 
-$(REPO_ROOT)/.stamp.csi:
+$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
 	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
-	docker tag calico/csi:latest-$(ARCH) calico/csi:$(KIND_TEST_BUILD_TAG)
-	touch $@
 
-$(REPO_ROOT)/.stamp.node-driver-registrar:
-	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
-	docker tag calico/node-driver-registrar:latest-$(ARCH) calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG)
-	touch $@
-
-$(REPO_ROOT)/.stamp.pod2daemon:
-	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
-	docker tag calico/pod2daemon-flexvol:latest-$(ARCH) calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG)
-	touch $@
-
-$(REPO_ROOT)/.stamp.calicoctl:
+$(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
 	$(MAKE) -C $(REPO_ROOT)/calicoctl image
-	docker tag calico/ctl:latest-$(ARCH) calico/ctl:$(KIND_TEST_BUILD_TAG)
-	touch $@
 
-$(REPO_ROOT)/.stamp.kube-controllers:
+$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
 	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
-	docker tag calico/kube-controllers:latest-$(ARCH) calico/kube-controllers:$(KIND_TEST_BUILD_TAG)
-	touch $@
 
-$(REPO_ROOT)/.stamp.operator: $(filter-out $(REPO_ROOT)/.stamp.operator,$(KIND_IMAGE_STAMPS)) $(KIND_INFRA_DIR)/calico_versions.yml
+$(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
+	$(MAKE) -C $(REPO_ROOT)/goldmane image
+
+$(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
+	$(MAKE) -C $(REPO_ROOT)/webhooks image
+
+$(REPO_ROOT)/whisker/.image.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/whisker image
+
+$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
+	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
+
+# Operator is built from a separate repo/branch and depends on all other
+# images being built first.
+$(REPO_ROOT)/.stamp.operator: $(KIND_IMAGE_MARKERS) $(KIND_INFRA_DIR)/calico_versions.yml
 	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
 	touch $@
 
-$(REPO_ROOT)/.stamp.goldmane:
-	$(MAKE) -C $(REPO_ROOT)/goldmane image
-	docker tag calico/goldmane:latest-$(ARCH) calico/goldmane:$(KIND_TEST_BUILD_TAG)
-	touch $@
-
-$(REPO_ROOT)/.stamp.webhook:
-	$(MAKE) -C $(REPO_ROOT)/webhooks image
-	docker tag calico/webhooks:latest-$(ARCH) calico/webhooks:$(KIND_TEST_BUILD_TAG)
-	touch $@
-
-$(REPO_ROOT)/.stamp.whisker:
-	$(MAKE) -C $(REPO_ROOT)/whisker image
-	docker tag calico/whisker:latest-$(ARCH) calico/whisker:$(KIND_TEST_BUILD_TAG)
-	touch $@
-
-$(REPO_ROOT)/.stamp.whisker-backend:
-	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
-	docker tag calico/whisker-backend:latest-$(ARCH) calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
-	touch $@
-
-## Build and tag all component images needed for kind cluster testing.
+## Build all component images needed for kind cluster testing, then tag them.
 .PHONY: kind-build-images
-kind-build-images: $(KIND_IMAGE_STAMPS)
+kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
+	@for img in calico/node calico/typha calico/apiserver calico/cni \
+	    calico/csi calico/node-driver-registrar calico/pod2daemon-flexvol \
+	    calico/ctl calico/kube-controllers calico/goldmane \
+	    calico/webhooks calico/whisker calico/whisker-backend; do \
+	  docker tag $$img:latest-$(ARCH) $$img:$(KIND_TEST_BUILD_TAG) 2>/dev/null || true; \
+	done
 
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
 # already built and tagged as test-build in the local Docker daemon. If a
@@ -1644,9 +1619,10 @@ kind-deploy: kind-cluster-create
 	KIND_IMAGES="$(KIND_IMAGES)" \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
-# Load test-build images onto an existing kind cluster and restart pods.
+# Rebuild any images whose source files have changed, load onto the kind
+# cluster, and restart pods.
 .PHONY: kind-reload
-kind-reload: $(KUBECTL)
+kind-reload: kind-build-images
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
