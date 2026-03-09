@@ -81,6 +81,10 @@ func TestImageComponents(t *testing.T) {
 			"webhooks":                     {Version: "v3.31.0", Image: "webhooks"},
 			"whisker":                      {Version: "v3.31.0", Image: "whisker"},
 			"whisker-backend":              {Version: "v3.31.0", Image: "whisker-backend"},
+			"istio-install-cni":            {Version: "v3.31.0", Image: "istio-install-cni"},
+			"istio-pilot":                  {Version: "v3.31.0", Image: "istio-pilot"},
+			"istio-proxyv2":                {Version: "v3.31.0", Image: "istio-proxyv2"},
+			"istio-ztunnel":                {Version: "v3.31.0", Image: "istio-ztunnel"},
 		}
 		actualComponents := p.ImageComponents(false)
 		if diff := cmp.Diff(expectedComponents, actualComponents); diff != "" {
@@ -113,6 +117,10 @@ func TestImageComponents(t *testing.T) {
 			"webhooks":                     {Version: "v3.31.0", Image: "webhooks"},
 			"whisker":                      {Version: "v3.31.0", Image: "whisker"},
 			"whisker-backend":              {Version: "v3.31.0", Image: "whisker-backend"},
+			"istio-install-cni":            {Version: "v3.31.0", Image: "istio-install-cni"},
+			"istio-pilot":                  {Version: "v3.31.0", Image: "istio-pilot"},
+			"istio-proxyv2":                {Version: "v3.31.0", Image: "istio-proxyv2"},
+			"istio-ztunnel":                {Version: "v3.31.0", Image: "istio-ztunnel"},
 			"tigera/operator":              {Version: "v1.40.0-v3.31.0", Image: "tigera/operator", Registry: "docker.io"},
 			"tigera/operator-init":         {Version: "v1.40.0-v3.31.0", Image: "tigera/operator-init", Registry: "docker.io"},
 		}
