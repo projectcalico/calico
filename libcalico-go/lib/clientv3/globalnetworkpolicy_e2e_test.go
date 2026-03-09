@@ -312,10 +312,9 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			}
 
 			By("Attempting to delete GlobalNetworkPolicy (name2) again")
-			Eventually(func() error {
-				_, err := c.GlobalNetworkPolicies().Delete(ctx, name2, options.DeleteOptions{})
-				return err
-			}, 5*time.Second, 200*time.Millisecond).Should(HaveOccurred())
+			_, outError = c.GlobalNetworkPolicies().Delete(ctx, name2, options.DeleteOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkPolicy(" + name2 + ") with error:"))
 
 			By("Listing all GlobalNetworkPolicies and expecting no items")
 			outList, outError = c.GlobalNetworkPolicies().List(ctx, options.ListOptions{})

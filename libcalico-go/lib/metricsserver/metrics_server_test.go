@@ -147,7 +147,7 @@ func TestServePrometheusMetricsHTTPS(t *testing.T) {
 			select {
 			case err := <-done:
 				recordConnectionError(err)
-			case <-time.After(200 * time.Millisecond):
+			case <-time.After(1 * time.Second):
 				// Success: the server is still running.
 			}
 			close(done)
