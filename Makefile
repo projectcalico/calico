@@ -143,8 +143,21 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 # local-deps.txt: per-component list of in-repo Go package directories that
 # the component depends on. Used by lib.Makefile to populate SRC_FILES and
 # track image build staleness for kind workflows.
-LOCAL_DEP_DIRS = node typha apiserver cni-plugin pod2daemon calicoctl kube-controllers \
-	goldmane webhooks whisker-backend felix confd app-policy guardian
+LOCAL_DEP_DIRS = \
+	apiserver \
+	app-policy \
+	calicoctl \
+	cni-plugin \
+	confd \
+	felix \
+	goldmane \
+	guardian \
+	kube-controllers \
+	node \
+	pod2daemon \
+	typha \
+	webhooks \
+	whisker-backend
 LOCAL_DEP_FILES = $(patsubst %, %/local-deps.txt, $(LOCAL_DEP_DIRS))
 
 gen-local-deps-files:
