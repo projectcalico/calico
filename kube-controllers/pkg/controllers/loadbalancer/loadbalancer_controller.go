@@ -290,17 +290,22 @@ func (c *loadBalancerController) handleUpdate(update any) {
 }
 
 func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
-	if kvp.Value == nil {
+	block, ok := kvp.Value.(*model.AllocationBlock)
+	if !ok {
+		log.WithField("key", kvp.Key.String()).Errorf("unexpected type for AllocationBlock value: %T", kvp.Value)
+		c.allocationTracker.deleteBlock(kvp.Key.String())
+		return
+	}
+	if block == nil {
 		c.allocationTracker.deleteBlock(kvp.Key.String())
 		return
 	}
 
-	affinity := kvp.Value.(*model.AllocationBlock).Affinity
-	block := kvp.Value.(*model.AllocationBlock)
+	affinity := block.Affinity
 	key := kvp.Key.String()
 
-	if affinity != nil && *affinity != fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
-		c.allocationTracker.deleteBlock(kvp.Key.String())
+	if affinity == nil || *affinity != fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
+		c.allocationTracker.deleteBlock(key)
 		return
 	}
 
@@ -308,21 +313,21 @@ func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
 
 	for i := range block.Allocations {
 		if block.Allocations[i] != nil {
-			if _, ok := block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeNamespace]; !ok {
-				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeNamespace, *block.Attributes[*block.Allocations[i]].AttrPrimary)
+			if _, ok := block.Attributes[*block.Allocations[i]].ActiveOwnerAttrs[ipam.AttributeNamespace]; !ok {
+				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeNamespace, *block.Attributes[*block.Allocations[i]].HandleID)
 				continue
 			}
 
-			if _, ok := block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeService]; !ok {
-				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeService, *block.Attributes[*block.Allocations[i]].AttrPrimary)
+			if _, ok := block.Attributes[*block.Allocations[i]].ActiveOwnerAttrs[ipam.AttributeService]; !ok {
+				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeService, *block.Attributes[*block.Allocations[i]].HandleID)
 				continue
 			}
 
 			ip := block.OrdinalToIP(i)
 			svcKey := serviceKey{
-				handle:    *block.Attributes[*block.Allocations[i]].AttrPrimary,
-				namespace: block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeNamespace],
-				name:      block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeService],
+				handle:    *block.Attributes[*block.Allocations[i]].HandleID,
+				namespace: block.Attributes[*block.Allocations[i]].ActiveOwnerAttrs[ipam.AttributeNamespace],
+				name:      block.Attributes[*block.Allocations[i]].ActiveOwnerAttrs[ipam.AttributeService],
 			}
 
 			c.allocationTracker.assignAddressToBlock(key, ip.String(), svcKey)

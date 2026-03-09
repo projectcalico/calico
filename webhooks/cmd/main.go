@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
@@ -54,6 +55,15 @@ var WebhookCommand = &cobra.Command{
 	Run:   serveWebhookTLS,
 }
 
+var VersionCommand = &cobra.Command{
+	Use:   "version",
+	Short: "Prints version information about the webhook server.",
+	Long:  `Prints version information about the webhook server.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		buildinfo.PrintVersion()
+	},
+}
+
 func init() {
 	WebhookCommand.Flags().StringVar(&certFile, "tls-cert-file", "", "File containing the default x509 Certificate for HTTPS. (CA cert, if any, concatenated after server cert).")
 	WebhookCommand.Flags().StringVar(&keyFile, "tls-private-key-file", "", "File containing the default x509 private key matching --tls-cert-file.")
@@ -65,6 +75,7 @@ func main() {
 	// Create the root command and add the webhook command to it.
 	rootCmd := &cobra.Command{Use: "webhook"}
 	rootCmd.AddCommand(WebhookCommand)
+	rootCmd.AddCommand(VersionCommand)
 	os.Exit(cli.Run(rootCmd))
 }
 

@@ -75,6 +75,7 @@ type AttachPoint struct {
 	IngressPacketRateConfigured   bool
 	EgressPacketRateConfigured    bool
 	WorkloadSrcSpoofingConfigured bool
+	UDPGSOLinearize               bool
 	DSCP                          int8
 	MaglevLUTSize                 uint32
 	ProgramsMap                   maps.Map
@@ -491,6 +492,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.WorkloadSrcSpoofingConfigured {
 		globalData.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
+  }
+  
+	if ap.UDPGSOLinearize {
+		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
 	}
 
 	globalData.HostTunnelIPv4 = globalData.HostIPv4

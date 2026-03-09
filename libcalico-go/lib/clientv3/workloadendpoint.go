@@ -21,7 +21,7 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -31,11 +31,11 @@ import (
 
 // WorkloadEndpointInterface has methods to work with WorkloadEndpoint resources.
 type WorkloadEndpointInterface interface {
-	Create(ctx context.Context, res *libapiv3.WorkloadEndpoint, opts options.SetOptions) (*libapiv3.WorkloadEndpoint, error)
-	Update(ctx context.Context, res *libapiv3.WorkloadEndpoint, opts options.SetOptions) (*libapiv3.WorkloadEndpoint, error)
-	Delete(ctx context.Context, namespace, name string, opts options.DeleteOptions) (*libapiv3.WorkloadEndpoint, error)
-	Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*libapiv3.WorkloadEndpoint, error)
-	List(ctx context.Context, opts options.ListOptions) (*libapiv3.WorkloadEndpointList, error)
+	Create(ctx context.Context, res *internalapi.WorkloadEndpoint, opts options.SetOptions) (*internalapi.WorkloadEndpoint, error)
+	Update(ctx context.Context, res *internalapi.WorkloadEndpoint, opts options.SetOptions) (*internalapi.WorkloadEndpoint, error)
+	Delete(ctx context.Context, namespace, name string, opts options.DeleteOptions) (*internalapi.WorkloadEndpoint, error)
+	Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*internalapi.WorkloadEndpoint, error)
+	List(ctx context.Context, opts options.ListOptions) (*internalapi.WorkloadEndpointList, error)
 	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 }
 
@@ -46,7 +46,7 @@ type workloadEndpoints struct {
 
 // Create takes the representation of a WorkloadEndpoint and creates it.  Returns the stored
 // representation of the WorkloadEndpoint, and an error, if there is any.
-func (r workloadEndpoints) Create(ctx context.Context, res *libapiv3.WorkloadEndpoint, opts options.SetOptions) (*libapiv3.WorkloadEndpoint, error) {
+func (r workloadEndpoints) Create(ctx context.Context, res *internalapi.WorkloadEndpoint, opts options.SetOptions) (*internalapi.WorkloadEndpoint, error) {
 	if res != nil {
 		// Since we're about to default some fields, take a (shallow) copy of the input data
 		// before we do so.
@@ -59,16 +59,16 @@ func (r workloadEndpoints) Create(ctx context.Context, res *libapiv3.WorkloadEnd
 		return nil, err
 	}
 	r.updateLabelsForStorage(res)
-	out, err := r.client.resources.Create(ctx, opts, libapiv3.KindWorkloadEndpoint, res)
+	out, err := r.client.resources.Create(ctx, opts, internalapi.KindWorkloadEndpoint, res)
 	if out != nil {
-		return out.(*libapiv3.WorkloadEndpoint), err
+		return out.(*internalapi.WorkloadEndpoint), err
 	}
 	return nil, err
 }
 
 // Update takes the representation of a WorkloadEndpoint and updates it. Returns the stored
 // representation of the WorkloadEndpoint, and an error, if there is any.
-func (r workloadEndpoints) Update(ctx context.Context, res *libapiv3.WorkloadEndpoint, opts options.SetOptions) (*libapiv3.WorkloadEndpoint, error) {
+func (r workloadEndpoints) Update(ctx context.Context, res *internalapi.WorkloadEndpoint, opts options.SetOptions) (*internalapi.WorkloadEndpoint, error) {
 	if res != nil {
 		// Since we're about to default some fields, take a (shallow) copy of the input data
 		// before we do so.
@@ -81,36 +81,36 @@ func (r workloadEndpoints) Update(ctx context.Context, res *libapiv3.WorkloadEnd
 		return nil, err
 	}
 	r.updateLabelsForStorage(res)
-	out, err := r.client.resources.Update(ctx, opts, libapiv3.KindWorkloadEndpoint, res)
+	out, err := r.client.resources.Update(ctx, opts, internalapi.KindWorkloadEndpoint, res)
 	if out != nil {
-		return out.(*libapiv3.WorkloadEndpoint), err
+		return out.(*internalapi.WorkloadEndpoint), err
 	}
 	return nil, err
 }
 
 // Delete takes name of the WorkloadEndpoint and deletes it. Returns an error if one occurs.
-func (r workloadEndpoints) Delete(ctx context.Context, namespace, name string, opts options.DeleteOptions) (*libapiv3.WorkloadEndpoint, error) {
-	out, err := r.client.resources.Delete(ctx, opts, libapiv3.KindWorkloadEndpoint, namespace, name)
+func (r workloadEndpoints) Delete(ctx context.Context, namespace, name string, opts options.DeleteOptions) (*internalapi.WorkloadEndpoint, error) {
+	out, err := r.client.resources.Delete(ctx, opts, internalapi.KindWorkloadEndpoint, namespace, name)
 	if out != nil {
-		return out.(*libapiv3.WorkloadEndpoint), err
+		return out.(*internalapi.WorkloadEndpoint), err
 	}
 	return nil, err
 }
 
 // Get takes name of the WorkloadEndpoint, and returns the corresponding WorkloadEndpoint object,
 // and an error if there is any.
-func (r workloadEndpoints) Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*libapiv3.WorkloadEndpoint, error) {
-	out, err := r.client.resources.Get(ctx, opts, libapiv3.KindWorkloadEndpoint, namespace, name)
+func (r workloadEndpoints) Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*internalapi.WorkloadEndpoint, error) {
+	out, err := r.client.resources.Get(ctx, opts, internalapi.KindWorkloadEndpoint, namespace, name)
 	if out != nil {
-		return out.(*libapiv3.WorkloadEndpoint), err
+		return out.(*internalapi.WorkloadEndpoint), err
 	}
 	return nil, err
 }
 
 // List returns the list of WorkloadEndpoint objects that match the supplied options.
-func (r workloadEndpoints) List(ctx context.Context, opts options.ListOptions) (*libapiv3.WorkloadEndpointList, error) {
-	res := &libapiv3.WorkloadEndpointList{}
-	if err := r.client.resources.List(ctx, opts, libapiv3.KindWorkloadEndpoint, libapiv3.KindWorkloadEndpointList, res); err != nil {
+func (r workloadEndpoints) List(ctx context.Context, opts options.ListOptions) (*internalapi.WorkloadEndpointList, error) {
+	res := &internalapi.WorkloadEndpointList{}
+	if err := r.client.resources.List(ctx, opts, internalapi.KindWorkloadEndpoint, internalapi.KindWorkloadEndpointList, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -119,12 +119,12 @@ func (r workloadEndpoints) List(ctx context.Context, opts options.ListOptions) (
 // Watch returns a watch.Interface that watches the NetworkPolicies that match the
 // supplied options.
 func (r workloadEndpoints) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, libapiv3.KindWorkloadEndpoint, nil)
+	return r.client.resources.Watch(ctx, opts, internalapi.KindWorkloadEndpoint, nil)
 }
 
 // assignOrValidateName either assigns the name calculated from the Spec fields, or validates
 // the name against the spec fields.
-func (r workloadEndpoints) assignOrValidateName(res *libapiv3.WorkloadEndpoint) error {
+func (r workloadEndpoints) assignOrValidateName(res *internalapi.WorkloadEndpoint) error {
 	// Validate the workload endpoint indices and the name match.
 	wepids := names.IdentifiersForV3WorkloadEndpoint(res)
 	expectedName, err := wepids.CalculateWorkloadEndpointName(false)
@@ -151,7 +151,7 @@ func (r workloadEndpoints) assignOrValidateName(res *libapiv3.WorkloadEndpoint) 
 // updateLabelsForStorage updates the set of labels that we persist.  It adds/overrides
 // the Namespace and Orchestrator labels which must be set to the correct values and are
 // not user configurable.
-func (r workloadEndpoints) updateLabelsForStorage(res *libapiv3.WorkloadEndpoint) {
+func (r workloadEndpoints) updateLabelsForStorage(res *internalapi.WorkloadEndpoint) {
 	labelsCopy := make(map[string]string, len(res.GetLabels())+2)
 	maps.Copy(labelsCopy, res.GetLabels())
 	labelsCopy[apiv3.LabelNamespace] = res.Namespace

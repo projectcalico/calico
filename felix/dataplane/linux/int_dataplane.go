@@ -727,6 +727,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	dataplaneFeatures := featureDetector.GetFeatures()
+
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option
 		if config.BPFEnabled && bpfutils.BTFEnabled {
@@ -2985,6 +2986,12 @@ func startBPFDataplaneComponents(
 		if err != nil {
 			log.WithError(err).Panic("Failed to start kube-proxy.")
 		}
+
+		// Register KP itself as a manager, in order to collect host metadata.
+		// Kube-proxy already interfaces with the dataplane via manager callbacks to receive information
+		// that is already at-hand in those managers. But, when it comes to batching raw host information,
+		// we might-as-well just funnel it directly from the calc-graph.
+		dp.RegisterManager(kp)
 
 		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)

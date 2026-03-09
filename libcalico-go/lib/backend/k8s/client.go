@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,11 +35,12 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	kubevirtclient "kubevirt.io/client-go/kubevirt/typed/core/v1"
 	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -220,7 +221,6 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		apiv3.KindBGPFilter,
 		resources.NewBGPFilterClient(restClient, group),
 	)
-
 	// IPAMConfig can come to us from two places:
 	// - The lib/ipam code, which uses the older v1 API 'IPAMConfig'
 	// - The lib/clientv3 code, which uses the newer v3 API 'IPAMConfiguration'
@@ -233,8 +233,20 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		resources.NewIPAMConfigClientV3(restClient, group),
 	)
 
-	// These resources are backed directly by core Kubernetes APIs, and do not
-	// use CRDs.
+	// These resources are backed directly by core Kubernetes APIs or third-party
+	// APIs, and do not use CRDs.
+	kvClient, err := kubevirtclient.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build KubeVirt client: %v", err)
+	}
+	c.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		internalapi.KindLiveMigration,
+		resources.NewLiveMigrationClient(func(namespace string) resources.VMIMClient {
+			return kvClient.VirtualMachineInstanceMigrations(namespace)
+		}),
+	)
 	c.registerResourceClient(
 		reflect.TypeFor[model.ResourceKey](),
 		reflect.TypeFor[model.ResourceListOptions](),
@@ -250,13 +262,13 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	c.registerResourceClient(
 		reflect.TypeFor[model.ResourceKey](),
 		reflect.TypeFor[model.ResourceListOptions](),
-		libapiv3.KindWorkloadEndpoint,
+		internalapi.KindWorkloadEndpoint,
 		resources.NewWorkloadEndpointClient(cs),
 	)
 	c.registerResourceClient(
 		reflect.TypeFor[model.ResourceKey](),
 		reflect.TypeFor[model.ResourceListOptions](),
-		libapiv3.KindNode,
+		internalapi.KindNode,
 		resources.NewNodeClient(cs, ca.K8sUsePodCIDR),
 	)
 	c.registerResourceClient(
@@ -288,13 +300,13 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		c.registerResourceClient(
 			reflect.TypeFor[model.BlockAffinityKey](),
 			reflect.TypeFor[model.BlockAffinityListOptions](),
-			libapiv3.KindBlockAffinity,
+			internalapi.KindBlockAffinity,
 			resources.NewBlockAffinityClientV1(restClient, group),
 		)
 		c.registerResourceClient(
 			reflect.TypeFor[model.IPAMConfigKey](),
 			nil,
-			libapiv3.KindIPAMConfig,
+			internalapi.KindIPAMConfig,
 			resources.NewIPAMConfigClientV1(restClient, group),
 		)
 
@@ -303,13 +315,13 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		c.registerResourceClient(
 			reflect.TypeFor[model.BlockKey](),
 			reflect.TypeFor[model.BlockListOptions](),
-			libapiv3.KindIPAMBlock,
+			internalapi.KindIPAMBlock,
 			resources.NewIPAMBlockClient(restClient, group),
 		)
 		c.registerResourceClient(
 			reflect.TypeFor[model.IPAMHandleKey](),
 			reflect.TypeFor[model.IPAMHandleListOptions](),
-			libapiv3.KindIPAMHandle,
+			internalapi.KindIPAMHandle,
 			resources.NewIPAMHandleClient(restClient, group),
 		)
 	}
@@ -493,7 +505,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindIPAMConfiguration,
 		apiv3.KindBlockAffinity,
 		apiv3.KindBGPFilter,
-		libapiv3.KindIPAMConfig,
+		internalapi.KindIPAMConfig,
 	}
 
 	// Deletion can fail due to CAS conflicts if multiple resources are
@@ -618,11 +630,11 @@ func (c *KubeClient) Clean() error {
 	}
 
 	// Get a list of Nodes and remove all BGP configuration from the nodes.
-	if nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, ""); err != nil {
+	if nodes, err := c.List(ctx, model.ResourceListOptions{Kind: internalapi.KindNode}, ""); err != nil {
 		log.Warning("Failed to list Nodes")
 	} else {
 		for _, nodeKvp := range nodes.KVPairs {
-			node := nodeKvp.Value.(*libapiv3.Node)
+			node := nodeKvp.Value.(*internalapi.Node)
 			node.Spec.BGP = nil
 			if _, err := c.Update(ctx, nodeKvp); err != nil {
 				log.WithField("Node", node.Name).Warning("Failed to remove Calico config from node")
@@ -699,6 +711,29 @@ func (c *KubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair
 			Identifier: d.Key,
 			Operation:  "Update",
 		}
+	}
+	return client.Update(ctx, d)
+}
+
+// UpdateStatus updates the status of an existing entry in the datastore using
+// the status subresource.  This errors if the entry does not exist.
+func (c *KubeClient) UpdateStatus(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
+	log.Debugf("Performing 'UpdateStatus' for %+v", d)
+	client := c.getResourceClientFromKey(d.Key)
+	if client == nil {
+		log.Debug("Attempt to 'UpdateStatus' using kubernetes backend is not supported.")
+		return nil, cerrors.ErrorOperationNotSupported{
+			Identifier: d.Key,
+			Operation:  "UpdateStatus",
+		}
+	}
+	// Use the UpdateStatus method on the resource client if it supports it,
+	// otherwise fall back to Update.
+	type statusUpdater interface {
+		UpdateStatus(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
+	}
+	if su, ok := client.(statusUpdater); ok {
+		return su.UpdateStatus(ctx, d)
 	}
 	return client.Update(ctx, d)
 }

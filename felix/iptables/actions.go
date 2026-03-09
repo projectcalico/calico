@@ -17,6 +17,8 @@ package iptables
 import (
 	"fmt"
 	"math"
+	"net"
+	"strconv"
 
 	"github.com/sirupsen/logrus"
 
@@ -274,7 +276,7 @@ func (g DNATAction) ToFragment(features *environment.Features) string {
 	if g.DestPort == 0 {
 		return fmt.Sprintf("--jump DNAT --to-destination %s", g.DestAddr)
 	} else {
-		return fmt.Sprintf("--jump DNAT --to-destination %s:%d", g.DestAddr, g.DestPort)
+		return fmt.Sprintf("--jump DNAT --to-destination %s", net.JoinHostPort(g.DestAddr, strconv.Itoa(int(g.DestPort))))
 	}
 }
 

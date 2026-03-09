@@ -201,13 +201,52 @@ build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 ###############################################################################
 # Unit Tests
 ###############################################################################
+
 fv:
 	@echo "No FV tests for CNI plugin"
 
-## Run the unit tests.
-ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
-	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
+
+## Install KubeVirt CRDs for testing (without operator/controllers)
+.PHONY: install-kubevirt-crds
+install-kubevirt-crds:
+	@echo "Installing KubeVirt CRDs for testing..."
+	@while ! docker exec calico-local-apiserver kubectl \
+		apply -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml; \
+		do echo "Waiting to install KubeVirt CRDs..."; \
+		sleep 1; \
+		done
+	@echo "KubeVirt CRDs installed successfully"
+
+## Remove KubeVirt CRDs
+.PHONY: remove-kubevirt-crds
+remove-kubevirt-crds:
+	@echo "Removing KubeVirt CRDs..."
+	@docker exec calico-local-apiserver kubectl \
+		delete -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml 2>/dev/null || \
+		echo "KubeVirt CRDs already removed or not present"
+
+
+UT_PREREQS = run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
+
+## Run all unit tests.
+ut: $(UT_PREREQS)
+	$(MAKE) ut-etcd
+	$(MAKE) ut-kdd
+	$(MAKE) ut-kubevirt
+
+## Run unit tests against etcdv3 with CNI spec 0.3.1.
+ut-etcd: $(UT_PREREQS)
+	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3 CNI_SPEC_VERSION=0.3.1
+
+## Run unit tests against KDD with CNI spec 1.0.0 (excludes KubeVirt tests).
+ut-kdd: $(UT_PREREQS)
+	$(MAKE) remove-kubevirt-crds
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
+
+## Run KubeVirt-specific unit tests against KDD with CNI spec 1.0.0.
+ut-kubevirt: $(UT_PREREQS)
+	$(MAKE) install-kubevirt-crds
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
 
 ut-datastore:
 	# The tests need to run as root
@@ -229,29 +268,6 @@ ut-datastore:
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
 
-ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
-	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
-	make stop-etcd
-	make stop-k8s-controller
-
-ut-kdd: run-k8s-controller-manager build $(BIN)/host-local
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
-	make stop-etcd
-	make stop-k8s-controller
-
-## Run the tests in a container (as root) for different CNI spec versions
-## to make sure we don't break backwards compatibility.
-.PHONY: test-cni-versions
-test-cni-versions:
-	for cniversion in "0.2.0" "0.3.1" ; do \
-		if make ut CNI_SPEC_VERSION=$$cniversion; then \
-			echo "CNI version $$cniversion PASSED"; \
-		else \
-			echo "CNI version $$cniversion FAILED"; \
-			exit 1; \
-		fi; \
-	done
-
 ###############################################################################
 # Install test
 ###############################################################################
@@ -271,7 +287,7 @@ test-install-cni: run-k8s-apiserver image pkg/install/install.test
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download build static-checks test-cni-versions image-all test-install-cni
+ci: clean mod-download build static-checks ut image-all test-install-cni
 
 ## Deploys images to registry
 cd: image-all cd-common

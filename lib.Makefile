@@ -285,6 +285,26 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
+# Support for git worktrees.  In a worktree, .git is a file pointing to
+# <main-repo>/.git/worktrees/<name>.  When Docker containers need git access,
+# the main .git directory must also be mounted, and GIT_DIR / GIT_WORK_TREE
+# must be set so that git can find objects and the correct working tree.
+_GIT_DIR := $(shell git rev-parse --absolute-git-dir 2>/dev/null)
+_GIT_COMMON_DIR := $(realpath $(shell git rev-parse --git-common-dir 2>/dev/null))
+ifneq ($(_GIT_DIR),$(_GIT_COMMON_DIR))
+# Running in a git worktree: mount the main .git directory at its host path
+# so the worktree .git file pointer resolves inside the container.
+# DOCKER_GIT_WORK_TREE can be overridden by Makefiles that mount the repo at
+# a different container path (e.g. api/Makefile).
+DOCKER_GIT_WORK_TREE ?= /go/src/github.com/projectcalico/calico
+DOCKER_GIT_WORKTREE_ARGS := \
+	-v $(_GIT_COMMON_DIR):$(_GIT_COMMON_DIR):ro \
+	-e GIT_DIR=$(_GIT_DIR) \
+	-e GIT_WORK_TREE=$(DOCKER_GIT_WORK_TREE)
+else
+DOCKER_GIT_WORKTREE_ARGS :=
+endif
+
 # Configure the Calico API group to use. Projects importing this Makefile can override this variable
 # if they need to.
 # Supported values:
@@ -322,6 +342,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
@@ -1301,53 +1322,50 @@ $(REPO_ROOT)/bin/crane:
 ###############################################################################
 ## Kubernetes apiserver used for tests
 APISERVER_NAME := calico-local-apiserver
-run-k8s-apiserver: stop-k8s-apiserver run-etcd
-	docker run --detach --net=host \
-		--name $(APISERVER_NAME) \
-		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
-		-v $(CERTS_PATH):/home/user/certs \
-		-e KUBECONFIG=/home/user/certs/kubeconfig \
-		$(CALICO_BUILD) kube-apiserver \
-		--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-		--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
-		--authorization-mode=RBAC \
-		--service-account-key-file=/home/user/certs/service-account.pem \
-		--service-account-signing-key-file=/home/user/certs/service-account-key.pem \
-		--service-account-issuer=https://localhost:443 \
-		--api-audiences=kubernetes.default \
-		--client-ca-file=/home/user/certs/ca.pem \
-		--tls-cert-file=/home/user/certs/kubernetes.pem \
-		--tls-private-key-file=/home/user/certs/kubernetes-key.pem \
-		--enable-priority-and-fairness=false \
-		--max-mutating-requests-inflight=0 \
-		--max-requests-inflight=0 \
-		--enable-aggregator-routing \
-		--requestheader-client-ca-file=/home/user/certs/ca.pem \
-		--requestheader-username-headers=X-Remote-User \
-		--requestheader-group-headers=X-Remote-Group \
-		--requestheader-extra-headers-prefix=X-Remote-Extra- \
-		--proxy-client-cert-file=/home/user/certs/kubernetes.pem \
-		--proxy-client-key-file=/home/user/certs/kubernetes-key.pem
-
-
-	# Wait until the apiserver is accepting requests.
-	while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
-
-	# Wait until we can configure a cluster role binding which allows anonymous auth.
-	while ! docker exec $(APISERVER_NAME) kubectl create \
-		clusterrolebinding anonymous-admin \
-		--clusterrole=cluster-admin \
-		--user=system:anonymous 2>/dev/null ; \
-		do echo "Waiting for $(APISERVER_NAME) to come up"; \
-		sleep 1; \
-		done
-
-	# Create CustomResourceDefinition (CRD) for Calico resources
-	while ! docker exec $(APISERVER_NAME) kubectl \
-		apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
-		do echo "Trying to create CRDs"; \
-		sleep 1; \
-		done
+run-k8s-apiserver: run-etcd
+	@if docker inspect $(APISERVER_NAME) >/dev/null 2>&1; then \
+		echo "$(APISERVER_NAME) already running"; \
+	else \
+		docker run --detach --net=host \
+			--name $(APISERVER_NAME) \
+			-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
+			-v $(CERTS_PATH):/home/user/certs \
+			-e KUBECONFIG=/home/user/certs/kubeconfig \
+			$(CALICO_BUILD) kube-apiserver \
+			--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+			--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
+			--authorization-mode=RBAC \
+			--service-account-key-file=/home/user/certs/service-account.pem \
+			--service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+			--service-account-issuer=https://localhost:443 \
+			--api-audiences=kubernetes.default \
+			--client-ca-file=/home/user/certs/ca.pem \
+			--tls-cert-file=/home/user/certs/kubernetes.pem \
+			--tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+			--enable-priority-and-fairness=false \
+			--max-mutating-requests-inflight=0 \
+			--max-requests-inflight=0 \
+			--enable-aggregator-routing \
+			--requestheader-client-ca-file=/home/user/certs/ca.pem \
+			--requestheader-username-headers=X-Remote-User \
+			--requestheader-group-headers=X-Remote-Group \
+			--requestheader-extra-headers-prefix=X-Remote-Extra- \
+			--proxy-client-cert-file=/home/user/certs/kubernetes.pem \
+			--proxy-client-key-file=/home/user/certs/kubernetes-key.pem; \
+		while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done; \
+		while ! docker exec $(APISERVER_NAME) kubectl create \
+			clusterrolebinding anonymous-admin \
+			--clusterrole=cluster-admin \
+			--user=system:anonymous 2>/dev/null; \
+			do echo "Waiting for $(APISERVER_NAME) to come up"; \
+			sleep 1; \
+			done; \
+		while ! docker exec $(APISERVER_NAME) kubectl \
+			apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
+			do echo "Trying to create CRDs"; \
+			sleep 1; \
+			done; \
+	fi
 
 # Stop Kubernetes apiserver
 stop-k8s-apiserver:
@@ -1355,19 +1373,23 @@ stop-k8s-apiserver:
 
 # Run a local Kubernetes controller-manager in a docker container, useful for tests.
 CONTROLLER_MANAGER_NAME := calico-local-controller-manager
-run-k8s-controller-manager: stop-k8s-controller-manager run-k8s-apiserver
-	docker run --detach --net=host \
-		--name $(CONTROLLER_MANAGER_NAME) \
-		-v $(CERTS_PATH):/home/user/certs \
-		$(CALICO_BUILD) kube-controller-manager \
-		--master=https://127.0.0.1:6443 \
-		--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
-		--min-resync-period=3m \
-		--allocate-node-cidrs=true \
-		--cluster-cidr=192.168.0.0/16 \
-		--v=5 \
-		--service-account-private-key-file=/home/user/certs/service-account-key.pem \
-		--root-ca-file=/home/user/certs/ca.pem
+run-k8s-controller-manager: run-k8s-apiserver
+	@if docker inspect $(CONTROLLER_MANAGER_NAME) >/dev/null 2>&1; then \
+		echo "$(CONTROLLER_MANAGER_NAME) already running"; \
+	else \
+		docker run --detach --net=host \
+			--name $(CONTROLLER_MANAGER_NAME) \
+			-v $(CERTS_PATH):/home/user/certs \
+			$(CALICO_BUILD) kube-controller-manager \
+			--master=https://127.0.0.1:6443 \
+			--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+			--min-resync-period=3m \
+			--allocate-node-cidrs=true \
+			--cluster-cidr=192.168.0.0/16 \
+			--v=5 \
+			--service-account-private-key-file=/home/user/certs/service-account-key.pem \
+			--root-ca-file=/home/user/certs/ca.pem; \
+	fi
 
 ## Stop Kubernetes controller manager
 stop-k8s-controller-manager:
@@ -1471,17 +1493,18 @@ bin/helm: bin/.helm-updated-$(HELM_VERSION)
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)
-# TODO: We shouldn't need to tear this down every time it is called.
 # TODO: We shouldn't need to enable the v2 API, but some of our test code still relies on it.
 .PHONY: run-etcd stop-etcd
-run-etcd: stop-etcd
-	docker run --detach \
-		--net=host \
-		--entrypoint=/usr/local/bin/etcd \
-		--name calico-etcd $(ETCD_IMAGE) \
-		--enable-v2 \
-		--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-		--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+run-etcd:
+	@if ! docker inspect calico-etcd >/dev/null 2>&1; then \
+		docker run --detach \
+			--net=host \
+			--entrypoint=/usr/local/bin/etcd \
+			--name calico-etcd $(ETCD_IMAGE) \
+			--enable-v2 \
+			--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+			--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"; \
+	fi
 
 stop-etcd:
 	@-docker rm -f calico-etcd
@@ -1657,3 +1680,8 @@ release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIE
 	for registry in $(DEV_REGISTRIES); do \
 		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$${describe_tag} $${registry}/$(WINDOWS_IMAGE):$${release_tag}; \
 	done;
+
+# Name of a test image that is used by both "node" and "calicoctl", so defined here.  This image is
+# built by node/Makefile.
+TEST_CONTAINER_NAME_VER?=latest
+TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)

@@ -205,7 +205,7 @@ type Config struct {
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool              `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration     `config:"seconds;1"`
-	BPFKubeProxyHealthzPort            int               `config:"int;10256;non-zero"`
+	BPFKubeProxyHealthzPort            int               `config:"int;10256"`
 	BPFExtToServiceConnmark            int               `config:"int;0"`
 	BPFPSNATPorts                      numorstring.Port  `config:"portrange;20000:29999"`
 	BPFMapSizeNATFrontend              int               `config:"int;65536;non-zero"`
@@ -1014,173 +1014,172 @@ func Params() map[string]Param {
 	return knownParams
 }
 
+var metaRegexp = regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
+	`([^;]*)(?:;` +
+	`([^;]*))?$`)
+
+func ParamForField(fieldName string, tag string) (param Param, defaultStr, flags string) {
+	captures := metaRegexp.FindStringSubmatch(tag)
+	if len(captures) == 0 {
+		log.Panicf("Failed to parse metadata for config param %v", fieldName)
+	}
+	log.Debugf("%v: metadata captures: %#v", fieldName, captures)
+	kind := captures[1]       // Type: "int|oneof|bool|port-list|..."
+	kindParams := captures[2] // Parameters for the type: e.g. for oneof "http,https"
+	defaultStr = captures[3]  // Default value e.g "1.0"
+	flags = captures[4]
+	switch kind {
+	case "bool":
+		param = &BoolParam{}
+	case "*bool":
+		param = &BoolPtrParam{}
+	case "int":
+		intParam := &IntParam{}
+		for r := range strings.SplitSeq(kindParams, ",") {
+			minAndMax := strings.Split(r, ":")
+			paramMin := mustParseOptionalInt(minAndMax[0], math.MinInt, fieldName)
+			paramMax := math.MaxInt
+			if len(minAndMax) == 2 {
+				paramMax = mustParseOptionalInt(minAndMax[1], math.MaxInt, fieldName)
+			}
+			intParam.Ranges = append(intParam.Ranges, MinMax{Min: paramMin, Max: paramMax})
+		}
+		param = intParam
+	case "int32":
+		param = &Int32Param{}
+	case "mark-bitmask":
+		param = &MarkBitmaskParam{}
+	case "float":
+		param = &FloatParam{}
+	case "seconds":
+		paramMin := math.MinInt
+		paramMax := math.MaxInt
+		var err error
+		if kindParams != "" {
+			minAndMax := strings.Split(kindParams, ":")
+			paramMin, err = strconv.Atoi(minAndMax[0])
+			if err != nil {
+				log.Panicf("Failed to parse min value for %v", fieldName)
+			}
+			paramMax, err = strconv.Atoi(minAndMax[1])
+			if err != nil {
+				log.Panicf("Failed to parse max value for %v", fieldName)
+			}
+		}
+		param = &SecondsParam{Min: paramMin, Max: paramMax}
+	case "millis":
+		param = &MillisParam{}
+	case "iface-list":
+		param = &RegexpParam{
+			Regexp: IfaceListRegexp,
+			Msg:    "invalid Linux interface name",
+		}
+	case "iface-list-regexp":
+		param = &RegexpPatternListParam{
+			NonRegexpElemRegexp: NonRegexpIfaceElemRegexp,
+			RegexpElemRegexp:    RegexpIfaceElemRegexp,
+			Delimiter:           ",",
+			Msg:                 "list contains invalid Linux interface name or regex pattern",
+			Schema:              "Comma-delimited list of Linux interface names/regex patterns. Regex patterns must start/end with `/`.",
+		}
+	case "log-rate":
+		param = &RegexpParam{
+			Regexp: LogActionRateRegexp,
+			Msg:    "invalid log rate limit",
+		}
+	case "regexp":
+		param = &RegexpPatternParam{
+			Flags: strings.Split(kindParams, ","),
+		}
+	case "iface-param":
+		param = &RegexpParam{
+			Regexp: IfaceParamRegexp,
+			Msg:    "invalid Linux interface parameter",
+		}
+	case "file":
+		param = &FileParam{
+			MustExist:  strings.Contains(kindParams, "must-exist"),
+			Executable: strings.Contains(kindParams, "executable"),
+		}
+	case "authority":
+		param = &RegexpParam{
+			Regexp: AuthorityRegexp,
+			Msg:    "invalid URL authority",
+		}
+	case "ipv4":
+		param = &Ipv4Param{}
+	case "ipv6":
+		param = &Ipv6Param{}
+	case "endpoint-list":
+		param = &EndpointListParam{}
+	case "port-list":
+		param = &PortListParam{}
+	case "portrange":
+		param = &PortRangeParam{}
+	case "portrange-list":
+		param = &PortRangeListParam{}
+	case "hostname":
+		param = &RegexpParam{
+			Regexp: HostnameRegexp,
+			Msg:    "invalid hostname",
+		}
+	case "host-address":
+		param = &RegexpParam{
+			Regexp: HostAddressRegexp,
+			Msg:    "invalid host address",
+		}
+	case "region":
+		param = &RegionParam{}
+	case "oneof":
+		options := strings.Split(kindParams, ",")
+		lowerCaseToCanon := make(map[string]string)
+		for _, option := range options {
+			lowerCaseToCanon[strings.ToLower(option)] = option
+		}
+		param = &OneofListParam{
+			lowerCaseOptionsToCanonical: lowerCaseToCanon,
+		}
+	case "string":
+		param = &RegexpParam{
+			Regexp: StringRegexp,
+			Msg:    "invalid string",
+		}
+	case "cidr-list":
+		param = &CIDRListParam{}
+	case "server-list":
+		param = &ServerListParam{}
+	case "string-slice":
+		param = &StringSliceParam{}
+	case "interface-name-slice":
+		param = &StringSliceParam{ValidationRegex: InterfaceRegex}
+	case "iface-filter-slice":
+		param = &StringSliceParam{ValidationRegex: IfaceParamRegexp}
+	case "route-table-range":
+		param = &RouteTableRangeParam{}
+	case "route-table-ranges":
+		param = &RouteTableRangesParam{}
+	case "keyvaluelist":
+		param = &KeyValueListParam{}
+	case "keydurationlist":
+		param = &KeyDurationListParam{}
+	default:
+		log.Panicf("Unknown type of parameter: %v", kind)
+		panic("Unknown type of parameter") // Unreachable, keep the linter happy.
+	}
+	return
+}
+
 func loadParams() {
 	knownParams = make(map[string]Param)
 	config := Config{}
 	kind := reflect.TypeFor[Config]()
-	metaRegexp := regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
-		`([^;]*)(?:;` +
-		`([^;]*))?$`)
 	for ii := 0; ii < kind.NumField(); ii++ {
 		field := kind.Field(ii)
 		tag := field.Tag.Get("config")
 		if tag == "" {
 			continue
 		}
-		captures := metaRegexp.FindStringSubmatch(tag)
-		if len(captures) == 0 {
-			log.Panicf("Failed to parse metadata for config param %v", field.Name)
-		}
-		log.Debugf("%v: metadata captures: %#v", field.Name, captures)
-		kind := captures[1]       // Type: "int|oneof|bool|port-list|..."
-		kindParams := captures[2] // Parameters for the type: e.g. for oneof "http,https"
-		defaultStr := captures[3] // Default value e.g "1.0"
-		flags := captures[4]
-		var param Param
-		switch kind {
-		case "bool":
-			param = &BoolParam{}
-		case "*bool":
-			param = &BoolPtrParam{}
-		case "int":
-			intParam := &IntParam{}
-			paramMin := math.MinInt
-			paramMax := math.MaxInt
-			if kindParams != "" {
-				for r := range strings.SplitSeq(kindParams, ",") {
-					minAndMax := strings.Split(r, ":")
-					paramMin = mustParseOptionalInt(minAndMax[0], math.MinInt, field.Name)
-					if len(minAndMax) == 2 {
-						paramMax = mustParseOptionalInt(minAndMax[1], math.MinInt, field.Name)
-					}
-					intParam.Ranges = append(intParam.Ranges, MinMax{Min: paramMin, Max: paramMax})
-				}
-			} else {
-				intParam.Ranges = []MinMax{{Min: paramMin, Max: paramMax}}
-			}
-			param = intParam
-		case "int32":
-			param = &Int32Param{}
-		case "mark-bitmask":
-			param = &MarkBitmaskParam{}
-		case "float":
-			param = &FloatParam{}
-		case "seconds":
-			paramMin := math.MinInt
-			paramMax := math.MaxInt
-			var err error
-			if kindParams != "" {
-				minAndMax := strings.Split(kindParams, ":")
-				paramMin, err = strconv.Atoi(minAndMax[0])
-				if err != nil {
-					log.Panicf("Failed to parse min value for %v", field.Name)
-				}
-				paramMax, err = strconv.Atoi(minAndMax[1])
-				if err != nil {
-					log.Panicf("Failed to parse max value for %v", field.Name)
-				}
-			}
-			param = &SecondsParam{Min: paramMin, Max: paramMax}
-		case "millis":
-			param = &MillisParam{}
-		case "iface-list":
-			param = &RegexpParam{
-				Regexp: IfaceListRegexp,
-				Msg:    "invalid Linux interface name",
-			}
-		case "iface-list-regexp":
-			param = &RegexpPatternListParam{
-				NonRegexpElemRegexp: NonRegexpIfaceElemRegexp,
-				RegexpElemRegexp:    RegexpIfaceElemRegexp,
-				Delimiter:           ",",
-				Msg:                 "list contains invalid Linux interface name or regex pattern",
-				Schema:              "Comma-delimited list of Linux interface names/regex patterns. Regex patterns must start/end with `/`.",
-			}
-		case "log-rate":
-			param = &RegexpParam{
-				Regexp: LogActionRateRegexp,
-				Msg:    "invalid log rate limit",
-			}
-		case "regexp":
-			param = &RegexpPatternParam{
-				Flags: strings.Split(kindParams, ","),
-			}
-		case "iface-param":
-			param = &RegexpParam{
-				Regexp: IfaceParamRegexp,
-				Msg:    "invalid Linux interface parameter",
-			}
-		case "file":
-			param = &FileParam{
-				MustExist:  strings.Contains(kindParams, "must-exist"),
-				Executable: strings.Contains(kindParams, "executable"),
-			}
-		case "authority":
-			param = &RegexpParam{
-				Regexp: AuthorityRegexp,
-				Msg:    "invalid URL authority",
-			}
-		case "ipv4":
-			param = &Ipv4Param{}
-		case "ipv6":
-			param = &Ipv6Param{}
-		case "endpoint-list":
-			param = &EndpointListParam{}
-		case "port-list":
-			param = &PortListParam{}
-		case "portrange":
-			param = &PortRangeParam{}
-		case "portrange-list":
-			param = &PortRangeListParam{}
-		case "hostname":
-			param = &RegexpParam{
-				Regexp: HostnameRegexp,
-				Msg:    "invalid hostname",
-			}
-		case "host-address":
-			param = &RegexpParam{
-				Regexp: HostAddressRegexp,
-				Msg:    "invalid host address",
-			}
-		case "region":
-			param = &RegionParam{}
-		case "oneof":
-			options := strings.Split(kindParams, ",")
-			lowerCaseToCanon := make(map[string]string)
-			for _, option := range options {
-				lowerCaseToCanon[strings.ToLower(option)] = option
-			}
-			param = &OneofListParam{
-				lowerCaseOptionsToCanonical: lowerCaseToCanon,
-			}
-		case "string":
-			param = &RegexpParam{
-				Regexp: StringRegexp,
-				Msg:    "invalid string",
-			}
-		case "cidr-list":
-			param = &CIDRListParam{}
-		case "server-list":
-			param = &ServerListParam{}
-		case "string-slice":
-			param = &StringSliceParam{}
-		case "interface-name-slice":
-			param = &StringSliceParam{ValidationRegex: InterfaceRegex}
-		case "iface-filter-slice":
-			param = &StringSliceParam{ValidationRegex: IfaceParamRegexp}
-		case "route-table-range":
-			param = &RouteTableRangeParam{}
-		case "route-table-ranges":
-			param = &RouteTableRangesParam{}
-		case "keyvaluelist":
-			param = &KeyValueListParam{}
-		case "keydurationlist":
-			param = &KeyDurationListParam{}
-		default:
-			log.Panicf("Unknown type of parameter: %v", kind)
-			panic("Unknown type of parameter") // Unreachable, keep the linter happy.
-		}
-
+		param, defaultStr, flags := ParamForField(field.Name, tag)
 		metadata := param.GetMetadata()
 		metadata.Name = field.Name
 		metadata.Type = field.Type.String()

@@ -374,12 +374,13 @@ type bpfEndpointManager struct {
 	bpfAttachType          apiv3.BPFAttachOption
 	policyTrampolineStride atomic.Int32
 
-	routeTableV4     *routetable.ClassView
-	routeTableV6     *routetable.ClassView
-	services         map[serviceKey][]ip.CIDR
-	dirtyServices    set.Set[serviceKey]
-	natExcludedCIDRs *ip.CIDRTrie
-	profiling        string
+	routeTableV4       *routetable.ClassView
+	routeTableV6       *routetable.ClassView
+	services           map[serviceKey][]ip.CIDR
+	dirtyServices      set.Set[serviceKey]
+	natExcludedCIDRs   *ip.CIDRTrie
+	profiling          string
+	bpfUDPGSOLinearize bool
 
 	// Maps for policy rule counters
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
@@ -523,10 +524,11 @@ func NewBPFEndpointManager(
 
 		natOutgoingExclusions: config.RulesConfig.NATOutgoingExclusions,
 
-		healthAggregator: healthAggregator,
-		features:         dataplanefeatures,
-		profiling:        config.BPFProfiling,
-		bpfAttachType:    config.BPFAttachType,
+		healthAggregator:   healthAggregator,
+		features:           dataplanefeatures,
+		profiling:          config.BPFProfiling,
+		bpfUDPGSOLinearize: !dataplanefeatures.KernelHasUDPGSOFix,
+		bpfAttachType:      config.BPFAttachType,
 
 		QoSMap:                 bpfmaps.CommonMaps.QoSMap,
 		maglevLUTSize:          config.BPFMaglevLUTSize,
@@ -3077,6 +3079,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.Profiling = m.profiling
+	ap.UDPGSOLinearize = m.bpfUDPGSOLinearize
 	ap.OverlayTunnelID = m.overlayTunnelID
 	ap.AttachType = m.bpfAttachType
 	ap.RedirectPeer = true
@@ -3739,13 +3742,17 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	if m.v4 != nil {
 		m.routeTableV4.RouteUpdate(dataplanedefs.BPFInDev, routetable.Target{
 			Type: routetable.TargetTypeLinkLocalUnicast,
-			CIDR: bpfnatGWCIDR,
+			RouteKey: routetable.RouteKey{
+				CIDR: bpfnatGWCIDR,
+			},
 		})
 	}
 	if m.v6 != nil {
 		m.routeTableV6.RouteUpdate(dataplanedefs.BPFInDev, routetable.Target{
 			Type: routetable.TargetTypeLinkLocalUnicast,
-			CIDR: bpfnatGWCIDRv6,
+			RouteKey: routetable.RouteKey{
+				CIDR: bpfnatGWCIDRv6,
+			},
 		})
 	}
 
@@ -4462,7 +4469,9 @@ var (
 func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 	target := routetable.Target{
 		Type: routetable.TargetTypeGlobalUnicast,
-		CIDR: cidr,
+		RouteKey: routetable.RouteKey{
+			CIDR: cidr,
+		},
 	}
 
 	if cidr.Version() == 6 {
@@ -4484,10 +4493,10 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 
 func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
 	if m.v6 != nil && cidr.Version() == 6 {
-		m.routeTableV6.RouteRemove(dataplanedefs.BPFInDev, cidr)
+		m.routeTableV6.RouteRemove(dataplanedefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
 	}
 	if m.v4 != nil && cidr.Version() == 4 {
-		m.routeTableV4.RouteRemove(dataplanedefs.BPFInDev, cidr)
+		m.routeTableV4.RouteRemove(dataplanedefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
 	}
 	logrus.WithFields(logrus.Fields{
 		"cidr": cidr,

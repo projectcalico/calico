@@ -21,7 +21,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
-	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -107,7 +107,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			} else {
 				h.callbacks.OnServiceUpdate(kubernetesServiceToProto(update.Value.(*kapiv1.Service)))
 			}
-		} else if key.Kind == libv3.KindNode {
+		} else if key.Kind == internalapi.KindNode {
 			// Handle node resource to pass-through HostMetadataV6Update/HostMetadataV6Remove messages
 			// with IPv6 node address updates. IPv4 updates are handled above my model.HostIPKey updates.
 			log.WithField("update", update).Debug("Passing-through a Node IPv6 address update")
@@ -120,7 +120,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 				log.WithField("update", update).Debug("Passing-through Node remove")
 				h.callbacks.OnHostMetadataRemove(hostname)
 			} else {
-				node, _ := update.Value.(*libv3.Node)
+				node, _ := update.Value.(*internalapi.Node)
 				log.WithField("update", update).Debug("Passing-through Node update")
 				bgpIp4net := &net.IPNet{} // required for print in event sequencer
 				bgpIp6net := &net.IPNet{} // required for print in event sequencer
@@ -164,9 +164,9 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 					// similar fallback as for IPv4, see how HostIPKey is generated in
 					// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go
 					var ip *net.IP
-					ip, _ = cresources.FindNodeAddress(node, libv3.InternalIP, 6)
+					ip, _ = cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
 					if ip == nil {
-						ip, _ = cresources.FindNodeAddress(node, libv3.ExternalIP, 6)
+						ip, _ = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
 					}
 					if ip != nil {
 						oldIP := h.hostIPv6s[hostname]

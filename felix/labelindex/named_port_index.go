@@ -897,7 +897,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	bestParentStrategy := labelnamevalueindex.ScanStrategy[string](nil)
 	bestParentEndpointEstimate := math.MaxInt
 
-	for k, r := range restrictions {
+	for k, r := range restrictions.All() {
 		epStrat := idx.endpointKVIdx.StrategyFor(k, r)
 		parentStrat := idx.parentKVIdx.StrategyFor(k, r)
 		epsToScan := epStrat.EstimatedItemsToScan()

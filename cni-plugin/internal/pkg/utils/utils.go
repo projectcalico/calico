@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -124,7 +124,7 @@ func MTUFromFile(filename string, conf types.NetConf) (int, error) {
 
 // CreateOrUpdate creates the WorkloadEndpoint if ResourceVersion is not specified,
 // or Update if it's specified.
-func CreateOrUpdate(ctx context.Context, client client.Interface, wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
+func CreateOrUpdate(ctx context.Context, client client.Interface, wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error) {
 	if wep.ResourceVersion != "" {
 		return client.WorkloadEndpoints().Update(ctx, wep, options.SetOptions{})
 	}
@@ -540,7 +540,7 @@ func AddIgnoreUnknownArgs() error {
 
 // CreateResultFromEndpoint takes a WorkloadEndpoint, extracts IP information
 // and populates that into a CNI Result.
-func CreateResultFromEndpoint(wep *api.WorkloadEndpoint) (*cniv1.Result, error) {
+func CreateResultFromEndpoint(wep *internalapi.WorkloadEndpoint) (*cniv1.Result, error) {
 	result := &cniv1.Result{}
 	for _, v := range wep.Spec.IPNetworks {
 		parsedIPConfig := cniv1.IPConfig{}
@@ -560,7 +560,7 @@ func CreateResultFromEndpoint(wep *api.WorkloadEndpoint) (*cniv1.Result, error) 
 
 // PopulateEndpointNets takes a WorkloadEndpoint and a CNI Result, extracts IP address and mask
 // and populates that information into the WorkloadEndpoint.
-func PopulateEndpointNets(wep *api.WorkloadEndpoint, result *cniv1.Result) error {
+func PopulateEndpointNets(wep *internalapi.WorkloadEndpoint, result *cniv1.Result) error {
 	var copyIpNet net.IPNet
 	if len(result.IPs) == 0 {
 		return errors.New("IPAM plugin did not return any IP addresses")

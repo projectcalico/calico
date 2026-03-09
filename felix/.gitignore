@@ -32,6 +32,7 @@ bpf-gpl/ut/*.ll.tmp
 # IDE files.
 /.idea/
 /.vscode/
+.claude
 
 # Patterns to match files from older releases (prevents lots of
 # untracked files from showing up when switching from a maintenance branch.

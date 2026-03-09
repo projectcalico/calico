@@ -43,8 +43,12 @@ spec:
       # resources to terminate when being uninstalled.
       terminationGracePeriodSeconds: 60
       hostNetwork: true
+      {{- if .Values.dnsPolicy }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- else }}
       # This must be set when hostNetwork is true or else the cluster services won't resolve
       dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
       {{- if .Values.dnsConfig }}
       dnsConfig:
         {{- toYaml .Values.dnsConfig | nindent 8 }}

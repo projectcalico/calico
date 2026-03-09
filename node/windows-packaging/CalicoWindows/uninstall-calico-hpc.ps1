@@ -96,6 +96,7 @@ if ("$env:CNI_PLUGIN_TYPE" -eq "Calico") {
 
 Write-Host "Logging containerd CNI bin and conf dir paths:"
 Get-Content "$env:ProgramFiles/containerd/config.toml" | Select-String -Pattern "^(\s)*bin_dir = (.)*$"
+Get-Content "$env:ProgramFiles/containerd/config.toml" | Select-String -Pattern "^(\s)*bin_dirs = (.)*$"
 Get-Content "$env:ProgramFiles/containerd/config.toml" | Select-String -Pattern "^(\s)*conf_dir = (.)*$"
 
 Get-Module 'calico' | Remove-Module -Force

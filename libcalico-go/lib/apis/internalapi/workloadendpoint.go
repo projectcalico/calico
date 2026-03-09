@@ -1,0 +1,205 @@
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package internalapi
+
+import (
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	KindWorkloadEndpoint     = "WorkloadEndpoint"
+	KindWorkloadEndpointList = "WorkloadEndpointList"
+)
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// WorkloadEndpoint contains information about a WorkloadEndpoint resource that is a peer of a Calico
+// compute node.
+type WorkloadEndpoint struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard object's metadata.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Specification of the WorkloadEndpoint.
+	Spec WorkloadEndpointSpec `json:"spec,omitempty"`
+}
+
+// WorkloadEndpointMetadata contains the specification for a WorkloadEndpoint resource.
+type WorkloadEndpointSpec struct {
+	// The name of the orchestrator.
+	Orchestrator string `json:"orchestrator,omitempty" validate:"omitempty,name"`
+	// The name of the workload.
+	Workload string `json:"workload,omitempty" validate:"omitempty,name"`
+	// The node name identifying the Calico node instance.
+	Node string `json:"node,omitempty" validate:"omitempty,name"`
+	// The container ID.
+	ContainerID string `json:"containerID,omitempty" validate:"omitempty,containerID"`
+	// The Pod name.
+	Pod string `json:"pod,omitempty" validate:"omitempty,name"`
+	// The Endpoint name.
+	Endpoint string `json:"endpoint,omitempty" validate:"omitempty,name"`
+	// ServiceAccountName, if specified, is the name of the k8s ServiceAccount  for this pod.
+	ServiceAccountName string `json:"serviceAccountName,omitempty" validate:"omitempty,name"`
+	// IPNetworks is a list of subnets allocated to this endpoint. IP packets will only be
+	// allowed to leave this interface if they come from an address in one of these subnets.
+	// Currently only /32 for IPv4 and /128 for IPv6 networks are supported.
+	IPNetworks []string `json:"ipNetworks,omitempty" validate:"omitempty,dive,net"`
+	// IPNATs is a list of 1:1 NAT mappings to apply to the endpoint. Inbound connections
+	// to the external IP will be forwarded to the internal IP. Connections initiated from the
+	// internal IP will not have their source address changed, except when an endpoint attempts
+	// to connect one of its own external IPs. Each internal IP must be associated with the same
+	// endpoint via the configured IPNetworks.
+	IPNATs []IPNAT `json:"ipNATs,omitempty" validate:"omitempty,dive"`
+	// IPv4Gateway is the gateway IPv4 address for traffic from the workload.
+	IPv4Gateway string `json:"ipv4Gateway,omitempty" validate:"omitempty,ipv4"`
+	// IPv6Gateway is the gateway IPv6 address for traffic from the workload.
+	IPv6Gateway string `json:"ipv6Gateway,omitempty" validate:"omitempty,ipv6"`
+	// A list of security Profile resources that apply to this endpoint. Each profile is
+	// applied in the order that they appear in this list.  Profile rules are applied
+	// after the selector-based security policy.
+	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
+	// InterfaceName the name of the Linux interface on the host: for example, tap80.
+	InterfaceName string `json:"interfaceName,omitempty" validate:"interface"`
+	// MAC is the MAC address of the endpoint interface.
+	MAC string `json:"mac,omitempty" validate:"omitempty,mac"`
+	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
+	Ports []WorkloadEndpointPort `json:"ports,omitempty" validate:"dive,omitempty"`
+	// AllowSpoofedSourcePrefixes is a list of CIDRs that the endpoint should be able to send traffic from,
+	// bypassing the RPF check.
+	AllowSpoofedSourcePrefixes []string `json:"allowSpoofedSourcePrefixes,omitempty" validate:"omitempty,dive,cidr"`
+
+	QoSControls *QoSControls `json:"qosControls,omitempty" validate:"omitempty"`
+}
+
+// WorkloadEndpointPort represents one endpoint's named or mapped port
+type WorkloadEndpointPort struct {
+	Name     string               `json:"name" validate:"omitempty,portName"`
+	Protocol numorstring.Protocol `json:"protocol"`
+	Port     uint16               `json:"port" validate:"gt=0"`
+	HostPort uint16               `json:"hostPort"`
+	HostIP   string               `json:"hostIP" validate:"omitempty,net"`
+}
+
+// IPNat contains a single NAT mapping for a WorkloadEndpoint resource.
+type IPNAT struct {
+	// The internal IP address which must be associated with the owning endpoint via the
+	// configured IPNetworks for the endpoint.
+	InternalIP string `json:"internalIP" validate:"omitempty,ip"`
+	// The external IP address.
+	ExternalIP string `json:"externalIP" validate:"omitempty,ip"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// WorkloadEndpointList contains a list of WorkloadEndpoint resources.
+type WorkloadEndpointList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+	Items           []WorkloadEndpoint `json:"items"`
+}
+
+// QoSControls contains QoS limits configuration.
+type QoSControls struct {
+	// Ingress bandwidth controls.  These are only applied if IngressBandwidth != 0.  In that
+	// case:
+	//
+	// - IngressBandwidth must be between 1000 (1k) and 10^15 (1P).
+	//
+	// - IngressBurst must be between 1000 (1k) and 34359738360 (32Gi - 8).  If specified as 0,
+	//   it is defaulted to 4294967296 (4Gi).
+	//
+	// - IngressPeakrate may be 0 if it is acceptable for bursts to be transmitted at line rate.
+	//   In that case IngressMinburst should also be 0.  But if IngressPeakrate != 0:
+	//
+	//   - IngressPeakrate must be between 1010 (1.01k) and 1.01 x 10^15 (1.01P).
+	//
+	//   - IngressMinburst must either be 0 - in which case Calico will use the MTU of the
+	//     relevant workload interface as the minimum burst size - or be between 1000 (1k) and
+	//     10^8 (100M).
+	//
+	// Ingress bandwidth rate limit in bits per second
+	IngressBandwidth int64 `json:"ingressBandwidth,omitempty"`
+	// Ingress bandwidth burst size in bits
+	IngressBurst int64 `json:"ingressBurst,omitempty"`
+	// Ingress bandwidth peakrate limit in bits per second
+	IngressPeakrate int64 `json:"ingressPeakrate,omitempty"`
+	// Ingress bandwidth minburst size in bytes (not bits because it is typically the MTU)
+	IngressMinburst int64 `json:"ingressMinburst,omitempty"`
+
+	// Egress bandwidth controls.  These are only applied if EgressBandwidth != 0.  The same
+	// detail applies here as for ingress bandwidth, except using the corresponding Egress
+	// fields.
+	//
+	// Egress bandwidth rate limit in bits per second
+	EgressBandwidth int64 `json:"egressBandwidth,omitempty"`
+	// Egress bandwidth burst size in bits
+	EgressBurst int64 `json:"egressBurst,omitempty"`
+	// Egress bandwidth peakrate limit in bits per second
+	EgressPeakrate int64 `json:"egressPeakrate,omitempty"`
+	// Egress bandwidth minburst size in bytes (not bits because it is typically the MTU)
+	EgressMinburst int64 `json:"egressMinburst,omitempty"`
+
+	// Ingress packet rate limit in packets per second.  Only applied if non-zero.  When
+	// non-zero:
+	//
+	// - IngressPacketRate must be between 1 and 10^4 (10k).
+	//
+	// - IngressPacketBurst must be between 1 and 10^4 (10k).  If specified as 0, it is
+	//   defaulted to 5.
+	//
+	IngressPacketRate int64 `json:"ingressPacketRate,omitempty"`
+	// Ingress packet rate burst size in number of packets
+	IngressPacketBurst int64 `json:"ingressPacketBurst,omitempty"`
+
+	// Egress packet rate limit in packets per second.  Only applied if non-zero.  The same
+	// detail applies here as for egress packet rate, except using the corresponding Egress
+	// fields.
+	EgressPacketRate int64 `json:"egressPacketRate,omitempty"`
+	// Egress packet rate burst size in number of packets
+	EgressPacketBurst int64 `json:"egressPacketBurst,omitempty"`
+
+	// Ingress maximum number of connections (absolute number of connections, no unit).  Only
+	// applied if non-zero.  When non-zero, must be between 1 and 4294967295.
+	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
+	// Egress maximum number of connections (absolute number of connections, no unit).  Only
+	// applied if non-zero.  When non-zero, must be between 1 and 4294967295.
+	EgressMaxConnections int64 `json:"egressMaxConnections,omitempty"`
+
+	DSCP *numorstring.DSCP `json:"dscp,omitempty"`
+}
+
+// NewWorkloadEndpoint creates a new (zeroed) WorkloadEndpoint struct with the TypeMetadata initialised to the current
+// version.
+func NewWorkloadEndpoint() *WorkloadEndpoint {
+	return &WorkloadEndpoint{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindWorkloadEndpoint,
+			APIVersion: apiv3.GroupVersionCurrent,
+		},
+	}
+}
+
+// NewWorkloadEndpointList creates a new (zeroed) WorkloadEndpointList struct with the TypeMetadata initialised to the current
+// version.
+func NewWorkloadEndpointList() *WorkloadEndpointList {
+	return &WorkloadEndpointList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindWorkloadEndpointList,
+			APIVersion: apiv3.GroupVersionCurrent,
+		},
+	}
+}

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -420,7 +421,7 @@ func (f *Felix) Ready() (bool, error) {
 		healthAddr = f.TopologyOptions.ExtraEnvVars["FELIX_HEALTHHOST"]
 	}
 
-	url := "http://" + healthAddr + ":9099/readiness"
+	url := "http://" + net.JoinHostPort(healthAddr, "9099") + "/readiness"
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -453,7 +454,7 @@ func (f *Felix) WaitForReady() {
 	if BPFMode() {
 		// BPF mode has to load BPF programs at startup, this can take a while
 		// when starting several felix nodes in parallel.
-		timeout = "30s"
+		timeout = "90s"
 	}
 	EventuallyWithOffset(1, f.Ready, timeout, "100ms").Should(BeTrue(),
 		"Timed out waiting for Felix to become ready.")

@@ -29,7 +29,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -37,15 +37,15 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-// NewBlockAffinityClientV3 returns a new client for managing BlockAffinity resources, as used by the
+// NewBlockAffinityClientV1 returns a new client for managing BlockAffinity resources, as used by the
 // libcalico-go/lib/ipam code.
 func NewBlockAffinityClientV1(r rest.Interface, group BackingAPIGroup) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customResourceClient{
 		restClient:      r,
 		resource:        BlockAffinityResourceName,
-		k8sResourceType: reflect.TypeFor[libapiv3.BlockAffinity](),
-		k8sListType:     reflect.TypeFor[libapiv3.BlockAffinityList](),
+		k8sResourceType: reflect.TypeFor[internalapi.BlockAffinity](),
+		k8sListType:     reflect.TypeFor[internalapi.BlockAffinityList](),
 		kind:            v3.KindBlockAffinity,
 		apiGroup:        group,
 	}
@@ -68,7 +68,7 @@ type blockAffinityClientV1 struct {
 	crdIsV3 bool
 }
 
-// toModelV1 converts the given v3 CRD KVPair into a v1 model representation
+// toModelV1 converts the given CRD KVPair into a model representation
 // which can be passed to the IPAM code.
 func (c *blockAffinityClientV1) toModelV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	if c.crdIsV3 {
@@ -106,15 +106,15 @@ func (c *blockAffinityClientV1) toModelV1(kvpv3 *model.KVPair) (*model.KVPair, e
 
 	} else {
 		// Parse the CIDR into a struct.
-		_, cidr, err := net.ParseCIDR(kvpv3.Value.(*libapiv3.BlockAffinity).Spec.CIDR)
+		_, cidr, err := net.ParseCIDR(kvpv3.Value.(*internalapi.BlockAffinity).Spec.CIDR)
 		if err != nil {
 			log.WithField("cidr", cidr).WithError(err).Error("failed to parse cidr")
 			return nil, err
 		}
-		state := model.BlockAffinityState(kvpv3.Value.(*libapiv3.BlockAffinity).Spec.State)
+		state := model.BlockAffinityState(kvpv3.Value.(*internalapi.BlockAffinity).Spec.State)
 
 		// Determine deleted status.
-		deletedString := kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Deleted
+		deletedString := kvpv3.Value.(*internalapi.BlockAffinity).Spec.Deleted
 		del := false
 		if deletedString != "" {
 			del, err = strconv.ParseBool(deletedString)
@@ -126,22 +126,22 @@ func (c *blockAffinityClientV1) toModelV1(kvpv3 *model.KVPair) (*model.KVPair, e
 		// Default affinity type to "host" if not set. Older versions of Calico's CRD backend
 		// did not set this field, assuming "host" as the default.
 		affinityType := "host"
-		if kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type != "" {
-			affinityType = kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type
+		if kvpv3.Value.(*internalapi.BlockAffinity).Spec.Type != "" {
+			affinityType = kvpv3.Value.(*internalapi.BlockAffinity).Spec.Type
 		}
 
 		return &model.KVPair{
 			Key: model.BlockAffinityKey{
 				CIDR:         *cidr,
 				AffinityType: affinityType,
-				Host:         kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
+				Host:         kvpv3.Value.(*internalapi.BlockAffinity).Spec.Node,
 			},
 			Value: &model.BlockAffinity{
 				State:   state,
 				Deleted: del,
 			},
 			Revision: kvpv3.Revision,
-			UID:      &kvpv3.Value.(*libapiv3.BlockAffinity).UID,
+			UID:      &kvpv3.Value.(*internalapi.BlockAffinity).UID,
 		}, nil
 	}
 }
@@ -172,8 +172,8 @@ func (c *blockAffinityClientV1) parseKey(k model.Key) (name, cidr, host, affinit
 	return
 }
 
-// toCRD converts the given v1 KVPair containing a model.BlockAffinity into a
-// v3 KVPair containing a CRD representation of the BlockAffinity.
+// toCRD converts the given model KVPair containing a model.BlockAffinity into a
+// CRD KVPair containing a CRD representation of the BlockAffinity.
 func (c *blockAffinityClientV1) toCRD(kvpv1 *model.KVPair) *model.KVPair {
 	name, cidr, host, affinityType := c.parseKey(kvpv1.Key)
 	state := kvpv1.Value.(*model.BlockAffinity).State
@@ -237,7 +237,7 @@ func (c *blockAffinityClientV1) DeleteKVP(ctx context.Context, kvp *model.KVPair
 	}
 
 	// Now actually delete the object.
-	k := model.ResourceKey{Name: name, Kind: libapiv3.KindBlockAffinity}
+	k := model.ResourceKey{Name: name, Kind: internalapi.KindBlockAffinity}
 	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
@@ -257,7 +257,7 @@ func (c *blockAffinityClientV1) Delete(ctx context.Context, key model.Key, revis
 func (c *blockAffinityClientV1) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	// Get the object.
 	name, _, _, _ := c.parseKey(key)
-	k := model.ResourceKey{Name: name, Kind: libapiv3.KindBlockAffinity}
+	k := model.ResourceKey{Name: name, Kind: internalapi.KindBlockAffinity}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
@@ -285,7 +285,7 @@ func (c *blockAffinityClientV1) List(ctx context.Context, li model.ListInterface
 	list := li.(model.BlockAffinityListOptions)
 	log.Debugf("Listing v1 block affinities with host %s, affinity type %s, IP version %d", list.Host, list.AffinityType, list.IPVersion)
 	l := model.ResourceListOptions{
-		Kind:          libapiv3.KindBlockAffinity,
+		Kind:          internalapi.KindBlockAffinity,
 		LabelSelector: model.CalculateBlockAffinityLabelSelector(list),
 	}
 	crdList, err := c.rc.List(ctx, l, revision)
@@ -329,7 +329,7 @@ func (c *blockAffinityClientV1) toKVPairV1(r Resource) (*model.KVPair, error) {
 }
 
 func (c *blockAffinityClientV1) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
-	resl := model.ResourceListOptions{Kind: libapiv3.KindBlockAffinity}
+	resl := model.ResourceListOptions{Kind: internalapi.KindBlockAffinity}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
 	k8sOpts := watchOptionsToK8sListOptions(options)
 	k8sWatch, err := k8sWatchClient.WatchFunc(k8sOpts)

@@ -22,7 +22,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -47,7 +47,7 @@ type podConverter struct{}
 // BuildWorkloadEndpointData generates the correct WorkloadEndpointData for the given
 // list of WorkloadEndpoints, extracting fields that the policy controller is responsible
 // for syncing.
-func BuildWorkloadEndpointData(weps ...api.WorkloadEndpoint) []WorkloadEndpointData {
+func BuildWorkloadEndpointData(weps ...internalapi.WorkloadEndpoint) []WorkloadEndpointData {
 	var retWEPs []WorkloadEndpointData
 	for _, wep := range weps {
 		retWEPs = append(retWEPs, WorkloadEndpointData{
@@ -63,7 +63,7 @@ func BuildWorkloadEndpointData(weps ...api.WorkloadEndpoint) []WorkloadEndpointD
 
 // MergeWorkloadEndpointData applies the given WorkloadEndpointData to the provided
 // WorkloadEndpoint, updating relevant fields with new values.
-func MergeWorkloadEndpointData(wep *api.WorkloadEndpoint, upd WorkloadEndpointData) {
+func MergeWorkloadEndpointData(wep *internalapi.WorkloadEndpoint, upd WorkloadEndpointData) {
 	if wep.Spec.Pod != upd.PodName || wep.Namespace != upd.Namespace {
 		log.Fatalf("Bad attempt to merge data for %s/%s into wep %s/%s", upd.PodName, upd.Namespace, wep.Name, wep.Namespace)
 	}
@@ -99,10 +99,10 @@ func (p *podConverter) Convert(k8sObj any) ([]WorkloadEndpointData, error) {
 	return BuildWorkloadEndpointData(kvpsToWEPs(kvps)...), nil
 }
 
-func kvpsToWEPs(kvps []*model.KVPair) []api.WorkloadEndpoint {
-	var weps []api.WorkloadEndpoint
+func kvpsToWEPs(kvps []*model.KVPair) []internalapi.WorkloadEndpoint {
+	var weps []internalapi.WorkloadEndpoint
 	for _, kvp := range kvps {
-		wep := kvp.Value.(*api.WorkloadEndpoint)
+		wep := kvp.Value.(*internalapi.WorkloadEndpoint)
 		if wep != nil {
 			weps = append(weps, *wep)
 		}

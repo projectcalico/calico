@@ -112,7 +112,7 @@ bin_allow_list_patterns=(
   '/test$'
   ulimit
   uniq
-  wait
+  '/wait$'
   which
   whoami
   yes
@@ -275,6 +275,7 @@ packages_to_keep=(
   libpwquality
   libreadline
   libselinux
+  libsigsegv # used by grep in ubi9
   libzstd
   libz
   ncurses

@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/rest/fake"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -161,7 +161,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// The posted object should be in the backend libapiv3 format.
-			var posted libapiv3.BlockAffinity
+			var posted internalapi.BlockAffinity
 			Expect(json.Unmarshal(bodyBytes, &posted)).To(Succeed(), string(bodyBytes))
 			Expect(posted.Labels).To(HaveKey(apiv3.LabelHostnameHash))
 			Expect(posted.Labels[apiv3.LabelHostnameHash]).NotTo(BeEmpty())
@@ -240,7 +240,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 			bodyBytes, err := io.ReadAll(req.Body)
 			Expect(err).NotTo(HaveOccurred())
 
-			var posted libapiv3.BlockAffinity
+			var posted internalapi.BlockAffinity
 			Expect(json.Unmarshal(bodyBytes, &posted)).To(Succeed(), string(bodyBytes))
 			Expect(posted.Labels).To(HaveKey(apiv3.LabelHostnameHash))
 			Expect(posted.Labels[apiv3.LabelHostnameHash]).NotTo(BeEmpty())

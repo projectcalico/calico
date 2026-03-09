@@ -42,7 +42,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -436,7 +436,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					for _, felix := range topologyContainers.Felixes {
 						if wireguardEnabledV4 {
 							var wgPubKeyOrig string
-							var node *v3.Node
+							var node *internalapi.Node
 							var err error
 
 							// Get the original public-key.
@@ -472,7 +472,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						}
 						if wireguardEnabledV6 {
 							var wgPubKeyOrig string
-							var node *v3.Node
+							var node *internalapi.Node
 							var err error
 
 							// Get the original public-key.
