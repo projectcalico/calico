@@ -71,13 +71,13 @@ $(GUARDIAN_CONTAINER_CREATED): docker-image/guardian/Dockerfile $(BINDIR)/guardi
 ## Run only Unit Tests.
 ut:
 	mkdir -p report
-	$(DOCKER_GO_BUILD) gotestsum --junitfile report/guardian_ut.xml -- ./pkg/... -cover -count 1
+	$(DOCKER_GO_BUILD) gotestsum --junitfile report/guardian_ut.xml -- -race ./pkg/... -cover -count 1
 
 .PHONY: ut
 ## Run only Unit Tests.
 fv:
 	mkdir -p report
-	$(DOCKER_GO_BUILD) gotestsum --junitfile report/guardian_fv.xml -- ./tests/fv/... -cover -count 1
+	$(DOCKER_GO_BUILD) gotestsum --junitfile report/guardian_fv.xml -- -race ./tests/fv/... -cover -count 1
 
 ##########################################################################################
 # CI/CD
