@@ -1109,9 +1109,12 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      secrets:
+        - name: docker
       prologue:
         commands:
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
           - cd third_party/istio-ztunnel
       jobs:
         - name: "Linux amd64"
