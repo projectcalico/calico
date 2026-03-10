@@ -26,8 +26,8 @@ const defaultMaxRetries = 5
 // that use a channel-based event loop rather than the standard K8s worker pattern. Failed items
 // are requeued with exponential backoff up to maxRetries, then dropped.
 //
-// Use Retry() to feed back into the event loop: items are rate-limited by the workqueue and
-// delivered to the Retry() channel when ready for reprocessing.
+// Use Work() to feed back into the event loop: items are delivered to the Work() channel
+// when ready for processing (immediately for new items, after rate-limited delay for retries).
 type RetryWorkqueue[T comparable] struct {
 	queue      workqueue.TypedRateLimitingInterface[T]
 	retryChan  chan T
@@ -45,9 +45,9 @@ func NewRetryWorkqueue[T comparable](name string) *RetryWorkqueue[T] {
 	}
 }
 
-// Run starts the feeder goroutine that pulls items from the workqueue (after rate-limited delay)
-// and sends them to the Retry() channel. Call this once at the start of the event loop goroutine.
-// The goroutine exits when ShutDown is called.
+// Run starts the feeder goroutine that pulls items from the workqueue and sends them to the
+// Work() channel. Call this once at the start of the event loop goroutine. The goroutine exits
+// when ShutDown is called.
 func (r *RetryWorkqueue[T]) Run() {
 	go func() {
 		for {
@@ -66,9 +66,9 @@ func (r *RetryWorkqueue[T]) ShutDown() {
 	r.queue.ShutDown()
 }
 
-// Retry returns a channel that delivers items ready for reprocessing after their rate-limited delay.
-// Read from this channel in the controller's select loop.
-func (r *RetryWorkqueue[T]) Retry() <-chan T {
+// Work returns a channel that delivers items ready for processing. Read from this channel in
+// the controller's select loop.
+func (r *RetryWorkqueue[T]) Work() <-chan T {
 	return r.retryChan
 }
 
