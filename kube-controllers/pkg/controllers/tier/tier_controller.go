@@ -23,7 +23,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -53,6 +52,7 @@ func tierKeyFunc(obj any) ([]string, error) {
 type TierController struct {
 	ctx             context.Context
 	cli             clientset.Interface
+	tierInformer    cache.SharedIndexInformer
 	allInformers    []cache.SharedIndexInformer
 	policyInformers []cache.SharedIndexInformer
 }
@@ -66,6 +66,7 @@ func NewController(
 	c := &TierController{
 		ctx:             ctx,
 		cli:             cli,
+		tierInformer:    tierInformer,
 		allInformers:    append([]cache.SharedIndexInformer{tierInformer}, policyInformers...),
 		policyInformers: policyInformers,
 	}
@@ -154,20 +155,20 @@ func tierNameFromPolicy(obj any) string {
 	}
 }
 
-// reconcileTierByName fetches the tier from the API and reconciles it.
+// reconcileTierByName looks up the tier from the informer cache and reconciles it.
 func (c *TierController) reconcileTierByName(name string) {
 	logCtx := logrus.WithField("name", name)
-	tier, err := c.cli.ProjectcalicoV3().Tiers().Get(c.ctx, name, metav1.GetOptions{})
+	obj, exists, err := c.tierInformer.GetStore().GetByKey(name)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logCtx.Debug("Tier not found, skipping policy-triggered reconcile")
-		} else {
-			logCtx.WithError(err).Error("Failed to get tier for policy-triggered reconcile")
-		}
+		logCtx.WithError(err).Error("Failed to get tier from cache for policy-triggered reconcile")
+		return
+	}
+	if !exists {
+		logCtx.Debug("Tier not found in cache, skipping policy-triggered reconcile")
 		return
 	}
 	logCtx.Info("Policy deleted, re-reconciling tier")
-	if err := c.Reconcile(tier); err != nil {
+	if err := c.Reconcile(obj.(*v3.Tier)); err != nil {
 		logCtx.WithError(err).Error("Error reconciling tier after policy deletion")
 	}
 }
