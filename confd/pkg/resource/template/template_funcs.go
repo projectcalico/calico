@@ -380,7 +380,7 @@ func hasPeerTypeRules(rules []filterArgs) bool {
 }
 
 // emitFilterRules generates the BIRD filter function body lines for the given rules.
-// Rules with PeerType are wrapped in if (is_internal) / if (!is_internal) guards.
+// Rules with PeerType are wrapped in if (is_same_as) / if (!is_same_as) guards.
 func emitFilterRules(ruleFields []filterArgs) ([]string, error) {
 	var lines []string
 	for _, fields := range ruleFields {
@@ -391,9 +391,9 @@ func emitFilterRules(ruleFields []filterArgs) ([]string, error) {
 
 		// Wrap the rule in a PeerType guard if the rule specifies a PeerType.
 		if fields.peerType == v3.BGPFilterPeerTypeIBGP {
-			filterRule = fmt.Sprintf("if (is_internal) then { %s }", filterRule)
+			filterRule = fmt.Sprintf("if (is_same_as) then { %s }", filterRule)
 		} else if fields.peerType == v3.BGPFilterPeerTypeEBGP {
-			filterRule = fmt.Sprintf("if (!is_internal) then { %s }", filterRule)
+			filterRule = fmt.Sprintf("if (!is_same_as) then { %s }", filterRule)
 		}
 
 		lines = append(lines, fmt.Sprintf("  %s", filterRule))
@@ -407,9 +407,9 @@ func emitFilterRules(ruleFields []filterArgs) ([]string, error) {
 //
 // When any rule within a filter uses PeerType, the generated function takes a bool parameter:
 //
-//	function 'bgp_myfilter_importFilterV4'(bool is_internal) { ... }
+//	function 'bgp_myfilter_importFilterV4'(bool is_same_as) { ... }
 //
-// Rules with PeerType are then wrapped in if (is_internal) / if (!is_internal) guards.
+// Rules with PeerType are then wrapped in if (is_same_as) / if (!is_same_as) guards.
 func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 	lines := []string{}
 	var line string
@@ -466,7 +466,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 			}
 
 			if hasPeerTypeRules(ruleFields) {
-				line = fmt.Sprintf("function %s(bool is_internal) {", filterFuncName)
+				line = fmt.Sprintf("function %s(bool is_same_as) {", filterFuncName)
 			} else {
 				line = fmt.Sprintf("function %s() {", filterFuncName)
 			}
@@ -503,7 +503,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 			}
 
 			if hasPeerTypeRules(ruleFields) {
-				line = fmt.Sprintf("function %s(bool is_internal) {", filterFuncName)
+				line = fmt.Sprintf("function %s(bool is_same_as) {", filterFuncName)
 			} else {
 				line = fmt.Sprintf("function %s() {", filterFuncName)
 			}

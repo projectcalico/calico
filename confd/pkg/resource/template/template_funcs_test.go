@@ -503,9 +503,9 @@ func Test_BGPFilterBIRDFuncs_WithPeerType(t *testing.T) {
 
 	expectedV4 := []string{
 		"# v4 BGPFilter peertype-filter",
-		"function 'bgp_peertype-filter_exportFilterV4'(bool is_internal) {",
-		"  if (!is_internal) then { if ((net ~ 10.0.0.0/8)) then { accept; } }",
-		"  if (is_internal) then { if ((net ~ 10.0.0.0/8)) then { reject; } }",
+		"function 'bgp_peertype-filter_exportFilterV4'(bool is_same_as) {",
+		"  if (!is_same_as) then { if ((net ~ 10.0.0.0/8)) then { accept; } }",
+		"  if (is_same_as) then { if ((net ~ 10.0.0.0/8)) then { reject; } }",
 		"  reject;",
 		"}",
 	}

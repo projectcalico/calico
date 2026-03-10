@@ -1973,7 +1973,7 @@ func TestBuildImportFilter_WithPeerType_SameAS(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	// Same AS → sameAS=true → is_internal=true
+	// Same AS → sameAS=true → is_same_as=true
 	result := c.buildImportFilter([]string{"pt-filter"}, "64512", "64512", 4)
 	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(true);")
 	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
@@ -1998,7 +1998,7 @@ func TestBuildImportFilter_WithPeerType_DifferentAS(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	// Different AS → sameAS=false → is_internal=false
+	// Different AS → sameAS=false → is_same_as=false
 	result := c.buildImportFilter([]string{"pt-filter"}, "65000", "64512", 4)
 	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(false);")
 	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
@@ -2049,7 +2049,7 @@ func TestBuildExportFilter_WithPeerType_SameAS(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	// Same AS → sameAS=true → is_internal=true
+	// Same AS → sameAS=true → is_same_as=true
 	result := c.buildExportFilter([]string{"pt-export"}, "64512", "64512", 4)
 	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(true);")
 	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
@@ -2074,7 +2074,7 @@ func TestBuildExportFilter_WithPeerType_DifferentAS(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	// Different AS → sameAS=false → is_internal=false
+	// Different AS → sameAS=false → is_same_as=false
 	result := c.buildExportFilter([]string{"pt-export"}, "65000", "64512", 4)
 	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(false);")
 	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
