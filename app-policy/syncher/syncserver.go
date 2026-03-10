@@ -107,7 +107,12 @@ func (s *SyncClient) Sync(cxt context.Context) {
 				return
 			}
 
-			time.Sleep(PolicySyncRetryTime)
+			select {
+			case <-time.After(PolicySyncRetryTime):
+			case <-cxt.Done():
+				s.inSync = false
+				return
+			}
 		}
 	}
 }
