@@ -299,26 +299,19 @@ type testLogger interface {
 }
 
 func startBPFLogging() *exec.Cmd {
-	// Write BPF trace logs to a file rather than os.Stdout/os.Stderr.
-	// When the test binary runs in a pipeline (bpf_ut.test |& gotestsum),
-	// inheriting stdout/stderr means bpftool holds the pipe open even after
-	// the test binary exits, causing gotestsum to block forever.
-	f, err := os.Create("/tmp/bpf-trace.log")
-	if err != nil {
-		log.WithError(err).Warn("Failed to create BPF trace log file")
-		return nil
-	}
 	cmd := exec.Command("/usr/bin/bpftool", "prog", "tracelog")
-	cmd.Stdout = f
-	cmd.Stderr = f
-	err = cmd.Start()
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	// Pdeathsig ensures the kernel sends SIGKILL to bpftool when the test
+	// binary exits for any reason (including panic/crash/signal).  Without
+	// this, bpftool inherits the pipe FDs and keeps them open, causing
+	// gotestsum to block forever when the test binary runs in a pipeline.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	err := cmd.Start()
 	if err != nil {
 		log.WithError(err).Warn("Failed to start bpf log collection")
-		f.Close()
 		return nil
 	}
-	// Close our copy of the file; bpftool has its own fd now.
-	f.Close()
 	return cmd
 }
 
