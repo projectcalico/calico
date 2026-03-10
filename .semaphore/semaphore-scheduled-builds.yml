@@ -222,7 +222,9 @@ promotions:
 blocks:
   - name: Check images availability
     run:
-      when: "true or (branch !~ 'build-v.*' and change_in(['/charts/', '/manifests/'], {pipeline_file: 'ignore'}))"
+      when: >-
+        true or (branch !~ 'build-v.*' and change_in(['/charts/', '/manifests/'],
+        {pipeline_file: 'ignore'}))
     dependencies: []
     task:
       jobs:
@@ -376,7 +378,9 @@ blocks:
             - "true"
   - name: API
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/api/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -574,7 +578,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: E2E script & pipeline validations
     run:
-      when: "true or change_in(['/.semaphore/end-to-end/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/.semaphore/end-to-end/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 5
     dependencies:
@@ -640,7 +646,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Envoy Gateway
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -664,7 +672,9 @@ blocks:
             - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: Envoy Proxy
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -688,7 +698,9 @@ blocks:
             - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: "Envoy Ratelimit"
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -1133,7 +1145,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Libraries (lib)
     run:
-      when: "true or change_in(['/lib/'], {pipeline_file: 'ignore'})"
+      when: >-
+        true or change_in(['/lib/'],
+        {pipeline_file: 'ignore'})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -1314,7 +1328,9 @@ blocks:
             - 'test-results publish ./report/*.xml --name "pod2daemon: UT" || true'
   - name: "Tools (hack directory)"
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     dependencies:
       - Prerequisites
     task:
@@ -1409,7 +1425,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Whisker
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -1462,7 +1480,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "OpenStack integration (Caracal)"
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'], {pipeline_file: 'ignore'})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'],
+        {pipeline_file: 'ignore'})
     dependencies:
       - Prerequisites
     task:
