@@ -162,6 +162,7 @@ local:kube-controllers/pkg/controllers/networkpolicy
 local:kube-controllers/pkg/controllers/node
 local:kube-controllers/pkg/controllers/pod
 local:kube-controllers/pkg/controllers/serviceaccount
+local:kube-controllers/pkg/controllers/tier
 local:kube-controllers/pkg/controllers/utils
 local:kube-controllers/pkg/converter
 local:kube-controllers/pkg/status
