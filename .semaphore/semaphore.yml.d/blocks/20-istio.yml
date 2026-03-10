@@ -7,10 +7,11 @@
     prologue:
       commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+        - cd third_party/istio-ztunnel
     jobs:
       - name: "Linux amd64"
         commands:
-          - ../../.semaphore/run-and-monitor build.log make -C third_party/istio-ztunnel build
+          - ../../.semaphore/run-and-monitor build.log make build
 - name: Istio Ztunnel - native arm64 runner
   run:
     when: "${CHANGE_IN(third_party/istio-ztunnel)}"
@@ -23,10 +24,11 @@
     prologue:
       commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+        - cd third_party/istio-ztunnel
     jobs:
       - name: "Linux arm64"
         commands:
-          - ../../.semaphore/run-and-monitor build-arm64.log make -C third_party/istio-ztunnel build
+          - ../../.semaphore/run-and-monitor build-arm64.log make build
 
 - name: Istio
   run:
@@ -37,14 +39,15 @@
     prologue:
       commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+        - cd istio
     jobs:
       - name: "Istio: CI"
         commands:
-          - ../../.semaphore/run-and-monitor ci.log make -C istio ci
+          - ../.semaphore/run-and-monitor ci.log make ci
       - name: "Istio: build arm64"
         matrix:
           - env_var: ARCH
             values:
               - arm64
         commands:
-          - ../../.semaphore/run-and-monitor build-$ARCH.log make -C istio build ARCH=$ARCH
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
