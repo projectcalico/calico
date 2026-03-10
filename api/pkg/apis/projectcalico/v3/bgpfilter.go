@@ -107,10 +107,10 @@ type BGPFilterRuleV4 struct {
 	// +optional
 	PeerType BGPFilterPeerType `json:"peerType,omitempty" validate:"omitempty,oneof=eBGP iBGP"`
 
-	// If set, this filter rule will only apply to routes that match the specified BGP
-	// community criteria.  Currently only applies on import, where it matches communities
-	// set by the remote peer.  On export, community matching is ignored; export rules use
-	// the AddCommunity operation instead.
+	// If set, this filter rule will only apply to routes that carry the specified BGP
+	// community.  On import, this matches communities set by the remote peer.  On export,
+	// this matches communities already attached to the route (e.g. added by a prior import
+	// filter or by the AddCommunity operation on an earlier rule).
 	// +optional
 	Communities *BGPFilterCommunityMatch `json:"communities,omitempty" validate:"omitempty"`
 
@@ -179,10 +179,10 @@ type BGPFilterRuleV6 struct {
 	// +optional
 	PeerType BGPFilterPeerType `json:"peerType,omitempty" validate:"omitempty,oneof=eBGP iBGP"`
 
-	// If set, this filter rule will only apply to routes that match the specified BGP
-	// community criteria.  Currently only applies on import, where it matches communities
-	// set by the remote peer.  On export, community matching is ignored; export rules use
-	// the AddCommunity operation instead.
+	// If set, this filter rule will only apply to routes that carry the specified BGP
+	// community.  On import, this matches communities set by the remote peer.  On export,
+	// this matches communities already attached to the route (e.g. added by a prior import
+	// filter or by the AddCommunity operation on an earlier rule).
 	// +optional
 	Communities *BGPFilterCommunityMatch `json:"communities,omitempty" validate:"omitempty"`
 

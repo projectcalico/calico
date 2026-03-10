@@ -487,18 +487,14 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 				return []string{}, err
 			}
 
-			var ruleFields []filterArgs
+				var ruleFields []filterArgs
 			if v4Selected {
 				for _, rule := range filter.Spec.ExportV4 {
-					args := filterArgsFromRuleV4(rule)
-					args.communities = nil // Community matching is not applicable on export.
-					ruleFields = append(ruleFields, args)
+					ruleFields = append(ruleFields, filterArgsFromRuleV4(rule))
 				}
 			} else {
 				for _, rule := range filter.Spec.ExportV6 {
-					args := filterArgsFromRuleV6(rule)
-					args.communities = nil // Community matching is not applicable on export.
-					ruleFields = append(ruleFields, args)
+					ruleFields = append(ruleFields, filterArgsFromRuleV6(rule))
 				}
 			}
 
