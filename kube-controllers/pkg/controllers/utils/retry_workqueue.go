@@ -37,20 +37,15 @@ type RetryWorkqueue[T comparable] struct {
 }
 
 // NewRetryWorkqueue creates a RetryWorkqueue with the default controller rate limiter and max retries.
-// Callers must call SetProcessFn before calling Process.
-func NewRetryWorkqueue[T comparable](name string) *RetryWorkqueue[T] {
+// The processFn is called by Process() to handle each item; it runs on the caller's goroutine.
+func NewRetryWorkqueue[T comparable](name string, processFn func(T) error) *RetryWorkqueue[T] {
 	return &RetryWorkqueue[T]{
 		queue:      workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[T]()),
 		retryChan:  make(chan T, BatchUpdateSize),
+		processFn:  processFn,
 		maxRetries: defaultMaxRetries,
 		name:       name,
 	}
-}
-
-// SetProcessFn sets the process function. Use this when the process function is a method on the
-// struct being constructed and can't be passed to the constructor.
-func (r *RetryWorkqueue[T]) SetProcessFn(fn func(T) error) {
-	r.processFn = fn
 }
 
 // Run starts the feeder goroutine that pulls items from the workqueue and sends them to the

@@ -65,10 +65,8 @@ func NewController(
 		poolInformer:  poolInformer,
 		blockInformer: blockInformer,
 		ipam:          ipam,
-		retryQueue:    utils.NewRetryWorkqueue[string]("IPPool"),
 	}
-
-	c.retryQueue.SetProcessFn(c.reconcileByName)
+	c.retryQueue = utils.NewRetryWorkqueue[string]("IPPool", c.reconcileByName)
 
 	// Enqueue pool names on informer events rather than reconciling inline. The workqueue
 	// deduplicates rapid events for the same pool and provides rate-limited retry on errors.

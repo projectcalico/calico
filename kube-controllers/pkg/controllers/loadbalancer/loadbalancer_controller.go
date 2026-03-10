@@ -139,7 +139,6 @@ func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient clie
 		syncerUpdates:     make(chan any, utils.BatchUpdateSize),
 		syncChan:          make(chan any, 1),
 		serviceUpdates:    make(chan serviceKey, utils.BatchUpdateSize),
-		retryQueue:        utils.NewRetryWorkqueue[serviceKey]("LoadBalancer"),
 		ipPools:           make(map[string]api.IPPool),
 		serviceInformer:   serviceInformer,
 		serviceLister:     v1lister.NewServiceLister(serviceInformer.GetIndexer()),
@@ -151,8 +150,8 @@ func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient clie
 			ipsByBlock:   make(map[string]map[string]bool),
 		},
 	}
+	c.retryQueue = utils.NewRetryWorkqueue[serviceKey]("LoadBalancer", c.syncService)
 
-	c.retryQueue.SetProcessFn(c.syncService)
 	c.RegisterWith(c.dataFeed)
 
 	_, err := c.serviceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
