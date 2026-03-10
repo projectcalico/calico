@@ -276,6 +276,7 @@ blocks:
             - make check-go-mod
             - make verify-go-mods
             - make gen-deps-files
+            - make gen-local-deps-files
             - make go-vet
             - >-
               if [ -n "$SEMAPHORE_GIT_PR_NUMBER" ]; then
