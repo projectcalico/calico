@@ -390,9 +390,10 @@ func emitFilterRules(ruleFields []filterArgs) ([]string, error) {
 		}
 
 		// Wrap the rule in a PeerType guard if the rule specifies a PeerType.
-		if fields.peerType == v3.BGPFilterPeerTypeIBGP {
+		switch fields.peerType {
+		case v3.BGPFilterPeerTypeIBGP:
 			filterRule = fmt.Sprintf("if (is_same_as) then { %s }", filterRule)
-		} else if fields.peerType == v3.BGPFilterPeerTypeEBGP {
+		case v3.BGPFilterPeerTypeEBGP:
 			filterRule = fmt.Sprintf("if (!is_same_as) then { %s }", filterRule)
 		}
 

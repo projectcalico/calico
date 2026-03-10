@@ -527,10 +527,6 @@ func Test_BGPFilterBIRDFuncs_WithPeerType(t *testing.T) {
 	}
 }
 
-func intHelper(i int) *int {
-	return &i
-}
-
 func int32Helper(i int32) *int32 {
 	return &i
 }
