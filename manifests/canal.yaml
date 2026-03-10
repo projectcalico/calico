@@ -6385,6 +6385,7 @@ rules:
     resources:
       - ippools
       - felixconfigurations
+      - bgpconfigurations
       - clusterinformations
     verbs:
       - create
