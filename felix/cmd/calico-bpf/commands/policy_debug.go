@@ -17,8 +17,9 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,8 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/hook"
+	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
@@ -73,8 +76,10 @@ var policyDumpCmd = &cobra.Command{
 			return
 		}
 
+		ipsetMembers := loadIPSetMembers()
+
 		for _, dir := range hooks {
-			err := dumpPolicyInfo(cmd, iface, dir, m)
+			err := dumpPolicyInfo(cmd, iface, dir, m, ipsetMembers)
 			if err != nil {
 				log.WithError(err).Error("Failed to dump policy info.")
 			}
@@ -116,7 +121,133 @@ func getRuleMatchID(comment string) uint64 {
 	return id
 }
 
-func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.PolicyMapMem) error {
+// extractProtoField extracts a quoted field value from a protobuf text-format
+// string. For example, extractProtoField(`action:"allow" protocol:{number:6}`, "action")
+// returns "allow".
+func extractProtoField(s, field string) string {
+	prefix := field + `:"`
+	idx := strings.Index(s, prefix)
+	if idx < 0 {
+		return ""
+	}
+	rest := s[idx+len(prefix):]
+	end := strings.Index(rest, `"`)
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
+}
+
+// formatRuleStart converts a raw "Start of rule" comment into a readable line.
+// Input:  `Start of rule policy-tcp action:"allow" protocol:{number:6}`
+// Output: `Rule: policy-tcp  Action: allow`
+func formatRuleStart(comment string) string {
+	after := strings.TrimPrefix(comment, "Start of rule ")
+	parts := strings.SplitN(after, " ", 2)
+	ruleName := parts[0]
+	if len(parts) == 1 {
+		return "Rule: " + ruleName
+	}
+	action := extractProtoField(parts[1], "action")
+	if action == "" {
+		return "Rule: " + ruleName
+	}
+	return fmt.Sprintf("Rule: %s  Action: %s", ruleName, action)
+}
+
+// loadIPSetMembers reads the BPF IP set map and returns a map from set ID to
+// sorted member strings (CIDRs or named ports).
+func loadIPSetMembers() map[uint64][]string {
+	ipsetMap := ipsets.Map()
+	fromBytes := ipsets.IPSetEntryFromBytes
+
+	if ipv6 != nil && *ipv6 {
+		ipsetMap = ipsets.MapV6()
+		fromBytes = ipsets.IPSetEntryV6FromBytes
+	}
+
+	if err := ipsetMap.Open(); err != nil {
+		log.WithError(err).Debug("Failed to open IP sets map, IDs will not be resolved.")
+		return nil
+	}
+	defer ipsetMap.Close()
+
+	membersBySet := map[uint64][]string{}
+	err := ipsetMap.Iter(func(k, v []byte) maps.IteratorAction {
+		entry := fromBytes(k)
+		var member string
+		if entry.Protocol() == 0 {
+			member = fmt.Sprintf("%s/%d", entry.Addr(), entry.PrefixLen()-64)
+		} else {
+			member = fmt.Sprintf("%s:%d (proto %d)", entry.Addr(), entry.Port(), entry.Protocol())
+		}
+		membersBySet[entry.SetID()] = append(membersBySet[entry.SetID()], member)
+		return maps.IterNone
+	})
+	if err != nil {
+		log.WithError(err).Debug("Failed to iterate IP sets map.")
+		return nil
+	}
+	for _, v := range membersBySet {
+		sort.Strings(v)
+	}
+	return membersBySet
+}
+
+// ipsetHexIDRegex matches hex IP set IDs like "0x1234abcd5678ef90".
+var ipsetHexIDRegex = regexp.MustCompile(`0x[0-9a-fA-F]+`)
+
+// formatIPSets converts a raw IPSets comment into a more readable form,
+// resolving hex IDs to their members when available.
+// Input:  `IPSets src_ip_set_ids:<0x1234>`
+// Output without resolution: `IP sets: src=0x1234`
+// Output with resolution:    `IP sets: src={10.0.0.0/8, 192.168.0.0/16}`
+func formatIPSets(comment string, membersBySet map[uint64][]string) string {
+	after := strings.TrimPrefix(comment, "IPSets ")
+	// Replace the verbose field names with shorter labels.
+	r := strings.NewReplacer(
+		"src_ip_set_ids:<", "src=",
+		"dst_ip_set_ids:<", "dst=",
+		"not_src_ip_set_ids:<", "!src=",
+		"not_dst_ip_set_ids:<", "!dst=",
+		">", "",
+		" ,", ",",
+	)
+	formatted := strings.TrimSpace(r.Replace(after))
+
+	if membersBySet != nil {
+		formatted = ipsetHexIDRegex.ReplaceAllStringFunc(formatted, func(hexID string) string {
+			id, err := strconv.ParseUint(hexID, 0, 64)
+			if err != nil {
+				return hexID
+			}
+			members, ok := membersBySet[id]
+			if !ok || len(members) == 0 {
+				return hexID
+			}
+			return "{" + strings.Join(members, ", ") + "}"
+		})
+	}
+
+	return "IP sets: " + formatted
+}
+
+// formatTierEnd converts "End of tier <name>: <action>" into a readable form.
+func formatTierEnd(comment string) string {
+	after := strings.TrimPrefix(comment, "End of tier ")
+	parts := strings.SplitN(after, ": ", 2)
+	if len(parts) == 2 {
+		return fmt.Sprintf("End Tier: %s  (action: %s)", parts[0], parts[1])
+	}
+	return "End Tier: " + after
+}
+
+// indent returns a string of spaces for the given nesting depth.
+func indent(depth int) string {
+	return strings.Repeat("  ", depth)
+}
+
+func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.PolicyMapMem, ipsetMembers map[uint64][]string) error {
 	verboseFlag := cmd.Flag("asm").Value.String()
 	verboseFlagSet, _ := strconv.ParseBool(verboseFlag)
 
@@ -126,8 +257,10 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 		family = proto.IPVersion_IPV6
 	}
 	filename := bpf.PolicyDebugJSONFileName(iface, h.String(), family)
-	_, err := os.Stat(filename)
-	if err != nil {
+	if _, err := os.Stat(filename); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 
@@ -135,31 +268,73 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 	if err != nil {
 		return err
 	}
+	defer jsonFile.Close()
 
-	byteValue, _ := io.ReadAll(jsonFile)
-	dec := json.NewDecoder(strings.NewReader(string(byteValue)))
-	err = dec.Decode(&policyDbg)
+	err = json.NewDecoder(jsonFile).Decode(&policyDbg)
 	if err != nil {
 		return err
 	}
 
 	cmd.Printf("IfaceName: %s\n", policyDbg.IfaceName)
 	cmd.Printf("Hook: %s\n", policyDbg.Hook)
-	cmd.Printf("Error: %s\n", policyDbg.Error)
-	cmd.Println("Policy Info:")
+	if policyDbg.Error != "" {
+		cmd.Printf("Error: %s\n", policyDbg.Error)
+	}
+
+	// depth tracks indentation: 0=top, 1=tier, 2=policy, 3=rule
+	depth := 0
 
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, comment := range insn.Comments {
-			if strings.Contains(comment, "Rule MatchID") {
+			switch {
+			case strings.Contains(comment, "Rule MatchID"):
 				matchId := getRuleMatchID(comment)
-				cmd.Printf("// count = %d\n", m[matchId])
-			} else if verboseFlagSet || strings.Contains(comment, "Start of") || strings.Contains(comment, "End of") || strings.Contains(comment, "IPSets") {
-				cmd.Printf("// %s\n", comment)
+				cmd.Printf("%sHit count: %d\n", indent(depth), m[matchId])
+
+			case strings.HasPrefix(comment, "Start of tier "):
+				tierName := strings.TrimPrefix(comment, "Start of tier ")
+				depth = 1
+				cmd.Printf("%sTier: %s\n", indent(depth), tierName)
+
+			case strings.HasPrefix(comment, "End of tier "):
+				cmd.Printf("%s%s\n", indent(depth), formatTierEnd(comment))
+				depth = 0
+
+			case strings.HasPrefix(comment, "Start of rule "):
+				depth = 3
+				cmd.Printf("%s%s\n", indent(depth), formatRuleStart(comment))
+
+			case strings.HasPrefix(comment, "End of rule "):
+				depth = 2
+
+			case strings.HasPrefix(comment, "Start of "):
+				// Policy start: "Start of GlobalNetworkPolicy policy-tcp"
+				policyName := strings.TrimPrefix(comment, "Start of ")
+				depth = 2
+				cmd.Printf("%sPolicy: %s\n", indent(depth), policyName)
+
+			case strings.HasPrefix(comment, "End of "):
+				policyName := strings.TrimPrefix(comment, "End of ")
+				cmd.Printf("%sEnd Policy: %s\n", indent(depth), policyName)
+				depth = 1
+
+			case strings.HasPrefix(comment, "IPSets "):
+				cmd.Printf("%s%s\n", indent(depth), formatIPSets(comment, ipsetMembers))
+
+			case strings.HasPrefix(comment, "##### Start of program"):
+				if verboseFlagSet {
+					cmd.Printf("\n%s%s\n", indent(depth), comment)
+				}
+
+			default:
+				if verboseFlagSet {
+					cmd.Printf("%s// %s\n", indent(depth), comment)
+				}
 			}
 		}
 		for _, label := range insn.Labels {
 			if verboseFlagSet {
-				cmd.Printf("%s:\n", label)
+				cmd.Printf("%s%s:\n", indent(depth), label)
 			}
 		}
 		if verboseFlagSet {
