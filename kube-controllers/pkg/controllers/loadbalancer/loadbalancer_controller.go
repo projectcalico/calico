@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -119,6 +119,7 @@ type loadBalancerController struct {
 	syncStatus        bapi.SyncStatus
 	syncChan          chan any
 	serviceUpdates    chan serviceKey
+	retryQueue        *utils.RetryWorkqueue[serviceKey]
 	ipPools           map[string]api.IPPool
 	serviceInformer   cache.SharedIndexInformer
 	serviceLister     v1lister.ServiceLister
@@ -138,6 +139,7 @@ func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient clie
 		syncerUpdates:     make(chan any, utils.BatchUpdateSize),
 		syncChan:          make(chan any, 1),
 		serviceUpdates:    make(chan serviceKey, utils.BatchUpdateSize),
+		retryQueue:        utils.NewRetryWorkqueue[serviceKey]("LoadBalancer"),
 		ipPools:           make(map[string]api.IPPool),
 		serviceInformer:   serviceInformer,
 		serviceLister:     v1lister.NewServiceLister(serviceInformer.GetIndexer()),
@@ -234,6 +236,9 @@ func (c *loadBalancerController) onUpdate(update bapi.Update) {
 }
 
 func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{}) {
+	defer c.retryQueue.ShutDown()
+	c.retryQueue.Run()
+
 	log.Infof("Will run periodic IPAM sync every %s", timer)
 	t := time.NewTicker(timer)
 	for {
@@ -255,7 +260,11 @@ func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{})
 			c.syncIPAM()
 		case svcKey := <-c.serviceUpdates:
 			logEntry := log.WithFields(log.Fields{"controller": "LoadBalancer", "type": "serviceUpdate"})
-			utils.ProcessBatch(c.serviceUpdates, svcKey, c.syncService, logEntry)
+			utils.ProcessBatch(c.serviceUpdates, svcKey, func(key serviceKey) {
+				c.retryQueue.HandleErr(c.syncService(key), key)
+			}, logEntry)
+		case svcKey := <-c.retryQueue.Retry():
+			c.retryQueue.HandleErr(c.syncService(svcKey), svcKey)
 		case <-stopCh:
 			return
 		}
@@ -395,7 +404,7 @@ func (c *loadBalancerController) syncIPAM() {
 	}
 
 	for svcKey := range svcKeys {
-		c.syncService(svcKey)
+		c.retryQueue.HandleErr(c.syncService(svcKey), svcKey)
 	}
 }
 
@@ -416,94 +425,78 @@ func (c *loadBalancerController) ensureDatastoreUpgraded() error {
 // - Allocates any addresses necessary to satisfy the Service LB request
 // - Updates the controllers internal state tracking of which IP addresses are allocated.
 // - Updates the IP addresses in the Service Status to match the IPAM DB.
-func (c *loadBalancerController) syncService(svcKey serviceKey) {
+func (c *loadBalancerController) syncService(svcKey serviceKey) error {
 	if len(c.ipPools) == 0 {
 		if _, ok := c.allocationTracker.ipsByService[svcKey]; ok {
 			// Last LoadBalancer IPPool was deleted, and we have previously assigned IPs to this service. We need to release the IPs now and update the service status
 			log.Warnf("No ippools with allowedUse LoadBalancer found. Releasing previously assigned IPs for Service %s/%s", svcKey.namespace, svcKey.name)
 			err := c.releaseIPsByHandle(svcKey)
 			if err != nil {
-				log.WithError(err).Errorf("Error releasing previously assigned IPs for Service %s/%s", svcKey.namespace, svcKey.name)
-				return
+				return fmt.Errorf("error releasing previously assigned IPs for Service %s/%s: %v", svcKey.namespace, svcKey.name, err)
 			}
 
 			svc, err := c.serviceLister.Services(svcKey.namespace).Get(svcKey.name)
 			if apierrors.IsNotFound(err) {
-				// No need to update the status, service no longer exists
-				return
+				return nil
 			} else if err != nil {
-				log.WithError(err).Errorf("Error getting service %s/%s", svcKey.namespace, svcKey.name)
-				return
+				return fmt.Errorf("error getting service %s/%s: %v", svcKey.namespace, svcKey.name, err)
 			}
 
-			err = c.updateServiceStatus(svc, svcKey)
-			if err != nil {
-				log.WithError(err).Errorf("Failed to update service status for %s/%s", svc.Namespace, svc.Name)
-				return
+			if err = c.updateServiceStatus(svc, svcKey); err != nil {
+				return fmt.Errorf("failed to update service status for %s/%s: %v", svc.Namespace, svc.Name, err)
 			}
 		} else {
 			// We can skip service sync if there are no ippools defined that can be used for Service LoadBalancer
 			svc, err := c.serviceLister.Services(svcKey.namespace).Get(svcKey.name)
 			if apierrors.IsNotFound(err) {
-				return
+				return nil
 			}
 			if err != nil {
-				log.WithError(err).Errorf("Error getting service %s/%s", svcKey.namespace, svcKey.name)
-				return
+				return fmt.Errorf("error getting service %s/%s: %v", svcKey.namespace, svcKey.name, err)
 			}
 			if IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs) {
-				// Only warn the user if the service is managed by Calico and should have IP assigned
 				log.Warnf("No ippools with allowedUse LoadBalancer found. Skipping IP assignment for Service %s/%s", svcKey.namespace, svcKey.name)
 			}
 		}
-		return
+		return nil
 	}
 
 	svc, err := c.serviceLister.Services(svcKey.namespace).Get(svcKey.name)
 	if apierrors.IsNotFound(err) {
 		// service was deleted, we release all IPs that we have assigned to the service
-		err = c.releaseIPsByHandle(svcKey)
-		if err != nil {
-			log.WithError(err).Errorf("Failed to release IP for %s/%s", svcKey.namespace, svcKey.name)
-			return
+		if err = c.releaseIPsByHandle(svcKey); err != nil {
+			return fmt.Errorf("failed to release IP for %s/%s: %v", svcKey.namespace, svcKey.name, err)
 		}
-		return
+		return nil
 	}
 	if err != nil {
-		log.WithError(err).Error("Error getting service from serviceLister")
-		return
+		return fmt.Errorf("error getting service from serviceLister: %v", err)
 	}
 
 	if !IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs) {
 		if c.allocationTracker.ipsByService[svcKey] == nil {
-			// not managed by Calico, and no IP for the service is in our IPAM storage. It's safe to return
-			return
+			return nil
 		}
 
 		// Calico assigned IP previously, no longer managed by us, release IPs assigned by calico and update service status
 		// this also catches a case where the service used to be a LoadBalancer but no longer is
 		calicoIPs := c.allocationTracker.ipsByService[svcKey]
-		err = c.releaseIPsByHandle(svcKey)
-		if err != nil {
-			log.WithError(err).Errorf("Error releasing previously assigned IPs for Service %s/%s", svcKey.namespace, svcKey.name)
-			return
+		if err = c.releaseIPsByHandle(svcKey); err != nil {
+			return fmt.Errorf("error releasing previously assigned IPs for Service %s/%s: %v", svcKey.namespace, svcKey.name, err)
 		}
 
 		if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
-			err = c.removeCalicoIPFromStatus(svc, calicoIPs)
-			if err != nil {
-				log.WithError(err).Errorf("Error updating status for service %s/%s", svcKey.namespace, svcKey.name)
-				return
+			if err = c.removeCalicoIPFromStatus(svc, calicoIPs); err != nil {
+				return fmt.Errorf("error updating status for service %s/%s: %v", svcKey.namespace, svcKey.name, err)
 			}
 		}
 
-		return
+		return nil
 	}
 
 	loadBalancerIPs, ipv4pools, ipv6pools, err := c.parseAnnotations(svc.Annotations)
 	if err != nil {
-		log.WithError(err).Errorf("Failed to parse annotations for service %s/%s", svc.Namespace, svc.Name)
-		return
+		return fmt.Errorf("failed to parse annotations for service %s/%s: %v", svc.Namespace, svc.Name, err)
 	}
 
 	if loadBalancerIPs != nil {
@@ -515,10 +508,8 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 		for ip := range c.allocationTracker.ipsByService[svcKey] {
 			if _, ok := lbIPs[ip]; !ok {
 				log.Infof("Removing IP assignment (%s) for Service %s/%s; no longer in annotations.", ip, svc.Namespace, svc.Name)
-				err = c.releaseIP(svcKey, ip)
-				if err != nil {
-					log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
-					return
+				if err = c.releaseIP(svcKey, ip); err != nil {
+					return fmt.Errorf("failed to release IP for %s/%s: %v", svc.Namespace, svc.Name, err)
 				}
 			}
 		}
@@ -527,10 +518,8 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 		for ip := range c.allocationTracker.ipsByService[svcKey] {
 			if !poolContains(ip, ipv4pools) && !poolContains(ip, ipv6pools) {
 				log.Infof("Removing IP assignment (%s) for Service %s/%s: not from specified pools (%v, %v).", ip, svc.Namespace, svc.Name, ipv4pools, ipv6pools)
-				err = c.releaseIP(svcKey, ip)
-				if err != nil {
-					log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
-					return
+				if err = c.releaseIP(svcKey, ip); err != nil {
+					return fmt.Errorf("failed to release IP for %s/%s: %v", svc.Namespace, svc.Name, err)
 				}
 			}
 		}
@@ -539,8 +528,7 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 		for ip := range c.allocationTracker.ipsByService[svcKey] {
 			pool, err := c.poolForIP(ip)
 			if err != nil {
-				log.WithError(err).Error("Error syncing service object, will retry during next IPAM sync")
-				return
+				return fmt.Errorf("error syncing service %s/%s: %v", svc.Namespace, svc.Name, err)
 			}
 			if pool != nil {
 				// We want to release the address if annotation changed and we are no longer requesting IP from manual pool,
@@ -549,10 +537,8 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 				// AssignmentMode should never be nil due to defaulting, but we check it just in case.
 				if pool.Spec.AssignmentMode != nil && *pool.Spec.AssignmentMode == api.Manual {
 					log.Infof("Removing IP assignment (%s) for Service %s/%s. No annotations but IP is from a 'Manual' IP pool.", ip, svc.Namespace, svc.Name)
-					err = c.releaseIP(svcKey, ip)
-					if err != nil {
-						log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
-						return
+					if err = c.releaseIP(svcKey, ip); err != nil {
+						return fmt.Errorf("failed to release IP for %s/%s: %v", svc.Namespace, svc.Name, err)
 					}
 				}
 			}
@@ -563,19 +549,17 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 		log.Infof("Service requires an IP assignment %s/%s", svc.Namespace, svc.Name)
 		ips, err := c.assignIP(svc)
 		if err != nil {
-			log.WithError(err).Errorf("Failed to assign IP for %s/%s", svc.Namespace, svc.Name)
-		} else {
-			log.Infof("Assigned IPs %s for Service %s/%s", ips, svc.Namespace, svc.Name)
+			return fmt.Errorf("failed to assign IP for %s/%s: %v", svc.Namespace, svc.Name, err)
 		}
+		log.Infof("Assigned IPs %s for Service %s/%s", ips, svc.Namespace, svc.Name)
 	}
 
 	if c.needsStatusUpdate(svc, svcKey) {
-		err = c.updateServiceStatus(svc, svcKey)
-		if err != nil {
-			log.WithError(err).Errorf("Failed to update service status for %s/%s", svc.Namespace, svc.Name)
-			return
+		if err = c.updateServiceStatus(svc, svcKey); err != nil {
+			return fmt.Errorf("failed to update service status for %s/%s: %v", svc.Namespace, svc.Name, err)
 		}
 	}
+	return nil
 }
 
 // needsIPsAssigned determines if service IPFamilyPolicy is requirement is fulfilled by number of assigned IPs in IPAM storage
