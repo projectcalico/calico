@@ -1147,7 +1147,8 @@ blocks:
       jobs:
         - name: "Istio: CI"
           commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
+            # build all images except ztunnel, which is built in the previous step
+            - ../.semaphore/run-and-monitor ci.log make clean istio-install-cni istio-pilot istio-proxyv2
         - name: "Istio: build arm64"
           matrix:
             - env_var: ARCH
