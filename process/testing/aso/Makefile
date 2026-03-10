@@ -123,7 +123,8 @@ $(BINDIR)/helm:
 CRANE_ARCH = $(subst amd64,x86_64,$(ARCH))
 $(BINDIR)/crane:
 	mkdir -p $(@D)
-	curl -sSfL --retry 5 https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz | tar xz -C $(@D) crane
+	curl -sSfL --retry 5 -o /tmp/crane.tar.gz https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz
+	tar xz -C $(@D) -f /tmp/crane.tar.gz crane && rm -f /tmp/crane.tar.gz
 	touch $@
 
 .PHONY: clean

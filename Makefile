@@ -110,7 +110,7 @@ get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERA
 	cd ./charts/crd.projectcalico.org.v1/templates/ && \
 	for file in operator.tigera.io_*.yaml; do \
 		echo "downloading $$file from operator repo"; \
-		curl -fsSL https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/imports/crds/operator/$${file} -o $${file}; \
+		curl -fsSL --retry 5 https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/imports/crds/operator/$${file} -o $${file}; \
 		cp $${file} ../../projectcalico.org.v3/templates/$${file}; \
 	done
 	$(MAKE) fix-changed
@@ -130,11 +130,10 @@ gen-deps-files:
 $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/*
 	@{ \
 	  echo "!!! GENERATED FILE, DO NOT EDIT !!!" && \
-	  echo "This file contains the list of modules that this package depends on" && \
-	  echo "in order to trigger CI on changes" && \
+	  echo "Run 'make gen-deps-files' to regenerate." && \
 	  echo && \
 	  grep '^go' go.mod && \
-	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules $(dir $@)"; \
+	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
 
 CHART_DESTINATION ?= ./bin
@@ -203,7 +202,8 @@ e2e-test-clusternetworkpolicy:
 
 ## Run the general e2e tests against a pre-existing kind cluster.
 e2e-run-test:
-	KUBECONFIG=$(KIND_KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) -focus=$(E2E_FOCUS) -skip=$(E2E_SKIP) ./e2e/bin/k8s/e2e.test
+	mkdir -p report
+	KUBECONFIG=$(KIND_KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) -focus=$(E2E_FOCUS) -skip=$(E2E_SKIP) --junit-report=e2e_conformance.xml --output-dir=report/ ./e2e/bin/k8s/e2e.test
 
 ## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
 e2e-run-cnp-test:
@@ -225,7 +225,7 @@ bin/ghr:
 
 # Install GitHub CLI
 bin/gh:
-	curl -sSL -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
 	tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
 	chmod +x $@
 	rm bin/gh.tgz
