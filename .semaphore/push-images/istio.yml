@@ -25,7 +25,7 @@ global_job_config:
       - ssh-add ~/.ssh/id_rsa
 blocks:
   - name: Publish tigera/istio-ztunnel images
-    run:
+    skip:
       when: "branch !~ '.+'"
     dependencies: []
     task:
@@ -35,7 +35,7 @@ blocks:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd CONFIRM=true; fi
 
   - name: Publish tigera/istio-ztunnel images - native arm64 runner
-    run:
+    skip:
       when: "branch !~ '.+'"
     dependencies: []
     task:
