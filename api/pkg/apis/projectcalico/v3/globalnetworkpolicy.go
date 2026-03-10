@@ -25,7 +25,6 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:resource:scope=Cluster
 
 // GlobalNetworkPolicyList is a list of Policy objects.
@@ -40,6 +39,7 @@ type GlobalNetworkPolicyList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster,shortName={gnp,cgnp}
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
