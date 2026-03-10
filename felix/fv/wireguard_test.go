@@ -896,7 +896,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					}
 					cc.CheckConnectivity()
 
+					// Reset tunnel packet counts after CheckConnectivity confirms the deny
+					// is enforced. During the Eventually retries inside CheckConnectivity,
+					// packets may still traverse the tunnel before Felix programs the deny.
 					By("verifying tunnelled packet count is zero")
+					for i := range topologyContainers.Felixes {
+						if wireguardEnabledV4 {
+							tcpdumps[i].ResetCount("numInTunnelPackets")
+							tcpdumps[i].ResetCount("numOutTunnelPackets")
+						}
+						if wireguardEnabledV6 {
+							tcpdumps[i].ResetCount("numInTunnelPacketsV6")
+							tcpdumps[i].ResetCount("numOutTunnelPacketsV6")
+						}
+					}
 					for i := range topologyContainers.Felixes {
 						if wireguardEnabledV4 {
 							Consistently(func() int {
