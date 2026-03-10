@@ -9,11 +9,11 @@
     prologue:
       commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
         - cd third_party/istio-ztunnel
     jobs:
       - name: "Linux amd64"
         commands:
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
           - make cd ARCHES=amd64 CONFIRM=true
 - name: Publish tigera/istio-ztunnel images - native arm64 runner
   run:
