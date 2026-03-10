@@ -364,8 +364,6 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 		TypeDetails: make([]TypeMigrationProgress, 0, len(migrators)),
 	}
 
-	// TODO: Consider batching status updates in memory and committing once at the
-	// end (or per-type) instead of updating status before each type.
 	for i, m := range migrators {
 		// Update current-type progress before starting each type.
 		dm.Status.Progress.CurrentType = m.Kind
@@ -450,16 +448,9 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 }
 
 // handleConverged transitions to Complete once the operator and components have
-// switched over to the new API version.
-//
-// TODO: Detect that components have actually switched to v3 before transitioning
-// to Complete. The agreed approach is:
-//   - Felix and Typha will report their active API group (e.g., via a status field
-//     on their respective CRDs or a shared ConfigMap).
-//   - This controller should poll those reports on each resync (60s) and only
-//     transition to Complete once all Felix/Typha instances report reading from
-//     projectcalico.org/v3 CRDs.
-//   - Until that mechanism is implemented, this transitions immediately.
+// switched over to the new API version. Currently transitions immediately;
+// once Felix and Typha report their active API group (CORE-12315), this should
+// wait until all instances confirm they are reading from projectcalico.org/v3.
 func (c *migrationController) handleConverged(logCtx *log.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration converged, transitioning to Complete")
 	now := metav1.Now()
@@ -482,19 +473,10 @@ func (c *migrationController) handleDeletion(logCtx *log.Entry, dm *DatastoreMig
 }
 
 // handleCompletedCleanup deletes v1 CRDs once the DatastoreMigration object
-// has been deleted and is finalizing.
-//
-// TODO: If this errors, we won't get another deletion event. The poll loop will
-// retry since the finalizer is still present, but we should verify this works
-// reliably.
+// has been deleted and is finalizing. If this errors, the workqueue will
+// re-enqueue the item and retry since the finalizer is still present.
 func (c *migrationController) handleCompletedCleanup(logCtx *log.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration complete, cleaning up v1 CRDs")
-
-	crds, err := c.k8sClient.Discovery().ServerResourcesForGroupVersion("apiextensions.k8s.io/v1")
-	if err != nil {
-		logCtx.WithError(err).Warn("Could not discover apiextensions, attempting direct CRD deletion")
-	}
-	_ = crds // Discovery is just a sanity check.
 
 	// List all CRDs in the crd.projectcalico.org group and delete them.
 	crdClient := c.dynamicClient.Resource(crdGVR)

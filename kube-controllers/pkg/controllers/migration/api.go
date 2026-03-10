@@ -98,11 +98,9 @@ type DatastoreMigrationList struct {
 	Items           []DatastoreMigration `json:"items"`
 }
 
-// DatastoreMigrationSpec defines the desired migration behavior.
-//
-// TODO: Add a mechanism to trigger rollback (e.g., a spec field or deleting the
-// CR while in a non-Complete phase triggers abort via finalizer, but we may want
-// an explicit rollback action).
+// DatastoreMigrationSpec defines the desired migration behavior. Rollback is
+// triggered by deleting the CR while in a non-Complete phase; the finalizer
+// handles cleanup and APIService restoration.
 type DatastoreMigrationSpec struct {
 	// Kind specifies the migration to perform (e.g., V1ToV3).
 	// +kubebuilder:validation:Required

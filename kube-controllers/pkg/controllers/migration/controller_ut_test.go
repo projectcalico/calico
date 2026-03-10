@@ -16,11 +16,13 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicofake "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/fake"
 	log "github.com/sirupsen/logrus"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,6 +32,7 @@ import (
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -81,7 +84,8 @@ func testController(t *testing.T, objects ...runtime.Object) (*migrationControll
 }
 
 // createTestCR creates a DatastoreMigration CR as unstructured for the fake dynamic client.
-func createTestCR(name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
+func createTestCR(t *testing.T, name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
+	t.Helper()
 	dm := &DatastoreMigration{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: Group + "/" + Version,
@@ -99,13 +103,14 @@ func createTestCR(name string, phase DatastoreMigrationPhase) *unstructured.Unst
 	}
 	uns, err := toUnstructured(dm)
 	if err != nil {
-		panic(err)
+		t.Fatalf("failed to create test CR: %v", err)
 	}
 	return uns
 }
 
 // createTestCRWithDeletion creates a DatastoreMigration CR with a finalizer and deletion timestamp.
-func createTestCRWithDeletion(name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
+func createTestCRWithDeletion(t *testing.T, name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
+	t.Helper()
 	now := metav1.Now()
 	dm := &DatastoreMigration{
 		TypeMeta: metav1.TypeMeta{
@@ -124,7 +129,7 @@ func createTestCRWithDeletion(name string, phase DatastoreMigrationPhase) *unstr
 	dm.Status.Phase = phase
 	uns, err := toUnstructured(dm)
 	if err != nil {
-		panic(err)
+		t.Fatalf("failed to create test CR with deletion: %v", err)
 	}
 	return uns
 }
@@ -159,7 +164,7 @@ func TestReconcile_NoCR(t *testing.T) {
 }
 
 func TestReconcile_PendingToMigrating(t *testing.T) {
-	cr := createTestCR(defaultMigrationName, "")
+	cr := createTestCR(t, defaultMigrationName, "")
 	v1CRD := createV1CRD("bgppeers.crd.projectcalico.org")
 
 	c, _ := testController(t, cr, v1CRD)
@@ -199,7 +204,7 @@ func TestReconcile_PendingToMigrating(t *testing.T) {
 }
 
 func TestReconcile_CompleteIsNoOp(t *testing.T) {
-	cr := createTestCR(defaultMigrationName, DatastoreMigrationPhaseComplete)
+	cr := createTestCR(t, defaultMigrationName, DatastoreMigrationPhaseComplete)
 	c, _ := testController(t, cr)
 
 	if err := c.reconcile(); err != nil {
@@ -216,7 +221,7 @@ func TestReconcile_CompleteIsNoOp(t *testing.T) {
 }
 
 func TestReconcile_FailedIsNoOp(t *testing.T) {
-	cr := createTestCR(defaultMigrationName, DatastoreMigrationPhaseFailed)
+	cr := createTestCR(t, defaultMigrationName, DatastoreMigrationPhaseFailed)
 	c, _ := testController(t, cr)
 
 	if err := c.reconcile(); err != nil {
@@ -233,7 +238,7 @@ func TestReconcile_FailedIsNoOp(t *testing.T) {
 }
 
 func TestPreValidation_NoV1CRDs(t *testing.T) {
-	cr := createTestCR(defaultMigrationName, "")
+	cr := createTestCR(t, defaultMigrationName, "")
 	c, _ := testController(t, cr)
 
 	// First reconcile adds the finalizer.
@@ -269,7 +274,7 @@ func TestPreValidation_NoV1CRDs(t *testing.T) {
 }
 
 func TestPreValidation_AutomanagedAPIService(t *testing.T) {
-	cr := createTestCR(defaultMigrationName, "")
+	cr := createTestCR(t, defaultMigrationName, "")
 	v1CRD := createV1CRD("bgppeers.crd.projectcalico.org")
 
 	c, _ := testController(t, cr, v1CRD)
@@ -395,7 +400,7 @@ func TestUnlockDatastore(t *testing.T) {
 }
 
 func TestHandleDeletion_Complete(t *testing.T) {
-	cr := createTestCRWithDeletion(defaultMigrationName, DatastoreMigrationPhaseComplete)
+	cr := createTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseComplete)
 	c, _ := testController(t, cr)
 
 	// Reconcile should run the completed cleanup path (delete v1 CRDs).
@@ -414,7 +419,7 @@ func TestHandleDeletion_Complete(t *testing.T) {
 }
 
 func TestHandleDeletion_Abort(t *testing.T) {
-	cr := createTestCRWithDeletion(defaultMigrationName, DatastoreMigrationPhaseMigrating)
+	cr := createTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
 	c, _ := testController(t, cr)
 
 	// Set up v1 backend mock as locked.
@@ -448,3 +453,218 @@ func TestHandleDeletion_Abort(t *testing.T) {
 	}
 }
 
+func TestMigrateResourceType_TransientError(t *testing.T) {
+	ctx := context.Background()
+
+	bc := &mockBackendClient{
+		resources: map[string][]*model.KVPair{
+			apiv3.KindTier: {
+				{
+					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+				},
+			},
+		},
+	}
+
+	calls := 0
+	migrator := ResourceMigrator{
+		Kind:  apiv3.KindTier,
+		Order: OrderTiers,
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, c, apiv3.KindTier)
+		},
+		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+			v1 := kvp.Value.(*apiv3.Tier)
+			return &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}, nil
+		},
+		CreateV3: func(ctx context.Context, obj metav1.Object) error {
+			calls++
+			if calls == 1 {
+				return kerrors.NewServiceUnavailable("transient")
+			}
+			return nil
+		},
+		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
+			return nil, nil
+		},
+		SpecsEqual: func(a, b metav1.Object) bool {
+			return false
+		},
+	}
+
+	result, err := MigrateResourceType(ctx, bc, migrator)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Migrated != 1 {
+		t.Errorf("expected 1 migrated after retry, got %d", result.Migrated)
+	}
+	if calls < 2 {
+		t.Errorf("expected at least 2 CreateV3 calls (initial + retry), got %d", calls)
+	}
+}
+
+func TestMigrateResourceType_ContentMatch(t *testing.T) {
+	ctx := context.Background()
+
+	action := apiv3.Action("Deny")
+	originalSpec := apiv3.TierSpec{Order: floatPtr(42), DefaultAction: &action}
+	bc := &mockBackendClient{
+		resources: map[string][]*model.KVPair{
+			apiv3.KindTier: {
+				{
+					Key: model.ResourceKey{Kind: apiv3.KindTier, Name: "my-tier"},
+					Value: &apiv3.Tier{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        "my-tier",
+							Labels:      map[string]string{"env": "prod"},
+							Annotations: map[string]string{"note": "important"},
+						},
+						Spec: originalSpec,
+					},
+				},
+			},
+		},
+	}
+
+	var createdObj metav1.Object
+	migrator := ResourceMigrator{
+		Kind:  apiv3.KindTier,
+		Order: OrderTiers,
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, c, apiv3.KindTier)
+		},
+		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+			v1 := kvp.Value.(*apiv3.Tier)
+			v3 := &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+		CreateV3: func(ctx context.Context, obj metav1.Object) error {
+			createdObj = obj
+			return nil
+		},
+		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
+			return nil, nil
+		},
+		SpecsEqual: func(a, b metav1.Object) bool {
+			return false
+		},
+	}
+
+	result, err := MigrateResourceType(ctx, bc, migrator)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Migrated != 1 {
+		t.Fatalf("expected 1 migrated, got %d", result.Migrated)
+	}
+
+	// Verify the created object matches the original.
+	tier := createdObj.(*apiv3.Tier)
+	if tier.Name != "my-tier" {
+		t.Errorf("expected name my-tier, got %s", tier.Name)
+	}
+	if tier.Spec.Order == nil || *tier.Spec.Order != 42 {
+		t.Errorf("expected Order 42, got %v", tier.Spec.Order)
+	}
+	if tier.Spec.DefaultAction == nil || *tier.Spec.DefaultAction != apiv3.Action("Deny") {
+		t.Errorf("expected DefaultAction Deny, got %v", tier.Spec.DefaultAction)
+	}
+	if tier.Labels["env"] != "prod" {
+		t.Errorf("expected label env=prod, got %v", tier.Labels)
+	}
+	if tier.Annotations["note"] != "important" {
+		t.Errorf("expected annotation note=important, got %v", tier.Annotations)
+	}
+}
+
+func TestMigrateResourceType_ConvertError(t *testing.T) {
+	ctx := context.Background()
+
+	bc := &mockBackendClient{
+		resources: map[string][]*model.KVPair{
+			apiv3.KindTier: {
+				{
+					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "bad-tier"},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "bad-tier"}},
+				},
+			},
+		},
+	}
+
+	migrator := ResourceMigrator{
+		Kind:  apiv3.KindTier,
+		Order: OrderTiers,
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, c, apiv3.KindTier)
+		},
+		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+			return nil, fmt.Errorf("intentional convert error")
+		},
+		CreateV3: func(ctx context.Context, obj metav1.Object) error {
+			t.Fatal("CreateV3 should not be called when Convert fails")
+			return nil
+		},
+		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
+			return nil, nil
+		},
+		SpecsEqual: func(a, b metav1.Object) bool {
+			return false
+		},
+	}
+
+	_, err := MigrateResourceType(ctx, bc, migrator)
+	if err == nil {
+		t.Fatal("expected error from Convert failure")
+	}
+}
+
+func TestMigrateResourceType_EmptyList(t *testing.T) {
+	ctx := context.Background()
+
+	bc := &mockBackendClient{
+		resources: map[string][]*model.KVPair{
+			apiv3.KindTier: {},
+		},
+	}
+
+	migrator := ResourceMigrator{
+		Kind:  apiv3.KindTier,
+		Order: OrderTiers,
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, c, apiv3.KindTier)
+		},
+		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+			t.Fatal("Convert should not be called for empty list")
+			return nil, nil
+		},
+		CreateV3: func(ctx context.Context, obj metav1.Object) error {
+			t.Fatal("CreateV3 should not be called for empty list")
+			return nil
+		},
+		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
+			return nil, nil
+		},
+		SpecsEqual: func(a, b metav1.Object) bool {
+			return false
+		},
+	}
+
+	result, err := MigrateResourceType(ctx, bc, migrator)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Migrated != 0 || result.Skipped != 0 || len(result.Conflicts) != 0 {
+		t.Errorf("expected empty result for empty list, got migrated=%d skipped=%d conflicts=%d",
+			result.Migrated, result.Skipped, len(result.Conflicts))
+	}
+}
