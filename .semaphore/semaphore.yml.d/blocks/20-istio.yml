@@ -1,0 +1,53 @@
+- name: Istio Ztunnel
+  run:
+    when: "${CHANGE_IN(third_party/istio-ztunnel)}"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+        - cd third_party/istio-ztunnel
+    jobs:
+      - name: "Linux amd64"
+        commands:
+          - ../../.semaphore/run-and-monitor build.log make build
+- name: Istio Ztunnel - native arm64 runner
+  run:
+    when: "${CHANGE_IN(third_party/istio-ztunnel)}"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: s1-aws-arm64-2
+    prologue:
+      commands:
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+        - cd third_party/istio-ztunnel
+    jobs:
+      - name: "Linux arm64"
+        commands:
+          - ../../.semaphore/run-and-monitor build-arm64.log make build
+
+- name: Istio
+  run:
+    when: "${CHANGE_IN(istio)}"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+        - cd istio
+    jobs:
+      - name: "Istio: CI"
+        commands:
+          - ../.semaphore/run-and-monitor ci.log make ci
+      - name: "Istio: build arm64"
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+        commands:
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH

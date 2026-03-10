@@ -219,6 +219,10 @@ promotions:
     pipeline_file: push-images/e2e-test.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
+  - name: Push istio images
+    pipeline_file: push-images/istio.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
 blocks:
   - name: Check images availability
     run:
@@ -1099,6 +1103,58 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: Istio Ztunnel
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+          - cd third_party/istio-ztunnel
+      jobs:
+        - name: "Linux amd64"
+          commands:
+            - ../../.semaphore/run-and-monitor build.log make build
+  - name: Istio Ztunnel - native arm64 runner
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      agent:
+        machine:
+          type: s1-aws-arm64-2
+      prologue:
+        commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+          - cd third_party/istio-ztunnel
+      jobs:
+        - name: "Linux arm64"
+          commands:
+            - ../../.semaphore/run-and-monitor build-arm64.log make build
+  - name: Istio
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+          - cd istio
+      jobs:
+        - name: "Istio: CI"
+          commands:
+            - ../.semaphore/run-and-monitor ci.log make ci
+        - name: "Istio: build arm64"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+          commands:
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
       when: "true"
