@@ -77,6 +77,7 @@ type AttachPoint struct {
 	UDPGSOLinearize             bool
 	DSCP                        int8
 	MaglevLUTSize               uint32
+	IPFragTimeout               uint32
 	ProgramsMap                 maps.Map
 }
 
@@ -433,6 +434,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		LogFilterJmp:  uint32(ap.LogFilterIdx),
 		DSCP:          ap.DSCP,
 		MaglevLUTSize: ap.MaglevLUTSize,
+		IPFragTimeout: ap.IPFragTimeout,
 	}
 
 	if ap.Profiling == "Enabled" {
