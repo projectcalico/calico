@@ -6,6 +6,7 @@
 #define __CALI_FIB_CO_RE_H__
 
 #include "profiling.h"
+#include <linux/if_packet.h>
 
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
@@ -358,6 +359,9 @@ allow:
 			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
 					reason, prog_end_time-state->prog_start_time);
 		} else {
+			if (CALI_F_VXLAN && CALI_F_TO_HOST) {
+				bpf_skb_change_type(ctx->skb, PACKET_HOST);
+			}
 			CALI_INFO("Final result=ALLOW rc %d. Program execution time: %lluns",
 					rc, prog_end_time-state->prog_start_time);
 		}
