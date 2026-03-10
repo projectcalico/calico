@@ -1,6 +1,6 @@
 - name: Istio Ztunnel
   run:
-    when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']${DEFAULT_BRANCH}})"
+    when: "${CHANGE_IN(third_party/istio-ztunnel)}"
   dependencies:
     - Prerequisites
   task:
@@ -10,10 +10,10 @@
     jobs:
       - name: "Linux amd64"
         commands:
-          - make -C third_party/istio-ztunnel build CONFIRM=true
+          - ../../.semaphore/run-and-monitor build.log make -C third_party/istio-ztunnel build
 - name: Istio Ztunnel - native arm64 runner
   run:
-    when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']${DEFAULT_BRANCH}})"
+    when: "${CHANGE_IN(third_party/istio-ztunnel)}"
   dependencies:
     - Prerequisites
   task:
@@ -26,7 +26,7 @@
     jobs:
       - name: "Linux arm64"
         commands:
-          - make -C third_party/istio-ztunnel build CONFIRM=true
+          - ../../.semaphore/run-and-monitor build-arm64.log make -C third_party/istio-ztunnel build
 
 - name: Istio
   run:
@@ -40,11 +40,11 @@
     jobs:
       - name: "Istio: CI"
         commands:
-          - ../.semaphore/run-and-monitor ci.log make -C istio ci
+          - ../../.semaphore/run-and-monitor ci.log make -C istio ci
       - name: "Istio: build arm64"
         matrix:
           - env_var: ARCH
             values:
               - arm64
         commands:
-          - ../.semaphore/run-and-monitor build-$ARCH.log make -C istio build ARCH=$ARCH
+          - ../../.semaphore/run-and-monitor build-$ARCH.log make -C istio build ARCH=$ARCH
