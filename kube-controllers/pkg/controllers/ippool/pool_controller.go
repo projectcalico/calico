@@ -68,6 +68,8 @@ func NewController(
 		retryQueue:    utils.NewRetryWorkqueue[string]("IPPool"),
 	}
 
+	c.retryQueue.SetProcessFn(c.reconcileByName)
+
 	// Enqueue pool names on informer events rather than reconciling inline. The workqueue
 	// deduplicates rapid events for the same pool and provides rate-limited retry on errors.
 	poolHandlers := cache.ResourceEventHandlerFuncs{
@@ -138,7 +140,7 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 	for {
 		select {
 		case poolName := <-c.retryQueue.Work():
-			c.retryQueue.HandleErr(c.reconcileByName(poolName), poolName)
+			c.retryQueue.Process(poolName)
 		case <-stopCh:
 			logrus.Info("Stopping IPPool controller")
 			return

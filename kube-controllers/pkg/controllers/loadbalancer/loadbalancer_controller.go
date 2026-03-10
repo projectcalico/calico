@@ -152,6 +152,7 @@ func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient clie
 		},
 	}
 
+	c.retryQueue.SetProcessFn(c.syncService)
 	c.RegisterWith(c.dataFeed)
 
 	_, err := c.serviceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -260,11 +261,9 @@ func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{})
 			c.syncIPAM()
 		case svcKey := <-c.serviceUpdates:
 			logEntry := log.WithFields(log.Fields{"controller": "LoadBalancer", "type": "serviceUpdate"})
-			utils.ProcessBatch(c.serviceUpdates, svcKey, func(key serviceKey) {
-				c.retryQueue.HandleErr(c.syncService(key), key)
-			}, logEntry)
+			utils.ProcessBatch(c.serviceUpdates, svcKey, c.retryQueue.Process, logEntry)
 		case svcKey := <-c.retryQueue.Work():
-			c.retryQueue.HandleErr(c.syncService(svcKey), svcKey)
+			c.retryQueue.Process(svcKey)
 		case <-stopCh:
 			return
 		}
@@ -404,7 +403,7 @@ func (c *loadBalancerController) syncIPAM() {
 	}
 
 	for svcKey := range svcKeys {
-		c.retryQueue.HandleErr(c.syncService(svcKey), svcKey)
+		c.retryQueue.Process(svcKey)
 	}
 }
 
