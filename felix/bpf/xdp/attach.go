@@ -16,8 +16,10 @@ package xdp
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"strings"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -107,8 +109,12 @@ func (ap *AttachPoint) Configuration() *libbpf.XDPGlobalData {
 		}
 		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
 	}
+	logIface := ap.Iface
+	if prefix := fvLogPrefix(); prefix != "" {
+		logIface = prefix + logIface
+	}
 	in := []byte("---------------")
-	copy(in, ap.Iface)
+	copy(in, logIface)
 	globalData.IfaceName = string(in)
 
 	return globalData
@@ -210,3 +216,19 @@ func (ap *AttachPoint) ProgramID() (int, error) {
 	}
 	return progID, nil
 }
+
+// fvLogPrefix returns a short host-identifying prefix (e.g. "f0-") when running
+// inside a Felix FV test container (hostname ends with "-felixfv"). Returns ""
+// in production so there is no impact on non-test deployments.
+var fvLogPrefix = sync.OnceValue(func() string {
+	hostname, err := os.Hostname()
+	if err != nil || !strings.HasSuffix(hostname, "-felixfv") {
+		return ""
+	}
+	if !strings.HasPrefix(hostname, "felix-") {
+		return ""
+	}
+	rest := hostname[len("felix-"):]
+	idx, _, _ := strings.Cut(rest, "-")
+	return "f" + idx + "-"
+})
