@@ -137,7 +137,7 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 	c.retryQueue.Run()
 	for {
 		select {
-		case poolName := <-c.retryQueue.Retry():
+		case poolName := <-c.retryQueue.Work():
 			c.retryQueue.HandleErr(c.reconcileByName(poolName), poolName)
 		case <-stopCh:
 			logrus.Info("Stopping IPPool controller")

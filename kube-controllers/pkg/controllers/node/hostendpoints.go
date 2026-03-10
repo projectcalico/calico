@@ -168,7 +168,7 @@ func (c *autoHostEndpointController) acceptScheduledRequests(stopCh <-chan struc
 			utils.ProcessBatch(c.nodeUpdates, nodeName, func(name string) {
 				c.retryQueue.HandleErr(c.syncHostEndpointsForNode(name), name)
 			}, logEntry)
-		case nodeName := <-c.retryQueue.Retry():
+		case nodeName := <-c.retryQueue.Work():
 			c.retryQueue.HandleErr(c.syncHostEndpointsForNode(nodeName), nodeName)
 		case <-stopCh:
 			return

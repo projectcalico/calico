@@ -263,7 +263,7 @@ func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{})
 			utils.ProcessBatch(c.serviceUpdates, svcKey, func(key serviceKey) {
 				c.retryQueue.HandleErr(c.syncService(key), key)
 			}, logEntry)
-		case svcKey := <-c.retryQueue.Retry():
+		case svcKey := <-c.retryQueue.Work():
 			c.retryQueue.HandleErr(c.syncService(svcKey), svcKey)
 		case <-stopCh:
 			return
