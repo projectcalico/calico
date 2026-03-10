@@ -17,7 +17,6 @@ package fv_test
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -111,25 +110,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "10s", "200ms").Should(And(
-			ContainSubstring("Start of GlobalNetworkPolicy policy-tcp"),
-			ContainSubstring("IPSets src_ip_set_ids"),
+			ContainSubstring("Policy: GlobalNetworkPolicy policy-tcp"),
+			ContainSubstring("IP sets: src="),
 		))
 
 		outStr := out
-		Expect(outStr).To(ContainSubstring("Start of rule policy-tcp action:\"allow\""))
-		Expect(outStr).To(ContainSubstring("IPSets src_ip_set_ids:"))
-		re := regexp.MustCompile("0x[0-9a-fA-F]+")
+		Expect(outStr).To(ContainSubstring("Rule: policy-tcp  Action: allow"))
+		// The source selector matches w[1], so the resolved IP set should
+		// contain w[1]'s IP.  If resolution fails (e.g. map not available)
+		// it falls back to a hex ID, so accept either form.
 		ipSetFound := false
 		for tmp := range strings.SplitSeq(outStr, "\n") {
-			if strings.Contains(tmp, "IPSets src_ip_set_ids:") {
-				log.WithField("line", tmp).Info("Examining line for IPSet ID")
-				ipsetStr := re.FindAllString(tmp, -1)
-				Expect(len(ipsetStr)).To(Equal(1))
-				// IPSet ID is 64bit.
-				log.WithField("ipsetStr", ipsetStr[0]).Info("Found IPSet ID")
-				Expect(len(ipsetStr[0])).To(BeNumerically("<=", 18), "IPSet ID should be 64bit, not "+ipsetStr[0])
-				// Vanishingly unlikely to be less than 10 characters.
-				Expect(len(ipsetStr[0])).To(BeNumerically(">", 10), "IPSet ID should be 64bit, not "+ipsetStr[0])
+			if strings.Contains(tmp, "IP sets: src=") {
+				log.WithField("line", tmp).Info("Examining line for IP set")
+				Expect(tmp).To(ContainSubstring(w[1].IP),
+					"Resolved IP set should contain workload IP %s", w[1].IP)
 				ipSetFound = true
 			}
 		}
@@ -139,12 +134,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "ingress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
-		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
+		}, "5s", "200ms").Should(ContainSubstring("Tier: default"))
 
 		outStr = string(out)
 		Expect(outStr).To(ContainSubstring(ifaceStr))
 		Expect(outStr).To(ContainSubstring("Hook: tc egress"))
-		Expect(outStr).To(ContainSubstring("Start of GlobalNetworkPolicy policy-tcp"))
+		Expect(outStr).To(ContainSubstring("Policy: GlobalNetworkPolicy policy-tcp"))
 		Expect(outStr).To(ContainSubstring("Load packet metadata saved by previous program"))
 		Expect(outStr).To(ContainSubstring("Save state pointer in register R9"))
 		Expect(outStr).To(ContainSubstring("If protocol != tcp, skip to next rule"))
@@ -159,21 +154,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "egress")
 			Expect(err).NotTo(HaveOccurred())
 			return out
-		}, "5s", "200ms").Should(ContainSubstring("Start of GlobalNetworkPolicy policy-tcp"))
+		}, "5s", "200ms").Should(ContainSubstring("Policy: GlobalNetworkPolicy policy-tcp"))
 
 		outStr = string(out)
-		Expect(outStr).To(ContainSubstring("Start of rule policy-tcp action:\"deny\""))
+		Expect(outStr).To(ContainSubstring("Rule: policy-tcp  Action: deny"))
+		// The egress rule has NotSelector on w[1], so the resolved IP set
+		// should contain w[1]'s IP.
 		ipSetFound = false
 		for tmp := range strings.SplitSeq(outStr, "\n") {
-			if strings.Contains(tmp, "IPSets not_dst_ip_set_ids:") {
-				log.WithField("line", tmp).Info("Examining line for IPSet ID")
-				ipsetStr := re.FindAllString(tmp, -1)
-				Expect(len(ipsetStr)).To(Equal(1))
-				// IPSet ID is 64bit.
-				log.WithField("ipsetStr", ipsetStr[0]).Info("Found IPSet ID")
-				Expect(len(ipsetStr[0])).To(BeNumerically("<=", 18), "IPSet ID should be 64bit, not "+ipsetStr[0])
-				// Vanishingly unlikely to be less than 10 characters.
-				Expect(len(ipsetStr[0])).To(BeNumerically(">", 10), "IPSet ID should be 64bit, not "+ipsetStr[0])
+			if strings.Contains(tmp, "IP sets: !dst=") {
+				log.WithField("line", tmp).Info("Examining line for IP set")
+				Expect(tmp).To(ContainSubstring(w[1].IP),
+					"Resolved IP set should contain workload IP %s", w[1].IP)
 				ipSetFound = true
 			}
 		}
@@ -183,12 +175,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "egress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
-		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
+		}, "5s", "200ms").Should(ContainSubstring("Tier: default"))
 
 		outStr = string(out)
 		Expect(outStr).To(ContainSubstring(ifaceStr))
 		Expect(outStr).To(ContainSubstring("Hook: tc ingress"))
-		Expect(outStr).To(ContainSubstring("Start of GlobalNetworkPolicy policy-tcp"))
+		Expect(outStr).To(ContainSubstring("Policy: GlobalNetworkPolicy policy-tcp"))
 		Expect(outStr).To(ContainSubstring("Load packet metadata saved by previous program"))
 		Expect(outStr).To(ContainSubstring("Save state pointer in register R9"))
 		Expect(outStr).To(ContainSubstring("If protocol == tcp, skip to next rule"))
@@ -203,7 +195,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "all", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
-		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
+		}, "5s", "200ms").Should(ContainSubstring("Tier: default"))
 		outStr = string(out)
 		Expect(outStr).To(ContainSubstring("Hook: tc ingress"))
 		Expect(outStr).To(ContainSubstring("Hook: tc egress"))
@@ -245,11 +237,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "ingress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
-		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
+		}, "5s", "200ms").Should(ContainSubstring("Tier: default"))
 		outStr := string(out)
 		Expect(outStr).To(ContainSubstring(ifaceStr))
 		Expect(outStr).To(ContainSubstring("Hook: tc egress"))
-		Expect(outStr).To(ContainSubstring("Start of GlobalNetworkPolicy policy-icmp"))
+		Expect(outStr).To(ContainSubstring("Policy: GlobalNetworkPolicy policy-icmp"))
 		Expect(outStr).To(ContainSubstring("Load packet metadata saved by previous program"))
 		Expect(outStr).To(ContainSubstring("Save state pointer in register R9"))
 		Expect(outStr).To(ContainSubstring("If protocol != icmp, skip to next rule"))
@@ -263,11 +255,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "egress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
-		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
+		}, "5s", "200ms").Should(ContainSubstring("Tier: default"))
 		outStr = string(out)
 		Expect(outStr).To(ContainSubstring(ifaceStr))
 		Expect(outStr).To(ContainSubstring("Hook: tc ingress"))
-		Expect(outStr).To(ContainSubstring("Start of GlobalNetworkPolicy policy-icmp"))
+		Expect(outStr).To(ContainSubstring("Policy: GlobalNetworkPolicy policy-icmp"))
 		Expect(outStr).To(ContainSubstring("Load packet metadata saved by previous program"))
 		Expect(outStr).To(ContainSubstring("Save state pointer in register R9"))
 		Expect(outStr).To(ContainSubstring("If protocol == icmp, skip to next rule"))
