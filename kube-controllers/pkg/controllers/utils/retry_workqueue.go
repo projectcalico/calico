@@ -31,11 +31,13 @@ const defaultMaxRetries = 5
 type RetryWorkqueue[T comparable] struct {
 	queue      workqueue.TypedRateLimitingInterface[T]
 	retryChan  chan T
+	processFn  func(T) error
 	maxRetries int
 	name       string
 }
 
 // NewRetryWorkqueue creates a RetryWorkqueue with the default controller rate limiter and max retries.
+// Callers must call SetProcessFn before calling Process.
 func NewRetryWorkqueue[T comparable](name string) *RetryWorkqueue[T] {
 	return &RetryWorkqueue[T]{
 		queue:      workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[T]()),
@@ -43,6 +45,12 @@ func NewRetryWorkqueue[T comparable](name string) *RetryWorkqueue[T] {
 		maxRetries: defaultMaxRetries,
 		name:       name,
 	}
+}
+
+// SetProcessFn sets the process function. Use this when the process function is a method on the
+// struct being constructed and can't be passed to the constructor.
+func (r *RetryWorkqueue[T]) SetProcessFn(fn func(T) error) {
+	r.processFn = fn
 }
 
 // Run starts the feeder goroutine that pulls items from the workqueue and sends them to the
@@ -78,9 +86,17 @@ func (r *RetryWorkqueue[T]) Enqueue(key T) {
 	r.queue.Add(key)
 }
 
-// HandleErr handles the result of processing an item. On success (err==nil), it clears the retry
+// Process calls the configured process function for the given key and handles the result.
+// On success, the retry counter is cleared. On failure, the item is requeued with rate-limited
+// backoff. This runs on the caller's goroutine, preserving thread safety for controllers that
+// require single-threaded processing.
+func (r *RetryWorkqueue[T]) Process(key T) {
+	r.handleErr(r.processFn(key), key)
+}
+
+// handleErr handles the result of processing an item. On success (err==nil), it clears the retry
 // counter. On failure, it requeues with rate-limited backoff up to maxRetries, then drops the item.
-func (r *RetryWorkqueue[T]) HandleErr(err error, key T) {
+func (r *RetryWorkqueue[T]) handleErr(err error, key T) {
 	if err == nil {
 		r.queue.Forget(key)
 		return

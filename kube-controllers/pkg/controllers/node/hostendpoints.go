@@ -110,7 +110,7 @@ func (t *hostEndpointTracker) getAllHostEndpoints() []*api.HostEndpoint {
 }
 
 func NewAutoHEPController(cfg config.NodeControllerConfig, client client.Interface) *autoHostEndpointController {
-	return &autoHostEndpointController{
+	c := &autoHostEndpointController{
 		config:         cfg,
 		client:         client,
 		nodeCache:      make(map[string]*internalapi.Node),
@@ -120,6 +120,8 @@ func NewAutoHEPController(cfg config.NodeControllerConfig, client client.Interfa
 		syncChan:       make(chan any, 1),
 		autoHEPTracker: hostEndpointTracker{hostEndpointsByNode: make(map[string]map[string]*api.HostEndpoint)},
 	}
+	c.retryQueue.SetProcessFn(c.syncHostEndpointsForNode)
+	return c
 }
 
 type autoHostEndpointController struct {
@@ -165,11 +167,9 @@ func (c *autoHostEndpointController) acceptScheduledRequests(stopCh <-chan struc
 			c.syncHostEndpoints()
 		case nodeName := <-c.nodeUpdates:
 			logEntry := logrus.WithFields(logrus.Fields{"controller": "HostEndpoint", "type": "nodeUpdate"})
-			utils.ProcessBatch(c.nodeUpdates, nodeName, func(name string) {
-				c.retryQueue.HandleErr(c.syncHostEndpointsForNode(name), name)
-			}, logEntry)
+			utils.ProcessBatch(c.nodeUpdates, nodeName, c.retryQueue.Process, logEntry)
 		case nodeName := <-c.retryQueue.Work():
-			c.retryQueue.HandleErr(c.syncHostEndpointsForNode(nodeName), nodeName)
+			c.retryQueue.Process(nodeName)
 		case <-stopCh:
 			return
 		}
@@ -284,7 +284,7 @@ func (c *autoHostEndpointController) syncHostEndpoints() {
 	}
 
 	for _, node := range c.nodeCache {
-		c.retryQueue.HandleErr(c.syncHostEndpointsForNode(node.Name), node.Name)
+		c.retryQueue.Process(node.Name)
 	}
 }
 
