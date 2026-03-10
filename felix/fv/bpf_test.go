@@ -2412,11 +2412,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						} else {
 							deletedSvcNATKey = nat.NewNATKey(net.ParseIP(clusterIP), port, numericProto)
 						}
-						Eventually(func() bool {
+						Eventually(func(g Gomega) {
 							natmaps, _, _ := dumpNATMapsAny(familyInt, tc.Felixes[0])
-							_, ok := natmaps[deletedSvcNATKey]
-							return ok
-						}, "30s", "1s").Should(BeFalse(), "first service's NAT key should have been removed")
+							g.Expect(natmaps).NotTo(BeEmpty(), "NAT map dump returned no entries; dump may have failed")
+							g.Expect(natmaps).NotTo(HaveKey(deletedSvcNATKey), "first service's NAT key should have been removed")
+						}, "30s", "1s").Should(Succeed())
 
 						By("And still having connectivity...")
 						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)

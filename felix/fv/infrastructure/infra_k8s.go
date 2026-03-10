@@ -832,7 +832,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 	log.WithField("nodeIn", nodeIn).Debug("Node defined")
 	var nodeOut *v1.Node
 	var err error
-	delay := 1 * time.Second
+	delay := 3 * time.Second
 	for i := range 5 {
 		nodeOut, err = kds.K8sClient.CoreV1().Nodes().Create(context.Background(), nodeIn, metav1.CreateOptions{})
 		if err != nil {
