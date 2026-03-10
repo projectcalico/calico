@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -29,6 +31,8 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/hook"
+	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
@@ -73,8 +77,10 @@ var policyDumpCmd = &cobra.Command{
 			return
 		}
 
+		ipsetMembers := loadIPSetMembers()
+
 		for _, dir := range hooks {
-			err := dumpPolicyInfo(cmd, iface, dir, m)
+			err := dumpPolicyInfo(cmd, iface, dir, m, ipsetMembers)
 			if err != nil {
 				log.WithError(err).Error("Failed to dump policy info.")
 			}
@@ -150,10 +156,53 @@ func formatRuleStart(comment string) string {
 	return fmt.Sprintf("Rule: %s  Action: %s", ruleName, action)
 }
 
-// formatIPSets converts a raw IPSets comment into a more readable form.
-// Input:  `IPSets src_ip_set_ids:<0x1234> dst_ip_set_ids:<0x5678>`
-// Output: `IP sets: src=0x1234 dst=0x5678`
-func formatIPSets(comment string) string {
+// loadIPSetMembers reads the BPF IP set map and returns a map from set ID to
+// sorted member strings (CIDRs or named ports).
+func loadIPSetMembers() map[uint64][]string {
+	ipsetMap := ipsets.Map()
+	fromBytes := ipsets.IPSetEntryFromBytes
+
+	if ipv6 != nil && *ipv6 {
+		ipsetMap = ipsets.MapV6()
+		fromBytes = ipsets.IPSetEntryV6FromBytes
+	}
+
+	if err := ipsetMap.Open(); err != nil {
+		log.WithError(err).Debug("Failed to open IP sets map, IDs will not be resolved.")
+		return nil
+	}
+
+	membersBySet := map[uint64][]string{}
+	err := ipsetMap.Iter(func(k, v []byte) maps.IteratorAction {
+		entry := fromBytes(k)
+		var member string
+		if entry.Protocol() == 0 {
+			member = fmt.Sprintf("%s/%d", entry.Addr(), entry.PrefixLen()-64)
+		} else {
+			member = fmt.Sprintf("%s:%d (proto %d)", entry.Addr(), entry.Port(), entry.Protocol())
+		}
+		membersBySet[entry.SetID()] = append(membersBySet[entry.SetID()], member)
+		return maps.IterNone
+	})
+	if err != nil {
+		log.WithError(err).Debug("Failed to iterate IP sets map.")
+		return nil
+	}
+	for _, v := range membersBySet {
+		sort.Strings(v)
+	}
+	return membersBySet
+}
+
+// ipsetHexIDRegex matches hex IP set IDs like "0x1234abcd5678ef90".
+var ipsetHexIDRegex = regexp.MustCompile(`0x[0-9a-fA-F]+`)
+
+// formatIPSets converts a raw IPSets comment into a more readable form,
+// resolving hex IDs to their members when available.
+// Input:  `IPSets src_ip_set_ids:<0x1234>`
+// Output without resolution: `IP sets: src=0x1234`
+// Output with resolution:    `IP sets: src={10.0.0.0/8, 192.168.0.0/16}`
+func formatIPSets(comment string, membersBySet map[uint64][]string) string {
 	after := strings.TrimPrefix(comment, "IPSets ")
 	// Replace the verbose field names with shorter labels.
 	r := strings.NewReplacer(
@@ -164,7 +213,23 @@ func formatIPSets(comment string) string {
 		">", "",
 		" ,", ",",
 	)
-	return "IP sets: " + strings.TrimSpace(r.Replace(after))
+	formatted := strings.TrimSpace(r.Replace(after))
+
+	if membersBySet != nil {
+		formatted = ipsetHexIDRegex.ReplaceAllStringFunc(formatted, func(hexID string) string {
+			id, err := strconv.ParseUint(hexID, 0, 64)
+			if err != nil {
+				return hexID
+			}
+			members, ok := membersBySet[id]
+			if !ok || len(members) == 0 {
+				return hexID
+			}
+			return "{" + strings.Join(members, ", ") + "}"
+		})
+	}
+
+	return "IP sets: " + formatted
 }
 
 // formatTierEnd converts "End of tier <name>: <action>" into a readable form.
@@ -182,7 +247,7 @@ func indent(depth int) string {
 	return strings.Repeat("  ", depth)
 }
 
-func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.PolicyMapMem) error {
+func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.PolicyMapMem, ipsetMembers map[uint64][]string) error {
 	verboseFlag := cmd.Flag("asm").Value.String()
 	verboseFlagSet, _ := strconv.ParseBool(verboseFlag)
 
@@ -255,7 +320,7 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 				depth = 1
 
 			case strings.HasPrefix(comment, "IPSets "):
-				cmd.Printf("%s%s\n", indent(depth), formatIPSets(comment))
+				cmd.Printf("%s%s\n", indent(depth), formatIPSets(comment, ipsetMembers))
 
 			case strings.HasPrefix(comment, "##### Start of program"):
 				if verboseFlagSet {
