@@ -118,10 +118,10 @@ ${ssh_cmd} "cd calico/felix && make FOCUS=TestPrecompiledBinariesAreLoadable ut-
 ${ssh_cmd} "cd calico/felix && make FOCUS=TestNATNodePortNoFWD ut-bpf"
 
 # Felix FV test
-${ssh_cmd} "cd calico/felix && make fv GINKGO_FOCUS='TestName'"
+${ssh_cmd} "cd calico/felix && make fv FOCUS='TestName'"
 
 # BPF FV test
-${ssh_cmd} "cd calico/felix && make fv-bpf GINKGO_FOCUS='TestName'"
+${ssh_cmd} "cd calico/felix && make fv-bpf FOCUS='TestName'"
 ```
 
 The first run will be slow (pulls Docker build images). Subsequent runs are faster.

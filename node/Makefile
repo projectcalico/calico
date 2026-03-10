@@ -130,10 +130,13 @@ WINDOWS_ARCHIVE_FILES := \
 MICROSOFT_SDN_VERSION := 0d7593e5c8d4c2347079a7a6dbd9eb034ae19a44
 MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/$(MICROSOFT_SDN_VERSION)
 
-# Variables used by the k8st tests
-K8ST_WHAT?=tests/
-K8ST_FOCUS?=
-K8ST_PYTEST_ARGS?=
+# Variables used by tests
+WHAT?=.
+FOCUS?=.*
+SKIP?=
+GINKGO_ARGS?=
+PYTEST_WHAT?=tests/
+PYTEST_ARGS?=
 K8ST_REPORT_FILENAME ?= k8s-tests.xml
 
 # Filesystem of the node container that is checked in to this repository.
@@ -303,11 +306,6 @@ K8ST_IMAGE_TARS=calico-node.tar \
 	goldmane.tar
 
 ## Run the ginkgo tests.
-WHAT?=.
-FOCUS?=.*
-SKIP?=
-GINKGO_ARGS?=
-
 ut fv: $(LIBBPF_A) run-k8s-apiserver
 	mkdir -p report
 	$(DOCKER_RUN) \
@@ -469,7 +467,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    --net host \
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
-	     cd /code/tests/k8st && pytest $(K8ST_WHAT) -v $(if $(K8ST_FOCUS),-k "$(K8ST_FOCUS)") $(K8ST_PYTEST_ARGS) --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
+	     cd /code/tests/k8st && pytest $(PYTEST_WHAT) -v $(if $(filter-out .*,$(FOCUS)),-k "$(FOCUS)") $(PYTEST_ARGS) --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
 
 .PHONY: kind-k8st-cleanup
 kind-k8st-cleanup: kind-cluster-destroy
