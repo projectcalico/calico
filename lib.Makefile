@@ -185,6 +185,13 @@ define build_binary
 		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
+define build_binary_dir
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=0 \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
+endef
+
 # For windows builds that do not require cgo.
 define build_windows_binary
 	$(DOCKER_RUN) \

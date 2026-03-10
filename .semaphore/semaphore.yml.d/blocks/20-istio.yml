@@ -1,21 +1,17 @@
-- name: Publish tigera/istio-ztunnel images
+- name: Istio Ztunnel
   run:
     when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']${DEFAULT_BRANCH}})"
   dependencies:
     - Prerequisites
   task:
-    secrets:
-      - name: docker
     prologue:
       commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - cd third_party/istio-ztunnel
     jobs:
       - name: "Linux amd64"
         commands:
-          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-          - make cd ARCHES=amd64 CONFIRM=true
-- name: Publish tigera/istio-ztunnel images - native arm64 runner
+          - make -C third_party/istio-ztunnel build CONFIRM=true
+- name: Istio Ztunnel - native arm64 runner
   run:
     when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']${DEFAULT_BRANCH}})"
   dependencies:
@@ -27,45 +23,28 @@
     prologue:
       commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - cd third_party/istio-ztunnel
     jobs:
       - name: "Linux arm64"
         commands:
-          - make cd ARCHES=arm64 CONFIRM=true
-- name: Publish tigera/istio-ztunnel multi-arch manifests
-  run:
-    when: "change_in(['/third_party/istio-ztunnel'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']${DEFAULT_BRANCH}})"
-  dependencies:
-    - Publish tigera/istio-ztunnel images
-    - Publish tigera/istio-ztunnel images - native arm64 runner
-  task:
-    prologue:
-      commands:
-        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - cd third_party/istio-ztunnel
-    jobs:
-      - name: "Linux multi-arch manifest"
-        commands:
-          - make push-manifest CONFIRM=true
+          - make -C third_party/istio-ztunnel build CONFIRM=true
 
 - name: Istio
   run:
     when: "${CHANGE_IN(istio)}"
   dependencies:
-    - Publish tigera/istio-ztunnel multi-arch manifests
+    - Prerequisites
   task:
     prologue:
       commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - cd istio
     jobs:
       - name: "Istio: CI"
         commands:
-          - ../.semaphore/run-and-monitor ci.log make ci
+          - ../.semaphore/run-and-monitor ci.log make -C istio ci
       - name: "Istio: build arm64"
         matrix:
           - env_var: ARCH
             values:
               - arm64
         commands:
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+          - ../.semaphore/run-and-monitor build-$ARCH.log make -C istio build ARCH=$ARCH

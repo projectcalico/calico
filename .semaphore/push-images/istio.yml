@@ -24,12 +24,38 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - ssh-add ~/.ssh/id_rsa
 blocks:
-  - name: Publish istio images and multi-arch manifests
+  - name: Publish tigera/istio-ztunnel images
+    run:
+      when: "branch !~ '.+'"
     dependencies: []
+    task:
+      jobs:
+        - name: Linux amd64
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd CONFIRM=true; fi
+
+  - name: Publish tigera/istio-ztunnel images - native arm64 runner
+    run:
+      when: "branch !~ '.+'"
+    agent:
+      machine:
+        type: s1-aws-arm64-2
+    dependencies: []
+    task:
+      jobs:
+        - name: Linux arm64
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd CONFIRM=true; fi
+
+  - name: Publish istio images and multi-arch manifests
+    dependencies:
+      - Publish tigera/istio-ztunnel images
+      - Publish tigera/istio-ztunnel images - native arm64 runner
     skip:
       when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch
           commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd push-manifest CONFIRM=true; fi
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C istio cd push-manifests-with-tag CONFIRM=true; fi
