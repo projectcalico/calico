@@ -42,6 +42,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
+type felixIface struct {
+	f     *infrastructure.Felix
+	iface string
+}
+
 // This is an extension of the flow_logs_tests.go file to test flow logs from staged policies.
 //
 // Felix1             Felix2
@@ -352,16 +357,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(func() error {
-				for _, c := range []struct {
-					f     *infrastructure.Felix
-					iface string
-				}{
+				for _, c := range []felixIface{
 					{tc.Felixes[0], ep1_1.InterfaceName},
 					{tc.Felixes[1], ep2_1.InterfaceName},
 				} {
 					for _, hook := range []string{"ingress", "egress"} {
 						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
-							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+							return fmt.Errorf("found staged policy in BPF dump for %s on %s %s", c.f.Hostname, c.iface, hook)
 						}
 					}
 				}
@@ -820,16 +822,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(func() error {
-				for _, c := range []struct {
-					f     *infrastructure.Felix
-					iface string
-				}{
+				for _, c := range []felixIface{
 					{tc.Felixes[0], ep1_1.InterfaceName},
 					{tc.Felixes[1], ep2_1.InterfaceName},
 				} {
 					for _, hook := range []string{"ingress", "egress"} {
 						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
-							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+							return fmt.Errorf("found staged policy in BPF dump for %s on %s %s", c.f.Hostname, c.iface, hook)
 						}
 					}
 				}
@@ -871,16 +870,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(func() error {
-				for _, c := range []struct {
-					f     *infrastructure.Felix
-					iface string
-				}{
+				for _, c := range []felixIface{
 					{tc.Felixes[0], ep1_1.InterfaceName},
 					{tc.Felixes[1], ep2_1.InterfaceName},
 				} {
 					for _, hook := range []string{"ingress", "egress"} {
 						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
-							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+							return fmt.Errorf("found staged policy in BPF dump for %s on %s %s", c.f.Hostname, c.iface, hook)
 						}
 					}
 				}
@@ -919,16 +915,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(func() error {
-				for _, c := range []struct {
-					f     *infrastructure.Felix
-					iface string
-				}{
+				for _, c := range []felixIface{
 					{tc.Felixes[0], ep1_1.InterfaceName},
 					{tc.Felixes[1], ep2_1.InterfaceName},
 				} {
 					for _, hook := range []string{"ingress", "egress"} {
 						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
-							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+							return fmt.Errorf("found staged policy in BPF dump for %s on %s %s", c.f.Hostname, c.iface, hook)
 						}
 					}
 				}
@@ -968,16 +961,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(func() error {
-				for _, c := range []struct {
-					f     *infrastructure.Felix
-					iface string
-				}{
+				for _, c := range []felixIface{
 					{tc.Felixes[0], ep1_1.InterfaceName},
 					{tc.Felixes[1], ep2_1.InterfaceName},
 				} {
 					for _, hook := range []string{"ingress", "egress"} {
 						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
-							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+							return fmt.Errorf("found staged policy in BPF dump for %s on %s %s", c.f.Hostname, c.iface, hook)
 						}
 					}
 				}
@@ -1502,16 +1492,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(func() error {
-				for _, c := range []struct {
-					f     *infrastructure.Felix
-					iface string
-				}{
+				for _, c := range []felixIface{
 					{tc.Felixes[0], ep1_1.InterfaceName},
 					{tc.Felixes[1], ep2_1.InterfaceName},
 				} {
 					for _, hook := range []string{"ingress", "egress"} {
 						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
-							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+							return fmt.Errorf("found staged policy in BPF dump for %s on %s %s", c.f.Hostname, c.iface, hook)
 						}
 					}
 				}
@@ -1626,16 +1613,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(func() error {
-				for _, c := range []struct {
-					f     *infrastructure.Felix
-					iface string
-				}{
+				for _, c := range []felixIface{
 					{tc.Felixes[0], ep1_1.InterfaceName},
 					{tc.Felixes[1], ep2_1.InterfaceName},
 				} {
 					for _, hook := range []string{"ingress", "egress"} {
 						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
-							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+							return fmt.Errorf("found staged policy in BPF dump for %s on %s %s", c.f.Hostname, c.iface, hook)
 						}
 					}
 				}
@@ -1700,16 +1684,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			bpfWaitForNetworkPolicy(tc.Felixes[1], ep2_1.InterfaceName, "ingress", "default", "tier1.np1-1")
 			// When policies are programmed, make sure no staged policy is programmed. Staged policies must be skipped.
 			Consistently(func() error {
-				for _, c := range []struct {
-					f     *infrastructure.Felix
-					iface string
-				}{
+				for _, c := range []felixIface{
 					{tc.Felixes[0], ep1_1.InterfaceName},
 					{tc.Felixes[1], ep2_1.InterfaceName},
 				} {
 					for _, hook := range []string{"ingress", "egress"} {
 						if strings.Contains(bpfDumpPolicy(c.f, c.iface, hook), "staged") {
-							return fmt.Errorf("found staged policy in BPF dump for %s %s", c.iface, hook)
+							return fmt.Errorf("found staged policy in BPF dump for %s on %s %s", c.f.Hostname, c.iface, hook)
 						}
 					}
 				}

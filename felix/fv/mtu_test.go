@@ -48,11 +48,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			EventuallyWithOffset(1, func() string {
 				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfin.cali")
 				return out
-			}, "30s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
+			}, "5s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
 			EventuallyWithOffset(1, func() string {
 				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfout.cali")
 				return out
-			}, "30s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
+			}, "5s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
 		}
 	}
 
