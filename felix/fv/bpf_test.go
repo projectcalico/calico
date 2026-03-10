@@ -2401,8 +2401,23 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						err := k8sClient.CoreV1().Services(testSvc.Namespace).Delete(context.Background(), testSvcName, metav1.DeleteOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
-						By("Sleeping")
-						time.Sleep(20 * time.Second)
+						By("Waiting for first service's NAT key to be removed from the dataplane")
+						familyInt := 4
+						if testOpts.ipv6 {
+							familyInt = 6
+						}
+						var deletedSvcNATKey nat.FrontendKeyInterface
+						if testOpts.ipv6 {
+							deletedSvcNATKey = nat.NewNATKeyV6(net.ParseIP(clusterIP), port, numericProto)
+						} else {
+							deletedSvcNATKey = nat.NewNATKey(net.ParseIP(clusterIP), port, numericProto)
+						}
+						Eventually(func() bool {
+							natmaps, _, _ := dumpNATMapsAny(familyInt, tc.Felixes[0])
+							_, ok := natmaps[deletedSvcNATKey]
+							return ok
+						}, "30s", "1s").Should(BeFalse(), "first service's NAT key should have been removed")
+
 						By("And still having connectivity...")
 						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
 						cc.CheckConnectivity()
