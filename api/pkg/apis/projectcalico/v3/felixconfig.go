@@ -493,7 +493,7 @@ type FelixConfigurationSpec struct {
 	PrometheusMetricsKeyFile *string `json:"prometheusMetricsKeyFile,omitempty"`
 
 	// PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-	// This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+	// This determines how the server validates client certificates. Default is "NoClientCert".
 	PrometheusMetricsClientAuth *PrometheusMetricsClientAuthType `json:"prometheusMetricsClientAuth,omitempty" validate:"omitempty,oneof=RequireAndVerifyClientCert RequireAnyClientCert VerifyClientCertIfGiven NoClientCert"`
 
 	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
