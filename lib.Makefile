@@ -1521,9 +1521,9 @@ bin/helm: bin/.helm-updated-$(HELM_VERSION)
 KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
 KIND_TEST_BUILD_TAG = test-build
 
-# Docker image names tagged as test-build, passed to the load script.
-KIND_IMAGES = \
-	docker.io/tigera/operator:$(KIND_TEST_BUILD_TAG) \
+# Calico images built locally with latest-$(ARCH) tags. kind-build-images
+# re-tags each as :test-build for the kind cluster.
+KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
 	calico/typha:$(KIND_TEST_BUILD_TAG) \
 	calico/apiserver:$(KIND_TEST_BUILD_TAG) \
@@ -1537,6 +1537,13 @@ KIND_IMAGES = \
 	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
+
+# Operator is built separately (build-operator.sh tags it directly as
+# :test-build), so it's not in KIND_CALICO_IMAGES.
+KIND_OPERATOR_IMAGE = docker.io/tigera/operator:$(KIND_TEST_BUILD_TAG)
+
+# All images loaded onto the kind cluster.
+KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
 
 # .image.created markers: the per-component image build stamp files.
 # Each depends on its source files via deps.txt so Make knows when
@@ -1597,11 +1604,9 @@ $(REPO_ROOT)/.stamp.operator: $(KIND_IMAGE_MARKERS) $(KIND_INFRA_DIR)/calico_ver
 ## Build all component images needed for kind cluster testing, then tag them.
 .PHONY: kind-build-images
 kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
-	@for img in calico/node calico/typha calico/apiserver calico/cni \
-	    calico/csi calico/node-driver-registrar calico/pod2daemon-flexvol \
-	    calico/ctl calico/kube-controllers calico/goldmane \
-	    calico/webhooks calico/whisker calico/whisker-backend; do \
-	  docker tag $$img:latest-$(ARCH) $$img:$(KIND_TEST_BUILD_TAG) 2>/dev/null || true; \
+	@for img in $(KIND_CALICO_IMAGES); do \
+	  base=$${img%%:*}; \
+	  docker tag $$base:latest-$(ARCH) $$img; \
 	done
 
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
