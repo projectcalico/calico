@@ -203,7 +203,9 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
 	# Clean stale .d dependency files that may reference headers from a previous
 	# build environment (e.g., Docker container with different clang version).
-	find ../felix/bpf-gpl ../felix/bpf-apache -name '*.d' -delete 2>/dev/null || true
+	find ../felix/bpf-gpl -maxdepth 1 -name '*.d' -delete 2>/dev/null || true
+	find ../felix/bpf-gpl/ut -maxdepth 1 -name '*.d' -delete 2>/dev/null || true
+	find ../felix/bpf-apache -maxdepth 1 -name '*.d' -delete 2>/dev/null || true
 	make -C ../felix build-bpf ARCH=$(ARCH)
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
