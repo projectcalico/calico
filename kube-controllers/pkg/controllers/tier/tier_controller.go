@@ -81,21 +81,33 @@ func NewController(
 
 	tierHandlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
-			tier := obj.(*v3.Tier)
+			tier, ok := obj.(*v3.Tier)
+			if !ok {
+				logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier add handler")
+				return
+			}
 			logrus.WithField("name", tier.Name).Info("Handling tier add")
 			if err := c.Reconcile(tier); err != nil {
 				logrus.WithError(err).Error("Error handling tier add")
 			}
 		},
 		UpdateFunc: func(oldObj, newObj any) {
-			tier := newObj.(*v3.Tier)
+			tier, ok := newObj.(*v3.Tier)
+			if !ok {
+				logrus.WithField("type", fmt.Sprintf("%T", newObj)).Error("Unexpected object type in tier update handler")
+				return
+			}
 			logrus.WithField("name", tier.Name).Info("Handling tier update")
 			if err := c.Reconcile(tier); err != nil {
 				logrus.WithError(err).Error("Error handling tier update")
 			}
 		},
 		DeleteFunc: func(obj any) {
-			tier := obj.(*v3.Tier)
+			tier, ok := obj.(*v3.Tier)
+			if !ok {
+				logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier delete handler")
+				return
+			}
 			logrus.WithField("name", tier.Name).Info("Handling tier deletion")
 			if err := c.Reconcile(tier); err != nil {
 				logrus.WithError(err).Error("Error handling tier deletion")
@@ -167,8 +179,13 @@ func (c *TierController) reconcileTierByName(name string) {
 		logCtx.Debug("Tier not found in cache, skipping policy-triggered reconcile")
 		return
 	}
+	tier, ok := obj.(*v3.Tier)
+	if !ok {
+		logCtx.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier cache")
+		return
+	}
 	logCtx.Info("Policy deleted, re-reconciling tier")
-	if err := c.Reconcile(obj.(*v3.Tier)); err != nil {
+	if err := c.Reconcile(tier); err != nil {
 		logCtx.WithError(err).Error("Error reconciling tier after policy deletion")
 	}
 }
