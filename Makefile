@@ -189,7 +189,9 @@ CLUSTER_ROUTING ?= BIRD
 
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
-kind-up: kind-build-images kind-deploy
+kind-up: kind-build-images
+	$(MAKE) kind-cluster-create CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
+	$(MAKE) kind-deploy
 
 ## Create a kind cluster and run all e2e tests.
 e2e-test:

@@ -1612,11 +1612,13 @@ kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
 # already built and tagged as test-build in the local Docker daemon. If a
 # cluster already exists (stamp file present), the creation step is skipped.
-# Default to v3 CRDs for kind clusters. Override with CALICO_API_GROUP=crd.projectcalico.org/v1 if needed.
+# Default to v3 CRDs for kind clusters. Override with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 if needed.
 KIND_CALICO_API_GROUP ?= projectcalico.org/v3
 
+# Load images, install Calico via Helm, and wait for readiness on an existing
+# kind cluster. Use kind-up for end-to-end bringup (images + cluster + deploy).
 .PHONY: kind-deploy
-kind-deploy: kind-cluster-create
+kind-deploy:
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	REPO_ROOT=$(REPO_ROOT) \
 	KUBECONFIG=$(KIND_KUBECONFIG) \
