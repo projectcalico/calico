@@ -1,0 +1,68 @@
+From af3968c751efc4b15eab4461f568fcdc328948dc Mon Sep 17 00:00:00 2001
+From: Walter Neto <walter@tigera.io>
+Date: Mon, 7 Jul 2025 20:35:33 +0100
+Subject: feat: support transparent network policies
+
+uses the original destination port 
+instead of the target workload port 
+when communicating using HBONE protocol.
+---
+ src/config.rs         |  4 ++++
+ src/proxy/outbound.rs | 13 +++++++++----
+ 2 files changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/src/config.rs b/src/config.rs
+index 41a909bc9..b0d6b1e23 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -35,6 +35,7 @@ use crate::{identity, state};
+ use {crate::test_helpers::MpscAckReceiver, crate::xds::LocalConfig, tokio::sync::Mutex};
+ 
+ const ENABLE_PROXY: &str = "ENABLE_PROXY";
++const TRANSPARENT_NETWORK_POLICIES: &str = "TRANSPARENT_NETWORK_POLICIES";
+ const KUBERNETES_SERVICE_HOST: &str = "KUBERNETES_SERVICE_HOST";
+ const NETWORK: &str = "NETWORK";
+ const NODE_NAME: &str = "NODE_NAME";
+@@ -185,6 +186,8 @@ pub struct Config {
+     pub proxy: bool,
+     /// If true, a DNS proxy will be used.
+     pub dns_proxy: bool,
++    /// If true, the communication will be established by the original destination port.
++    pub transparent_network_policies: bool,
+ 
+     pub window_size: u32,
+     pub connection_window_size: u32,
+@@ -705,6 +708,7 @@ pub fn construct_config(pc: ProxyConfig) -> Result<Config, Error> {
+ 
+     validate_config(Config {
+         proxy: parse_default(ENABLE_PROXY, true)?,
++        transparent_network_policies: parse_default(TRANSPARENT_NETWORK_POLICIES, false)?,
+         // Enable by default; running the server is not an issue, clients still need to opt-in to sending their
+         // DNS requests to Ztunnel.
+         dns_proxy: pc
+diff --git a/src/proxy/outbound.rs b/src/proxy/outbound.rs
+index 14b790360..92ed82518 100644
+--- a/src/proxy/outbound.rs
++++ b/src/proxy/outbound.rs
+@@ -603,12 +603,17 @@ impl OutboundConnection {
+             .selected_workload_ip
+             .ok_or(Error::NoValidDestination(Box::new((*us.workload).clone())))?;
+ 
++        let original_destination = us.workload_socket_addr()
++            .ok_or(Error::NoValidDestination(Box::new((*us.workload).clone())))?;
++
+         // only change the port if we're sending HBONE
+         let actual_destination = match us.workload.protocol {
+-            InboundProtocol::HBONE => SocketAddr::from((selected_workload_ip, self.hbone_port)),
+-            InboundProtocol::TCP => us
+-                .workload_socket_addr()
+-                .ok_or(Error::NoValidDestination(Box::new((*us.workload).clone())))?,
++            InboundProtocol::HBONE => if self.pi.cfg.transparent_network_policies {
++                original_destination
++            } else {
++                SocketAddr::from((selected_workload_ip, self.hbone_port))
++            },
++            InboundProtocol::TCP => original_destination,
+         };
+         let hbone_target_destination = match us.workload.protocol {
+             InboundProtocol::HBONE => Some(HboneAddress::SocketAddr(
