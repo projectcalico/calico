@@ -111,6 +111,7 @@ func NewController(
 		DeleteFunc: func(obj any) {
 			tierName := tierNameFromPolicy(obj)
 			if tierName == "" {
+				logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Policy has no tier set, cannot reconcile owning tier")
 				return
 			}
 			c.reconcileTierByName(tierName)
@@ -131,24 +132,19 @@ func tierNameFromPolicy(obj any) string {
 	if d, ok := obj.(cache.DeletedFinalStateUnknown); ok {
 		obj = d.Obj
 	}
-	var tierName string
 	switch p := obj.(type) {
 	case *v3.GlobalNetworkPolicy:
-		tierName = p.Spec.Tier
+		return p.Spec.Tier
 	case *v3.NetworkPolicy:
-		tierName = p.Spec.Tier
+		return p.Spec.Tier
 	case *v3.StagedGlobalNetworkPolicy:
-		tierName = p.Spec.Tier
+		return p.Spec.Tier
 	case *v3.StagedNetworkPolicy:
-		tierName = p.Spec.Tier
+		return p.Spec.Tier
 	default:
 		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unknown policy type in tier controller")
 		return ""
 	}
-	if tierName == "" {
-		logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Policy has no tier set")
-	}
-	return tierName
 }
 
 // reconcileTierByName fetches the tier from the API and reconciles it.
