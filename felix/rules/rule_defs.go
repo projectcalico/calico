@@ -70,6 +70,7 @@ const (
 	IPSetIDAllHostNets        = "all-hosts-net"
 	IPSetIDAllVXLANSourceNets = "all-vxlan-net"
 	IPSetIDThisHostIPs        = "this-host"
+	IPSetIDAllIstioWEPs       = "all-istio-weps"
 
 	ChainFIPDnat = ChainNamePrefix + "fip-dnat"
 	ChainFIPSnat = ChainNamePrefix + "fip-snat"
@@ -461,6 +462,9 @@ type Config struct {
 
 	NFTablesMode    string
 	FlowLogsEnabled bool
+
+	IstioAmbientModeEnabled bool
+	IstioDSCPMark           uint8
 }
 
 var unusedBitsInBPFMode = map[string]bool{
