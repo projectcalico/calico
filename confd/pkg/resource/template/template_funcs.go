@@ -487,7 +487,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 				return []string{}, err
 			}
 
-				var ruleFields []filterArgs
+			var ruleFields []filterArgs
 			if v4Selected {
 				for _, rule := range filter.Spec.ExportV4 {
 					ruleFields = append(ruleFields, filterArgsFromRuleV4(rule))

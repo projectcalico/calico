@@ -1226,7 +1226,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 					},
 					"communities": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If set, this filter rule will only apply to routes that match the specified BGP community criteria.  Currently only applies on import, where it matches communities set by the remote peer.  On export, community matching is ignored; export rules use the AddCommunity operation instead.",
+							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already attached to the route (e.g. added by a prior import filter or by the AddCommunity operation on an earlier rule).",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterCommunityMatch"),
 						},
 					},
@@ -1337,7 +1337,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 					},
 					"communities": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If set, this filter rule will only apply to routes that match the specified BGP community criteria.  Currently only applies on import, where it matches communities set by the remote peer.  On export, community matching is ignored; export rules use the AddCommunity operation instead.",
+							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already attached to the route (e.g. added by a prior import filter or by the AddCommunity operation on an earlier rule).",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterCommunityMatch"),
 						},
 					},
