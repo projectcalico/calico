@@ -89,9 +89,9 @@ func TryCreateInformers(restConfig *rest.Config, resyncPeriod time.Duration) (ca
 	return vmInformer, vmiInformer, nil
 }
 
-// NewIndexerFunc returns a GetIndexerFunc that calls TryCreateInformers with
+// NewIndexerFunc returns a GetIndexInformerFunc that calls TryCreateInformers with
 // the given config and resync period.
-func NewIndexerFunc(restConfig *rest.Config, resyncPeriod time.Duration) GetIndexerFunc {
+func NewIndexerFunc(restConfig *rest.Config, resyncPeriod time.Duration) GetIndexInformerFunc {
 	return func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
 		return TryCreateInformers(restConfig, resyncPeriod)
 	}

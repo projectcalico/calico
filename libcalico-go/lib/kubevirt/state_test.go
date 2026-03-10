@@ -38,9 +38,9 @@ func newFakeInformers(stop <-chan struct{}) (cache.SharedIndexInformer, cache.Sh
 	return vmInf, vmiInf
 }
 
-// newFakeInformerFactory returns a GetIndexerFunc that returns nil for the
+// newFakeInformerFactory returns a GetIndexInformerFunc that returns nil for the
 // first nilCount calls, then returns real (fake) informers.
-func newFakeInformerFactory(nilCount int, stop <-chan struct{}) kubevirt.GetIndexerFunc {
+func newFakeInformerFactory(nilCount int, stop <-chan struct{}) kubevirt.GetIndexInformerFunc {
 	var calls atomic.Int32
 	return func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
 		n := int(calls.Add(1))
@@ -98,22 +98,22 @@ var _ = Describe("NewDeferredInformers", func() {
 	})
 
 	It("should not publish indexers when stop is closed before KubeVirt appears", func() {
+		// Use a dedicated stop channel so we can close it independently of AfterEach.
+		localStop := make(chan struct{})
+
 		// Factory always returns nil — KubeVirt never appears.
 		factory := func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
 			return nil, nil, nil
 		}
 
-		di := kubevirt.NewDeferredInformers(factory, 10*time.Millisecond, stop)
+		di := kubevirt.NewDeferredInformers(factory, 10*time.Millisecond, localStop)
 
-		// Let it poll a few times, then stop.
-		time.Sleep(50 * time.Millisecond)
-		close(stop)
-		// Reopen stop so AfterEach doesn't double-close.
-		stop = make(chan struct{})
+		// Assert indexers remain nil while polling.
+		Consistently(func() cache.Indexer { return di.VMIndexer() }, 50*time.Millisecond).Should(BeNil())
+		Consistently(func() cache.Indexer { return di.VMInstanceIndexer() }, 50*time.Millisecond).Should(BeNil())
 
-		// Give the goroutine time to exit.
-		time.Sleep(20 * time.Millisecond)
-
+		// Stop polling and verify indexers are still nil.
+		close(localStop)
 		Expect(di.VMIndexer()).To(BeNil())
 		Expect(di.VMInstanceIndexer()).To(BeNil())
 	})
