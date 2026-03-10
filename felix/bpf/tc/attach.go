@@ -492,8 +492,8 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.WorkloadSrcSpoofingConfigured {
 		globalData.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
-  }
-  
+	}
+
 	if ap.UDPGSOLinearize {
 		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
 	}
