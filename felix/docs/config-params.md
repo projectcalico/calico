@@ -1924,6 +1924,7 @@ Felix will not modify the JIT hardening setting.
 
 In BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
 The health check server is used by external load balancers to determine if this node should receive traffic.
+Set to 0 to disable the health check server.
 
 | Detail |   |
 | --- | --- |
@@ -1933,7 +1934,6 @@ The health check server is used by external load balancers to determine if this 
 | `FelixConfiguration` field | `bpfKubeProxyHealthzPort` (YAML) `BPFKubeProxyHealthzPort` (Go API) |
 | `FelixConfiguration` schema | Integer |
 | Default value (YAML) | `10256` |
-| Notes | Required. | 
 
 ### `BPFKubeProxyIptablesCleanupEnabled` (config file) / `bpfKubeProxyIptablesCleanupEnabled` (YAML)
 

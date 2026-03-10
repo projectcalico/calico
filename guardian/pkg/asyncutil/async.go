@@ -110,7 +110,7 @@ func NewCommandExecutor[C any, R any](ctx context.Context, errBuff ErrorBuffer, 
 		errBuff:             errBuff,
 		cmdChan:             make(chan Command[C, R], 100),
 		backlogChan:         make(chan Command[C, R], 100),
-		drainAndBacklogSig:  make(chan chan struct{}, 100),
+		drainAndBacklogSig:  make(chan chan struct{}),
 		resumeBackloggedSig: make(chan struct{}),
 		shutdownCompleteSig: make(chan struct{}),
 	}

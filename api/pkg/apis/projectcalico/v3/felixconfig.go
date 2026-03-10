@@ -795,8 +795,9 @@ type FelixConfigurationSpec struct {
 	BPFKubeProxyMinSyncPeriod *metav1.Duration `json:"bpfKubeProxyMinSyncPeriod,omitempty" validate:"omitempty" configv1timescale:"seconds"`
 
 	// BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
-	// The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
-	BPFKubeProxyHealthzPort *int `json:"bpfKubeProxyHealthzPort,omitempty" validate:"omitempty,gte=1,lte=65535" confignamev1:"BPFKubeProxyHealthzPort"`
+	// The health check server is used by external load balancers to determine if this node should receive traffic.
+	// Set to 0 to disable the health check server.  [Default: 10256]
+	BPFKubeProxyHealthzPort *int `json:"bpfKubeProxyHealthzPort,omitempty" validate:"omitempty,gte=0,lte=65535" confignamev1:"BPFKubeProxyHealthzPort"`
 
 	// BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
 	// collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and
