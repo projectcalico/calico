@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 )
 
@@ -74,6 +75,7 @@ type AttachPoint struct {
 	AttachType                  apiv3.BPFAttachOption
 	IngressPacketRateConfigured bool
 	EgressPacketRateConfigured  bool
+	UDPGSOLinearize             bool
 	DSCP                        int8
 	IstioDSCP                   int8
 	MaglevLUTSize               uint32
@@ -490,6 +492,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
 	}
 
+	if ap.UDPGSOLinearize {
+		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
+	}
+
 	globalData.HostTunnelIPv4 = globalData.HostIPv4
 	globalData.HostTunnelIPv6 = globalData.HostIPv6
 
@@ -517,8 +523,14 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
 	}
 
+	logIface := ap.Iface
+	if ap.Type != tcdefs.EpTypeWorkload {
+		if prefix := bpfutils.FVLogPrefix(); prefix != "" {
+			logIface = prefix + logIface
+		}
+	}
 	in := []byte("---------------")
-	copy(in, ap.Iface)
+	copy(in, logIface)
 	globalData.IfaceName = string(in)
 
 	globalData.OverlayTunnelID = ap.OverlayTunnelID

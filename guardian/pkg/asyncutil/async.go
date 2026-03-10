@@ -110,7 +110,7 @@ func NewCommandExecutor[C any, R any](ctx context.Context, errBuff ErrorBuffer, 
 		errBuff:             errBuff,
 		cmdChan:             make(chan Command[C, R], 100),
 		backlogChan:         make(chan Command[C, R], 100),
-		drainAndBacklogSig:  make(chan chan struct{}, 100),
+		drainAndBacklogSig:  make(chan chan struct{}),
 		resumeBackloggedSig: make(chan struct{}),
 		shutdownCompleteSig: make(chan struct{}),
 	}
@@ -226,10 +226,10 @@ func (executor *commandExecutor[C, R]) drainBacklogChannel() {
 }
 
 func (executor *commandExecutor[C, R]) execBacklog(shutdownCtx context.Context) (context.Context, func()) {
-	// Just in case there's anything left on the backlog channel ensure it's drained off and added to the backlog slice.
-	if len(executor.backlog) > 0 {
-		executor.drainBacklogChannel()
-	}
+	// Drain the backlog channel unconditionally. Commands cancelled during drain
+	// are placed on backlogChan asynchronously and may not have been read by the
+	// select loop before Resume was received.
+	executor.drainBacklogChannel()
 
 	ctx, stopCommands := context.WithCancel(shutdownCtx)
 	for _, cmd := range executor.backlog {

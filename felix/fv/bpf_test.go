@@ -1962,8 +1962,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Starting permanent connection")
 						pc := w[0][0].StartPersistentConnection(w[1][0].IP, 8055, workload.PersistentConnectionOpts{
 							MonitorConnectivity: true,
+							Timeout:             60 * time.Second,
 						})
-						defer pc.Stop()
 
 						expectPongs := func() {
 							EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
@@ -2000,12 +2000,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Should no longer get pongs when using the spoof interface")
 						expectNoPongs()
 
-						// Move WEP to spoof interface
+						// Switch back to eth0 and stop the persistent connection
+						// cleanly before the WEP move.  RemoveFromInfra triggers
+						// WorkloadRemoveScannerTCP which marks the CT entry with
+						// FlagSendRST, causing BPF to RST the connection and the
+						// test-connection tool to exit with Fatal.
+						w[0][0].UseSpoofInterface(false)
+						expectPongs()
+						pc.Stop()
+
+						// Move WEP to spoof interface.  This simulates a pod being
+						// removed and a new pod being created on the spoof interface.
+						// Verify that new connections work on the new interface.
+						w[0][0].UseSpoofInterface(true)
 						w[0][0].RemoveFromInfra(infra)
 						w[0][0].RemoveSpoofWEPFromInfra(infra)
 						w[0][0].ConfigureInInfraAsSpoofInterface(infra)
-						By("Should get pongs again after switching WEP to spoof iface")
-						expectPongs()
+						By("Should have connectivity via new connections after WEP move to spoof iface")
+						cc.Expect(Some, w[0][0], w[1][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
 					})
 				}
 
@@ -2387,8 +2401,23 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						err := k8sClient.CoreV1().Services(testSvc.Namespace).Delete(context.Background(), testSvcName, metav1.DeleteOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
-						By("Sleeping")
-						time.Sleep(20 * time.Second)
+						By("Waiting for first service's NAT key to be removed from the dataplane")
+						familyInt := 4
+						if testOpts.ipv6 {
+							familyInt = 6
+						}
+						var deletedSvcNATKey nat.FrontendKeyInterface
+						if testOpts.ipv6 {
+							deletedSvcNATKey = nat.NewNATKeyV6(net.ParseIP(clusterIP), port, numericProto)
+						} else {
+							deletedSvcNATKey = nat.NewNATKey(net.ParseIP(clusterIP), port, numericProto)
+						}
+						Eventually(func() bool {
+							natmaps, _, _ := dumpNATMapsAny(familyInt, tc.Felixes[0])
+							_, ok := natmaps[deletedSvcNATKey]
+							return ok
+						}, "30s", "1s").Should(BeFalse(), "first service's NAT key should have been removed")
+
 						By("And still having connectivity...")
 						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
 						cc.CheckConnectivity()
@@ -6496,13 +6525,13 @@ func bpfDumpPolicyAsm(felix *infrastructure.Felix, iface, hook string) string {
 
 // bpfWaitForGlobalNetworkPolicy waits for the given global network policy to appear in BPF policy.
 func bpfWaitForGlobalNetworkPolicy(felix *infrastructure.Felix, iface, hook, policyName string) string {
-	search := fmt.Sprintf("Start of GlobalNetworkPolicy %s", policyName)
+	search := fmt.Sprintf("Policy: GlobalNetworkPolicy %s", policyName)
 	return bpfWaitForPolicy(felix, iface, hook, search)
 }
 
 // bpfWaitForNetworkPolicy waits for the given network policy in the given namespace to appear in BPF policy.
 func bpfWaitForNetworkPolicy(felix *infrastructure.Felix, iface, hook, ns, policyName string) string {
-	search := fmt.Sprintf("Start of NetworkPolicy %s/%s", ns, policyName)
+	search := fmt.Sprintf("Policy: NetworkPolicy %s/%s", ns, policyName)
 	return bpfWaitForPolicy(felix, iface, hook, search)
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -239,6 +239,93 @@ var localEp1WithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 	routelocalWlV6ColonOne,
 	routelocalWlV6ColonTwo,
 ).withName("ep1 local, policy with non-default tier")
+
+// States for testing a policy that changes tiers via UPDATE. Both tiers exist
+// throughout; only the policy's Tier field changes. This exercises the tier
+// migration path in the policy sorter and active rules calculator.
+
+var tier2_order30 = Tier{
+	Order: &order30,
+}
+
+// withTwoTiersPolicyInTier1 has both tier-1 and tier-2 resources, with the policy in tier-1.
+var withTwoTiersPolicyInTier1 = initialisedStore.withKVUpdates(
+	KVPair{Key: TierKey{Name: "tier-1"}, Value: &tier1_order20},
+	KVPair{Key: TierKey{Name: "tier-2"}, Value: &tier2_order30},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_tier1_order20},
+).withName("two tiers, policy in tier-1")
+
+// localEp1WithTwoTiersPolicyInTier1 has the endpoint matching pol-1 which is in tier-1.
+var localEp1WithTwoTiersPolicyInTier1 = withTwoTiersPolicyInTier1.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+}).withActivePolicies(
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+).withActiveProfiles(
+	types.ProfileID{Name: "prof-1"},
+	types.ProfileID{Name: "prof-2"},
+	types.ProfileID{Name: "prof-missing"},
+).withEndpoint(
+	localWlEp1Id,
+	[]mock.TierInfo{
+		{
+			Name:            "tier-1",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
+	},
+).withRoutes(
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlV6ColonOne,
+	routelocalWlV6ColonTwo,
+).withName("ep1 local, two tiers, policy in tier-1")
+
+// localEp1WithTwoTiersPolicyInTier2 is the same setup but with the policy moved to tier-2.
+// The only datastore change from the above is the policy's Tier field.
+var localEp1WithTwoTiersPolicyInTier2 = withTwoTiersPolicyInTier1.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_tier2_order20},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+}).withActivePolicies(
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+).withActiveProfiles(
+	types.ProfileID{Name: "prof-1"},
+	types.ProfileID{Name: "prof-2"},
+	types.ProfileID{Name: "prof-missing"},
+).withEndpoint(
+	localWlEp1Id,
+	[]mock.TierInfo{
+		{
+			Name:            "tier-2",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
+	},
+).withRoutes(
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlV6ColonOne,
+	routelocalWlV6ColonTwo,
+).withName("ep1 local, two tiers, policy in tier-2")
 
 // localEp2WithPolicyAndTier adds a different endpoint that doesn't match b=="b".
 // This tests an empty IP set.
