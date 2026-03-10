@@ -3467,7 +3467,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfKubeProxyHealthzPort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to. The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]",
+							Description: "BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to. The health check server is used by external load balancers to determine if this node should receive traffic. Set to 0 to disable the health check server.  [Default: 10256]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
