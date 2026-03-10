@@ -111,11 +111,12 @@ func NewController(
 		DeleteFunc: func(obj any) {
 			tierName := tierNameFromPolicy(obj)
 			if tierName == "" {
-				if meta, ok := policyMeta(obj); ok {
+				if accessor, ok := obj.(metav1.ObjectMetaAccessor); ok {
+					meta := accessor.GetObjectMeta()
 					logrus.WithFields(logrus.Fields{
 						"kind":      fmt.Sprintf("%T", obj),
-						"name":      meta.Name,
-						"namespace": meta.Namespace,
+						"name":      meta.GetName(),
+						"namespace": meta.GetNamespace(),
 					}).Error("Policy has no tier set, cannot reconcile owning tier")
 				}
 				return
@@ -150,25 +151,6 @@ func tierNameFromPolicy(obj any) string {
 	default:
 		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unknown policy type in tier controller")
 		return ""
-	}
-}
-
-// policyMeta extracts the ObjectMeta from a policy object for logging purposes.
-func policyMeta(obj any) (metav1.ObjectMeta, bool) {
-	if d, ok := obj.(cache.DeletedFinalStateUnknown); ok {
-		obj = d.Obj
-	}
-	switch p := obj.(type) {
-	case *v3.GlobalNetworkPolicy:
-		return p.ObjectMeta, true
-	case *v3.NetworkPolicy:
-		return p.ObjectMeta, true
-	case *v3.StagedGlobalNetworkPolicy:
-		return p.ObjectMeta, true
-	case *v3.StagedNetworkPolicy:
-		return p.ObjectMeta, true
-	default:
-		return metav1.ObjectMeta{}, false
 	}
 }
 
