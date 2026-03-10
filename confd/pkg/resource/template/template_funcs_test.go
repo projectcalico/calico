@@ -403,7 +403,7 @@ func Test_filterStatementWithOperations(t *testing.T) {
 	}
 }
 
-func Test_BGPFilterBIRDFuncs_WithNewFields(t *testing.T) {
+func Test_BGPFilterBIRDFuncs_WithCommunitiesASPathPriorityAndOperations(t *testing.T) {
 	prio := 512
 	testFilter := v3.BGPFilter{}
 	testFilter.Name = "kubevirt-filter"
