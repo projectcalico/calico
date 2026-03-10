@@ -115,12 +115,11 @@ func NewAutoHEPController(cfg config.NodeControllerConfig, client client.Interfa
 		client:         client,
 		nodeCache:      make(map[string]*internalapi.Node),
 		nodeUpdates:    make(chan string, utils.BatchUpdateSize),
-		retryQueue:     utils.NewRetryWorkqueue[string]("HostEndpoint"),
 		syncerUpdates:  make(chan any, utils.BatchUpdateSize),
 		syncChan:       make(chan any, 1),
 		autoHEPTracker: hostEndpointTracker{hostEndpointsByNode: make(map[string]map[string]*api.HostEndpoint)},
 	}
-	c.retryQueue.SetProcessFn(c.syncHostEndpointsForNode)
+	c.retryQueue = utils.NewRetryWorkqueue[string]("HostEndpoint", c.syncHostEndpointsForNode)
 	return c
 }
 
