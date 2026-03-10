@@ -109,10 +109,11 @@ lint-cache-dir:
 
 .PHONY: ut
 ut: lint-cache-dir run-etcd
+	mkdir -p report
 	$(DOCKER_RUN) \
 	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 	$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" go test $(UNIT_TEST_FLAGS) \
+		sh -c '$(GIT_CONFIG_SSH) ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" gotestsum --junitfile report/apiserver_ut.xml -- $(UNIT_TEST_FLAGS) \
 			$(addprefix $(PACKAGE_NAME)/,$(TEST_DIRS))'
 
 .PHONY: st

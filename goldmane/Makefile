@@ -76,7 +76,8 @@ gen-files: $(GENERATED_FILES) gen-mocks
 ###############################################################################
 ci: static-checks ut
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -coverprofile coverage.profile -race -count 1
+	mkdir -p report
+	$(DOCKER_GO_BUILD) gotestsum --junitfile report/goldmane_ut.xml -- ./... -coverprofile coverage.profile -race -count 1
 
 gen-mocks:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'

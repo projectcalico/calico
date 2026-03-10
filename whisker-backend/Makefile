@@ -59,7 +59,8 @@ clean:
 ###############################################################################
 ci: static-checks ut
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
+	mkdir -p report
+	$(DOCKER_GO_BUILD) gotestsum --junitfile report/whisker_backend_ut.xml -- ./... -cover -count 1
 
 ###############################################################################
 # Release

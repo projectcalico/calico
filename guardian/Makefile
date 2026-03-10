@@ -69,12 +69,14 @@ $(GUARDIAN_CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/guardian-$(ARCH)
 .PHONY: ut
 ## Run only Unit Tests.
 ut:
-	$(DOCKER_GO_BUILD) go test -race ./pkg/... -cover -count 1
+	mkdir -p report
+	$(DOCKER_GO_BUILD) gotestsum --junitfile report/guardian_ut.xml -- -race ./pkg/... -cover -count 1
 
 .PHONY: ut
 ## Run only Unit Tests.
 fv:
-	$(DOCKER_GO_BUILD) go test -race ./tests/fv/... -cover -count 1
+	mkdir -p report
+	$(DOCKER_GO_BUILD) gotestsum --junitfile report/guardian_fv.xml -- -race ./tests/fv/... -cover -count 1
 
 ##########################################################################################
 # CI/CD

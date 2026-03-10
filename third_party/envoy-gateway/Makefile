@@ -25,7 +25,8 @@ ENVOY_GATEWAY_DOWNLOADED=.envoy-gateway.downloaded
 init-source: $(ENVOY_GATEWAY_DOWNLOADED)
 $(ENVOY_GATEWAY_DOWNLOADED):
 	mkdir -p envoy-gateway
-	curl -sfL https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz | tar xz --strip-components 1 -C envoy-gateway
+	curl -sSfL --retry 5 -o /tmp/envoy-gateway.tar.gz https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz
+	tar xz --strip-components 1 -C envoy-gateway -f /tmp/envoy-gateway.tar.gz && rm -f /tmp/envoy-gateway.tar.gz
 
 # 	Apply patches for the specified Envoy Gateway version if patches directory exists.
 # 	This code checks for the presence of a patches directory corresponding to ENVOY_GATEWAY_VERSION.
