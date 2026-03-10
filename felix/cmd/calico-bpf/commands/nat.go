@@ -16,9 +16,10 @@ package commands
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"net"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -131,7 +132,7 @@ func dump(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		dumpNice[nat.FrontendKeyV6, nat.BackendValueV6](cmd.Printf, filtered, back, natDumpGroupByService)
+		dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
 	} else {
 		natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
 		if err != nil {
@@ -155,7 +156,7 @@ func dump(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		dumpNice[nat.FrontendKey, nat.BackendValue](cmd.Printf, filtered, back, natDumpGroupByService)
+		dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
 	}
 	return nil
 }
@@ -166,6 +167,13 @@ func parseIPPortProto(args []string) (net.IP, uint16, uint8, error) {
 	ip := net.ParseIP(args[0])
 	if ip == nil {
 		return nil, 0, 0, fmt.Errorf("invalid IP address: %q", args[0])
+	}
+	isV6 := ipv6 != nil && *ipv6
+	if isV6 && ip.To4() != nil {
+		return nil, 0, 0, fmt.Errorf("expected IPv6 address but got IPv4: %q (omit -6 for IPv4)", args[0])
+	}
+	if !isV6 && ip.To4() == nil {
+		return nil, 0, 0, fmt.Errorf("expected IPv4 address but got IPv6: %q (use -6 for IPv6)", args[0])
 	}
 
 	portNum, err := strconv.ParseUint(args[1], 0, 16)
@@ -271,24 +279,27 @@ func dumpNiceGrouped[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface]
 	for id := range byID {
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.SortFunc(ids, func(a, b uint32) int { return cmp.Compare(a, b) })
 
 	for _, id := range ids {
 		keys := byID[id]
 		// Sort frontend keys within the group for deterministic output.
-		sort.Slice(keys, func(i, j int) bool {
-			return bytes.Compare(keys[i].AsBytes(), keys[j].AsBytes()) < 0
+		slices.SortFunc(keys, func(a, b FK) int {
+			return bytes.Compare(a.AsBytes(), b.AsBytes())
 		})
 
+		// Determine backend count from the first frontend in the group.
+		// All frontends in a service share the same backend pool, so the
+		// count should be identical; we use the first one.
+		firstVal := natMap[keys[0]]
+		count := int(firstVal.Count())
+		if firstVal.Count() == nat.BlackHoleCount {
+			count = -1
+		}
+
 		// Print every frontend line in the group.
-		var count int
 		for _, nk := range keys {
 			nv := natMap[nk]
-			valCount := nv.Count()
-			count = int(valCount)
-			if valCount == nat.BlackHoleCount {
-				count = -1
-			}
 			local := nv.LocalCount()
 			flags := nv.FlagsAsString()
 			if flags != "" {
