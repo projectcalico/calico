@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
 
@@ -287,32 +286,11 @@ func (h *tieredRBACHook) parsePolicy(kind string, body []byte) (client.Object, s
 		return nil, "", fmt.Errorf("failed to decode object: %v", err)
 	}
 
-	// Use reflection to access the Spec.Tier field.
-	if tier, ok := getTier(obj); ok {
+	// Extract the tier from the policy's Spec.Tier field.
+	if tier, ok := names.TierFromPolicy(obj); ok {
 		return obj, tier, nil
 	}
 	return nil, "", fmt.Errorf("object does not have a Spec.Tier field")
-}
-
-// getTier uses reflection to access the Spec.Tier field of the given object, if it has one.
-// It returns the tier and a boolean indicating whether the tier was successfully retrieved.
-func getTier(obj any) (string, bool) {
-	v := reflect.ValueOf(obj)
-	if v.Kind() == reflect.Pointer {
-		v = v.Elem()
-	}
-	spec := v.FieldByName("Spec")
-	if !spec.IsValid() {
-		return "", false
-	}
-	tier := spec.FieldByName("Tier")
-	if !tier.IsValid() {
-		return "", false
-	}
-	if tier.Kind() != reflect.String {
-		return "", false
-	}
-	return names.TierOrDefault(tier.String()), true
 }
 
 // augmentContextWithUserInfo adds the necessary user and request information from the admission request to the context so that it can

@@ -32,6 +32,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
 
@@ -50,7 +51,7 @@ func init() {
 	utilruntime.Must(v3.AddToScheme(utils.Scheme))
 }
 
-func TestGetTier(t *testing.T) {
+func TestTierFromPolicy(t *testing.T) {
 	testCases := []struct {
 		name     string
 		obj      any
@@ -120,7 +121,7 @@ func TestGetTier(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tier, ok := getTier(tc.obj)
+			tier, ok := names.TierFromPolicy(tc.obj)
 			assert.Equal(t, tc.ok, ok)
 			if ok {
 				assert.Equal(t, tc.expected, tier)

@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // tierIndex is the name of the cache index used to look up policies by tier name.
@@ -146,25 +147,18 @@ func NewController(
 	return c
 }
 
-// tierNameFromPolicy extracts the tier name from a policy object. All Calico policy types
-// have a Spec.Tier field. Returns empty string if the tier cannot be determined.
+// tierNameFromPolicy extracts the tier name from a policy object using the
+// shared names.TierFromPolicy helper. Handles the DeletedFinalStateUnknown
+// wrapper that the informer may pass to delete handlers.
 func tierNameFromPolicy(obj any) string {
 	if d, ok := obj.(cache.DeletedFinalStateUnknown); ok {
 		obj = d.Obj
 	}
-	switch p := obj.(type) {
-	case *v3.GlobalNetworkPolicy:
-		return p.Spec.Tier
-	case *v3.NetworkPolicy:
-		return p.Spec.Tier
-	case *v3.StagedGlobalNetworkPolicy:
-		return p.Spec.Tier
-	case *v3.StagedNetworkPolicy:
-		return p.Spec.Tier
-	default:
-		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unknown policy type in tier controller")
-		return ""
+	tier, ok := names.TierFromPolicy(obj)
+	if !ok {
+		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Could not extract tier from policy object")
 	}
+	return tier
 }
 
 // reconcileTierByName looks up the tier from the informer cache and reconciles it.
