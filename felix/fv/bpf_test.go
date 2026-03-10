@@ -6481,13 +6481,13 @@ func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
 
 // bpfWaitForGlobalNetworkPolicy waits for the given global network policy to appear in BPF policy.
 func bpfWaitForGlobalNetworkPolicy(felix *infrastructure.Felix, iface, hook, policyName string) string {
-	search := fmt.Sprintf("Start of GlobalNetworkPolicy %s", policyName)
+	search := fmt.Sprintf("Policy: GlobalNetworkPolicy %s", policyName)
 	return bpfWaitForPolicy(felix, iface, hook, search)
 }
 
 // bpfWaitForNetworkPolicy waits for the given network policy in the given namespace to appear in BPF policy.
 func bpfWaitForNetworkPolicy(felix *infrastructure.Felix, iface, hook, ns, policyName string) string {
-	search := fmt.Sprintf("Start of NetworkPolicy %s/%s", ns, policyName)
+	search := fmt.Sprintf("Policy: NetworkPolicy %s/%s", ns, policyName)
 	return bpfWaitForPolicy(felix, iface, hook, search)
 }
 
