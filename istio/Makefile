@@ -44,6 +44,8 @@ $(ISTIO_DOWNLOADED):
 ###############################################################################
 # Build
 ###############################################################################
+VALIDARCHES = amd64 arm64
+
 .PHONY: build
 build: bin/pilot-discovery-$(ARCH) bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) bin/pilot-agent-$(ARCH)
 
