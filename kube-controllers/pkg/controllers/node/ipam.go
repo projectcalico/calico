@@ -132,8 +132,11 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 
 	syncChan := make(chan any, 1)
 
-	// Create a rate limited that compares two distinct limiters and uses the max. This rate limiter is used
-	// only to control the retry rate of whole IPAM sync executions.
+	// The IPAM controller uses a RetryController + channel pattern rather than a per-key workqueue because
+	// it syncs the entire IPAM state as a single batch operation (all blocks, allocations, and nodes at once).
+	// A per-key workqueue doesn't fit this model since there's no meaningful individual key to enqueue —
+	// the sync is all-or-nothing. The rate limiter below provides the same exponential backoff semantics
+	// as a workqueue rate limiter, just applied to the batch sync as a whole.
 	rl := workqueue.NewTypedMaxOfRateLimiter(
 		// Exponential backoff, starting at 5ms and max of 30s.
 		workqueue.NewTypedItemExponentialFailureRateLimiter[any](5*time.Millisecond, 30*time.Second),
