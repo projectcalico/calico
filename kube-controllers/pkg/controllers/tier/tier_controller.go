@@ -26,10 +26,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
+
+// maxRetries is the number of times a tier key will be retried before being dropped.
+const maxRetries = 5
 
 // tierIndex is the name of the cache index used to look up policies by tier name.
 const tierIndex = "byTier"
@@ -56,6 +60,7 @@ type TierController struct {
 	tierInformer    cache.SharedIndexInformer
 	allInformers    []cache.SharedIndexInformer
 	policyInformers []cache.SharedIndexInformer
+	queue           workqueue.TypedRateLimitingInterface[string]
 }
 
 func NewController(
@@ -70,6 +75,7 @@ func NewController(
 		tierInformer:    tierInformer,
 		allInformers:    append([]cache.SharedIndexInformer{tierInformer}, policyInformers...),
 		policyInformers: policyInformers,
+		queue:           workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
 	}
 
 	// Add a cache index to each policy informer so we can efficiently look up
@@ -80,6 +86,7 @@ func NewController(
 		}
 	}
 
+	// Tier events: enqueue the tier name for reconciliation.
 	tierHandlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
 			tier, ok := obj.(*v3.Tier)
@@ -87,10 +94,7 @@ func NewController(
 				logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier add handler")
 				return
 			}
-			logrus.WithField("name", tier.Name).Info("Handling tier add")
-			if err := c.Reconcile(tier); err != nil {
-				logrus.WithError(err).Error("Error handling tier add")
-			}
+			c.queue.Add(tier.Name)
 		},
 		UpdateFunc: func(oldObj, newObj any) {
 			tier, ok := newObj.(*v3.Tier)
@@ -98,10 +102,7 @@ func NewController(
 				logrus.WithField("type", fmt.Sprintf("%T", newObj)).Error("Unexpected object type in tier update handler")
 				return
 			}
-			logrus.WithField("name", tier.Name).Info("Handling tier update")
-			if err := c.Reconcile(tier); err != nil {
-				logrus.WithError(err).Error("Error handling tier update")
-			}
+			c.queue.Add(tier.Name)
 		},
 		DeleteFunc: func(obj any) {
 			tier, ok := obj.(*v3.Tier)
@@ -109,10 +110,7 @@ func NewController(
 				logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier delete handler")
 				return
 			}
-			logrus.WithField("name", tier.Name).Info("Handling tier deletion")
-			if err := c.Reconcile(tier); err != nil {
-				logrus.WithError(err).Error("Error handling tier deletion")
-			}
+			c.queue.Add(tier.Name)
 		},
 	}
 	if _, err := tierInformer.AddEventHandler(tierHandlers); err != nil {
@@ -135,7 +133,7 @@ func NewController(
 				}
 				return
 			}
-			c.reconcileTierByName(tierName)
+			c.queue.Add(tierName)
 		},
 	}
 	for _, inf := range policyInformers {
@@ -161,31 +159,9 @@ func tierNameFromPolicy(obj any) string {
 	return tier
 }
 
-// reconcileTierByName looks up the tier from the informer cache and reconciles it.
-func (c *TierController) reconcileTierByName(name string) {
-	logCtx := logrus.WithField("name", name)
-	obj, exists, err := c.tierInformer.GetStore().GetByKey(name)
-	if err != nil {
-		logCtx.WithError(err).Error("Failed to get tier from cache for policy-triggered reconcile")
-		return
-	}
-	if !exists {
-		logCtx.Debug("Tier not found in cache, skipping policy-triggered reconcile")
-		return
-	}
-	tier, ok := obj.(*v3.Tier)
-	if !ok {
-		logCtx.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier cache")
-		return
-	}
-	logCtx.Info("Policy deleted, re-reconciling tier")
-	if err := c.Reconcile(tier); err != nil {
-		logCtx.WithError(err).Error("Error reconciling tier after policy deletion")
-	}
-}
-
 func (c *TierController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
+	defer c.queue.ShutDown()
 
 	logrus.Info("Starting Tier controller")
 	syncFuncs := make([]cache.InformerSynced, len(c.allInformers))
@@ -196,52 +172,95 @@ func (c *TierController) Run(stopCh chan struct{}) {
 		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
 	}
-	logrus.Debug("Finished syncing with Kubernetes API")
+	logrus.Info("Tier controller synced and ready")
+
+	go c.runWorker()
 
 	<-stopCh
 	logrus.Info("Stopping Tier controller")
 }
 
-func (c *TierController) Reconcile(t *v3.Tier) error {
-	logCtx := logrus.WithField("name", t.Name)
+func (c *TierController) runWorker() {
+	for c.processNextItem() {
+	}
+}
 
-	if t.DeletionTimestamp == nil {
+func (c *TierController) processNextItem() bool {
+	key, quit := c.queue.Get()
+	if quit {
+		return false
+	}
+	defer c.queue.Done(key)
+
+	err := c.reconcile(key)
+	c.handleErr(err, key)
+	return true
+}
+
+func (c *TierController) handleErr(err error, key string) {
+	if err == nil {
+		c.queue.Forget(key)
+		return
+	}
+	if c.queue.NumRequeues(key) < maxRetries {
+		logrus.WithError(err).WithField("name", key).Warning("Error reconciling tier, will retry")
+		c.queue.AddRateLimited(key)
+		return
+	}
+	c.queue.Forget(key)
+	logrus.WithError(err).WithField("name", key).Error("Dropping tier out of queue after max retries")
+}
+
+// reconcile looks up the tier by name from the informer cache and reconciles it.
+func (c *TierController) reconcile(name string) error {
+	logCtx := logrus.WithField("name", name)
+	obj, exists, err := c.tierInformer.GetStore().GetByKey(name)
+	if err != nil {
+		return fmt.Errorf("failed to get tier from cache: %v", err)
+	}
+	if !exists {
+		logCtx.Debug("Tier not found in cache, nothing to reconcile")
+		return nil
+	}
+	tier, ok := obj.(*v3.Tier)
+	if !ok {
+		return fmt.Errorf("unexpected object type in tier cache: %T", obj)
+	}
+
+	if tier.DeletionTimestamp == nil {
 		// Tier is not being deleted — ensure it has a finalizer.
-		if !hasFinalizer(t) {
+		if !hasFinalizer(tier) {
 			logCtx.Info("Adding finalizer to Tier")
-			t.SetFinalizers(append(t.Finalizers, v3.TierFinalizer))
-			if _, err := c.cli.ProjectcalicoV3().Tiers().Update(c.ctx, t, metav1.UpdateOptions{}); err != nil {
-				logCtx.WithError(err).Error("Failed to add finalizer to Tier")
-				return err
+			tier.SetFinalizers(append(tier.Finalizers, v3.TierFinalizer))
+			if _, err := c.cli.ProjectcalicoV3().Tiers().Update(c.ctx, tier, metav1.UpdateOptions{}); err != nil {
+				return fmt.Errorf("failed to add finalizer: %v", err)
 			}
 		}
 		return nil
 	}
 
 	// Tier is being deleted.
-	if !hasFinalizer(t) {
-		logCtx.Info("Tier is being deleted but has no finalizer, skipping")
+	if !hasFinalizer(tier) {
+		logCtx.Debug("Tier is being deleted but has no finalizer, skipping")
 		return nil
 	}
 
 	// Count remaining policies across all four policy types that reference this tier.
-	counts, err := c.countPoliciesInTier(t.Name)
+	counts, err := c.countPoliciesInTier(tier.Name)
 	if err != nil {
-		logCtx.WithError(err).Error("Failed to count policies in tier")
-		return err
+		return fmt.Errorf("counting policies in tier: %v", err)
 	}
 
 	if counts.total() > 0 {
 		logCtx.WithField("remaining", counts.total()).Info("Policies still exist in tier, updating status")
-		return c.setTerminatingCondition(t, counts)
+		return c.setTerminatingCondition(tier, counts)
 	}
 
 	// No policies left — remove the finalizer to allow deletion.
 	logCtx.Info("No policies remain in tier, removing finalizer")
-	t.Finalizers = slices.DeleteFunc(t.Finalizers, func(s string) bool { return s == v3.TierFinalizer })
-	if _, err := c.cli.ProjectcalicoV3().Tiers().Update(c.ctx, t, metav1.UpdateOptions{}); err != nil {
-		logCtx.WithError(err).Error("Failed to remove finalizer from Tier")
-		return err
+	tier.Finalizers = slices.DeleteFunc(tier.Finalizers, func(s string) bool { return s == v3.TierFinalizer })
+	if _, err := c.cli.ProjectcalicoV3().Tiers().Update(c.ctx, tier, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to remove finalizer: %v", err)
 	}
 	return nil
 }

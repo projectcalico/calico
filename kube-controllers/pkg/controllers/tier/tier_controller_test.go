@@ -16,6 +16,7 @@ package tier
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -23,11 +24,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 )
 
-// newTestController creates a TierController with policy informers backed by the given
-// GNP objects. The informers have the tier index registered so countPoliciesInTier works.
-func newTestController(cli *fake.Clientset, gnps ...*v3.GlobalNetworkPolicy) *TierController {
+// newTestController creates a TierController with a tier informer seeded with the given
+// tier and policy informers backed by the given GNP objects. The informers have the tier
+// index registered so countPoliciesInTier works.
+func newTestController(cli *fake.Clientset, tier *v3.Tier, gnps ...*v3.GlobalNetworkPolicy) *TierController {
+	tierStore := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	if tier != nil {
+		tierStore.Add(tier)
+	}
+
 	gnpInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
 	for _, gnp := range gnps {
 		gnpInformer.Add(gnp)
@@ -35,9 +43,11 @@ func newTestController(cli *fake.Clientset, gnps ...*v3.GlobalNetworkPolicy) *Ti
 	npInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
 	sgnpInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
 	snpInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
+
 	return &TierController{
-		ctx: context.Background(),
-		cli: cli,
+		ctx:          context.Background(),
+		cli:          cli,
+		tierInformer: &fakeSharedIndexInformer{indexer: tierStore},
 		policyInformers: []cache.SharedIndexInformer{
 			&fakeSharedIndexInformer{indexer: gnpInformer},
 			&fakeSharedIndexInformer{indexer: npInformer},
@@ -48,7 +58,7 @@ func newTestController(cli *fake.Clientset, gnps ...*v3.GlobalNetworkPolicy) *Ti
 }
 
 // fakeSharedIndexInformer wraps a cache.Indexer to satisfy cache.SharedIndexInformer
-// for testing countPoliciesInTier. Only GetIndexer is implemented.
+// for testing. Only GetIndexer and GetStore are implemented.
 type fakeSharedIndexInformer struct {
 	cache.SharedIndexInformer
 	indexer cache.Indexer
@@ -58,19 +68,22 @@ func (f *fakeSharedIndexInformer) GetIndexer() cache.Indexer {
 	return f.indexer
 }
 
+func (f *fakeSharedIndexInformer) GetStore() cache.Store {
+	return f.indexer
+}
+
 func TestReconcile_AddsFinalizer(t *testing.T) {
 	tier := &v3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "my-tier"},
 		Spec:       v3.TierSpec{},
 	}
 	cli := fake.NewSimpleClientset(tier)
-	c := newTestController(cli)
+	c := newTestController(cli, tier)
 
-	if err := c.Reconcile(tier); err != nil {
-		t.Fatalf("Reconcile failed: %v", err)
+	if err := c.reconcile("my-tier"); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
 	}
 
-	// Verify that an Update was issued to add the finalizer.
 	updated := getUpdatedTier(t, cli, "my-tier")
 	if !hasFinalizer(updated) {
 		t.Fatal("expected finalizer to be added")
@@ -86,13 +99,12 @@ func TestReconcile_SkipsFinalizerIfAlreadyPresent(t *testing.T) {
 		Spec: v3.TierSpec{},
 	}
 	cli := fake.NewSimpleClientset(tier)
-	c := newTestController(cli)
+	c := newTestController(cli, tier)
 
-	if err := c.Reconcile(tier); err != nil {
-		t.Fatalf("Reconcile failed: %v", err)
+	if err := c.reconcile("my-tier"); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
 	}
 
-	// No update should have been issued since the finalizer is already present.
 	for _, action := range cli.Actions() {
 		if action.GetVerb() == "update" && action.GetResource().Resource == "tiers" {
 			t.Fatal("unexpected update action when finalizer already present")
@@ -110,13 +122,11 @@ func TestReconcile_RemovesFinalizerWhenNoPolicies(t *testing.T) {
 		},
 		Spec: v3.TierSpec{},
 	}
-
-	// Empty policy informers — no policies reference this tier.
 	cli := fake.NewSimpleClientset(tier)
-	c := newTestController(cli)
+	c := newTestController(cli, tier)
 
-	if err := c.Reconcile(tier); err != nil {
-		t.Fatalf("Reconcile failed: %v", err)
+	if err := c.reconcile("my-tier"); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
 	}
 
 	updated := getUpdatedTier(t, cli, "my-tier")
@@ -135,23 +145,18 @@ func TestReconcile_KeepsFinalizerWhenPoliciesExist(t *testing.T) {
 		},
 		Spec: v3.TierSpec{},
 	}
-
-	// Create a GNP that references this tier.
 	gnp := &v3.GlobalNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "my-tier.policy1"},
 		Spec:       v3.GlobalNetworkPolicySpec{Tier: "my-tier"},
 	}
 
 	cli := fake.NewSimpleClientset(tier, gnp)
-	c := newTestController(cli, gnp)
+	c := newTestController(cli, tier, gnp)
 
-	if err := c.Reconcile(tier); err != nil {
-		t.Fatalf("Reconcile failed: %v", err)
+	if err := c.reconcile("my-tier"); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
 	}
 
-	// The finalizer should still be present because there are policies in the tier.
-	// Verify that an UpdateStatus was issued (for the terminating condition), not a
-	// regular Update to remove the finalizer.
 	foundStatusUpdate := false
 	for _, action := range cli.Actions() {
 		if action.GetVerb() == "update" && action.GetSubresource() == "status" {
@@ -161,7 +166,6 @@ func TestReconcile_KeepsFinalizerWhenPoliciesExist(t *testing.T) {
 			if !hasFinalizer(updated) {
 				t.Fatal("finalizer should not be removed when policies exist")
 			}
-			// Check the condition.
 			found := false
 			for _, c := range updated.Status.Conditions {
 				if c.Type == "Ready" && c.Status == metav1.ConditionFalse && c.Reason == "Terminating" {
@@ -188,16 +192,30 @@ func TestReconcile_DeletingTierWithoutFinalizer(t *testing.T) {
 		Spec: v3.TierSpec{},
 	}
 	cli := fake.NewSimpleClientset(tier)
-	c := newTestController(cli)
+	c := newTestController(cli, tier)
 
-	if err := c.Reconcile(tier); err != nil {
-		t.Fatalf("Reconcile failed: %v", err)
+	if err := c.reconcile("my-tier"); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
 	}
 
-	// No updates should be issued — just skip.
 	for _, action := range cli.Actions() {
 		if action.GetVerb() == "update" {
 			t.Fatal("unexpected update for deleting tier without finalizer")
+		}
+	}
+}
+
+func TestReconcile_TierNotInCache(t *testing.T) {
+	cli := fake.NewSimpleClientset()
+	c := newTestController(cli, nil)
+
+	if err := c.reconcile("nonexistent"); err != nil {
+		t.Fatalf("reconcile should not error for missing tier: %v", err)
+	}
+
+	for _, action := range cli.Actions() {
+		if action.GetVerb() == "update" {
+			t.Fatal("unexpected update for nonexistent tier")
 		}
 	}
 }
@@ -250,7 +268,6 @@ func TestSetCondition(t *testing.T) {
 		Message: "2 policies remain",
 	}
 
-	// First call should return true (condition added).
 	if !setCondition(tier, cond) {
 		t.Fatal("expected setCondition to return true on first call")
 	}
@@ -258,12 +275,10 @@ func TestSetCondition(t *testing.T) {
 		t.Fatalf("expected 1 condition, got %d", len(tier.Status.Conditions))
 	}
 
-	// Same condition again should return false (no change).
 	if setCondition(tier, cond) {
 		t.Fatal("expected setCondition to return false when condition unchanged")
 	}
 
-	// Different message should return true (condition updated).
 	cond.Message = "1 policy remains"
 	if !setCondition(tier, cond) {
 		t.Fatal("expected setCondition to return true when message changed")
@@ -288,7 +303,7 @@ func TestCountPoliciesInTier(t *testing.T) {
 	}
 
 	cli := fake.NewSimpleClientset()
-	c := newTestController(cli, gnp1, gnp2, gnpOther)
+	c := newTestController(cli, nil, gnp1, gnp2, gnpOther)
 
 	counts, err := c.countPoliciesInTier("my-tier")
 	if err != nil {
@@ -301,7 +316,6 @@ func TestCountPoliciesInTier(t *testing.T) {
 		t.Fatalf("expected total 2, got %d", counts.total())
 	}
 
-	// Other tier should have 1.
 	counts, err = c.countPoliciesInTier("other-tier")
 	if err != nil {
 		t.Fatalf("countPoliciesInTier failed: %v", err)
@@ -310,7 +324,6 @@ func TestCountPoliciesInTier(t *testing.T) {
 		t.Fatalf("expected 1 GNP for other-tier, got %d", counts.GlobalNetworkPolicies)
 	}
 
-	// Non-existent tier should have 0.
 	counts, err = c.countPoliciesInTier("no-such-tier")
 	if err != nil {
 		t.Fatalf("countPoliciesInTier failed: %v", err)
@@ -319,6 +332,57 @@ func TestCountPoliciesInTier(t *testing.T) {
 		t.Fatalf("expected 0 for non-existent tier, got %d", counts.total())
 	}
 }
+
+func TestHandleErr_RequeuesOnError(t *testing.T) {
+	c := &TierController{
+		queue: newFakeQueue(),
+	}
+
+	c.handleErr(fmt.Errorf("transient error"), "my-tier")
+
+	fq, ok := c.queue.(*fakeRateLimitingQueue)
+	if !ok {
+		t.Fatal("unexpected queue type")
+	}
+	if fq.rateLimitedAdds != 1 {
+		t.Fatalf("expected 1 rate-limited requeue, got %d", fq.rateLimitedAdds)
+	}
+}
+
+func TestHandleErr_ForgetsOnSuccess(t *testing.T) {
+	c := &TierController{
+		queue: newFakeQueue(),
+	}
+
+	c.handleErr(nil, "my-tier")
+
+	fq, ok := c.queue.(*fakeRateLimitingQueue)
+	if !ok {
+		t.Fatal("unexpected queue type")
+	}
+	if fq.forgets != 1 {
+		t.Fatalf("expected 1 forget, got %d", fq.forgets)
+	}
+	if fq.rateLimitedAdds != 0 {
+		t.Fatalf("expected 0 rate-limited requeues, got %d", fq.rateLimitedAdds)
+	}
+}
+
+// fakeRateLimitingQueue tracks calls for testing handleErr behavior.
+type fakeRateLimitingQueue struct {
+	workqueue.TypedRateLimitingInterface[string]
+	rateLimitedAdds int
+	forgets         int
+	requeues        int
+}
+
+func newFakeQueue() workqueue.TypedRateLimitingInterface[string] {
+	return &fakeRateLimitingQueue{}
+}
+
+func (f *fakeRateLimitingQueue) AddRateLimited(item string)  { f.rateLimitedAdds++ }
+func (f *fakeRateLimitingQueue) Forget(item string)          { f.forgets++ }
+func (f *fakeRateLimitingQueue) NumRequeues(item string) int { return f.requeues }
 
 // getUpdatedTier finds the tier from Update actions in the fake client.
 func getUpdatedTier(t *testing.T, cli *fake.Clientset, name string) *v3.Tier {
@@ -333,8 +397,6 @@ func getUpdatedTier(t *testing.T, cli *fake.Clientset, name string) *v3.Tier {
 			}
 		}
 	}
-
-	// Also check creates, in case the fake registered it differently.
 	t.Fatalf("no Update action found for tier %q; actions: %s", name, actionSummary(cli.Actions()))
 	return nil
 }
