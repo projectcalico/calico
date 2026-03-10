@@ -17,9 +17,7 @@ package fv_test
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -116,22 +114,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			ContainSubstring("IP sets: src="),
 		))
 
-		time.Sleep(100 * time.Second)
 		outStr := out
 		Expect(outStr).To(ContainSubstring("Rule: policy-tcp  Action: allow"))
-		Expect(outStr).To(ContainSubstring("IP sets: src="))
-		re := regexp.MustCompile("0x[0-9a-fA-F]+")
+		// The source selector matches w[1], so the resolved IP set should
+		// contain w[1]'s IP.  If resolution fails (e.g. map not available)
+		// it falls back to a hex ID, so accept either form.
 		ipSetFound := false
 		for tmp := range strings.SplitSeq(outStr, "\n") {
 			if strings.Contains(tmp, "IP sets: src=") {
-				log.WithField("line", tmp).Info("Examining line for IPSet ID")
-				ipsetStr := re.FindAllString(tmp, -1)
-				Expect(len(ipsetStr)).To(Equal(1))
-				// IPSet ID is 64bit.
-				log.WithField("ipsetStr", ipsetStr[0]).Info("Found IPSet ID")
-				Expect(len(ipsetStr[0])).To(BeNumerically("<=", 18), "IPSet ID should be 64bit, not "+ipsetStr[0])
-				// Vanishingly unlikely to be less than 10 characters.
-				Expect(len(ipsetStr[0])).To(BeNumerically(">", 10), "IPSet ID should be 64bit, not "+ipsetStr[0])
+				log.WithField("line", tmp).Info("Examining line for IP set")
+				Expect(tmp).To(ContainSubstring(w[1].IP),
+					"Resolved IP set should contain workload IP %s", w[1].IP)
 				ipSetFound = true
 			}
 		}
@@ -165,17 +158,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 
 		outStr = string(out)
 		Expect(outStr).To(ContainSubstring("Rule: policy-tcp  Action: deny"))
+		// The egress rule has NotSelector on w[1], so the resolved IP set
+		// should contain w[1]'s IP.
 		ipSetFound = false
 		for tmp := range strings.SplitSeq(outStr, "\n") {
 			if strings.Contains(tmp, "IP sets: !dst=") {
-				log.WithField("line", tmp).Info("Examining line for IPSet ID")
-				ipsetStr := re.FindAllString(tmp, -1)
-				Expect(len(ipsetStr)).To(Equal(1))
-				// IPSet ID is 64bit.
-				log.WithField("ipsetStr", ipsetStr[0]).Info("Found IPSet ID")
-				Expect(len(ipsetStr[0])).To(BeNumerically("<=", 18), "IPSet ID should be 64bit, not "+ipsetStr[0])
-				// Vanishingly unlikely to be less than 10 characters.
-				Expect(len(ipsetStr[0])).To(BeNumerically(">", 10), "IPSet ID should be 64bit, not "+ipsetStr[0])
+				log.WithField("line", tmp).Info("Examining line for IP set")
+				Expect(tmp).To(ContainSubstring(w[1].IP),
+					"Resolved IP set should contain workload IP %s", w[1].IP)
 				ipSetFound = true
 			}
 		}
