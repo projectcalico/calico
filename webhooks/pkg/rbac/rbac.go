@@ -286,11 +286,16 @@ func (h *tieredRBACHook) parsePolicy(kind string, body []byte) (client.Object, s
 		return nil, "", fmt.Errorf("failed to decode object: %v", err)
 	}
 
-	// Extract the tier from the policy's Spec.Tier field.
-	if tier, ok := names.TierFromPolicy(obj); ok {
-		return obj, tier, nil
+	// Extract the tier from the policy's Spec.Tier field. StagedKubernetesNetworkPolicy
+	// doesn't have a Tier field — it's always implicitly in the default tier.
+	tier, ok := names.TierFromPolicy(obj)
+	if !ok {
+		if kind == v3.KindStagedKubernetesNetworkPolicy {
+			return obj, names.DefaultTierName, nil
+		}
+		return nil, "", fmt.Errorf("object does not have a Spec.Tier field")
 	}
-	return nil, "", fmt.Errorf("object does not have a Spec.Tier field")
+	return obj, tier, nil
 }
 
 // augmentContextWithUserInfo adds the necessary user and request information from the admission request to the context so that it can

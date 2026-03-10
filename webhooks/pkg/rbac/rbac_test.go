@@ -242,10 +242,11 @@ func TestParsePolicy(t *testing.T) {
 			expectError:  false,
 		},
 		{
-			name:        "StagedKubernetesNetworkPolicy (no tier)",
-			kind:        v3.KindStagedKubernetesNetworkPolicy,
-			body:        sknpRaw,
-			expectError: true,
+			name:         "StagedKubernetesNetworkPolicy (no tier field, defaults to default)",
+			kind:         v3.KindStagedKubernetesNetworkPolicy,
+			body:         sknpRaw,
+			expectedTier: "default",
+			expectError:  false,
 		},
 		{
 			name:        "Unsupported kind",

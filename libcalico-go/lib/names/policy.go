@@ -35,11 +35,11 @@ func TierOrDefault(tier string) string {
 }
 
 // TierFromPolicy extracts the tier name from a policy object using reflection.
-// It looks for a Spec.Tier string field, which all Calico policy types have
+// It looks for a Spec.Tier string field, which most Calico policy types have
 // (GlobalNetworkPolicy, NetworkPolicy, StagedGlobalNetworkPolicy,
-// StagedNetworkPolicy, StagedKubernetesNetworkPolicy). Returns the tier name
-// and true if found, or empty string and false if the object doesn't have a
-// Spec.Tier field.
+// StagedNetworkPolicy). Returns the tier name and true if found, or empty
+// string and false if the object doesn't have a Spec.Tier field (e.g.,
+// StagedKubernetesNetworkPolicy).
 func TierFromPolicy(obj any) (string, bool) {
 	v := reflect.ValueOf(obj)
 	if v.Kind() == reflect.Pointer {
