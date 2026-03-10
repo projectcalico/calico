@@ -143,7 +143,7 @@ GINKGO_ARGS?=
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage
+	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)
 
 ###############################################################################
 # CI/CD

@@ -139,7 +139,7 @@ GINKGO_ARGS?=
 ut:
 	mkdir -p report
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_ut.xml --output-dir=report/ -skip "\[Datastore\]$${SKIP:+|$$SKIP}" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_ut.xml --output-dir=report/ -skip "\[Datastore\]$(if $(SKIP),|$(SKIP))" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
