@@ -33421,9 +33421,35 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                            x-kubernetes-validations:
+                              - message:
+                                  standard communities must have 16-bit values
+                                  (aa:nn), large communities must have 32-bit values (aa:nn:mm)
+                                rule:
+                                  "self.all(v, v.matches('^[0-9]+:[0-9]+$') ? (int(v.split(':')[0])
+                                  <= 65535 && int(v.split(':')[1]) <= 65535) : (v.matches('^[0-9]+:[0-9]+:[0-9]+$')
+                                  && int(v.split(':')[0]) <= 4294967295 && int(v.split(':')[1])
+                                  <= 4294967295 && int(v.split(':')[2]) <= 4294967295))"
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -33432,6 +33458,67 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  type: string
+                                  x-kubernetes-validations:
+                                    - message:
+                                        standard communities must have 16-bit values
+                                        (aa:nn), large communities must have 32-bit values
+                                        (aa:nn:mm)
+                                      rule:
+                                        "self.matches('^[0-9]+:[0-9]+$') ? (int(self.split(':')[0])
+                                        <= 65535 && int(self.split(':')[1]) <= 65535)
+                                        : (self.matches('^[0-9]+:[0-9]+:[0-9]+$') &&
+                                        int(self.split(':')[0]) <= 4294967295 && int(self.split(':')[1])
+                                        <= 4294967295 && int(self.split(':')[2]) <=
+                                        4294967295)"
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                          x-kubernetes-validations:
+                            - message: exactly one operation must be set
+                              rule:
+                                "(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath)
+                                ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1"
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -33447,6 +33534,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -33455,6 +33546,11 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
                 exportV6:
                   items:
@@ -33464,9 +33560,35 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                            x-kubernetes-validations:
+                              - message:
+                                  standard communities must have 16-bit values
+                                  (aa:nn), large communities must have 32-bit values (aa:nn:mm)
+                                rule:
+                                  "self.all(v, v.matches('^[0-9]+:[0-9]+$') ? (int(v.split(':')[0])
+                                  <= 65535 && int(v.split(':')[1]) <= 65535) : (v.matches('^[0-9]+:[0-9]+:[0-9]+$')
+                                  && int(v.split(':')[0]) <= 4294967295 && int(v.split(':')[1])
+                                  <= 4294967295 && int(v.split(':')[2]) <= 4294967295))"
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -33475,6 +33597,67 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  type: string
+                                  x-kubernetes-validations:
+                                    - message:
+                                        standard communities must have 16-bit values
+                                        (aa:nn), large communities must have 32-bit values
+                                        (aa:nn:mm)
+                                      rule:
+                                        "self.matches('^[0-9]+:[0-9]+$') ? (int(self.split(':')[0])
+                                        <= 65535 && int(self.split(':')[1]) <= 65535)
+                                        : (self.matches('^[0-9]+:[0-9]+:[0-9]+$') &&
+                                        int(self.split(':')[0]) <= 4294967295 && int(self.split(':')[1])
+                                        <= 4294967295 && int(self.split(':')[2]) <=
+                                        4294967295)"
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                          x-kubernetes-validations:
+                            - message: exactly one operation must be set
+                              rule:
+                                "(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath)
+                                ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1"
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -33490,6 +33673,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -33498,6 +33685,11 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
                 importV4:
                   items:
@@ -33507,9 +33699,35 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                            x-kubernetes-validations:
+                              - message:
+                                  standard communities must have 16-bit values
+                                  (aa:nn), large communities must have 32-bit values (aa:nn:mm)
+                                rule:
+                                  "self.all(v, v.matches('^[0-9]+:[0-9]+$') ? (int(v.split(':')[0])
+                                  <= 65535 && int(v.split(':')[1]) <= 65535) : (v.matches('^[0-9]+:[0-9]+:[0-9]+$')
+                                  && int(v.split(':')[0]) <= 4294967295 && int(v.split(':')[1])
+                                  <= 4294967295 && int(v.split(':')[2]) <= 4294967295))"
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -33518,6 +33736,67 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  type: string
+                                  x-kubernetes-validations:
+                                    - message:
+                                        standard communities must have 16-bit values
+                                        (aa:nn), large communities must have 32-bit values
+                                        (aa:nn:mm)
+                                      rule:
+                                        "self.matches('^[0-9]+:[0-9]+$') ? (int(self.split(':')[0])
+                                        <= 65535 && int(self.split(':')[1]) <= 65535)
+                                        : (self.matches('^[0-9]+:[0-9]+:[0-9]+$') &&
+                                        int(self.split(':')[0]) <= 4294967295 && int(self.split(':')[1])
+                                        <= 4294967295 && int(self.split(':')[2]) <=
+                                        4294967295)"
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                          x-kubernetes-validations:
+                            - message: exactly one operation must be set
+                              rule:
+                                "(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath)
+                                ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1"
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -33533,6 +33812,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -33541,7 +33824,15 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
+                  x-kubernetes-validations:
+                    - message: source is not applicable to import rules
+                      rule: self.all(r, !has(r.source) || r.source == '')
                 importV6:
                   items:
                     properties:
@@ -33550,9 +33841,35 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                            x-kubernetes-validations:
+                              - message:
+                                  standard communities must have 16-bit values
+                                  (aa:nn), large communities must have 32-bit values (aa:nn:mm)
+                                rule:
+                                  "self.all(v, v.matches('^[0-9]+:[0-9]+$') ? (int(v.split(':')[0])
+                                  <= 65535 && int(v.split(':')[1]) <= 65535) : (v.matches('^[0-9]+:[0-9]+:[0-9]+$')
+                                  && int(v.split(':')[0]) <= 4294967295 && int(v.split(':')[1])
+                                  <= 4294967295 && int(v.split(':')[2]) <= 4294967295))"
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -33561,6 +33878,67 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  type: string
+                                  x-kubernetes-validations:
+                                    - message:
+                                        standard communities must have 16-bit values
+                                        (aa:nn), large communities must have 32-bit values
+                                        (aa:nn:mm)
+                                      rule:
+                                        "self.matches('^[0-9]+:[0-9]+$') ? (int(self.split(':')[0])
+                                        <= 65535 && int(self.split(':')[1]) <= 65535)
+                                        : (self.matches('^[0-9]+:[0-9]+:[0-9]+$') &&
+                                        int(self.split(':')[0]) <= 4294967295 && int(self.split(':')[1])
+                                        <= 4294967295 && int(self.split(':')[2]) <=
+                                        4294967295)"
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                          x-kubernetes-validations:
+                            - message: exactly one operation must be set
+                              rule:
+                                "(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath)
+                                ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1"
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -33576,6 +33954,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -33584,7 +33966,15 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
+                  x-kubernetes-validations:
+                    - message: source is not applicable to import rules
+                      rule: self.all(r, !has(r.source) || r.source == '')
               type: object
           type: object
       served: true
