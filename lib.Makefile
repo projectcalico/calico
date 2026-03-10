@@ -82,6 +82,9 @@ endif
 
 # Enable binfmt adding support for miscellaneous binary formats.
 # This is only needed when running non-native binaries.
+# Marked .PHONY since it produces no file; use as an order-only prerequisite
+# (| register) to avoid triggering unnecessary rebuilds.
+.PHONY: register
 register:
 ifneq ($(BUILDARCH),$(ARCH))
 	docker run --privileged --rm calico/binfmt:qemu-v10.1.3 --install all || true
@@ -376,6 +379,29 @@ DOCKER_RUST_BUILD := mkdir -p bin && \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
 		-w /rust/src/$(PACKAGE_NAME) \
 		$(CALICO_RUST_BUILD)
+
+###############################################################################
+# Source file dependency tracking via deps.txt
+#
+# Each component's deps.txt contains both external module dependencies and
+# local in-repo package directories (prefixed with "local:"). If deps.txt
+# has local entries, SRC_FILES is automatically populated with all .go files
+# in those directories. Components can append extra non-Go dependencies
+# (e.g., BPF .c/.h files) after including lib.Makefile.
+#
+# IMAGE_DEPS lists non-Go files that the Docker image depends on (Dockerfiles,
+# config templates, scripts, etc.). Components should override or append to
+# this variable and include $(IMAGE_DEPS) in their .image.created prereqs.
+###############################################################################
+ifneq ($(wildcard deps.txt),)
+SRC_FILES := $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
+endif
+
+IMAGE_DEPS ?= Dockerfile
+
+# Expand a component's deps.txt local entries to the list of .go files.
+# Usage: $(call local-deps-go-files,<component-dir>)
+local-deps-go-files = $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' $(REPO_ROOT)/$(1)/deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
 
 # A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
 .PHONY: force-rebuild
