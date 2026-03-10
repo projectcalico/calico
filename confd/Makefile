@@ -11,8 +11,7 @@ include ../lib.Makefile
 
 ###############################################################################
 
-# All go files.
-SRC_FILES:=$(shell find . -name '*.go' -not -path "./vendor/*" )
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 
 .PHONY: clean
 clean:
