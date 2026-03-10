@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -43,12 +44,12 @@ const (
 type IPPoolController struct {
 	ctx context.Context
 
-	// For syncing node objects from the k8s API.
 	poolInformer  cache.SharedIndexInformer
 	blockInformer cache.SharedIndexInformer
 
-	cli  clientset.Interface
-	ipam ipam.Interface
+	cli        clientset.Interface
+	ipam       ipam.Interface
+	retryQueue *utils.RetryWorkqueue[string]
 }
 
 func NewController(
@@ -64,44 +65,34 @@ func NewController(
 		poolInformer:  poolInformer,
 		blockInformer: blockInformer,
 		ipam:          ipam,
+		retryQueue:    utils.NewRetryWorkqueue[string]("IPPool"),
 	}
 
-	// Configure events for new IP pools.
+	// Enqueue pool names on informer events rather than reconciling inline. The workqueue
+	// deduplicates rapid events for the same pool and provides rate-limited retry on errors.
 	poolHandlers := cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj any) {
-			logrus.WithField("name", obj.(*v3.IPPool).Name).Info("Handling pool deletion")
-			if err := c.Reconcile(obj.(*v3.IPPool)); err != nil {
-				logrus.WithError(err).Error("Error handling pool deletion")
-			}
-		},
 		AddFunc: func(obj any) {
-			logrus.WithField("name", obj.(*v3.IPPool).Name).Info("Handling pool add")
-			if err := c.Reconcile(obj.(*v3.IPPool)); err != nil {
-				logrus.WithError(err).Error("Error handling pool add")
-			}
+			c.retryQueue.Enqueue(obj.(*v3.IPPool).Name)
 		},
 		UpdateFunc: func(oldObj, newObj any) {
-			logrus.WithField("name", newObj.(*v3.IPPool).Name).Info("Handling pool update")
-			if err := c.Reconcile(newObj.(*v3.IPPool)); err != nil {
-				logrus.WithError(err).Error("Error handling pool update")
-			}
+			c.retryQueue.Enqueue(newObj.(*v3.IPPool).Name)
+		},
+		DeleteFunc: func(obj any) {
+			c.retryQueue.Enqueue(obj.(*v3.IPPool).Name)
 		},
 	}
 	if _, err := poolInformer.AddEventHandler(poolHandlers); err != nil {
 		logrus.WithError(err).Fatal("Failed to register event handler for IPPool")
 	}
 
-	// Configure handlers for IPAM block updates. We need to trigger a reconcile for any
-	// deleting IP pools when blocks are deleted, to ensure we can finalize the pool.
+	// When a block is deleted, enqueue any deleting pools that overlap it so they can
+	// check whether finalization is now possible.
 	blockHandlers := cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj any) {
 			block := obj.(*v3.IPAMBlock)
-
-			// Find any pools that might be associated with this block and trigger a reconcile.
 			for _, i := range poolInformer.GetIndexer().List() {
 				pool := i.(*v3.IPPool)
 				if pool.DeletionTimestamp == nil {
-					// Pool is not being deleted, skip it.
 					continue
 				}
 				_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
@@ -115,10 +106,8 @@ func NewController(
 					continue
 				}
 				if poolNet.Contains(blockNet.IP) {
-					logrus.WithField("name", pool.Name).Debug("Triggering reconcile for finalizing pool due to block deletion")
-					if err := c.Reconcile(pool); err != nil {
-						logrus.WithError(err).Error("Error handling pool reconcile due to block deletion")
-					}
+					logrus.WithField("name", pool.Name).Debug("Enqueuing pool for reconcile due to block deletion")
+					c.retryQueue.Enqueue(pool.Name)
 				}
 			}
 		},
@@ -130,24 +119,45 @@ func NewController(
 	return c
 }
 
-// Run starts the node controller. It does start-of-day preparation
-// and then launches worker threads.
+// Run starts the IPPool controller. It waits for informer caches to sync,
+// then processes pool reconcile events from the workqueue.
 func (c *IPPoolController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
+	defer c.retryQueue.ShutDown()
 
 	logrus.Info("Starting IPPool controller")
 
-	// Wait till k8s cache is synced
 	logrus.Debug("Waiting to sync with Kubernetes API")
 	if !cache.WaitForNamedCacheSync("pools", stopCh, c.poolInformer.HasSynced, c.blockInformer.HasSynced) {
 		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
 	}
-
 	logrus.Debug("Finished syncing with Kubernetes API")
 
-	<-stopCh
-	logrus.Info("Stopping IPPool controller")
+	c.retryQueue.Run()
+	for {
+		select {
+		case poolName := <-c.retryQueue.Retry():
+			c.retryQueue.HandleErr(c.reconcileByName(poolName), poolName)
+		case <-stopCh:
+			logrus.Info("Stopping IPPool controller")
+			return
+		}
+	}
+}
+
+// reconcileByName looks up the pool by name from the informer cache and reconciles it.
+func (c *IPPoolController) reconcileByName(poolName string) error {
+	obj, exists, err := c.poolInformer.GetIndexer().GetByKey(poolName)
+	if err != nil {
+		return fmt.Errorf("error fetching pool %s from cache: %v", poolName, err)
+	}
+	if !exists {
+		// Pool was deleted and is gone from the cache. Trigger a conditions reconcile in case
+		// removing this pool enables a previously overlapping pool.
+		return c.reconcileConditions(context.TODO())
+	}
+	return c.Reconcile(obj.(*v3.IPPool))
 }
 
 func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
