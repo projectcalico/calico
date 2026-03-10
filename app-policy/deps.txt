@@ -1,6 +1,5 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
-This file contains the list of modules that this package depends on
-in order to trigger CI on changes
+Run 'make gen-deps-files' to regenerate.
 
 go 1.25.7
 github.com/beorn7/perks v1.0.1
@@ -121,3 +120,87 @@ sigs.k8s.io/network-policy-api v0.1.8-0.20260212153203-412bf65729a5
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 sigs.k8s.io/yaml v1.6.0
+
+local:api/pkg/apis/projectcalico/v3
+local:api/pkg/defaults
+local:api/pkg/lib/numorstring
+local:app-policy/checker
+local:app-policy/cmd/dikastes
+local:app-policy/cmd/healthz
+local:app-policy/health
+local:app-policy/policystore
+local:app-policy/proto
+local:app-policy/syncher
+local:app-policy/types
+local:app-policy/uds
+local:crypto/pkg/tls
+local:felix/bpf/tc/defs
+local:felix/calc
+local:felix/config
+local:felix/dataplane/ipsets
+local:felix/dataplane/linux/dataplanedefs
+local:felix/deltatracker
+local:felix/dispatcher
+local:felix/environment
+local:felix/generictables
+local:felix/idalloc
+local:felix/ip
+local:felix/ipsets
+local:felix/iptables
+local:felix/iptables/cmdshim
+local:felix/k8sutils
+local:felix/labelindex
+local:felix/labelindex/ipsetmember
+local:felix/labelindex/labelnamevalueindex
+local:felix/labelindex/labelrestrictionindex
+local:felix/logutils
+local:felix/markbits
+local:felix/multidict
+local:felix/netlinkshim
+local:felix/nftables
+local:felix/proto
+local:felix/rules
+local:felix/serviceindex
+local:felix/stringutils
+local:felix/types
+local:lib/std/uniquelabels
+local:lib/std/uniquestr
+local:libcalico-go/config
+local:libcalico-go/lib/apiconfig
+local:libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme
+local:libcalico-go/lib/apis/internalapi
+local:libcalico-go/lib/apis/v1
+local:libcalico-go/lib/apis/v1/unversioned
+local:libcalico-go/lib/backend
+local:libcalico-go/lib/backend/api
+local:libcalico-go/lib/backend/encap
+local:libcalico-go/lib/backend/etcdv3
+local:libcalico-go/lib/backend/k8s
+local:libcalico-go/lib/backend/k8s/conversion
+local:libcalico-go/lib/backend/k8s/resources
+local:libcalico-go/lib/backend/model
+local:libcalico-go/lib/clientv3
+local:libcalico-go/lib/consistenthash
+local:libcalico-go/lib/errors
+local:libcalico-go/lib/hash
+local:libcalico-go/lib/health
+local:libcalico-go/lib/json
+local:libcalico-go/lib/logutils
+local:libcalico-go/lib/names
+local:libcalico-go/lib/namespace
+local:libcalico-go/lib/net
+local:libcalico-go/lib/options
+local:libcalico-go/lib/packedmap
+local:libcalico-go/lib/prometheus
+local:libcalico-go/lib/resources
+local:libcalico-go/lib/scope
+local:libcalico-go/lib/selector
+local:libcalico-go/lib/selector/parser
+local:libcalico-go/lib/selector/tokenizer
+local:libcalico-go/lib/set
+local:libcalico-go/lib/validator/v1
+local:libcalico-go/lib/validator/v3
+local:libcalico-go/lib/watch
+local:libcalico-go/lib/winutils
+local:node/pkg/lifecycle/utils
+local:pkg/buildinfo
