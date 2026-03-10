@@ -303,7 +303,14 @@ func startBPFLogging() *exec.Cmd {
 	// When the test binary runs in a pipeline (bpf_ut.test |& gotestsum),
 	// inheriting stdout/stderr means bpftool holds the pipe open even after
 	// the test binary exits, causing gotestsum to block forever.
-	f, err := os.Create("/tmp/bpf-trace.log")
+	//
+	// The log file is written to the report/ directory so that
+	// collect-artifacts picks it up and it ends up in CI job artifacts.
+	logPath := "../../report/bpf-trace.log"
+	if err := os.MkdirAll("../../report", 0o755); err != nil {
+		log.WithError(err).Warn("Failed to create report directory for BPF trace log")
+	}
+	f, err := os.Create(logPath)
 	if err != nil {
 		log.WithError(err).Warn("Failed to create BPF trace log file")
 		return nil

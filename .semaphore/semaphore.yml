@@ -844,6 +844,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "22.04-ipt"
           commands:
@@ -869,6 +871,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "22.04-nft"
           commands:
@@ -894,6 +898,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "bpf-24.04-ipt-with-ut"
           commands:
@@ -919,6 +925,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "bpf-22.04-nft-with-ut"
             - name: FELIX_FV_BPFATTACHTYPE
@@ -978,6 +986,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "bpf-25.10-nft-with-ut-jitharden"
             - name: FELIX_FV_BPFATTACHTYPE
