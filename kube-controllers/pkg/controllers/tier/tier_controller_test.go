@@ -22,7 +22,41 @@ import (
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 )
+
+// newTestController creates a TierController with policy informers backed by the given
+// GNP objects. The informers have the tier index registered so countPoliciesInTier works.
+func newTestController(cli *fake.Clientset, gnps ...*v3.GlobalNetworkPolicy) *TierController {
+	gnpInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
+	for _, gnp := range gnps {
+		gnpInformer.Add(gnp)
+	}
+	npInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
+	sgnpInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
+	snpInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
+	return &TierController{
+		ctx: context.Background(),
+		cli: cli,
+		policyInformers: []cache.SharedIndexInformer{
+			&fakeSharedIndexInformer{indexer: gnpInformer},
+			&fakeSharedIndexInformer{indexer: npInformer},
+			&fakeSharedIndexInformer{indexer: sgnpInformer},
+			&fakeSharedIndexInformer{indexer: snpInformer},
+		},
+	}
+}
+
+// fakeSharedIndexInformer wraps a cache.Indexer to satisfy cache.SharedIndexInformer
+// for testing countPoliciesInTier. Only GetIndexer is implemented.
+type fakeSharedIndexInformer struct {
+	cache.SharedIndexInformer
+	indexer cache.Indexer
+}
+
+func (f *fakeSharedIndexInformer) GetIndexer() cache.Indexer {
+	return f.indexer
+}
 
 func TestReconcile_AddsFinalizer(t *testing.T) {
 	tier := &v3.Tier{
@@ -30,7 +64,7 @@ func TestReconcile_AddsFinalizer(t *testing.T) {
 		Spec:       v3.TierSpec{},
 	}
 	cli := fake.NewSimpleClientset(tier)
-	c := &TierController{ctx: context.Background(), cli: cli}
+	c := newTestController(cli)
 
 	if err := c.Reconcile(tier); err != nil {
 		t.Fatalf("Reconcile failed: %v", err)
@@ -52,7 +86,7 @@ func TestReconcile_SkipsFinalizerIfAlreadyPresent(t *testing.T) {
 		Spec: v3.TierSpec{},
 	}
 	cli := fake.NewSimpleClientset(tier)
-	c := &TierController{ctx: context.Background(), cli: cli}
+	c := newTestController(cli)
 
 	if err := c.Reconcile(tier); err != nil {
 		t.Fatalf("Reconcile failed: %v", err)
@@ -77,9 +111,9 @@ func TestReconcile_RemovesFinalizerWhenNoPolicies(t *testing.T) {
 		Spec: v3.TierSpec{},
 	}
 
-	// Empty policy lists — no policies reference this tier.
+	// Empty policy informers — no policies reference this tier.
 	cli := fake.NewSimpleClientset(tier)
-	c := &TierController{ctx: context.Background(), cli: cli}
+	c := newTestController(cli)
 
 	if err := c.Reconcile(tier); err != nil {
 		t.Fatalf("Reconcile failed: %v", err)
@@ -109,7 +143,7 @@ func TestReconcile_KeepsFinalizerWhenPoliciesExist(t *testing.T) {
 	}
 
 	cli := fake.NewSimpleClientset(tier, gnp)
-	c := &TierController{ctx: context.Background(), cli: cli}
+	c := newTestController(cli, gnp)
 
 	if err := c.Reconcile(tier); err != nil {
 		t.Fatalf("Reconcile failed: %v", err)
@@ -154,7 +188,7 @@ func TestReconcile_DeletingTierWithoutFinalizer(t *testing.T) {
 		Spec: v3.TierSpec{},
 	}
 	cli := fake.NewSimpleClientset(tier)
-	c := &TierController{ctx: context.Background(), cli: cli}
+	c := newTestController(cli)
 
 	if err := c.Reconcile(tier); err != nil {
 		t.Fatalf("Reconcile failed: %v", err)
@@ -236,6 +270,53 @@ func TestSetCondition(t *testing.T) {
 	}
 	if tier.Status.Conditions[0].Message != "1 policy remains" {
 		t.Fatalf("expected updated message, got %q", tier.Status.Conditions[0].Message)
+	}
+}
+
+func TestCountPoliciesInTier(t *testing.T) {
+	gnp1 := &v3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-tier.policy1"},
+		Spec:       v3.GlobalNetworkPolicySpec{Tier: "my-tier"},
+	}
+	gnp2 := &v3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-tier.policy2"},
+		Spec:       v3.GlobalNetworkPolicySpec{Tier: "my-tier"},
+	}
+	gnpOther := &v3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "other-tier.policy1"},
+		Spec:       v3.GlobalNetworkPolicySpec{Tier: "other-tier"},
+	}
+
+	cli := fake.NewSimpleClientset()
+	c := newTestController(cli, gnp1, gnp2, gnpOther)
+
+	counts, err := c.countPoliciesInTier("my-tier")
+	if err != nil {
+		t.Fatalf("countPoliciesInTier failed: %v", err)
+	}
+	if counts.GlobalNetworkPolicies != 2 {
+		t.Fatalf("expected 2 GNPs, got %d", counts.GlobalNetworkPolicies)
+	}
+	if counts.total() != 2 {
+		t.Fatalf("expected total 2, got %d", counts.total())
+	}
+
+	// Other tier should have 1.
+	counts, err = c.countPoliciesInTier("other-tier")
+	if err != nil {
+		t.Fatalf("countPoliciesInTier failed: %v", err)
+	}
+	if counts.GlobalNetworkPolicies != 1 {
+		t.Fatalf("expected 1 GNP for other-tier, got %d", counts.GlobalNetworkPolicies)
+	}
+
+	// Non-existent tier should have 0.
+	counts, err = c.countPoliciesInTier("no-such-tier")
+	if err != nil {
+		t.Fatalf("countPoliciesInTier failed: %v", err)
+	}
+	if counts.total() != 0 {
+		t.Fatalf("expected 0 for non-existent tier, got %d", counts.total())
 	}
 }
 

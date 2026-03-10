@@ -23,12 +23,25 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 )
+
+// tierIndex is the name of the cache index used to look up policies by tier name.
+const tierIndex = "byTier"
+
+// tierKeyFunc extracts the tier name from a policy object for use as a cache index key.
+func tierKeyFunc(obj any) ([]string, error) {
+	name := tierNameFromPolicy(obj)
+	if name == "" {
+		return nil, nil
+	}
+	return []string{name}, nil
+}
 
 // TierController watches Tier resources and manages their finalizers for cascading deletion.
 // When a tier is created, it adds a finalizer. When a tier is being deleted, it checks whether
@@ -38,9 +51,10 @@ import (
 // The controller also watches all policy types (GNP, NP, SGNP, SNP) so that when a policy is
 // deleted, it re-reconciles the owning tier to check whether the finalizer can be removed.
 type TierController struct {
-	ctx       context.Context
-	cli       clientset.Interface
-	informers []cache.SharedIndexInformer
+	ctx             context.Context
+	cli             clientset.Interface
+	allInformers    []cache.SharedIndexInformer
+	policyInformers []cache.SharedIndexInformer
 }
 
 func NewController(
@@ -50,9 +64,18 @@ func NewController(
 	policyInformers ...cache.SharedIndexInformer,
 ) controller.Controller {
 	c := &TierController{
-		ctx:       ctx,
-		cli:       cli,
-		informers: append([]cache.SharedIndexInformer{tierInformer}, policyInformers...),
+		ctx:             ctx,
+		cli:             cli,
+		allInformers:    append([]cache.SharedIndexInformer{tierInformer}, policyInformers...),
+		policyInformers: policyInformers,
+	}
+
+	// Add a cache index to each policy informer so we can efficiently look up
+	// policies by tier name without hitting the API server.
+	for _, inf := range policyInformers {
+		if err := inf.AddIndexers(cache.Indexers{tierIndex: tierKeyFunc}); err != nil {
+			logrus.WithError(err).Fatal("Failed to add tier index to policy informer")
+		}
 	}
 
 	tierHandlers := cache.ResourceEventHandlerFuncs{
@@ -108,19 +131,24 @@ func tierNameFromPolicy(obj any) string {
 	if d, ok := obj.(cache.DeletedFinalStateUnknown); ok {
 		obj = d.Obj
 	}
+	var tierName string
 	switch p := obj.(type) {
 	case *v3.GlobalNetworkPolicy:
-		return p.Spec.Tier
+		tierName = p.Spec.Tier
 	case *v3.NetworkPolicy:
-		return p.Spec.Tier
+		tierName = p.Spec.Tier
 	case *v3.StagedGlobalNetworkPolicy:
-		return p.Spec.Tier
+		tierName = p.Spec.Tier
 	case *v3.StagedNetworkPolicy:
-		return p.Spec.Tier
+		tierName = p.Spec.Tier
 	default:
 		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unknown policy type in tier controller")
 		return ""
 	}
+	if tierName == "" {
+		logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Policy has no tier set")
+	}
+	return tierName
 }
 
 // reconcileTierByName fetches the tier from the API and reconciles it.
@@ -128,7 +156,11 @@ func (c *TierController) reconcileTierByName(name string) {
 	logCtx := logrus.WithField("name", name)
 	tier, err := c.cli.ProjectcalicoV3().Tiers().Get(c.ctx, name, metav1.GetOptions{})
 	if err != nil {
-		logCtx.WithError(err).Debug("Failed to get tier for policy-triggered reconcile")
+		if apierrors.IsNotFound(err) {
+			logCtx.Debug("Tier not found, skipping policy-triggered reconcile")
+		} else {
+			logCtx.WithError(err).Error("Failed to get tier for policy-triggered reconcile")
+		}
 		return
 	}
 	logCtx.Info("Policy deleted, re-reconciling tier")
@@ -141,8 +173,8 @@ func (c *TierController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	logrus.Info("Starting Tier controller")
-	syncFuncs := make([]cache.InformerSynced, len(c.informers))
-	for i, inf := range c.informers {
+	syncFuncs := make([]cache.InformerSynced, len(c.allInformers))
+	for i, inf := range c.allInformers {
 		syncFuncs[i] = inf.HasSynced
 	}
 	if !cache.WaitForNamedCacheSync("tiers", stopCh, syncFuncs...) {
@@ -237,37 +269,28 @@ func pluralY(n int) string {
 	return "ies"
 }
 
-// countPoliciesInTier uses field selectors to count all policies that reference the given tier.
+// countPoliciesInTier uses the informer cache index to count all policies that reference
+// the given tier, avoiding direct API server calls.
 func (c *TierController) countPoliciesInTier(tierName string) (policyCounts, error) {
-	ctx := c.ctx
-	fieldSelector := fmt.Sprintf("spec.tier=%s", tierName)
-	opts := metav1.ListOptions{FieldSelector: fieldSelector}
 	var counts policyCounts
-
-	gnpList, err := c.cli.ProjectcalicoV3().GlobalNetworkPolicies().List(ctx, opts)
-	if err != nil {
-		return counts, fmt.Errorf("listing GlobalNetworkPolicies: %v", err)
+	for _, inf := range c.policyInformers {
+		items, err := inf.GetIndexer().ByIndex(tierIndex, tierName)
+		if err != nil {
+			return counts, fmt.Errorf("looking up policies by tier %q: %v", tierName, err)
+		}
+		for _, item := range items {
+			switch item.(type) {
+			case *v3.GlobalNetworkPolicy:
+				counts.GlobalNetworkPolicies++
+			case *v3.NetworkPolicy:
+				counts.NetworkPolicies++
+			case *v3.StagedGlobalNetworkPolicy:
+				counts.StagedGlobalNetworkPolicies++
+			case *v3.StagedNetworkPolicy:
+				counts.StagedNetworkPolicies++
+			}
+		}
 	}
-	counts.GlobalNetworkPolicies = len(gnpList.Items)
-
-	npList, err := c.cli.ProjectcalicoV3().NetworkPolicies("").List(ctx, opts)
-	if err != nil {
-		return counts, fmt.Errorf("listing NetworkPolicies: %v", err)
-	}
-	counts.NetworkPolicies = len(npList.Items)
-
-	sgnpList, err := c.cli.ProjectcalicoV3().StagedGlobalNetworkPolicies().List(ctx, opts)
-	if err != nil {
-		return counts, fmt.Errorf("listing StagedGlobalNetworkPolicies: %v", err)
-	}
-	counts.StagedGlobalNetworkPolicies = len(sgnpList.Items)
-
-	snpList, err := c.cli.ProjectcalicoV3().StagedNetworkPolicies("").List(ctx, opts)
-	if err != nil {
-		return counts, fmt.Errorf("listing StagedNetworkPolicies: %v", err)
-	}
-	counts.StagedNetworkPolicies = len(snpList.Items)
-
 	return counts, nil
 }
 
