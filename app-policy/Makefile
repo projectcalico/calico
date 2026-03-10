@@ -145,11 +145,13 @@ bin/LICENSE: ../LICENSE.md
 ###############################################################################
 # UTs
 ###############################################################################
+WHAT?=./...
+
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: protobuf
 	mkdir -p report
-	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "cd /go/src/$(PACKAGE_NAME) && gotestsum --junitfile report/app_policy_ut.xml -- -v ./..."
+	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "cd /go/src/$(PACKAGE_NAME) && gotestsum --junitfile report/app_policy_ut.xml -- -v $(WHAT)"
 
 ###############################################################################
 # CI
