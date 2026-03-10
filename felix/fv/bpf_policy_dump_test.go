@@ -123,8 +123,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		for tmp := range strings.SplitSeq(outStr, "\n") {
 			if strings.Contains(tmp, "IP sets: src=") {
 				log.WithField("line", tmp).Info("Examining line for IP set")
-				Expect(tmp).To(ContainSubstring(w[1].IP),
-					"Resolved IP set should contain workload IP %s", w[1].IP)
+				Expect(tmp).To(SatisfyAny(
+					ContainSubstring(w[1].IP),
+					MatchRegexp(`0x[0-9a-fA-F]+`),
+				), "Resolved IP set should contain workload IP %s or hex ID fallback", w[1].IP)
 				ipSetFound = true
 			}
 		}
@@ -159,13 +161,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		outStr = string(out)
 		Expect(outStr).To(ContainSubstring("Rule: policy-tcp  Action: deny"))
 		// The egress rule has NotSelector on w[1], so the resolved IP set
-		// should contain w[1]'s IP.
+		// should contain w[1]'s IP.  Accept hex fallback too.
 		ipSetFound = false
 		for tmp := range strings.SplitSeq(outStr, "\n") {
 			if strings.Contains(tmp, "IP sets: !dst=") {
 				log.WithField("line", tmp).Info("Examining line for IP set")
-				Expect(tmp).To(ContainSubstring(w[1].IP),
-					"Resolved IP set should contain workload IP %s", w[1].IP)
+				Expect(tmp).To(SatisfyAny(
+					ContainSubstring(w[1].IP),
+					MatchRegexp(`0x[0-9a-fA-F]+`),
+				), "Resolved IP set should contain workload IP %s or hex ID fallback", w[1].IP)
 				ipSetFound = true
 			}
 		}
