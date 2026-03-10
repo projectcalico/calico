@@ -9,7 +9,7 @@
 #define RESERVED_IP_SET_BASE (((__u64)1)<<32)
 
 // IP set ID for All Istio WEPs.  Must match the ID defined in ipsets.go.
-#define ALL_ISTIO_WEPS_ID (RESERVED_IP_SET_BASE + 1)
+#define ALL_ISTIO_WEPS_ID (RESERVED_IP_SET_BASE + 3)
 
 enum calico_policy_result {
 	CALI_POL_NO_MATCH,
