@@ -99,8 +99,8 @@ func parseArgs(args []string) (string, string, error) {
 	return args[0], args[1], nil
 }
 
-func printInsn(cmd *cobra.Command, insn asm.Insn) {
-	cmd.Printf("%-6s", "")
+func printInsn(cmd *cobra.Command, insn asm.Insn, depth int) {
+	cmd.Printf("%s", indent(depth))
 	for _, value := range insn.Instruction {
 		cmd.Printf("%02x", value)
 	}
@@ -338,7 +338,7 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 			}
 		}
 		if verboseFlagSet {
-			printInsn(cmd, insn)
+			printInsn(cmd, insn, depth)
 		}
 	}
 	return nil
