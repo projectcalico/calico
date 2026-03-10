@@ -17,7 +17,6 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"regexp"
 	"sort"
@@ -171,6 +170,7 @@ func loadIPSetMembers() map[uint64][]string {
 		log.WithError(err).Debug("Failed to open IP sets map, IDs will not be resolved.")
 		return nil
 	}
+	defer ipsetMap.Close()
 
 	membersBySet := map[uint64][]string{}
 	err := ipsetMap.Iter(func(k, v []byte) maps.IteratorAction {
@@ -268,10 +268,9 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 	if err != nil {
 		return err
 	}
+	defer jsonFile.Close()
 
-	byteValue, _ := io.ReadAll(jsonFile)
-	dec := json.NewDecoder(strings.NewReader(string(byteValue)))
-	err = dec.Decode(&policyDbg)
+	err = json.NewDecoder(jsonFile).Decode(&policyDbg)
 	if err != nil {
 		return err
 	}
