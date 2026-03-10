@@ -380,7 +380,7 @@ func hasPeerTypeRules(rules []filterArgs) bool {
 }
 
 // emitFilterRules generates the BIRD filter function body lines for the given rules.
-// If needsPeerType is true, rules with PeerType are wrapped in if (is_internal) / if (!is_internal) guards.
+// Rules with PeerType are wrapped in if (is_internal) / if (!is_internal) guards.
 func emitFilterRules(ruleFields []filterArgs) ([]string, error) {
 	var lines []string
 	for _, fields := range ruleFields {
@@ -490,11 +490,15 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 			var ruleFields []filterArgs
 			if v4Selected {
 				for _, rule := range filter.Spec.ExportV4 {
-					ruleFields = append(ruleFields, filterArgsFromRuleV4(rule))
+					args := filterArgsFromRuleV4(rule)
+					args.communities = nil // Community matching is not applicable on export.
+					ruleFields = append(ruleFields, args)
 				}
 			} else {
 				for _, rule := range filter.Spec.ExportV6 {
-					ruleFields = append(ruleFields, filterArgsFromRuleV6(rule))
+					args := filterArgsFromRuleV6(rule)
+					args.communities = nil // Community matching is not applicable on export.
+					ruleFields = append(ruleFields, args)
 				}
 			}
 

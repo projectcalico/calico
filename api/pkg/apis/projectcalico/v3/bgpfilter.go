@@ -53,7 +53,7 @@ type BGPFilterSpec struct {
 
 	// The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.
 	// Source is not applicable to import rules because all imported routes are from BGP peers by definition.
-	// +kubebuilder:validation:Rule="self.all(r, !has(r.source) || r.source == '')",message="source is not applicable to import rules"
+	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.source) || r.source == '')",message="source is not applicable to import rules"
 	ImportV4 []BGPFilterRuleV4 `json:"importV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.
@@ -61,14 +61,14 @@ type BGPFilterSpec struct {
 
 	// The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.
 	// Source is not applicable to import rules because all imported routes are from BGP peers by definition.
-	// +kubebuilder:validation:Rule="self.all(r, !has(r.source) || r.source == '')",message="source is not applicable to import rules"
+	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.source) || r.source == '')",message="source is not applicable to import rules"
 	ImportV6 []BGPFilterRuleV6 `json:"importV6,omitempty" validate:"omitempty,dive"`
 }
 
 // BGPFilterRuleV4 defines a BGP filter rule consisting of match criteria, a terminal action,
 // and optional operations to apply to matching routes.
 // +mapType=atomic
-// +kubebuilder:validation:Rule="!has(self.operations) || size(self.operations) == 0 || self.action == 'Accept'",message="operations may only be used with action Accept"
+// +kubebuilder:validation:XValidation:rule="!has(self.operations) || size(self.operations) == 0 || self.action == 'Accept'",message="operations may only be used with action Accept"
 type BGPFilterRuleV4 struct {
 	// If non-empty, this filter rule will only apply when the route being exported or imported
 	// "matches" the given CIDR - where the definition of "matches" is according to
@@ -140,7 +140,7 @@ type BGPFilterRuleV4 struct {
 // BGPFilterRuleV6 defines a BGP filter rule consisting of match criteria, a terminal action,
 // and optional operations to apply to matching routes.
 // +mapType=atomic
-// +kubebuilder:validation:Rule="!has(self.operations) || size(self.operations) == 0 || self.action == 'Accept'",message="operations may only be used with action Accept"
+// +kubebuilder:validation:XValidation:rule="!has(self.operations) || size(self.operations) == 0 || self.action == 'Accept'",message="operations may only be used with action Accept"
 type BGPFilterRuleV6 struct {
 	// If non-empty, this filter rule will only apply when the route being exported or imported
 	// "matches" the given CIDR - where the definition of "matches" is according to
@@ -274,14 +274,14 @@ type BGPFilterCommunityMatch struct {
 	// For large communities, `aa`, `nn`, and `mm` must be 32-bit values (0-4294967295).
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=1
-	// +kubebuilder:validation:Rule="self.all(v, v.matches('^[0-9]+:[0-9]+$') ? (int(v.split(':')[0]) <= 65535 && int(v.split(':')[1]) <= 65535) : (v.matches('^[0-9]+:[0-9]+:[0-9]+$') && int(v.split(':')[0]) <= 4294967295 && int(v.split(':')[1]) <= 4294967295 && int(v.split(':')[2]) <= 4294967295))",message="standard communities must have 16-bit values (aa:nn), large communities must have 32-bit values (aa:nn:mm)"
+	// +kubebuilder:validation:XValidation:rule="self.all(v, v.matches('^[0-9]+:[0-9]+$') ? (int(v.split(':')[0]) <= 65535 && int(v.split(':')[1]) <= 65535) : (v.matches('^[0-9]+:[0-9]+:[0-9]+$') && int(v.split(':')[0]) <= 4294967295 && int(v.split(':')[1]) <= 4294967295 && int(v.split(':')[2]) <= 4294967295))",message="standard communities must have 16-bit values (aa:nn), large communities must have 32-bit values (aa:nn:mm)"
 	Values []string `json:"values" validate:"required,dive"`
 }
 
 // BGPFilterOperation is a discriminated union representing a single route modification.
 // Exactly one field must be set.
 // +mapType=atomic
-// +kubebuilder:validation:Rule="(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath) ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1",message="exactly one operation must be set"
+// +kubebuilder:validation:XValidation:rule="(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath) ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1",message="exactly one operation must be set"
 type BGPFilterOperation struct {
 	// AddCommunity adds the specified BGP community to the route.
 	// +optional
@@ -303,7 +303,7 @@ type BGPFilterAddCommunity struct {
 	// Value is a BGP community value in `aa:nn` (standard) or `aa:nn:mm` (large) format.
 	// For standard communities, `aa` and `nn` must be 16-bit values (0-65535).
 	// For large communities, `aa`, `nn`, and `mm` must be 32-bit values (0-4294967295).
-	// +kubebuilder:validation:Rule="self.matches('^[0-9]+:[0-9]+$') ? (int(self.split(':')[0]) <= 65535 && int(self.split(':')[1]) <= 65535) : (self.matches('^[0-9]+:[0-9]+:[0-9]+$') && int(self.split(':')[0]) <= 4294967295 && int(self.split(':')[1]) <= 4294967295 && int(self.split(':')[2]) <= 4294967295)",message="standard communities must have 16-bit values (aa:nn), large communities must have 32-bit values (aa:nn:mm)"
+	// +kubebuilder:validation:XValidation:rule="self.matches('^[0-9]+:[0-9]+$') ? (int(self.split(':')[0]) <= 65535 && int(self.split(':')[1]) <= 65535) : (self.matches('^[0-9]+:[0-9]+:[0-9]+$') && int(self.split(':')[0]) <= 4294967295 && int(self.split(':')[1]) <= 4294967295 && int(self.split(':')[2]) <= 4294967295)",message="standard communities must have 16-bit values (aa:nn), large communities must have 32-bit values (aa:nn:mm)"
 	Value string `json:"value" validate:"required"`
 }
 
