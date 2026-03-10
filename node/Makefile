@@ -130,12 +130,10 @@ WINDOWS_ARCHIVE_FILES := \
 MICROSOFT_SDN_VERSION := 0d7593e5c8d4c2347079a7a6dbd9eb034ae19a44
 MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/$(MICROSOFT_SDN_VERSION)
 
-# Variables used by the tests
-ST_TO_RUN?=tests/st/
-K8ST_TO_RUN?=tests/
-# Can exclude the slower tests with "-m 'not slow'"
-ST_OPTIONS?=
-
+# Variables used by the k8st tests
+K8ST_WHAT?=tests/
+K8ST_FOCUS?=
+K8ST_PYTEST_ARGS?=
 K8ST_REPORT_FILENAME ?= k8s-tests.xml
 
 # Filesystem of the node container that is checked in to this repository.
@@ -305,6 +303,11 @@ K8ST_IMAGE_TARS=calico-node.tar \
 	goldmane.tar
 
 ## Run the ginkgo tests.
+WHAT?=.
+FOCUS?=.*
+SKIP?=
+GINKGO_ARGS?=
+
 ut fv: $(LIBBPF_A) run-k8s-apiserver
 	mkdir -p report
 	$(DOCKER_RUN) \
@@ -312,7 +315,7 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=node_ut.xml --output-dir=report/ -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 ###############################################################################
 # System tests
@@ -466,7 +469,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    --net host \
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
-	     cd /code/tests/k8st && pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
+	     cd /code/tests/k8st && pytest $(K8ST_WHAT) -v $(if $(K8ST_FOCUS),-k "$(K8ST_FOCUS)") $(K8ST_PYTEST_ARGS) --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
 
 .PHONY: kind-k8st-cleanup
 kind-k8st-cleanup: kind-cluster-destroy
