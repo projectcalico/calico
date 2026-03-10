@@ -525,14 +525,38 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
 	}
 
+	logIface := ap.Iface
+	if ap.Type != tcdefs.EpTypeWorkload {
+		if prefix := fvLogPrefix(); prefix != "" {
+			logIface = prefix + logIface
+		}
+	}
 	in := []byte("---------------")
-	copy(in, ap.Iface)
+	copy(in, logIface)
 	globalData.IfaceName = string(in)
 
 	globalData.OverlayTunnelID = ap.OverlayTunnelID
 
 	return globalData
 }
+
+// fvLogPrefix returns a short host-identifying prefix (e.g. "f0-") when running
+// inside a Felix FV test container (hostname ends with "-felixfv"). Returns ""
+// in production so there is no impact on non-test deployments.
+var fvLogPrefix = sync.OnceValue(func() string {
+	hostname, err := os.Hostname()
+	if err != nil || !strings.HasSuffix(hostname, "-felixfv") {
+		return ""
+	}
+	// Hostname format: felix-<id>-<pid>-<counter>-felixfv
+	// Extract the <id> part after "felix-".
+	if !strings.HasPrefix(hostname, "felix-") {
+		return ""
+	}
+	rest := hostname[len("felix-"):]
+	idx, _, _ := strings.Cut(rest, "-")
+	return "f" + idx + "-"
+})
 
 var IsTcxSupported = sync.OnceValue(func() bool {
 	name := "testTcx"
