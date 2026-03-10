@@ -15,7 +15,7 @@ BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 ###############################################################################
 include ../lib.Makefile
 
-SRC_FILES=$(shell find pkg cmd internal -name '*.go') $(shell find ../libcalico-go -name '*.go')
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 
@@ -133,13 +133,13 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 # Builds the statically compiled binaries into a container.
-$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build build-cni-bins bin/LICENSE
+$(DEPLOY_CONTAINER_STATIC_MARKER): $(IMAGE_DEPS) build build-cni-bins bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # Builds the FIPS binaries into a container.
-$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build build-cni-bins bin/LICENSE
+$(DEPLOY_CONTAINER_FIPS_MARKER): $(IMAGE_DEPS) build build-cni-bins bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
