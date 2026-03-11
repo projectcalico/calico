@@ -3673,7 +3673,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if testOpts.protocol == "tcp" {
 							Eventually(func() int { return tcpd.MatchCount("tcp-rst") }, "25s").ShouldNot(BeZero(),
 								"Expected to see TCP RSTs on the connection after backend change")
-							Expect(pc.IsConnectionReset()).To(BeTrue())
+							Eventually(pc.IsConnectionReset, "5s").Should(BeTrue(),
+							"Expected the persistent connection to detect the reset after RST seen in tcpdump")
 						} else {
 							prevCount = pc.PongCount()
 							Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
