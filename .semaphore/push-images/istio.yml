@@ -9,7 +9,7 @@ execution_time_limit:
 global_job_config:
   env_vars:
     - name: DEV_REGISTRIES
-      value: quay.io/calico docker.io/calico
+      value: quay.io/calico
   secrets:
     - name: docker
     - name: quay-robot-calico+semaphoreci
@@ -64,6 +64,9 @@ blocks:
     skip:
       when: "branch !~ '.+'"
     task:
+      env_vars:
+        - name: DEV_REGISTRIES
+          value: quay.io/calico docker.io/calico
       jobs:
         - name: Linux multi-arch
           commands:
