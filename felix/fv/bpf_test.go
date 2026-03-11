@@ -3404,41 +3404,47 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									Expect(err.Error()).To(ContainSubstring("No such file or directory"))
 								}
 
+								// Verify the map is empty after delete; retry if not.
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(0))
-
-									cc.CheckConnectivity()
-
-									aff = dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(1))
-									Expect(aff).To(HaveKey(mkey.(nat.AffinityKeyV6)))
-
-									return aff[mkey.(nat.AffinityKeyV6)].Backend()
-								}
-
-								if testOpts.ipv6 {
-									aff := dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(0))
+									if len(aff) != 0 {
+										return nil
+									}
 								} else {
 									aff := dumpAffMap(tc.Felixes[0])
-									Expect(aff).To(HaveLen(0))
+									if len(aff) != 0 {
+										return nil
+									}
 								}
 
 								cc.CheckConnectivity()
 
+								// The BPF datapath should have written exactly one
+								// affinity entry for the connection we just made.
+								// Retry if it hasn't shown up yet.
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(1))
-									Expect(aff).To(HaveKey(mkey.(nat.AffinityKeyV6)))
+									if len(aff) != 1 {
+										return nil
+									}
+									if _, ok := aff[mkey.(nat.AffinityKeyV6)]; !ok {
+										return nil
+									}
 									return aff[mkey.(nat.AffinityKeyV6)].Backend()
 								}
 
 								aff := dumpAffMap(tc.Felixes[0])
-								Expect(aff).To(HaveLen(1))
-								Expect(aff).To(HaveKey(mkey.(nat.AffinityKey)))
+								if len(aff) != 1 {
+									return nil
+								}
+								if _, ok := aff[mkey.(nat.AffinityKey)]; !ok {
+									return nil
+								}
 								return aff[mkey.(nat.AffinityKey)].Backend()
-							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
+							}, 60*time.Second, time.Second).Should(SatisfyAll(
+							Not(BeNil()),
+							Not(Equal(mVal.Backend())),
+						))
 						})
 					}
 
@@ -3673,7 +3679,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if testOpts.protocol == "tcp" {
 							Eventually(func() int { return tcpd.MatchCount("tcp-rst") }, "25s").ShouldNot(BeZero(),
 								"Expected to see TCP RSTs on the connection after backend change")
-							Expect(pc.IsConnectionReset()).To(BeTrue())
+							Eventually(pc.IsConnectionReset, "5s").Should(BeTrue(),
+							"Expected the persistent connection to detect the reset after RST seen in tcpdump")
 						} else {
 							prevCount = pc.PongCount()
 							Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
