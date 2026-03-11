@@ -381,32 +381,7 @@ func hasPeerTypeRules(rules []filterArgs) bool {
 	return false
 }
 
-// emitFilterRules generates the BIRD filter function body lines for the given rules.
-// Rules with PeerType are wrapped in if (is_same_as) / if (!is_same_as) guards.
-func emitFilterRules(ruleFields []filterArgs) ([]string, error) {
-	var lines []string
-	for _, fields := range ruleFields {
-		filterRule, err := filterStatement(fields)
-		if err != nil {
-			return nil, err
-		}
-
-		// Wrap the rule in a PeerType guard if the rule specifies a PeerType.
-		switch fields.peerType {
-		case v3.BGPFilterPeerTypeIBGP:
-			filterRule = fmt.Sprintf("if (is_same_as) then { %s }", filterRule)
-		case v3.BGPFilterPeerTypeEBGP:
-			filterRule = fmt.Sprintf("if (!is_same_as) then { %s }", filterRule)
-		}
-
-		lines = append(lines, fmt.Sprintf("  %s", filterRule))
-	}
-	return lines, nil
-}
-
-// BGPFilterBIRDFuncs generates a set of BIRD functions for BGPFilter resources that have been packaged into KVPairs.
-// By doing the formatting inside of this function we eliminate the need to copy and paste repeated blocks of golang
-// template code into our BIRD config templates that is both difficult to read and prone to errors.
+// BGPFilterBIRDFuncs generates the definitions of a set of BIRD functions for all configured BGPFilter resources.
 //
 // When any rule within a filter uses PeerType, the generated function takes a bool parameter:
 //
@@ -414,112 +389,96 @@ func emitFilterRules(ruleFields []filterArgs) ([]string, error) {
 //
 // Rules with PeerType are then wrapped in if (is_same_as) / if (!is_same_as) guards.
 func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
-	lines := []string{}
-	var line string
+	var lines []string
 	var versionStr string
 
 	if version == 4 || version == 6 {
 		versionStr = fmt.Sprintf("%d", version)
 	} else {
-		return []string{}, fmt.Errorf("version must be either 4 or 6")
+		return nil, fmt.Errorf("version must be either 4 or 6")
+	}
+
+	v4Selected := version == 4
+
+	type directionInput struct {
+		dir string
+		v4  []v3.BGPFilterRuleV4
+		v6  []v3.BGPFilterRuleV6
+	}
+	type directionRules struct {
+		direction string
+		rules     []filterArgs
 	}
 
 	for _, kvp := range pairs {
 		var filter v3.BGPFilter
 		err := json.Unmarshal([]byte(kvp.Value), &filter)
 		if err != nil {
-			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
+			return nil, fmt.Errorf("error unmarshalling JSON: %s", err)
 		}
 
-		var filterName string
-		var emitImports bool
-		var emitExports bool
-		v4Selected := version == 4
-
-		if v4Selected {
-			emitImports = len(filter.Spec.ImportV4) > 0
-			emitExports = len(filter.Spec.ExportV4) > 0
-		} else {
-			emitImports = len(filter.Spec.ImportV6) > 0
-			emitExports = len(filter.Spec.ExportV6) > 0
-		}
-
-		if emitImports || emitExports {
-			filterName = path.Base(kvp.Key)
-			line = fmt.Sprintf("# v%s BGPFilter %s", versionStr, filterName)
-			lines = append(lines, line)
-		}
-
-		var filterFuncName string
-		if emitImports {
-			filterFuncName, err = BGPFilterFunctionName(filterName, "import", versionStr)
-			if err != nil {
-				return []string{}, err
-			}
-
+		// Build rules for each direction, converting V4/V6 to unified filterArgs.
+		var directions []directionRules
+		for _, d := range []directionInput{
+			{"import", filter.Spec.ImportV4, filter.Spec.ImportV6},
+			{"export", filter.Spec.ExportV4, filter.Spec.ExportV6},
+		} {
 			var ruleFields []filterArgs
 			if v4Selected {
-				for _, rule := range filter.Spec.ImportV4 {
+				for _, rule := range d.v4 {
 					ruleFields = append(ruleFields, filterArgsFromRuleV4(rule))
 				}
 			} else {
-				for _, rule := range filter.Spec.ImportV6 {
+				for _, rule := range d.v6 {
 					ruleFields = append(ruleFields, filterArgsFromRuleV6(rule))
 				}
 			}
-
-			if hasPeerTypeRules(ruleFields) {
-				line = fmt.Sprintf("function %s(bool is_same_as) {", filterFuncName)
-			} else {
-				line = fmt.Sprintf("function %s() {", filterFuncName)
+			if len(ruleFields) > 0 {
+				directions = append(directions, directionRules{d.dir, ruleFields})
 			}
-			lines = append(lines, line)
-
-			ruleLines, err := emitFilterRules(ruleFields)
-			if err != nil {
-				return []string{}, err
-			}
-			lines = append(lines, ruleLines...)
-
-			lines = append(lines, "}")
 		}
 
-		if emitExports {
-			filterFuncName, err = BGPFilterFunctionName(filterName, "export", versionStr)
+		if len(directions) == 0 {
+			continue
+		}
+
+		filterName := path.Base(kvp.Key)
+		lines = append(lines, fmt.Sprintf("# v%s BGPFilter %s", versionStr, filterName))
+
+		for _, dr := range directions {
+			filterFuncName, err := BGPFilterFunctionName(filterName, dr.direction, versionStr)
 			if err != nil {
-				return []string{}, err
+				return nil, err
 			}
 
-			var ruleFields []filterArgs
-			if v4Selected {
-				for _, rule := range filter.Spec.ExportV4 {
-					ruleFields = append(ruleFields, filterArgsFromRuleV4(rule))
-				}
+			if hasPeerTypeRules(dr.rules) {
+				lines = append(lines, fmt.Sprintf("function %s(bool is_same_as) {", filterFuncName))
 			} else {
-				for _, rule := range filter.Spec.ExportV6 {
-					ruleFields = append(ruleFields, filterArgsFromRuleV6(rule))
+				lines = append(lines, fmt.Sprintf("function %s() {", filterFuncName))
+			}
+
+			// Emit each rule as a BIRD statement, wrapping with PeerType guard if needed.
+			for _, fields := range dr.rules {
+				filterRule, err := filterStatement(fields)
+				if err != nil {
+					return nil, err
 				}
-			}
 
-			if hasPeerTypeRules(ruleFields) {
-				line = fmt.Sprintf("function %s(bool is_same_as) {", filterFuncName)
-			} else {
-				line = fmt.Sprintf("function %s() {", filterFuncName)
-			}
-			lines = append(lines, line)
+				switch fields.peerType {
+				case v3.BGPFilterPeerTypeIBGP:
+					filterRule = fmt.Sprintf("if (is_same_as) then { %s }", filterRule)
+				case v3.BGPFilterPeerTypeEBGP:
+					filterRule = fmt.Sprintf("if (!is_same_as) then { %s }", filterRule)
+				}
 
-			ruleLines, err := emitFilterRules(ruleFields)
-			if err != nil {
-				return []string{}, err
+				lines = append(lines, fmt.Sprintf("  %s", filterRule))
 			}
-			lines = append(lines, ruleLines...)
 
 			lines = append(lines, "}")
 		}
 	}
 	if len(lines) == 0 {
-		line = fmt.Sprintf("# No v%s BGPFilters configured", versionStr)
-		lines = append(lines, line)
+		lines = append(lines, fmt.Sprintf("# No v%s BGPFilters configured", versionStr))
 	}
 	return lines, nil
 }
