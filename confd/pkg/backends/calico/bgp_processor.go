@@ -505,13 +505,14 @@ func (c *client) buildPeerFromData(peer *bgpPeer, prefix string, config *types.B
 		result.SourceAddr = currentNodeIP
 	}
 
-	// Filters - build inline filter blocks
-	result.ImportFilter = c.buildImportFilter(peer.Filters, ipVersion)
 	// Use effective node AS number (local_as_num if set, otherwise node AS)
 	effectiveNodeAS := config.ASNumber
 	if result.LocalASNumber != "" {
 		effectiveNodeAS = result.LocalASNumber
 	}
+
+	// Filters - build inline filter blocks
+	result.ImportFilter = c.buildImportFilter(peer.Filters, result.ASNumber, effectiveNodeAS, ipVersion)
 	result.ExportFilter = c.buildExportFilter(peer.Filters, result.ASNumber, effectiveNodeAS, ipVersion)
 
 	// Optional fields
@@ -587,8 +588,43 @@ func truncateBGPFilterName(name string) string {
 	return truncated
 }
 
+// filterHasPeerType checks if any rules in the given filter for the specified direction
+// and IP version have a PeerType set.
+func filterHasPeerType(filter *v3.BGPFilter, direction string, ipVersion int) bool {
+	if direction == "import" {
+		if ipVersion == 4 {
+			for _, r := range filter.Spec.ImportV4 {
+				if r.PeerType != "" {
+					return true
+				}
+			}
+		} else {
+			for _, r := range filter.Spec.ImportV6 {
+				if r.PeerType != "" {
+					return true
+				}
+			}
+		}
+	} else {
+		if ipVersion == 4 {
+			for _, r := range filter.Spec.ExportV4 {
+				if r.PeerType != "" {
+					return true
+				}
+			}
+		} else {
+			for _, r := range filter.Spec.ExportV6 {
+				if r.PeerType != "" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // buildImportFilter builds the import filter block
-func (c *client) buildImportFilter(filters []string, ipVersion int) string {
+func (c *client) buildImportFilter(filters []string, peerAS, nodeAS string, ipVersion int) string {
 	var filterLines []string
 
 	// Determine filter suffix based on IP version
@@ -596,6 +632,8 @@ func (c *client) buildImportFilter(filters []string, ipVersion int) string {
 	if ipVersion == 6 {
 		filterSuffix = "V6"
 	}
+
+	sameAS := peerAS == nodeAS
 
 	// Process BGP filters
 	for _, filterName := range filters {
@@ -606,7 +644,11 @@ func (c *client) buildImportFilter(filters []string, ipVersion int) string {
 				// Check if import rules exist based on IP version
 				if (ipVersion == 4 && len(filter.Spec.ImportV4) > 0) || (ipVersion == 6 && len(filter.Spec.ImportV6) > 0) {
 					truncatedName := truncateBGPFilterName(filterName)
-					filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilter%s'();", truncatedName, filterSuffix))
+					if filterHasPeerType(&filter, "import", ipVersion) {
+						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilter%s'(%v);", truncatedName, filterSuffix, sameAS))
+					} else {
+						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilter%s'();", truncatedName, filterSuffix))
+					}
 				}
 			}
 		}
@@ -626,6 +668,8 @@ func (c *client) buildExportFilter(filters []string, peerAS, nodeAS string, ipVe
 		filterSuffix = "V6"
 	}
 
+	sameAS := peerAS == nodeAS
+
 	// Process BGP filters
 	for _, filterName := range filters {
 		filterKey := fmt.Sprintf("/calico/resources/v3/projectcalico.org/bgpfilters/%s", filterName)
@@ -635,14 +679,17 @@ func (c *client) buildExportFilter(filters []string, peerAS, nodeAS string, ipVe
 				// Check if export rules exist based on IP version
 				if (ipVersion == 4 && len(filter.Spec.ExportV4) > 0) || (ipVersion == 6 && len(filter.Spec.ExportV6) > 0) {
 					truncatedName := truncateBGPFilterName(filterName)
-					filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'();", truncatedName, filterSuffix))
+					if filterHasPeerType(&filter, "export", ipVersion) {
+						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'(%v);", truncatedName, filterSuffix, sameAS))
+					} else {
+						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'();", truncatedName, filterSuffix))
+					}
 				}
 			}
 		}
 	}
 
 	// Call calico_export_to_bgp_peers
-	sameAS := peerAS == nodeAS
 	filterLines = append(filterLines, fmt.Sprintf("calico_export_to_bgp_peers(%v);", sameAS))
 	filterLines = append(filterLines, "reject;")
 
