@@ -25,7 +25,7 @@ var MapParameters = maps.MapParameters{
 	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  4,
-	MaxEntries: 256 * 1024,
+	MaxEntries: 1024 * 1024,
 	Name:       "cali_v4_sprefix",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }

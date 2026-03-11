@@ -4660,7 +4660,7 @@ func (m *bpfEndpointManager) addAllowSourcePrefix(wlID types.WorkloadEndpointID,
 
 	mapAddError := m.changeAllowedSource(prefix, ifindex, true)
 	if mapAddError != nil {
-		logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(mapAddError).Warn("Failed to add allowed source CIDR")
+		logrus.WithField("wep", wlID).WithField("cidr", prefix).WithError(mapAddError).Error("Failed to add allowed source CIDR")
 		return
 	}
 	m.setAllowedSourcesPerWorkload(wlID, prefix)
@@ -4709,9 +4709,15 @@ func (m *bpfEndpointManager) changeAllowedSource(prefix string, ifindex int, isA
 	}
 
 	if cidr.Version() == 4 {
+		if m.v4 == nil {
+			return fmt.Errorf("ipv4 dataplane not initialized")
+		}
 		entry = allowsources.NewKey(cidr, ifindex)
 		managerDataplane = m.v4
 	} else if cidr.Version() == 6 {
+		if m.v6 == nil {
+			return fmt.Errorf("ipv6 dataplane not initialized")
+		}
 		entry = allowsources.NewKeyV6(cidr, ifindex)
 		managerDataplane = m.v6
 	}
