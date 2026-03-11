@@ -257,7 +257,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 			// Clean up any remnants of the failed container.
 			cleanCmd := utils.Command("docker", "rm", "-f", c.Name)
 			_ = cleanCmd.Run()
-			time.Sleep(time.Duration(attempt-1) * time.Second)
+			time.Sleep(time.Second)
 		}
 
 		c.runCmd = utils.Command("docker", runArgs...)
@@ -292,8 +292,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 		}
 		log.WithError(lastErr).WithField("container", c.Name).Warn("Container failed to start")
 	}
-	Expect(lastErr).NotTo(HaveOccurred(),
-		fmt.Sprintf("Container %s failed to start after %d attempts", c.Name, maxContainerStartRetries))
+	Expect(lastErr).NotTo(HaveOccurred(), fmt.Sprintf("Container %s failed to start after %d attempts", c.Name, maxContainerStartRetries))
 
 	// Fill in rest of container struct.
 	c.IP = c.GetIP()

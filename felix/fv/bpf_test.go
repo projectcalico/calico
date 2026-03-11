@@ -3407,12 +3407,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
 									if len(aff) != 0 {
-										return nil // Map not empty yet after delete, retry.
+										return nil
 									}
 								} else {
 									aff := dumpAffMap(tc.Felixes[0])
 									if len(aff) != 0 {
-										return nil // Map not empty yet after delete, retry.
+										return nil
 									}
 								}
 
@@ -3421,20 +3421,20 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
 									if len(aff) != 1 {
-										return nil // Affinity entry not yet written by BPF, retry.
+										return nil
 									}
 									if _, ok := aff[mkey.(nat.AffinityKeyV6)]; !ok {
-										return nil // Wrong key, retry.
+										return nil
 									}
 									return aff[mkey.(nat.AffinityKeyV6)].Backend()
 								}
 
 								aff := dumpAffMap(tc.Felixes[0])
 								if len(aff) != 1 {
-									return nil // Affinity entry not yet written by BPF, retry.
+									return nil
 								}
 								if _, ok := aff[mkey.(nat.AffinityKey)]; !ok {
-									return nil // Wrong key, retry.
+									return nil
 								}
 								return aff[mkey.(nat.AffinityKey)].Backend()
 							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
