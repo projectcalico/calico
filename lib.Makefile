@@ -82,6 +82,9 @@ endif
 
 # Enable binfmt adding support for miscellaneous binary formats.
 # This is only needed when running non-native binaries.
+# Marked .PHONY since it produces no file; use as an order-only prerequisite
+# (| register) to avoid triggering unnecessary rebuilds.
+.PHONY: register
 register:
 ifneq ($(BUILDARCH),$(ARCH))
 	docker run --privileged --rm calico/binfmt:qemu-v10.1.3 --install all || true
@@ -358,6 +361,29 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
+
+###############################################################################
+# Source file dependency tracking via deps.txt
+#
+# Each component's deps.txt contains both external module dependencies and
+# local in-repo package directories (prefixed with "local:"). If deps.txt
+# has local entries, SRC_FILES is automatically populated with all .go files
+# in those directories. Components can append extra non-Go dependencies
+# (e.g., BPF .c/.h files) after including lib.Makefile.
+#
+# IMAGE_DEPS lists non-Go files that the Docker image depends on (Dockerfiles,
+# config templates, scripts, etc.). Components should override or append to
+# this variable and include $(IMAGE_DEPS) in their .image.created prereqs.
+###############################################################################
+ifneq ($(wildcard deps.txt),)
+SRC_FILES := $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
+endif
+
+IMAGE_DEPS ?= Dockerfile
+
+# Expand a component's deps.txt local entries to the list of .go files.
+# Usage: $(call local-deps-go-files,<component-dir>)
+local-deps-go-files = $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' $(REPO_ROOT)/$(1)/deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
 
 # A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
 .PHONY: force-rebuild
@@ -1322,53 +1348,50 @@ $(REPO_ROOT)/bin/crane:
 ###############################################################################
 ## Kubernetes apiserver used for tests
 APISERVER_NAME := calico-local-apiserver
-run-k8s-apiserver: stop-k8s-apiserver run-etcd
-	docker run --detach --net=host \
-		--name $(APISERVER_NAME) \
-		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
-		-v $(CERTS_PATH):/home/user/certs \
-		-e KUBECONFIG=/home/user/certs/kubeconfig \
-		$(CALICO_BUILD) kube-apiserver \
-		--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-		--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
-		--authorization-mode=RBAC \
-		--service-account-key-file=/home/user/certs/service-account.pem \
-		--service-account-signing-key-file=/home/user/certs/service-account-key.pem \
-		--service-account-issuer=https://localhost:443 \
-		--api-audiences=kubernetes.default \
-		--client-ca-file=/home/user/certs/ca.pem \
-		--tls-cert-file=/home/user/certs/kubernetes.pem \
-		--tls-private-key-file=/home/user/certs/kubernetes-key.pem \
-		--enable-priority-and-fairness=false \
-		--max-mutating-requests-inflight=0 \
-		--max-requests-inflight=0 \
-		--enable-aggregator-routing \
-		--requestheader-client-ca-file=/home/user/certs/ca.pem \
-		--requestheader-username-headers=X-Remote-User \
-		--requestheader-group-headers=X-Remote-Group \
-		--requestheader-extra-headers-prefix=X-Remote-Extra- \
-		--proxy-client-cert-file=/home/user/certs/kubernetes.pem \
-		--proxy-client-key-file=/home/user/certs/kubernetes-key.pem
-
-
-	# Wait until the apiserver is accepting requests.
-	while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
-
-	# Wait until we can configure a cluster role binding which allows anonymous auth.
-	while ! docker exec $(APISERVER_NAME) kubectl create \
-		clusterrolebinding anonymous-admin \
-		--clusterrole=cluster-admin \
-		--user=system:anonymous 2>/dev/null ; \
-		do echo "Waiting for $(APISERVER_NAME) to come up"; \
-		sleep 1; \
-		done
-
-	# Create CustomResourceDefinition (CRD) for Calico resources
-	while ! docker exec $(APISERVER_NAME) kubectl \
-		apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
-		do echo "Trying to create CRDs"; \
-		sleep 1; \
-		done
+run-k8s-apiserver: run-etcd
+	@if docker inspect $(APISERVER_NAME) >/dev/null 2>&1; then \
+		echo "$(APISERVER_NAME) already running"; \
+	else \
+		docker run --detach --net=host \
+			--name $(APISERVER_NAME) \
+			-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
+			-v $(CERTS_PATH):/home/user/certs \
+			-e KUBECONFIG=/home/user/certs/kubeconfig \
+			$(CALICO_BUILD) kube-apiserver \
+			--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+			--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
+			--authorization-mode=RBAC \
+			--service-account-key-file=/home/user/certs/service-account.pem \
+			--service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+			--service-account-issuer=https://localhost:443 \
+			--api-audiences=kubernetes.default \
+			--client-ca-file=/home/user/certs/ca.pem \
+			--tls-cert-file=/home/user/certs/kubernetes.pem \
+			--tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+			--enable-priority-and-fairness=false \
+			--max-mutating-requests-inflight=0 \
+			--max-requests-inflight=0 \
+			--enable-aggregator-routing \
+			--requestheader-client-ca-file=/home/user/certs/ca.pem \
+			--requestheader-username-headers=X-Remote-User \
+			--requestheader-group-headers=X-Remote-Group \
+			--requestheader-extra-headers-prefix=X-Remote-Extra- \
+			--proxy-client-cert-file=/home/user/certs/kubernetes.pem \
+			--proxy-client-key-file=/home/user/certs/kubernetes-key.pem; \
+		while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done; \
+		while ! docker exec $(APISERVER_NAME) kubectl create \
+			clusterrolebinding anonymous-admin \
+			--clusterrole=cluster-admin \
+			--user=system:anonymous 2>/dev/null; \
+			do echo "Waiting for $(APISERVER_NAME) to come up"; \
+			sleep 1; \
+			done; \
+		while ! docker exec $(APISERVER_NAME) kubectl \
+			apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
+			do echo "Trying to create CRDs"; \
+			sleep 1; \
+			done; \
+	fi
 
 # Stop Kubernetes apiserver
 stop-k8s-apiserver:
@@ -1376,19 +1399,23 @@ stop-k8s-apiserver:
 
 # Run a local Kubernetes controller-manager in a docker container, useful for tests.
 CONTROLLER_MANAGER_NAME := calico-local-controller-manager
-run-k8s-controller-manager: stop-k8s-controller-manager run-k8s-apiserver
-	docker run --detach --net=host \
-		--name $(CONTROLLER_MANAGER_NAME) \
-		-v $(CERTS_PATH):/home/user/certs \
-		$(CALICO_BUILD) kube-controller-manager \
-		--master=https://127.0.0.1:6443 \
-		--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
-		--min-resync-period=3m \
-		--allocate-node-cidrs=true \
-		--cluster-cidr=192.168.0.0/16 \
-		--v=5 \
-		--service-account-private-key-file=/home/user/certs/service-account-key.pem \
-		--root-ca-file=/home/user/certs/ca.pem
+run-k8s-controller-manager: run-k8s-apiserver
+	@if docker inspect $(CONTROLLER_MANAGER_NAME) >/dev/null 2>&1; then \
+		echo "$(CONTROLLER_MANAGER_NAME) already running"; \
+	else \
+		docker run --detach --net=host \
+			--name $(CONTROLLER_MANAGER_NAME) \
+			-v $(CERTS_PATH):/home/user/certs \
+			$(CALICO_BUILD) kube-controller-manager \
+			--master=https://127.0.0.1:6443 \
+			--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+			--min-resync-period=3m \
+			--allocate-node-cidrs=true \
+			--cluster-cidr=192.168.0.0/16 \
+			--v=5 \
+			--service-account-private-key-file=/home/user/certs/service-account-key.pem \
+			--root-ca-file=/home/user/certs/ca.pem; \
+	fi
 
 ## Stop Kubernetes controller manager
 stop-k8s-controller-manager:
@@ -1431,7 +1458,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 
 	touch $@
 
-kind-cluster-destroy: $(KIND) $(KUBECTL)
+kind-cluster-destroy kind-down: $(KIND) $(KUBECTL)
 	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
 	# This requires we execute CNI del on pods with pod networking.
 	-$(KIND) delete cluster --name $(KIND_NAME)
@@ -1488,7 +1515,7 @@ helm: bin/helm
 	@echo "helm: $^"
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
 
-###############################################################################
+
 # Common functions for setting up a local envtest environment.
 ###############################################################################
 ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
@@ -1509,22 +1536,146 @@ $(ENVTEST_ASSETS_MARKER):
 		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
 	touch $@
+###############################################################################
+# Common functions for setting up a kind cluster with Calico for testing.
+###############################################################################
+KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
+KIND_TEST_BUILD_TAG = test-build
+
+# Calico images built locally with latest-$(ARCH) tags. kind-build-images
+# re-tags each as :test-build for the kind cluster.
+KIND_CALICO_IMAGES = \
+	calico/node:$(KIND_TEST_BUILD_TAG) \
+	calico/typha:$(KIND_TEST_BUILD_TAG) \
+	calico/apiserver:$(KIND_TEST_BUILD_TAG) \
+	calico/ctl:$(KIND_TEST_BUILD_TAG) \
+	calico/cni:$(KIND_TEST_BUILD_TAG) \
+	calico/csi:$(KIND_TEST_BUILD_TAG) \
+	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG) \
+	calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG) \
+	calico/kube-controllers:$(KIND_TEST_BUILD_TAG) \
+	calico/goldmane:$(KIND_TEST_BUILD_TAG) \
+	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
+	calico/whisker:$(KIND_TEST_BUILD_TAG) \
+	calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
+
+# Operator is built separately (build-operator.sh tags it directly as
+# :test-build), so it's not in KIND_CALICO_IMAGES.
+KIND_OPERATOR_IMAGE = docker.io/tigera/operator:$(KIND_TEST_BUILD_TAG)
+
+# All images loaded onto the kind cluster.
+KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
+
+# .image.created markers: the per-component image build stamp files.
+# Each depends on its source files via deps.txt so Make knows when
+# to rebuild. The sub-make handles the actual build; we just ensure it
+# runs when sources are newer.
+KIND_IMAGE_MARKERS = \
+	$(REPO_ROOT)/node/.image.created-$(ARCH) \
+	$(REPO_ROOT)/typha/.image.created-$(ARCH) \
+	$(REPO_ROOT)/apiserver/.image.created-$(ARCH) \
+	$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH) \
+	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH) \
+	$(REPO_ROOT)/calicoctl/.image.created-$(ARCH) \
+	$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH) \
+	$(REPO_ROOT)/goldmane/.image.created-$(ARCH) \
+	$(REPO_ROOT)/webhooks/.image.created-$(ARCH) \
+	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
+	$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH)
+
+$(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
+	$(MAKE) -C $(REPO_ROOT)/node image
+
+$(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
+	$(MAKE) -C $(REPO_ROOT)/typha image
+
+$(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
+	$(MAKE) -C $(REPO_ROOT)/apiserver image
+
+$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
+	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
+
+$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
+	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+
+$(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
+	$(MAKE) -C $(REPO_ROOT)/calicoctl image
+
+$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
+	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
+
+$(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
+	$(MAKE) -C $(REPO_ROOT)/goldmane image
+
+$(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
+	$(MAKE) -C $(REPO_ROOT)/webhooks image
+
+$(REPO_ROOT)/whisker/.image.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/whisker image
+
+$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
+	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
+
+# Operator is built from a separate repo/branch and depends on all other
+# images being built first.
+$(REPO_ROOT)/.stamp.operator: $(KIND_IMAGE_MARKERS) $(KIND_INFRA_DIR)/calico_versions.yml
+	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+	touch $@
+
+## Build all component images needed for kind cluster testing, then tag them.
+.PHONY: kind-build-images
+kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
+	@for img in $(KIND_CALICO_IMAGES); do \
+	  base=$${img%%:*}; \
+	  docker tag $$base:latest-$(ARCH) $$img; \
+	done
+
+# Create a kind cluster and deploy Calico on it via Helm. Assumes images are
+# already built and tagged as test-build in the local Docker daemon. If a
+# cluster already exists (stamp file present), the creation step is skipped.
+# Default to v3 CRDs for kind clusters. Override with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 if needed.
+KIND_CALICO_API_GROUP ?= projectcalico.org/v3
+
+# Load images, install Calico via Helm, and wait for readiness on an existing
+# kind cluster. Use kind-up for end-to-end bringup (images + cluster + deploy).
+.PHONY: kind-deploy
+kind-deploy:
+	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
+	REPO_ROOT=$(REPO_ROOT) \
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	KIND=$(KIND) \
+	KIND_NAME=$(KIND_NAME) \
+	ARCH=$(ARCH) \
+	GIT_VERSION=$(GIT_VERSION) \
+	CALICO_API_GROUP=$(KIND_CALICO_API_GROUP) \
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
+	KIND_IMAGES="$(KIND_IMAGES)" \
+	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
+
+# Rebuild any images whose source files have changed, load onto the kind
+# cluster, and restart pods.
+.PHONY: kind-reload
+kind-reload: kind-build-images
+	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 
 ###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)
-# TODO: We shouldn't need to tear this down every time it is called.
 # TODO: We shouldn't need to enable the v2 API, but some of our test code still relies on it.
 .PHONY: run-etcd stop-etcd
-run-etcd: stop-etcd
-	docker run --detach \
-		--net=host \
-		--entrypoint=/usr/local/bin/etcd \
-		--name calico-etcd $(ETCD_IMAGE) \
-		--enable-v2 \
-		--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-		--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+run-etcd:
+	@if ! docker inspect calico-etcd >/dev/null 2>&1; then \
+		docker run --detach \
+			--net=host \
+			--entrypoint=/usr/local/bin/etcd \
+			--name calico-etcd $(ETCD_IMAGE) \
+			--enable-v2 \
+			--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+			--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"; \
+	fi
 
 stop-etcd:
 	@-docker rm -f calico-etcd

@@ -9784,6 +9784,13 @@ spec:
                           type: object
                       type: object
                   type: object
+                metricsPort:
+                  description: |-
+                    MetricsPort configures the port that Goldmane uses to serve Prometheus metrics.
+                    When set to a non-zero value, Goldmane will expose a /metrics endpoint on the given port.
+                    Set to zero to disable metrics. If omitted, metrics are disabled.
+                  format: int32
+                  type: integer
               type: object
             status:
               description: GoldmaneStatus defines the observed state of Goldmane
@@ -31624,6 +31631,10 @@ spec:
           jsonPath: .status.conditions[?(@.type=='Available')].lastTransitionTime
           name: Since
           type: date
+        - description: Error message when the component is degraded.
+          jsonPath: .status.conditions[?(@.type=='Degraded')].message
+          name: Message
+          type: string
       name: v1
       schema:
         openAPIV3Schema:
@@ -34379,7 +34390,8 @@ spec:
                 bpfKubeProxyHealthzPort:
                   description: |-
                     BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
-                    The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
+                    The health check server is used by external load balancers to determine if this node should receive traffic.
+                    Set to 0 to disable the health check server.  [Default: 10256]
                   type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
                   description: |-

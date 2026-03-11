@@ -150,12 +150,16 @@ WHAT?=.
 GINKGO_FOCUS?=.*
 
 .PHONY:ut
-ut: setup-envtest
+ut: kind-cluster-create setup-envtest
+	mkdir -p report
 	$(DOCKER_RUN) \
 		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
 		-e KUBEBUILDER_ASSETS=/envtest \
+		--privileged \
+		-e KUBECONFIG=/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		$(CALICO_BUILD) \
-		sh -c 'go test -count=1 ./...'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=api_ut.xml --output-dir=report/ -focus="$(GINKGO_FOCUS)" $(WHAT)'
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files

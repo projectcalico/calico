@@ -1,6 +1,5 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
-This file contains the list of modules that this package depends on
-in order to trigger CI on changes
+Run 'make gen-deps-files' to regenerate.
 
 go 1.25.7
 cel.dev/expr v0.24.0
@@ -87,3 +86,20 @@ google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a
 google.golang.org/protobuf v1.36.10
 gopkg.in/natefinch/lumberjack.v2 v2.2.1
 gopkg.in/yaml.v3 v3.0.1
+
+local:libcalico-go/lib/logutils
+local:release/cmd
+local:release/internal/ci
+local:release/internal/command
+local:release/internal/hashreleaseserver
+local:release/internal/imagescanner
+local:release/internal/outputs
+local:release/internal/pinnedversion
+local:release/internal/registry
+local:release/internal/slack
+local:release/internal/utils
+local:release/internal/version
+local:release/pkg/manager/branch
+local:release/pkg/manager/calico
+local:release/pkg/manager/operator
+local:release/pkg/tasks

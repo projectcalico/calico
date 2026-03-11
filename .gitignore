@@ -24,6 +24,9 @@ builder.coverprofile
 *.pprof
 .release-*.*
 
+/* Image build stamp files for kind testing */
+.stamp.*
+
 /* Created by local kind cluster */
 hack/test/kind/kind
 hack/test/kind/kind-v*

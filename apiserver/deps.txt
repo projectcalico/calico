@@ -1,6 +1,5 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
-This file contains the list of modules that this package depends on
-in order to trigger CI on changes
+Run 'make gen-deps-files' to regenerate.
 
 go 1.25.7
 cel.dev/expr v0.24.0
@@ -123,3 +122,73 @@ sigs.k8s.io/network-policy-api v0.1.8-0.20260212153203-412bf65729a5
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 sigs.k8s.io/yaml v1.6.0
+
+local:api/pkg/apis/projectcalico/v3
+local:api/pkg/defaults
+local:api/pkg/lib/numorstring
+local:api/pkg/openapi
+local:apiserver/cmd/apiserver
+local:apiserver/cmd/apiserver/server
+local:apiserver/pkg/apiserver
+local:apiserver/pkg/printers/projectcalico
+local:apiserver/pkg/rbac
+local:apiserver/pkg/registry/projectcalico/authorizer
+local:apiserver/pkg/registry/projectcalico/bgpconfiguration
+local:apiserver/pkg/registry/projectcalico/bgpfilter
+local:apiserver/pkg/registry/projectcalico/bgppeer
+local:apiserver/pkg/registry/projectcalico/blockaffinity
+local:apiserver/pkg/registry/projectcalico/caliconodestatus
+local:apiserver/pkg/registry/projectcalico/clusterinformation
+local:apiserver/pkg/registry/projectcalico/felixconfig
+local:apiserver/pkg/registry/projectcalico/globalnetworkset
+local:apiserver/pkg/registry/projectcalico/globalpolicy
+local:apiserver/pkg/registry/projectcalico/hostendpoint
+local:apiserver/pkg/registry/projectcalico/ipamconfig
+local:apiserver/pkg/registry/projectcalico/ippool
+local:apiserver/pkg/registry/projectcalico/ipreservation
+local:apiserver/pkg/registry/projectcalico/kubecontrollersconfig
+local:apiserver/pkg/registry/projectcalico/networkpolicy
+local:apiserver/pkg/registry/projectcalico/networkset
+local:apiserver/pkg/registry/projectcalico/profile
+local:apiserver/pkg/registry/projectcalico/rest
+local:apiserver/pkg/registry/projectcalico/server
+local:apiserver/pkg/registry/projectcalico/stagedglobalnetworkpolicy
+local:apiserver/pkg/registry/projectcalico/stagedkubernetesnetworkpolicy
+local:apiserver/pkg/registry/projectcalico/stagednetworkpolicy
+local:apiserver/pkg/registry/projectcalico/tier
+local:apiserver/pkg/registry/projectcalico/util
+local:apiserver/pkg/storage/calico
+local:apiserver/pkg/storage/etcd
+local:crypto/pkg/tls
+local:lib/std/uniquelabels
+local:lib/std/uniquestr
+local:libcalico-go/lib/apiconfig
+local:libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme
+local:libcalico-go/lib/apis/internalapi
+local:libcalico-go/lib/backend
+local:libcalico-go/lib/backend/api
+local:libcalico-go/lib/backend/encap
+local:libcalico-go/lib/backend/etcdv3
+local:libcalico-go/lib/backend/k8s
+local:libcalico-go/lib/backend/k8s/conversion
+local:libcalico-go/lib/backend/k8s/resources
+local:libcalico-go/lib/backend/model
+local:libcalico-go/lib/backend/watchersyncer
+local:libcalico-go/lib/clientv3
+local:libcalico-go/lib/errors
+local:libcalico-go/lib/hash
+local:libcalico-go/lib/json
+local:libcalico-go/lib/logutils
+local:libcalico-go/lib/names
+local:libcalico-go/lib/namespace
+local:libcalico-go/lib/net
+local:libcalico-go/lib/options
+local:libcalico-go/lib/resources
+local:libcalico-go/lib/selector
+local:libcalico-go/lib/selector/parser
+local:libcalico-go/lib/selector/tokenizer
+local:libcalico-go/lib/set
+local:libcalico-go/lib/validator/v3
+local:libcalico-go/lib/watch
+local:libcalico-go/lib/winutils
+local:pkg/buildinfo

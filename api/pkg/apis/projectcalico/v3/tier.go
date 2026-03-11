@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,8 +25,10 @@ const (
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Order",type="integer",JSONPath=".spec.order",description="Order in which the tier is applied"
 // +kubebuilder:printcolumn:name="DefaultAction",type="string",JSONPath=".spec.defaultAction",description="Default action for the tier"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason",description="Current status of the tier"
 
 // Tier contains a set of policies that are applied to packets.  Multiple tiers may
 // be created and each tier is applied in the order specified in the tier specification.
@@ -38,14 +40,25 @@ const (
 type Tier struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
-	Spec              TierSpec `json:"spec" protobuf:"bytes,2,rep,name=spec"`
+	Spec              TierSpec   `json:"spec" protobuf:"bytes,2,rep,name=spec"`
+	Status            TierStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
 const (
 	KubeAdminTierOrder    = float64(1_000)      // 1K
 	DefaultTierOrder      = float64(1_000_000)  // 1Million
 	KubeBaselineTierOrder = float64(10_000_000) // 10Million
+
+	// TierFinalizer is set on tiers to ensure policies are cleaned up before the tier is deleted.
+	TierFinalizer = "projectcalico.org/tier-controller"
 )
+
+// TierStatus contains the status of a Tier resource.
+type TierStatus struct {
+	// Conditions represents the latest observed set of conditions for the resource. A tier with a
+	// "Ready" condition set to "True" is operating as expected.
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
 
 // TierSpec contains the specification for a security policy tier resource.
 type TierSpec struct {
