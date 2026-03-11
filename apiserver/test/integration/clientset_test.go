@@ -2183,11 +2183,6 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
-	r4v4 := v3.BGPFilterRuleV4{
-		Source:    v3.BGPFilterSourceRemotePeers,
-		Interface: "*.calico",
-		Action:    v3.Accept,
-	}
 	r4v6 := v3.BGPFilterRuleV6{
 		Source:    v3.BGPFilterSourceRemotePeers,
 		Interface: "*.calico",
