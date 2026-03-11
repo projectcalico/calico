@@ -77,6 +77,17 @@ func wepUpdate(id types.WorkloadEndpointID, role proto.LiveMigrationRole) *proto
 	}
 }
 
+func wepUpdateWithUID(id types.WorkloadEndpointID, role proto.LiveMigrationRole, uid string) *proto.WorkloadEndpointUpdate {
+	return &proto.WorkloadEndpointUpdate{
+		Id: protoWEPID(id),
+		Endpoint: &proto.WorkloadEndpoint{
+			Name:              "cali" + id.EndpointId,
+			LiveMigrationRole: role,
+			LiveMigrationUid:  uid,
+		},
+	}
+}
+
 func wepRemove(id types.WorkloadEndpointID) *proto.WorkloadEndpointRemove {
 	return &proto.WorkloadEndpointRemove{
 		Id: protoWEPID(id),
@@ -688,4 +699,73 @@ func (f *fakeGARPHandle) IsClosed() bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.closed
+}
+
+// --- Section 7: Migration UID tracking ---
+
+func TestMigrationUIDTracking(t *testing.T) {
+	t.Run("UID stored from WEP update and set on FSM", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-abc-123"))
+
+		g.Expect(m.migrationUIDs[wepID1]).To(Equal("uid-abc-123"))
+		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-abc-123"))
+	})
+
+	t.Run("UID cleaned up on WEP remove", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-abc-123"))
+		g.Expect(m.migrationUIDs).To(HaveKey(wepID1))
+
+		m.OnUpdate(wepRemove(wepID1))
+		g.Expect(m.migrationUIDs).NotTo(HaveKey(wepID1))
+	})
+
+	t.Run("empty UID is not stored", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+		g.Expect(m.migrationUIDs).NotTo(HaveKey(wepID1))
+	})
+
+	t.Run("UID preserved through FSM state transitions", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-xyz-789"))
+		m.PendingUpdates()
+
+		// GARP detected → Live
+		m.OnGARPDetected(wepID1)
+		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-xyz-789"))
+
+		// NoRole → TimeWait
+		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_NO_ROLE, "uid-xyz-789"))
+		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-xyz-789"))
+	})
+}
+
+func TestLiveMigrationStateString(t *testing.T) {
+	g := NewWithT(t)
+	g.Expect(liveMigrationStateBase.String()).To(Equal("Base"))
+	g.Expect(liveMigrationStateTarget.String()).To(Equal("Target"))
+	g.Expect(liveMigrationStateLive.String()).To(Equal("Live"))
+	g.Expect(liveMigrationStateTimeWait.String()).To(Equal("TimeWait"))
+	g.Expect(liveMigrationState(99).String()).To(Equal("Unknown(99)"))
+}
+
+func TestLiveMigrationInputString(t *testing.T) {
+	g := NewWithT(t)
+	g.Expect(liveMigrationInputNoRole.String()).To(Equal("NoRole"))
+	g.Expect(liveMigrationInputSource.String()).To(Equal("Source"))
+	g.Expect(liveMigrationInputTarget.String()).To(Equal("Target"))
+	g.Expect(liveMigrationInputGARPDetected.String()).To(Equal("GARPDetected"))
+	g.Expect(liveMigrationInputTimerPop.String()).To(Equal("TimerPop"))
+	g.Expect(liveMigrationInputDeleted.String()).To(Equal("Deleted"))
+	g.Expect(liveMigrationInput(99).String()).To(Equal("Unknown(99)"))
 }
