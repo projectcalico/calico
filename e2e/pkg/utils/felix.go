@@ -17,9 +17,8 @@ package utils
 import (
 	"context"
 
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // UpdateFelixConfig applies a mutation to the default FelixConfiguration.
