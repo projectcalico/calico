@@ -100,6 +100,13 @@ var (
 	snatPriority   = knftables.SNATPriority + "+10"
 	dnatPriority   = knftables.DNATPriority
 
+	// arpBaseChains defines the base chains for the ARP family table.
+	// The ARP family only supports the filter chain type (not nat or route),
+	// and only the input, output, and forward hooks.
+	arpBaseChains = map[string]knftables.Chain{
+		"filter-OUTPUT": {Name: "filter-OUTPUT", Hook: &outputHook, Type: &filterType, Priority: &filterPriority},
+	}
+
 	// Calico uses a single nftables table with a variety of hooks.
 	// The top level base chains are laid out below.
 	baseChains = map[string]knftables.Chain{
@@ -176,6 +183,10 @@ type NftablesTable struct {
 	// solely to clean up any existing rules and chains that may be programmed.
 	disabled bool
 
+	// baseChains is the set of base chains for this table. This is typically the
+	// package-level baseChains variable, but for ARP family tables it uses arpBaseChains.
+	baseChainDefs map[string]knftables.Chain
+
 	// For rendering rules and chains.
 	render NFTRenderer
 
@@ -218,7 +229,7 @@ type NftablesTable struct {
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
 
-	// ourChainsRegexp matches the names of chains that belong to this specicific table.
+	// ourChainsRegexp matches the names of chains that belong to this specific table.
 	ourChainsRegexp *regexp.Regexp
 
 	// Record when we did our most recent reads and writes of the table.  We use these to
@@ -356,6 +367,7 @@ func NewTable(
 		IPSetsDataplane:        NewIPSets(ipv, nft, options.OpRecorder),
 		name:                   name,
 		nft:                    nft,
+		baseChainDefs:          baseChains,
 		render:                 NewNFTRenderer(hashPrefix, ipVersion),
 		ipVersion:              ipVersion,
 		featureDetector:        featureDetector,
@@ -383,6 +395,129 @@ func NewTable(
 
 		gaugeNumChains: gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion)),
 		gaugeNumRules:  gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion)),
+		opReporter:     options.OpRecorder,
+
+		disabled: options.Disabled,
+
+		contextTimeout: defaultTimeout,
+	}
+	table.MapsDataplane = NewMaps(
+		ipv,
+		nft,
+		table.increfChain,
+		table.decrefChain,
+		options.OpRecorder,
+	)
+
+	if options.OnStillAlive != nil {
+		table.onStillAlive = options.OnStillAlive
+	} else {
+		table.onStillAlive = func() {}
+	}
+
+	return table
+}
+
+// NewARPTable creates a new NftablesTable in the ARP family. This is used for
+// proxy ARP suppression, preventing the host from responding to ARP requests
+// from workloads for their own IPs. The ARP family table has a single
+// filter-OUTPUT base chain.
+func NewARPTable(
+	name string,
+	hashPrefix string,
+	featureDetector environment.FeatureDetectorIface,
+	options TableOptions,
+	required bool,
+) *NftablesTable {
+	// Match dynamically-programmed chains ("cali-arp-*" for workload and dispatch chains)
+	// and base chains ("filter-OUTPUT", prefixed by the table layer name).
+	ourChainsRegexp := regexp.MustCompile("^(cali|filter)-.*")
+
+	inserts := map[string][]generictables.Rule{}
+	appends := map[string][]generictables.Rule{}
+	chainNameToChain := map[string]*generictables.Chain{}
+	dirtyBaseChains := set.New[string]()
+	refcounts := map[string]int{}
+
+	if !options.Disabled {
+		for _, baseChain := range arpBaseChains {
+			inserts[baseChain.Name] = []generictables.Rule{}
+			appends[baseChain.Name] = []generictables.Rule{}
+			chainNameToChain[baseChain.Name] = &generictables.Chain{
+				Name:  baseChain.Name,
+				Rules: []generictables.Rule{},
+			}
+			dirtyBaseChains.Add(baseChain.Name)
+			refcounts[baseChain.Name] += 1
+		}
+	}
+
+	newCmd := cmdshim.NewRealCmd
+	sleep := time.Sleep
+	if options.SleepOverride != nil {
+		sleep = options.SleepOverride
+	}
+	now := time.Now
+	if options.NowOverride != nil {
+		now = options.NowOverride
+	}
+
+	logFields := logrus.Fields{
+		"ipVersion": 4,
+		"table":     name,
+		"family":    "arp",
+	}
+
+	if options.NewDataplane == nil {
+		options.NewDataplane = knftables.New
+	}
+
+	nft, err := options.NewDataplane(knftables.ARPFamily, name)
+	if err != nil {
+		if required {
+			logrus.WithError(err).Panic("Failed to create knftables ARP client")
+		} else {
+			logrus.WithError(err).Info("Failed to create knftables ARP client")
+			return nil
+		}
+	}
+
+	// ARP is IPv4-only; use IPv4 IP set config for the renderer.
+	ipsetFamily := ipsets.IPFamilyV4
+	ipv := ipsets.NewIPVersionConfig(ipsetFamily, ipsets.IPSetNamePrefix, nil, nil)
+
+	table := &NftablesTable{
+		IPSetsDataplane:        NewIPSets(ipv, nft, options.OpRecorder),
+		name:                   name,
+		nft:                    nft,
+		baseChainDefs:          arpBaseChains,
+		render:                 NewNFTRenderer(hashPrefix, 4),
+		ipVersion:              4,
+		featureDetector:        featureDetector,
+		chainToInsertedRules:   inserts,
+		chainToAppendedRules:   appends,
+		dirtyBaseChains:        dirtyBaseChains,
+		chainNameToChain:       chainNameToChain,
+		chainRefCounts:         refcounts,
+		dirtyChains:            set.New[string](),
+		chainToDataplaneHashes: map[string][]string{},
+		chainToFullRules:       map[string][]*knftables.Rule{},
+		logCxt:                 logrus.WithFields(logFields),
+		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
+			logutilslc.OptInterval(30*time.Second),
+			logutilslc.OptBurst(100),
+		).WithFields(logFields),
+		hashCommentPrefix: hashPrefix,
+		ourChainsRegexp:   ourChainsRegexp,
+
+		refreshInterval: options.RefreshInterval,
+
+		newCmd:    newCmd,
+		timeSleep: sleep,
+		timeNow:   now,
+
+		gaugeNumChains: gaugeNumChains.WithLabelValues("arp"),
+		gaugeNumRules:  gaugeNumRules.WithLabelValues("arp"),
 		opReporter:     options.OpRecorder,
 
 		disabled: options.Disabled,
@@ -654,7 +789,7 @@ func (t *NftablesTable) loadDataplaneState() {
 // markChainDirty marks the given chain as dirty, causing it to be re-written on the next Apply.
 // It handles adding the chain to dirtyBaseChains if it's a base chain, otherwise to dirtyChains.
 func (t *NftablesTable) markChainDirty(chainName string) {
-	if _, isBase := baseChains[chainName]; isBase {
+	if _, isBase := t.baseChainDefs[chainName]; isBase {
 		t.dirtyBaseChains.Add(chainName)
 	} else {
 		t.dirtyChains.Add(chainName)
@@ -928,7 +1063,7 @@ func (t *NftablesTable) applyUpdates() error {
 
 	if !t.disabled {
 		// Also make sure our base chains exist.
-		for _, c := range baseChains {
+		for _, c := range t.baseChainDefs {
 			// Make a copy.
 			baseChain := c
 			if _, ok := t.chainToDataplaneHashes[baseChain.Name]; !ok {
@@ -1221,7 +1356,7 @@ func (t *NftablesTable) InsertRulesNow(chain string, rules []generictables.Rule)
 
 	tx := t.nft.NewTransaction()
 	tx.Add(&knftables.Table{})
-	if baseChain, ok := baseChains[chain]; ok {
+	if baseChain, ok := t.baseChainDefs[chain]; ok {
 		tx.Add(&baseChain)
 	}
 	for i, r := range rules {

@@ -1740,6 +1740,30 @@ spec:
                     to reduce Felix CPU usage. [Default: 10s]
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                ipv4ElevatedRoutePriority:
+                  description: |-
+                    Route Priority value for an elevated priority Calico-programmed IPv4 route.  Note, higher
+                    values mean lower priority.  Elevated priority is used during VM live migration, and for
+                    optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
+                    [Default: 512]
+                  type: integer
+                ipv4NormalRoutePriority:
+                  description: |-
+                    Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
+                    values mean lower priority. [Default: 1024]
+                  type: integer
+                ipv6ElevatedRoutePriority:
+                  description: |-
+                    Route Priority value for an elevated priority Calico-programmed IPv6 route.  Note, higher
+                    values mean lower priority.  Elevated priority is used during VM live migration, and for
+                    optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
+                    [Default: 512]
+                  type: integer
+                ipv6NormalRoutePriority:
+                  description: |-
+                    Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
+                    values mean lower priority. [Default: 1024]
+                  type: integer
                 ipv6Support:
                   description:
                     IPv6Support controls whether Felix enables support for
@@ -1756,6 +1780,13 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                liveMigrationRouteConvergenceTime:
+                  description: |-
+                    LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
+                    VM live migration completes.  This allows routes to converge across the cluster before
+                    reverting to normal priority. [Default: 30s]
+                  pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
                 logActionRateLimit:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
