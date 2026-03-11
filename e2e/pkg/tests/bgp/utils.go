@@ -27,16 +27,20 @@ func ensureInitialBGPConfig(cli ctrlclient.Client) func() {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default BGPConfiguration resource")
 
 	updated := false
+	updatedConfig := *initialConfig
 	if initialConfig.Spec.NodeToNodeMeshEnabled == nil || !*initialConfig.Spec.NodeToNodeMeshEnabled {
-		initialConfig.Spec.NodeToNodeMeshEnabled = ptr.To(true)
-		err = cli.Update(context.Background(), initialConfig)
+		updatedConfig.Spec.NodeToNodeMeshEnabled = ptr.To(true)
+		err = cli.Update(context.Background(), &updatedConfig)
 		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error updating BGPConfiguration resource to enable mesh")
 		updated = true
+
+		err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, &updatedConfig)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default BGPConfiguration resource")
 	}
 
 	ginkgo.By("Ensuring full mesh BGP is enabled in existing BGPConfiguration")
-	ExpectWithOffset(1, initialConfig.Spec.NodeToNodeMeshEnabled).NotTo(BeNil(), "nodeToNodeMeshEnabled is not configured in BGPConfiguration")
-	ExpectWithOffset(1, *initialConfig.Spec.NodeToNodeMeshEnabled).To(BeTrue(), "nodeToNodeMeshEnabled is not enabled in BGPConfiguration")
+	ExpectWithOffset(1, updatedConfig.Spec.NodeToNodeMeshEnabled).NotTo(BeNil(), "nodeToNodeMeshEnabled is not configured in BGPConfiguration")
+	ExpectWithOffset(1, *updatedConfig.Spec.NodeToNodeMeshEnabled).To(BeTrue(), "nodeToNodeMeshEnabled is not enabled in BGPConfiguration")
 
 	return func() {
 		if !updated {
