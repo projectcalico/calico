@@ -3441,7 +3441,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									return nil
 								}
 								return aff[mkey.(nat.AffinityKey)].Backend()
-							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
+							}, 60*time.Second, time.Second).Should(SatisfyAll(
+							Not(BeNil()),
+							Not(Equal(mVal.Backend())),
+						))
 						})
 					}
 
