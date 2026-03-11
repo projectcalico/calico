@@ -1434,7 +1434,7 @@ KIND_NAME = $(basename $(notdir $(KIND_CONFIG)))
 KIND_KUBECONFIG?=$(KIND_DIR)/$(KIND_NAME)-kubeconfig.yaml
 
 kind-cluster-create: $(REPO_ROOT)/.$(KIND_NAME).created
-$(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
+$(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND) | kind-img-registry
 	# First make sure any previous cluster is deleted
 	$(MAKE) kind-cluster-destroy
 
@@ -1444,6 +1444,15 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 		--kubeconfig $(KIND_KUBECONFIG) \
 		--name $(KIND_NAME) \
 		--image kindest/node:$(KINDEST_NODE_VERSION)
+
+	# Connect the local registry to the kind network so nodes can reach it by container name.
+	docker network connect kind $(KIND_REGISTRY_NAME) 2>/dev/null || true
+
+	# Configure containerd on each node to use the local registry.
+	for node in $$($(KIND) get nodes --name $(KIND_NAME)); do \
+		docker exec $$node mkdir -p /etc/containerd/certs.d/localhost:$(KIND_REGISTRY_PORT); \
+		docker exec $$node sh -c "echo '[host.\"http://$(KIND_REGISTRY_NAME):5000\"]' > /etc/containerd/certs.d/localhost:$(KIND_REGISTRY_PORT)/hosts.toml"; \
+	done
 
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
@@ -1520,6 +1529,18 @@ bin/helm: bin/.helm-updated-$(HELM_VERSION)
 ###############################################################################
 KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
 KIND_TEST_BUILD_TAG = test-build
+KIND_REGISTRY_NAME := kind-registry
+KIND_REGISTRY_PORT := 5001
+
+## Start a local Docker registry for kind image loading.
+.PHONY: kind-img-registry
+kind-img-registry:
+	@if ! docker inspect $(KIND_REGISTRY_NAME) >/dev/null 2>&1; then \
+		echo "Starting local registry $(KIND_REGISTRY_NAME) on port $(KIND_REGISTRY_PORT)..."; \
+		docker run -d --restart=always -p "$(KIND_REGISTRY_PORT):5000" --name $(KIND_REGISTRY_NAME) registry:2; \
+	else \
+		echo "Registry $(KIND_REGISTRY_NAME) already running."; \
+	fi
 
 # Calico images built locally with latest-$(ARCH) tags. kind-build-images
 # re-tags each as :test-build for the kind cluster.
@@ -1597,16 +1618,18 @@ $(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,
 
 # Operator is built from a separate repo/branch and depends on all other
 # images being built first.
-$(REPO_ROOT)/.stamp.operator: $(KIND_IMAGE_MARKERS) $(KIND_INFRA_DIR)/calico_versions.yml
+$(REPO_ROOT)/.stamp.operator: $(KIND_IMAGE_MARKERS) $(KIND_INFRA_DIR)/calico_versions.yml | kind-img-registry
 	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
 	touch $@
 
-## Build all component images needed for kind cluster testing, then tag them.
+## Build all component images needed for kind cluster testing, then tag and push them.
 .PHONY: kind-build-images
-kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
+kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator | kind-img-registry
 	@for img in $(KIND_CALICO_IMAGES); do \
 	  base=$${img%%:*}; \
 	  docker tag $$base:latest-$(ARCH) $$img; \
+	  docker tag $$img localhost:$(KIND_REGISTRY_PORT)/$$img; \
+	  docker push --quiet localhost:$(KIND_REGISTRY_PORT)/$$img; \
 	done
 
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
@@ -1631,12 +1654,11 @@ kind-deploy:
 	KIND_IMAGES="$(KIND_IMAGES)" \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
-# Rebuild any images whose source files have changed, load onto the kind
-# cluster, and restart pods.
+# Rebuild any images whose source files have changed, push to the local
+# registry, and restart pods so they pick up the new images.
 .PHONY: kind-reload
 kind-reload:
 	$(MAKE) -j$(shell nproc) kind-build-images
-	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 
