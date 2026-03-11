@@ -33,8 +33,8 @@ var (
 	testEnvObj *envtest.Environment
 )
 
-// crdDir returns the path to config/crd/ containing Calico CRD YAML files.
-// It walks up from the current working directory to find the api module root.
+// crdDir returns the path to api/config/crd/ containing Calico CRD YAML files.
+// It walks up from the current working directory to find the calico monorepo root.
 func crdDir() string {
 	if dir := os.Getenv("CALICO_CRD_DIR"); dir != "" {
 		return dir
@@ -46,14 +46,14 @@ func crdDir() string {
 	for {
 		gomod := filepath.Join(dir, "go.mod")
 		if data, err := os.ReadFile(gomod); err == nil {
-			if bytes.Contains(data, []byte("module github.com/projectcalico/api\n")) ||
-				bytes.Contains(data, []byte("module github.com/projectcalico/api\r\n")) {
-				return filepath.Join(dir, "config", "crd")
+			if bytes.Contains(data, []byte("module github.com/projectcalico/calico\n")) ||
+				bytes.Contains(data, []byte("module github.com/projectcalico/calico\r\n")) {
+				return filepath.Join(dir, "api", "config", "crd")
 			}
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			panic("cannot find api module root (go.mod with module github.com/projectcalico/api)")
+			panic("cannot find calico monorepo root (go.mod with module github.com/projectcalico/calico)")
 		}
 		dir = parent
 	}
