@@ -161,6 +161,16 @@ EOF
         # transient conflict errors.
         retry_until_success(lambda: self.clear_rr_config(self.nodes[2]))
 
+    def set_rr_config(self, node):
+        json_str = calicoctl("get node %s -o json" % node)
+        node_dict = json.loads(json_str)
+        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
+        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
+        calicoctl("""apply -f - << EOF
+%s
+EOF
+""" % json.dumps(node_dict))
+
     def clear_rr_config(self, node):
         json_str = calicoctl("get node %s -o json" % node)
         node_dict = json.loads(json_str)
@@ -851,15 +861,9 @@ EOF
         calicoctl("get bgppeers -o yaml")
         calicoctl("get bgpconfigs -o yaml")
 
-        # Update the node-2 to behave as a route-reflector
-        json_str = calicoctl("get node %s -o json" % self.nodes[2])
-        node_dict = json.loads(json_str)
-        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
-        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
-        calicoctl("""apply -f - << EOF
-%s
-EOF
-""" % json.dumps(node_dict))
+        # Update the node-2 to behave as a route-reflector, using a retry
+        # to avoid transient conflict errors.
+        retry_until_success(lambda: self.set_rr_config(self.nodes[2]))
 
         # Disable node-to-node mesh, add cluster and external IP CIDRs to
         # advertise, and configure BGP peering between the cluster nodes and the
@@ -971,15 +975,9 @@ EOF
         calicoctl("get bgppeers -o yaml")
         calicoctl("get bgpconfigs -o yaml")
 
-        # Update the node-2 to behave as a route-reflector
-        json_str = calicoctl("get node %s -o json" % self.nodes[2])
-        node_dict = json.loads(json_str)
-        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
-        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
-        calicoctl("""apply -f - << EOF
-%s
-EOF
-""" % json.dumps(node_dict))
+        # Update the node-2 to behave as a route-reflector, using a retry
+        # to avoid transient conflict errors.
+        retry_until_success(lambda: self.set_rr_config(self.nodes[2]))
 
         # Disable node-to-node mesh, add cluster and external IP CIDRs to
         # advertise, and configure BGP peering between the cluster nodes and the

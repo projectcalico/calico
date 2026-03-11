@@ -352,6 +352,14 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 	v1 := l1.(*netlink.Vxlan)
 	v2 := l2.(*netlink.Vxlan)
 
+	// FlowBased is the most fundamental mode difference — a flow-based device
+	// (used by the BPF dataplane with BTF) has no VNI, VtepDevIndex, or SrcAddr
+	// set on the device; the BPF program sets the tunnel key per-packet.
+	// Switching between iptables and eBPF dataplanes requires recreating the device.
+	if v1.FlowBased != v2.FlowBased {
+		return fmt.Sprintf("flow-based mode: %v vs %v", v1.FlowBased, v2.FlowBased)
+	}
+
 	if v1.VxlanId != v2.VxlanId {
 		return fmt.Sprintf("vni: %v vs %v", v1.VxlanId, v2.VxlanId)
 	}
