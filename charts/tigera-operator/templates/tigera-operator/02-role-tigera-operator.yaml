@@ -526,7 +526,7 @@ rules:
       - update
       - delete
 {{- end }}
-  # For Tiers controller, the operator needs to read/watch access to NetworkPolicies and GlobalNetworkPolicies.
+  # The operator needs to manage NetworkPolicies and GlobalNetworkPolicies in calico-system.
   - apiGroups:
       - projectcalico.org
     resources:
@@ -536,6 +536,9 @@ rules:
       - get
       - list
       - watch
+      - create
+      - update
+      - delete
   # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
