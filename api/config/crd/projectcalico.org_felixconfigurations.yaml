@@ -585,6 +585,7 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: routeTableRange and routeTableRanges cannot both be set
+                  reason: FieldValueForbidden
                   rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           required:
             - metadata

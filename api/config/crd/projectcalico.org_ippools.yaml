@@ -75,6 +75,7 @@ spec:
                     - message:
                         Block size cannot be changed; follow IP pool migration
                         guide to avoid corruption.
+                      reason: FieldValueInvalid
                       rule: self == oldSelf
                 cidr:
                   format: cidr
@@ -83,6 +84,7 @@ spec:
                     - message:
                         CIDR cannot be changed; follow IP pool migration guide
                         to avoid corruption.
+                      reason: FieldValueInvalid
                       rule: self == oldSelf
                 disableBGPExport:
                   type: boolean
@@ -111,11 +113,13 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: ipipMode and vxlanMode cannot both be enabled
+                  reason: FieldValueForbidden
                   rule:
                     "!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode
                     == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode)
                     == 0 || size(self.vxlanMode) == 0"
                 - message: LoadBalancer IP pool cannot have IPIP or VXLAN enabled
+                  reason: FieldValueForbidden
                   rule:
                     "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
                     || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode
@@ -124,6 +128,7 @@ spec:
                 - message:
                     LoadBalancer cannot be combined with Workload or Tunnel allowed
                     uses
+                  reason: FieldValueForbidden
                   rule:
                     "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
                     || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')"
