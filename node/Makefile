@@ -284,10 +284,13 @@ $(BIRD_SOURCE): .bird-source.created
 
 # include GPL felix code in the image.
 $(FELIX_GPL_SOURCE): .felix-gpl-source.created
-.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f)
+.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d' -not -path '*/libbpf/*')
 	rm -rf filesystem/included-source/felix*
 	mkdir -p filesystem/included-source/
-	tar cf $(FELIX_GPL_SOURCE) ../felix/bpf-gpl --use-compress-program="xz -T0"
+	tar cf $(FELIX_GPL_SOURCE) ../felix/bpf-gpl \
+		--exclude='*.ll' --exclude='*.o' --exclude='*.d' \
+		--exclude='libbpf' \
+		--use-compress-program="xz -T0"
 	touch $@
 
 ###############################################################################
