@@ -11,7 +11,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,37 +18,34 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
-// ensureInitialBGPConfig checks for an existing BGPConfiguration resource and ensures that full mesh BGP is enabled.
+// ensureInitialBGPConfig updates the default BGPConfiguration to ensures that full mesh BGP is enabled.
 // It returns a cleanup function to restore the original state after the test.
 func ensureInitialBGPConfig(cli ctrlclient.Client) func() {
 	// Ensure full mesh BGP is functioning before each test.
 	initialConfig := &v3.BGPConfiguration{}
 	err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, initialConfig)
-	if errors.IsNotFound(err) {
-		// Not found - simply create a new one, enabling full mesh (the default behavior). Ideally, our product code
-		// would do this automatically, but we do it here until it does.
-		ginkgo.By("Creating default BGPConfiguration suitable for tests")
-		err = cli.Create(context.Background(), &v3.BGPConfiguration{
-			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec: v3.BGPConfigurationSpec{
-				NodeToNodeMeshEnabled: ptr.To(true),
-			},
-		})
-		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error creating BGPConfiguration resource")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default BGPConfiguration resource")
 
-		return func() {
-			ginkgo.By("Deleting BGPConfiguration created for tests")
-			err := cli.Delete(context.Background(), &v3.BGPConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error deleting BGPConfiguration resource")
-		}
+	updated := false
+	updatedConfig := *initialConfig
+	if initialConfig.Spec.NodeToNodeMeshEnabled == nil || !*initialConfig.Spec.NodeToNodeMeshEnabled {
+		updatedConfig.Spec.NodeToNodeMeshEnabled = ptr.To(true)
+		err = cli.Update(context.Background(), &updatedConfig)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error updating BGPConfiguration resource to enable mesh")
+		updated = true
+
+		err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, &updatedConfig)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default BGPConfiguration resource")
 	}
 
 	ginkgo.By("Ensuring full mesh BGP is enabled in existing BGPConfiguration")
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying BGPConfiguration resource")
-	ExpectWithOffset(1, initialConfig.Spec.NodeToNodeMeshEnabled).NotTo(BeNil(), "nodeToNodeMeshEnabled is not configured in BGPConfiguration")
-	ExpectWithOffset(1, *initialConfig.Spec.NodeToNodeMeshEnabled).To(BeTrue(), "nodeToNodeMeshEnabled is not enabled in BGPConfiguration")
+	ExpectWithOffset(1, updatedConfig.Spec.NodeToNodeMeshEnabled).NotTo(BeNil(), "nodeToNodeMeshEnabled is not configured in BGPConfiguration")
+	ExpectWithOffset(1, *updatedConfig.Spec.NodeToNodeMeshEnabled).To(BeTrue(), "nodeToNodeMeshEnabled is not enabled in BGPConfiguration")
 
 	return func() {
+		if !updated {
+			return
+		}
 		ginkgo.By("Restoring initial BGPConfiguration")
 		// Query the resource again to get the latest resource version.
 		currentConfig := &v3.BGPConfiguration{}
