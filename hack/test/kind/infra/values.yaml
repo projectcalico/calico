@@ -1,7 +1,7 @@
 # Default values.yaml for Calico installation on kind clusters.
 installation:
   enabled: true
-  registry: docker.io
+  registry: localhost:5001
 
   # Disable HA control plane.
   controlPlaneReplicas: 1
@@ -50,4 +50,4 @@ manageCRDs: false
 tigeraOperator:
   image: tigera/operator
   version: test-build
-  registry: docker.io
+  registry: localhost:5001
