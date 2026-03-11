@@ -17,6 +17,7 @@ package calc
 import (
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/felix/proto"
@@ -30,6 +31,7 @@ import (
 type roleEvent struct {
 	key  model.WorkloadEndpointKey
 	role proto.LiveMigrationRole
+	uid  string
 }
 
 // testLMCEnv bundles the LMC under test together with its recording shims.
@@ -49,7 +51,7 @@ func newTestLMCEnv() *testLMCEnv {
 		arc,
 		func(key model.WorkloadEndpointKey, kind EndpointComputedDataKind, data EndpointComputedData) {
 			lmr := data.(*liveMigrationRole)
-			env.roleEvents = append(env.roleEvents, roleEvent{key: key, role: lmr.role})
+			env.roleEvents = append(env.roleEvents, roleEvent{key: key, role: lmr.role, uid: lmr.uid})
 		},
 	)
 	return env
@@ -63,6 +65,16 @@ func (env *testLMCEnv) lastRole(key model.WorkloadEndpointKey) proto.LiveMigrati
 		}
 	}
 	return proto.LiveMigrationRole_NO_ROLE
+}
+
+// lastUID returns the most recent UID emitted for a given WEP key, or "" if none.
+func (env *testLMCEnv) lastUID(key model.WorkloadEndpointKey) string {
+	for i := len(env.roleEvents) - 1; i >= 0; i-- {
+		if env.roleEvents[i].key == key {
+			return env.roleEvents[i].uid
+		}
+	}
+	return ""
 }
 
 // addLabeledEndpoint registers a labeled WEP with both the LMC and ARC so that
@@ -150,6 +162,12 @@ func makeLM(source *types.NamespacedName, destName *types.NamespacedName, destSe
 			Selector:       destSelector,
 		}
 	}
+	return lm
+}
+
+func makeLMWithUID(source *types.NamespacedName, destName *types.NamespacedName, destSelector *string, uid types.UID) *internalapi.LiveMigration {
+	lm := makeLM(source, destName, destSelector)
+	lm.ObjectMeta = metav1.ObjectMeta{UID: uid}
 	return lm
 }
 
@@ -661,5 +679,55 @@ func TestLiveMigrationCalculator_WEPRecreated(t *testing.T) {
 	// Should pick up existing LM role again.
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_SOURCE {
 		t.Errorf("expected SOURCE after WEP re-created, got %v", env.lastRole(wepKey))
+	}
+}
+
+func TestLiveMigrationCalculator_UIDPropagation(t *testing.T) {
+	env := newTestLMCEnv()
+
+	srcKey := makeWEPKey("ns", "src-pod")
+	dstKey := makeWEPKey("ns", "dst-pod")
+	env.lmc.OnUpdate(makeWEPUpdate(srcKey))
+	env.lmc.OnUpdate(makeWEPUpdate(dstKey))
+
+	// LM with a UID.
+	lmKey := makeLMKey("lm1")
+	lm := makeLMWithUID(ptrNN("ns", "src-pod"), ptrNN("ns", "dst-pod"), nil, "test-uid-12345")
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
+
+	if env.lastUID(srcKey) != "test-uid-12345" {
+		t.Errorf("expected UID test-uid-12345 for src-pod, got %q", env.lastUID(srcKey))
+	}
+	if env.lastUID(dstKey) != "test-uid-12345" {
+		t.Errorf("expected UID test-uid-12345 for dst-pod, got %q", env.lastUID(dstKey))
+	}
+
+	// Delete the LM — UID should be empty.
+	env.lmc.OnUpdate(makeLMDelete(lmKey))
+	if env.lastUID(srcKey) != "" {
+		t.Errorf("expected empty UID for src-pod after LM deleted, got %q", env.lastUID(srcKey))
+	}
+	if env.lastUID(dstKey) != "" {
+		t.Errorf("expected empty UID for dst-pod after LM deleted, got %q", env.lastUID(dstKey))
+	}
+}
+
+func TestLiveMigrationCalculator_UIDWithSelector(t *testing.T) {
+	env := newTestLMCEnv()
+
+	// LM with UID and selector.
+	lmKey := makeLMKey("lm1")
+	lm := makeLMWithUID(nil, nil, ptrStr("has(migrate)"), "selector-uid-999")
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
+
+	// Add a matching WEP.
+	wepKey := makeWEPKey("ns", "dst-pod")
+	env.addLabeledEndpoint(wepKey, map[string]string{"migrate": "true"})
+
+	if env.lastRole(wepKey) != proto.LiveMigrationRole_TARGET {
+		t.Fatalf("expected TARGET, got %v", env.lastRole(wepKey))
+	}
+	if env.lastUID(wepKey) != "selector-uid-999" {
+		t.Errorf("expected UID selector-uid-999, got %q", env.lastUID(wepKey))
 	}
 }

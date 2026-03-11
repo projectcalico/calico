@@ -697,8 +697,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     port = self.db.get_port(admin_context, port_id)
                     migrating_to = port.get("binding:profile", {}).get("migrating_to")
                     if migrating_to == hostname:
+                        dest_port = port.copy()
+                        dest_port["binding:host_id"] = migrating_to
+                        dest_wep_name = endpoint_name(dest_port)
+                        namespace = self.endpoint_syncer.namespace
+                        migration_uid = datamodel_v3.get_uid(
+                            "LiveMigration", namespace, dest_wep_name
+                        )
                         LOG.info(
-                            "Port %s is up on migration dest %s, notifying Nova",
+                            "Live migration %s: destination port %s "
+                            "active on %s, notifying Nova",
+                            migration_uid,
                             port_id,
                             hostname,
                         )
@@ -986,14 +995,20 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 dest_port = original.copy()
                 dest_port["binding:host_id"] = orig_migrating_to
                 dest_wep_name = endpoint_name(dest_port)
+                migration_uid = datamodel_v3.get_uid(
+                    "LiveMigration", namespace, dest_wep_name
+                )
                 datamodel_v3.delete("LiveMigration", namespace, dest_wep_name)
 
                 if port["binding:host_id"] == original["binding:host_id"]:
                     # Migration FAILED — host didn't change, delete
                     # destination WEP.
                     LOG.info(
-                        "Live migration failed, deleting destination WEP on %s",
-                        orig_migrating_to,
+                        "Live migration %s: failed, port %s "
+                        "remains on %s",
+                        migration_uid,
+                        port["id"],
+                        port["binding:host_id"],
                     )
                     self.endpoint_syncer.delete_endpoint(dest_port)
                 else:
@@ -1001,7 +1016,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     # Delete source WEP.  Destination WEP already exists
                     # from pre-migration and doesn't need updating.
                     LOG.info(
-                        "Live migration succeeded to %s",
+                        "Live migration %s: succeeded, port %s "
+                        "migrated from %s to %s",
+                        migration_uid,
+                        port["id"],
+                        original["binding:host_id"],
                         port["binding:host_id"],
                     )
                     self.endpoint_syncer.delete_endpoint(original)
@@ -1039,11 +1058,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             #   we do nothing with unbound ports).
             if port.get("binding:profile", {}).get("migrating_to") is not None:
                 dest_host = port["binding:profile"]["migrating_to"]
-                LOG.info(
-                    "Pre-live-migration: creating destination WEP on "
-                    "%s and LiveMigration resource",
-                    dest_host,
-                )
 
                 # Create destination WEP.  Skip DB re-read because this
                 # is a synthetic port dict with the destination host.
@@ -1057,7 +1071,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 namespace = self.endpoint_syncer.namespace
                 source_wep_name = endpoint_name(port)
                 dest_wep_name = endpoint_name(dest_port)
-                datamodel_v3.put(
+                migration_uid = datamodel_v3.put(
                     "LiveMigration",
                     namespace,
                     dest_wep_name,
@@ -1073,6 +1087,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                             },
                         },
                     },
+                )
+                LOG.info(
+                    "Live migration %s: pre-migrate port %s "
+                    "from %s to %s",
+                    migration_uid,
+                    port["id"],
+                    port["binding:host_id"],
+                    dest_host,
                 )
             elif port_bound(port):
                 if endpoint_should_already_exist:
@@ -1128,6 +1150,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             dest_port = port.copy()
             dest_port["binding:host_id"] = migrating_to
             dest_wep_name = endpoint_name(dest_port)
+            migration_uid = datamodel_v3.get_uid(
+                "LiveMigration", namespace, dest_wep_name
+            )
+            LOG.info(
+                "Live migration %s: port %s deleted during "
+                "migration, cleaning up",
+                migration_uid,
+                port["id"],
+            )
             datamodel_v3.delete("LiveMigration", namespace, dest_wep_name)
             self.endpoint_syncer.delete_endpoint(dest_port)
 
