@@ -159,10 +159,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             endpoint_annotations(port),
         )
 
-    def write_endpoint(self, port, context, must_update=False):
-        # Reread the current port. This protects against concurrent writes
-        # breaking our state.
-        port = self.db.get_port(context, port["id"])
+    def write_endpoint(self, port, context, must_update=False, reread=True):
+        if reread:
+            # Reread the current port. This protects against concurrent writes
+            # breaking our state.
+            port = self.db.get_port(context, port["id"])
 
         # Fill out other information we need on the port.
         port_extra = self.get_extra_port_information(context, port)

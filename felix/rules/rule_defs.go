@@ -91,6 +91,10 @@ const (
 	NftablesToWorkloadDispatchMap   = ChainNamePrefix + "to-wl-dispatch"
 	NftablesFromWorkloadDispatchMap = ChainNamePrefix + "from-wl-dispatch"
 
+	WorkloadARPPfx         = ChainNamePrefix + "arp-"
+	NftablesARPDispatchMap = ChainNamePrefix + "arp-dispatch"
+	ChainARPDispatch       = ChainNamePrefix + "arp-dispatch"
+
 	ChainDispatchToHostEndpoint          = ChainNamePrefix + "to-host-endpoint"
 	ChainDispatchFromHostEndpoint        = ChainNamePrefix + "from-host-endpoint"
 	ChainDispatchToHostEndpointForward   = ChainNamePrefix + "to-hep-forward"
