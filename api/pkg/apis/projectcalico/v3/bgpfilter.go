@@ -109,8 +109,9 @@ type BGPFilterRuleV4 struct {
 
 	// If set, this filter rule will only apply to routes that carry the specified BGP
 	// community.  On import, this matches communities set by the remote peer.  On export,
-	// this matches communities already attached to the route (e.g. added by a prior import
-	// filter or by the AddCommunity operation on an earlier rule).
+	// this matches communities already present on the route, whether received from a BGP
+	// peer (e.g. on a route reflector re-advertising to an eBGP peer) or added locally
+	// by an import filter or an earlier export rule's AddCommunity operation.
 	// +optional
 	Communities *BGPFilterCommunityMatch `json:"communities,omitempty" validate:"omitempty"`
 
@@ -119,7 +120,7 @@ type BGPFilterRuleV4 struct {
 	// +optional
 	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty,dive"`
 
-	// If non-nil, this filter rule will only apply to routes with the given priority, in the
+	// If set, this filter rule will only apply to routes with the given priority, in the
 	// same units as the ...RoutePriority fields in FelixConfiguration.
 	// +optional
 	// +kubebuilder:validation:Minimum=1
@@ -181,8 +182,9 @@ type BGPFilterRuleV6 struct {
 
 	// If set, this filter rule will only apply to routes that carry the specified BGP
 	// community.  On import, this matches communities set by the remote peer.  On export,
-	// this matches communities already attached to the route (e.g. added by a prior import
-	// filter or by the AddCommunity operation on an earlier rule).
+	// this matches communities already present on the route, whether received from a BGP
+	// peer (e.g. on a route reflector re-advertising to an eBGP peer) or added locally
+	// by an import filter or an earlier export rule's AddCommunity operation.
 	// +optional
 	Communities *BGPFilterCommunityMatch `json:"communities,omitempty" validate:"omitempty"`
 
@@ -191,7 +193,7 @@ type BGPFilterRuleV6 struct {
 	// +optional
 	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty,dive"`
 
-	// If non-nil, this filter rule will only apply to routes with the given priority, in the
+	// If set, this filter rule will only apply to routes with the given priority, in the
 	// same units as the ...RoutePriority fields in FelixConfiguration.
 	// +optional
 	// +kubebuilder:validation:Minimum=1
