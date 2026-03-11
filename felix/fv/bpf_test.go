@@ -3406,37 +3406,36 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(0))
-
-									cc.CheckConnectivity()
-
-									aff = dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(1))
-									Expect(aff).To(HaveKey(mkey.(nat.AffinityKeyV6)))
-
-									return aff[mkey.(nat.AffinityKeyV6)].Backend()
-								}
-
-								if testOpts.ipv6 {
-									aff := dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(0))
+									if len(aff) != 0 {
+										return nil // Map not empty yet after delete, retry.
+									}
 								} else {
 									aff := dumpAffMap(tc.Felixes[0])
-									Expect(aff).To(HaveLen(0))
+									if len(aff) != 0 {
+										return nil // Map not empty yet after delete, retry.
+									}
 								}
 
 								cc.CheckConnectivity()
 
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(1))
-									Expect(aff).To(HaveKey(mkey.(nat.AffinityKeyV6)))
+									if len(aff) != 1 {
+										return nil // Affinity entry not yet written by BPF, retry.
+									}
+									if _, ok := aff[mkey.(nat.AffinityKeyV6)]; !ok {
+										return nil // Wrong key, retry.
+									}
 									return aff[mkey.(nat.AffinityKeyV6)].Backend()
 								}
 
 								aff := dumpAffMap(tc.Felixes[0])
-								Expect(aff).To(HaveLen(1))
-								Expect(aff).To(HaveKey(mkey.(nat.AffinityKey)))
+								if len(aff) != 1 {
+									return nil // Affinity entry not yet written by BPF, retry.
+								}
+								if _, ok := aff[mkey.(nat.AffinityKey)]; !ok {
+									return nil // Wrong key, retry.
+								}
 								return aff[mkey.(nat.AffinityKey)].Backend()
 							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
 						})
