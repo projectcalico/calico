@@ -2226,15 +2226,49 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	r8v6 := v3.BGPFilterRuleV6{
 		Action: v3.Accept,
 	}
+	// Import-safe rules (Source is rejected on import by CEL validation).
+	r9v4 := v3.BGPFilterRuleV4{
+		CIDR:          "192.168.0.0/16",
+		MatchOperator: v3.NotIn,
+		Action:        v3.Reject,
+	}
+	r9v6 := v3.BGPFilterRuleV6{
+		CIDR:          "dead:beef:2::/64",
+		MatchOperator: v3.NotEqual,
+		Action:        v3.Reject,
+	}
+	r10v4 := v3.BGPFilterRuleV4{
+		CIDR:          "172.16.0.0/12",
+		MatchOperator: v3.Equal,
+		Action:        v3.Accept,
+	}
+	r10v6 := v3.BGPFilterRuleV6{
+		CIDR:          "dead:beef:3::/64",
+		MatchOperator: v3.In,
+		Action:        v3.Accept,
+	}
+	r11v4 := v3.BGPFilterRuleV4{
+		CIDR:          "10.20.0.0/16",
+		MatchOperator: v3.NotEqual,
+		Interface:     "eth*",
+		Action:        v3.Reject,
+	}
+	r11v6 := v3.BGPFilterRuleV6{
+		CIDR:          "dead:beef:4::/64",
+		MatchOperator: v3.In,
+		Interface:     "eth*",
+		Action:        v3.Reject,
+	}
 
 	// This test expect equal number of rules in each of ExportV4, ImportV4, ExportV6 and ImportV6.
+	// Import rules must not have Source set (CEL validation rejects it).
 	bgpFilter := &v3.BGPFilter{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: v3.BGPFilterSpec{
 			ExportV4: []v3.BGPFilterRuleV4{r1v4, r7v4, r6v4, r5v4, r2v4, r8v4},
-			ImportV4: []v3.BGPFilterRuleV4{r2v4, r3v4, r4v4, r7v4, r8v4, r1v4},
+			ImportV4: []v3.BGPFilterRuleV4{r3v4, r7v4, r8v4, r9v4, r10v4, r11v4},
 			ExportV6: []v3.BGPFilterRuleV6{r5v6, r1v6, r6v6, r4v6, r8v6, r2v6},
-			ImportV6: []v3.BGPFilterRuleV6{r6v6, r1v6, r3v6, r7v6, r2v6, r4v6},
+			ImportV6: []v3.BGPFilterRuleV6{r3v6, r7v6, r8v6, r9v6, r10v6, r11v6},
 		},
 	}
 	ctx := context.Background()
