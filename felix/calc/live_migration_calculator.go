@@ -50,8 +50,9 @@ type LiveMigrationCalculator struct {
 
 	// pendingSelectorMatches tracks WEPs that were matched by a computed selector callback
 	// before the LMC had processed the WEP update.  This can happen because the ARC's
-	// handler runs before the LMC's handler in the dispatcher chain.
-	pendingSelectorMatches set.Set[types.NamespacedName]
+	// handler runs before the LMC's handler in the dispatcher chain.  The value is the
+	// selector string that matched.
+	pendingSelectorMatches map[types.NamespacedName]string
 }
 
 type wepData struct {
@@ -63,22 +64,40 @@ type wepData struct {
 	// i.e. in the union of both these sets.  But we've coded to allow for transient overlaps.
 	directNameKeys [numSourceOrTarget]set.Set[model.ResourceKey]
 
-	// Whether there is a current LiveMigration resource with destination selector matching this
-	// WEP (as determined by the active rules calculator).
-	targetSelectorMatching bool
+	// The computed selector string that matched this WEP as a live migration target, or "" if
+	// no selector is currently matching.  Set by the active rules calculator's match callbacks.
+	targetSelectorMatched string
 }
 
-func (wepData *wepData) liveMigrationRole() proto.LiveMigrationRole {
-	if wepData.targetSelectorMatching {
-		return proto.LiveMigrationRole_TARGET
+// liveMigrationRoleAndUID returns the live migration role and UID for the given
+// WEP.  The UID is always taken from the same LiveMigration resource that
+// determines the role, so they are consistent even during transient overlaps.
+func (lmc *LiveMigrationCalculator) liveMigrationRoleAndUID(wd *wepData) (proto.LiveMigrationRole, string) {
+	// Selector-based target match takes priority.
+	if wd.targetSelectorMatched != "" {
+		return proto.LiveMigrationRole_TARGET, lmc.uidFromLMKeys(lmc.selectorKeys[wd.targetSelectorMatched])
 	}
-	if wepData.directNameKeys[target].Len() > 0 {
-		return proto.LiveMigrationRole_TARGET
+	if wd.directNameKeys[target].Len() > 0 {
+		return proto.LiveMigrationRole_TARGET, lmc.uidFromLMKeys(wd.directNameKeys[target])
 	}
-	if wepData.directNameKeys[source].Len() > 0 {
-		return proto.LiveMigrationRole_SOURCE
+	if wd.directNameKeys[source].Len() > 0 {
+		return proto.LiveMigrationRole_SOURCE, lmc.uidFromLMKeys(wd.directNameKeys[source])
 	}
-	return proto.LiveMigrationRole_NO_ROLE
+	return proto.LiveMigrationRole_NO_ROLE, ""
+}
+
+// uidFromLMKeys returns the UID from one of the LiveMigration resources
+// referenced by the given set of keys, or "" if none has a UID.
+func (lmc *LiveMigrationCalculator) uidFromLMKeys(keys set.Set[model.ResourceKey]) string {
+	if keys == nil {
+		return ""
+	}
+	for lmKey := range keys.All() {
+		if lm, ok := lmc.liveMigrations[lmKey]; ok && string(lm.UID) != "" {
+			return string(lm.UID)
+		}
+	}
+	return ""
 }
 
 func NewLiveMigrationCalculator(
@@ -95,7 +114,7 @@ func NewLiveMigrationCalculator(
 			map[types.NamespacedName]set.Set[model.ResourceKey]{},
 		},
 		selectorKeys:           map[string]set.Set[model.ResourceKey]{},
-		pendingSelectorMatches: set.New[types.NamespacedName](),
+		pendingSelectorMatches: map[types.NamespacedName]string{},
 	}
 	activeRulesCalc.RegisterPolicyMatchListener(lmc)
 	return lmc
@@ -201,12 +220,13 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			if lmc.directNameKeys[target][namespacedName] != nil {
 				wepData.directNameKeys[target].AddSet(lmc.directNameKeys[target][namespacedName])
 			}
-			if lmc.pendingSelectorMatches.Contains(namespacedName) {
-				wepData.targetSelectorMatching = true
-				lmc.pendingSelectorMatches.Discard(namespacedName)
+			if sel, ok := lmc.pendingSelectorMatches[namespacedName]; ok {
+				wepData.targetSelectorMatched = sel
+				delete(lmc.pendingSelectorMatches, namespacedName)
 			}
 			lmc.weps[namespacedName] = wepData
-			lmc.indicateRole(key, wepData.liveMigrationRole())
+			role, uid := lmc.liveMigrationRoleAndUID(wepData)
+			lmc.indicateRole(key, role, uid)
 		} else {
 			// Don't need anything here to "reset the role that we previously said"
 			// because the WEP is being deleted anyway.
@@ -288,16 +308,16 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 }
 
 func (lmc *LiveMigrationCalculator) withRoleUpdateIfNeeded(wepData *wepData, updateFunc func()) {
-	oldRole := wepData.liveMigrationRole()
+	oldRole, _ := lmc.liveMigrationRoleAndUID(wepData)
 	updateFunc()
-	newRole := wepData.liveMigrationRole()
+	newRole, newUID := lmc.liveMigrationRoleAndUID(wepData)
 	if newRole != oldRole {
-		lmc.indicateRole(wepData.key, newRole)
+		lmc.indicateRole(wepData.key, newRole, newUID)
 	}
 }
 
-func (lmc *LiveMigrationCalculator) indicateRole(key model.WorkloadEndpointKey, role proto.LiveMigrationRole) {
-	lmc.onEndpointComputedData(key, EPCompDataKindLiveMigration, &liveMigrationRole{role: role})
+func (lmc *LiveMigrationCalculator) indicateRole(key model.WorkloadEndpointKey, role proto.LiveMigrationRole, uid string) {
+	lmc.onEndpointComputedData(key, EPCompDataKindLiveMigration, &liveMigrationRole{role: role, uid: uid})
 }
 
 func (lmc *LiveMigrationCalculator) OnPolicyMatch(_ model.PolicyKey, _ model.EndpointKey)        {}
@@ -312,14 +332,14 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 		namespacedName := types.NamespacedName{Namespace: ns, Name: name}
 		if wepData := lmc.weps[namespacedName]; wepData != nil {
 			lmc.withRoleUpdateIfNeeded(wepData, func() {
-				wepData.targetSelectorMatching = true
+				wepData.targetSelectorMatched = cs
 			})
 		} else {
 			// WEP not yet tracked; the ARC handler runs before ours in the
 			// dispatcher chain, so we may receive selector match callbacks
 			// before our OnUpdate has processed the WEP.  Record it so we can
 			// pick it up when the WEP is processed.
-			lmc.pendingSelectorMatches.Add(namespacedName)
+			lmc.pendingSelectorMatches[namespacedName] = cs
 		}
 	}
 }
@@ -333,19 +353,21 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, ep
 		namespacedName := types.NamespacedName{Namespace: ns, Name: name}
 		if wepData := lmc.weps[namespacedName]; wepData != nil {
 			lmc.withRoleUpdateIfNeeded(wepData, func() {
-				wepData.targetSelectorMatching = false
+				wepData.targetSelectorMatched = ""
 			})
 		} else {
 			// Undo a pending match if there was one.
-			lmc.pendingSelectorMatches.Discard(namespacedName)
+			delete(lmc.pendingSelectorMatches, namespacedName)
 		}
 	}
 }
 
 type liveMigrationRole struct {
 	role proto.LiveMigrationRole
+	uid  string
 }
 
 func (lmr *liveMigrationRole) ApplyTo(wep *proto.WorkloadEndpoint) {
 	wep.LiveMigrationRole = lmr.role
+	wep.LiveMigrationUid = lmr.uid
 }

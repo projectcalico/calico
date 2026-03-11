@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"time"
 
@@ -57,17 +58,19 @@ type liveMigrationMonitor struct {
 	timerC          chan types.WorkloadEndpointID
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
+	migrationUIDs   map[types.WorkloadEndpointID]string
 	newGARPHandle   func(string) (garpHandle, error)
 	convergenceTime time.Duration
 }
 
 func newLiveMigrationMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
 	return &liveMigrationMonitor{
-		roles:      make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
-		fsms:       make(map[types.WorkloadEndpointID]*liveMigrationFSM),
-		timerC:     make(chan types.WorkloadEndpointID, 100),
-		garpC:      make(chan types.WorkloadEndpointID, 100),
-		ifaceNames: make(map[types.WorkloadEndpointID]string),
+		roles:         make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
+		fsms:          make(map[types.WorkloadEndpointID]*liveMigrationFSM),
+		timerC:        make(chan types.WorkloadEndpointID, 100),
+		garpC:         make(chan types.WorkloadEndpointID, 100),
+		ifaceNames:    make(map[types.WorkloadEndpointID]string),
+		migrationUIDs: make(map[types.WorkloadEndpointID]string),
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
 			return pcapgo.NewEthernetHandle(ifaceName)
 		},
@@ -87,6 +90,9 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 	case *proto.WorkloadEndpointUpdate:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		m.ifaceNames[id] = msg.Endpoint.Name
+		if uid := msg.Endpoint.LiveMigrationUid; uid != "" {
+			m.migrationUIDs[id] = uid
+		}
 		oldRole := m.roles[id]
 		newRole := msg.Endpoint.LiveMigrationRole
 		m.roles[id] = newRole
@@ -104,6 +110,7 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		delete(m.roles, id)
 		delete(m.ifaceNames, id)
+		delete(m.migrationUIDs, id)
 		m.executeFSM(id, liveMigrationInputDeleted)
 	}
 }
@@ -118,6 +125,9 @@ func (m *liveMigrationMonitor) executeFSM(id types.WorkloadEndpointID, input liv
 			currentState: liveMigrationStateBase,
 		}
 		m.fsms[id] = fsm
+	}
+	if uid := m.migrationUIDs[id]; uid != "" {
+		fsm.migrationUID = uid
 	}
 	fsm.handleInput(input)
 	if fsm.currentState == liveMigrationStateBase {
@@ -136,6 +146,25 @@ const (
 	liveMigrationInputTimerPop
 	liveMigrationInputDeleted
 )
+
+func (i liveMigrationInput) String() string {
+	switch i {
+	case liveMigrationInputNoRole:
+		return "NoRole"
+	case liveMigrationInputSource:
+		return "Source"
+	case liveMigrationInputTarget:
+		return "Target"
+	case liveMigrationInputGARPDetected:
+		return "GARPDetected"
+	case liveMigrationInputTimerPop:
+		return "TimerPop"
+	case liveMigrationInputDeleted:
+		return "Deleted"
+	default:
+		return fmt.Sprintf("Unknown(%d)", int(i))
+	}
+}
 
 // liveMigrationState represents the current state of the per-workload FSM.
 //
@@ -157,11 +186,27 @@ const (
 	liveMigrationStateTimeWait
 )
 
+func (s liveMigrationState) String() string {
+	switch s {
+	case liveMigrationStateBase:
+		return "Base"
+	case liveMigrationStateTarget:
+		return "Target"
+	case liveMigrationStateLive:
+		return "Live"
+	case liveMigrationStateTimeWait:
+		return "TimeWait"
+	default:
+		return fmt.Sprintf("Unknown(%d)", int(s))
+	}
+}
+
 type liveMigrationFSM struct {
 	logCtx       *logrus.Entry
 	id           types.WorkloadEndpointID
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
+	migrationUID string
 	timer        *time.Timer
 	pcapHandle   garpHandle
 }
@@ -226,7 +271,11 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 	}
 
 	if next != f.currentState {
-		logCtx.WithField("next", next).Debug("FSM state change")
+		logCtx.WithFields(logrus.Fields{
+			"migrationUID": f.migrationUID,
+			"from":         f.currentState,
+			"to":           next,
+		}).Info("Live migration state transition")
 		f.currentState = next
 		f.emitStateChange(next)
 	} else {
