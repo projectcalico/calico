@@ -20,7 +20,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/client-go/rest"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 )
 
 // ipamConfigResourceClient returns a customResourceClient for IPAMConfig resources based on the
@@ -34,16 +34,16 @@ func ipamConfigResourceClient(r rest.Interface, group BackingAPIGroup) customRes
 	rc := customResourceClient{
 		restClient:      r,
 		resource:        resource,
-		k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfig{}),
-		k8sListType:     reflect.TypeOf(libapiv3.IPAMConfigList{}),
+		k8sResourceType: reflect.TypeFor[internalapi.IPAMConfig](),
+		k8sListType:     reflect.TypeFor[internalapi.IPAMConfigList](),
 		kind:            v3.KindIPAMConfiguration,
 		apiGroup:        group,
 	}
 
 	if group == BackingAPIGroupV3 {
 		// If this is a v3 resource, then we need to use the v3 API types, as they differ.
-		rc.k8sResourceType = reflect.TypeOf(v3.IPAMConfiguration{})
-		rc.k8sListType = reflect.TypeOf(v3.IPAMConfigurationList{})
+		rc.k8sResourceType = reflect.TypeFor[v3.IPAMConfiguration]()
+		rc.k8sListType = reflect.TypeFor[v3.IPAMConfigurationList]()
 	}
 	return rc
 }

@@ -48,8 +48,8 @@ import (
 // total amount of policy. If no policies in a tier match a given endpoint then that tier is skipped.
 type Policy struct {
 	unversioned.TypeMetadata
-	Metadata PolicyMetadata `json:"metadata,omitempty"`
-	Spec     PolicySpec     `json:"spec,omitempty"`
+	Metadata PolicyMetadata `json:"metadata"`
+	Spec     PolicySpec     `json:"spec"`
 }
 
 func (t Policy) GetResourceMetadata() unversioned.ResourceMetadata {
@@ -173,7 +173,7 @@ func NewPolicy() *Policy {
 // enumerations on the client interface.
 type PolicyList struct {
 	unversioned.TypeMetadata
-	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Metadata unversioned.ListMetadata `json:"metadata"`
 	Items    []Policy                 `json:"items" validate:"dive"`
 }
 

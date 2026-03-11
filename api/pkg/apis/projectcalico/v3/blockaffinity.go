@@ -38,6 +38,7 @@ const (
 // +kubebuilder:resource:scope=Cluster,shortName={affinity,affinities}
 // +kubebuilder:printcolumn:name="CIDR",type=string,JSONPath=".spec.cidr",description="The block CIDR"
 // +kubebuilder:printcolumn:name="Node",type=string,JSONPath=".spec.node",description="The node the block is affine to"
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=".spec.type",description="The type of block affinity"
 
 // BlockAffinity maintains a block affinity's state
 type BlockAffinity struct {

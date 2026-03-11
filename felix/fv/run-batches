@@ -16,43 +16,29 @@
 
 : ${FV_NUM_BATCHES:=4}
 : ${FV_BATCHES_TO_RUN:=1 2 3 4}
-: ${FV_SLOW_SPEC_THRESH:=90}
+: ${FV_SLOW_SPEC_THRESH:="90s"}
 : ${FV_BINARY:=bin/calico-felix-amd64}
-: ${PRIVATE_KEY:=`pwd`/private.key}
+: ${PRIVATE_KEY:=$(pwd)/private.key}
 : ${GINKGO_ARGS:=}
 : ${GINKGO_FOCUS:=.*}
 
 mkdir -p cwlogs
-export FV_CWLOGDIR=`pwd`/cwlogs
+export FV_CWLOGDIR=$(pwd)/cwlogs
 export OS_RELEASE=$(lsb_release -rs 2> /dev/null || echo "unknown")
 
 for batch in ${FV_BATCHES_TO_RUN}; do
   (
-     echo "Running FV batch ${batch}"
-     # List the tests that will be run.
-     ./fv.test -ginkgo.parallel.node ${batch} \
-               -ginkgo.parallel.total ${FV_NUM_BATCHES} \
-               -ginkgo.seed 1 \
-               -ginkgo.randomizeAllSpecs=true \
-               -ginkgo.noisySkippings=false \
-               -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
-               -ginkgo.focus="${GINKGO_FOCUS}" \
-               ${GINKGO_ARGS} \
-               -ginkgo.v \
-               -ginkgo.noColor \
-               -ginkgo.dryRun 2>&1 | awk -f test-list-filter.awk
-     # Now really run them.
-     ./fv.test -ginkgo.parallel.node ${batch} \
-               -ginkgo.parallel.total ${FV_NUM_BATCHES} \
-               -ginkgo.seed 1 \
-               -ginkgo.randomizeAllSpecs=true \
-               -ginkgo.noisySkippings=false \
-               -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
-               -ginkgo.focus="${GINKGO_FOCUS}" \
-               ${GINKGO_ARGS}
-     status=$?
-     echo "Test batch $batch completed with status $status"
-     exit $status
+    echo "Running FV batch ${batch}"
+    FV_BATCH=${batch} FV_NUM_BATCHES=${FV_NUM_BATCHES} ./fv.test \
+      --ginkgo.randomize-all \
+      --ginkgo.seed 1 \
+      --ginkgo.silence-skips \
+      --ginkgo.slow-spec-threshold=${FV_SLOW_SPEC_THRESH} \
+      --ginkgo.focus="${GINKGO_FOCUS}" \
+      ${GINKGO_ARGS}
+    status=$?
+    echo "Test batch $batch completed with status $status"
+    exit $status
   ) &
   pids[${batch}]=$!
 done

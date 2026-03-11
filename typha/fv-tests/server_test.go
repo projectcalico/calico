@@ -21,14 +21,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
@@ -36,7 +36,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -120,8 +120,8 @@ var (
 	}
 	v3Node = api.Update{
 		KVPair: model.KVPair{
-			Key: model.ResourceKey{Name: "node1", Kind: libapiv3.KindNode},
-			Value: &libapiv3.Node{
+			Key: model.ResourceKey{Name: "node1", Kind: internalapi.KindNode},
+			Value: &internalapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					ResourceVersion: "1237",
 				},
@@ -360,7 +360,7 @@ var _ = Describe("With an in-process Server", func() {
 			expectedState := map[string]api.Update{}
 			const numKeys = 10000
 			const halfNumKeys = numKeys / 2
-			for i := 0; i < numKeys; i++ {
+			for i := range numKeys {
 				upd := api.Update{
 					KVPair: model.KVPair{
 						Key:      model.GlobalConfigKey{Name: fmt.Sprintf("foobar%d", i)},
@@ -375,7 +375,7 @@ var _ = Describe("With an in-process Server", func() {
 					expectedState[fmt.Sprintf("/calico/v1/config/foobar%d", i)] = upd
 				}
 			}
-			for i := 0; i < halfNumKeys; i++ {
+			for i := range halfNumKeys {
 				h.Decoupler.OnUpdates([]api.Update{{
 					KVPair: model.KVPair{
 						Key:      model.GlobalConfigKey{Name: fmt.Sprintf("foobar%d", i)},
@@ -414,9 +414,7 @@ var _ = Describe("With an in-process Server", func() {
 			expState := h.SendInitialSnapshotPods(10)
 			h.ExpectAllClientsToReachState(api.InSync, expState)
 			expState2 := h.SendPodUpdates(10)
-			for k, v := range expState2 {
-				expState[k] = v
-			}
+			maps.Copy(expState, expState2)
 			h.ExpectAllClientsToReachState(api.InSync, expState)
 		})
 	})
@@ -517,11 +515,9 @@ var _ = Describe("With an in-process Server", func() {
 		It("with churn, it should report the correct number of connections after killing the clients", func() {
 			// Generate some churn while we disconnect the clients.
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				h.SendInitialSnapshotPods(1000)
-				wg.Done()
-			}()
+			})
 			defer wg.Wait()
 			for _, c := range h.ClientStates {
 				c.clientCancel()
@@ -1215,7 +1211,6 @@ var _ = Describe("With an in-process Server with short write timeout", func() {
 		})
 
 		for _, disabledDecoderRestart := range []bool{true, false} {
-			disabledDecoderRestart := disabledDecoderRestart
 			It(fmt.Sprintf("client (DisabledDecoderRestart=%v) that blocks while reading snapshot should get disconnected", disabledDecoderRestart),
 				func() {
 					clientCxt, clientCancel := context.WithCancel(context.Background())
@@ -1348,9 +1343,16 @@ const (
 	serverURISAN = "spiffe://k8s.example.com/typha-server"
 )
 
-var _ = Describe("with server requiring TLS", func() {
-	var certDir string
+var certDir string
 
+var _ = AfterSuite(func() {
+	// Remove TLS keys and certificates.
+	if certDir != "" {
+		_ = os.RemoveAll(certDir)
+	}
+})
+
+var _ = Describe("with server requiring TLS", func() {
 	BeforeEach(func() {
 		// Generating certs is expensive, so we defer it until this BeforeEach and then reuse the certs for all the
 		// tests.
@@ -1405,13 +1407,6 @@ var _ = Describe("with server requiring TLS", func() {
 		clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, untrustedCert, untrustedKey)
 		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "client-untrusted.key"))
 		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client-untrusted.crt"))
-	})
-
-	_ = AfterSuite(func() {
-		// Remove TLS keys and certificates.
-		if certDir != "" {
-			_ = os.RemoveAll(certDir)
-		}
 	})
 
 	// We'll create this pipeline for updates to flow through:

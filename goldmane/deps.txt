@@ -1,6 +1,5 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
-This file contains the list of modules that this package depends on
-in order to trigger CI on changes
+Run 'make gen-deps-files' to regenerate.
 
 go 1.25.7
 github.com/beorn7/perks v1.0.1
@@ -8,6 +7,7 @@ github.com/blang/semver/v4 v4.0.0
 github.com/cespare/xxhash/v2 v2.3.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/distribution/reference v0.6.0
+github.com/emicklei/go-restful v2.15.0+incompatible
 github.com/emicklei/go-restful/v3 v3.12.2
 github.com/evanphx/json-patch v5.9.11+incompatible
 github.com/evanphx/json-patch/v5 v5.9.11
@@ -32,7 +32,6 @@ github.com/olekukonko/tablewriter v0.0.5
 github.com/opencontainers/go-digest v1.0.0
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
-github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
 github.com/prometheus/client_golang v1.23.2
 github.com/prometheus/client_model v0.6.2
 github.com/prometheus/common v0.67.2
@@ -47,11 +46,11 @@ go.opentelemetry.io/otel v1.37.0
 go.opentelemetry.io/otel/trace v1.37.0
 go.yaml.in/yaml/v2 v2.4.3
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/net v0.48.0
+golang.org/x/net v0.49.0
 golang.org/x/oauth2 v0.34.0
-golang.org/x/sys v0.39.0
-golang.org/x/term v0.38.0
-golang.org/x/text v0.32.0
+golang.org/x/sys v0.40.0
+golang.org/x/term v0.39.0
+golang.org/x/text v0.33.0
 golang.org/x/time v0.14.0
 google.golang.org/genproto v0.0.0-20250603155806-513f23925822
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c
@@ -78,3 +77,41 @@ sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 sigs.k8s.io/yaml v1.6.0
+
+local:api/pkg/apis/projectcalico/v3
+local:api/pkg/lib/numorstring
+local:crypto/pkg/tls
+local:felix/proto
+local:felix/types
+local:goldmane/cmd
+local:goldmane/cmd/flowgen
+local:goldmane/cmd/health
+local:goldmane/cmd/stream
+local:goldmane/pkg/client
+local:goldmane/pkg/daemon
+local:goldmane/pkg/emitter
+local:goldmane/pkg/flowgen
+local:goldmane/pkg/goldmane
+local:goldmane/pkg/internal/flowcache
+local:goldmane/pkg/internal/utils
+local:goldmane/pkg/server
+local:goldmane/pkg/storage
+local:goldmane/pkg/stream
+local:goldmane/pkg/types
+local:goldmane/proto
+local:lib/std/chanutil
+local:lib/std/time
+local:lib/std/uniquelabels
+local:lib/std/uniquestr
+local:libcalico-go/lib/apis/internalapi
+local:libcalico-go/lib/backend/encap
+local:libcalico-go/lib/backend/model
+local:libcalico-go/lib/debugserver
+local:libcalico-go/lib/errors
+local:libcalico-go/lib/health
+local:libcalico-go/lib/json
+local:libcalico-go/lib/logutils
+local:libcalico-go/lib/namespace
+local:libcalico-go/lib/net
+local:libcalico-go/lib/prometheus
+local:libcalico-go/lib/set

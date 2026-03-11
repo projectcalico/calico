@@ -604,9 +604,11 @@ const (
 	GlobalsSkipEgressRedirect          uint32 = C.CALI_GLOBALS_SKIP_EGRESS_REDIRECT
 	GlobalsIngressPacketRateConfigured uint32 = C.CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED
 	GlobalsEgressPacketRateConfigured  uint32 = C.CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED
+	GlobalsUDPGSOLinearize             uint32 = C.CALI_GLOBALS_UDP_GSO_LINEARIZE
 
 	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
 	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
+	AttachTypeXDP        uint32 = C.BPF_XDP
 )
 
 func (t *TcGlobalData) Set(m *Map) error {

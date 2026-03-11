@@ -18,8 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -263,7 +262,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 
 			By("Setting status1 on resource")
 			res.Status = status1
-			res, outError = c.KubeControllersConfiguration().Update(ctx, res, options.SetOptions{})
+			res, outError = c.KubeControllersConfiguration().UpdateStatus(ctx, res, options.SetOptions{})
 			Expect(outError).ToNot(HaveOccurred())
 			Expect(res).To(MatchResourceWithStatus(apiv3.KindKubeControllersConfiguration, testutils.ExpectNoNamespace, name, spec2, status1))
 
@@ -274,7 +273,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 
 			By("Setting status2 on resource")
 			res.Status = status2
-			res, outError = c.KubeControllersConfiguration().Update(ctx, res, options.SetOptions{})
+			res, outError = c.KubeControllersConfiguration().UpdateStatus(ctx, res, options.SetOptions{})
 			Expect(outError).ToNot(HaveOccurred())
 			Expect(res).To(MatchResourceWithStatus(apiv3.KindKubeControllersConfiguration, testutils.ExpectNoNamespace, name, spec2, status2))
 			rv1_3 := res.ResourceVersion

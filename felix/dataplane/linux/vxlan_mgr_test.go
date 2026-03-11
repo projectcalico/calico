@@ -19,7 +19,7 @@ import (
 	"net"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -46,6 +46,52 @@ func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
 	t.currentVTEPs = targets
 	t.setVTEPsCalls++
 }
+
+var _ = DescribeTable("vxlanLinksIncompat",
+	func(l1, l2 *netlink.Vxlan, expected string) {
+		Expect(vxlanLinksIncompat(l1, l2)).To(Equal(expected))
+	},
+	Entry("identical legacy devices", &netlink.Vxlan{
+		VxlanId: 4096, VtepDevIndex: 2, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, VtepDevIndex: 2, Port: 4789,
+	}, ""),
+	Entry("identical flow-based devices", &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, ""),
+	Entry("legacy to flow-based (iptables to eBPF)", &netlink.Vxlan{
+		VxlanId: 4096, VtepDevIndex: 2, Port: 4789,
+	}, &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, "flow-based mode: false vs true"),
+	Entry("flow-based to legacy (eBPF to iptables)", &netlink.Vxlan{
+		FlowBased: true, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, VtepDevIndex: 2, Port: 4789,
+	}, "flow-based mode: true vs false"),
+	Entry("VNI mismatch", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4097, Port: 4789,
+	}, "vni: 4096 vs 4097"),
+	Entry("port mismatch", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4790,
+	}, "port: 4789 vs 4790"),
+	Entry("GBP mismatch", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, GBP: true,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, GBP: false,
+	}, "gbp: true vs false"),
+	Entry("L2miss mismatch", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, L2miss: true,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, L2miss: false,
+	}, "l2miss: true vs false"),
+)
 
 var _ = Describe("VXLANManager", func() {
 	var (
@@ -432,8 +478,10 @@ var _ = Describe("VXLANManager", func() {
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4][0]).To(Equal(
 			routetable.Target{
-				CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
-				MTU:  4444,
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
+				},
+				MTU: 4444,
 			}))
 
 		// Delete the route.
@@ -466,8 +514,10 @@ var _ = Describe("VXLANManager", func() {
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6][0]).To(Equal(
 			routetable.Target{
-				CIDR: ip.MustParseCIDROrIP("fc00:10:244::1/112"),
-				MTU:  6666,
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("fc00:10:244::1/112"),
+				},
+				MTU: 6666,
 			}))
 
 		// Delete the route.

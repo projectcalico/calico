@@ -56,14 +56,16 @@ RUN apk add --no-cache \
     musl-dev \
     netcat-openbsd \
     openssl-dev \
+    py3-setuptools \
     py3-pip \
     python3 \
     python3-dev \
     tshark
 
 # Install etcdctl
-RUN curl -sfL https://github.com/coreos/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | \
-    tar xz --strip-components 1 -C /usr/local/bin etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl
+RUN curl -sSfL --retry 5 -o /tmp/etcd.tar.gz https://github.com/coreos/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz && \
+    tar xz --strip-components 1 -C /usr/local/bin -f /tmp/etcd.tar.gz etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl && \
+    rm -f /tmp/etcd.tar.gz
 
 COPY requirements.txt /requirements.txt
 RUN pip3 install -r /requirements.txt --break-system-packages

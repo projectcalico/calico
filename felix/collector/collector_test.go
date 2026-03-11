@@ -19,10 +19,11 @@ package collector
 import (
 	"fmt"
 	net2 "net"
+	"slices"
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	kapiv1 "k8s.io/api/core/v1"
@@ -2276,7 +2277,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 			// Create multiple NetworkSets for performance testing
 			nsMap := make(map[model.NetworkSetKey]*model.NetworkSet)
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				networkSet := &model.NetworkSet{
 					Nets: []net.IPNet{
 						utils.MustParseNet(fmt.Sprintf("10.%d.0.0/16", i)),
@@ -2299,7 +2300,7 @@ var _ = Describe("Collector Namespace-Aware NetworkSet Lookups", func() {
 
 			// Performance test: multiple namespace lookups should complete quickly
 			start := time.Now()
-			for i := 0; i < 50; i++ {
+			for i := range 50 {
 				namespace := fmt.Sprintf("namespace-%d", i%5)
 				testIPLoop := ipToBytes(fmt.Sprintf("10.%d.1.1", i%10))
 
@@ -3177,11 +3178,7 @@ func (m *mockEgressDomainCache) GetTopLevelDomainsForIP(clientIP string, ip [16]
 func (m *mockEgressDomainCache) IterWatchedDomainsForIP(clientIP string, ip [16]byte, fn func(domain string) bool) {
 	if clientDomains, ok := m.domains[clientIP]; ok {
 		if domains, ok := clientDomains[ip]; ok {
-			for _, domain := range domains {
-				if fn(domain) {
-					break
-				}
-			}
+			_ = slices.ContainsFunc(domains, fn)
 		}
 	}
 }
@@ -3254,14 +3251,14 @@ func BenchmarkApplyStatUpdate(b *testing.B) {
 	}
 	var rids []*calc.RuleID
 	MaxEntries := 10000
-	for i := 0; i < MaxEntries; i++ {
+	for range MaxEntries {
 		rid := defTierPolicy1AllowIngressRuleID
 		rids = append(rids, rid)
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		for i := 0; i < MaxEntries; i++ {
+		for i := range MaxEntries {
 			data := NewData(tuples[i], localEd1, remoteEd1)
 			c.applyNflogStatUpdate(data, rids[i], 0, 1, 2)
 		}
@@ -3445,7 +3442,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 
 	// Setup initial policy configuration
 	// localWlEp1 has policy1 for both ingress and egress
-	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, []*proto.TierInfo{
+	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, nil, []*proto.TierInfo{
 		{
 			Name:            "default",
 			IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
@@ -3454,7 +3451,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	})
 
 	// localWlEp2 initially has policy2 (deny) for both ingress and egress
-	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, []*proto.TierInfo{
+	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
 		{
 			Name:            "default",
 			IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
@@ -3463,7 +3460,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	})
 
 	// remoteWlEp1 has no policies
-	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, []*proto.TierInfo{})
+	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, nil, []*proto.TierInfo{})
 
 	// Initialize policy store with endpoints and policies
 	policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
@@ -3570,7 +3567,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	// Test policy update scenario
 	t.Run("PolicyUpdate", func(t *testing.T) {
 		// Change localWlEp2 from policy2 (deny) to policy1 (allow)
-		updatedLocalWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, []*proto.TierInfo{
+		updatedLocalWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
 			{Name: "default", IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}}, EgressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}}},
 		})
 
@@ -3742,7 +3739,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 		c.luc = lm
 
 		// Make another policy change to trigger evaluation
-		localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, []*proto.TierInfo{
+		localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
 			{Name: "default", IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}}, EgressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}}},
 		})
 

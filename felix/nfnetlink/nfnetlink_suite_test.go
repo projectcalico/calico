@@ -17,8 +17,7 @@ package nfnetlink_test
 import (
 	"testing"
 
-	"github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -30,6 +29,7 @@ func init() {
 
 func TestNfnetlink(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/felix_nfnetlink_suite.xml")
-	ginkgo.RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/nfnetlink", []ginkgo.Reporter{junitReporter})
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/felix_nfnetlink_suite.xml"
+	ginkgo.RunSpecs(t, "UT: felix/nfnetlink", suiteConfig, reporterConfig)
 }

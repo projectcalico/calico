@@ -18,8 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -292,13 +291,13 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				By("Updating StagedNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedNetworkPolicies().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
+				Eventually(func() string {
+					_, err := c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
 
 				By("Creating StagedNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedNetworkPolicies().Create(ctx, &apiv3.StagedNetworkPolicy{
@@ -306,13 +305,13 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
+				Eventually(func() string {
+					_, err := c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -732,6 +731,6 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				Expect(np.GetName()).To(Equal(name))
 			}
 		},
-		nameNormalizationTests...,
+		nameNormalizationTests,
 	)
 })

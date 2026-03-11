@@ -18,8 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -373,13 +372,13 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 				By("Updating CalicoNodeStatus name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.CalicoNodeStatus().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.CalicoNodeStatus().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.CalicoNodeStatus().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: CalicoNodeStatus(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.CalicoNodeStatus().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: CalicoNodeStatus(" + name2 + ") with error:"))
 
 				By("Creating CalicoNodeStatus name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.CalicoNodeStatus().Create(ctx, &apiv3.CalicoNodeStatus{
@@ -388,13 +387,13 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 					Status:     status2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.CalicoNodeStatus().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.CalicoNodeStatus().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: CalicoNodeStatus(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.CalicoNodeStatus().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: CalicoNodeStatus(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {

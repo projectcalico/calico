@@ -231,7 +231,7 @@ func splitCIDR(oldCIDR string, parts int) ([]string, error) {
 
 	// Create the child CIDRs
 	splitCIDRs := make([]string, parts)
-	for i := 0; i < parts; i++ {
+	for i := range parts {
 		splitCIDR := cnet.IPNet{
 			IPNet: net.IPNet{
 				IP:   maskedIP.IP,

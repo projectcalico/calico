@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"sync"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -103,7 +103,7 @@ var _ = Describe("Status pkg UTs", func() {
 		By("status file should handle a lot of concurrent not-ready updates for a lot of keys", func() {
 			wg := sync.WaitGroup{}
 			wg.Add(100)
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				go func(j int) {
 					st.SetReady("anykey"+strconv.Itoa(j), false, "reason"+strconv.Itoa(j))
 					wg.Done()
@@ -127,9 +127,12 @@ var _ = Describe("Status pkg UTs", func() {
 
 		By("status file should handle a lot of concurrent ready updates for all of the keys (plus more)", func() {
 			wg := sync.WaitGroup{}
-			wg.Add(200)
-			go st.SetReady("anykey", true, "reason")
-			for i := 0; i < 200; i++ {
+			wg.Add(201)
+			go func() {
+				st.SetReady("anykey", true, "reason")
+				wg.Done()
+			}()
+			for i := range 200 {
 				go func(j int) {
 					st.SetReady("anykey"+strconv.Itoa(j), true, "reason"+strconv.Itoa(j))
 					wg.Done()

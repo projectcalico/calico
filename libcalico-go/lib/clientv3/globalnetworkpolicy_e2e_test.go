@@ -18,8 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -283,19 +282,18 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			dres, outError := c.GlobalNetworkPolicies().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(dres).To(MatchResource(apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec2))
-			time.Sleep(1 * time.Second)
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Updating GlobalNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.GlobalNetworkPolicies().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.GlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.GlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkPolicy(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.GlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: GlobalNetworkPolicy(" + name2 + ") with error:"))
 
 				By("Creating GlobalNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.GlobalNetworkPolicies().Create(ctx, &apiv3.GlobalNetworkPolicy{
@@ -303,13 +301,13 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.GlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.GlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkPolicy(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.GlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: GlobalNetworkPolicy(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -317,7 +315,6 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 				dres, outError = c.GlobalNetworkPolicies().Delete(ctx, name2, options.DeleteOptions{})
 				Expect(outError).NotTo(HaveOccurred())
 				Expect(dres).To(MatchResource(apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, name2, spec2))
-				time.Sleep(1 * time.Second)
 			}
 
 			By("Attempting to delete GlobalNetworkPolicy (name2) again")

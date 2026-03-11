@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -52,6 +52,10 @@ type NodeController struct {
 	podInformer  cache.SharedIndexInformer
 	k8sClientset *kubernetes.Clientset
 
+	// Optional KubeVirt informers for VM/VMI resources (nil if KubeVirt is not installed).
+	vmInformer  cache.SharedIndexInformer
+	vmiInformer cache.SharedIndexInformer
+
 	// For accessing Calico datastore.
 	calicoClient client.Interface
 	dataFeed     *utils.DataFeed
@@ -69,6 +73,7 @@ func NewNodeController(ctx context.Context,
 	cfg config.NodeControllerConfig,
 	nodeInformer, podInformer cache.SharedIndexInformer,
 	dataFeed *utils.DataFeed,
+	vmInformer, vmiInformer cache.SharedIndexInformer,
 ) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
@@ -78,14 +83,23 @@ func NewNodeController(ctx context.Context,
 		dataFeed:     dataFeed,
 		nodeInformer: nodeInformer,
 		podInformer:  podInformer,
+		vmInformer:   vmInformer,
+		vmiInformer:  vmiInformer,
 	}
 
 	// Store functions to call on node deletion.
 	nodeDeletionFuncs := []func(*v1.Node){}
 	podDeletionFuncs := []func(*v1.Pod){}
 
-	// Create the IPAM controller.
-	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer())
+	// Create the IPAM controller. Pass KubeVirt cache indexers if available.
+	var vmIdx, vmiIdx cache.Indexer
+	if vmInformer != nil {
+		vmIdx = vmInformer.GetIndexer()
+	}
+	if vmiInformer != nil {
+		vmiIdx = vmiInformer.GetIndexer()
+	}
+	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer(), vmIdx, vmiIdx)
 	nc.ipamCtrl.RegisterWith(nc.dataFeed)
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
 	podDeletionFuncs = append(podDeletionFuncs, nc.ipamCtrl.OnKubernetesPodDeleted)
@@ -102,7 +116,7 @@ func NewNodeController(ctx context.Context,
 	// Setup event handlers for nodes and pods learned through the
 	// respective informers.
 	nodeHandlers := cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			// Call all of the registered node deletion funcs.
 			for _, f := range nodeDeletionFuncs {
 				f(obj.(*v1.Node))
@@ -110,7 +124,7 @@ func NewNodeController(ctx context.Context,
 		},
 	}
 	podHandlers := cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			// Call all of the registered pod deletion funcs.
 			for _, f := range podDeletionFuncs {
 				f(obj.(*v1.Pod))
@@ -147,7 +161,7 @@ func NewNodeController(ctx context.Context,
 }
 
 // getK8sNodeName is a helper method that searches a calicoNode for its kubernetes nodeRef.
-func getK8sNodeName(calicoNode api.Node) (string, error) {
+func getK8sNodeName(calicoNode internalapi.Node) (string, error) {
 	for _, orchRef := range calicoNode.Spec.OrchRefs {
 		if orchRef.Orchestrator == "k8s" {
 			if orchRef.NodeName == "" {
@@ -179,6 +193,19 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 		return
 	}
 
+	if c.vmInformer != nil {
+		if !cache.WaitForNamedCacheSync("virtualmachines", stopCh, c.vmInformer.HasSynced) {
+			log.Info("Failed to sync KubeVirt VM resources, received signal for controller to shut down.")
+			return
+		}
+	}
+	if c.vmiInformer != nil {
+		if !cache.WaitForNamedCacheSync("virtualmachineinstances", stopCh, c.vmiInformer.HasSynced) {
+			log.Info("Failed to sync KubeVirt VMI resources, received signal for controller to shut down.")
+			return
+		}
+	}
+
 	log.Debug("Finished syncing with Kubernetes API (Nodes and Pods)")
 
 	// We're in-sync. Start the sub-controllers.
@@ -196,7 +223,7 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 // kick puts an item on the channel in non-blocking write. This means if there
 // is already something pending, it has no effect. This allows us to coalesce
 // multiple requests into a single pending request.
-func kick(c chan<- interface{}) {
+func kick(c chan<- any) {
 	select {
 	case c <- nil:
 		// pass

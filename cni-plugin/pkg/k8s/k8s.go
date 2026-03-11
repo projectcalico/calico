@@ -32,6 +32,7 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
@@ -39,12 +40,13 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/wait"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
@@ -53,7 +55,7 @@ import (
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
 // Having kubernetes code in its own file avoids polluting the mainline code. It's expected that the kubernetes case will
 // more special casing than the mainline code.
-func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epIDs utils.WEPIdentifiers, calicoClient calicoclient.Interface, endpoint *libapi.WorkloadEndpoint) (*cniv1.Result, error) {
+func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epIDs utils.WEPIdentifiers, calicoClient calicoclient.Interface, endpoint *internalapi.WorkloadEndpoint) (*cniv1.Result, error) {
 	var err error
 	var result *cniv1.Result
 
@@ -102,7 +104,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		//
 		// We unpack the JSON data as an untyped map rather than using a typed struct because we want to
 		// round-trip any fields that we don't know about.
-		var stdinData map[string]interface{}
+		var stdinData map[string]any
 		if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 			return nil, err
 		}
@@ -138,15 +140,15 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.Debug("Updated stdin data")
 
 		// Extract any custom routes from the IPAM configuration.
-		ipamData := stdinData["ipam"].(map[string]interface{})
+		ipamData := stdinData["ipam"].(map[string]any)
 		untypedRoutes := ipamData["routes"]
-		hlRoutes, ok := untypedRoutes.([]interface{})
+		hlRoutes, ok := untypedRoutes.([]any)
 		if untypedRoutes != nil && !ok {
 			return nil, fmt.Errorf(
 				"failed to parse host-local IPAM routes section; expecting list, not: %v", stdinData["ipam"])
 		}
 		for _, route := range hlRoutes {
-			route := route.(map[string]interface{})
+			route := route.(map[string]any)
 			untypedDst, ok := route["dst"]
 			if !ok {
 				logger.Debug("Ignoring host-ipam route with no dst")
@@ -184,7 +186,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	labels := make(map[string]string)
 	annot := make(map[string]string)
 
-	var ports []libapi.WorkloadEndpointPort
+	var ports []internalapi.WorkloadEndpointPort
 	var profiles []string
 	var generateName string
 	var serviceAccount string
@@ -234,7 +236,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			}
 
 			if len(v4pools) != 0 || len(v6pools) != 0 || len(ipFamilies) != 0 {
-				var stdinData map[string]interface{}
+				var stdinData map[string]any
 				if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 					return nil, err
 				}
@@ -246,10 +248,10 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 						return nil, err
 					}
 
-					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+					if _, ok := stdinData["ipam"].(map[string]any); !ok {
 						return nil, errors.New("data on stdin was of unexpected type")
 					}
-					stdinData["ipam"].(map[string]interface{})["ipv4_pools"] = v4PoolSlice
+					stdinData["ipam"].(map[string]any)["ipv4_pools"] = v4PoolSlice
 					logger.WithField("ipv4_pools", v4pools).Debug("Setting IPv4 Pools")
 				}
 				if len(v6pools) > 0 {
@@ -258,10 +260,10 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 						return nil, err
 					}
 
-					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+					if _, ok := stdinData["ipam"].(map[string]any); !ok {
 						return nil, errors.New("data on stdin was of unexpected type")
 					}
-					stdinData["ipam"].(map[string]interface{})["ipv6_pools"] = v6PoolSlice
+					stdinData["ipam"].(map[string]any)["ipv6_pools"] = v6PoolSlice
 					logger.WithField("ipv6_pools", v6pools).Debug("Setting IPv6 Pools")
 				}
 
@@ -285,12 +287,12 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 						}
 					}
 
-					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+					if _, ok := stdinData["ipam"].(map[string]any); !ok {
 						return nil, errors.New("data on stdin was of unexpected type")
 					}
 
-					stdinData["ipam"].(map[string]interface{})["assign_ipv4"] = &assignV4
-					stdinData["ipam"].(map[string]interface{})["assign_ipv6"] = &assignV6
+					stdinData["ipam"].(map[string]any)["assign_ipv4"] = &assignV4
+					stdinData["ipam"].(map[string]any)["assign_ipv6"] = &assignV6
 					logger.WithField("assign_ipv4", assignV4).Debug("Setting assignV4")
 					logger.WithField("assign_ipv6", assignV6).Debug("Setting assignV6")
 				}
@@ -386,7 +388,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// Configure the endpoint (creating if required).
 	if endpoint == nil {
 		logger.Debug("Initializing new WorkloadEndpoint resource")
-		endpoint = libapi.NewWorkloadEndpoint()
+		endpoint = internalapi.NewWorkloadEndpoint()
 	}
 	endpoint.Name = epIDs.WEPName
 	endpoint.Namespace = epIDs.Namespace
@@ -424,10 +426,18 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		utils.ReleaseIPAllocation(logger, conf, args)
 	}
 
+	// Check if IPAM returned empty routes (migration target pod case)
+	// calico-ipam returns empty routes for migration target pods to skip host-side route programming
+	skipHostSideRoutes := false
+	if conf.IPAM.Type == "calico-ipam" && len(result.Routes) == 0 {
+		skipHostSideRoutes = true
+		logger.Info("IPAM returned empty routes - skipping host-side route programming")
+	}
+
 	// Whether the endpoint existed or not, the veth needs (re)creating.
 	desiredVethName := k8sconversion.NewConverter().VethNameForWorkload(epIDs.Namespace, epIDs.Pod)
 	hostVethName, contVethMac, err := d.DoNetworking(
-		ctx, calicoClient, args, result, desiredVethName, routes, endpoint, annot)
+		ctx, calicoClient, args, result, desiredVethName, routes, endpoint, annot, skipHostSideRoutes)
 	if err != nil {
 		logger.WithError(err).Error("Error setting up networking")
 		releaseIPAM()
@@ -504,12 +514,12 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 		for _, ip := range ips {
 			if strings.Contains(ip, ":") {
-				endpoint.Spec.IPNATs = append(endpoint.Spec.IPNATs, libapi.IPNAT{
+				endpoint.Spec.IPNATs = append(endpoint.Spec.IPNATs, internalapi.IPNAT{
 					InternalIP: podnetV6.IP.String(),
 					ExternalIP: ip,
 				})
 			} else {
-				endpoint.Spec.IPNATs = append(endpoint.Spec.IPNATs, libapi.IPNAT{
+				endpoint.Spec.IPNATs = append(endpoint.Spec.IPNATs, internalapi.IPNAT{
 					InternalIP: podnetV4.IP.String(),
 					ExternalIP: ip,
 				})
@@ -523,7 +533,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// Pod resource. (In Enterprise) Felix also modifies the pod through a patch and setting this avoids patching the
 	// same fields as Felix so that we can't clobber Felix's updates.
 	ctxPatchCNI := k8sresources.ContextWithPatchMode(ctx, k8sresources.PatchModeCNI)
-	var endpointOut *libapi.WorkloadEndpoint
+	var endpointOut *internalapi.WorkloadEndpoint
 	if endpointOut, err = utils.CreateOrUpdate(ctxPatchCNI, calicoClient, endpoint); err != nil {
 		logger.WithError(err).Error("Error creating/updating endpoint in datastore.")
 		releaseIPAM()
@@ -907,7 +917,9 @@ func parseIPAddrs(ipAddrsStr string, logger *logrus.Entry) ([]string, error) {
 	return ips, nil
 }
 
-func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clientset, error) {
+// getK8sRestConfig creates a Kubernetes REST config from the CNI network configuration.
+// This helper function builds the config with kubeconfig file and overrides from the network config.
+func getK8sRestConfig(conf types.NetConf) (*rest.Config, error) {
 	// Some config can be passed in a kubeconfig file
 	kubeconfig := conf.Kubernetes.Kubeconfig
 
@@ -943,15 +955,33 @@ func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 	}
 
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
-	config, err := winutils.NewNonInteractiveDeferredLoadingClientConfig(
+	return winutils.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
 		configOverrides)
+}
+
+func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clientset, error) {
+	// Get the Kubernetes REST config
+	config, err := getK8sRestConfig(conf)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create the clientset
 	return kubernetes.NewForConfig(config)
+}
+
+// NewKubeVirtClient creates a KubeVirt client from the CNI network configuration.
+// Note: This will return an error if KubeVirt is not installed in the cluster.
+func NewKubeVirtClient(conf types.NetConf, logger *logrus.Entry) (kubevirt.VirtClientInterface, error) {
+	// Get the Kubernetes REST config
+	config, err := getK8sRestConfig(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create KubeVirt client
+	return kubevirt.NewVirtClient(config)
 }
 
 func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotations map[string]string, err error) {
@@ -963,7 +993,7 @@ func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotation
 	return ns.Annotations, nil
 }
 
-func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []libapi.WorkloadEndpointPort, profiles []string, generateName, serviceAccount string, err error) {
+func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []internalapi.WorkloadEndpointPort, profiles []string, generateName, serviceAccount string, err error) {
 	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(context.Background(), podName, metav1.GetOptions{})
 	logrus.Debugf("pod info %+v", pod)
 	if err != nil {
@@ -977,11 +1007,11 @@ func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (
 	}
 
 	kvp := kvps[0]
-	ports = kvp.Value.(*libapi.WorkloadEndpoint).Spec.Ports
-	labels = kvp.Value.(*libapi.WorkloadEndpoint).Labels
-	profiles = kvp.Value.(*libapi.WorkloadEndpoint).Spec.Profiles
-	generateName = kvp.Value.(*libapi.WorkloadEndpoint).GenerateName
-	serviceAccount = kvp.Value.(*libapi.WorkloadEndpoint).Spec.ServiceAccountName
+	ports = kvp.Value.(*internalapi.WorkloadEndpoint).Spec.Ports
+	labels = kvp.Value.(*internalapi.WorkloadEndpoint).Labels
+	profiles = kvp.Value.(*internalapi.WorkloadEndpoint).Spec.Profiles
+	generateName = kvp.Value.(*internalapi.WorkloadEndpoint).GenerateName
+	serviceAccount = kvp.Value.(*internalapi.WorkloadEndpoint).Spec.ServiceAccountName
 
 	return labels, pod.Annotations, ports, profiles, generateName, serviceAccount, nil
 }

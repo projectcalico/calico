@@ -219,7 +219,7 @@ func (r *reporter) reportStatus() error {
 	var err error
 	var updatedResource *apiv3.CalicoNodeStatus
 	// Update resource
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		status.Status.LastUpdated = metav1.Time{Time: time.Now()}

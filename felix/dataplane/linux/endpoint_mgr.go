@@ -221,7 +221,7 @@ type endpointManager struct {
 	bpfEndpointManager     hepListener
 }
 
-type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string, extraInfo interface{})
+type EndpointStatusUpdateCallback func(ipVersion uint8, id any, status string, extraInfo any)
 
 type procSysWriter func(path, value string) error
 
@@ -381,7 +381,7 @@ func newEndpointManagerWithShims(
 	return epManager
 }
 
-func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
+func (m *endpointManager) OnUpdate(protoBufMsg any) {
 	log.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
@@ -825,7 +825,10 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					logCxt.Debug("Endpoint up, adding routes")
 					for _, s := range ipStrings {
 						routeTargets = append(routeTargets, routetable.Target{
-							CIDR:    ip.MustParseCIDROrIP(s),
+							RouteKey: routetable.RouteKey{
+
+								CIDR: ip.MustParseCIDROrIP(s),
+							},
 							DestMAC: mac,
 						})
 					}

@@ -17,7 +17,7 @@ package errors
 import log "github.com/sirupsen/logrus"
 
 // PanicIfErrored logs and panics if the supplied error is non-nil.
-func PanicIfErrored(err error, msgformat string, args ...interface{}) {
+func PanicIfErrored(err error, msgformat string, args ...any) {
 	if err != nil {
 		log.WithError(err).Panicf(msgformat, args...)
 	}

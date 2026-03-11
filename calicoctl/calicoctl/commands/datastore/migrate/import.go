@@ -38,7 +38,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -202,7 +202,7 @@ func splitImportFile(filename string) ([]byte, []byte, []byte, error) {
 	return split[0], split[1], split[2], nil
 }
 
-func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interface) error {
+func checkCalicoResourcesNotExist(args map[string]any, c client.Interface) error {
 	// Loop through all the v3 resources to see if anything is returned
 	extendedV3Resources := append(allV3Resources, "clusterinfo")
 	for _, r := range extendedV3Resources {
@@ -212,7 +212,7 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 		}
 
 		// Create mocked args in order to retrieve Get resources.
-		mockArgs := map[string]interface{}{
+		mockArgs := map[string]any{
 			"<KIND>":   r,
 			"<NAME>":   []string{},
 			"--config": args["--config"].(string),
@@ -330,7 +330,7 @@ func updateV3Resources(cfg *apiconfig.CalicoAPIConfig, data []byte) error {
 		return fmt.Errorf("error while writing to temporary v3 migration config file: %s", err)
 	}
 
-	mockArgs := map[string]interface{}{
+	mockArgs := map[string]any{
 		"--config":   tempConfigFile.Name(),
 		"--filename": tempfile.Name(),
 		"apply":      true,
@@ -393,7 +393,7 @@ func importCRDs(cfg *apiconfig.CalicoAPIConfig) error {
 	return nil
 }
 
-func applyV3(args map[string]interface{}) error {
+func applyV3(args map[string]any) error {
 	results := common.ExecuteConfigCommand(args, common.ActionApply)
 	log.Infof("results: %+v", results)
 
@@ -415,7 +415,7 @@ func applyV3(args map[string]interface{}) error {
 			case calicoErrors.ErrorResourceDoesNotExist:
 				// Check that the error is for a Node
 				if key, ok := e.Identifier.(model.ResourceKey); ok {
-					if key.Kind == libapiv3.KindNode {
+					if key.Kind == internalapi.KindNode {
 						fmt.Printf("[WARNING] Attempted to import node %v from etcd that references a nonexistent Kubernetes node. Skipping that node. Non-Kubernetes nodes are not supported in the Kubernetes datastore and will be skipped.", e.Identifier)
 						continue
 					}

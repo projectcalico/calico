@@ -258,7 +258,7 @@ func (v FrontendValue) FlagsAsString() string {
 	flgs := v.Flags()
 	fstr := ""
 
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		flg := uint32(1 << i)
 		if flgs&flg != 0 {
 			fstr += flgTostr[int(flg)]

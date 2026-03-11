@@ -18,8 +18,7 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/ip"
@@ -97,7 +96,7 @@ var _ = Describe("CIDRTrie tests", func() {
 		return s
 	}
 
-	lpm := func(cidr string, expectedCidr string) interface{} {
+	lpm := func(cidr string, expectedCidr string) any {
 		cidrIn := ip.MustParseCIDROrIP(cidr)
 		cidrOut, data := trie.LPM(cidrIn)
 

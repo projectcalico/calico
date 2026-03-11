@@ -28,7 +28,7 @@ import (
 var (
 	matchActiveStatusReport = regexp.MustCompile("^/?calico/felix/v2/([^/]+)/host/([^/]+)/status$")
 	matchLastStatusReport   = regexp.MustCompile("^/?calico/felix/v2/([^/]+)/host/([^/]+)/last_reported_status")
-	typeStatusReport        = reflect.TypeOf(StatusReport{})
+	typeStatusReport        = reflect.TypeFor[StatusReport]()
 )
 
 type ActiveStatusReportKey struct {

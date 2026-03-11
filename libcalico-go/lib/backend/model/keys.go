@@ -43,9 +43,9 @@ type (
 )
 
 var (
-	rawStringType = reflect.TypeOf(rawString(""))
-	rawBoolType   = reflect.TypeOf(rawBool(true))
-	rawIPType     = reflect.TypeOf(rawIP{})
+	rawStringType = reflect.TypeFor[rawString]()
+	rawBoolType   = reflect.TypeFor[rawBool]()
+	rawIPType     = reflect.TypeFor[rawIP]()
 )
 
 // LegacyKey is an interface implemented by keys that carry old information but
@@ -678,10 +678,10 @@ func SerializeValue(d *KVPair) ([]byte, error) {
 		return []byte(d.Value.(string)), nil
 	}
 	if valueType == rawBoolType {
-		return []byte(fmt.Sprint(d.Value)), nil
+		return fmt.Append(nil, d.Value), nil
 	}
 	if valueType == rawIPType {
-		return []byte(fmt.Sprint(d.Value)), nil
+		return fmt.Append(nil, d.Value), nil
 	}
 	return json.Marshal(d.Value)
 }

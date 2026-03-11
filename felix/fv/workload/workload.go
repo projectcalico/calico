@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -39,7 +39,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -57,11 +57,11 @@ type Workload struct {
 	outPipe               io.ReadCloser
 	errPipe               io.ReadCloser
 	namespacePath         string
-	WorkloadEndpoint      *api.WorkloadEndpoint
+	WorkloadEndpoint      *internalapi.WorkloadEndpoint
 	Protocol              string // "tcp" or "udp"
 	SpoofInterfaceName    string
 	SpoofName             string
-	SpoofWorkloadEndpoint *api.WorkloadEndpoint
+	SpoofWorkloadEndpoint *internalapi.WorkloadEndpoint
 	MTU                   int
 	isRunning             bool
 	isSpoofing            bool
@@ -197,7 +197,7 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 	// Build unique workload name and struct.
 	workloadIdx++
 
-	wep := api.NewWorkloadEndpoint()
+	wep := internalapi.NewWorkloadEndpoint()
 	wep.Labels = map[string]string{"name": n}
 	wep.Spec.Node = c.Hostname
 	wep.Spec.Orchestrator = "felixfv"
@@ -300,9 +300,7 @@ func (w *Workload) Start(cleanupProvider CleanupProvider) error {
 	stderrReader := bufio.NewReader(w.errPipe)
 
 	var errDone sync.WaitGroup
-	errDone.Add(1)
-	go func() {
-		defer errDone.Done()
+	errDone.Go(func() {
 		for {
 			line, err := stderrReader.ReadString('\n')
 			if err != nil {
@@ -311,7 +309,7 @@ func (w *Workload) Start(cleanupProvider CleanupProvider) error {
 			}
 			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stderr] %v", w.Name, line)
 		}
-	}()
+	})
 
 	pid, err := stdoutReader.ReadString('\n')
 	if err != nil {
@@ -735,8 +733,8 @@ func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 const nsprefix = "/var/run/netns/"
 
 func (w *Workload) netns() string {
-	if strings.HasPrefix(w.namespacePath, nsprefix) {
-		return strings.TrimPrefix(w.namespacePath, nsprefix)
+	if after, ok := strings.CutPrefix(w.namespacePath, nsprefix); ok {
+		return after
 	}
 
 	return ""
@@ -903,7 +901,7 @@ func (w *Workload) InterfaceIndex() int {
 func (w *Workload) RenameInterface(from, to string) {
 	var err error
 	sleep := 100 * time.Millisecond
-	for try := 0; try < 40; try++ {
+	for range 40 {
 		// Can fail with EBUSY.
 		err = w.C.ExecMayFail("ip", "link", "set", from, "name", to)
 		if err == nil {

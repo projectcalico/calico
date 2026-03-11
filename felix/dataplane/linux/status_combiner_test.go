@@ -15,8 +15,7 @@
 package intdataplane
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/proto"
@@ -29,7 +28,7 @@ var (
 
 var _ = Describe("StatusCombiner", func() {
 	var (
-		fromDataplane  chan interface{}
+		fromDataplane  chan any
 		statusCombiner *endpointStatusCombiner
 	)
 
@@ -43,7 +42,7 @@ var _ = Describe("StatusCombiner", func() {
 	}
 
 	BeforeEach(func() {
-		fromDataplane = make(chan interface{})
+		fromDataplane = make(chan any)
 	})
 
 	Describe("with IPv6 enabled", func() {

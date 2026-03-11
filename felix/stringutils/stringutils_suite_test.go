@@ -17,9 +17,8 @@ package stringutils_test
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -29,7 +28,8 @@ func init() {
 }
 
 func TestStringutils(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/felix_stringutils_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/stringutils", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/felix_stringutils_suite.xml"
+	ginkgo.RunSpecs(t, "UT: felix/stringutils", suiteConfig, reporterConfig)
 }

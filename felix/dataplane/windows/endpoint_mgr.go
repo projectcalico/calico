@@ -141,7 +141,7 @@ func (m *endpointManager) OnIPSetsUpdate(ipSetId string) {
 
 // OnUpdate is called by the main dataplane driver loop during the first phase. It processes
 // specific types of updates from the datastore.
-func (m *endpointManager) OnUpdate(msg interface{}) {
+func (m *endpointManager) OnUpdate(msg any) {
 	switch msg := msg.(type) {
 	case *proto.WorkloadEndpointUpdate:
 		log.WithField("workloadEndpointId", msg.Id).Info("Processing WorkloadEndpointUpdate")

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
@@ -34,8 +35,15 @@ func (k *Kubectl) Wait(kind, ns, name, user, condition string, timeout time.Dura
 	return err
 }
 
-func (k *Kubectl) PortForward(ns, pod, port, user string, timeOut chan time.Time) {
-	options := []string{"port-forward", pod, fmt.Sprintf("%s:%s", port, port)}
+// PortForward starts a kubectl port-forward in the background, allocating a random
+// local port to avoid conflicts when tests run in parallel. It returns the local port.
+func (k *Kubectl) PortForward(ns, pod, remotePort, user string, timeOut chan time.Time) (int, error) {
+	localPort, err := getFreePort()
+	if err != nil {
+		return 0, fmt.Errorf("failed to allocate local port: %w", err)
+	}
+
+	options := []string{"port-forward", pod, fmt.Sprintf("%d:%s", localPort, remotePort)}
 	if user != "" {
 		options = append(options, fmt.Sprintf("--as=%v", user))
 	}
@@ -46,4 +54,15 @@ func (k *Kubectl) PortForward(ns, pod, port, user string, timeOut chan time.Time
 			return
 		}
 	}()
+	return localPort, nil
+}
+
+func getFreePort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port, nil
 }

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/bits"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -57,6 +58,12 @@ const (
 	AttributeTypeVXLANV6     = model.IPAMBlockAttributeTypeVXLANV6
 	AttributeTypeWireguard   = model.IPAMBlockAttributeTypeWireguard
 	AttributeTypeWireguardV6 = model.IPAMBlockAttributeTypeWireguardV6
+
+	// KubeVirt VM pod attributes
+	AttributeVMIName = model.IPAMBlockAttributeVMIName
+	AttributeVMIUID  = model.IPAMBlockAttributeVMIUID
+	AttributeVMUID   = model.IPAMBlockAttributeVMUID
+	AttributeVMIMUID = model.IPAMBlockAttributeVMIMUID
 
 	// Host affinity used for Service LoadBalancer
 	loadBalancerAffinityHost = "virtual:load-balancer"
@@ -120,7 +127,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMA
 				return nil, nil, fmt.Errorf("provided IPv4 IPPools list contains one or more IPv6 IPPools")
 			}
 		}
-		v4ia, err = c.autoAssign(ctx, args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, 4, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv4s, args.IntendedUse, args.Namespace)
+		v4ia, err = c.autoAssign(ctx, args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, 4, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv4s, args.IntendedUse, args.Namespace, args.MaxAllocToHandlePerIPVersion)
 		if err != nil {
 			log.Errorf("Error assigning IPV4 addresses: %v", err)
 			return v4ia, nil, err
@@ -135,7 +142,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMA
 				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
 			}
 		}
-		v6ia, err = c.autoAssign(ctx, args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, 6, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv6s, args.IntendedUse, args.Namespace)
+		v6ia, err = c.autoAssign(ctx, args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, 6, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv6s, args.IntendedUse, args.Namespace, args.MaxAllocToHandlePerIPVersion)
 		if err != nil {
 			log.Errorf("Error assigning IPV6 addresses: %v", err)
 			return v4ia, v6ia, err
@@ -251,7 +258,7 @@ func detectOS(ctx context.Context) string {
 // If no pools are requested, all enabled pools are returned.
 // Also applies selector logic on node labels and namespace labels to determine if the pool is a match.
 // Returns the set of matching pools as well as the full set of ip pools.
-func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node libapiv3.Node, namespace *corev1.Namespace, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
+func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node internalapi.Node, namespace *corev1.Namespace, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
 	// Get all the enabled IP pools from the datastore.
 	enabledPools, err = c.pools.GetEnabledPools(ctx, version)
 	if err != nil {
@@ -351,7 +358,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 	// Retrieve node for given hostname to use for ip pool node selection
 	var node *model.KVPair
 	var err error
-	var v3n *libapiv3.Node
+	var v3n *internalapi.Node
 	var ok bool
 	affinityCfg := AffinityConfig{
 		AffinityType: AffinityTypeHost,
@@ -359,20 +366,20 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 	}
 	// Use is not LoadBalancer, continue as normal with node
 	if use != v3.IPPoolAllowedUseLoadBalancer {
-		node, err = c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
+		node, err = c.client.Get(ctx, model.ResourceKey{Kind: internalapi.KindNode, Name: host}, "")
 		if err != nil {
 			log.WithError(err).WithField("node", host).Error("failed to get node for host")
 			return nil, nil, err
 		}
 
 		// Make sure the returned value is OK.
-		v3n, ok = node.Value.(*libapiv3.Node)
+		v3n, ok = node.Value.(*internalapi.Node)
 		if !ok {
 			return nil, nil, fmt.Errorf("Datastore returned malformed node object")
 		}
 	} else {
 		// Special case for Service LoadBalancer that is affined to virtual node
-		v3n = libapiv3.NewNode()
+		v3n = internalapi.NewNode()
 		v3n.Name = v3.VirtualLoadBalancer
 		affinityCfg.AffinityType = AffinityTypeVirtual
 	}
@@ -449,7 +456,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 		}
 
 		// Release the block affinity, requiring it to be empty.
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, block, releaseAffinityOpts{
 				RequireEmpty: true,
 			}); err != nil {
@@ -477,11 +484,8 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 func filterPoolsByUse(pools []v3.IPPool, use v3.IPPoolAllowedUse) []v3.IPPool {
 	var filteredPools []v3.IPPool
 	for _, p := range pools {
-		for _, allowed := range p.Spec.AllowedUses {
-			if allowed == use {
-				filteredPools = append(filteredPools, p)
-				break
-			}
+		if slices.Contains(p.Spec.AllowedUses, use) {
+			filteredPools = append(filteredPools, p)
 		}
 	}
 	return filteredPools
@@ -522,7 +526,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 
 		// Checking this block - if we hit a CAS error, we'll try this block again.
 		// For any other error, we'll break out and try the next affine block.
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			// Get the affinity.
 			logCtx.Infof("Trying affinity for %s", cidr)
 			aff, err := s.client.blockReaderWriter.queryAffinity(ctx, s.affinityCfg, cidr, "")
@@ -569,7 +573,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 	}
 	logCtx.Debugf("Allocate new blocks? Config: %+v", config)
 	if config.AutoAllocateBlocks {
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			// First, try to find a usable block. findUsableBlock will usually return a new block, or in rare scenarios an already
 			// allocated affine block. This may happen due to a race condition where another process on the host allocates a new block
 			// after we decide that a new block is required to satisfy this request, but before we actually allocate a new block.
@@ -588,7 +592,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 			logCtx := log.WithFields(log.Fields{string(s.affinityCfg.AffinityType): s.affinityCfg.Host, "subnet": subnet})
 			logCtx.Infof("Found unclaimed block in %v", time.Since(findStart))
 
-			for j := 0; j < datastoreRetries; j++ {
+			for range datastoreRetries {
 				// We found an unclaimed block - claim affinity for it.
 				pa, err := s.client.blockReaderWriter.getPendingAffinity(ctx, s.affinityCfg, *subnet)
 				if err != nil {
@@ -648,11 +652,9 @@ type IPAMAssignments struct {
 }
 
 func (i *IPAMAssignments) AddMsg(msg string) {
-	for _, m := range i.Msgs {
-		if msg == m {
-			// Don't add duplicate msgs
-			return
-		}
+	if slices.Contains(i.Msgs, msg) {
+		// Don't add duplicate msgs
+		return
 	}
 	i.Msgs = append(i.Msgs, msg)
 }
@@ -678,7 +680,20 @@ func (i *IPAMAssignments) PartialFulfillmentError() error {
 
 var ErrUseRequired = errors.New("must specify the intended use when assigning an IP")
 
-func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse, namespace *corev1.Namespace) (*IPAMAssignments, error) {
+// ErrInsufficientIPsByHandle is returned when a handle has some IPs allocated but not enough yet.
+// This indicates a concurrent operation is in progress and the caller should retry.
+type ErrInsufficientIPsByHandle struct {
+	HandleID      string
+	ExistingCount int
+	RequiredCount int
+}
+
+func (e ErrInsufficientIPsByHandle) Error() string {
+	return fmt.Sprintf("handle %s has %d IPs allocated but requires %d (concurrent operation in progress)",
+		e.HandleID, e.ExistingCount, e.RequiredCount)
+}
+
+func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse, namespace *corev1.Namespace, maxAlloc int) (*IPAMAssignments, error) {
 	// Default parameters.
 	if use == "" {
 		log.Error("Attempting to auto-assign an IP without specifying intended use.")
@@ -791,9 +806,9 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		}
 
 		// We have got a block b.
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			assignStart := time.Now()
-			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, affinityCfg, config.StrictAffinity, reservations)
+			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, affinityCfg, config.StrictAffinity, reservations, maxAlloc)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					log.WithError(err).Debug("CAS Error assigning from new block - retry")
@@ -810,6 +825,23 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 					// Block b is in sync with datastore. Retry assigning IP.
 					continue
 				}
+
+				// Check if error is due to maxAlloc constraint
+				if maxAllocErr, ok := err.(ErrMaxAllocReached); ok {
+					logCtx.WithError(maxAllocErr)
+					existingIPs, handleErr := c.handleMaxAllocReached(ctx, *handleID, num, version, logCtx)
+					if handleErr != nil {
+						// Either insufficient IPs or query failed - both cases should retry
+						// because the concurrent operation may complete on the next attempt
+						logCtx.WithError(handleErr).Debug("Will retry after maxAlloc handling")
+						continue
+					}
+					// Sufficient IPs found
+					ia.IPs = append(ia.IPs, existingIPs...)
+					rem = num - len(ia.IPs)
+					break
+				}
+
 				logCtx.WithError(err).Warningf("Failed to assign IPs in newly allocated block")
 				ia.AddMsg("Failed to assign IPs in newly allocated block")
 				break
@@ -860,7 +892,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 					continue
 				}
 
-				for i := 0; i < datastoreRetries; i++ {
+				for range datastoreRetries {
 					b, err := c.blockReaderWriter.queryBlock(ctx, *blockCIDR, "")
 					if err != nil {
 						logCtx.WithError(err).Warn("Failed to get non-affine block")
@@ -869,12 +901,30 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 					// Attempt to assign from the block.
 					logCtx.Infof("Attempting to assign IPs from non-affine block %s", blockCIDR.String())
-					newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, affinityCfg, false, reservations)
+					newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, affinityCfg, false, reservations, maxAlloc)
 					if err != nil {
 						if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 							logCtx.WithError(err).Debug("CAS error assigning from non-affine block - retry")
 							continue
 						}
+
+						// Check if error is due to maxAlloc constraint
+						if maxAllocErr, ok := err.(ErrMaxAllocReached); ok {
+							logCtx.WithError(maxAllocErr)
+							existingIPs, handleErr := c.handleMaxAllocReached(ctx, *handleID, num, version, logCtx)
+							if handleErr != nil {
+								// Either insufficient IPs or query failed - both cases should retry
+								// because the concurrent operation may complete on the next attempt
+								logCtx.WithError(handleErr).Debug("Will retry after maxAlloc handling in non-affine block")
+								continue
+							}
+							// Sufficient IPs found
+							ia.IPs = append(ia.IPs, existingIPs...)
+							rem = num - len(ia.IPs)
+							// Exit both loops since we found IPs
+							goto doneLookingForIPs
+						}
+
 						logCtx.WithError(err).Warningf("Failed to assign IPs from non-affine block in pool %s", p.Spec.CIDR)
 						break
 					}
@@ -893,6 +943,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		}
 	}
 
+doneLookingForIPs:
 	logCtx.Infof("Auto-assigned %d out of %d IPv%ds: %v", len(ia.IPs), num, version, ia.IPs)
 	return ia, nil
 }
@@ -934,7 +985,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 
 	blockCIDR := getBlockCIDRForAddress(args.IP, pool)
 	log.Debugf("IP %s is in block '%s'", args.IP.String(), blockCIDR.String())
-	for i := 0; i < datastoreRetries; i++ {
+	for range datastoreRetries {
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -976,14 +1027,57 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
 		err = block.assign(cfg.StrictAffinity, args.IP, args.HandleID, args.Attrs, affinityCfg)
 		if err != nil {
+			// Only attempt idempotent reuse when MaxAllocToHandlePerIPVersion is set (non-zero),
+			// since that is the only case where re-assigning an existing IP to the same handle is expected.
+			if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok && args.HandleID != nil && args.MaxAllocToHandlePerIPVersion > 0 {
+				existingAttr, handleErr := block.allocationAttributesForIP(args.IP)
+				if handleErr == nil && existingAttr != nil && existingAttr.HandleID != nil && *existingAttr.HandleID == *args.HandleID {
+					log.Infof("IP %s already assigned to handle %s, treating as idempotent success", args.IP, *args.HandleID)
+					return nil
+				}
+			}
 			log.Errorf("Failed to assign address %v: %v", args.IP, err)
 			return err
 		}
 
 		// Increment handle.
 		if args.HandleID != nil {
-			err := c.incrementHandle(ctx, *args.HandleID, blockCIDR, 1)
+			err := c.incrementHandle(ctx, *args.HandleID, blockCIDR, 1, args.MaxAllocToHandlePerIPVersion)
 			if err != nil {
+				// Check if error is due to maxAlloc constraint
+				if maxAllocErr, ok := err.(ErrMaxAllocReached); ok {
+					logCtx := log.WithFields(log.Fields{
+						"handleID": *args.HandleID,
+						"ip":       args.IP.String(),
+					})
+					logCtx.WithError(maxAllocErr)
+
+					// Use the helper function to query existing IPs
+					assignIPVersion := 4
+					if args.IP.IP.To4() == nil {
+						assignIPVersion = 6
+					}
+					existingIPNets, handleErr := c.handleMaxAllocReached(ctx, *args.HandleID, 1, assignIPVersion, logCtx)
+					if handleErr != nil {
+						// Query failed or insufficient IPs - retry
+						logCtx.WithError(handleErr).Debug("Will retry AssignIP after maxAlloc handling")
+						continue
+					}
+
+					// We got existing IPs - check if the requested IP is in the list
+					for _, existingIPNet := range existingIPNets {
+						if existingIPNet.IP.Equal(args.IP.IP) {
+							logCtx.Info("Requested IP is already allocated to this handle, treating as success")
+							return nil
+						}
+					}
+
+					// The handle has other IP(s) but not the requested one
+					logCtx.WithField("existingIPs", existingIPNets).Error("Handle already has different IP(s) allocated")
+					return fmt.Errorf("handle %s already has IP(s) allocated, cannot assign additional IP %s (maxAllocPerIPVersion=%d)",
+						*args.HandleID, args.IP.String(), args.MaxAllocToHandlePerIPVersion)
+				}
+
 				log.WithError(err).Warn("Failed to increment handle")
 				return fmt.Errorf("failed to increment handle: %w", err)
 			}
@@ -1015,6 +1109,58 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 	return errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
+// handleMaxAllocReached handles the case where incrementHandle fails due to maxAlloc constraint.
+// It queries for existing IPs allocated to the handle, filtered by IP version, and returns
+// exactly num IPs if sufficient allocations already exist.
+// Returns:
+//   - []net.IPNet (len == num): Exactly num existing IPs if sufficient IPs (>= num) were found
+//   - nil, ErrInsufficientIPsByHandle: If partial/no IPs found (caller should retry)
+//   - nil, error: If the query failed
+func (c ipamClient) handleMaxAllocReached(ctx context.Context, handleID string, num int, ipVersion int, logCtx *log.Entry) ([]net.IPNet, error) {
+	logCtx.Info("MaxAlloc limit reached, checking for existing allocation")
+
+	// Query for existing IPs allocated to this handle
+	existingIPs, queryErr := c.IPsByHandle(ctx, handleID)
+	if queryErr != nil {
+		logCtx.WithError(queryErr).Warn("Failed to query existing IPs by handle after maxAlloc error")
+		return nil, queryErr
+	}
+
+	// Filter by IP version to avoid returning IPs from other address families.
+	var filtered []net.IP
+	for _, ip := range existingIPs {
+		isV4 := ip.IP.To4() != nil
+		if (ipVersion == 4 && isV4) || (ipVersion == 6 && !isV4) {
+			filtered = append(filtered, ip)
+		}
+	}
+
+	if len(filtered) >= num {
+		logCtx.WithField("existingIPs", filtered).Info("Found sufficient existing IP allocations, reusing them")
+		result := make([]net.IPNet, 0, num)
+		for _, ip := range filtered[:num] {
+			result = append(result, *ip.Network())
+		}
+		return result, nil
+	}
+
+	// Partial or no IPs - concurrent operation in progress
+	if len(filtered) > 0 {
+		logCtx.WithFields(log.Fields{
+			"existingCount": len(filtered),
+			"requiredCount": num,
+		}).Info("Partial allocation found, concurrent operation in progress - will retry")
+	} else {
+		logCtx.Info("No existing IPs found yet, concurrent operation in progress - will retry")
+	}
+
+	return nil, ErrInsufficientIPsByHandle{
+		HandleID:      handleID,
+		ExistingCount: len(filtered),
+		RequiredCount: num,
+	}
+}
+
 // ReleaseIPs releases any of the given IP addresses that are currently assigned,
 // so that they are available to be used in another assignment.
 // ReleaseIPs returns:
@@ -1022,7 +1168,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 // - A list of ReleaseOptions that did not encounter an error (either not allocated, or successfully released).
 // - An error, if one occurred.
 func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]net.IP, []ReleaseOptions, error) {
-	for i := 0; i < len(ips); i++ {
+	for i := range ips {
 		// Validate the input.
 		if ips[i].Address == "" {
 			return nil, nil, fmt.Errorf("No IP address specified in options: %+v", ips[i])
@@ -1159,7 +1305,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 
 func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[string]*model.KVPair, ips []ReleaseOptions, blockCIDR net.IPNet) ([]net.IP, error) {
 	logCtx := log.WithField("cidr", blockCIDR)
-	for i := 0; i < datastoreRetries; i++ {
+	for i := range datastoreRetries {
 		logCtx.Debug("Getting block so we can release IPs")
 
 		// Get allocation block for cidr.
@@ -1237,7 +1383,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[strin
 	return nil, errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
-func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, affinityCfg AffinityConfig, affCheck bool, reservations addrFilter) ([]net.IPNet, error) {
+func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, affinityCfg AffinityConfig, affCheck bool, reservations addrFilter, maxAlloc int) ([]net.IPNet, error) {
 	blockCIDR := block.Key.(model.BlockKey).CIDR
 	logCtx := log.WithFields(log.Fields{string(affinityCfg.AffinityType): affinityCfg.Host, "block": blockCIDR})
 	if handleID != nil {
@@ -1261,10 +1407,13 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 	// Increment handle count.
 	if handleID != nil {
 		logCtx.Debug("Incrementing handle")
-		err := c.incrementHandle(ctx, *handleID, blockCIDR, num)
+		err := c.incrementHandle(ctx, *handleID, blockCIDR, num, maxAlloc)
 		if err != nil {
-			log.WithError(err).Warn("Failed to increment handle")
-			return nil, fmt.Errorf("failed to increment handle: %w", err)
+			// If incrementHandle fails due to maxAlloc constraint, return the error so caller can handle it.
+			// The IPs allocated in the block's memory structure won't be persisted since
+			// we return before updateBlock.
+			logCtx.WithError(err).Info("Failed to increment handle")
+			return nil, err
 		}
 	}
 
@@ -1342,7 +1491,7 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, affinityC
 	// Claim all blocks within the given cidr.
 	blocks := blockGenerator(pool, cidr)
 	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			// First, claim a pending affinity.
 			pa, err := c.blockReaderWriter.getPendingAffinity(ctx, affinityCfg, *blockCIDR)
 			if err != nil {
@@ -1414,7 +1563,7 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	blocks := blockGenerator(pool, cidr)
 	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
 		logCtx := log.WithField("cidr", blockCIDR)
-		for i := 0; i < datastoreRetries; i++ {
+		for range datastoreRetries {
 			err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, *blockCIDR, releaseAffinityOpts{
 				RequireEmpty: mustBeEmpty,
 			})
@@ -1489,7 +1638,7 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg Affin
 
 		for _, blockCIDR := range blockCIDRs {
 			logCtx := log.WithField("cidr", blockCIDR)
-			for i := 0; i < datastoreRetries; i++ {
+			for range datastoreRetries {
 				err := c.blockReaderWriter.releaseBlockAffinity(ctx, affinityCfg, blockCIDR, releaseAffinityOpts{
 					RequireEmpty: mustBeEmpty,
 				})
@@ -1577,7 +1726,7 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, affinityCfg AffinityConf
 	logCtx := log.WithField("host", affinityCfg.Host)
 	logCtx.Debug("Removing IPAM data for host")
 
-	for i := 0; i < datastoreRetries; i++ {
+	for range datastoreRetries {
 		// Release affinities for this host.
 		logCtx.Debug("Releasing IPAM affinities for host")
 		if err := c.ReleaseHostAffinities(ctx, affinityCfg, false); err != nil {
@@ -1700,7 +1849,7 @@ func (c ipamClient) ReleaseByHandle(ctx context.Context, handleID string) error 
 
 func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, opts ReleaseOptions) error {
 	logCtx := log.WithFields(log.Fields{"handle": opts.Handle, "cidr": blockCIDR})
-	for i := 0; i < datastoreRetries; i++ {
+	for i := range datastoreRetries {
 		logCtx.Debug("Querying block so we can release IPs by handle")
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 		if err != nil {
@@ -1771,7 +1920,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 		return nil
 	}
 
-	for i := 0; i < datastoreRetries; i++ {
+	for range datastoreRetries {
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -1802,10 +1951,22 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 	return errors.New("Hit max retries")
 }
 
-func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int) error {
+// ErrMaxAllocReached is returned when a handle already has the maximum number of allocations.
+type ErrMaxAllocReached struct {
+	HandleID     string
+	CurrentCount int
+	MaxAlloc     int
+}
+
+func (e ErrMaxAllocReached) Error() string {
+	return fmt.Sprintf("handle %s already has %d allocation(s), cannot allocate more (maxAlloc=%d)",
+		e.HandleID, e.CurrentCount, e.MaxAlloc)
+}
+
+func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int, maxAlloc int) error {
 	var obj *model.KVPair
 	var err error
-	for i := 0; i < datastoreRetries; i++ {
+	for range datastoreRetries {
 		obj, err = c.blockReaderWriter.queryHandle(ctx, handleID, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -1827,6 +1988,25 @@ func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockC
 
 		// Get the handle from the KVPair.
 		handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
+
+		// Check if maxAlloc constraint would be violated before incrementing
+		// maxAlloc is enforced per IP version (IPv4/IPv6)
+		if maxAlloc > 0 {
+			// Determine IP version from the block CIDR
+			ipVersion := 4
+			if blockCIDR.IP.To4() == nil {
+				ipVersion = 6
+			}
+
+			currentCount := handle.totalCountByVersion(ipVersion)
+			if currentCount+num > maxAlloc {
+				return ErrMaxAllocReached{
+					HandleID:     handleID,
+					CurrentCount: currentCount,
+					MaxAlloc:     maxAlloc,
+				}
+			}
+		}
 
 		// Increment the handle for this block.
 		handle.incrementBlock(blockCIDR, num)
@@ -1855,7 +2035,7 @@ func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockC
 }
 
 func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int, obj *model.KVPair) error {
-	for i := 0; i < datastoreRetries; i++ {
+	for i := range datastoreRetries {
 		var err error
 		// Query the handle if either of these conditions is true:
 		// - This is the first iteration, and the caller did not provide the current handle.
@@ -1903,35 +2083,6 @@ func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockC
 	return errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
-// GetAssignmentAttributes returns the attributes stored with the given IP address
-// upon assignment, as well as the handle used for assignment (if any).
-func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr net.IP) (map[string]string, *string, error) {
-	pool, err := c.blockReaderWriter.getPoolForIP(ctx, addr, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	if pool == nil {
-		log.Errorf("Error reading pool for %s", addr.String())
-		return nil, nil, cerrors.ErrorResourceDoesNotExist{Identifier: addr.String(), Err: errors.New("No valid IPPool")}
-	}
-	blockCIDR := getBlockCIDRForAddress(addr, pool)
-	obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
-	if err != nil {
-		log.Errorf("Error reading block %s: %v", blockCIDR, err)
-		return nil, nil, err
-	}
-	block := allocationBlock{obj.Value.(*model.AllocationBlock)}
-	attrs, err := block.attributesForIP(addr)
-	if err != nil {
-		return nil, nil, err
-	}
-	handle, err := block.handleForIP(addr)
-	if err != nil {
-		return nil, nil, err
-	}
-	return attrs, handle, nil
-}
-
 // GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
@@ -1957,12 +2108,14 @@ func (c ipamClient) GetIPAMConfig(ctx context.Context) (*IPAMConfig, error) {
 			}
 
 			// Create the default config because it doesn't already exist.
+			enabled := "Enabled"
 			kvp := &model.KVPair{
 				Key: model.IPAMConfigKey{},
 				Value: &model.IPAMConfig{
-					StrictAffinity:     false,
-					AutoAllocateBlocks: true,
-					MaxBlocksPerHost:   0,
+					StrictAffinity:               false,
+					AutoAllocateBlocks:           true,
+					MaxBlocksPerHost:             0,
+					KubeVirtVMAddressPersistence: &enabled, // Default: enabled for auto-detection
 				},
 			}
 
@@ -2050,18 +2203,30 @@ func (c ipamClient) SetIPAMConfig(ctx context.Context, cfg IPAMConfig) error {
 }
 
 func (c ipamClient) convertIPAMConfigToBackend(cfg *IPAMConfig) *model.IPAMConfig {
+	var persistence *string
+	if cfg.KubeVirtVMAddressPersistence != nil {
+		s := string(*cfg.KubeVirtVMAddressPersistence)
+		persistence = &s
+	}
 	return &model.IPAMConfig{
-		StrictAffinity:     cfg.StrictAffinity,
-		AutoAllocateBlocks: cfg.AutoAllocateBlocks,
-		MaxBlocksPerHost:   cfg.MaxBlocksPerHost,
+		StrictAffinity:               cfg.StrictAffinity,
+		AutoAllocateBlocks:           cfg.AutoAllocateBlocks,
+		MaxBlocksPerHost:             cfg.MaxBlocksPerHost,
+		KubeVirtVMAddressPersistence: persistence,
 	}
 }
 
 func (c ipamClient) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfig {
+	var persistence *VMAddressPersistence
+	if cfg.KubeVirtVMAddressPersistence != nil {
+		enum := VMAddressPersistence(*cfg.KubeVirtVMAddressPersistence)
+		persistence = &enum
+	}
 	return &IPAMConfig{
-		StrictAffinity:     cfg.StrictAffinity,
-		AutoAllocateBlocks: cfg.AutoAllocateBlocks,
-		MaxBlocksPerHost:   cfg.MaxBlocksPerHost,
+		StrictAffinity:               cfg.StrictAffinity,
+		AutoAllocateBlocks:           cfg.AutoAllocateBlocks,
+		MaxBlocksPerHost:             cfg.MaxBlocksPerHost,
+		KubeVirtVMAddressPersistence: persistence,
 	}
 }
 
@@ -2089,7 +2254,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	// we should release the block's affinity to this node so it can be
 	// used elsewhere.
 	logCtx.Debugf("Looking up node labels for host affinity")
-	node, err := c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: affinityCfg.Host}, "")
+	node, err := c.client.Get(ctx, model.ResourceKey{Kind: internalapi.KindNode, Name: affinityCfg.Host}, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			logCtx.WithError(err).WithField("node", affinityCfg.Host).Error("Failed to get node for host")
@@ -2100,7 +2265,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	}
 
 	// Make sure the returned value is a valid node.
-	v3n, ok := node.Value.(*libapiv3.Node)
+	v3n, ok := node.Value.(*internalapi.Node)
 	if !ok {
 		return fmt.Errorf("Datastore returned malformed node object")
 	}
@@ -2404,7 +2569,7 @@ func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) err
 		return err
 	}
 	kvs, err := c.client.List(ctx, model.ResourceListOptions{
-		Kind:          libapiv3.KindBlockAffinity,
+		Kind:          internalapi.KindBlockAffinity,
 		LabelSelector: ls,
 	}, "")
 	if err != nil {
@@ -2414,7 +2579,7 @@ func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) err
 	var errs []error
 	numUpgraded := 0
 	for _, kv := range kvs.KVPairs {
-		if val, ok := kv.Value.(*libapiv3.BlockAffinity); ok {
+		if val, ok := kv.Value.(*internalapi.BlockAffinity); ok {
 			if val.Spec.Node != nodeName {
 				// Only do _our_ affinities to avoid n x n conflicts with other
 				// nodes also doing this operation.

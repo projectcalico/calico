@@ -16,9 +16,10 @@ package node_test
 
 import (
 	"context"
+	"maps"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
@@ -28,7 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -206,7 +207,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Calico node with new IPs.
-		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
+		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *internalapi.Node) {
 			cn.Spec.BGP.IPv4Address = "172.100.2.3"
 			cn.Spec.BGP.IPv4IPIPTunnelAddr = ""
 			cn.Spec.IPv4VXLANTunnelAddr = "10.10.20.1"
@@ -220,8 +221,8 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the wireguard IPs.
-		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
-			cn.Spec.Wireguard = &libapi.NodeWireguardSpec{
+		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *internalapi.Node) {
+			cn.Spec.Wireguard = &internalapi.NodeWireguardSpec{
 				InterfaceIPv4Address: "192.168.100.1",
 				InterfaceIPv6Address: "dead:beef::100:1",
 			}
@@ -236,22 +237,22 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Add an internal IP and an external IP to the Addresses in the node spec.
 		// Also add a duplicate IP and make sure it is not added.
 		// Also add interfaces to the node spec to check the hostendpoint is updated with the interface addresses.
-		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
-			cn.Spec.Addresses = []libapi.NodeAddress{
+		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *internalapi.Node) {
+			cn.Spec.Addresses = []internalapi.NodeAddress{
 				{
 					Address: "192.168.200.1",
-					Type:    libapi.InternalIP,
+					Type:    internalapi.InternalIP,
 				},
 				{
 					Address: "192.168.200.2",
-					Type:    libapi.ExternalIP,
+					Type:    internalapi.ExternalIP,
 				},
 				{
 					Address: "172.100.2.3",
-					Type:    libapi.InternalIP,
+					Type:    internalapi.InternalIP,
 				},
 			}
-			cn.Spec.Interfaces = []libapi.NodeInterface{
+			cn.Spec.Interfaces = []internalapi.NodeInterface{
 				{
 					Name: "eth0",
 					Addresses: []string{
@@ -288,7 +289,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Delete the Kubernetes node.
 		err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		Eventually(func() *libapi.Node {
+		Eventually(func() *internalapi.Node {
 			node, _ := c.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 			return node
 		}, time.Second*2, 500*time.Millisecond).Should(BeNil())
@@ -860,11 +861,11 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
-		cn := libapi.NewNode()
+		cn := internalapi.NewNode()
 		cn.Name = "node"
 
-		cn.Spec = libapi.NodeSpec{
-			BGP: &libapi.NodeBGPSpec{
+		cn.Spec = internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: "172.16.1.1/24",
 				IPv6Address: "", // invalid ip format for hostEndpoint.InterfaceIPs
 			},
@@ -931,14 +932,14 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
 
-		cn := libapi.NewNode()
+		cn := internalapi.NewNode()
 		cn.Name = "node"
 
-		cn.Spec = libapi.NodeSpec{
-			BGP: &libapi.NodeBGPSpec{
+		cn.Spec = internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: "172.16.1.1/24",
 			},
-			Interfaces: []libapi.NodeInterface{
+			Interfaces: []internalapi.NodeInterface{
 				{
 					Name:      "eth0",
 					Addresses: []string{"5.5.5.5"},
@@ -1070,17 +1071,15 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	})
 })
 
-func calicoNode(name string, k8sNodeName string, labels map[string]string) *libapi.Node {
+func calicoNode(name string, k8sNodeName string, labels map[string]string) *internalapi.Node {
 	// Create a Calico node with a reference to it.
-	node := libapi.NewNode()
+	node := internalapi.NewNode()
 	node.Name = name
 	node.Labels = make(map[string]string)
-	for k, v := range labels {
-		node.Labels[k] = v
-	}
+	maps.Copy(node.Labels, labels)
 
-	node.Spec = libapi.NodeSpec{
-		BGP: &libapi.NodeBGPSpec{
+	node.Spec = internalapi.NodeSpec{
+		BGP: &internalapi.NodeBGPSpec{
 			IPv4Address:        "172.16.1.1/24",
 			IPv6Address:        "fe80::1",
 			IPv4IPIPTunnelAddr: "192.168.100.1",
@@ -1089,7 +1088,7 @@ func calicoNode(name string, k8sNodeName string, labels map[string]string) *liba
 
 	// Add in the orchRef if a k8s node was provided.
 	if k8sNodeName != "" {
-		node.Spec.OrchRefs = []libapi.OrchRef{{NodeName: k8sNodeName, Orchestrator: "k8s"}}
+		node.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: k8sNodeName, Orchestrator: "k8s"}}
 	}
 	return node
 }

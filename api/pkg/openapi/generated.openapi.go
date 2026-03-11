@@ -132,6 +132,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Tier":                               schema_pkg_apis_projectcalico_v3_Tier(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierList":                           schema_pkg_apis_projectcalico_v3_TierList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec":                           schema_pkg_apis_projectcalico_v3_TierSpec(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierStatus":                         schema_pkg_apis_projectcalico_v3_TierStatus(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig":   schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.DSCP":                                     schema_api_pkg_lib_numorstring_DSCP(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Port":                                     schema_api_pkg_lib_numorstring_Port(ref),
@@ -492,6 +493,21 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 							},
 						},
 					},
+					"alternate": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -815,6 +831,13 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					"localWorkloadPeeringIPV6": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The virtual IPv6 address of the node with which its local workload is expected to peer. It is recommended to use a link-local address.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"programClusterRoutes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node, when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled, confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route. Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Enabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3150,7 +3173,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"programClusterRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
+							Description: "ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node, when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled, it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route. Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3444,7 +3467,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfKubeProxyHealthzPort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to. The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]",
+							Description: "BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to. The health check server is used by external load balancers to determine if this node should receive traffic. Set to 0 to disable the health check server.  [Default: 10256]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -4831,6 +4854,13 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.Reference
 							Description: "Whether or not to auto allocate blocks to hosts.",
 							Default:     false,
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"kubeVirtVMAddressPersistence": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction). When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses when their underlying pods are recreated during VM operations. When Disabled, VMs receive new IP addresses whenever their pods are recreated, and creating a live migration target pod is not supported because the migration target pod requires the same IP as the source pod, which is only possible with address persistence. Defaults to Enabled if not specified.",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
@@ -7225,12 +7255,18 @@ func schema_pkg_apis_projectcalico_v3_Tier(ref common.ReferenceCallback) common.
 							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierStatus"),
+						},
+					},
 				},
 				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -7307,6 +7343,35 @@ func schema_pkg_apis_projectcalico_v3_TierSpec(ref common.ReferenceCallback) com
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_TierStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TierStatus contains the status of a Tier resource.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions represents the latest observed set of conditions for the resource. A tier with a \"Ready\" condition set to \"True\" is operating as expected.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
 	}
 }
 

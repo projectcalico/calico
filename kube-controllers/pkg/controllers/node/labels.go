@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -38,7 +38,7 @@ type nodeLabelController struct {
 	k8sNodeMapper map[string]string
 
 	// calicoNodeCache stores calicoNodes received via the syncer in local map
-	calicoNodeCache map[string]*apiv3.Node
+	calicoNodeCache map[string]*internalapi.Node
 
 	// For interacting with the Calico API to update nodes.
 	client client.Interface
@@ -46,21 +46,21 @@ type nodeLabelController struct {
 	nodeInformer  cache.SharedIndexInformer
 	nodeLister    v1lister.NodeLister
 	syncStatus    bapi.SyncStatus
-	syncerUpdates chan interface{}
+	syncerUpdates chan any
 	k8sNodeUpdate chan *v1.Node
-	syncChan      chan interface{}
+	syncChan      chan any
 }
 
 func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIndexInformer) *nodeLabelController {
 	c := &nodeLabelController{
 		k8sNodeMapper:   map[string]string{},
-		calicoNodeCache: map[string]*apiv3.Node{},
+		calicoNodeCache: map[string]*internalapi.Node{},
 		client:          client,
 		nodeInformer:    nodeInformer,
 		nodeLister:      v1lister.NewNodeLister(nodeInformer.GetIndexer()),
-		syncerUpdates:   make(chan interface{}, utils.BatchUpdateSize),
+		syncerUpdates:   make(chan any, utils.BatchUpdateSize),
 		k8sNodeUpdate:   make(chan *v1.Node, utils.BatchUpdateSize),
-		syncChan:        make(chan interface{}, 1),
+		syncChan:        make(chan any, 1),
 	}
 
 	_, err := c.nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -75,19 +75,19 @@ func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIn
 	return c
 }
 
-func (c *nodeLabelController) OnKubernetesNodeAdd(obj interface{}) {
+func (c *nodeLabelController) OnKubernetesNodeAdd(obj any) {
 	if n, ok := obj.(*v1.Node); ok {
 		c.k8sNodeUpdate <- n
 	}
 }
 
-func (c *nodeLabelController) OnKubernetesNodeUpdate(objOld interface{}, objNew interface{}) {
+func (c *nodeLabelController) OnKubernetesNodeUpdate(objOld any, objNew any) {
 	if n, ok := objNew.(*v1.Node); ok {
 		c.k8sNodeUpdate <- n
 	}
 }
 
-func (c *nodeLabelController) OnKubernetesNodeDelete(obj interface{}) {
+func (c *nodeLabelController) OnKubernetesNodeDelete(obj any) {
 	if n, ok := obj.(*v1.Node); ok {
 		c.k8sNodeUpdate <- n
 	}
@@ -111,13 +111,13 @@ func (c *nodeLabelController) onUpdate(update bapi.Update) {
 	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case apiv3.KindNode:
+		case internalapi.KindNode:
 			c.syncerUpdates <- update.KVPair
 		}
 	}
 }
 
-func (c *nodeLabelController) handleUpdate(update interface{}) {
+func (c *nodeLabelController) handleUpdate(update any) {
 	switch update := update.(type) {
 	case bapi.SyncStatus:
 		c.syncStatus = update
@@ -130,7 +130,7 @@ func (c *nodeLabelController) handleUpdate(update interface{}) {
 		switch update.Key.(type) {
 		case model.ResourceKey:
 			switch update.Key.(model.ResourceKey).Kind {
-			case apiv3.KindNode:
+			case internalapi.KindNode:
 				c.handleNodeUpdate(update)
 			}
 		}
@@ -157,7 +157,7 @@ func (c *nodeLabelController) handleNodeUpdate(update model.KVPair) {
 		return
 	}
 
-	n := update.Value.(*apiv3.Node)
+	n := update.Value.(*internalapi.Node)
 
 	kn, err := getK8sNodeName(*n)
 	if err != nil {

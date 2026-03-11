@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"time"
 
@@ -115,9 +116,7 @@ func (f *FlannelCluster) AddFlannelNode(nodeName, podCidr, backend, mac, ip stri
 		defaultLabels["node-role.kubernetes.io/master"] = ""
 		defaultLabels["node-role.kubernetes.io/control-plane"] = ""
 	}
-	for k, v := range labels {
-		defaultLabels[k] = v
-	}
+	maps.Copy(defaultLabels, labels)
 
 	flannelNode := newFlannelNode(podCidr, backend, mac, ip)
 

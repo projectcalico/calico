@@ -779,22 +779,18 @@ func (w *Wireguard) Apply() (err error) {
 	// Update link address if out of sync.
 	if !w.inSyncInterfaceAddr {
 		w.logCtx.Debug("Ensure wireguard interface address is correct")
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if errLink = w.ensureLinkAddress(netlinkClient); errLink == nil {
 				w.inSyncInterfaceAddr = true
 			}
-		}()
+		})
 	}
 
 	// Apply routetable updates.
 	w.logCtx.Debug("Apply routing table updates for wireguard")
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		errRoutes = w.routetable.Apply()
-	}()
+	})
 
 	// Apply wireguard configuration.
 	wg.Add(1)
@@ -1100,8 +1096,8 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 		// not programmed.
 		for cidr := range update.cidrsDeleted.All() {
 			w.logCtx.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
-			w.routetable.RouteRemove(w.interfaceName, cidr)
-			w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
+			w.routetable.RouteRemove(w.interfaceName, routetable.RouteKey{CIDR: cidr})
+			w.routetable.RouteRemove(routetable.InterfaceNone, routetable.RouteKey{CIDR: cidr})
 		}
 	}
 
@@ -1151,12 +1147,12 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 				// information to decide which route we need to remove - however we have also had bugs related to state
 				// tracking so deleting both is reasonable - routetable ignores the one that is not programmed.
 				updateLogCtx.Debug("Wireguard routing has changed - delete previous route")
-				w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
-				w.routetable.RouteRemove(w.interfaceName, cidr)
+				w.routetable.RouteRemove(routetable.InterfaceNone, routetable.RouteKey{CIDR: cidr})
+				w.routetable.RouteRemove(w.interfaceName, routetable.RouteKey{CIDR: cidr})
 			}
 			w.routetable.RouteUpdate(ifaceName, routetable.Target{
-				Type: targetType,
-				CIDR: cidr,
+				RouteKey: routetable.RouteKey{CIDR: cidr},
+				Type:     targetType,
 			})
 		}
 		node.routingToWireguard = shouldRouteToWireguard
@@ -1644,26 +1640,20 @@ func (w *Wireguard) ensureDisabled(netlinkClient netlinkshim.Interface) error {
 	wg := sync.WaitGroup{}
 
 	if w.routerule != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			errRule = w.routerule.Apply()
-		}()
+		})
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		errLink = w.ensureNoLink(netlinkClient)
-	}()
+	})
 	if w.config.RoutingTableIndex > 0 {
 		// Only attempt automatic cleanup of the routing table if it is not the default table.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			// The routetable configuration will be empty since we will not send updates, so applying this will remove the
 			// old routes if so configured.
 			errRoutes = w.routetable.Apply()
-		}()
+		})
 		wg.Wait()
 	}
 

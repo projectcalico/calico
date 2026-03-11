@@ -226,7 +226,7 @@ func (config *Config) resolve() (changed bool, err error) {
 
 			log.Infof("Parsing value for %v: %v (from %v)",
 				name, rawValue, source)
-			var value interface{}
+			var value any
 			if strings.ToLower(rawValue) == "none" {
 				// Special case: we allow a value of "none" to force the value to
 				// the zero value for a field.  The zero value often differs from
@@ -349,7 +349,7 @@ var knownParams map[string]param
 func loadParams() {
 	knownParams = make(map[string]param)
 	config := Config{}
-	kind := reflect.TypeOf(config)
+	kind := reflect.TypeFor[Config]()
 	metaRegexp := regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
 		`([^;]*)(?:;` +
 		`([^;]*))?$`)
@@ -490,6 +490,6 @@ func New() *Config {
 
 type param interface {
 	GetMetadata() *Metadata
-	Parse(raw string) (result interface{}, err error)
+	Parse(raw string) (result any, err error)
 	setDefault(*Config)
 }

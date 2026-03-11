@@ -17,6 +17,7 @@ package checker
 import (
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -202,12 +203,7 @@ func matchName(names []string, name string) bool {
 		log.Debug("No names on rule.")
 		return true
 	}
-	for _, n := range names {
-		if n == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(names, name)
 }
 
 // matchLabels checks if the selector matches the labels. It returns true if the selector matches,

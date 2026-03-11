@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -47,29 +47,41 @@ type v1IPAMConfigClient struct {
 	v3 bool
 }
 
-// crdToV1 converts the given CRD KVPair into a v1 model representation which can be passed back to the IPAM code.
+// crdToV1 converts the given CRD KVPair into a model representation which can be passed back to the IPAM code.
 func (c v1IPAMConfigClient) crdToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	switch kvp.Value.(type) {
-	case *libapiv3.IPAMConfig:
-		v3obj := kvp.Value.(*libapiv3.IPAMConfig)
+	case *internalapi.IPAMConfig:
+		v3obj := kvp.Value.(*internalapi.IPAMConfig)
+		var kubeVirtVMAddressPersistence *string
+		if v3obj.Spec.KubeVirtVMAddressPersistence != nil {
+			val := string(*v3obj.Spec.KubeVirtVMAddressPersistence)
+			kubeVirtVMAddressPersistence = &val
+		}
 		return &model.KVPair{
 			Key: model.IPAMConfigKey{},
 			Value: &model.IPAMConfig{
-				StrictAffinity:     v3obj.Spec.StrictAffinity,
-				AutoAllocateBlocks: v3obj.Spec.AutoAllocateBlocks,
-				MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
+				StrictAffinity:               v3obj.Spec.StrictAffinity,
+				AutoAllocateBlocks:           v3obj.Spec.AutoAllocateBlocks,
+				MaxBlocksPerHost:             v3obj.Spec.MaxBlocksPerHost,
+				KubeVirtVMAddressPersistence: kubeVirtVMAddressPersistence,
 			},
 			Revision: kvp.Revision,
-			UID:      &kvp.Value.(*libapiv3.IPAMConfig).UID,
+			UID:      &kvp.Value.(*internalapi.IPAMConfig).UID,
 		}, nil
 	case *v3.IPAMConfiguration:
 		v3obj := kvp.Value.(*v3.IPAMConfiguration)
+		var kubeVirtVMAddressPersistence *string
+		if v3obj.Spec.KubeVirtVMAddressPersistence != nil {
+			val := string(*v3obj.Spec.KubeVirtVMAddressPersistence)
+			kubeVirtVMAddressPersistence = &val
+		}
 		return &model.KVPair{
 			Key: model.IPAMConfigKey{},
 			Value: &model.IPAMConfig{
-				StrictAffinity:     v3obj.Spec.StrictAffinity,
-				AutoAllocateBlocks: v3obj.Spec.AutoAllocateBlocks,
-				MaxBlocksPerHost:   int(v3obj.Spec.MaxBlocksPerHost),
+				StrictAffinity:               v3obj.Spec.StrictAffinity,
+				AutoAllocateBlocks:           v3obj.Spec.AutoAllocateBlocks,
+				MaxBlocksPerHost:             int(v3obj.Spec.MaxBlocksPerHost),
+				KubeVirtVMAddressPersistence: kubeVirtVMAddressPersistence,
 			},
 			Revision: kvp.Revision,
 			UID:      &v3obj.UID,
@@ -87,12 +99,12 @@ func (c v1IPAMConfigClient) getBackingTypeMeta() metav1.TypeMeta {
 		}
 	}
 	return metav1.TypeMeta{
-		Kind:       libapiv3.KindIPAMConfig,
+		Kind:       internalapi.KindIPAMConfig,
 		APIVersion: "crd.projectcalico.org/v1",
 	}
 }
 
-// toCRD converts the given v1 KVPair into a CRD KVPair which can be stored
+// toCRD converts the given model KVPair into a CRD KVPair which can be stored
 // in the Kubernetes API.
 func (c v1IPAMConfigClient) toCRD(kvpv1 *model.KVPair) *model.KVPair {
 	// Build object meta.
@@ -105,6 +117,11 @@ func (c v1IPAMConfigClient) toCRD(kvpv1 *model.KVPair) *model.KVPair {
 
 	if c.v3 {
 		v1obj := kvpv1.Value.(*model.IPAMConfig)
+		var kubeVirtVMAddressPersistence *v3.VMAddressPersistence
+		if v1obj.KubeVirtVMAddressPersistence != nil {
+			val := v3.VMAddressPersistence(*v1obj.KubeVirtVMAddressPersistence)
+			kubeVirtVMAddressPersistence = &val
+		}
 		return &model.KVPair{
 			Key: model.ResourceKey{
 				Name: model.IPAMConfigGlobalName,
@@ -114,27 +131,34 @@ func (c v1IPAMConfigClient) toCRD(kvpv1 *model.KVPair) *model.KVPair {
 				TypeMeta:   typeMeta,
 				ObjectMeta: m,
 				Spec: v3.IPAMConfigurationSpec{
-					StrictAffinity:     v1obj.StrictAffinity,
-					AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
-					MaxBlocksPerHost:   int32(v1obj.MaxBlocksPerHost),
+					StrictAffinity:               v1obj.StrictAffinity,
+					AutoAllocateBlocks:           v1obj.AutoAllocateBlocks,
+					MaxBlocksPerHost:             int32(v1obj.MaxBlocksPerHost),
+					KubeVirtVMAddressPersistence: kubeVirtVMAddressPersistence,
 				},
 			},
 			Revision: kvpv1.Revision,
 		}
 	} else {
 		v1obj := kvpv1.Value.(*model.IPAMConfig)
+		var kubeVirtVMAddressPersistence *internalapi.VMAddressPersistence
+		if v1obj.KubeVirtVMAddressPersistence != nil {
+			val := internalapi.VMAddressPersistence(*v1obj.KubeVirtVMAddressPersistence)
+			kubeVirtVMAddressPersistence = &val
+		}
 		return &model.KVPair{
 			Key: model.ResourceKey{
 				Name: model.IPAMConfigGlobalName,
-				Kind: libapiv3.KindIPAMConfig,
+				Kind: internalapi.KindIPAMConfig,
 			},
-			Value: &libapiv3.IPAMConfig{
+			Value: &internalapi.IPAMConfig{
 				TypeMeta:   typeMeta,
 				ObjectMeta: m,
-				Spec: libapiv3.IPAMConfigSpec{
-					StrictAffinity:     v1obj.StrictAffinity,
-					AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
-					MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
+				Spec: internalapi.IPAMConfigSpec{
+					StrictAffinity:               v1obj.StrictAffinity,
+					AutoAllocateBlocks:           v1obj.AutoAllocateBlocks,
+					MaxBlocksPerHost:             v1obj.MaxBlocksPerHost,
+					KubeVirtVMAddressPersistence: kubeVirtVMAddressPersistence,
 				},
 			},
 			Revision: kvpv1.Revision,
@@ -176,7 +200,7 @@ func (c *v1IPAMConfigClient) Delete(ctx context.Context, key model.Key, revision
 	log.Debug("Received Delete request on IPAMConfig type")
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
-		Kind: libapiv3.KindIPAMConfig,
+		Kind: internalapi.KindIPAMConfig,
 	}
 	if c.v3 {
 		k.Kind = v3.KindIPAMConfiguration
@@ -196,7 +220,7 @@ func (c *v1IPAMConfigClient) Get(ctx context.Context, key model.Key, revision st
 	log.Debug("Received Get request on IPAMConfig type")
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
-		Kind: libapiv3.KindIPAMConfig,
+		Kind: internalapi.KindIPAMConfig,
 	}
 	if c.v3 {
 		k.Kind = v3.KindIPAMConfiguration

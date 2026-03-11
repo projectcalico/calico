@@ -27,7 +27,7 @@ import (
 
 var (
 	matchTier = regexp.MustCompile("^/?calico/v1/policy/tier/([^/]+)/metadata$")
-	typeTier  = reflect.TypeOf(Tier{})
+	typeTier  = reflect.TypeFor[Tier]()
 )
 
 type TierKey struct {

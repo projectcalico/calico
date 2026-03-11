@@ -15,8 +15,8 @@
 package nftables_test
 
 import (
-	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -25,7 +25,7 @@ import (
 
 var _ = DescribeTable("Actions",
 	func(features environment.Features, action generictables.Action, expRendering string) {
-		Expect(action.ToFragment(&features)).To(Equal(expRendering))
+		gomega.Expect(action.ToFragment(&features)).To(gomega.Equal(expRendering))
 	},
 	Entry("GotoAction", environment.Features{}, GotoAction{Target: "cali-abcd"}, "goto cali-abcd"),
 	Entry("JumpAction", environment.Features{}, JumpAction{Target: "cali-abcd"}, "jump cali-abcd"),

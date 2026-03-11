@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -51,8 +51,12 @@ var _ = Describe("IPAM migration handling", func() {
 				Affinity: &blockAffinityField,
 				Attributes: []model.AllocationAttribute{
 					{
-						AttrPrimary: &ipipTunnelHandle,
-						AttrSecondary: map[string]string{
+						HandleID: &ipipTunnelHandle,
+						ActiveOwnerAttrs: map[string]string{
+							"node": nodeName,
+							"type": "ipipTunnelAddress",
+						},
+						AlternateOwnerAttrs: map[string]string{
 							"node": nodeName,
 							"type": "ipipTunnelAddress",
 						},
@@ -108,8 +112,9 @@ var _ = Describe("IPAM migration handling", func() {
 		Expect(migrateIPAM.IPAMBlocks).To(HaveLen(1))
 		Expect(*migrateIPAM.IPAMBlocks[0].Value.Affinity).To(Equal(fmt.Sprintf("host:%s", newNodeName)))
 		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes).To(HaveLen(1))
-		Expect(*migrateIPAM.IPAMBlocks[0].Value.Attributes[0].AttrPrimary).To(Equal(fmt.Sprintf("ipip-tunnel-addr-%s", newNodeName)))
-		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].AttrSecondary["node"]).To(Equal(newNodeName))
+		Expect(*migrateIPAM.IPAMBlocks[0].Value.Attributes[0].HandleID).To(Equal(fmt.Sprintf("ipip-tunnel-addr-%s", newNodeName)))
+		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].ActiveOwnerAttrs["node"]).To(Equal(newNodeName))
+		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].AlternateOwnerAttrs["node"]).To(Equal(newNodeName))
 
 		// Check that the block affinity attributes were changed correctly
 		newAffinityKey := model.BlockAffinityKey{
@@ -154,8 +159,9 @@ var _ = Describe("IPAM migration handling", func() {
 		Expect(migrateIPAM.IPAMBlocks).To(HaveLen(1))
 		Expect(*migrateIPAM.IPAMBlocks[0].Value.Affinity).To(Equal(fmt.Sprintf("host:%s", nodeName)))
 		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes).To(HaveLen(1))
-		Expect(*migrateIPAM.IPAMBlocks[0].Value.Attributes[0].AttrPrimary).To(Equal(fmt.Sprintf("ipip-tunnel-addr-%s", nodeName)))
-		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].AttrSecondary["node"]).To(Equal(nodeName))
+		Expect(*migrateIPAM.IPAMBlocks[0].Value.Attributes[0].HandleID).To(Equal(fmt.Sprintf("ipip-tunnel-addr-%s", nodeName)))
+		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].ActiveOwnerAttrs["node"]).To(Equal(nodeName))
+		Expect(migrateIPAM.IPAMBlocks[0].Value.Attributes[0].AlternateOwnerAttrs["node"]).To(Equal(nodeName))
 
 		// Check that the block affinity attributes were not changed
 		newAffinityKeyPath, err := model.KeyToDefaultPath(affinity1.Key)
@@ -244,6 +250,11 @@ func (c *MockIPAMClient) NetworkSets() client.NetworkSetInterface {
 }
 
 func (c *MockIPAMClient) HostEndpoints() client.HostEndpointInterface {
+	// DO NOTHING
+	return nil
+}
+
+func (c *MockIPAMClient) LiveMigrations() client.LiveMigrationInterface {
 	// DO NOTHING
 	return nil
 }

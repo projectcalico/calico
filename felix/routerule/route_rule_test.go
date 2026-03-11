@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -304,7 +304,7 @@ var _ = Describe("RouteRules", func() {
 			})
 
 			It("should panic after all its retries are exhausted", func() {
-				for i := 0; i < 3; i++ {
+				for range 3 {
 					Expect(rrs.Apply()).To(Equal(ErrConnectFailed))
 				}
 				Expect(func() { _ = rrs.Apply() }).To(Panic())
@@ -315,7 +315,6 @@ var _ = Describe("RouteRules", func() {
 		// each case, we make the failure transient so that only the first Apply() should
 		// fail.  Then, at most, the second call to Apply() should succeed.
 		for _, failFlags := range failureScenarios {
-			failFlags := failFlags
 			desc := fmt.Sprintf("with some rules added and failures: %v", failFlags)
 			Context(desc, func() {
 				BeforeEach(func() {

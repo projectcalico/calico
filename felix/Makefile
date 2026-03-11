@@ -46,10 +46,6 @@ BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl
 GENERATED_FILES=proto/felixbackend.pb.go bpf/asm/opcode_string.go routetable/routeclass_string.go
 GENERATED_DOCS_FILES=docs/config-params.json docs/config-params.md
 
-# All Felix go files.
-SRC_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS) fv,-path ./$(dir) -prune -o) -type f -name '*.go' -print) $(GENERATED_FILES)
-# Add Felix cgo files
-SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
 EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
 
@@ -59,6 +55,11 @@ EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/c
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
 include ../lib.Makefile
+
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
+## Append non-Go sources that also affect the build.
+SRC_FILES += $(GENERATED_FILES)
+SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 
 # Set the platform correctly for building docker images.
 ifeq ($(ARCH),arm64)
@@ -96,7 +97,7 @@ clean:
 	       go/docs/calc.pdf \
 	       release-notes-*
 	find . -name "junit.xml" -type f -delete
-	find . -name "*.coverprofile" -type f -delete
+	find . -name "coverprofile.out" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
@@ -268,12 +269,12 @@ FELIX_CONTAINER_CREATED=.calico_felix.created-$(ARCH)
 FELIX_IMAGE_WITH_TAG=$(FELIX_IMAGE):latest-$(ARCH)
 FELIX_IMAGE_ID=$(shell docker images -q $(FELIX_IMAGE_WITH_TAG))
 $(FELIX_IMAGE)-$(ARCH): $(FELIX_CONTAINER_CREATED)
-$(FELIX_CONTAINER_CREATED): register \
-                            docker-image/calico-felix-wrapper \
-                            docker-image/felix.cfg \
-                            docker-image/Dockerfile \
+IMAGE_DEPS = docker-image/Dockerfile docker-image/calico-felix-wrapper docker-image/felix.cfg
+# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
+$(FELIX_CONTAINER_CREATED): $(IMAGE_DEPS) \
                             ../metadata.mk \
-                            $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild)
+                            $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild) \
+                            | register
 	$(DOCKER_BUILD) --network=host -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
@@ -290,7 +291,7 @@ UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) -e $(ACK_GINKGO) $(CALICO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests
@@ -363,7 +364,6 @@ fv fv/latency.log fv/data-races.log: fv-prereqs
 fv-no-prereqs:
 	rm -f fv/data-races.log fv/latency.log
 	cd fv && \
-	  $(ACK_GINKGO) \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	  FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
@@ -539,12 +539,12 @@ release-build: .release-$(VERSION).created
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo watch -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
@@ -578,7 +578,6 @@ ut-bpf-no-prereqs:
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
-		-e $(ACK_GINKGO) \
 		$(CALICO_BUILD) bash -o pipefail -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
@@ -586,7 +585,6 @@ ut-bpf-no-prereqs:
 		gotestsum --format $(GOTESTSUM_FORMAT) --junitfile ../report/felix_bpf.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf'
 	$(DOCKER_RUN_PRIV_NET) \
 		--privileged \
-		-e $(ACK_GINKGO) \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
@@ -600,7 +598,6 @@ ut-bpf-no-prereqs:
 bench-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 	$(DOCKER_RUN) \
 		--privileged \
-		-e $(ACK_GINKGO) \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \

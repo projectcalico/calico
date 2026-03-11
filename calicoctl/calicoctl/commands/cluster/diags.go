@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -303,32 +303,64 @@ func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient
 
 func collectCalicoResource(dir string) {
 	log.Info("Auditing calico resource definitions")
+
+	collected := set.New[string]()
+	commands := []common.Cmd{}
+
+	// Phase 1: Discover Calico resources via CRD listing. This finds resources registered as
+	// CustomResourceDefinitions (both crd.projectcalico.org/v1 and projectcalico.org/v3 CRD modes).
 	buf, err := common.Exec([]string{"kubectl", "get", "customresourcedefinition", "-o", "go-template", "--template", "{{range .items}}{{.metadata.name}} {{end}}"})
 	if err != nil {
 		fmt.Printf("Couldn't list CRDs: %s\n", err)
 		if buf != nil {
 			fmt.Printf("\tcmd output:\n\t\t%s", buf.String())
 		}
-		return
+	} else {
+		crds := strings.Fields(buf.String())
+		for _, resource := range crds {
+			if !strings.Contains(resource, "projectcalico") && !strings.Contains(resource, "tigera") {
+				continue
+			}
+			collected.Add(resource)
+			commands = append(commands, common.Cmd{
+				Info:     fmt.Sprintf("Collect Calico %v (yaml)", resource),
+				CmdStr:   fmt.Sprintf("kubectl get %v -Ao yaml", resource),
+				FilePath: fmt.Sprintf("%s/%v.yaml", dir, resource),
+			}, common.Cmd{
+				Info:     fmt.Sprintf("Collect Calico %v (wide text)", resource),
+				CmdStr:   fmt.Sprintf("kubectl get %v -Ao wide", resource),
+				FilePath: fmt.Sprintf("%s/%v.txt", dir, resource),
+			})
+		}
 	}
 
-	rawStr := buf.String()
-	crds := strings.Fields(rawStr)
-	commands := []common.Cmd{}
-	for _, resource := range crds {
-		if !strings.Contains(resource, "projectcalico") && !strings.Contains(resource, "tigera") {
-			continue
+	// Phase 2: Discover v3 resources via the projectcalico.org API group. When the Calico API
+	// server is running, v3 resources are served via API aggregation rather than CRDs, so they
+	// won't appear in the CRD listing above. This catches them regardless of serving mode.
+	buf, err = common.Exec([]string{"kubectl", "api-resources", "--api-group=projectcalico.org", "-o", "name"})
+	if err != nil {
+		log.WithError(err).Warn("Couldn't list api-resources for projectcalico.org group, skipping v3 API resource discovery")
+		fmt.Printf("Couldn't list api-resources for projectcalico.org group, skipping v3 API resource discovery: %s\n", err)
+		if buf != nil {
+			fmt.Printf("\tcmd output:\n\t\t%s", buf.String())
 		}
-
-		commands = append(commands, common.Cmd{
-			Info:     fmt.Sprintf("Collect Calico %v (yaml)", resource),
-			CmdStr:   fmt.Sprintf("kubectl get %v -Ao yaml", resource),
-			FilePath: fmt.Sprintf("%s/%v.yaml", dir, resource),
-		}, common.Cmd{
-			Info:     fmt.Sprintf("Collect Calico %v (wide text)", resource),
-			CmdStr:   fmt.Sprintf("kubectl get %v -Ao wide", resource),
-			FilePath: fmt.Sprintf("%s/%v.txt", dir, resource),
-		})
+	} else {
+		apiResources := strings.Fields(buf.String())
+		for _, resource := range apiResources {
+			if collected.Contains(resource) {
+				continue
+			}
+			collected.Add(resource)
+			commands = append(commands, common.Cmd{
+				Info:     fmt.Sprintf("Collect Calico %v (yaml)", resource),
+				CmdStr:   fmt.Sprintf("kubectl get %v -Ao yaml", resource),
+				FilePath: fmt.Sprintf("%s/%v.yaml", dir, resource),
+			}, common.Cmd{
+				Info:     fmt.Sprintf("Collect Calico %v (wide text)", resource),
+				CmdStr:   fmt.Sprintf("kubectl get %v -Ao wide", resource),
+				FilePath: fmt.Sprintf("%s/%v.txt", dir, resource),
+			})
+		}
 	}
 
 	common.ExecAllCmdsWriteToFile(commands)
@@ -442,6 +474,14 @@ func collectKubernetesResource(dir string) {
 		Info:     "Collect k8s baselineadminnetworkpolicies (text)",
 		CmdStr:   "kubectl get baselineadminnetworkpolicies.policy.networking.k8s.io -Ao wide",
 		FilePath: fmt.Sprintf("%s/baselineadminnetworkpolicies.txt", dir),
+	}, common.Cmd{
+		Info:     "Collect multus network-attachment-definitions (yaml)",
+		CmdStr:   "kubectl get network-attachment-definitions.k8s.cni.cncf.io -Ao yaml",
+		FilePath: fmt.Sprintf("%s/network-attachment-definitions.yaml", dir),
+	}, common.Cmd{
+		Info:     "Collect multus network-attachment-definitions (text)",
+		CmdStr:   "kubectl get network-attachment-definitions.k8s.cni.cncf.io -Ao wide",
+		FilePath: fmt.Sprintf("%s/network-attachment-definitions.txt", dir),
 	}, common.Cmd{
 		Info:     "Collect k8s validatingwebhookconfigurations (text)",
 		CmdStr:   "kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io -o wide",
