@@ -1634,7 +1634,8 @@ kind-deploy:
 # Rebuild any images whose source files have changed, load onto the kind
 # cluster, and restart pods.
 .PHONY: kind-reload
-kind-reload: kind-build-images
+kind-reload:
+	$(MAKE) -j$(shell nproc) kind-build-images
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
