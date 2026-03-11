@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -92,12 +93,14 @@ func TestDial(t *testing.T) {
 
 		errCh := make(chan error, 1)
 		clientDoneCh := make(chan struct{})
+		var closeOnce sync.Once
+		t.Cleanup(func() { closeOnce.Do(func() { close(clientDoneCh) }) })
 		go handleConnection(t, listener, errCh, clientDoneCh)
 
 		dialer, err := tunnel.NewTLSSessionDialer(listener.Addr().String(), nil, tunnel.WithDialerKeepAliveSettings(false, time.Second))
 		Expect(err).NotTo(HaveOccurred())
 
-		assertExpectations(t, dialer, clientDoneCh)
+		assertExpectations(t, dialer, clientDoneCh, &closeOnce)
 
 		select {
 		case err := <-errCh:
@@ -127,6 +130,8 @@ func TestDial(t *testing.T) {
 
 		errCh := make(chan error, 1)
 		clientDoneCh := make(chan struct{})
+		var closeOnce sync.Once
+		t.Cleanup(func() { closeOnce.Do(func() { close(clientDoneCh) }) })
 		go handleConnection(t, listener, errCh, clientDoneCh)
 
 		certPool := x509.NewCertPool()
@@ -138,7 +143,7 @@ func TestDial(t *testing.T) {
 			RootCAs: certPool,
 		}, tunnel.WithDialerKeepAliveSettings(false, time.Second))
 		Expect(err).NotTo(HaveOccurred())
-		assertExpectations(t, dialer, clientDoneCh)
+		assertExpectations(t, dialer, clientDoneCh, &closeOnce)
 
 		select {
 		case err := <-errCh:
@@ -148,7 +153,7 @@ func TestDial(t *testing.T) {
 	})
 }
 
-func assertExpectations(t *testing.T, dialer tunnel.SessionDialer, clientDoneCh chan<- struct{}) {
+func assertExpectations(t *testing.T, dialer tunnel.SessionDialer, clientDoneCh chan struct{}, closeOnce *sync.Once) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -169,7 +174,7 @@ func assertExpectations(t *testing.T, dialer tunnel.SessionDialer, clientDoneCh 
 	Expect(string(buf[:n])).To(Equal("Hello from server"))
 
 	// Signal the server that we're done reading so it can safely tear down.
-	close(clientDoneCh)
+	closeOnce.Do(func() { close(clientDoneCh) })
 
 	err = conn.Close()
 	Expect(err).NotTo(HaveOccurred())
