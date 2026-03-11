@@ -30,8 +30,12 @@ dikastes:
 csi-driver:
   image: csi-driver
   registry: quay.io/calico
+webhooks:
+  image: webhooks
+  registry: quay.io/calico
 
 # Some defaults used in the templates.
+useV3CRDs: false
 includeCRDs: true
 imagePullPolicy: IfNotPresent
 mtu: "1440"
