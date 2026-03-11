@@ -1226,7 +1226,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 					},
 					"communities": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already attached to the route (e.g. added by a prior import filter or by the AddCommunity operation on an earlier rule).",
+							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already present on the route, whether received from a BGP peer (e.g. on a route reflector re-advertising to an eBGP peer) or added locally by an import filter or an earlier export rule's AddCommunity operation.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterCommunityMatch"),
 						},
 					},
@@ -1247,7 +1247,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If non-nil, this filter rule will only apply to routes with the given priority, in the same units as the ...RoutePriority fields in FelixConfiguration.",
+							Description: "If set, this filter rule will only apply to routes with the given priority, in the same units as the ...RoutePriority fields in FelixConfiguration.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -1337,7 +1337,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 					},
 					"communities": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already attached to the route (e.g. added by a prior import filter or by the AddCommunity operation on an earlier rule).",
+							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already present on the route, whether received from a BGP peer (e.g. on a route reflector re-advertising to an eBGP peer) or added locally by an import filter or an earlier export rule's AddCommunity operation.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterCommunityMatch"),
 						},
 					},
@@ -1358,7 +1358,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If non-nil, this filter rule will only apply to routes with the given priority, in the same units as the ...RoutePriority fields in FelixConfiguration.",
+							Description: "If set, this filter rule will only apply to routes with the given priority, in the same units as the ...RoutePriority fields in FelixConfiguration.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
