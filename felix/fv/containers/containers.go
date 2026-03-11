@@ -654,13 +654,18 @@ func (c *Container) waitUntilRunning() error {
 
 	// Set up so we detect if container startup fails.
 	stoppedChan := make(chan struct{})
+	// Capture runCmd locally so the goroutine doesn't race with a retry
+	// that reassigns c.runCmd.
+	runCmd := c.runCmd
 	go func() {
 		defer close(stoppedChan)
-		err := c.runCmd.Wait()
+		err := runCmd.Wait()
 		log.WithError(err).WithField("name", c.Name).Info("Container stopped ('docker run' exited)")
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
-		c.runCmd = nil
+		if c.runCmd == runCmd {
+			c.runCmd = nil
+		}
 	}()
 
 	for {

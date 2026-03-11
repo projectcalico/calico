@@ -3441,7 +3441,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									return nil
 								}
 								return aff[mkey.(nat.AffinityKey)].Backend()
-							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
+							}, 60*time.Second, time.Second).Should(SatisfyAll(
+								Not(BeNil()),
+								Not(Equal(mVal.Backend())),
+							))
 						})
 					}
 
@@ -3677,7 +3680,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							Eventually(func() int { return tcpd.MatchCount("tcp-rst") }, "25s").ShouldNot(BeZero(),
 								"Expected to see TCP RSTs on the connection after backend change")
 							Eventually(pc.IsConnectionReset, "5s").Should(BeTrue(),
-							"Expected the persistent connection to detect the reset after RST seen in tcpdump")
+								"Expected the persistent connection to detect the reset after RST seen in tcpdump")
 						} else {
 							prevCount = pc.PongCount()
 							Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
