@@ -110,8 +110,15 @@ func (o *OperatorManager) Build() error {
 		return err
 	}
 	env, logFields := o.env()
-	logFields["calico_registry"] = o.productRegistry
-	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, o.productRegistry))
+	logFields["product_registry"] = o.productRegistry
+	r, i, err := o.productRegistryParts()
+	if err != nil {
+		return err
+	}
+	logFields[fmt.Sprintf("%s_registry", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
+	logFields[fmt.Sprintf("%s_image_path", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
+	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, r))
+	env = append(env, fmt.Sprintf("%s_IMAGE_PATH=%s", defaultProductEnvPrefix, i))
 	if o.isHashRelease {
 		if o.calicoVersion != "" {
 			env = append(env, fmt.Sprintf("%s_VERSION=%s", defaultProductEnvPrefix, o.calicoVersion))
@@ -156,6 +163,26 @@ func (o *OperatorManager) env() ([]string, logrus.Fields) {
 		env = append(env, "DEBUG=true")
 	}
 	return env, logFields
+}
+
+// productRegistryParts splits the product registry into registry and image path.
+// Typically the product registry is something like "docker.io/calico" or "quay.io/calico".
+// This function splits it into "docker.io" and "calico" or "quay.io" and "calico".
+func (o *OperatorManager) productRegistryParts() (registry string, imagePath string, err error) {
+	// Split and filter out empty parts from double slashes or trailing slashes.
+	var parts []string
+	for _, part := range strings.Split(o.productRegistry, "/") {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) < 2 {
+		err = fmt.Errorf("failed to parse product registry: %s", o.productRegistry)
+		return
+	}
+	registry = strings.Join(parts[:len(parts)-1], "/") + "/"
+	imagePath = parts[len(parts)-1] + "/"
+	return
 }
 
 func (o *OperatorManager) PreBuildValidation() error {

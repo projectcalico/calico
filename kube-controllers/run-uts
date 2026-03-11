@@ -13,6 +13,8 @@ echo GINKGO_ARGS: $GINKGO_ARGS
 # time a suite fails.
 RC=0
 
+mkdir -p report
+
 # Go through each package we've been told to test. If there are actually test files present,
 # then run those tests. If the package is included in SKIP, we'll skip them.
 for PKG in "$@"; do
@@ -25,7 +27,15 @@ for PKG in "$@"; do
 	HAS_TESTS=$(find ${PKG} -name "ut.test")
 	if [ ! -z "${HAS_TESTS}" ]; then
 		echo "Running tests for package: ${PKG}";
-		${PKG}/ut.test ${GINKGO_ARGS} || ((RC++))
+		REPORT_NAME=$(echo "${PKG}" | tr '/./' '_' | sed 's/^_//')
+
+		# Only pass Ginkgo flags to Ginkgo-based test binaries. Vanilla go test
+		# binaries don't recognize --ginkgo.* flags and will fail immediately.
+		if ${PKG}/ut.test --help 2>&1 | grep -q ginkgo; then
+			${PKG}/ut.test --ginkgo.junit-report=report/${REPORT_NAME}.xml ${GINKGO_ARGS} || ((RC++))
+		else
+			${PKG}/ut.test -test.v || ((RC++))
+		fi
 	else
 		echo "WARNING: No tests to run in ${PKG}, skipping"
 	fi

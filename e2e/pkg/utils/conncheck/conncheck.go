@@ -27,6 +27,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
@@ -60,6 +61,7 @@ type ConnectionTester interface {
 	AddServer(server *Server)
 	Deploy()
 	Stop()
+	StopClient(client *Client)
 
 	// Methods for one-shot execution.
 	ExpectSuccess(client *Client, targets ...Target)
@@ -187,7 +189,7 @@ func (c *connectionTester) stop() error {
 	for _, client := range c.clients {
 		By(fmt.Sprintf("Deleting client pod %s", client.pod.Name))
 		err := c.f.ClientSet.CoreV1().Pods(client.namespace.Name).Delete(ctx, client.pod.Name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -195,13 +197,13 @@ func (c *connectionTester) stop() error {
 	for _, server := range c.servers {
 		By(fmt.Sprintf("Deleting server pod %s", server.pod.Name))
 		err := c.f.ClientSet.CoreV1().Pods(server.namespace.Name).Delete(ctx, server.pod.Name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 		if server.service != nil {
 			By(fmt.Sprintf("Deleting server service %s", server.service.Name))
 			err = c.f.ClientSet.CoreV1().Services(server.namespace.Name).Delete(ctx, server.service.Name, metav1.DeleteOptions{})
-			if err != nil {
+			if err != nil && !apierrors.IsNotFound(err) {
 				return err
 			}
 		}
@@ -241,6 +243,33 @@ func (c *connectionTester) AddClient(client *Client) {
 		framework.Failf("Client with ID %s already exists", client.ID())
 	}
 	c.clients[client.ID()] = client
+}
+
+func (c *connectionTester) StopClient(client *Client) {
+	framework.ExpectNoErrorWithOffset(1, c.stopClient(client))
+}
+
+func (c *connectionTester) stopClient(client *Client) error {
+	id := client.ID()
+	if _, ok := c.clients[id]; !ok {
+		return fmt.Errorf("client %s not found", id)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	if client.pod != nil {
+		By(fmt.Sprintf("Stopping client pod %s", client.pod.Name))
+		err := c.f.ClientSet.CoreV1().Pods(client.namespace.Name).Delete(ctx, client.pod.Name, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		if err := e2epod.WaitForPodNotFoundInNamespace(
+			ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, 1*time.Minute,
+		); err != nil {
+			return err
+		}
+	}
+	delete(c.clients, id)
+	return nil
 }
 
 func (c *connectionTester) AddServer(server *Server) {
