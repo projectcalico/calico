@@ -25,12 +25,14 @@ fi
 make build/_output/bin/gen-versions
 build/_output/bin/gen-versions -os-versions=../calico_versions.yml > pkg/components/calico.go
 
-# Modify pull policy to be "Never".
-find . -name '*.go' | xargs sed -i 's/PullIfNotPresent/PullNever/g'
+# Modify pull policy to be "Always" so the operator pulls from the local registry.
+find . -name '*.go' | xargs sed -i 's/PullIfNotPresent/PullAlways/g'
 
-# Build an operator image for us to use and tag it with a local-only tag.
+# Build an operator image for us to use and push it to the local registry.
 make image
 docker tag tigera/operator:latest docker.io/tigera/operator:test-build
+docker tag tigera/operator:latest localhost:5001/tigera/operator:test-build
+docker push --quiet localhost:5001/tigera/operator:test-build
 
 # Clean up after ourselves.
 popd
