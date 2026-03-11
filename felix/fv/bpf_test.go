@@ -3404,6 +3404,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									Expect(err.Error()).To(ContainSubstring("No such file or directory"))
 								}
 
+								// Verify the map is empty after delete; retry if not.
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
 									if len(aff) != 0 {
@@ -3418,6 +3419,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								cc.CheckConnectivity()
 
+								// The BPF datapath should have written exactly one
+								// affinity entry for the connection we just made.
+								// Retry if it hasn't shown up yet.
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
 									if len(aff) != 1 {
