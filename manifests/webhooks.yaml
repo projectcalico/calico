@@ -1,0 +1,173 @@
+# Calico webhooks manifest for non-operator installs.
+#
+# Provides tiered RBAC enforcement for Calico policy resources via a validating
+# admission webhook. Requires TLS certificates - see instructions below.
+#
+# Prerequisites:
+#   1. Create a TLS certificate/key pair for the webhook service. The certificate
+#      must be valid for the DNS names:
+#        - calico-webhooks
+#        - calico-webhooks.calico-system
+#        - calico-webhooks.calico-system.svc
+#
+#   2. Create the TLS secret in the calico-system namespace:
+#        kubectl -n calico-system create secret tls calico-webhooks-tls \
+#          --cert=<cert-file> --key=<key-file>
+#
+#   3. Patch the ValidatingWebhookConfiguration with the CA bundle:
+#        CA_BUNDLE=$(cat <ca-cert-file> | base64 | tr -d '\n')
+#        kubectl patch validatingwebhookconfiguration calico-webhooks \
+#          --type='json' -p="[
+#            {\"op\": \"replace\", \"path\": \"/webhooks/0/clientConfig/caBundle\", \"value\": \"${CA_BUNDLE}\"}
+#          ]"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-webhooks
+  namespace: calico-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: calico-webhooks
+rules:
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-webhooks
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-webhooks
+subjects:
+  - kind: ServiceAccount
+    name: calico-webhooks
+    namespace: calico-system
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calico-webhooks
+  namespace: calico-system
+  labels:
+    k8s-app: calico-webhooks
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: calico-webhooks
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-webhooks
+    spec:
+      serviceAccountName: calico-webhooks
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+      containers:
+        - name: calico-webhooks
+          image: quay.io/calico/webhooks:master
+          args:
+            - webhook
+            - --tls-cert-file=/certs/tls.crt
+            - --tls-private-key-file=/certs/tls.key
+          ports:
+            - containerPort: 6443
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 6443
+              scheme: HTTPS
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            privileged: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: certs
+          secret:
+            secretName: calico-webhooks-tls
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: calico-webhooks
+  namespace: calico-system
+spec:
+  selector:
+    k8s-app: calico-webhooks
+  ports:
+    - port: 443
+      targetPort: 6443
+      protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: calico-webhooks
+webhooks:
+  - name: tiered-rbac.projectcalico.org
+    admissionReviewVersions:
+      - v1
+    clientConfig:
+      # Replace with the CA bundle for the webhook TLS certificate.
+      caBundle: ""
+      service:
+        name: calico-webhooks
+        namespace: calico-system
+        path: /rbac
+    failurePolicy: Fail
+    sideEffects: None
+    timeoutSeconds: 5
+    rules:
+      - apiGroups:
+          - projectcalico.org
+        apiVersions:
+          - v3
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
