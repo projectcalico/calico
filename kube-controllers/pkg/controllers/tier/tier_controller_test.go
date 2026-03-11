@@ -33,12 +33,12 @@ import (
 func newTestController(cli *fake.Clientset, tier *v3.Tier, gnps ...*v3.GlobalNetworkPolicy) *TierController {
 	tierStore := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	if tier != nil {
-		tierStore.Add(tier)
+		_ = tierStore.Add(tier)
 	}
 
 	gnpInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
 	for _, gnp := range gnps {
-		gnpInformer.Add(gnp)
+		_ = gnpInformer.Add(gnp)
 	}
 	npInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
 	sgnpInformer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{tierIndex: tierKeyFunc})
