@@ -237,7 +237,7 @@ func TestBGPFilterValidation(t *testing.T) {
 				Spec: v3.BGPFilterSpec{ImportV4: []v3.BGPFilterRuleV4{
 					{
 						Action:      v3.Accept,
-						Communities: &v3.BGPFilterCommunityMatch{Values: []string{"65000:100"}},
+						Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100"}},
 					},
 				}},
 			},
@@ -250,7 +250,7 @@ func TestBGPFilterValidation(t *testing.T) {
 				Spec: v3.BGPFilterSpec{ImportV4: []v3.BGPFilterRuleV4{
 					{
 						Action:      v3.Accept,
-						Communities: &v3.BGPFilterCommunityMatch{Values: []string{"65000:100:200"}},
+						Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100:200"}},
 					},
 				}},
 			},
@@ -263,11 +263,11 @@ func TestBGPFilterValidation(t *testing.T) {
 				Spec: v3.BGPFilterSpec{ImportV4: []v3.BGPFilterRuleV4{
 					{
 						Action:      v3.Accept,
-						Communities: &v3.BGPFilterCommunityMatch{Values: []string{"70000:100"}},
+						Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"70000:100"}},
 					},
 				}},
 			},
-			err:   "standard communities must have 16-bit values",
+			err:   "Invalid value",
 			valid: false,
 		},
 		{
@@ -277,15 +277,15 @@ func TestBGPFilterValidation(t *testing.T) {
 				Spec: v3.BGPFilterSpec{ImportV4: []v3.BGPFilterRuleV4{
 					{
 						Action:      v3.Accept,
-						Communities: &v3.BGPFilterCommunityMatch{Values: []string{"not-a-community"}},
+						Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"not-a-community"}},
 					},
 				}},
 			},
-			err:   "standard communities must have 16-bit values",
+			err:   "Invalid value",
 			valid: false,
 		},
 
-		// --- CEL: AddCommunity value format validation ---
+		// --- AddCommunity value format validation ---
 		{
 			name: "valid standard community in AddCommunity operation",
 			obj: &v3.BGPFilter{
@@ -329,7 +329,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					},
 				}},
 			},
-			err:   "standard communities must have 16-bit values",
+			err:   "Invalid value",
 			valid: false,
 		},
 		{
@@ -345,7 +345,356 @@ func TestBGPFilterValidation(t *testing.T) {
 					},
 				}},
 			},
-			err:   "standard communities must have 16-bit values",
+			err:   "Invalid value",
+			valid: false,
+		},
+
+		// --- Comprehensive community value pattern boundary tests ---
+
+		// Standard community: 16-bit boundary values
+		{
+			name: "standard community 0:0 (minimum)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-min"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"0:0"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "standard community 65535:65535 (maximum)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-max"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65535:65535"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "standard community 1:1 (single digit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-single"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"1:1"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "standard community 9999:9999 (4-digit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-4digit"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"9999:9999"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "standard community 59999:59999 (upper mid range)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-59999"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"59999:59999"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "standard community 65535:0 (max:min)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-maxmin"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65535:0"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "invalid standard community 65536:0 (first component over 16-bit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-65536a"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65536:0"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid standard community 0:65536 (second component over 16-bit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-65536b"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"0:65536"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid standard community 99999:0 (5-digit over range)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-99999"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"99999:0"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid standard community 100000:0 (6 digits)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-6digit"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"100000:0"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid standard community with leading zero 01:02",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-std-leading0"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"01:02"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+
+		// Large community: 32-bit boundary values
+		{
+			name: "large community 0:0:0 (minimum)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-lg-min"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"0:0:0"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "large community 4294967295:4294967295:4294967295 (maximum)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-lg-max"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"4294967295:4294967295:4294967295"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "large community 1:1:1 (single digit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-lg-single"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"1:1:1"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "large community 999999999:999999999:999999999 (9-digit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-lg-9digit"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"999999999:999999999:999999999"}}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "invalid large community 4294967296:0:0 (first component over 32-bit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-lg-over-a"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"4294967296:0:0"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid large community 0:4294967296:0 (second component over 32-bit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-lg-over-b"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"0:4294967296:0"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid large community 0:0:4294967296 (third component over 32-bit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-lg-over-c"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"0:0:4294967296"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid large community with leading zero 01:02:03",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-lg-leading0"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"01:02:03"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+
+		// Malformed community strings
+		{
+			name: "invalid community: empty string",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-empty"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{""}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid community: single number",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-single-num"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"12345"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid community: four colons",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-four-colon"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"1:2:3:4"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid community: non-numeric",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-alpha"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"abc:def"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid community: negative number",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-negative"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"-1:100"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid community: spaces",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-spaces"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"100 : 200"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid community: trailing colon",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "comm-trailing"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"100:200:"}}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+
+		// AddCommunity also uses BGPCommunityValue — spot-check boundaries
+		{
+			name: "AddCommunity with max standard community 65535:65535",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-std-max"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65535:65535"}},
+					}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "AddCommunity with max large community",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-lg-max"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "4294967295:4294967295:4294967295"}},
+					}},
+				}},
+			},
+			valid: true,
+		},
+		{
+			name: "invalid AddCommunity 65536:65536 (over 16-bit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-over16"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65536:65536"}},
+					}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid AddCommunity 4294967296:0:0 (over 32-bit)",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-over32"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "4294967296:0:0"}},
+					}},
+				}},
+			},
+			err:   "Invalid value",
+			valid: false,
+		},
+		{
+			name: "invalid AddCommunity with leading zero",
+			obj: &v3.BGPFilter{
+				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-lead0"},
+				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
+					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "0100:200"}},
+					}},
+				}},
+			},
+			err:   "Invalid value",
 			valid: false,
 		},
 	}

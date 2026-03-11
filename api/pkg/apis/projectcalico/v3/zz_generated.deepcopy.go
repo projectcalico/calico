@@ -275,7 +275,7 @@ func (in *BGPFilterCommunityMatch) DeepCopyInto(out *BGPFilterCommunityMatch) {
 	*out = *in
 	if in.Values != nil {
 		in, out := &in.Values, &out.Values
-		*out = make([]string, len(*in))
+		*out = make([]BGPCommunityValue, len(*in))
 		copy(*out, *in)
 	}
 	return

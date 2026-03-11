@@ -265,19 +265,22 @@ const (
 	BGPFilterPeerTypeIBGP BGPFilterPeerType = "iBGP"
 )
 
+// BGPCommunityValue is a BGP community string in `aa:nn` (standard) or `aa:nn:mm` (large) format.
+// For standard communities, each component must be a 16-bit value (0-65535).
+// For large communities, each component must be a 32-bit value (0-4294967295).
+// +kubebuilder:validation:MaxLength=32
+// +kubebuilder:validation:Pattern=`^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$`
+type BGPCommunityValue string
+
 // BGPFilterCommunityMatch specifies community-based match criteria for a BGP filter rule.
 // Currently only a single community value is supported.  A MatchOperator field may be
 // introduced in the future to support anyOf/allOf semantics with multiple values.
 // +mapType=atomic
 type BGPFilterCommunityMatch struct {
-	// Values is a list of BGP community values to match against.  Each value must be in
-	// `aa:nn` (standard) or `aa:nn:mm` (large) format.
-	// For standard communities, `aa` and `nn` must be 16-bit values (0-65535).
-	// For large communities, `aa`, `nn`, and `mm` must be 32-bit values (0-4294967295).
+	// Values is a list of BGP community values to match against.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=1
-	// +kubebuilder:validation:XValidation:rule="self.all(v, v.matches('^[0-9]+:[0-9]+$') ? (int(v.split(':')[0]) <= 65535 && int(v.split(':')[1]) <= 65535) : (v.matches('^[0-9]+:[0-9]+:[0-9]+$') && int(v.split(':')[0]) <= 4294967295 && int(v.split(':')[1]) <= 4294967295 && int(v.split(':')[2]) <= 4294967295))",message="standard communities must have 16-bit values (aa:nn), large communities must have 32-bit values (aa:nn:mm)"
-	Values []string `json:"values" validate:"required,dive"`
+	Values []BGPCommunityValue `json:"values" validate:"required,dive"`
 }
 
 // BGPFilterOperation is a discriminated union representing a single route modification.
@@ -302,11 +305,8 @@ type BGPFilterOperation struct {
 // BGPFilterAddCommunity specifies a BGP community to add to a route.
 // +mapType=atomic
 type BGPFilterAddCommunity struct {
-	// Value is a BGP community value in `aa:nn` (standard) or `aa:nn:mm` (large) format.
-	// For standard communities, `aa` and `nn` must be 16-bit values (0-65535).
-	// For large communities, `aa`, `nn`, and `mm` must be 32-bit values (0-4294967295).
-	// +kubebuilder:validation:XValidation:rule="self.matches('^[0-9]+:[0-9]+$') ? (int(self.split(':')[0]) <= 65535 && int(self.split(':')[1]) <= 65535) : (self.matches('^[0-9]+:[0-9]+:[0-9]+$') && int(self.split(':')[0]) <= 4294967295 && int(self.split(':')[1]) <= 4294967295 && int(self.split(':')[2]) <= 4294967295)",message="standard communities must have 16-bit values (aa:nn), large communities must have 32-bit values (aa:nn:mm)"
-	Value string `json:"value" validate:"required"`
+	// Value is the BGP community to add.
+	Value BGPCommunityValue `json:"value" validate:"required"`
 }
 
 // BGPFilterPrependASPath specifies AS numbers to prepend to a route's AS path.

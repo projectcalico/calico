@@ -223,12 +223,12 @@ func Test_filterMatchCommunity(t *testing.T) {
 	}{
 		{
 			name:     "standard community",
-			comm:     &v3.BGPFilterCommunityMatch{Values: []string{"65000:100"}},
+			comm:     &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100"}},
 			expected: "((65000, 100) ~ bgp_community)",
 		},
 		{
 			name:     "large community",
-			comm:     &v3.BGPFilterCommunityMatch{Values: []string{"65000:10:20"}},
+			comm:     &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:10:20"}},
 			expected: "((65000, 10, 20) ~ bgp_large_community)",
 		},
 		{
@@ -238,7 +238,7 @@ func Test_filterMatchCommunity(t *testing.T) {
 		},
 		{
 			name:    "empty values",
-			comm:    &v3.BGPFilterCommunityMatch{Values: []string{}},
+			comm:    &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{}},
 			wantErr: true,
 		},
 	}
@@ -412,7 +412,7 @@ func Test_BGPFilterBIRDFuncs_WithCommunitiesASPathPriorityAndOperations(t *testi
 			// Import rule: match community and set priority
 			{
 				Action:      v3.Accept,
-				Communities: &v3.BGPFilterCommunityMatch{Values: []string{"65000:100"}},
+				Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100"}},
 				Operations: []v3.BGPFilterOperation{
 					{SetPriority: &v3.BGPFilterSetPriority{Value: 100}},
 				},
@@ -544,7 +544,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 				MatchOperator: v3.In,
 				PrefixLength:  &v3.BGPFilterPrefixLengthV4{Min: int32Helper(24), Max: int32Helper(28)},
 				PeerType:      v3.BGPFilterPeerTypeIBGP,
-				Communities:   &v3.BGPFilterCommunityMatch{Values: []string{"65000:100"}},
+				Communities:   &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100"}},
 				ASPathPrefix:  []numorstring.ASNumber{65000},
 				Priority:      &prio512,
 				Interface:     "eth0",
@@ -559,7 +559,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 				CIDR:          "10.244.0.0/16",
 				MatchOperator: v3.In,
 				PeerType:      v3.BGPFilterPeerTypeEBGP,
-				Communities:   &v3.BGPFilterCommunityMatch{Values: []string{"65000:100:999"}},
+				Communities:   &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100:999"}},
 				ASPathPrefix:  []numorstring.ASNumber{65000, 65001},
 				Priority:      &prio100,
 				Action:        v3.Accept,
@@ -578,7 +578,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 				Source:        v3.BGPFilterSourceRemotePeers,
 				Interface:     "eth1",
 				PeerType:      v3.BGPFilterPeerTypeEBGP,
-				Communities:   &v3.BGPFilterCommunityMatch{Values: []string{"65000:42"}},
+				Communities:   &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:42"}},
 				ASPathPrefix:  []numorstring.ASNumber{65000, 65001},
 				Priority:      &prio100,
 				Action:        v3.Accept,
@@ -697,14 +697,14 @@ func Test_BGPFilterBIRDFuncs_CommunityMatchOnExport(t *testing.T) {
 		ExportV4: []v3.BGPFilterRuleV4{
 			{
 				Action:      v3.Accept,
-				Communities: &v3.BGPFilterCommunityMatch{Values: []string{"65000:42"}},
+				Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:42"}},
 				Operations: []v3.BGPFilterOperation{
 					{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65001:100"}},
 				},
 			},
 			{
 				Action:      v3.Reject,
-				Communities: &v3.BGPFilterCommunityMatch{Values: []string{"65000:10:20"}},
+				Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:10:20"}},
 			},
 		},
 	}

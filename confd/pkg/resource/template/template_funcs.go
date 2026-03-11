@@ -232,7 +232,7 @@ func filterMatchCommunity(communities *v3.BGPFilterCommunityMatch) (string, erro
 		return "", fmt.Errorf("empty communities in BGPFilter")
 	}
 	// Currently MaxItems=1, so we only handle one value.
-	value := communities.Values[0]
+	value := string(communities.Values[0])
 	parts := strings.Split(value, ":")
 	switch len(parts) {
 	case 2:
@@ -277,7 +277,7 @@ func filterOperationStatements(operations []v3.BGPFilterOperation) ([]string, er
 	var stmts []string
 	for _, op := range operations {
 		if op.AddCommunity != nil {
-			parts := strings.Split(op.AddCommunity.Value, ":")
+			parts := strings.Split(string(op.AddCommunity.Value), ":")
 			switch len(parts) {
 			case 2:
 				stmts = append(stmts, fmt.Sprintf("bgp_community.add((%s, %s));", parts[0], parts[1]))

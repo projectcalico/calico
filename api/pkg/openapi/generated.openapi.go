@@ -945,7 +945,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterAddCommunity(ref common.Reference
 				Properties: map[string]spec.Schema{
 					"value": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Value is a BGP community value in `aa:nn` (standard) or `aa:nn:mm` (large) format. For standard communities, `aa` and `nn` must be 16-bit values (0-65535). For large communities, `aa`, `nn`, and `mm` must be 32-bit values (0-4294967295).",
+							Description: "Value is the BGP community to add.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -972,7 +972,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref common.Referen
 				Properties: map[string]spec.Schema{
 					"values": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Values is a list of BGP community values to match against.  Each value must be in `aa:nn` (standard) or `aa:nn:mm` (large) format. For standard communities, `aa` and `nn` must be 16-bit values (0-65535). For large communities, `aa`, `nn`, and `mm` must be 32-bit values (0-4294967295).",
+							Description: "Values is a list of BGP community values to match against.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
