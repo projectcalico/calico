@@ -115,10 +115,10 @@ func filterAction(action v3.BGPFilterAction) (string, error) {
 
 var (
 	operatorLUT = map[v3.BGPFilterMatchOperator]string{
-		v3.Equal:    "=",
-		v3.NotEqual: "!=",
-		v3.In:       "~",
-		v3.NotIn:    "!~",
+		v3.MatchOperatorEqual:    "=",
+		v3.MatchOperatorNotEqual: "!=",
+		v3.MatchOperatorIn:       "~",
+		v3.MatchOperatorNotIn:    "!~",
 	}
 )
 

@@ -150,9 +150,11 @@ WHAT?=.
 GINKGO_FOCUS?=.*
 
 .PHONY:ut
-ut: kind-cluster-create
+ut: kind-cluster-create setup-envtest
 	mkdir -p report
 	$(DOCKER_RUN) \
+		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
+		-e KUBEBUILDER_ASSETS=/envtest \
 		--privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
