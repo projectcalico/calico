@@ -166,8 +166,8 @@ if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
   echo "Patching FelixConfiguration to configure Felix program cluster routes"
   ${kubectl} patch felixconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Enabled"}}'
 
-  echo "Apply BGPConfiguration to configure BIRD to not program cluster routes"
-  ${kubectl} apply -f $TEST_DIR/infra/bgpconfig.yaml
+  echo "Patching BGPConfiguration to configure BIRD to not program cluster routes"
+  ${kubectl} patch bgpconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Disabled"}}'
 fi
 
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
