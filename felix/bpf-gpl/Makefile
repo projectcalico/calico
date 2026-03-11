@@ -126,11 +126,11 @@ $(LIBBPF_FILE_CREATED):
 ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
 	$(info "Directory does not exist.")
 	@echo "Directory does not exist."
-	git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
+	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
 endif
 	rm -rf .libbpf-*
 	cd $(LIBBPF_DIR) && \
-		git fetch --tags && git checkout $(LIBBPF_VERSION)
+		env -u GIT_DIR -u GIT_WORK_TREE git fetch --tags && env -u GIT_DIR -u GIT_WORK_TREE git checkout $(LIBBPF_VERSION)
 	touch $(LIBBPF_FILE_CREATED)
 
 
