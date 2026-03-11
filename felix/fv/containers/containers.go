@@ -214,6 +214,8 @@ func UniqueName(namePrefix string) string {
 	return name
 }
 
+const maxContainerStartRetries = 3
+
 func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) {
 	c = &Container{
 		Name:             name,
@@ -242,33 +244,56 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	// Add remaining args
 	runArgs = append(runArgs, args...)
 
-	c.runCmd = utils.Command("docker", runArgs...)
+	var lastErr error
+	for attempt := 1; attempt <= maxContainerStartRetries; attempt++ {
+		if attempt > 1 {
+			log.WithFields(log.Fields{
+				"container": c.Name,
+				"attempt":   attempt,
+				"lastErr":   lastErr,
+			}).Warn("Retrying container startup after transient failure")
+			// Wait for log goroutines from the previous attempt to finish.
+			c.logFinished.Wait()
+			// Clean up any remnants of the failed container.
+			cleanCmd := utils.Command("docker", "rm", "-f", c.Name)
+			_ = cleanCmd.Run()
+			time.Sleep(time.Duration(attempt-1) * time.Second)
+		}
 
-	if opts.WithStdinPipe {
-		var err error
-		c.Stdin, err = c.runCmd.StdinPipe()
+		c.runCmd = utils.Command("docker", runArgs...)
+
+		if opts.WithStdinPipe {
+			var err error
+			c.Stdin, err = c.runCmd.StdinPipe()
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// Get the command's output pipes, so we can merge those into the test's own logging.
+		stdout, err := c.runCmd.StdoutPipe()
 		Expect(err).NotTo(HaveOccurred())
+		stderr, err := c.runCmd.StderrPipe()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Start the container running.
+		err = c.runCmd.Start()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Merge container's output into our own logging.
+		c.logFinished.Add(2)
+
+		go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
+		go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches, nil)
+
+		// Note: it might take a long time for the container to start running,
+		// e.g. if the image needs to be downloaded.
+		lastErr = c.waitUntilRunning()
+		if lastErr == nil {
+			break
+		}
+		log.WithError(lastErr).WithField("container", c.Name).Warn("Container failed to start")
 	}
-
-	// Get the command's output pipes, so we can merge those into the test's own logging.
-	stdout, err := c.runCmd.StdoutPipe()
-	Expect(err).NotTo(HaveOccurred())
-	stderr, err := c.runCmd.StderrPipe()
-	Expect(err).NotTo(HaveOccurred())
-
-	// Start the container running.
-	err = c.runCmd.Start()
-	Expect(err).NotTo(HaveOccurred())
-
-	// Merge container's output into our own logging.
-	c.logFinished.Add(2)
-
-	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
-	go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches, nil)
-
-	// Note: it might take a long time for the container to start running, e.g. if the image
-	// needs to be downloaded.
-	c.WaitUntilRunning()
+	Expect(lastErr).NotTo(HaveOccurred(),
+		fmt.Sprintf("Container %s failed to start after %d attempts", c.Name, maxContainerStartRetries))
 
 	// Fill in rest of container struct.
 	c.IP = c.GetIP()
@@ -621,6 +646,11 @@ func (c *Container) GetSinglePID(processName string) int {
 }
 
 func (c *Container) WaitUntilRunning() {
+	err := c.waitUntilRunning()
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func (c *Container) waitUntilRunning() error {
 	log.Info("Wait for container to be listed in docker ps")
 
 	// Set up so we detect if container startup fails.
@@ -635,13 +665,19 @@ func (c *Container) WaitUntilRunning() {
 	}()
 
 	for {
-		Expect(stoppedChan).NotTo(BeClosed(), fmt.Sprintf("Container %s failed before being listed in 'docker ps'", c.Name))
+		select {
+		case <-stoppedChan:
+			return fmt.Errorf("container %s failed before being listed in 'docker ps'", c.Name)
+		default:
+		}
 
 		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred(), "Failed to run 'docker ps'")
+		if err != nil {
+			return fmt.Errorf("failed to run 'docker ps': %w", err)
+		}
 		if strings.Contains(string(out), c.Name) {
-			break
+			return nil
 		}
 		time.Sleep(1000 * time.Millisecond)
 	}
