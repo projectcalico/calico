@@ -345,6 +345,7 @@ rules:
       - projectcalico.org
     resources:
       - felixconfigurations
+      - bgpconfigurations
       - ippools
     verbs:
       - create
