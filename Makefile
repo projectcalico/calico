@@ -100,10 +100,33 @@ clean:
 	$(MAKE) -C whisker clean
 	$(MAKE) -C whisker-backend clean
 
-## Build the Helm chart.
-.PHONY: chart
-chart:
-	$(MAKE) -C node chart
+CHART_DESTINATION ?= ./bin
+
+## Build helm charts.
+chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz \
+			 $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz \
+			 $(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+
+$(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+	mkdir -p $(CHART_DESTINATION)
+	bin/helm package ./charts/tigera-operator \
+	--destination $(CHART_DESTINATION)/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
+
+$(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/crd.projectcalico.org.v1/ -type f)
+	mkdir -p $(CHART_DESTINATION)
+	bin/helm package ./charts/crd.projectcalico.org.v1/ \
+	--destination $(CHART_DESTINATION)/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
+
+$(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/projectcalico.org.v3/ -type f)
+	mkdir -p $(CHART_DESTINATION)
+	bin/helm package ./charts/projectcalico.org.v3/ \
+	--destination $(CHART_DESTINATION)/ \
+	--version $(GIT_VERSION) \
+	--app-version $(GIT_VERSION)
 
 ## Run all tests in the repository.
 .PHONY: st
