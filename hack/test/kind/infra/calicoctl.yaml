@@ -28,7 +28,7 @@ spec:
   serviceAccountName: calicoctl
   containers:
     - name: calicoctl
-      image: calico/ctl:test-build
+      image: localhost:5001/calico/ctl:test-build
       command:
         - calicoctl
       args:
