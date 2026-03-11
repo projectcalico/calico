@@ -108,6 +108,8 @@ make gen-manifests          # Update manifests/ from helm charts
 make gen-semaphore-yaml     # Regenerate .semaphore/semaphore.yml from templates
 ```
 
+**After modifying API types** (e.g., `api/pkg/apis/projectcalico/v3/felixconfig.go`), run `make generate` — it regenerates OpenAPI specs, CRDs, deep copy, Felix config docs, manifests, and runs `fix-changed`. See also `hack/docs/adding-an-api.md`.
+
 ## Generated Files (DO NOT edit directly)
 
 | Generated file | Edit this instead | Regenerate with |
@@ -242,6 +244,22 @@ lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
 - Before building: `make -C felix clone-libbpf`
 - BPF tooling configured in `metadata.mk` (LIBBPF_VERSION, BPFTOOL_IMAGE)
 
+### Kind Cluster Development
+
+Kind cluster targets are defined in `lib.Makefile` and orchestrated from the root `Makefile`. Scripts and infrastructure live in `hack/test/kind/`.
+
+```bash
+make kind-up                # Build all images + create cluster + deploy Calico (full bringup)
+make kind-cluster-create    # Create the kind cluster (no images, no Calico)
+make kind-build-images      # Build all container images needed for the kind cluster
+make kind-deploy            # Load images + install Calico via Helm + wait for readiness
+make kind-reload            # Reload only changed images onto an existing cluster (incremental)
+make kind-cluster-destroy   # Tear down the kind cluster
+make kind-down              # Alias for kind-cluster-destroy
+```
+
+Image loading is incremental — `kind-reload` and `kind-deploy` compare local Docker image IDs against what's on the cluster and only transfer changed images. Override the cluster name with `KIND_NAME=<name>`.
+
 ### Cherry-picking to Release Branches
 
 1. Merge PR to master first
@@ -264,6 +282,10 @@ lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
 - `felix/dataplane/` - Dataplane implementations (eBPF, iptables, nftables)
 - `node/pkg/lifecycle/startup/startup.go` - Node initialization
 - `calicoctl/calicoctl/calicoctl.go` - CLI entry point
+
+**Kind Cluster Infrastructure:**
+- `hack/test/kind/` - Kind cluster scripts (creation, image loading, deployment, teardown)
+- `hack/test/kind/infra/` - Kind cluster config, Helm values, supporting manifests
 
 **Testing:**
 - `felix/fv/` - Felix functional verification tests (Ginkgo v2-based)

@@ -15,7 +15,7 @@ BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 ###############################################################################
 include ../lib.Makefile
 
-SRC_FILES=$(shell find pkg cmd internal -name '*.go') $(shell find ../libcalico-go -name '*.go')
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 
@@ -133,13 +133,13 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 # Builds the statically compiled binaries into a container.
-$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build build-cni-bins bin/LICENSE
+$(DEPLOY_CONTAINER_STATIC_MARKER): $(IMAGE_DEPS) build build-cni-bins bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # Builds the FIPS binaries into a container.
-$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build build-cni-bins bin/LICENSE
+$(DEPLOY_CONTAINER_FIPS_MARKER): $(IMAGE_DEPS) build build-cni-bins bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
@@ -236,17 +236,17 @@ ut: $(UT_PREREQS)
 
 ## Run unit tests against etcdv3 with CNI spec 0.3.1.
 ut-etcd: $(UT_PREREQS)
-	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3 CNI_SPEC_VERSION=0.3.1
+	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3 CNI_SPEC_VERSION=0.3.1 JUNIT_REPORT_NAME=cni_plugin_ut_etcd.xml
 
 ## Run unit tests against KDD with CNI spec 1.0.0 (excludes KubeVirt tests).
 ut-kdd: $(UT_PREREQS)
 	$(MAKE) remove-kubevirt-crds
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 JUNIT_REPORT_NAME=cni_plugin_ut_kdd.xml GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
 
 ## Run KubeVirt-specific unit tests against KDD with CNI spec 1.0.0.
 ut-kubevirt: $(UT_PREREQS)
 	$(MAKE) install-kubevirt-crds
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 JUNIT_REPORT_NAME=cni_plugin_ut_kubevirt.xml GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
 
 ut-datastore:
 	# The tests need to run as root
@@ -266,7 +266,8 @@ ut-datastore:
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
+			mkdir -p report && \
+			ginkgo -cover -r --junit-report=$(JUNIT_REPORT_NAME) --output-dir=report/ -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
 
 ###############################################################################
 # Install test

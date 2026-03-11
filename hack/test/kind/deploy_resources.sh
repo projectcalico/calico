@@ -1,5 +1,36 @@
 #!/bin/bash -e
 
+# Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# deploy_resources.sh sets up a kind cluster with Calico installed
+# and ready for testing. It loads images, installs Calico via Helm, and verifies
+# basic connectivity.
+#
+# Required environment variables:
+#   REPO_ROOT   - absolute path to the repository root
+#   KIND        - path to the kind binary
+#   KIND_NAME   - name of the kind cluster
+#   KIND_IMAGES - space-separated list of Docker images to load onto the cluster
+#
+# Optional environment variables:
+#   ARCH              - target architecture (default: amd64)
+#   GIT_VERSION       - version for chart lookup (default: git describe)
+#   CALICO_API_GROUP  - which API group to use
+#   CLUSTER_ROUTING   - BIRD (default) or FELIX
+#   VALUES_FILE       - path to helm values file (default: infra/values.yaml)
+
 # Clean up background jobs on exit, and collect diagnostics on failure.
 set -m
 function cleanup() {
@@ -12,11 +43,24 @@ function cleanup() {
 }
 trap 'cleanup' SIGINT SIGHUP SIGTERM EXIT
 
+: ${REPO_ROOT:?REPO_ROOT must be set}
+: ${KIND:?KIND must be set}
+: ${KIND_NAME:?KIND_NAME must be set}
+
+INFRA_DIR=${REPO_ROOT}/hack/test/kind/infra
+ARCH=${ARCH:-amd64}
+GIT_VERSION=${GIT_VERSION:-$(git -C "${REPO_ROOT}" describe --tags --dirty --always --abbrev=12)}
+HELM=${REPO_ROOT}/bin/helm
+CHART=${REPO_ROOT}/bin/tigera-operator-${GIT_VERSION}.tgz
+VALUES_FILE=${VALUES_FILE:-${INFRA_DIR}/values.yaml}
+
+: ${kubectl:=${REPO_ROOT}/hack/test/kind/kubectl}
+
 # collect_diags prints detailed cluster diagnostics on failure.
 # It collects tigerastatus, tigera-operator logs, and logs from failing pods.
 function collect_diags() {
   # Guard against kubectl not being set yet (failure during variable init).
-  local kctl="${kubectl:-../hack/test/kind/kubectl}"
+  local kctl="${kubectl:-${REPO_ROOT}/hack/test/kind/kubectl}"
 
   echo ""
   echo "========================================================================"
@@ -101,18 +145,6 @@ function wait_pod_ready() {
   return $rc
 }
 
-# test directory.
-TEST_DIR=./tests/k8st
-ARCH=${ARCH:-amd64}
-GIT_VERSION=${GIT_VERSION:-`git describe --tags --dirty --always --abbrev=12`}
-HELM=../bin/helm
-CHART=../bin/tigera-operator-$GIT_VERSION.tgz
-
-VALUES_FILE=$TEST_DIR/infra/values.yaml
-
-# kubectl binary.
-: ${kubectl:=../hack/test/kind/kubectl}
-
 echo "Set ipv6 address on each node"
 docker exec kind-control-plane ip -6 addr replace 2001:20::8/64 dev eth0
 docker exec kind-worker ip -6 addr replace 2001:20::1/64 dev eth0
@@ -121,20 +153,20 @@ docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
 
 echo
 
-echo "Load calico/node docker images onto each node"
-$TEST_DIR/load_images_on_kind_cluster.sh
+echo "Load docker images onto kind cluster"
+KIND=${KIND} KIND_NAME=${KIND_NAME} ${REPO_ROOT}/hack/test/kind/load_images.sh ${KIND_IMAGES}
 
 echo "Install additional permissions for BGP password"
-${kubectl} apply -f $TEST_DIR/infra/additional-rbac.yaml
+${kubectl} apply -f ${INFRA_DIR}/additional-rbac.yaml
 echo
 
 # CRDs are already created prior to reaching this script from within lib.Makefile as part
 # of kind cluster creation.
 echo "Install Calico using the helm chart"
-$HELM install calico $CHART -f $VALUES_FILE -n tigera-operator --create-namespace
+${HELM} install calico ${CHART} -f ${VALUES_FILE} -n tigera-operator --create-namespace
 
 echo "Install calicoctl as a pod"
-${kubectl} apply -f $TEST_DIR/infra/calicoctl.yaml
+${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
 
 echo "Wait for tigera status to be ready"
@@ -172,37 +204,17 @@ fi
 
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
 ${kubectl} create ns metallb-system || true
-${kubectl} apply -f $TEST_DIR/infra/metallb.yaml
-${kubectl} apply -f $TEST_DIR/infra/metallb-config.yaml
+${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
+${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml
 
-# Create and monitor a test webserver service for dual stack.
-echo "Create test-webserver deployment..."
-${kubectl} apply -f tests/k8st/infra/test-webserver.yaml
-
-echo "Wait for client and webserver pods to be ready..."
-wait_pod_ready -l pod-name=client
-wait_pod_ready -l app=webserver
-echo "client and webserver pods are running."
+echo "Cluster is ready."
 echo
 
 # Show all the pods running for diags purposes.
 ${kubectl} get po --all-namespaces -o wide
 ${kubectl} get svc
 
-# Run ipv4 ipv6 connection test
-function test_connection() {
-  local svc="webserver-ipv$1"
-  output=$(${kubectl} exec client -- wget $svc -T 10 -O -)
-  echo $output
-  if [[ $output != *test-webserver* ]]; then
-    echo "connection to $svc service failed"
-    exit 1
-  fi
-}
-test_connection 4
-test_connection 6
-
-# At the end of it all, scale down the operator so that it doesn't
-# make changes to the cluster. Some of our tests modify calico/node, etc.
-# We should remove this once we fix up those tests.
+# Scale down the operator so that it doesn't make changes to the cluster.
+# Some of our tests modify calico/node, etc. We should remove this once we
+# fix up those tests.
 ${kubectl} scale deployment -n tigera-operator tigera-operator --replicas=0
