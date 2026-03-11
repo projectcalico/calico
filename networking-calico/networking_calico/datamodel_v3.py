@@ -255,6 +255,8 @@ def _is_namespaced(resource_kind):
         return True
     if resource_kind == "NetworkPolicy":
         return True
+    if resource_kind == "LiveMigration":
+        return True
     return False
 
 
