@@ -30,6 +30,10 @@ spec:
           jsonPath: .status.conditions[?(@.type=='Available')].lastTransitionTime
           name: Since
           type: date
+        - description: Error message when the component is degraded.
+          jsonPath: .status.conditions[?(@.type=='Degraded')].message
+          name: Message
+          type: string
       name: v1
       schema:
         openAPIV3Schema:
