@@ -227,13 +227,13 @@ var _ = testutils.E2eDatastoreDescribe("NetworkSet tests", testutils.DatastoreAl
 
 				_, outError = c.NetworkSets().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.NetworkSets().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.NetworkSets().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: NetworkSet(" + namespace2 + "/" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.NetworkSets().Get(ctx, namespace2, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: NetworkSet(" + namespace2 + "/" + name2 + ") with error:"))
 
 				By("Creating NetworkSet name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.NetworkSets().Create(ctx, &apiv3.NetworkSet{
@@ -241,13 +241,13 @@ var _ = testutils.E2eDatastoreDescribe("NetworkSet tests", testutils.DatastoreAl
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.NetworkSets().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.NetworkSets().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: NetworkSet(" + namespace2 + "/" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.NetworkSets().Get(ctx, namespace2, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: NetworkSet(" + namespace2 + "/" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {

@@ -47,7 +47,7 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
-	rm -rf ./bin
+	rm -rf ./bin .stamp.*
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
@@ -130,11 +130,10 @@ gen-deps-files:
 $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/*
 	@{ \
 	  echo "!!! GENERATED FILE, DO NOT EDIT !!!" && \
-	  echo "This file contains the list of modules that this package depends on" && \
-	  echo "in order to trigger CI on changes" && \
+	  echo "Run 'make gen-deps-files' to regenerate." && \
 	  echo && \
 	  grep '^go' go.mod && \
-	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules $(dir $@)"; \
+	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
 
 CHART_DESTINATION ?= ./bin
@@ -188,17 +187,23 @@ K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 CLUSTER_ROUTING ?= BIRD
 
+## Build all test images, create a kind cluster, and deploy Calico on it.
+.PHONY: kind-up
+kind-up: kind-build-images
+	$(MAKE) kind-cluster-create CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
+	$(MAKE) kind-deploy
+
 ## Create a kind cluster and run all e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) -C node kind-k8st-setup
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
 	$(MAKE) e2e-run-test
 	$(MAKE) e2e-run-cnp-test
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) -C node kind-k8st-setup
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
 	$(MAKE) e2e-run-cnp-test
 
 ## Run the general e2e tests against a pre-existing kind cluster.

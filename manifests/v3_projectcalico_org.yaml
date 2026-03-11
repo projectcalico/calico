@@ -9784,6 +9784,13 @@ spec:
                           type: object
                       type: object
                   type: object
+                metricsPort:
+                  description: |-
+                    MetricsPort configures the port that Goldmane uses to serve Prometheus metrics.
+                    When set to a non-zero value, Goldmane will expose a /metrics endpoint on the given port.
+                    Set to zero to disable metrics. If omitted, metrics are disabled.
+                  format: int32
+                  type: integer
               type: object
             status:
               description: GoldmaneStatus defines the observed state of Goldmane
@@ -31624,6 +31631,10 @@ spec:
           jsonPath: .status.conditions[?(@.type=='Available')].lastTransitionTime
           name: Since
           type: date
+        - description: Error message when the component is degraded.
+          jsonPath: .status.conditions[?(@.type=='Degraded')].message
+          name: Message
+          type: string
       name: v1
       schema:
         openAPIV3Schema:
@@ -35146,6 +35157,8 @@ spec:
             - metadata
             - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
       subresources: {}
@@ -37632,6 +37645,10 @@ spec:
           jsonPath: .spec.defaultAction
           name: DefaultAction
           type: string
+        - description: Current status of the tier
+          jsonPath: .status.conditions[?(@.type=='Ready')].reason
+          name: Status
+          type: string
       name: v3
       schema:
         openAPIV3Schema:
@@ -37658,6 +37675,45 @@ spec:
                 order:
                   type: number
               type: object
+            status:
+              properties:
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+              type: object
           required:
             - metadata
             - spec
@@ -37677,4 +37733,5 @@ spec:
                 : true"
       served: true
       storage: true
-      subresources: {}
+      subresources:
+        status: {}

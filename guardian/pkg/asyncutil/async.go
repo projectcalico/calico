@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@ package asyncutil
 
 import (
 	"context"
-	"errors"
-	"io"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -226,10 +224,10 @@ func (executor *commandExecutor[C, R]) drainBacklogChannel() {
 }
 
 func (executor *commandExecutor[C, R]) execBacklog(shutdownCtx context.Context) (context.Context, func()) {
-	// Just in case there's anything left on the backlog channel ensure it's drained off and added to the backlog slice.
-	if len(executor.backlog) > 0 {
-		executor.drainBacklogChannel()
-	}
+	// Drain the backlog channel unconditionally. Commands cancelled during drain
+	// are placed on backlogChan asynchronously and may not have been read by the
+	// select loop before Resume was received.
+	executor.drainBacklogChannel()
 
 	ctx, stopCommands := context.WithCancel(shutdownCtx)
 	for _, cmd := range executor.backlog {
@@ -248,12 +246,7 @@ func (executor *commandExecutor[C, R]) executeCommand(ctx context.Context, req C
 		if err != nil {
 			logrus.WithError(err).Debug("Error executing command")
 			executor.errBuff.Write(err)
-			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
-				executor.backlogChan <- req
-				return
-			}
-
-			req.ReturnError(err)
+			executor.backlogChan <- req
 			return
 		}
 
