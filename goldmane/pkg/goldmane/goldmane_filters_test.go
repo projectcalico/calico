@@ -469,6 +469,20 @@ func TestFilter(t *testing.T) {
 		},
 
 		{
+			name: "fuzzy match on policy namespace",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{
+					Policies: []*proto.PolicyMatch{
+						{
+							Namespace: &proto.StringMatch{Value: "ns-", Type: proto.MatchType_Fuzzy},
+						},
+					},
+				},
+			},
+			numFlows: 10,
+		},
+
+		{
 			name: "fuzzy match on destination namespace",
 			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
