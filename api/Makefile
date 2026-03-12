@@ -15,7 +15,6 @@ LOCAL_CHECKS     = lint-cache-dir check-copyright
 BINDIR ?= bin
 BUILD_DIR ?= build
 TOP_SRC_DIRS = pkg
-KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -146,18 +145,13 @@ bin/list-gnp: examples/list-gnp/main.go
 	@echo Building list-gnp example binary...
 	$(call build_binary, examples/list-gnp/main.go, $@)
 
-WHAT?=.
-GINKGO_FOCUS?=.*
-
 .PHONY:ut
-ut: kind-cluster-create
-	mkdir -p report
+ut: setup-envtest
 	$(DOCKER_RUN) \
-		--privileged \
-		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
+		-v $(ENVTEST_ASSETS):/envtest:ro \
+		-e KUBEBUILDER_ASSETS=/envtest \
 		$(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=api_ut.xml --output-dir=report/ -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'go test -count=1 ./...'
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files
