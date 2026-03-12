@@ -333,6 +333,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		psnaStart: 20000,
 		psnatEnd:  30000,
 		dscp:      -1,
+		istioDSCP: -1,
 	}
 
 	for _, o := range opts {
@@ -863,6 +864,8 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.DSCP = topts.dscp
 				}
 
+				globals.IstioDSCP = topts.istioDSCP
+
 				if topts.ipv6 {
 					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 					copy(globals.HostIPv6[:], hostIP.To16())
@@ -1238,6 +1241,7 @@ type testOpts struct {
 	ingressQoSPacketRate          bool
 	egressQoSPacketRate           bool
 	dscp                          int8
+	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
 }
 
@@ -1333,6 +1337,12 @@ func withDescription(desc string) testOption {
 func withWorkloadSrcSpoofingConfigured() testOption {
 	return func(o *testOpts) {
 		o.workloadSrcSpoofingConfigured = true
+	}
+}
+
+func withIstioDSCP(value uint8) testOption {
+	return func(o *testOpts) {
+		o.istioDSCP = int8(value)
 	}
 }
 

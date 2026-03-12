@@ -27,6 +27,7 @@ const (
 	Agnhost       = "registry.k8s.io/e2e-test-images/agnhost:2.47"
 	RapidClient   = "quay.io/tigeradev/rapidclient"
 	Iperf3        = "docker.io/networkstatic/iperf3:latest"
+	Netutils      = "calico/k8s-e2e-netutils:stable"
 )
 
 // Get client image and powershell command based on windows OS version

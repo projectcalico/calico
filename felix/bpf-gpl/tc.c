@@ -1364,9 +1364,31 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		skb_log(ctx, true);
 	}
 
-	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && qos_dscp_needs_update(ctx) && !qos_dscp_set(ctx)) {
+	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && qos_dscp_needs_update(ctx) && !qos_dscp_set(ctx, EGRESS_DSCP)) {
 		goto deny;
 	}
+
+	// Set Istio DSCP mark, if traffic originates from a workload that's part of the mesh.
+	if (CALI_F_TO_WEP && ISTIO_DSCP >= 0 && ctx->state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx->state->ct_result.rc)) {
+		ipv46_addr_t src_ip = ctx->state->ip_src;
+		struct ip_set_key sip = {0};
+#ifdef IPVER6
+		sip.mask = 128 /* IP prefix length */ + 64 /* Match ID */ + 16 /* Match port */ + 8 /* Match protocol */;
+#else
+		sip.mask = 32 /* IP prefix length */ + 64 /* Match ID */ + 16 /* Match port */ + 8 /* Match protocol */;
+#endif
+		sip.set_id = bpf_cpu_to_be64(ALL_ISTIO_WEPS_ID);
+		sip.addr = src_ip;
+
+		// Is the src part of the mesh?
+		if (cali_ip_sets_lookup_elem(&sip)) {
+			if (!qos_dscp_set(ctx, ISTIO_DSCP)) {
+				goto deny;
+			}
+			CALI_DEBUG("IP DSCP: set for Mesh");
+		}
+	}
+
 	calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
 

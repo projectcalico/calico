@@ -78,6 +78,7 @@ type AttachPoint struct {
 	WorkloadSrcSpoofingConfigured bool
 	UDPGSOLinearize               bool
 	DSCP                          int8
+	IstioDSCP                     int8
 	MaglevLUTSize                 uint32
 	ProgramsMap                   maps.Map
 }
@@ -434,6 +435,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		NatOut:        ap.NATout,
 		LogFilterJmp:  uint32(ap.LogFilterIdx),
 		DSCP:          ap.DSCP,
+		IstioDSCP:     ap.IstioDSCP,
 		MaglevLUTSize: ap.MaglevLUTSize,
 	}
 

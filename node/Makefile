@@ -197,6 +197,10 @@ $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
+	# Clean stale build artifacts that may reference headers from a previous
+	# build environment (e.g., Docker container with different clang version).
+	make -C ../felix/bpf-gpl clean
+	make -C ../felix/bpf-apache clean
 	make -C ../felix build-bpf ARCH=$(ARCH)
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
@@ -280,10 +284,14 @@ $(BIRD_SOURCE): .bird-source.created
 
 # include GPL felix code in the image.
 $(FELIX_GPL_SOURCE): .felix-gpl-source.created
-.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f)
+.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d' -not -path '*/libbpf/*')
 	rm -rf filesystem/included-source/felix*
 	mkdir -p filesystem/included-source/
-	tar cf $(FELIX_GPL_SOURCE) ../felix/bpf-gpl --use-compress-program="xz -T0"
+	tar cf $(FELIX_GPL_SOURCE) \
+		--exclude='*.ll' --exclude='*.o' --exclude='*.d' \
+		--exclude='libbpf' \
+		--use-compress-program="xz -T0" \
+		../felix/bpf-gpl
 	touch $@
 
 ###############################################################################
