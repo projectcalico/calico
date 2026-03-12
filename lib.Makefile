@@ -1042,10 +1042,30 @@ push-image-arch-to-registry-%:
 	)
 
 # push multi-arch manifest where supported.
+MANIFEST_RETRIES ?= 5
+MANIFEST_RETRY_DELAY ?= 5
 push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
 sub-manifest-%:
-	$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)))
-	$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG)
+	@if [ -z "$(MANIFEST_RETRIES)" ] || ! printf '%s\n' "$(MANIFEST_RETRIES)" | grep -Eq '^[0-9]+$$' || [ "$(MANIFEST_RETRIES)" -lt 1 ]; then \
+		echo "ERROR: MANIFEST_RETRIES must be a positive integer, got '$(MANIFEST_RETRIES)'"; \
+		exit 1; \
+	fi
+	i=1; \
+	while [ $$i -le $(MANIFEST_RETRIES) ]; do \
+		$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES))) && break; \
+		echo "WARNING: docker manifest create failed (attempt $$i/$(MANIFEST_RETRIES)), retrying in $(MANIFEST_RETRY_DELAY)s..."; \
+		sleep $(MANIFEST_RETRY_DELAY); \
+		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
+		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
+		sleep $(MANIFEST_RETRY_DELAY); \
+	done
+	for i in $$(seq 1 $(MANIFEST_RETRIES)); do \
+		$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG) && break; \
+		echo "WARNING: docker manifest push failed (attempt $$i/$(MANIFEST_RETRIES)), retrying in $(MANIFEST_RETRY_DELAY)s..."; \
+		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
+		sleep $(MANIFEST_RETRY_DELAY); \
+		i=$$((i + 1)); \
+	done
 
 push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
