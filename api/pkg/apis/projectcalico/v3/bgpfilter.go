@@ -114,7 +114,7 @@ type BGPFilterRuleV4 struct {
 	// If non-empty, this filter rule will only apply to routes whose AS path begins with the
 	// specified sequence of AS numbers.
 	// +optional
-	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty,dive"`
+	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty"`
 
 	// If set, this filter rule will only apply to routes with the given priority, in the
 	// same units as the ...RoutePriority fields in FelixConfiguration.
@@ -187,7 +187,7 @@ type BGPFilterRuleV6 struct {
 	// If non-empty, this filter rule will only apply to routes whose AS path begins with the
 	// specified sequence of AS numbers.
 	// +optional
-	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty,dive"`
+	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty"`
 
 	// If set, this filter rule will only apply to routes with the given priority, in the
 	// same units as the ...RoutePriority fields in FelixConfiguration.
@@ -276,7 +276,7 @@ type BGPFilterCommunityMatch struct {
 	// Values is a list of BGP community values to match against.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=1
-	Values []BGPCommunityValue `json:"values" validate:"required,dive"`
+	Values []BGPCommunityValue `json:"values" validate:"required"`
 }
 
 // BGPFilterOperation is a discriminated union representing a single route modification.
@@ -313,7 +313,7 @@ type BGPFilterPrependASPath struct {
 	// e.g. [65000, 65001] produces the path "65000 65001 <original>".
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=10
-	Prefix []numorstring.ASNumber `json:"prefix" validate:"required,dive"`
+	Prefix []numorstring.ASNumber `json:"prefix" validate:"required"`
 }
 
 // BGPFilterSetPriority specifies a route priority to set.
