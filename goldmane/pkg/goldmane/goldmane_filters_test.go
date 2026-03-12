@@ -147,9 +147,9 @@ func TestFilter(t *testing.T) {
 			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
 					Policies: []*proto.PolicyMatch{
-						{Tier: "tier-5"},
-						{Tier: "tier-4"},
-						{Tier: "tier-3"},
+						{Tier: &proto.StringMatch{Value: "tier-5"}},
+						{Tier: &proto.StringMatch{Value: "tier-4"}},
+						{Tier: &proto.StringMatch{Value: "tier-3"}},
 					},
 				},
 			},
@@ -194,9 +194,9 @@ func TestFilter(t *testing.T) {
 			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
 					Policies: []*proto.PolicyMatch{
-						{Tier: "pending-tier-5"},
-						{Tier: "pending-tier-4"},
-						{Tier: "pending-tier-3"},
+						{Tier: &proto.StringMatch{Value: "pending-tier-5"}},
+						{Tier: &proto.StringMatch{Value: "pending-tier-4"}},
+						{Tier: &proto.StringMatch{Value: "pending-tier-3"}},
 					},
 				},
 			},
@@ -236,7 +236,7 @@ func TestFilter(t *testing.T) {
 			name: "Multiple Tiers",
 			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
-					Policies: []*proto.PolicyMatch{{Tier: "tier-5"}, {Tier: "tier-6"}},
+					Policies: []*proto.PolicyMatch{{Tier: &proto.StringMatch{Value: "tier-5"}}, {Tier: &proto.StringMatch{Value: "tier-6"}}},
 				},
 			},
 			numFlows: 2,
@@ -248,9 +248,9 @@ func TestFilter(t *testing.T) {
 				Filter: &proto.Filter{
 					Policies: []*proto.PolicyMatch{
 						{
-							Tier:      "tier-4",
-							Name:      "name-4",
-							Namespace: "ns-4",
+							Tier:      &proto.StringMatch{Value: "tier-4"},
+							Name:      &proto.StringMatch{Value: "name-4"},
+							Namespace: &proto.StringMatch{Value: "ns-4"},
 							Action:    proto.Action_Allow,
 							Kind:      proto.PolicyKind_CalicoNetworkPolicy,
 						},
@@ -274,9 +274,9 @@ func TestFilter(t *testing.T) {
 				Filter: &proto.Filter{
 					Policies: []*proto.PolicyMatch{
 						{
-							Tier:      "pending-tier-5",
-							Name:      "pending-name-5",
-							Namespace: "pending-ns-5",
+							Tier:      &proto.StringMatch{Value: "pending-tier-5"},
+							Name:      &proto.StringMatch{Value: "pending-name-5"},
+							Namespace: &proto.StringMatch{Value: "pending-ns-5"},
 							Action:    proto.Action_Deny,
 							Kind:      proto.PolicyKind_Profile,
 						},
@@ -418,7 +418,7 @@ func TestFilter(t *testing.T) {
 				Filter: &proto.Filter{
 					Policies: []*proto.PolicyMatch{
 						{
-							Namespace: "pending-ns-5",
+							Namespace: &proto.StringMatch{Value: "pending-ns-5"},
 						},
 					},
 				},
