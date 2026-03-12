@@ -427,6 +427,48 @@ func TestFilter(t *testing.T) {
 		},
 
 		{
+			name: "fuzzy match on policy name",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{
+					Policies: []*proto.PolicyMatch{
+						{
+							Name: &proto.StringMatch{Value: "name-", Type: proto.MatchType_Fuzzy},
+						},
+					},
+				},
+			},
+			numFlows: 10,
+		},
+
+		{
+			name: "fuzzy match on policy name, no match",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{
+					Policies: []*proto.PolicyMatch{
+						{
+							Name: &proto.StringMatch{Value: "nomatch", Type: proto.MatchType_Fuzzy},
+						},
+					},
+				},
+			},
+			numFlows: 0,
+		},
+
+		{
+			name: "fuzzy match on policy tier",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{
+					Policies: []*proto.PolicyMatch{
+						{
+							Tier: &proto.StringMatch{Value: "tier-", Type: proto.MatchType_Fuzzy},
+						},
+					},
+				},
+			},
+			numFlows: 10,
+		},
+
+		{
 			name: "fuzzy match on destination namespace",
 			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
