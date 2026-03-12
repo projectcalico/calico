@@ -1,0 +1,49 @@
+# Sync operator CRD files from tigera/operator into this repo's Helm charts
+# and regenerate manifests. Creates or updates a PR if anything changed.
+---
+name: Sync operator CRDs
+on:  # yamllint disable-line rule:truthy
+  schedule:
+    - cron: '0 * * * *'  # every hour
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: sync-operator-crds-${{ matrix.branch }}
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        branch: [master, release-v3.31, release-v3.30]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Install tools
+        run: make bin/helm bin/yq
+
+      - name: Sync operator CRDs
+        run: make get-operator-crds
+
+      - name: Regenerate manifests
+        run: make gen-manifests
+
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Sync operator CRDs from tigera/operator"
+          branch: auto-sync-operator-crds-${{ matrix.branch }}
+          base: ${{ matrix.branch }}
+          title: "Auto: sync operator CRDs from tigera/operator [${{ matrix.branch }}]"
+          body: |
+            Automated sync of operator CRD files from `tigera/operator` into
+            `${{ matrix.branch }}` and regeneration of manifests.
+
+            Triggered by scheduled workflow.
+          labels: auto-sync,docs-not-required,release-note-not-required
+          delete-branch: true

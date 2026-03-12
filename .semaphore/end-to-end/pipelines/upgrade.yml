@@ -133,6 +133,10 @@ blocks:
             hours: 4
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          agent:
+            machine:
+              type: f1-standard-2
+              os_image: ubuntu2204
           env_vars:
             - name: PROVISIONER
               value: aws-openshift

@@ -436,6 +436,10 @@ func StartDataplaneDriver(
 			dpConfig.BPFDSROptoutCIDRs = configParams.BPFDSROptoutCIDRs
 		}
 
+		if configParams.WorkloadSourceSpoofing == "Any" {
+			dpConfig.WorkloadSourceSpoofing = true
+		}
+
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
 
