@@ -132,6 +132,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Tier":                               schema_pkg_apis_projectcalico_v3_Tier(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierList":                           schema_pkg_apis_projectcalico_v3_TierList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec":                           schema_pkg_apis_projectcalico_v3_TierSpec(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierStatus":                         schema_pkg_apis_projectcalico_v3_TierStatus(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig":   schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.DSCP":                                     schema_api_pkg_lib_numorstring_DSCP(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Port":                                     schema_api_pkg_lib_numorstring_Port(ref),
@@ -3466,7 +3467,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfKubeProxyHealthzPort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to. The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]",
+							Description: "BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to. The health check server is used by external load balancers to determine if this node should receive traffic. Set to 0 to disable the health check server.  [Default: 10256]",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -3610,6 +3611,19 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "BPFExportBufferSizeMB in BPF mode, controls the buffer size used for sending BPF events to felix. [Default: 1]",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"istioAmbientMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IstioAmbientMode configures Felix to work together with Tigera's Istio distribution. [Default: Disabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"istioDSCPMark": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used with other Istio installation. [Default: 23]",
+							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.DSCP"),
 						},
 					},
 					"cgroupV2Path": {
@@ -3913,7 +3927,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.DSCP", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -7288,12 +7302,18 @@ func schema_pkg_apis_projectcalico_v3_Tier(ref common.ReferenceCallback) common.
 							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierStatus"),
+						},
+					},
 				},
 				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -7370,6 +7390,35 @@ func schema_pkg_apis_projectcalico_v3_TierSpec(ref common.ReferenceCallback) com
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_TierStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TierStatus contains the status of a Tier resource.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions represents the latest observed set of conditions for the resource. A tier with a \"Ready\" condition set to \"True\" is operating as expected.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
 	}
 }
 

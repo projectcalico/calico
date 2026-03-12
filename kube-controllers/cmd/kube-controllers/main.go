@@ -48,6 +48,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/pod"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/tier"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
@@ -112,14 +113,6 @@ func main() {
 	k8sClientset, libcalicoClient, calicoClient, k8sconfig, err := getClients(cfg.Kubeconfig)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to start")
-	}
-
-	// KubeVirt informers are optional — only created if KubeVirt is installed.
-	// NOTE: KubeVirt detection only runs at startup. If KubeVirt CRDs are added
-	// to a running cluster, this pod must be restarted to pick them up.
-	vmInformer, vmiInformer, err := kubevirt.TryCreateInformers(k8sconfig, 5*time.Minute)
-	if err != nil {
-		log.WithError(err).Warn("Failed to create KubeVirt informers, proceeding without KubeVirt IPAM GC support")
 	}
 
 	stop := make(chan struct{})
@@ -201,7 +194,7 @@ func main() {
 
 		// any subsequent changes trigger a restart
 		controllerCtrl.restart = cCtrlr.ConfigChan()
-		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, vmInformer, vmiInformer)
+		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, k8sconfig)
 	}
 
 	if cfg.DatastoreType == utils.Etcdv3 {
@@ -474,7 +467,7 @@ func (cc *controllerControl) InitControllers(
 	calicoClient client.Interface,
 	v3c clientset.Interface,
 	dataFeed *utils.DataFeed,
-	vmInformer, vmiInformer cache.SharedIndexInformer,
+	k8sconfig *rest.Config,
 ) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
@@ -499,6 +492,17 @@ func (cc *controllerControl) InitControllers(
 			poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
 			cc.controllers["IPPool"] = poolController
 			cc.registerInformers(poolInformer, blockInformer)
+
+			// Enable the Tier controller, which manages tier deletion via finalizers.
+			// It watches tiers and all policy types so it can react to policy deletions.
+			tierInformer := calicoFactory.Projectcalico().V3().Tiers().Informer()
+			gnpInformer := calicoFactory.Projectcalico().V3().GlobalNetworkPolicies().Informer()
+			npInformer := calicoFactory.Projectcalico().V3().NetworkPolicies().Informer()
+			sgnpInformer := calicoFactory.Projectcalico().V3().StagedGlobalNetworkPolicies().Informer()
+			snpInformer := calicoFactory.Projectcalico().V3().StagedNetworkPolicies().Informer()
+			tierController := tier.NewController(ctx, v3c, tierInformer, gnpInformer, npInformer, sgnpInformer, snpInformer)
+			cc.controllers["Tier"] = tierController
+			cc.registerInformers(tierInformer, gnpInformer, npInformer, sgnpInformer, snpInformer)
 		}
 	}
 
@@ -517,12 +521,10 @@ func (cc *controllerControl) InitControllers(
 		cc.controllers["NetworkPolicy"] = policyController
 	}
 	if cfg.Controllers.Node != nil {
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, vmInformer, vmiInformer)
+		deferredInformers := kubevirt.NewDeferredInformers(kubevirt.NewIndexerFunc(k8sconfig, 5*time.Minute), 30*time.Second, cc.stop)
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, deferredInformers)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
-		if vmInformer != nil {
-			cc.registerInformers(vmInformer, vmiInformer)
-		}
 	}
 	if cfg.Controllers.ServiceAccount != nil {
 		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)

@@ -27,6 +27,7 @@ struct name {                              \
 	__u32 log_filter_jmp;                  \
 	__u32 jumps[40];                       \
 	__s8 dscp;                             \
+	__s8 istio_dscp;                       \
 	__u32 maglev_lut_size;                 \
 }
 
@@ -63,6 +64,7 @@ enum cali_globals_flags {
 	CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED       = 0x00004000,
 	CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED        = 0x00008000,
 	CALI_GLOBALS_UDP_GSO_LINEARIZE                    = 0x00010000,
+	CALI_GLOBALS_WORKLOAD_SRC_SPOOFING_CONFIGURED     = 0x00020000,
 };
 
 struct cali_ctlb_globals {

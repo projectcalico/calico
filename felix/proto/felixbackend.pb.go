@@ -3146,7 +3146,8 @@ type WorkloadEndpoint struct {
 	LocalBgpPeer               *LocalBGPPeer          `protobuf:"bytes,13,opt,name=local_bgp_peer,json=localBgpPeer,proto3" json:"local_bgp_peer,omitempty"`
 	SkipRedir                  *WorkloadBpfSkipRedir  `protobuf:"bytes,14,opt,name=skip_redir,json=skipRedir,proto3" json:"skip_redir,omitempty"`
 	QosPolicies                []*QoSPolicy           `protobuf:"bytes,15,rep,name=qos_policies,json=qosPolicies,proto3" json:"qos_policies,omitempty"`
-	LiveMigrationRole          LiveMigrationRole      `protobuf:"varint,16,opt,name=live_migration_role,json=liveMigrationRole,proto3,enum=felix.LiveMigrationRole" json:"live_migration_role,omitempty"`
+	IsIstioAmbient             bool                   `protobuf:"varint,16,opt,name=is_istio_ambient,json=isIstioAmbient,proto3" json:"is_istio_ambient,omitempty"`
+	LiveMigrationRole          LiveMigrationRole      `protobuf:"varint,17,opt,name=live_migration_role,json=liveMigrationRole,proto3,enum=felix.LiveMigrationRole" json:"live_migration_role,omitempty"`
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
@@ -3284,6 +3285,13 @@ func (x *WorkloadEndpoint) GetQosPolicies() []*QoSPolicy {
 		return x.QosPolicies
 	}
 	return nil
+}
+
+func (x *WorkloadEndpoint) GetIsIstioAmbient() bool {
+	if x != nil {
+		return x.IsIstioAmbient
+	}
+	return false
 }
 
 func (x *WorkloadEndpoint) GetLiveMigrationRole() LiveMigrationRole {
@@ -6679,7 +6687,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\bendpoint\x18\x05 \x01(\v2\x17.felix.WorkloadEndpointR\bendpoint\"H\n" +
 	"\x14WorkloadBpfSkipRedir\x12\x16\n" +
 	"\x06Egress\x18\x01 \x01(\bR\x06Egress\x12\x18\n" +
-	"\aIngress\x18\x02 \x01(\bR\aIngress\"\xa2\x06\n" +
+	"\aIngress\x18\x02 \x01(\bR\aIngress\"\xcc\x06\n" +
 	"\x10WorkloadEndpoint\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
@@ -6698,8 +6706,9 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x0elocal_bgp_peer\x18\r \x01(\v2\x13.felix.LocalBGPPeerR\flocalBgpPeer\x12:\n" +
 	"\n" +
 	"skip_redir\x18\x0e \x01(\v2\x1b.felix.WorkloadBpfSkipRedirR\tskipRedir\x123\n" +
-	"\fqos_policies\x18\x0f \x03(\v2\x10.felix.QoSPolicyR\vqosPolicies\x12H\n" +
-	"\x13live_migration_role\x18\x10 \x01(\x0e2\x18.felix.LiveMigrationRoleR\x11liveMigrationRole\x1a>\n" +
+	"\fqos_policies\x18\x0f \x03(\v2\x10.felix.QoSPolicyR\vqosPolicies\x12(\n" +
+	"\x10is_istio_ambient\x18\x10 \x01(\bR\x0eisIstioAmbient\x12H\n" +
+	"\x13live_migration_role\x18\x11 \x01(\x0e2\x18.felix.LiveMigrationRoleR\x11liveMigrationRole\x1a>\n" +
 	"\x10AnnotationsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xef\x04\n" +

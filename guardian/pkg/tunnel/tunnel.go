@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package tunnel
 
 import (
 	"context"
-	"io"
 	"net"
 	"sync"
 
@@ -177,15 +176,9 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 		logrus.Debug("Waiting for signals.")
 		select {
 		case err := <-t.cmdErrBuff.Receive():
-			logrus.WithError(err).Debug("Received error from executors.")
-			// Receive errors from the command executors. If the error is an EOF then it's a signal that the session returned
-			// an EOF error and needs to be recreated.
-			//
-			// If it's a non EOF error than the tunnel needs to be taken down.
-			if err != io.EOF {
-				logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
-				return
-			}
+			// Any error from the command executors (EOF, broken pipe, connection reset, session shutdown, etc.)
+			// indicates the session is dead and should be recreated. All of these are recoverable via re-dial.
+			logrus.WithError(err).Warn("Session error from executors, will attempt to recreate session.")
 
 			// Break from this block if we're in the middle of draining (drainAndBacklogFinished channel is not nil)
 			// or if the drainTimer hasn't expired yet (

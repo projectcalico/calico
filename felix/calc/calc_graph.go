@@ -393,6 +393,10 @@ func NewCalculationGraph(
 		cg.liveMigrationCalculator.OnUpdate,
 	)
 
+	if conf.IsIstioAmbientModeEnabled() {
+		_ = NewIstioCalculator(activeRulesCalc, ruleScanner, callbacks, ipsetMemberIndex, polResolver.OnEndpointComputedDataUpdate)
+	}
+
 	// Create and hook up the active BGP peer calculator.
 	activeBGPPeerCalc := NewActiveBGPPeerCalculator(hostname)
 	activeBGPPeerCalc.RegisterWith(localEndpointDispatcher, allUpdDispatcher)

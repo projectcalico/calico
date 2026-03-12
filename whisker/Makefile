@@ -22,7 +22,8 @@ DOCKER_RUN_RM:=docker run --rm \
 	-v $${PWD}:/code \
 	-w /code
 
-$(IMAGE_BUILD_MARKER): register build bin/LICENSE
+# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
+$(IMAGE_BUILD_MARKER): build bin/LICENSE | register
 	$(DOCKER_BUILD) --build-arg BIN_DIR=bin -t whisker:latest-$(ARCH) -f docker-image/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
