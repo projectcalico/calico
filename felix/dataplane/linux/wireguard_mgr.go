@@ -83,6 +83,9 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
 			return
 		}
+		// IPv6 deletion is signalled by an empty Ipv6Addr rather than a separate HostMetadataV4V6Remove,
+		// which is only sent when the host is fully removed. This differs from IPv4, where HostMetadataRemove
+		// is the exclusive removal signal.
 		if msg.Ipv6Addr == "" {
 			m.wireguardRouteTable.EndpointRemove(msg.Hostname)
 		} else {

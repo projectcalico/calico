@@ -687,9 +687,11 @@ func (buf *EventSequencer) OnHostIPv6Remove(hostname string) {
 
 func (buf *EventSequencer) flushHostIPv6Deletes() {
 	for item := range buf.pendingHostIPv6Deletes.All() {
-		// No longer emit a separate message for IPv6 deletes. IPv6 address removal is communicated
-		// via HostMetadataV4V6Update with an empty Ipv6Addr from flushHostUpdates. For full host
-		// removals, flushHostDeletes emits HostMetadataV4V6Remove.
+		// No longer emit a separate message for IPv6 address removals. When a node's IPv6 address
+		// is cleared, the event sequencer emits a HostMetadataV4V6Update with an empty Ipv6Addr via
+		// flushHostUpdates. For full host removals, flushHostDeletes emits HostMetadataV4V6Remove.
+		// We still iterate here to discard the pending delete state and update sentHostIPv6s tracking
+		// so that subsequent IPv6 updates for the same host are handled correctly.
 		buf.sentHostIPv6s.Discard(item)
 		buf.pendingHostIPv6Deletes.Discard(item)
 	}
