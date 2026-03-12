@@ -181,11 +181,13 @@ func convertVMIMToLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigration
 			string(vmim.UID),
 		)
 		lm.Spec = internalapi.LiveMigrationSpec{
-			Source: &types.NamespacedName{
-				Name:      vmim.Status.MigrationState.SourcePod,
-				Namespace: vmim.Namespace,
+			Source: &internalapi.LiveMigrationSource{
+				Workload: &internalapi.WorkloadIdentifier{
+					OrchestratorID: "k8s",
+					WorkloadID:     vmim.Namespace + "/" + vmim.Status.MigrationState.SourcePod,
+				},
 			},
-			Destination: &internalapi.WorkloadEndpointIdentifier{
+			Target: &internalapi.LiveMigrationTarget{
 				Selector: &selector,
 			},
 		}

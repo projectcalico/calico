@@ -616,10 +616,10 @@ var baseTests = []StateList{
 
 	// Live migration: local WEP as source, then LM removed.
 	{localEp1WithPolicyLMSource, localEp1WithPolicy},
+	// Live migration: local WEP as source (workload-level), then LM removed.
+	{localEp1WithPolicyLMSourceWorkloadLevel, localEp1WithPolicy},
 	// Live migration: local WEP as target by direct name, then LM removed.
 	{localEp1WithPolicyLMTargetByName, localEp1WithPolicy},
-	// Live migration: local WEP as target by selector, then LM removed.
-	{localEp1WithPolicyLMTargetBySelector, localEp1WithPolicy},
 
 	// Istio tests - verify that the all-istio-weps IPSet is populated correctly
 	{

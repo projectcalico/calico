@@ -18,7 +18,6 @@ import (
 	"reflect"
 
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -37,22 +36,81 @@ const (
 	numSourceOrTarget
 )
 
+// wepOwnerID identifies either a single WorkloadEndpoint (all fields set) or an entire workload
+// (endpointID empty, matching all endpoints for that workload).
+type wepOwnerID struct {
+	hostname       string
+	orchestratorID string
+	workloadID     string
+	endpointID     string // empty = matches all endpoints for this workload
+}
+
+// isWorkloadLevel returns true if this ID matches all endpoints for a workload
+// rather than a single endpoint.
+func (w wepOwnerID) isWorkloadLevel() bool {
+	return w.endpointID == ""
+}
+
+// workloadLevel returns a copy with endpointID cleared, so it matches all endpoints
+// for the same workload.
+func (w wepOwnerID) workloadLevel() wepOwnerID {
+	w.endpointID = ""
+	return w
+}
+
+// hostnameForOwnerID returns the hostname to use in a wepOwnerID.  For the
+// "k8s" orchestrator, the WorkloadID (namespace/pod) is already unique,
+// so hostname is unnecessary for matching and is normalized to "" so that
+// WEP-derived and LM-derived keys match without needing the source node.
+func hostnameForOwnerID(orchestratorID, hostname string) string {
+	if orchestratorID == "k8s" {
+		return ""
+	}
+	return hostname
+}
+
+func wepOwnerIDFromWorkload(w *internalapi.WorkloadIdentifier) wepOwnerID {
+	return wepOwnerID{
+		hostname:       hostnameForOwnerID(w.OrchestratorID, w.Hostname),
+		orchestratorID: w.OrchestratorID,
+		workloadID:     w.WorkloadID,
+	}
+}
+
+func wepOwnerIDFromEndpoint(e *internalapi.WorkloadEndpointIdentifier) wepOwnerID {
+	return wepOwnerID{
+		hostname:       hostnameForOwnerID(e.OrchestratorID, e.Hostname),
+		orchestratorID: e.OrchestratorID,
+		workloadID:     e.WorkloadID,
+		endpointID:     e.EndpointID,
+	}
+}
+
+func wepOwnerIDFromKey(k model.WorkloadEndpointKey) wepOwnerID {
+	return wepOwnerID{
+		hostname:       hostnameForOwnerID(k.OrchestratorID, k.Hostname),
+		orchestratorID: k.OrchestratorID,
+		workloadID:     k.WorkloadID,
+		endpointID:     k.EndpointID,
+	}
+}
+
 // LiveMigrationCalculator tracks local workload endpoints and LiveMigration resources and
 // correlates between them, in order to correctly set the live_migration_role field in
 // proto.WorkloadEndpoints that are sent to the dataplane.
 type LiveMigrationCalculator struct {
 	activeRulesCalc        *ActiveRulesCalculator
 	onEndpointComputedData EndpointComputedDataUpdater
-	weps                   map[types.NamespacedName]*wepData
+	weps                   map[wepOwnerID]*wepData
 	liveMigrations         map[model.ResourceKey]internalapi.LiveMigration
-	directNameKeys         [numSourceOrTarget]map[types.NamespacedName]set.Set[model.ResourceKey]
+	directNameKeys         [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]
 	selectorKeys           map[string]set.Set[model.ResourceKey]
 
 	// pendingSelectorMatches tracks WEPs that were matched by a computed selector callback
 	// before the LMC had processed the WEP update.  This can happen because the ARC's
 	// handler runs before the LMC's handler in the dispatcher chain.  The value is the
 	// selector string that matched.
-	pendingSelectorMatches map[types.NamespacedName]string
+	pendingSelectorMatches map[wepOwnerID]string
 }
 
 type wepData struct {
@@ -107,58 +165,82 @@ func NewLiveMigrationCalculator(
 	lmc := &LiveMigrationCalculator{
 		activeRulesCalc:        activeRulesCalc,
 		onEndpointComputedData: onEndpointComputedDataUpdater,
-		weps:                   map[types.NamespacedName]*wepData{},
+		weps:                   map[wepOwnerID]*wepData{},
 		liveMigrations:         map[model.ResourceKey]internalapi.LiveMigration{},
-		directNameKeys: [numSourceOrTarget]map[types.NamespacedName]set.Set[model.ResourceKey]{
-			map[types.NamespacedName]set.Set[model.ResourceKey]{},
-			map[types.NamespacedName]set.Set[model.ResourceKey]{},
+		directNameKeys: [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]{
+			map[wepOwnerID]set.Set[model.ResourceKey]{},
+			map[wepOwnerID]set.Set[model.ResourceKey]{},
 		},
 		selectorKeys:           map[string]set.Set[model.ResourceKey]{},
-		pendingSelectorMatches: map[types.NamespacedName]string{},
+		pendingSelectorMatches: map[wepOwnerID]string{},
 	}
 	activeRulesCalc.RegisterPolicyMatchListener(lmc)
 	return lmc
 }
 
 func (lmc *LiveMigrationCalculator) refDirectName(
-	namespacedName types.NamespacedName,
+	ownerID wepOwnerID,
 	lmKey model.ResourceKey,
 	sourceOrTarget sourceOrTarget,
 ) {
-	// Emit role change if there is an existing and affected known WEP.
-	if wepData := lmc.weps[namespacedName]; wepData != nil {
-		lmc.withRoleUpdateIfNeeded(wepData, func() {
-			wepData.directNameKeys[sourceOrTarget].Add(lmKey)
-		})
+	// Emit role change for existing known WEPs that match this ownerID.
+	if ownerID.isWorkloadLevel() {
+		// Workload-level: iterate all known WEPs to find matching ones.
+		for wepID, wd := range lmc.weps {
+			if wepID.workloadLevel() == ownerID {
+				lmc.withRoleUpdateIfNeeded(wd, func() {
+					wd.directNameKeys[sourceOrTarget].Add(lmKey)
+				})
+			}
+		}
+	} else {
+		// Endpoint-level: direct lookup.
+		if wd := lmc.weps[ownerID]; wd != nil {
+			lmc.withRoleUpdateIfNeeded(wd, func() {
+				wd.directNameKeys[sourceOrTarget].Add(lmKey)
+			})
+		}
 	}
 
 	// Update tracking for WEPs that we might hear about later.
-	directNameKeysForName := lmc.directNameKeys[sourceOrTarget][namespacedName]
+	directNameKeysForName := lmc.directNameKeys[sourceOrTarget][ownerID]
 	if directNameKeysForName == nil {
 		directNameKeysForName = set.New[model.ResourceKey]()
-		lmc.directNameKeys[sourceOrTarget][namespacedName] = directNameKeysForName
+		lmc.directNameKeys[sourceOrTarget][ownerID] = directNameKeysForName
 	}
 	directNameKeysForName.Add(lmKey)
 }
 
 func (lmc *LiveMigrationCalculator) unrefDirectName(
-	namespacedName types.NamespacedName,
+	ownerID wepOwnerID,
 	lmKey model.ResourceKey,
 	sourceOrTarget sourceOrTarget,
 ) {
-	// Emit role change if there is an existing and affected known WEP.
-	if wepData := lmc.weps[namespacedName]; wepData != nil {
-		lmc.withRoleUpdateIfNeeded(wepData, func() {
-			wepData.directNameKeys[sourceOrTarget].Discard(lmKey)
-		})
+	// Emit role change for existing known WEPs that match this ownerID.
+	if ownerID.isWorkloadLevel() {
+		// Workload-level: iterate all known WEPs to find matching ones.
+		for wepID, wd := range lmc.weps {
+			if wepID.workloadLevel() == ownerID {
+				lmc.withRoleUpdateIfNeeded(wd, func() {
+					wd.directNameKeys[sourceOrTarget].Discard(lmKey)
+				})
+			}
+		}
+	} else {
+		// Endpoint-level: direct lookup.
+		if wd := lmc.weps[ownerID]; wd != nil {
+			lmc.withRoleUpdateIfNeeded(wd, func() {
+				wd.directNameKeys[sourceOrTarget].Discard(lmKey)
+			})
+		}
 	}
 
 	// Update tracking for WEPs that we might hear about later.
-	directNameKeysForName := lmc.directNameKeys[sourceOrTarget][namespacedName]
+	directNameKeysForName := lmc.directNameKeys[sourceOrTarget][ownerID]
 	if directNameKeysForName != nil {
 		directNameKeysForName.Discard(lmKey)
 		if directNameKeysForName.Len() == 0 {
-			delete(lmc.directNameKeys[sourceOrTarget], namespacedName)
+			delete(lmc.directNameKeys[sourceOrTarget], ownerID)
 		}
 	}
 }
@@ -192,93 +274,122 @@ func (lmc *LiveMigrationCalculator) unrefSelector(
 	}
 }
 
+// extractSourceOwnerID extracts the wepOwnerID from a LiveMigrationSource.
+// Returns the zero value if the source is nil or has no identifying fields set.
+func extractSourceOwnerID(src *internalapi.LiveMigrationSource) wepOwnerID {
+	if src != nil {
+		if src.Workload != nil {
+			return wepOwnerIDFromWorkload(src.Workload)
+		}
+		if src.WorkloadEndpoint != nil {
+			return wepOwnerIDFromEndpoint(src.WorkloadEndpoint)
+		}
+	}
+	return wepOwnerID{}
+}
+
+// extractTargetOwnerID extracts the wepOwnerID from a LiveMigrationTarget's
+// WorkloadEndpoint field (used for direct-name target matching).
+// Returns the zero value if the target is nil or uses selector-based matching.
+func extractTargetOwnerID(tgt *internalapi.LiveMigrationTarget) wepOwnerID {
+	if tgt != nil {
+		if tgt.WorkloadEndpoint != nil {
+			return wepOwnerIDFromEndpoint(tgt.WorkloadEndpoint)
+		}
+	}
+	return wepOwnerID{}
+}
+
+// extractTargetSelector extracts the selector string from a LiveMigrationTarget.
+func extractTargetSelector(tgt *internalapi.LiveMigrationTarget) string {
+	if tgt != nil && tgt.Selector != nil {
+		return *tgt.Selector
+	}
+	return ""
+}
+
 func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
-		// Only the WEP name and namespace are relevant in this component; we don't care
-		// about details within the WEP Spec.
-		name, ns := key.GetNameAndNamespace()
-		namespacedName := types.NamespacedName{Namespace: ns, Name: name}
+		// Only the WEP key is relevant in this component; we don't care about details
+		// within the WEP Spec.
+		exactID := wepOwnerIDFromKey(key)
 		if update.Value != nil {
 			// WEP being created or updated.
-			if lmc.weps[namespacedName] != nil {
+			if lmc.weps[exactID] != nil {
 				// We already know this WEP and have done whatever is needed for it.
 				return
 			}
 
-			logrus.WithField("wep", namespacedName).Debug("LiveMigrationCalculator: new WEP")
+			logrus.WithField("wep", exactID).Debug("LiveMigrationCalculator: new WEP")
 
 			// First time we're seeing this WEP.
-			wepData := &wepData{
+			wd := &wepData{
 				key: key,
 				directNameKeys: [numSourceOrTarget]set.Set[model.ResourceKey]{
 					set.New[model.ResourceKey](),
 					set.New[model.ResourceKey](),
 				},
 			}
-			if lmc.directNameKeys[source][namespacedName] != nil {
-				wepData.directNameKeys[source].AddSet(lmc.directNameKeys[source][namespacedName])
+
+			// Check for direct-name matches: both exact endpoint-level and workload-level.
+			workloadID := exactID.workloadLevel()
+			for _, sot := range []sourceOrTarget{source, target} {
+				if lmc.directNameKeys[sot][exactID] != nil {
+					wd.directNameKeys[sot].AddSet(lmc.directNameKeys[sot][exactID])
+				}
+				if workloadID != exactID {
+					if lmc.directNameKeys[sot][workloadID] != nil {
+						wd.directNameKeys[sot].AddSet(lmc.directNameKeys[sot][workloadID])
+					}
+				}
 			}
-			if lmc.directNameKeys[target][namespacedName] != nil {
-				wepData.directNameKeys[target].AddSet(lmc.directNameKeys[target][namespacedName])
-			}
-			if sel, ok := lmc.pendingSelectorMatches[namespacedName]; ok {
+
+			if sel, ok := lmc.pendingSelectorMatches[exactID]; ok {
 				logrus.WithFields(logrus.Fields{
-					"wep":      namespacedName,
+					"wep":      exactID,
 					"selector": sel,
 				}).Debug("LiveMigrationCalculator: applying pending selector match")
-				wepData.targetSelectorMatched = sel
-				delete(lmc.pendingSelectorMatches, namespacedName)
+				wd.targetSelectorMatched = sel
+				delete(lmc.pendingSelectorMatches, exactID)
 			}
-			lmc.weps[namespacedName] = wepData
-			role, uid := lmc.liveMigrationRoleAndUID(wepData)
+			lmc.weps[exactID] = wd
+			role, uid := lmc.liveMigrationRoleAndUID(wd)
 			lmc.indicateRole(key, role, uid)
 		} else {
-			logrus.WithField("wep", namespacedName).Debug("LiveMigrationCalculator: WEP deleted")
+			logrus.WithField("wep", exactID).Debug("LiveMigrationCalculator: WEP deleted")
 			// Don't need anything here to "reset the role that we previously said"
 			// because the WEP is being deleted anyway.
-			delete(lmc.weps, namespacedName)
+			delete(lmc.weps, exactID)
 		}
 	case model.ResourceKey:
 		if key.Kind != internalapi.KindLiveMigration {
 			return
 		}
 
-		// If we already had a LiveMigration with this key, get the names it indicated.
-		old := [numSourceOrTarget]types.NamespacedName{}
+		// If we already had a LiveMigration with this key, get the IDs it indicated.
+		var oldSourceID, oldTargetID wepOwnerID
 		oldSelector := ""
 		if existing, ok := lmc.liveMigrations[key]; ok {
-			if existing.Spec.Source != nil {
-				old[source] = *existing.Spec.Source
-			}
-			if existing.Spec.Destination != nil && existing.Spec.Destination.NamespacedName != nil {
-				old[target] = *existing.Spec.Destination.NamespacedName
-			}
-			if existing.Spec.Destination != nil && existing.Spec.Destination.Selector != nil {
-				oldSelector = *existing.Spec.Destination.Selector
-			}
+			oldSourceID = extractSourceOwnerID(existing.Spec.Source)
+			oldTargetID = extractTargetOwnerID(existing.Spec.Target)
+			oldSelector = extractTargetSelector(existing.Spec.Target)
 		}
 
 		// Now check the new LiveMigration state.
-		new := [numSourceOrTarget]types.NamespacedName{}
+		var newSourceID, newTargetID wepOwnerID
 		newSelector := ""
 		if update.Value != nil {
 			lm := update.Value.(*internalapi.LiveMigration)
 			lmc.liveMigrations[key] = *lm
-			if lm.Spec.Source != nil {
-				new[source] = *lm.Spec.Source
-			}
-			if lm.Spec.Destination != nil && lm.Spec.Destination.NamespacedName != nil {
-				new[target] = *lm.Spec.Destination.NamespacedName
-			}
-			if lm.Spec.Destination != nil && lm.Spec.Destination.Selector != nil {
-				newSelector = *lm.Spec.Destination.Selector
-			}
+			newSourceID = extractSourceOwnerID(lm.Spec.Source)
+			newTargetID = extractTargetOwnerID(lm.Spec.Target)
+			newSelector = extractTargetSelector(lm.Spec.Target)
 			logrus.WithFields(logrus.Fields{
 				"lm":       key,
 				"uid":      lm.UID,
-				"source":   new[source],
-				"target":   new[target],
+				"source":   newSourceID,
+				"target":   newTargetID,
 				"selector": newSelector,
 			}).Debug("LiveMigrationCalculator: LiveMigration created/updated")
 		} else {
@@ -295,13 +406,22 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 		// and its target; and will never transition from referencing a WEP as
 		// source to referencing that same WEP as target, or vice versa.  Hence it's
 		// correct to process the source and target fields independently here.
-		for sourceOrTarget := range numSourceOrTarget {
-			if new[sourceOrTarget] != old[sourceOrTarget] {
-				if old[sourceOrTarget].Name != "" {
-					lmc.unrefDirectName(old[sourceOrTarget], key, sourceOrTarget)
+		type ownerIDTuple struct {
+			oldID wepOwnerID
+			newID wepOwnerID
+			sot   sourceOrTarget
+		}
+		for _, pair := range []ownerIDTuple{
+			{oldSourceID, newSourceID, source},
+			{oldTargetID, newTargetID, target},
+		} {
+			if pair.newID != pair.oldID {
+				empty := wepOwnerID{}
+				if pair.oldID != empty {
+					lmc.unrefDirectName(pair.oldID, key, pair.sot)
 				}
-				if new[sourceOrTarget].Name != "" {
-					lmc.refDirectName(new[sourceOrTarget], key, sourceOrTarget)
+				if pair.newID != empty {
+					lmc.refDirectName(pair.newID, key, pair.sot)
 				}
 			}
 		}
@@ -348,15 +468,14 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 		return
 	}
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
-		name, ns := wepKey.GetNameAndNamespace()
-		namespacedName := types.NamespacedName{Namespace: ns, Name: name}
-		if wepData := lmc.weps[namespacedName]; wepData != nil {
+		exactID := wepOwnerIDFromKey(wepKey)
+		if wd := lmc.weps[exactID]; wd != nil {
 			logrus.WithFields(logrus.Fields{
-				"wep":      namespacedName,
+				"wep":      exactID,
 				"selector": cs,
 			}).Debug("LiveMigrationCalculator: selector matched WEP")
-			lmc.withRoleUpdateIfNeeded(wepData, func() {
-				wepData.targetSelectorMatched = cs
+			lmc.withRoleUpdateIfNeeded(wd, func() {
+				wd.targetSelectorMatched = cs
 			})
 		} else {
 			// WEP not yet tracked; the ARC handler runs before ours in the
@@ -364,10 +483,10 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 			// before our OnUpdate has processed the WEP.  Record it so we can
 			// pick it up when the WEP is processed.
 			logrus.WithFields(logrus.Fields{
-				"wep":      namespacedName,
+				"wep":      exactID,
 				"selector": cs,
 			}).Debug("LiveMigrationCalculator: selector matched unknown WEP, queuing")
-			lmc.pendingSelectorMatches[namespacedName] = cs
+			lmc.pendingSelectorMatches[exactID] = cs
 		}
 	}
 }
@@ -377,19 +496,18 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, ep
 		return
 	}
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
-		name, ns := wepKey.GetNameAndNamespace()
-		namespacedName := types.NamespacedName{Namespace: ns, Name: name}
-		if wepData := lmc.weps[namespacedName]; wepData != nil {
+		exactID := wepOwnerIDFromKey(wepKey)
+		if wd := lmc.weps[exactID]; wd != nil {
 			logrus.WithFields(logrus.Fields{
-				"wep":      namespacedName,
+				"wep":      exactID,
 				"selector": cs,
 			}).Debug("LiveMigrationCalculator: selector match stopped for WEP")
-			lmc.withRoleUpdateIfNeeded(wepData, func() {
-				wepData.targetSelectorMatched = ""
+			lmc.withRoleUpdateIfNeeded(wd, func() {
+				wd.targetSelectorMatched = ""
 			})
 		} else {
 			// Undo a pending match if there was one.
-			delete(lmc.pendingSelectorMatches, namespacedName)
+			delete(lmc.pendingSelectorMatches, exactID)
 		}
 	}
 }

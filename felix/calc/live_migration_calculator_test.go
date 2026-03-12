@@ -115,6 +115,15 @@ func makeWEPKey(namespace, name string) model.WorkloadEndpointKey {
 	}
 }
 
+func makeWEPKeyWithEndpoint(namespace, name, endpointID string) model.WorkloadEndpointKey {
+	return model.WorkloadEndpointKey{
+		Hostname:       "host1",
+		OrchestratorID: "k8s",
+		WorkloadID:     namespace + "/" + name,
+		EndpointID:     endpointID,
+	}
+}
+
 func makeWEPUpdate(key model.WorkloadEndpointKey) api.Update {
 	return api.Update{
 		KVPair: model.KVPair{
@@ -141,32 +150,68 @@ func makeLMKey(name string) model.ResourceKey {
 	}
 }
 
-func ptrNN(ns, name string) *types.NamespacedName {
-	nn := types.NamespacedName{Namespace: ns, Name: name}
-	return &nn
+// ptrWEI creates a WorkloadEndpointIdentifier pointer (endpoint-level matching).
+func ptrWEI(hostname, orchestratorID, workloadID, endpointID string) *internalapi.WorkloadEndpointIdentifier {
+	return &internalapi.WorkloadEndpointIdentifier{
+		Hostname:       hostname,
+		OrchestratorID: orchestratorID,
+		WorkloadID:     workloadID,
+		EndpointID:     endpointID,
+	}
+}
+
+// ptrWI creates a WorkloadIdentifier pointer (workload-level matching).
+func ptrWI(hostname, orchestratorID, workloadID string) *internalapi.WorkloadIdentifier {
+	return &internalapi.WorkloadIdentifier{
+		Hostname:       hostname,
+		OrchestratorID: orchestratorID,
+		WorkloadID:     workloadID,
+	}
 }
 
 func ptrStr(s string) *string {
 	return &s
 }
 
-func makeLM(source *types.NamespacedName, destName *types.NamespacedName, destSelector *string) *internalapi.LiveMigration {
-	lm := &internalapi.LiveMigration{
-		Spec: internalapi.LiveMigrationSpec{
-			Source: source,
-		},
+// makeSourceWEI creates a LiveMigrationSource using WorkloadEndpoint (endpoint-level).
+func makeSourceWEI(hostname, orchestratorID, workloadID, endpointID string) *internalapi.LiveMigrationSource {
+	return &internalapi.LiveMigrationSource{
+		WorkloadEndpoint: ptrWEI(hostname, orchestratorID, workloadID, endpointID),
 	}
-	if destName != nil || destSelector != nil {
-		lm.Spec.Destination = &internalapi.WorkloadEndpointIdentifier{
-			NamespacedName: destName,
-			Selector:       destSelector,
-		}
-	}
-	return lm
 }
 
-func makeLMWithUID(source *types.NamespacedName, destName *types.NamespacedName, destSelector *string, uid types.UID) *internalapi.LiveMigration {
-	lm := makeLM(source, destName, destSelector)
+// makeSourceWI creates a LiveMigrationSource using Workload (workload-level).
+func makeSourceWI(hostname, orchestratorID, workloadID string) *internalapi.LiveMigrationSource {
+	return &internalapi.LiveMigrationSource{
+		Workload: ptrWI(hostname, orchestratorID, workloadID),
+	}
+}
+
+// makeTargetWEI creates a LiveMigrationTarget using WorkloadEndpoint (endpoint-level).
+func makeTargetWEI(hostname, orchestratorID, workloadID, endpointID string) *internalapi.LiveMigrationTarget {
+	return &internalapi.LiveMigrationTarget{
+		WorkloadEndpoint: ptrWEI(hostname, orchestratorID, workloadID, endpointID),
+	}
+}
+
+// makeTargetSelector creates a LiveMigrationTarget using a selector.
+func makeTargetSelector(selector string) *internalapi.LiveMigrationTarget {
+	return &internalapi.LiveMigrationTarget{
+		Selector: ptrStr(selector),
+	}
+}
+
+func makeLM(source *internalapi.LiveMigrationSource, target *internalapi.LiveMigrationTarget) *internalapi.LiveMigration {
+	return &internalapi.LiveMigration{
+		Spec: internalapi.LiveMigrationSpec{
+			Source: source,
+			Target: target,
+		},
+	}
+}
+
+func makeLMWithUID(source *internalapi.LiveMigrationSource, target *internalapi.LiveMigrationTarget, uid types.UID) *internalapi.LiveMigration {
+	lm := makeLM(source, target)
 	lm.ObjectMeta = metav1.ObjectMeta{UID: uid}
 	return lm
 }
@@ -189,13 +234,16 @@ func makeLMDelete(key model.ResourceKey) api.Update {
 	}
 }
 
-// --- Tests ---
+// --- Tests using endpoint-level (WorkloadEndpointIdentifier) matching ---
 
 func TestLiveMigrationCalculator_LMThenWEPs(t *testing.T) {
 	env := newTestLMCEnv()
 
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(ptrNN("ns", "src-pod"), ptrNN("ns", "dst-pod"), nil)
+	lm := makeLM(
+		makeSourceWEI("host1", "k8s", "ns/src-pod", "eth0"),
+		makeTargetWEI("host1", "k8s", "ns/dst-pod", "eth0"),
+	)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	// No WEPs yet, no role events.
@@ -210,7 +258,7 @@ func TestLiveMigrationCalculator_LMThenWEPs(t *testing.T) {
 		t.Errorf("expected SOURCE for src-pod, got %v", env.lastRole(srcKey))
 	}
 
-	// Destination WEP arrives.
+	// Target WEP arrives.
 	dstKey := makeWEPKey("ns", "dst-pod")
 	env.lmc.OnUpdate(makeWEPUpdate(dstKey))
 	if env.lastRole(dstKey) != proto.LiveMigrationRole_TARGET {
@@ -233,7 +281,10 @@ func TestLiveMigrationCalculator_WEPsThenLM(t *testing.T) {
 
 	// LM arrives naming both WEPs.
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(ptrNN("ns", "src-pod"), ptrNN("ns", "dst-pod"), nil)
+	lm := makeLM(
+		makeSourceWEI("host1", "k8s", "ns/src-pod", "eth0"),
+		makeTargetWEI("host1", "k8s", "ns/dst-pod", "eth0"),
+	)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	if env.lastRole(srcKey) != proto.LiveMigrationRole_SOURCE {
@@ -265,7 +316,7 @@ func TestLiveMigrationCalculator_TargetWinsOverSource(t *testing.T) {
 
 	// LM1 names pod-a as source.
 	lm1Key := makeLMKey("lm1")
-	lm1 := makeLM(ptrNN("ns", "pod-a"), nil, nil)
+	lm1 := makeLM(makeSourceWEI("host1", "k8s", "ns/pod-a", "eth0"), nil)
 	env.lmc.OnUpdate(makeLMUpdate(lm1Key, lm1))
 
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_SOURCE {
@@ -274,7 +325,7 @@ func TestLiveMigrationCalculator_TargetWinsOverSource(t *testing.T) {
 
 	// LM2 names pod-a as target.
 	lm2Key := makeLMKey("lm2")
-	lm2 := makeLM(nil, ptrNN("ns", "pod-a"), nil)
+	lm2 := makeLM(nil, makeTargetWEI("host1", "k8s", "ns/pod-a", "eth0"))
 	env.lmc.OnUpdate(makeLMUpdate(lm2Key, lm2))
 
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_TARGET {
@@ -294,7 +345,7 @@ func TestLiveMigrationCalculator_LMUpdateChangesSourceName(t *testing.T) {
 	env.lmc.OnUpdate(makeWEPUpdate(wepBKey))
 
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(ptrNN("ns", "pod-a"), nil, nil)
+	lm := makeLM(makeSourceWEI("host1", "k8s", "ns/pod-a", "eth0"), nil)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	if env.lastRole(wepAKey) != proto.LiveMigrationRole_SOURCE {
@@ -302,7 +353,7 @@ func TestLiveMigrationCalculator_LMUpdateChangesSourceName(t *testing.T) {
 	}
 
 	// Update LM to change source from pod-a to pod-b.
-	lmUpdated := makeLM(ptrNN("ns", "pod-b"), nil, nil)
+	lmUpdated := makeLM(makeSourceWEI("host1", "k8s", "ns/pod-b", "eth0"), nil)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lmUpdated))
 
 	if env.lastRole(wepAKey) != proto.LiveMigrationRole_NO_ROLE {
@@ -313,12 +364,12 @@ func TestLiveMigrationCalculator_LMUpdateChangesSourceName(t *testing.T) {
 	}
 }
 
-func TestLiveMigrationCalculator_SelectorBasedDestination(t *testing.T) {
+func TestLiveMigrationCalculator_SelectorBasedTarget(t *testing.T) {
 	env := newTestLMCEnv()
 
-	// Create LM with destination selector first.
+	// Create LM with target selector first.
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(nil, nil, ptrStr("has(migrate)"))
+	lm := makeLM(nil, makeTargetSelector("has(migrate)"))
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	// Add a labeled WEP through both LMC and ARC — the ARC will fire the selector
@@ -343,7 +394,7 @@ func TestLiveMigrationCalculator_SelectorMatchThenLMDeleted(t *testing.T) {
 	env.addLabeledEndpoint(wepKey, map[string]string{"migrate": "true"})
 
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(nil, nil, ptrStr("has(migrate)"))
+	lm := makeLM(nil, makeTargetSelector("has(migrate)"))
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_TARGET {
@@ -366,11 +417,11 @@ func TestLiveMigrationCalculator_SelectorRefCounting(t *testing.T) {
 
 	// Two LMs with the same selector.
 	lm1Key := makeLMKey("lm1")
-	lm1 := makeLM(nil, nil, ptrStr("has(migrate)"))
+	lm1 := makeLM(nil, makeTargetSelector("has(migrate)"))
 	env.lmc.OnUpdate(makeLMUpdate(lm1Key, lm1))
 
 	lm2Key := makeLMKey("lm2")
-	lm2 := makeLM(nil, nil, ptrStr("has(migrate)"))
+	lm2 := makeLM(nil, makeTargetSelector("has(migrate)"))
 	env.lmc.OnUpdate(makeLMUpdate(lm2Key, lm2))
 
 	// Selector should be active (added once, ref count = 2).
@@ -411,13 +462,13 @@ func TestLiveMigrationCalculator_SelectorRefCounting(t *testing.T) {
 }
 
 // Note, this scenario isn't expected as part of mainline live migration.  Once a LiveMigration
-// specifies a destination, that should never change for the same LiveMigration resource.  But it's
+// specifies a target, that should never change for the same LiveMigration resource.  But it's
 // useful to test how the product code would respond.
 func TestLiveMigrationCalculator_SelectorChangeOnUpdate(t *testing.T) {
 	env := newTestLMCEnv()
 
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(nil, nil, ptrStr("has(selectorA)"))
+	lm := makeLM(nil, makeTargetSelector("has(selectorA)"))
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	if _, ok := env.lmc.selectorKeys["has(selectorA)"]; !ok {
@@ -433,7 +484,7 @@ func TestLiveMigrationCalculator_SelectorChangeOnUpdate(t *testing.T) {
 	}
 
 	// Update LM to change selector from A to B.
-	lmUpdated := makeLM(nil, nil, ptrStr("has(selectorB)"))
+	lmUpdated := makeLM(nil, makeTargetSelector("has(selectorB)"))
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lmUpdated))
 
 	if _, ok := env.lmc.selectorKeys["has(selectorA)"]; ok {
@@ -456,14 +507,15 @@ func TestLiveMigrationCalculator_WEPDeleteRemovesTracking(t *testing.T) {
 	env.lmc.OnUpdate(makeWEPUpdate(wepKey))
 
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(ptrNN("ns", "pod-a"), nil, nil)
+	lm := makeLM(makeSourceWEI("host1", "k8s", "ns/pod-a", "eth0"), nil)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	// Delete the WEP.
 	env.lmc.OnUpdate(makeWEPDelete(wepKey))
 
-	nn := types.NamespacedName{Namespace: "ns", Name: "pod-a"}
-	if _, ok := env.lmc.weps[nn]; ok {
+	// Hostname is normalized to "" for k8s orchestrator.
+	ownerID := wepOwnerID{orchestratorID: "k8s", workloadID: "ns/pod-a", endpointID: "eth0"}
+	if _, ok := env.lmc.weps[ownerID]; ok {
 		t.Error("expected WEP to be removed from tracking after delete")
 	}
 }
@@ -475,7 +527,7 @@ func TestLiveMigrationCalculator_WEPUpdateIsIdempotent(t *testing.T) {
 	env.lmc.OnUpdate(makeWEPUpdate(wepKey))
 
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(ptrNN("ns", "pod-a"), nil, nil)
+	lm := makeLM(makeSourceWEI("host1", "k8s", "ns/pod-a", "eth0"), nil)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	// Send the same WEP update again — should be a no-op.
@@ -520,30 +572,30 @@ func TestLiveMigrationCalculator_IgnoresHostEndpointKey(t *testing.T) {
 	}
 }
 
-func TestLiveMigrationCalculator_NilSourceAndDestination(t *testing.T) {
+func TestLiveMigrationCalculator_NilSourceAndTarget(t *testing.T) {
 	env := newTestLMCEnv()
 
 	wepKey := makeWEPKey("ns", "pod-a")
 	env.lmc.OnUpdate(makeWEPUpdate(wepKey))
 
-	// LM with nil source and nil destination.
+	// LM with nil source and nil target.
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(nil, nil, nil)
+	lm := makeLM(nil, nil)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_NO_ROLE {
-		t.Errorf("expected NO_ROLE with nil source/dest, got %v", env.lastRole(wepKey))
+		t.Errorf("expected NO_ROLE with nil source/target, got %v", env.lastRole(wepKey))
 	}
 }
 
-func TestLiveMigrationCalculator_DestinationWithNilNameAndSelector(t *testing.T) {
+func TestLiveMigrationCalculator_TargetWithNilFieldsInside(t *testing.T) {
 	env := newTestLMCEnv()
 
-	// LM with a Destination struct but nil NamespacedName and nil Selector.
+	// LM with a Target struct but nil WorkloadEndpoint and nil Selector.
 	lmKey := makeLMKey("lm1")
 	lm := &internalapi.LiveMigration{
 		Spec: internalapi.LiveMigrationSpec{
-			Destination: &internalapi.WorkloadEndpointIdentifier{},
+			Target: &internalapi.LiveMigrationTarget{},
 		},
 	}
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
@@ -562,7 +614,10 @@ func TestLiveMigrationCalculator_EndToEndSourceHost(t *testing.T) {
 	env.lmc.OnUpdate(makeWEPUpdate(srcKey))
 
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(ptrNN("ns", "src-pod"), ptrNN("ns", "dst-pod"), nil)
+	lm := makeLM(
+		makeSourceWEI("host1", "k8s", "ns/src-pod", "eth0"),
+		makeTargetWEI("host1", "k8s", "ns/dst-pod", "eth0"),
+	)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	if env.lastRole(srcKey) != proto.LiveMigrationRole_SOURCE {
@@ -587,11 +642,11 @@ func TestLiveMigrationCalculator_TransientOverlap(t *testing.T) {
 
 	// Two LMs both name pod-a as source.
 	lm1Key := makeLMKey("lm1")
-	lm1 := makeLM(ptrNN("ns", "pod-a"), nil, nil)
+	lm1 := makeLM(makeSourceWEI("host1", "k8s", "ns/pod-a", "eth0"), nil)
 	env.lmc.OnUpdate(makeLMUpdate(lm1Key, lm1))
 
 	lm2Key := makeLMKey("lm2")
-	lm2 := makeLM(ptrNN("ns", "pod-a"), nil, nil)
+	lm2 := makeLM(makeSourceWEI("host1", "k8s", "ns/pod-a", "eth0"), nil)
 	env.lmc.OnUpdate(makeLMUpdate(lm2Key, lm2))
 
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_SOURCE {
@@ -625,7 +680,7 @@ func TestLiveMigrationCalculator_SelectorWinsOverDirectTarget(t *testing.T) {
 
 	// LM1 names pod-a as direct target.
 	lm1Key := makeLMKey("lm1")
-	lm1 := makeLM(nil, ptrNN("ns", "pod-a"), nil)
+	lm1 := makeLM(nil, makeTargetWEI("host1", "k8s", "ns/pod-a", "eth0"))
 	env.lmc.OnUpdate(makeLMUpdate(lm1Key, lm1))
 
 	if env.lastRole(wepKey) != proto.LiveMigrationRole_TARGET {
@@ -635,7 +690,7 @@ func TestLiveMigrationCalculator_SelectorWinsOverDirectTarget(t *testing.T) {
 	// LM2 uses a selector that also matches pod-a — still TARGET, no redundant event.
 	eventsBefore := len(env.roleEvents)
 	lm2Key := makeLMKey("lm2")
-	lm2 := makeLM(nil, nil, ptrStr("has(migrate)"))
+	lm2 := makeLM(nil, makeTargetSelector("has(migrate)"))
 	env.lmc.OnUpdate(makeLMUpdate(lm2Key, lm2))
 
 	if len(env.roleEvents) != eventsBefore {
@@ -662,7 +717,7 @@ func TestLiveMigrationCalculator_WEPRecreated(t *testing.T) {
 	env := newTestLMCEnv()
 
 	lmKey := makeLMKey("lm1")
-	lm := makeLM(ptrNN("ns", "pod-a"), nil, nil)
+	lm := makeLM(makeSourceWEI("host1", "k8s", "ns/pod-a", "eth0"), nil)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	wepKey := makeWEPKey("ns", "pod-a")
@@ -692,7 +747,11 @@ func TestLiveMigrationCalculator_UIDPropagation(t *testing.T) {
 
 	// LM with a UID.
 	lmKey := makeLMKey("lm1")
-	lm := makeLMWithUID(ptrNN("ns", "src-pod"), ptrNN("ns", "dst-pod"), nil, "test-uid-12345")
+	lm := makeLMWithUID(
+		makeSourceWEI("host1", "k8s", "ns/src-pod", "eth0"),
+		makeTargetWEI("host1", "k8s", "ns/dst-pod", "eth0"),
+		"test-uid-12345",
+	)
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	if env.lastUID(srcKey) != "test-uid-12345" {
@@ -717,7 +776,7 @@ func TestLiveMigrationCalculator_UIDWithSelector(t *testing.T) {
 
 	// LM with UID and selector.
 	lmKey := makeLMKey("lm1")
-	lm := makeLMWithUID(nil, nil, ptrStr("has(migrate)"), "selector-uid-999")
+	lm := makeLMWithUID(nil, makeTargetSelector("has(migrate)"), "selector-uid-999")
 	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
 
 	// Add a matching WEP.
@@ -729,5 +788,96 @@ func TestLiveMigrationCalculator_UIDWithSelector(t *testing.T) {
 	}
 	if env.lastUID(wepKey) != "selector-uid-999" {
 		t.Errorf("expected UID selector-uid-999, got %q", env.lastUID(wepKey))
+	}
+}
+
+// --- Tests for workload-level (WorkloadIdentifier) matching ---
+
+func TestLiveMigrationCalculator_WorkloadLevelSource(t *testing.T) {
+	env := newTestLMCEnv()
+
+	// Two WEPs for the same workload with different endpoint IDs.
+	wepEth0 := makeWEPKeyWithEndpoint("ns", "src-pod", "eth0")
+	wepEth1 := makeWEPKeyWithEndpoint("ns", "src-pod", "eth1")
+	env.lmc.OnUpdate(makeWEPUpdate(wepEth0))
+	env.lmc.OnUpdate(makeWEPUpdate(wepEth1))
+
+	// LM with workload-level source (matches all endpoints for the workload).
+	lmKey := makeLMKey("lm1")
+	lm := makeLM(makeSourceWI("host1", "k8s", "ns/src-pod"), nil)
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
+
+	// Both WEPs should get SOURCE role.
+	if env.lastRole(wepEth0) != proto.LiveMigrationRole_SOURCE {
+		t.Errorf("expected SOURCE for eth0, got %v", env.lastRole(wepEth0))
+	}
+	if env.lastRole(wepEth1) != proto.LiveMigrationRole_SOURCE {
+		t.Errorf("expected SOURCE for eth1, got %v", env.lastRole(wepEth1))
+	}
+
+	// Delete the LM — both revert to NO_ROLE.
+	env.lmc.OnUpdate(makeLMDelete(lmKey))
+	if env.lastRole(wepEth0) != proto.LiveMigrationRole_NO_ROLE {
+		t.Errorf("expected NO_ROLE for eth0 after LM delete, got %v", env.lastRole(wepEth0))
+	}
+	if env.lastRole(wepEth1) != proto.LiveMigrationRole_NO_ROLE {
+		t.Errorf("expected NO_ROLE for eth1 after LM delete, got %v", env.lastRole(wepEth1))
+	}
+}
+
+func TestLiveMigrationCalculator_WorkloadLevelSourceWEPsArriveAfterLM(t *testing.T) {
+	env := newTestLMCEnv()
+
+	// LM arrives first with workload-level source.
+	lmKey := makeLMKey("lm1")
+	lm := makeLM(makeSourceWI("host1", "k8s", "ns/src-pod"), nil)
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
+
+	// No events yet.
+	if len(env.roleEvents) != 0 {
+		t.Fatalf("expected no role events before WEPs arrive, got %d", len(env.roleEvents))
+	}
+
+	// WEPs arrive after LM.
+	wepEth0 := makeWEPKeyWithEndpoint("ns", "src-pod", "eth0")
+	wepEth1 := makeWEPKeyWithEndpoint("ns", "src-pod", "eth1")
+	env.lmc.OnUpdate(makeWEPUpdate(wepEth0))
+	env.lmc.OnUpdate(makeWEPUpdate(wepEth1))
+
+	// Both should get SOURCE.
+	if env.lastRole(wepEth0) != proto.LiveMigrationRole_SOURCE {
+		t.Errorf("expected SOURCE for eth0, got %v", env.lastRole(wepEth0))
+	}
+	if env.lastRole(wepEth1) != proto.LiveMigrationRole_SOURCE {
+		t.Errorf("expected SOURCE for eth1, got %v", env.lastRole(wepEth1))
+	}
+}
+
+func TestLiveMigrationCalculator_WorkloadLevelSourcePartialDelete(t *testing.T) {
+	env := newTestLMCEnv()
+
+	// Two WEPs, workload-level LM.
+	wepEth0 := makeWEPKeyWithEndpoint("ns", "src-pod", "eth0")
+	wepEth1 := makeWEPKeyWithEndpoint("ns", "src-pod", "eth1")
+	env.lmc.OnUpdate(makeWEPUpdate(wepEth0))
+	env.lmc.OnUpdate(makeWEPUpdate(wepEth1))
+
+	lmKey := makeLMKey("lm1")
+	lm := makeLM(makeSourceWI("host1", "k8s", "ns/src-pod"), nil)
+	env.lmc.OnUpdate(makeLMUpdate(lmKey, lm))
+
+	// Both should have SOURCE.
+	if env.lastRole(wepEth0) != proto.LiveMigrationRole_SOURCE {
+		t.Fatalf("expected SOURCE for eth0, got %v", env.lastRole(wepEth0))
+	}
+	if env.lastRole(wepEth1) != proto.LiveMigrationRole_SOURCE {
+		t.Fatalf("expected SOURCE for eth1, got %v", env.lastRole(wepEth1))
+	}
+
+	// Delete one WEP — the other should retain SOURCE.
+	env.lmc.OnUpdate(makeWEPDelete(wepEth0))
+
+	if env.lastRole(wepEth1) != proto.LiveMigrationRole_SOURCE {
+		t.Errorf("expected SOURCE for eth1 after eth0 deleted, got %v", env.lastRole(wepEth1))
 	}
 }
