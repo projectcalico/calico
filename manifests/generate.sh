@@ -35,7 +35,7 @@ OPERATOR_REGISTRY=${OPERATOR_REGISTRY_OVERRIDE:-$defaultOperatorRegistry}
 defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
 OPERATOR_IMAGE=${OPERATOR_IMAGE_OVERRIDE:-$defaultOperatorImage}
 
-NON_HELM_MANIFEST_IMAGES="apiserver windows ctl csi node-driver-registrar dikastes flannel-migration-controller"
+NON_HELM_MANIFEST_IMAGES="apiserver webhooks windows ctl csi node-driver-registrar dikastes flannel-migration-controller"
 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
