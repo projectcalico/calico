@@ -18,13 +18,13 @@ import (
 	"context"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -46,7 +46,7 @@ const (
 // kubernetes nodes and responding to delete events by removing them from the Calico datastore.
 type NodeController struct {
 	ctx context.Context
-	cfg config.NodeControllerConfig
+	cfg v3.NodeControllerConfig
 
 	// For syncing node objects from the k8s API.
 	nodeInformer cache.SharedIndexInformer
@@ -67,7 +67,8 @@ type NodeController struct {
 func NewNodeController(ctx context.Context,
 	k8sClientset *kubernetes.Clientset,
 	calicoClient client.Interface,
-	cfg config.NodeControllerConfig,
+	cfg v3.NodeControllerConfig,
+	deleteNodes bool,
 	nodeInformer, podInformer cache.SharedIndexInformer,
 	dataFeed *utils.DataFeed,
 	deferredInformers *kubevirt.DeferredInformers,
@@ -91,7 +92,7 @@ func NewNodeController(ctx context.Context,
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
 	podDeletionFuncs = append(podDeletionFuncs, nc.ipamCtrl.OnKubernetesPodDeleted)
 
-	if cfg.DeleteNodes {
+	if deleteNodes {
 		// If we're running in etcd mode, then we also need to delete the node resource.
 		// We don't need this for KDD mode, since the Calico Node resource is backed
 		// directly by the Kubernetes Node resource, so their lifecycle is identical.
@@ -125,7 +126,7 @@ func NewNodeController(ctx context.Context,
 	nc.hostEndpointController = NewAutoHEPController(cfg, calicoClient)
 	nc.hostEndpointController.RegisterWith(nc.dataFeed)
 
-	if cfg.SyncLabels {
+	if cfg.SyncLabels == v3.Enabled {
 		// Note that the configuration code has already handled disabling this if
 		// we are in KDD mode.
 
@@ -186,7 +187,7 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 	c.ipamCtrl.Start(stopCh)
 	c.hostEndpointController.Start(stopCh)
 
-	if c.cfg.SyncLabels {
+	if c.cfg.SyncLabels == v3.Enabled {
 		c.nodeLabelController.Start(stopCh)
 	}
 

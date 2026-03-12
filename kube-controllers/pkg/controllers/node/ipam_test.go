@@ -32,7 +32,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -137,7 +136,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		nodeInformer := factory.Core().V1().Nodes().Informer()
 
 		// Config for the test.
-		cfg := config.NodeControllerConfig{
+		cfg := apiv3.NodeControllerConfig{
 			LeakGracePeriod: &metav1.Duration{Duration: gracePeriod},
 		}
 
