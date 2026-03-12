@@ -206,6 +206,8 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 				return
 			}
 
+			logrus.WithField("wep", namespacedName).Debug("LiveMigrationCalculator: new WEP")
+
 			// First time we're seeing this WEP.
 			wepData := &wepData{
 				key: key,
@@ -221,6 +223,10 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 				wepData.directNameKeys[target].AddSet(lmc.directNameKeys[target][namespacedName])
 			}
 			if sel, ok := lmc.pendingSelectorMatches[namespacedName]; ok {
+				logrus.WithFields(logrus.Fields{
+					"wep":      namespacedName,
+					"selector": sel,
+				}).Debug("LiveMigrationCalculator: applying pending selector match")
 				wepData.targetSelectorMatched = sel
 				delete(lmc.pendingSelectorMatches, namespacedName)
 			}
@@ -228,6 +234,7 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			role, uid := lmc.liveMigrationRoleAndUID(wepData)
 			lmc.indicateRole(key, role, uid)
 		} else {
+			logrus.WithField("wep", namespacedName).Debug("LiveMigrationCalculator: WEP deleted")
 			// Don't need anything here to "reset the role that we previously said"
 			// because the WEP is being deleted anyway.
 			delete(lmc.weps, namespacedName)
@@ -267,7 +274,15 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			if lm.Spec.Destination != nil && lm.Spec.Destination.Selector != nil {
 				newSelector = *lm.Spec.Destination.Selector
 			}
+			logrus.WithFields(logrus.Fields{
+				"lm":       key,
+				"uid":      lm.UID,
+				"source":   new[source],
+				"target":   new[target],
+				"selector": newSelector,
+			}).Debug("LiveMigrationCalculator: LiveMigration created/updated")
 		} else {
+			logrus.WithField("lm", key).Debug("LiveMigrationCalculator: LiveMigration deleted")
 			delete(lmc.liveMigrations, key)
 		}
 
@@ -317,6 +332,11 @@ func (lmc *LiveMigrationCalculator) withRoleUpdateIfNeeded(wepData *wepData, upd
 }
 
 func (lmc *LiveMigrationCalculator) indicateRole(key model.WorkloadEndpointKey, role proto.LiveMigrationRole, uid string) {
+	logrus.WithFields(logrus.Fields{
+		"wep":  key,
+		"role": role,
+		"uid":  uid,
+	}).Debug("LiveMigrationCalculator: emitting role for WEP")
 	lmc.onEndpointComputedData(key, EPCompDataKindLiveMigration, &liveMigrationRole{role: role, uid: uid})
 }
 
@@ -331,6 +351,10 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 		name, ns := wepKey.GetNameAndNamespace()
 		namespacedName := types.NamespacedName{Namespace: ns, Name: name}
 		if wepData := lmc.weps[namespacedName]; wepData != nil {
+			logrus.WithFields(logrus.Fields{
+				"wep":      namespacedName,
+				"selector": cs,
+			}).Debug("LiveMigrationCalculator: selector matched WEP")
 			lmc.withRoleUpdateIfNeeded(wepData, func() {
 				wepData.targetSelectorMatched = cs
 			})
@@ -339,6 +363,10 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 			// dispatcher chain, so we may receive selector match callbacks
 			// before our OnUpdate has processed the WEP.  Record it so we can
 			// pick it up when the WEP is processed.
+			logrus.WithFields(logrus.Fields{
+				"wep":      namespacedName,
+				"selector": cs,
+			}).Debug("LiveMigrationCalculator: selector matched unknown WEP, queuing")
 			lmc.pendingSelectorMatches[namespacedName] = cs
 		}
 	}
@@ -352,6 +380,10 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, ep
 		name, ns := wepKey.GetNameAndNamespace()
 		namespacedName := types.NamespacedName{Namespace: ns, Name: name}
 		if wepData := lmc.weps[namespacedName]; wepData != nil {
+			logrus.WithFields(logrus.Fields{
+				"wep":      namespacedName,
+				"selector": cs,
+			}).Debug("LiveMigrationCalculator: selector match stopped for WEP")
 			lmc.withRoleUpdateIfNeeded(wepData, func() {
 				wepData.targetSelectorMatched = ""
 			})
