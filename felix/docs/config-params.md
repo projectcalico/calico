@@ -965,6 +965,34 @@ Controls whether Felix enables support for IPv6 (if supported by the in-use data
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
 
+### `IstioAmbientMode` (config file) / `istioAmbientMode` (YAML)
+
+Configures Felix to work together with Tigera's Istio distribution.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IstioAmbientMode` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `istioAmbientMode` (YAML) `IstioAmbientMode` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
+
+### `IstioDSCPMark` (config file) / `istioDSCPMark` (YAML)
+
+Sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
+SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
+with other Istio installation.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IstioDSCPMark` |
+| Encoding (env var/config file) | Numeric value: An integer from 0 to 63, representing the 6-bit DSCP code directly; Named value: A case-insensitive string corresponding to a standardized DSCP name (e.g., "CS0", "AF11", "AF21", "EF", etc.) as defined in the IANA registry for Differentiated Services Field Codepoints. |
+| Default value (above encoding) | `23` |
+| `FelixConfiguration` field | `istioDSCPMark` (YAML) `IstioDSCPMark` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
 ### `MTUIfacePattern` (config file) / `mtuIfacePattern` (YAML)
 
 A regular expression that controls which interfaces Felix should scan in order
