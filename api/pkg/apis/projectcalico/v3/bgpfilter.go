@@ -52,16 +52,12 @@ type BGPFilterSpec struct {
 	ExportV4 []BGPFilterRuleV4 `json:"exportV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.
-	// Source is not applicable to import rules because all imported routes are from BGP peers by definition.
-	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.source) || r.source == '')",message="source is not applicable to import rules"
 	ImportV4 []BGPFilterRuleV4 `json:"importV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.
 	ExportV6 []BGPFilterRuleV6 `json:"exportV6,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.
-	// Source is not applicable to import rules because all imported routes are from BGP peers by definition.
-	// +kubebuilder:validation:XValidation:rule="self.all(r, !has(r.source) || r.source == '')",message="source is not applicable to import rules"
 	ImportV6 []BGPFilterRuleV6 `json:"importV6,omitempty" validate:"omitempty,dive"`
 }
 
