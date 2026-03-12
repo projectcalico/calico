@@ -16,7 +16,6 @@ package migration
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -1241,20 +1240,4 @@ func listV1IPAMHandles(ctx context.Context, bc api.Client) (*model.KVPairList, e
 		})
 	}
 	return result, nil
-}
-
-// convertClusterInformation converts a v1 ClusterInformation to a v3 object,
-// but does NOT set DatastoreReady — that is handled specially by the controller.
-func convertClusterInformation(kvp *model.KVPair) (*apiv3.ClusterInformation, error) {
-	v1, ok := kvp.Value.(*apiv3.ClusterInformation)
-	if !ok {
-		return nil, fmt.Errorf("expected *apiv3.ClusterInformation, got %T", kvp.Value)
-	}
-	v3 := &apiv3.ClusterInformation{
-		TypeMeta:   newV3TypeMeta(apiv3.KindClusterInformation),
-		ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
-		Spec:       *v1.Spec.DeepCopy(),
-	}
-	copyLabelsAndAnnotations(v1, v3)
-	return v3, nil
 }

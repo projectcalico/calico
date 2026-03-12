@@ -617,12 +617,6 @@ func (c *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *Dat
 			return fmt.Errorf("saving APIService annotation: %v", err)
 		}
 		logCtx.Info("Saved APIService to annotation")
-
-		// Re-fetch to avoid stale resourceVersion after metadata update.
-		dm, err = c.migClient.Get(c.ctx, dm.Name)
-		if err != nil {
-			return fmt.Errorf("re-fetching after saving APIService: %v", err)
-		}
 	}
 
 	// Delete the APIService.
