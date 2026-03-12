@@ -206,29 +206,6 @@ func TestBGPFilterValidation(t *testing.T) {
 			},
 			valid: true,
 		},
-		{
-			name: "invalid source on importV4 rule",
-			obj: &v3.BGPFilter{
-				ObjectMeta: metav1.ObjectMeta{Name: "cel-source-importv4"},
-				Spec: v3.BGPFilterSpec{ImportV4: []v3.BGPFilterRuleV4{
-					{Source: v3.BGPFilterSourceRemotePeers, Action: v3.Reject},
-				}},
-			},
-			err:   "source is not applicable to import rules",
-			valid: false,
-		},
-		{
-			name: "invalid source on importV6 rule",
-			obj: &v3.BGPFilter{
-				ObjectMeta: metav1.ObjectMeta{Name: "cel-source-importv6"},
-				Spec: v3.BGPFilterSpec{ImportV6: []v3.BGPFilterRuleV6{
-					{Source: v3.BGPFilterSourceRemotePeers, Action: v3.Accept},
-				}},
-			},
-			err:   "source is not applicable to import rules",
-			valid: false,
-		},
-
 		// --- CEL: community value format validation ---
 		{
 			name: "valid standard community in match",

@@ -392,9 +392,6 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
-                  x-kubernetes-validations:
-                    - message: source is not applicable to import rules
-                      rule: self.all(r, !has(r.source) || r.source == '')
                 importV6:
                   items:
                     properties:
@@ -517,9 +514,6 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
-                  x-kubernetes-validations:
-                    - message: source is not applicable to import rules
-                      rule: self.all(r, !has(r.source) || r.source == '')
               type: object
           required:
             - metadata
