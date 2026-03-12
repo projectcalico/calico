@@ -50,7 +50,7 @@ echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
 for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
-		--show-only crds/$FILE \
+		--show-only $FILE \
 	        --set version=$CALICO_VERSION \
 		-f ../charts/values/calico.yaml >> crds.yaml
 done
@@ -62,14 +62,14 @@ echo "# CustomResourceDefinitions for Calico and Tigera operator" > operator-crd
 for FILE in $(ls ../charts/tigera-operator/crds/*.yaml | xargs -n1 basename); do
 	${HELM} -n tigera-operator template \
 		--include-crds \
-		--show-only crds/$FILE \
+		--show-only $FILE \
 	        --set version=$CALICO_VERSION \
 	       ../charts/tigera-operator >> operator-crds.yaml
 done
 for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
-		--show-only crds/$FILE \
+		--show-only $FILE \
 	        --set version=$CALICO_VERSION \
 		-f ../charts/values/calico.yaml >> operator-crds.yaml
 done
