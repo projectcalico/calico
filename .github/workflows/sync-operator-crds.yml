@@ -7,10 +7,6 @@ on:  # yamllint disable-line rule:truthy
     - cron: '0 * * * *'  # every hour
   workflow_dispatch: {}
 
-concurrency:
-  group: sync-operator-crds-${{ matrix.branch }}
-  cancel-in-progress: true
-
 permissions:
   contents: write
   pull-requests: write
@@ -18,6 +14,9 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    concurrency:
+      group: sync-operator-crds-${{ matrix.branch }}
+      cancel-in-progress: true
     strategy:
       matrix:
         branch: [master, release-v3.31, release-v3.30]
