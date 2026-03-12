@@ -2054,7 +2054,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.db.nova_notifier.notify_port_active_direct.assert_called_once()
         call_args = self.db.nova_notifier.notify_port_active_direct.call_args
         notified_port = call_args[0][0]
-        self.assertEqual(notified_port["id"], port_id)
+        self.assertEqual(notified_port.id, port_id)
 
     def test_vif_plug_no_notification_for_non_migration(self):
         """Felix 'up' on source host does NOT trigger Nova notification."""
