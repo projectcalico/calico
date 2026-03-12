@@ -119,14 +119,6 @@ func main() {
 		log.WithError(err).Fatal("Failed to start")
 	}
 
-	// KubeVirt informers are optional — only created if KubeVirt is installed.
-	// NOTE: KubeVirt detection only runs at startup. If KubeVirt CRDs are added
-	// to a running cluster, this pod must be restarted to pick them up.
-	vmInformer, vmiInformer, err := kubevirt.TryCreateInformers(k8sconfig, 5*time.Minute)
-	if err != nil {
-		log.WithError(err).Warn("Failed to create KubeVirt informers, proceeding without KubeVirt IPAM GC support")
-	}
-
 	stop := make(chan struct{})
 
 	// Create the context.
@@ -206,7 +198,7 @@ func main() {
 
 		// any subsequent changes trigger a restart
 		controllerCtrl.restart = cCtrlr.ConfigChan()
-		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, k8sconfig, dataFeed, vmInformer, vmiInformer)
+		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, k8sconfig, dataFeed)
 	}
 
 	if cfg.DatastoreType == utils.Etcdv3 {
@@ -480,7 +472,6 @@ func (cc *controllerControl) InitControllers(
 	v3c clientset.Interface,
 	k8sconfig *rest.Config,
 	dataFeed *utils.DataFeed,
-	vmInformer, vmiInformer cache.SharedIndexInformer,
 ) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
@@ -534,12 +525,10 @@ func (cc *controllerControl) InitControllers(
 		cc.controllers["NetworkPolicy"] = policyController
 	}
 	if cfg.Controllers.Node != nil {
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, vmInformer, vmiInformer)
+		deferredInformers := kubevirt.NewDeferredInformers(kubevirt.NewIndexerFunc(k8sconfig, 5*time.Minute), 30*time.Second, cc.stop)
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, deferredInformers)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
-		if vmInformer != nil {
-			cc.registerInformers(vmInformer, vmiInformer)
-		}
 	}
 	if cfg.Controllers.ServiceAccount != nil {
 		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)
