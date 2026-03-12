@@ -337,6 +337,7 @@ blocks:
             - make -C libcalico-go gen-files
             - make -C felix gen-files
             - make -C goldmane gen-files
+            - make get-operator-crds
             - make gen-manifests
             - make fix-changed
             - make check-ocp-no-crds
