@@ -1782,6 +1782,31 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.IPv4NormalRoutePriority != nil {
+		in, out := &in.IPv4NormalRoutePriority, &out.IPv4NormalRoutePriority
+		*out = new(int)
+		**out = **in
+	}
+	if in.IPv4ElevatedRoutePriority != nil {
+		in, out := &in.IPv4ElevatedRoutePriority, &out.IPv4ElevatedRoutePriority
+		*out = new(int)
+		**out = **in
+	}
+	if in.IPv6NormalRoutePriority != nil {
+		in, out := &in.IPv6NormalRoutePriority, &out.IPv6NormalRoutePriority
+		*out = new(int)
+		**out = **in
+	}
+	if in.IPv6ElevatedRoutePriority != nil {
+		in, out := &in.IPv6ElevatedRoutePriority, &out.IPv6ElevatedRoutePriority
+		*out = new(int)
+		**out = **in
+	}
+	if in.LiveMigrationRouteConvergenceTime != nil {
+		in, out := &in.LiveMigrationRouteConvergenceTime, &out.LiveMigrationRouteConvergenceTime
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	if in.WireguardEnabled != nil {
 		in, out := &in.WireguardEnabled, &out.WireguardEnabled
 		*out = new(bool)

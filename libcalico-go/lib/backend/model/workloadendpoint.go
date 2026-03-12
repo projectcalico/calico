@@ -95,15 +95,23 @@ func (key WorkloadEndpointKey) String() string {
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)
 }
 
-// GetNamespace extracts and returns the namespace from the WorkloadID.
-// WorkloadID is expected to be in the format "namespace/name".
-// Returns an empty string if the WorkloadID doesn't contain a namespace.
-func (key WorkloadEndpointKey) GetNamespace() string {
+// WorkloadID is expected to be in the format "name" or "namespace/name".
+// Returns name first, then namespace, with namespace being empty if WorkloadID
+// doesn't have any namespace.
+func (key WorkloadEndpointKey) GetNameAndNamespace() (string, string) {
 	parts := strings.SplitN(key.WorkloadID, "/", 2)
 	if len(parts) == 2 {
-		return parts[0]
+		return parts[1], parts[0]
 	}
-	return ""
+	return parts[0], ""
+}
+
+// GetNamespace extracts and returns the namespace from the WorkloadID.
+// WorkloadID is expected to be in the format "name" or "namespace/name".
+// Returns an empty string if the WorkloadID doesn't contain a namespace.
+func (key WorkloadEndpointKey) GetNamespace() string {
+	_, ns := key.GetNameAndNamespace()
+	return ns
 }
 
 var _ EndpointKey = WorkloadEndpointKey{}

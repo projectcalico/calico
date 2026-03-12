@@ -34492,6 +34492,14 @@ spec:
                 iptablesRefreshInterval:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                ipv4ElevatedRoutePriority:
+                  type: integer
+                ipv4NormalRoutePriority:
+                  type: integer
+                ipv6ElevatedRoutePriority:
+                  type: integer
+                ipv6NormalRoutePriority:
+                  type: integer
                 ipv6Support:
                   type: boolean
                 istioAmbientMode:
@@ -34511,6 +34519,9 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                liveMigrationRouteConvergenceTime:
+                  pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
                 logActionRateLimit:
                   pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
                   type: string
