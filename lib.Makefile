@@ -1031,41 +1031,42 @@ ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
 	)
 endif
 
+# retry_docker_cmd retries a docker command up to a specified number of times.
+# Usage: $(call retry_docker_cmd,<description>,<docker command>,<max retries>,<retry delay>)
+define retry_docker_cmd
+	i=1; \
+	while [ $$i -le $(3) ]; do \
+		$(2) && break; \
+		echo "WARNING: $(1) failed (attempt $$i/$(3)), retrying in $(4)s..."; \
+		if [ $$i -eq $(3) ]; then exit 1; fi; \
+		sleep $(4); \
+		i=$$((i + 1)); \
+	done
+endef
+
+# Configuration options for retrying docker commands 
+MANIFEST_RETRIES ?= 5
+MANIFEST_RETRY_DELAY ?= 5
+
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
 push-image-arch-to-registry-%:
 # If the registry we want to push to doesn't not support manifests don't push the ARCH image.
-	$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*
+	$(call retry_docker_cmd,docker push with quiet flag,$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*,$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 	$(if $(filter $*,amd64),\
-		$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),\
+		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))\
 		$(NOECHO) $(NOOP)\
 	)
 
 # push multi-arch manifest where supported.
-MANIFEST_RETRIES ?= 5
-MANIFEST_RETRY_DELAY ?= 5
 push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
 sub-manifest-%:
 	@if [ -z "$(MANIFEST_RETRIES)" ] || ! printf '%s\n' "$(MANIFEST_RETRIES)" | grep -Eq '^[0-9]+$$' || [ "$(MANIFEST_RETRIES)" -lt 1 ]; then \
 		echo "ERROR: MANIFEST_RETRIES must be a positive integer, got '$(MANIFEST_RETRIES)'"; \
 		exit 1; \
 	fi
-	i=1; \
-	while [ $$i -le $(MANIFEST_RETRIES) ]; do \
-		$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES))) && break; \
-		echo "WARNING: docker manifest create failed (attempt $$i/$(MANIFEST_RETRIES)), retrying in $(MANIFEST_RETRY_DELAY)s..."; \
-		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
-		sleep $(MANIFEST_RETRY_DELAY); \
-		i=$$((i + 1)); \
-	done
-	i=1; \
-	while [ $$i -le $(MANIFEST_RETRIES) ]; do \
-		$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG) && break; \
-		echo "WARNING: docker manifest push failed (attempt $$i/$(MANIFEST_RETRIES)), retrying in $(MANIFEST_RETRY_DELAY)s..."; \
-		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
-		sleep $(MANIFEST_RETRY_DELAY); \
-		i=$$((i + 1)); \
-	done
+	$(call retry_docker_cmd,docker manifest create,$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES))),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
+	$(call retry_docker_cmd,docker manifest push,$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 
 push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
