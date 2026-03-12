@@ -348,6 +348,10 @@ blocks:
             hours: 6
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          agent:
+            machine:
+              type: f1-standard-2
+              os_image: ubuntu2204
           env_vars:
             - name: OPENSHIFT_VERSION
               value: "4.18.17"
