@@ -29,7 +29,6 @@ from datetime import datetime, timedelta
 import os
 import re
 import threading
-import types
 import uuid
 from functools import wraps
 
@@ -46,6 +45,7 @@ from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
 from neutron.objects import ports as ports_object
 from neutron.objects.qos import policy as policy_object
+from neutron.plugins.ml2 import db as ml2_db
 from neutron.plugins.ml2.drivers import mech_agent
 
 from neutron_lib import constants
@@ -91,6 +91,7 @@ from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 config.register_agent_state_opts_helper(cfg.CONF)
 
 LOG = log.getLogger(__name__)
+
 
 # The default interval between periodic resyncs, in seconds.
 DEFAULT_RESYNC_INTERVAL_SECS = 60
@@ -712,12 +713,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                             port_id,
                             hostname,
                         )
-                        # Wrap the port dict as a SimpleNamespace so that
-                        # Neutron's nova notifier can access fields like
-                        # port.id via attribute syntax.
-                        self.db.nova_notifier.notify_port_active_direct(
-                            types.SimpleNamespace(**port)
-                        )
+                        # notify_port_active_direct expects a db
+                        # model (not a dict), matching the pattern
+                        # used by OVN and ML2 RPC callers.
+                        db_port = ml2_db.get_port(admin_context, port_id)
+                        if db_port:
+                            self.db.nova_notifier.notify_port_active_direct(db_port)
                 except Exception:
                     LOG.exception(
                         "Failed to send VIF plug notification for port %s",
