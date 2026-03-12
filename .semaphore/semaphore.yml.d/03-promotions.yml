@@ -103,6 +103,10 @@ promotions:
     pipeline_file: push-images/packaging.yaml
     auto_promote:
       when: "branch =~ 'master'"
+  - name: E2E tests on GCP kubeadm
+    pipeline_file: end-to-end/pipelines/e2e-gcp.yml
+    auto_promote:
+      when: "change_in('/e2e/', {pipeline_file: 'ignore'})"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
