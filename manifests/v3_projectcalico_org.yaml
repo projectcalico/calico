@@ -33306,6 +33306,14 @@ spec:
                     type: string
                   type: array
                   x-kubernetes-list-type: set
+                ipv4NormalRoutePriority:
+                  maximum: 2147483646
+                  minimum: 1
+                  type: integer
+                ipv6NormalRoutePriority:
+                  maximum: 2147483646
+                  minimum: 1
+                  type: integer
                 listenPort:
                   maximum: 65535
                   minimum: 1
