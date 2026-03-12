@@ -11229,16 +11229,6 @@ spec:
                         - Disabled
                         - Enabled
                       type: string
-                    clusterRoutingMode:
-                      description: |-
-                        ClusterRoutingMode controls how nodes gets a route to a workload on another node,
-                        when that workload's IP comes from an IP Pool with vxlanMode: Never. When ClusterRoutingMode is BIRD,
-                        confd and BIRD program that route. When ClusterRoutingMode is Felix, it is expected that Felix will program that route.
-                        Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: BIRD]
-                      enum:
-                        - BIRD
-                        - Felix
-                      type: string
                     containerIPForwarding:
                       description: |-
                         ContainerIPForwarding configures whether ip forwarding will be enabled for containers in the CNI configuration.
@@ -20051,16 +20041,6 @@ spec:
                           enum:
                             - Disabled
                             - Enabled
-                          type: string
-                        clusterRoutingMode:
-                          description: |-
-                            ClusterRoutingMode controls how nodes gets a route to a workload on another node,
-                            when that workload's IP comes from an IP Pool with vxlanMode: Never. When ClusterRoutingMode is BIRD,
-                            confd and BIRD program that route. When ClusterRoutingMode is Felix, it is expected that Felix will program that route.
-                            Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: BIRD]
-                          enum:
-                            - BIRD
-                            - Felix
                           type: string
                         containerIPForwarding:
                           description: |-
