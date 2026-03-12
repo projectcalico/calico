@@ -1456,7 +1456,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 					},
 					"importV4": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer. Source is not applicable to import rules because all imported routes are from BGP peers by definition.",
+							Description: "The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -1484,7 +1484,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 					},
 					"importV6": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer. Source is not applicable to import rules because all imported routes are from BGP peers by definition.",
+							Description: "The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
