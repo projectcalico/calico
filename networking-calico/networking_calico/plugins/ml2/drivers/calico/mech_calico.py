@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 import os
 import re
 import threading
+import types
 import uuid
 from functools import wraps
 
@@ -711,7 +712,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                             port_id,
                             hostname,
                         )
-                        self.db.nova_notifier.notify_port_active_direct(port)
+                        # Wrap the port dict as a SimpleNamespace so that
+                        # Neutron's nova notifier can access fields like
+                        # port.id via attribute syntax.
+                        self.db.nova_notifier.notify_port_active_direct(
+                            types.SimpleNamespace(**port)
+                        )
                 except Exception:
                     LOG.exception(
                         "Failed to send VIF plug notification for port %s",
