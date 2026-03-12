@@ -17,7 +17,6 @@ package internalapi
 import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -39,24 +38,62 @@ type LiveMigration struct {
 
 // LiveMigrationSpec contains the specification for a LiveMigration resource.
 type LiveMigrationSpec struct {
-	// Source identifies the WorkloadEndpoint that this live migration operation is moving from.
-	Source *types.NamespacedName
+	// Source identifies the Workload or WorkloadEndpoint that this live migration operation is
+	// moving from.
+	Source *LiveMigrationSource
 
-	// Destination identifies the WorkloadEndpoint that this live migration operation is moving
-	// to.
-	Destination *WorkloadEndpointIdentifier
+	// Target identifies the Workload or WorkloadEndpoint that this live migration operation is
+	// moving to.
+	Target *LiveMigrationTarget
 }
 
 // +kubebuilder:validation:ExactlyOneOf
-type WorkloadEndpointIdentifier struct {
-	// NamespacedName is used when the WorkloadEndpoint can be identified directly by its
-	// name and namespace.
+type LiveMigrationSource struct {
+	// Workload identifies the live migration source pod or VM in clusters where the
+	// orchestrator uses a single LiveMigration object to describe all of that pod/VM's
+	// interfaces.  This is what happens with KubeVirt.
 	// +optional
-	NamespacedName *types.NamespacedName
+	Workload *WorkloadIdentifier
 
-	// Selector is used when the WorkloadEndpoint must be identified by a selector expression.
+	// WorkloadEndpoint identifies the live migration source WorkloadEndpoint in clusters where
+	// the orchestrator uses different LiveMigration objects to describe each of a migrating
+	// pod/VM's interfaces.  This is what happens with OpenStack.
+	// +optional
+	WorkloadEndpoint *WorkloadEndpointIdentifier
+}
+
+// +kubebuilder:validation:ExactlyOneOf
+type LiveMigrationTarget struct {
+	// Selector identifies the live migration target pod or VM in clusters where the
+	// orchestrator uses a single LiveMigration object to describe all of that pod/VM's
+	// interfaces.  This is what happens with KubeVirt.
 	// +optional
 	Selector *string
+
+	// WorkloadEndpoint identifies the live migration target WorkloadEndpoint in clusters where
+	// the orchestrator uses different LiveMigration objects to describe each of a migrating
+	// pod/VM's interfaces.  This is what happens with OpenStack.
+	// +optional
+	WorkloadEndpoint *WorkloadEndpointIdentifier
+}
+
+// WorkloadIdentifier identifies a workload, i.e. a pod or VM, possibly with multiple interfaces.
+// When OrchestratorID is "k8s" the Hostname field is ignored because a Kubernetes pod is already
+// uniquely identified by WorkloadID.
+type WorkloadIdentifier struct {
+	Hostname       string
+	OrchestratorID string
+	WorkloadID     string
+}
+
+// WorkloadIdentifier identifies a workload endpoint, i.e. a specific pod or VM interface.  When
+// OrchestratorID is "k8s" the Hostname field is ignored because a Kubernetes pod is already
+// uniquely identified by WorkloadID.
+type WorkloadEndpointIdentifier struct {
+	Hostname       string
+	OrchestratorID string
+	WorkloadID     string
+	EndpointID     string
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
