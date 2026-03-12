@@ -21,7 +21,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
@@ -3290,12 +3289,6 @@ var (
 		Namespace: "default",
 	}
 
-	// A remote WEP name that doesn't match any local WEP.
-	remoteWEPName = k8stypes.NamespacedName{Name: "remote-wep"}
-
-	// NamespacedNames matching localWlEpKey1 (WorkloadID "wl1" → name="wl1", namespace="").
-	localWlEp1NN = k8stypes.NamespacedName{Name: "wl1"}
-
 	// A selector that matches localWlEp1's labels (has label "a").
 	liveMigrationTargetSelector = "has(a)"
 )
@@ -3308,9 +3301,21 @@ var localEp1WithPolicyLMSource = localEp1WithPolicy.withKVUpdates(
 			Namespace: liveMigrationKey1.Namespace,
 		},
 		Spec: internalapi.LiveMigrationSpec{
-			Source: &localWlEp1NN,
-			Destination: &internalapi.WorkloadEndpointIdentifier{
-				NamespacedName: &remoteWEPName,
+			Source: &internalapi.LiveMigrationSource{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       localHostname,
+					OrchestratorID: "orch",
+					WorkloadID:     "wl1",
+					EndpointID:     "ep1",
+				},
+			},
+			Target: &internalapi.LiveMigrationTarget{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       "remote-host",
+					OrchestratorID: "orch",
+					WorkloadID:     "remote-wep",
+					EndpointID:     "ep1",
+				},
 			},
 		},
 	}},
@@ -3326,9 +3331,21 @@ var localEp1WithPolicyLMTargetByName = localEp1WithPolicy.withKVUpdates(
 			Namespace: liveMigrationKey1.Namespace,
 		},
 		Spec: internalapi.LiveMigrationSpec{
-			Source: &remoteWEPName,
-			Destination: &internalapi.WorkloadEndpointIdentifier{
-				NamespacedName: &localWlEp1NN,
+			Source: &internalapi.LiveMigrationSource{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       "remote-host",
+					OrchestratorID: "orch",
+					WorkloadID:     "remote-wep",
+					EndpointID:     "ep1",
+				},
+			},
+			Target: &internalapi.LiveMigrationTarget{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       localHostname,
+					OrchestratorID: "orch",
+					WorkloadID:     "wl1",
+					EndpointID:     "ep1",
+				},
 			},
 		},
 	}},
@@ -3336,23 +3353,33 @@ var localEp1WithPolicyLMTargetByName = localEp1WithPolicy.withKVUpdates(
 	localWlEp1Id, proto.LiveMigrationRole_TARGET,
 ).withName("ep1 local, policy, LM target by name")
 
-// Case 3: Local WEP is a live migration target (by selector).
-var localEp1WithPolicyLMTargetBySelector = localEp1WithPolicy.withKVUpdates(
+// Case 2b: Local WEP is a live migration source (workload-level, matches all endpoints).
+// This is the pattern used by KubeVirt, where a single LiveMigration covers all interfaces
+// of the migrating VM, and the target is identified by a selector.  The target selector
+// must not match the source WEP (in real KubeVirt usage, target pods have migration-specific
+// labels that the source pod does not have).
+var localEp1WithPolicyLMSourceWorkloadLevel = localEp1WithPolicy.withKVUpdates(
 	KVPair{Key: liveMigrationKey1, Value: &internalapi.LiveMigration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      liveMigrationKey1.Name,
 			Namespace: liveMigrationKey1.Namespace,
 		},
 		Spec: internalapi.LiveMigrationSpec{
-			Source: &remoteWEPName,
-			Destination: &internalapi.WorkloadEndpointIdentifier{
-				Selector: &liveMigrationTargetSelector,
+			Source: &internalapi.LiveMigrationSource{
+				Workload: &internalapi.WorkloadIdentifier{
+					Hostname:       localHostname,
+					OrchestratorID: "orch",
+					WorkloadID:     "wl1",
+				},
+			},
+			Target: &internalapi.LiveMigrationTarget{
+				Selector: stringPtr("has(migration-target)"),
 			},
 		},
 	}},
 ).withLiveMigrationRole(
-	localWlEp1Id, proto.LiveMigrationRole_TARGET,
-).withName("ep1 local, policy, LM target by selector")
+	localWlEp1Id, proto.LiveMigrationRole_SOURCE,
+).withName("ep1 local, policy, LM source (workload-level)")
 
 // Test states for Istio functionality
 // Base state with Istio enabled but no endpoints
@@ -3654,4 +3681,8 @@ func namespaceToProfile(ns *kapiv1.Namespace) *v3.Profile {
 		panic(fmt.Errorf("Failed to convert namespace to profile.\nns: %v", ns))
 	}
 	return profile
+}
+
+func stringPtr(s string) *string {
+	return &s
 }
