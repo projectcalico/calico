@@ -25,11 +25,16 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPConfigurationSpec":               schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPDaemonStatus":                    schema_pkg_apis_projectcalico_v3_BGPDaemonStatus(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilter":                          schema_pkg_apis_projectcalico_v3_BGPFilter(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterAddCommunity":              schema_pkg_apis_projectcalico_v3_BGPFilterAddCommunity(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterCommunityMatch":            schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterList":                      schema_pkg_apis_projectcalico_v3_BGPFilterList(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterOperation":                 schema_pkg_apis_projectcalico_v3_BGPFilterOperation(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4":            schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6":            schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrependASPath":             schema_pkg_apis_projectcalico_v3_BGPFilterPrependASPath(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSetPriority":               schema_pkg_apis_projectcalico_v3_BGPFilterSetPriority(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSpec":                      schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword":                        schema_pkg_apis_projectcalico_v3_BGPPassword(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeer":                            schema_pkg_apis_projectcalico_v3_BGPPeer(ref),
@@ -939,6 +944,67 @@ func schema_pkg_apis_projectcalico_v3_BGPFilter(ref common.ReferenceCallback) co
 	}
 }
 
+func schema_pkg_apis_projectcalico_v3_BGPFilterAddCommunity(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterAddCommunity specifies a BGP community to add to a route.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"value": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Value is the BGP community to add.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"value"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterCommunityMatch specifies community-based match criteria for a BGP filter rule. Currently only a single community value is supported.  A MatchOperator field may be introduced in the future to support anyOf/allOf semantics with multiple values.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"values": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Values is a list of BGP community values to match against.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"values"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -985,6 +1051,44 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilter", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BGPFilterOperation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterOperation is a discriminated union representing a single route modification. Exactly one field must be set.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"addCommunity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AddCommunity adds the specified BGP community to the route.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterAddCommunity"),
+						},
+					},
+					"prependASPath": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PrependASPath prepends the specified AS numbers to the route's AS path.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrependASPath"),
+						},
+					},
+					"setPriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SetPriority sets the route's priority (metric), in the same units as the ...RoutePriority fields in FelixConfiguration.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSetPriority"),
+						},
+					},
+				},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterAddCommunity", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrependASPath", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSetPriority"},
 	}
 }
 
@@ -1046,40 +1150,114 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref common.Referen
 	}
 }
 
+func schema_pkg_apis_projectcalico_v3_BGPFilterPrependASPath(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterPrependASPath specifies AS numbers to prepend to a route's AS path.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"prefix": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Prefix is the sequence of AS numbers to prepend to the route's AS path. The resulting path starts with these AS numbers in the order listed; e.g. [65000, 65001] produces the path \"65000 65001 <original>\".",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: 0,
+										Type:    []string{"integer"},
+										Format:  "int64",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"prefix"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.",
+				Description: "BGPFilterRuleV4 defines a BGP filter rule consisting of match criteria, a terminal action, and optional operations to apply to matching routes.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If non-empty, this filter rule will only apply when the route being exported or imported \"matches\" the given CIDR - where the definition of \"matches\" is according to MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation, <prefix>/<length>.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"prefixLength": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"),
+							Description: "PrefixLength further constrains the CIDR match by restricting the range of allowed prefix lengths.  For example, CIDR \"10.0.0.0/8\" with MatchOperator \"In\" and PrefixLength {min: 16, max: 24} matches any route within 10.0.0.0/8 whose prefix length is between /16 and /24.  Only meaningful when CIDR is also specified; if PrefixLength is nil, the CIDR's own prefix length is used as the minimum and /32 (for V4) as the maximum.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"),
 						},
 					},
 					"source": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If set to \"RemotePeers\": for export rules, this filter rule will only apply to routes learned from BGP peers (i.e. re-advertised routes), not locally originated routes. For import rules, this field is redundant because imported routes are by definition from BGP peers.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"interface": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If non-empty, this filter rule will only apply to routes with an outgoing interface that matches Interface.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"matchOperator": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "MatchOperator defines how the route's prefix is compared against CIDR.  \"Equal\" requires an exact prefix match, \"In\" requires the route to be contained within the CIDR (or equal), \"NotEqual\" and \"NotIn\" are their negations.  Only meaningful when CIDR is also specified. Required when CIDR is set.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"peerType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If non-empty, this filter rule will only apply to routes being imported from or exported to a BGP peer of the specified type.  If empty, the rule applies to all peers.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"communities": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already present on the route, whether received from a BGP peer (e.g. on a route reflector re-advertising to an eBGP peer) or added locally by an import filter or an earlier export rule's AddCommunity operation.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterCommunityMatch"),
+						},
+					},
+					"asPathPrefix": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If non-empty, this filter rule will only apply to routes whose AS path begins with the specified sequence of AS numbers.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: 0,
+										Type:    []string{"integer"},
+										Format:  "int64",
+									},
+								},
+							},
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If set, this filter rule will only apply to routes with the given priority, in the same units as the ...RoutePriority fields in FelixConfiguration.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"action": {
@@ -1087,6 +1265,20 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 							Default: "",
 							Type:    []string{"string"},
 							Format:  "",
+						},
+					},
+					"operations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Operations is an ordered list of route modifications to apply to matching routes before accepting them.  Only valid when Action is \"Accept\"; specifying operations with \"Reject\" is rejected by validation.  Each entry must set exactly one operation field.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterOperation"),
+									},
+								},
+							},
 						},
 					},
 				},
@@ -1099,7 +1291,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterCommunityMatch", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterOperation", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"},
 	}
 }
 
@@ -1107,36 +1299,76 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.",
+				Description: "BGPFilterRuleV6 defines a BGP filter rule consisting of match criteria, a terminal action, and optional operations to apply to matching routes.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If non-empty, this filter rule will only apply when the route being exported or imported \"matches\" the given CIDR - where the definition of \"matches\" is according to MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation, <prefix>/<length>.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"prefixLength": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6"),
+							Description: "PrefixLength further constrains the CIDR match by restricting the range of allowed prefix lengths.  For example, CIDR \"fd00::/8\" with MatchOperator \"In\" and PrefixLength {min: 48, max: 64} matches any route within fd00::/8 whose prefix length is between /48 and /64.  Only meaningful when CIDR is also specified; if PrefixLength is nil, the CIDR's own prefix length is used as the minimum and /128 (for V6) as the maximum.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6"),
 						},
 					},
 					"source": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If set to \"RemotePeers\": for export rules, this filter rule will only apply to routes learned from BGP peers (i.e. re-advertised routes), not locally originated routes. For import rules, this field is redundant because imported routes are by definition from BGP peers.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"interface": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If non-empty, this filter rule will only apply to routes with an outgoing interface that matches Interface.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"matchOperator": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "MatchOperator defines how the route's prefix is compared against CIDR.  \"Equal\" requires an exact prefix match, \"In\" requires the route to be contained within the CIDR (or equal), \"NotEqual\" and \"NotIn\" are their negations.  Only meaningful when CIDR is also specified. Required when CIDR is set.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"peerType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If non-empty, this filter rule will only apply to routes being imported from or exported to a BGP peer of the specified type.  If empty, the rule applies to all peers.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"communities": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already present on the route, whether received from a BGP peer (e.g. on a route reflector re-advertising to an eBGP peer) or added locally by an import filter or an earlier export rule's AddCommunity operation.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterCommunityMatch"),
+						},
+					},
+					"asPathPrefix": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If non-empty, this filter rule will only apply to routes whose AS path begins with the specified sequence of AS numbers.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: 0,
+										Type:    []string{"integer"},
+										Format:  "int64",
+									},
+								},
+							},
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If set, this filter rule will only apply to routes with the given priority, in the same units as the ...RoutePriority fields in FelixConfiguration.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"action": {
@@ -1144,6 +1376,20 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 							Default: "",
 							Type:    []string{"string"},
 							Format:  "",
+						},
+					},
+					"operations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Operations is an ordered list of route modifications to apply to matching routes before accepting them.  Only valid when Action is \"Accept\"; specifying operations with \"Reject\" is rejected by validation.  Each entry must set exactly one operation field.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterOperation"),
+									},
+								},
+							},
 						},
 					},
 				},
@@ -1156,7 +1402,34 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterCommunityMatch", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterOperation", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BGPFilterSetPriority(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterSetPriority specifies a route priority to set.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"value": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Value is the priority to set, in the same units as FelixConfiguration's ...RoutePriority fields.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"value"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
 	}
 }
 
