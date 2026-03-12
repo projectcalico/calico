@@ -657,9 +657,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
-	genHostMetadataV6Update := func(ip string) func() {
+	genHostMetadataV4V6Update := func(ip string) func() {
 		return func() {
-			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{
+			bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 				Hostname: "uthost",
 				Ipv6Addr: ip,
 			})
@@ -1081,13 +1081,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(3))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(3))
 
-			genHostMetadataV6Update("1::5/128")()
+			genHostMetadataV4V6Update("1::5/128")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(4))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(4))
-			genHostMetadataV6Update("1::4")()
+			genHostMetadataV4V6Update("1::4")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(5))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(5))
-			genHostMetadataV6Update("1::4")()
+			genHostMetadataV4V6Update("1::4")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(5))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(5))
 		})

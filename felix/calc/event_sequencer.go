@@ -668,7 +668,7 @@ func (buf *EventSequencer) flushHostIPv6Updates() {
 		if hostIP != nil {
 			hostIPv6Addr = hostIP.String()
 		}
-		buf.Callback(&proto.HostMetadataV6Update{
+		buf.Callback(&proto.HostMetadataV4V6Update{
 			Hostname: hostname,
 			Ipv6Addr: hostIPv6Addr,
 		})
@@ -687,9 +687,9 @@ func (buf *EventSequencer) OnHostIPv6Remove(hostname string) {
 
 func (buf *EventSequencer) flushHostIPv6Deletes() {
 	for item := range buf.pendingHostIPv6Deletes.All() {
-		buf.Callback(&proto.HostMetadataV6Remove{
-			Hostname: item,
-		})
+		// No longer emit a separate message for IPv6 deletes. IPv6 address removal is communicated
+		// via HostMetadataV4V6Update with an empty Ipv6Addr from flushHostUpdates. For full host
+		// removals, flushHostDeletes emits HostMetadataV4V6Remove.
 		buf.sentHostIPv6s.Discard(item)
 		buf.pendingHostIPv6Deletes.Discard(item)
 	}
