@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -112,6 +113,7 @@ var _ = Describe("IPAM controller UTs", func() {
 	var c *IPAMController
 	var cli client.Interface
 	var cs kubernetes.Interface
+	var deferredInformers *kubevirt.DeferredInformers
 	var vmIndexer cache.Indexer
 	var vmiIndexer cache.Indexer
 	var stopChan chan struct{}
@@ -127,6 +129,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		vmIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 		vmiIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		deferredInformers = kubevirt.NewDeferredInformersWithIndexers(vmIndexer, vmiIndexer)
 
 		// Create a node indexer with the fake clientset
 		factory := informers.NewSharedInformerFactory(cs, 0)
@@ -172,7 +175,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), vmIndexer, vmiIndexer)
+		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers)
 
 		// For testing, speed up update batching.
 		c.consolidationWindow = 1 * time.Millisecond
@@ -288,8 +291,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		})
 
 		It("should treat allocation as valid if KubeVirt indexers are nil (KubeVirt not installed)", func() {
-			c.vmIndexer = nil
-			c.vmiIndexer = nil
+			// Create a DeferredInformers with no indexers set (KubeVirt not installed).
+			c.deferredInformers = &kubevirt.DeferredInformers{}
 			c.Start(stopChan)
 
 			allocation := makeVMIAllocation("default", "some-vm")

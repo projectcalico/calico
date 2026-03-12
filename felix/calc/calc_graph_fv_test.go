@@ -620,6 +620,13 @@ var baseTests = []StateList{
 	{localEp1WithPolicyLMTargetByName, localEp1WithPolicy},
 	// Live migration: local WEP as target by selector, then LM removed.
 	{localEp1WithPolicyLMTargetBySelector, localEp1WithPolicy},
+
+	// Istio tests - verify that the all-istio-weps IPSet is populated correctly
+	{
+		istioWithAmbientPod,
+		istioWithMixedPods,
+		istioSelectorEdgeCases,
+	},
 }
 
 var logOnce sync.Once
@@ -711,6 +718,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf := config.New()
 					conf.FelixHostname = localHostname
 					conf.BPFEnabled = true
+					conf.IstioAmbientMode = "Enabled"
 					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan any)
@@ -872,6 +880,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		conf := config.New()
 		conf.FelixHostname = localHostname
 		conf.BPFEnabled = true
+		conf.IstioAmbientMode = "Enabled"
 		conf.SetUseNodeResourceUpdates(expandedTest.UsesNodeResources())
 		conf.RouteSource = expandedTest.RouteSource()
 		mockDataplane = mock.NewMockDataplane()

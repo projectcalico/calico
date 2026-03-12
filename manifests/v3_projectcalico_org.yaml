@@ -34502,6 +34502,15 @@ spec:
                   type: integer
                 ipv6Support:
                   type: boolean
+                istioAmbientMode:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                istioDSCPMark:
+                  pattern: ^.*
+                  type: integer
+                  x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   items:
                     anyOf:

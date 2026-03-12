@@ -427,8 +427,9 @@ message WorkloadEndpoint {
   LocalBGPPeer local_bgp_peer = 13;
   WorkloadBpfSkipRedir skip_redir = 14;
   repeated QoSPolicy qos_policies = 15;
-  LiveMigrationRole live_migration_role = 16;
-  string live_migration_uid = 17;
+  bool is_istio_ambient = 16;
+  LiveMigrationRole live_migration_role = 17;
+  string live_migration_uid = 18;
 }
 
 message QoSControls {

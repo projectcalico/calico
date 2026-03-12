@@ -301,6 +301,8 @@ func StartDataplaneDriver(
 				BPFEnabled:                         configParams.BPFEnabled,
 				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
+				IstioAmbientModeEnabled:            configParams.IsIstioAmbientModeEnabled(),
+				IstioDSCPMark:                      configParams.IstioDSCPMark.ToUint8(),
 			},
 			Wireguard: wireguard.Config{
 				Enabled:             wireguardEnabled,
@@ -439,6 +441,10 @@ func StartDataplaneDriver(
 		if configParams.BPFExternalServiceMode == "dsr" {
 			dpConfig.BPFNodePortDSREnabled = true
 			dpConfig.BPFDSROptoutCIDRs = configParams.BPFDSROptoutCIDRs
+		}
+
+		if configParams.WorkloadSourceSpoofing == "Any" {
+			dpConfig.WorkloadSourceSpoofing = true
 		}
 
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
