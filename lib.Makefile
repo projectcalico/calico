@@ -1042,10 +1042,22 @@ push-image-arch-to-registry-%:
 	)
 
 # push multi-arch manifest where supported.
+MANIFEST_RETRIES ?= 5
+MANIFEST_RETRY_DELAY ?= 5
 push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
 sub-manifest-%:
-	$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)))
-	$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG)
+	for i in $$(seq 1 $(MANIFEST_RETRIES)); do \
+		$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES))) && break; \
+		echo "WARNING: docker manifest create failed (attempt $$i/$(MANIFEST_RETRIES)), retrying in $(MANIFEST_RETRY_DELAY)s..."; \
+		sleep $(MANIFEST_RETRY_DELAY); \
+		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
+	done
+	for i in $$(seq 1 $(MANIFEST_RETRIES)); do \
+		$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG) && break; \
+		echo "WARNING: docker manifest push failed (attempt $$i/$(MANIFEST_RETRIES)), retrying in $(MANIFEST_RETRY_DELAY)s..."; \
+		sleep $(MANIFEST_RETRY_DELAY); \
+		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
+	done
 
 push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
