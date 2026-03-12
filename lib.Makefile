@@ -1056,14 +1056,14 @@ sub-manifest-%:
 		echo "WARNING: docker manifest create failed (attempt $$i/$(MANIFEST_RETRIES)), retrying in $(MANIFEST_RETRY_DELAY)s..."; \
 		sleep $(MANIFEST_RETRY_DELAY); \
 		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
-		i=$$((i + 1)); \
+		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
+		sleep $(MANIFEST_RETRY_DELAY); \
 	done
-	i=1; \
-	while [ $$i -le $(MANIFEST_RETRIES) ]; do \
+	for i in $$(seq 1 $(MANIFEST_RETRIES)); do \
 		$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG) && break; \
 		echo "WARNING: docker manifest push failed (attempt $$i/$(MANIFEST_RETRIES)), retrying in $(MANIFEST_RETRY_DELAY)s..."; \
-		sleep $(MANIFEST_RETRY_DELAY); \
 		if [ $$i -eq $(MANIFEST_RETRIES) ]; then exit 1; fi; \
+		sleep $(MANIFEST_RETRY_DELAY); \
 		i=$$((i + 1)); \
 	done
 
