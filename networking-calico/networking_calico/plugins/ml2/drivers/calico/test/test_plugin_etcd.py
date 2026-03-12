@@ -1876,14 +1876,20 @@ class TestLiveMigration(TestPluginEtcdBase):
                 "namespace": self.namespace,
             },
             "spec": {
-                "source": {
-                    "namespace": self.namespace,
-                    "name": self._ep_name(source_host),
+                "Source": {
+                    "WorkloadEndpoint": {
+                        "Hostname": source_host,
+                        "OrchestratorID": "openstack",
+                        "WorkloadID": self.namespace + "/" + lib.port1["device_id"],
+                        "EndpointID": lib.port1["id"],
+                    },
                 },
-                "destination": {
-                    "namespacedName": {
-                        "namespace": self.namespace,
-                        "name": self._ep_name(dest_host),
+                "Target": {
+                    "WorkloadEndpoint": {
+                        "Hostname": dest_host,
+                        "OrchestratorID": "openstack",
+                        "WorkloadID": self.namespace + "/" + lib.port1["device_id"],
+                        "EndpointID": lib.port1["id"],
                     },
                 },
             },
@@ -2048,13 +2054,19 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.recent_deletes = set()
 
         port_id = self.port["id"]
-        self._call_try_to_update_port_status(self.DEST_HOST, port_id)
+        mock_db_port = mock.Mock()
+        mock_db_port.id = port_id
+        with mock.patch(
+            "networking_calico.plugins.ml2.drivers.calico.mech_calico.ml2_db"
+        ) as mock_ml2_db:
+            mock_ml2_db.get_port.return_value = mock_db_port
+            self._call_try_to_update_port_status(self.DEST_HOST, port_id)
 
-        # Verify that notify_port_active_direct was called.
-        self.db.nova_notifier.notify_port_active_direct.assert_called_once()
-        call_args = self.db.nova_notifier.notify_port_active_direct.call_args
-        notified_port = call_args[0][0]
-        self.assertEqual(notified_port.id, port_id)
+        # Verify that notify_port_active_direct was called with the
+        # db model port returned by ml2_db.get_port().
+        self.db.nova_notifier.notify_port_active_direct.assert_called_once_with(
+            mock_db_port
+        )
 
     def test_vif_plug_no_notification_for_non_migration(self):
         """Felix 'up' on source host does NOT trigger Nova notification."""
