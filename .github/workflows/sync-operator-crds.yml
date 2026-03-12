@@ -21,11 +21,7 @@ jobs:
         run: make bin/helm bin/yq
 
       - name: Sync operator CRDs
-        run: |
-          make get-operator-crds \
-            OPERATOR_ORGANIZATION=tigera \
-            OPERATOR_GIT_REPO=operator \
-            OPERATOR_BRANCH=master
+        run: make get-operator-crds
 
       - name: Regenerate manifests
         run: make gen-manifests
