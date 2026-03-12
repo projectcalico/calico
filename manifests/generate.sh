@@ -74,7 +74,7 @@ echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
 for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
-		--show-only crds/$FILE \
+		--show-only $FILE \
 		--set version=$CALICO_VERSION \
 		--set node.registry=$REGISTRY \
 		--set calicoctl.registry=$REGISTRY \
