@@ -41,6 +41,7 @@ ci-preflight-checks:
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
+	$(MAKE) get-operator-crds
 	$(MAKE) fix-all
 	$(MAKE) check-ocp-no-crds
 	$(MAKE) check-dirty
