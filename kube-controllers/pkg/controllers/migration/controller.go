@@ -129,7 +129,11 @@ func (c *migrationController) Run(stop chan struct{}) {
 			c.enqueue(obj)
 		},
 	}
-	informer.AddEventHandler(handler)
+	_, err := informer.AddEventHandler(handler)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to add event handler to informer")
+		return
+	}
 
 	ctx, cancel := context.WithCancel(c.ctx)
 	defer cancel()
