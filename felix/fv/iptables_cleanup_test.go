@@ -116,12 +116,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 		})
 
 		It("should clean up nftables rules when running in iptables mode", func() {
-			// There should be no cali chains left in nftables after Felix has run.
+			// The stale "table ip calico" should be cleaned up. The "table arp calico-arp"
+			// is legitimately created by Felix for ARP suppression regardless of dataplane mode.
 			Eventually(func() string {
 				out, err := tc.Felixes[0].ExecOutput("nft", "list", "tables")
 				Expect(err).NotTo(HaveOccurred())
 				return out
-			}, "5s").ShouldNot(ContainSubstring("cali"))
+			}, "5s").ShouldNot(ContainSubstring("table ip calico"))
 		})
 	})
 })

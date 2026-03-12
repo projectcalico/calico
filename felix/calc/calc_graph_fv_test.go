@@ -613,6 +613,14 @@ var baseTests = []StateList{
 		wireguardV6,
 		wireguardV4V6,
 	},
+
+	// Live migration: local WEP as source, then LM removed.
+	{localEp1WithPolicyLMSource, localEp1WithPolicy},
+	// Live migration: local WEP as target by direct name, then LM removed.
+	{localEp1WithPolicyLMTargetByName, localEp1WithPolicy},
+	// Live migration: local WEP as target by selector, then LM removed.
+	{localEp1WithPolicyLMTargetBySelector, localEp1WithPolicy},
+
 	// Istio tests - verify that the all-istio-weps IPSet is populated correctly
 	{
 		istioWithAmbientPod,
@@ -833,6 +841,9 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 		state.Name)
 	Expect(googleproto.Equal(mockDataplane.Encapsulation(), state.ExpectedEncapsulation)).To(BeTrue(),
 		"Encapsulation incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.EndpointToLiveMigrationRole()).To(Equal(state.ExpectedLiveMigrationRoles),
+		"Live migration roles incorrect after moving to state: %v",
 		state.Name)
 }
 
