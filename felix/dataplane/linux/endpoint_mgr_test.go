@@ -879,7 +879,8 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				mockProcSys.write,
 				mockProcSys.stat,
 				"1",
-				nil,
+				nil,  // filterMaps
+				nil,  // ifceHandler
 				false,
 				v3.BPFAttachOptionTCX,
 				hepListener,
