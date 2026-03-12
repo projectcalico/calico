@@ -1,6 +1,6 @@
 # CustomResourceDefinitions for Calico and Tigera operator
 ---
-# Source: crds/operator.tigera.io_apiservers_crd.yaml
+# Source: tigera-operator/crds/operator.tigera.io_apiservers_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1589,7 +1589,7 @@ spec:
     subresources:
       status: {}
 ---
-# Source: crds/operator.tigera.io_gatewayapis_crd.yaml
+# Source: tigera-operator/crds/operator.tigera.io_gatewayapis_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -5245,7 +5245,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/operator.tigera.io_goldmanes_crd.yaml
+# Source: tigera-operator/crds/operator.tigera.io_goldmanes_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -6715,7 +6715,7 @@ spec:
     subresources:
       status: {}
 ---
-# Source: crds/operator.tigera.io_imagesets_crd.yaml
+# Source: tigera-operator/crds/operator.tigera.io_imagesets_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -6795,7 +6795,7 @@ spec:
     subresources:
       status: {}
 ---
-# Source: crds/operator.tigera.io_installations_crd.yaml
+# Source: tigera-operator/crds/operator.tigera.io_installations_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -23750,7 +23750,7 @@ spec:
     subresources:
       status: {}
 ---
-# Source: crds/operator.tigera.io_managementclusterconnections_crd.yaml
+# Source: tigera-operator/crds/operator.tigera.io_managementclusterconnections_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -24063,7 +24063,7 @@ spec:
     subresources:
       status: {}
 ---
-# Source: crds/operator.tigera.io_tigerastatuses_crd.yaml
+# Source: tigera-operator/crds/operator.tigera.io_tigerastatuses_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -24179,7 +24179,7 @@ spec:
     subresources:
       status: {}
 ---
-# Source: crds/operator.tigera.io_whiskers_crd.yaml
+# Source: tigera-operator/crds/operator.tigera.io_whiskers_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -25656,7 +25656,7 @@ spec:
     subresources:
       status: {}
 ---
-# Source: crds/crd.projectcalico.org_bgpconfigurations.yaml
+# Source: calico/crds/crd.projectcalico.org_bgpconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -25857,7 +25857,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_bgpfilters.yaml
+# Source: calico/crds/crd.projectcalico.org_bgpfilters.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -26040,7 +26040,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_bgppeers.yaml
+# Source: calico/crds/crd.projectcalico.org_bgppeers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -26222,7 +26222,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_blockaffinities.yaml
+# Source: calico/crds/crd.projectcalico.org_blockaffinities.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -26288,7 +26288,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_caliconodestatuses.yaml
+# Source: calico/crds/crd.projectcalico.org_caliconodestatuses.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -26551,7 +26551,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_clusterinformations.yaml
+# Source: calico/crds/crd.projectcalico.org_clusterinformations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -26617,7 +26617,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_felixconfigurations.yaml
+# Source: calico/crds/crd.projectcalico.org_felixconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -27854,7 +27854,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_globalnetworkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_globalnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -28736,7 +28736,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_globalnetworksets.yaml
+# Source: calico/crds/crd.projectcalico.org_globalnetworksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -28791,7 +28791,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_hostendpoints.yaml
+# Source: calico/crds/crd.projectcalico.org_hostendpoints.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -28899,7 +28899,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_ipamblocks.yaml
+# Source: calico/crds/crd.projectcalico.org_ipamblocks.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -29020,7 +29020,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_ipamconfigs.yaml
+# Source: calico/crds/crd.projectcalico.org_ipamconfigs.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -29081,7 +29081,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_ipamhandles.yaml
+# Source: calico/crds/crd.projectcalico.org_ipamhandles.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -29139,7 +29139,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_ippools.yaml
+# Source: calico/crds/crd.projectcalico.org_ippools.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -29259,7 +29259,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_ipreservations.yaml
+# Source: calico/crds/crd.projectcalico.org_ipreservations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -29312,7 +29312,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_kubecontrollersconfigurations.yaml
+# Source: calico/crds/crd.projectcalico.org_kubecontrollersconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -29652,7 +29652,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_networkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_networkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -30515,7 +30515,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_networksets.yaml
+# Source: calico/crds/crd.projectcalico.org_networksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -30568,7 +30568,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_stagedglobalnetworkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_stagedglobalnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -31455,7 +31455,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_stagedkubernetesnetworkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_stagedkubernetesnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -31963,7 +31963,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_stagednetworkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_stagednetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -32831,7 +32831,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/crd.projectcalico.org_tiers.yaml
+# Source: calico/crds/crd.projectcalico.org_tiers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -32895,7 +32895,7 @@ spec:
     served: true
     storage: true
 ---
-# Source: crds/policy.networking.k8s.io_adminnetworkpolicies.yaml
+# Source: calico/crds/policy.networking.k8s.io_adminnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -33979,7 +33979,7 @@ status:
   conditions: null
   storedVersions: null
 ---
-# Source: crds/policy.networking.k8s.io_baselineadminnetworkpolicies.yaml
+# Source: calico/crds/policy.networking.k8s.io_baselineadminnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
