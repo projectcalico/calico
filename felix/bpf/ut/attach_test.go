@@ -214,7 +214,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		if ipv6Enabled {
 			// IPv6 address update
 			bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1::4"))
-			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
+			bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
