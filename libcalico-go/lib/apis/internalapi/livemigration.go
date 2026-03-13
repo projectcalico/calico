@@ -40,11 +40,11 @@ type LiveMigration struct {
 type LiveMigrationSpec struct {
 	// Source identifies the Workload or WorkloadEndpoint that this live migration operation is
 	// moving from.
-	Source *LiveMigrationSource
+	Source *LiveMigrationSource `json:"source,omitempty"`
 
 	// Target identifies the Workload or WorkloadEndpoint that this live migration operation is
 	// moving to.
-	Target *LiveMigrationTarget
+	Target *LiveMigrationTarget `json:"target,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf
@@ -53,13 +53,13 @@ type LiveMigrationSource struct {
 	// orchestrator uses a single LiveMigration object to describe all of that pod/VM's
 	// interfaces.  This is what happens with KubeVirt.
 	// +optional
-	Workload *WorkloadIdentifier
+	Workload *WorkloadIdentifier `json:"workload,omitempty"`
 
 	// WorkloadEndpoint identifies the live migration source WorkloadEndpoint in clusters where
 	// the orchestrator uses different LiveMigration objects to describe each of a migrating
 	// pod/VM's interfaces.  This is what happens with OpenStack.
 	// +optional
-	WorkloadEndpoint *WorkloadEndpointIdentifier
+	WorkloadEndpoint *WorkloadEndpointIdentifier `json:"workloadEndpoint,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf
@@ -68,32 +68,32 @@ type LiveMigrationTarget struct {
 	// orchestrator uses a single LiveMigration object to describe all of that pod/VM's
 	// interfaces.  This is what happens with KubeVirt.
 	// +optional
-	Selector *string
+	Selector *string `json:"selector,omitempty"`
 
 	// WorkloadEndpoint identifies the live migration target WorkloadEndpoint in clusters where
 	// the orchestrator uses different LiveMigration objects to describe each of a migrating
 	// pod/VM's interfaces.  This is what happens with OpenStack.
 	// +optional
-	WorkloadEndpoint *WorkloadEndpointIdentifier
+	WorkloadEndpoint *WorkloadEndpointIdentifier `json:"workloadEndpoint,omitempty"`
 }
 
 // WorkloadIdentifier identifies a workload, i.e. a pod or VM, possibly with multiple interfaces.
 // When OrchestratorID is "k8s" the Hostname field is ignored because a Kubernetes pod is already
 // uniquely identified by WorkloadID.
 type WorkloadIdentifier struct {
-	Hostname       string
-	OrchestratorID string
-	WorkloadID     string
+	Hostname       string `json:"hostname,omitempty"`
+	OrchestratorID string `json:"orchestratorID,omitempty"`
+	WorkloadID     string `json:"workloadID,omitempty"`
 }
 
 // WorkloadIdentifier identifies a workload endpoint, i.e. a specific pod or VM interface.  When
 // OrchestratorID is "k8s" the Hostname field is ignored because a Kubernetes pod is already
 // uniquely identified by WorkloadID.
 type WorkloadEndpointIdentifier struct {
-	Hostname       string
-	OrchestratorID string
-	WorkloadID     string
-	EndpointID     string
+	Hostname       string `json:"hostname,omitempty"`
+	OrchestratorID string `json:"orchestratorID,omitempty"`
+	WorkloadID     string `json:"workloadID,omitempty"`
+	EndpointID     string `json:"endpointID,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

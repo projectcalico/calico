@@ -908,13 +908,13 @@ func schema_libcalico_go_lib_apis_internalapi_LiveMigrationSource(ref common.Ref
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"Workload": {
+					"workload": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Workload identifies the live migration source pod or VM in clusters where the orchestrator uses a single LiveMigration object to describe all of that pod/VM's interfaces.  This is what happens with KubeVirt.",
 							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.WorkloadIdentifier"),
 						},
 					},
-					"WorkloadEndpoint": {
+					"workloadEndpoint": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WorkloadEndpoint identifies the live migration source WorkloadEndpoint in clusters where the orchestrator uses different LiveMigration objects to describe each of a migrating pod/VM's interfaces.  This is what happens with OpenStack.",
 							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.WorkloadEndpointIdentifier"),
@@ -935,20 +935,19 @@ func schema_libcalico_go_lib_apis_internalapi_LiveMigrationSpec(ref common.Refer
 				Description: "LiveMigrationSpec contains the specification for a LiveMigration resource.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"Source": {
+					"source": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Source identifies the Workload or WorkloadEndpoint that this live migration operation is moving from.",
 							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.LiveMigrationSource"),
 						},
 					},
-					"Target": {
+					"target": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Target identifies the Workload or WorkloadEndpoint that this live migration operation is moving to.",
 							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.LiveMigrationTarget"),
 						},
 					},
 				},
-				Required: []string{"Source", "Target"},
 			},
 		},
 		Dependencies: []string{
@@ -962,14 +961,14 @@ func schema_libcalico_go_lib_apis_internalapi_LiveMigrationTarget(ref common.Ref
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"Selector": {
+					"selector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selector identifies the live migration target pod or VM in clusters where the orchestrator uses a single LiveMigration object to describe all of that pod/VM's interfaces.  This is what happens with KubeVirt.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"WorkloadEndpoint": {
+					"workloadEndpoint": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WorkloadEndpoint identifies the live migration target WorkloadEndpoint in clusters where the orchestrator uses different LiveMigration objects to describe each of a migrating pod/VM's interfaces.  This is what happens with OpenStack.",
 							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi.WorkloadEndpointIdentifier"),
@@ -1553,36 +1552,31 @@ func schema_libcalico_go_lib_apis_internalapi_WorkloadEndpointIdentifier(ref com
 				Description: "WorkloadIdentifier identifies a workload endpoint, i.e. a specific pod or VM interface.  When OrchestratorID is \"k8s\" the Hostname field is ignored because a Kubernetes pod is already uniquely identified by WorkloadID.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"Hostname": {
+					"hostname": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
-					"OrchestratorID": {
+					"orchestratorID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
-					"WorkloadID": {
+					"workloadID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
-					"EndpointID": {
+					"endpointID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 				},
-				Required: []string{"Hostname", "OrchestratorID", "WorkloadID", "EndpointID"},
 			},
 		},
 	}
@@ -1863,29 +1857,25 @@ func schema_libcalico_go_lib_apis_internalapi_WorkloadIdentifier(ref common.Refe
 				Description: "WorkloadIdentifier identifies a workload, i.e. a pod or VM, possibly with multiple interfaces. When OrchestratorID is \"k8s\" the Hostname field is ignored because a Kubernetes pod is already uniquely identified by WorkloadID.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"Hostname": {
+					"hostname": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
-					"OrchestratorID": {
+					"orchestratorID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
-					"WorkloadID": {
+					"workloadID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 				},
-				Required: []string{"Hostname", "OrchestratorID", "WorkloadID"},
 			},
 		},
 	}
