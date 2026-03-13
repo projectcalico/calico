@@ -66,6 +66,7 @@ type BGPFilterSpec struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.prefixLength) || (has(self.cidr) && size(self.cidr) > 0)",message="cidr is required when prefixLength is set",reason=FieldValueInvalid
 type BGPFilterRuleV4 struct {
 	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:MaxLength=18
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv4"`
 
 	PrefixLength *BGPFilterPrefixLengthV4 `json:"prefixLength,omitempty" validate:"omitempty"`
@@ -85,6 +86,7 @@ type BGPFilterRuleV4 struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.prefixLength) || (has(self.cidr) && size(self.cidr) > 0)",message="cidr is required when prefixLength is set",reason=FieldValueInvalid
 type BGPFilterRuleV6 struct {
 	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:MaxLength=43
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv6"`
 
 	PrefixLength *BGPFilterPrefixLengthV6 `json:"prefixLength,omitempty" validate:"omitempty"`

@@ -233,7 +233,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
@@ -439,7 +439,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)

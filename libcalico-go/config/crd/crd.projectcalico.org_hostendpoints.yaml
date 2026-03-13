@@ -32,8 +32,10 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 interfaceName:
+                  maxLength: 15
                   type: string
                 node:
+                  maxLength: 253
                   type: string
                 ports:
                   items:

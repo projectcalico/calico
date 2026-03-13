@@ -96,6 +96,37 @@ func TestRule_Validation(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "HTTP match with numeric protocol 6 (TCP) is accepted",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:   v3.Allow,
+							Protocol: ptr.To(numorstring.ProtocolFromInt(6)),
+							HTTP:     &v3.HTTPMatch{Methods: []string{"GET"}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "HTTP match with numeric protocol 17 (UDP) is rejected",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:   v3.Allow,
+							Protocol: ptr.To(numorstring.ProtocolFromInt(17)),
+							HTTP:     &v3.HTTPMatch{Methods: []string{"GET"}},
+						},
+					},
+				},
+			},
+			wantErr: "rules with HTTP match must have protocol TCP or unset",
+		},
 	}
 
 	for _, tt := range tests {

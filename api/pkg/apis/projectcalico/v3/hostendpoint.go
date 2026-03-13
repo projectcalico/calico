@@ -54,6 +54,7 @@ type HostEndpoint struct {
 // +kubebuilder:validation:XValidation:rule="has(self.node) && size(self.node) > 0",message="node must be specified",reason=FieldValueInvalid
 type HostEndpointSpec struct {
 	// The node name identifying the Calico node instance.
+	// +kubebuilder:validation:MaxLength=253
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
 
 	// Either "*", or the name of a specific Linux interface to apply policy to; or empty.  "*"
@@ -70,6 +71,7 @@ type HostEndpointSpec struct {
 	//
 	// Note: Only some kinds of policy are implemented for "*" HostEndpoints; initially just
 	// pre-DNAT policy.  Please check Calico documentation for the latest position.
+	// +kubebuilder:validation:MaxLength=15
 	InterfaceName string `json:"interfaceName,omitempty" validate:"omitempty,interface"`
 
 	// The expected IP addresses (IPv4 and IPv6) of the endpoint.

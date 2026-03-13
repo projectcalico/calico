@@ -58,6 +58,19 @@ func expectCreateFails(t *testing.T, obj client.Object, msgSubstring string) {
 	}
 }
 
+// expectUpdateFails asserts that updating the object fails and the error contains msgSubstring.
+func expectUpdateFails(t *testing.T, obj client.Object, msgSubstring string) {
+	t.Helper()
+	ctx := context.Background()
+	err := testClient.Update(ctx, obj)
+	if err == nil {
+		t.Fatalf("expected update to fail with %q, but it succeeded", msgSubstring)
+	}
+	if !strings.Contains(err.Error(), msgSubstring) {
+		t.Fatalf("expected error containing %q, got: %v", msgSubstring, err)
+	}
+}
+
 // expectCreateSucceeds asserts that creating the object succeeds, then deletes it.
 func expectCreateSucceeds(t *testing.T, obj client.Object) {
 	t.Helper()

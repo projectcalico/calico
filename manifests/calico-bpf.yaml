@@ -291,6 +291,7 @@ spec:
                         type: string
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
                       interface:
                         type: string
@@ -345,6 +346,7 @@ spec:
                         type: string
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
                       interface:
                         type: string
@@ -399,6 +401,7 @@ spec:
                         type: string
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
                       interface:
                         type: string
@@ -453,6 +456,7 @@ spec:
                         type: string
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
                       interface:
                         type: string
@@ -546,6 +550,7 @@ spec:
                   format: int32
                   type: integer
                 localWorkloadSelector:
+                  maxLength: 4096
                   type: string
                 maxRestartTime:
                   type: string
@@ -556,8 +561,10 @@ spec:
                     - Keep
                   type: string
                 node:
+                  maxLength: 253
                   type: string
                 nodeSelector:
+                  maxLength: 4096
                   type: string
                 numAllowedLocalASNumbers:
                   format: int32
@@ -579,8 +586,10 @@ spec:
                       x-kubernetes-map-type: atomic
                   type: object
                 peerIP:
+                  maxLength: 64
                   type: string
                 peerSelector:
+                  maxLength: 4096
                   type: string
                 reachableBy:
                   type: string
@@ -2537,7 +2546,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
@@ -2743,7 +2752,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
@@ -2886,8 +2895,10 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 interfaceName:
+                  maxLength: 15
                   type: string
                 node:
+                  maxLength: 253
                   type: string
                 ports:
                   items:
@@ -3765,7 +3776,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
@@ -3971,7 +3982,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
@@ -4279,7 +4290,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
@@ -4485,7 +4496,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
@@ -5042,7 +5053,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
@@ -5248,7 +5259,7 @@ spec:
                         reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
-                          == 'TCP'"
+                          == 'TCP' || self.protocol == 6"
                       - message: HTTP match is only valid on Allow rules
                         reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)

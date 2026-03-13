@@ -36,6 +36,7 @@ spec:
                         type: string
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
                       interface:
                         type: string
@@ -90,6 +91,7 @@ spec:
                         type: string
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
                       interface:
                         type: string
@@ -144,6 +146,7 @@ spec:
                         type: string
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
                       interface:
                         type: string
@@ -198,6 +201,7 @@ spec:
                         type: string
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
                       interface:
                         type: string
