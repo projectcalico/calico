@@ -302,6 +302,8 @@ spec:
                         type: string
                       operations:
                         items:
+                          maxProperties: 1
+                          minProperties: 1
                           properties:
                             addCommunity:
                               properties:
@@ -338,11 +340,6 @@ spec:
                               x-kubernetes-map-type: atomic
                           type: object
                           x-kubernetes-map-type: atomic
-                          x-kubernetes-validations:
-                            - message: exactly one operation must be set
-                              rule:
-                                "(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath)
-                                ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1"
                         maxItems: 10
                         minItems: 1
                         type: array
@@ -424,6 +421,8 @@ spec:
                         type: string
                       operations:
                         items:
+                          maxProperties: 1
+                          minProperties: 1
                           properties:
                             addCommunity:
                               properties:
@@ -460,11 +459,6 @@ spec:
                               x-kubernetes-map-type: atomic
                           type: object
                           x-kubernetes-map-type: atomic
-                          x-kubernetes-validations:
-                            - message: exactly one operation must be set
-                              rule:
-                                "(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath)
-                                ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1"
                         maxItems: 10
                         minItems: 1
                         type: array
@@ -546,6 +540,8 @@ spec:
                         type: string
                       operations:
                         items:
+                          maxProperties: 1
+                          minProperties: 1
                           properties:
                             addCommunity:
                               properties:
@@ -582,11 +578,6 @@ spec:
                               x-kubernetes-map-type: atomic
                           type: object
                           x-kubernetes-map-type: atomic
-                          x-kubernetes-validations:
-                            - message: exactly one operation must be set
-                              rule:
-                                "(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath)
-                                ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1"
                         maxItems: 10
                         minItems: 1
                         type: array
@@ -668,6 +659,8 @@ spec:
                         type: string
                       operations:
                         items:
+                          maxProperties: 1
+                          minProperties: 1
                           properties:
                             addCommunity:
                               properties:
@@ -704,11 +697,6 @@ spec:
                               x-kubernetes-map-type: atomic
                           type: object
                           x-kubernetes-map-type: atomic
-                          x-kubernetes-validations:
-                            - message: exactly one operation must be set
-                              rule:
-                                "(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath)
-                                ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1"
                         maxItems: 10
                         minItems: 1
                         type: array
