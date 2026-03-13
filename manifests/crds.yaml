@@ -3076,6 +3076,7 @@ spec:
                       rule: self == oldSelf
                 cidr:
                   format: cidr
+                  maxLength: 48
                   type: string
                   x-kubernetes-validations:
                     - message:
@@ -3129,6 +3130,11 @@ spec:
                   rule:
                     "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
                     || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')"
+                - message: IPIP is not supported on IPv6 pools
+                  reason: FieldValueForbidden
+                  rule:
+                    "!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode
+                    == 'Never' || size(self.ipipMode) == 0"
           type: object
       served: true
       storage: true
