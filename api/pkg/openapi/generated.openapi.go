@@ -3722,6 +3722,40 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"ipv4NormalRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher values mean lower priority. [Default: 1024]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ipv4ElevatedRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Route Priority value for an elevated priority Calico-programmed IPv4 route.  Note, higher values mean lower priority.  Elevated priority is used during VM live migration, and for optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority [Default: 512]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ipv6NormalRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher values mean lower priority. [Default: 1024]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ipv6ElevatedRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Route Priority value for an elevated priority Calico-programmed IPv6 route.  Note, higher values mean lower priority.  Elevated priority is used during VM live migration, and for optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority [Default: 512]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"liveMigrationRouteConvergenceTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a VM live migration completes.  This allows routes to converge across the cluster before reverting to normal priority. [Default: 30s]",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 					"wireguardEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]",
