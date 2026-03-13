@@ -8,9 +8,9 @@ github.com/cespare/xxhash/v2 v2.3.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/distribution/reference v0.6.0
 github.com/emicklei/go-restful v2.15.0+incompatible
-github.com/emicklei/go-restful/v3 v3.12.2
+github.com/emicklei/go-restful/v3 v3.13.0
 github.com/fxamacker/cbor/v2 v2.9.0
-github.com/gabriel-vasile/mimetype v1.4.10
+github.com/gabriel-vasile/mimetype v1.4.12
 github.com/go-logr/logr v1.4.3
 github.com/go-openapi/jsonpointer v0.21.0
 github.com/go-openapi/jsonreference v0.20.2
@@ -18,7 +18,7 @@ github.com/go-openapi/swag v0.23.0
 github.com/go-playground/form v3.1.4+incompatible
 github.com/go-playground/locales v0.14.1
 github.com/go-playground/universal-translator v0.18.1
-github.com/go-playground/validator/v10 v10.28.0
+github.com/go-playground/validator/v10 v10.30.1
 github.com/google/gnostic-models v0.7.0
 github.com/google/go-cmp v0.7.0
 github.com/google/uuid v1.6.0
@@ -38,24 +38,24 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
 github.com/prometheus/client_golang v1.23.2
 github.com/prometheus/client_model v0.6.2
-github.com/prometheus/common v0.67.2
-github.com/prometheus/procfs v0.19.2
+github.com/prometheus/common v0.67.5
+github.com/prometheus/procfs v0.20.1
 github.com/robfig/cron/v3 v3.0.1
-github.com/sirupsen/logrus v1.9.3
+github.com/sirupsen/logrus v1.9.4
 github.com/spf13/pflag v1.0.10
 github.com/x448/float16 v0.8.4
-go.opentelemetry.io/otel v1.37.0
-go.opentelemetry.io/otel/trace v1.37.0
+go.opentelemetry.io/otel v1.42.0
+go.opentelemetry.io/otel/trace v1.42.0
 go.yaml.in/yaml/v2 v2.4.3
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/crypto v0.47.0
-golang.org/x/net v0.49.0
-golang.org/x/sys v0.40.0
-golang.org/x/text v0.33.0
-google.golang.org/genproto v0.0.0-20250603155806-513f23925822
-google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c
-google.golang.org/grpc v1.76.0
-google.golang.org/protobuf v1.36.10
+golang.org/x/crypto v0.49.0
+golang.org/x/net v0.52.0
+golang.org/x/sys v0.42.0
+golang.org/x/text v0.35.0
+google.golang.org/genproto v0.0.0-20260128011058-8636f8732409
+google.golang.org/genproto/googleapis/rpc v0.0.0-20260311181403-84a4fc48630c
+google.golang.org/grpc v1.79.2
+google.golang.org/protobuf v1.36.11
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/yaml.v3 v3.0.1
 k8s.io/api v0.35.2
@@ -67,14 +67,14 @@ k8s.io/component-base v0.35.2
 k8s.io/component-helpers v0.35.2
 k8s.io/controller-manager v0.35.2
 k8s.io/klog v0.2.0
-k8s.io/klog/v2 v2.130.1
+k8s.io/klog/v2 v2.140.0
 k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
 k8s.io/kubelet v0.35.2
 k8s.io/kubernetes v1.35.2
 k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
 sigs.k8s.io/randfill v1.0.0
-sigs.k8s.io/structured-merge-diff/v6 v6.3.0
+sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482
 sigs.k8s.io/yaml v1.6.0
 
 local:api/pkg/apis/projectcalico/v3
