@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -158,6 +158,10 @@ func (m *ipipManager) CompleteDeferredWork() error {
 }
 
 func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	if isRemoteTunnelRoute(r, proto.IPPoolType_IPIP) {
+		// Ignore remote VTEP routes since they are only applicable to VXLAN encapsulation.
+		return nil
+	}
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
