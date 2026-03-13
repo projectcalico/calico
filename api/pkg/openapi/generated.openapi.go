@@ -954,7 +954,6 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterAddCommunity(ref common.Reference
 					"value": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Value is the BGP community to add.",
-							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -1200,7 +1199,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 					},
 					"prefixLength": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PrefixLength further constrains the CIDR match by restricting the range of allowed prefix lengths.  For example, CIDR \"10.0.0.0/8\" with MatchOperator \"In\" and PrefixLength {min: 16, max: 24} matches any route within 10.0.0.0/8 whose prefix length is between /16 and /24.  Only meaningful when CIDR is also specified; if PrefixLength is nil, the CIDR's own prefix length is used as the minimum and /32 (for V4) as the maximum.",
+							Description: "PrefixLength further constrains the CIDR match by restricting the range of allowed prefix lengths.  For example, CIDR \"10.0.0.0/8\" with MatchOperator \"In\" and PrefixLength {min: 16, max: 24} matches any route within 10.0.0.0/8 whose prefix length is between /16 and /24.  Requires CIDR to be set; if CIDR is omitted, PrefixLength is ignored.  If PrefixLength is nil and CIDR is set, the CIDR's own prefix length is used as the minimum and /32 (for V4) as the maximum.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"),
 						},
 					},
@@ -1311,7 +1310,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 					},
 					"prefixLength": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PrefixLength further constrains the CIDR match by restricting the range of allowed prefix lengths.  For example, CIDR \"fd00::/8\" with MatchOperator \"In\" and PrefixLength {min: 48, max: 64} matches any route within fd00::/8 whose prefix length is between /48 and /64.  Only meaningful when CIDR is also specified; if PrefixLength is nil, the CIDR's own prefix length is used as the minimum and /128 (for V6) as the maximum.",
+							Description: "PrefixLength further constrains the CIDR match by restricting the range of allowed prefix lengths.  For example, CIDR \"fd00::/8\" with MatchOperator \"In\" and PrefixLength {min: 48, max: 64} matches any route within fd00::/8 whose prefix length is between /48 and /64.  Requires CIDR to be set; if CIDR is omitted, PrefixLength is ignored.  If PrefixLength is nil and CIDR is set, the CIDR's own prefix length is used as the minimum and /128 (for V6) as the maximum.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6"),
 						},
 					},
@@ -1416,7 +1415,6 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSetPriority(ref common.ReferenceC
 					"value": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Value is the priority to set, in the same units as FelixConfiguration's ...RoutePriority fields.",
-							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

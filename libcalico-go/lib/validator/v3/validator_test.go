@@ -2052,36 +2052,36 @@ func init() {
 
 		// (API) BGPFilterOperation
 		Entry("should accept BGPFilterOperation with AddCommunity set", api.BGPFilterOperation{
-			AddCommunity: &api.BGPFilterAddCommunity{Value: "65000:100"},
+			AddCommunity: &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
 		}, true),
 		Entry("should accept BGPFilterOperation with PrependASPath set", api.BGPFilterOperation{
 			PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}},
 		}, true),
 		Entry("should accept BGPFilterOperation with SetPriority set", api.BGPFilterOperation{
-			SetPriority: &api.BGPFilterSetPriority{Value: 256},
+			SetPriority: &api.BGPFilterSetPriority{Value: intHelper(256)},
 		}, true),
 		Entry("should reject BGPFilterOperation with no fields set", api.BGPFilterOperation{}, false),
 		Entry("should reject BGPFilterOperation with two fields set", api.BGPFilterOperation{
-			AddCommunity: &api.BGPFilterAddCommunity{Value: "65000:100"},
-			SetPriority:  &api.BGPFilterSetPriority{Value: 256},
+			AddCommunity: &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
+			SetPriority:  &api.BGPFilterSetPriority{Value: intHelper(256)},
 		}, false),
 		Entry("should reject BGPFilterOperation with all fields set", api.BGPFilterOperation{
-			AddCommunity:  &api.BGPFilterAddCommunity{Value: "65000:100"},
+			AddCommunity:  &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
 			PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}},
-			SetPriority:   &api.BGPFilterSetPriority{Value: 256},
+			SetPriority:   &api.BGPFilterSetPriority{Value: intHelper(256)},
 		}, false),
 
 		// (API) BGPFilterRuleV4 with Operations
 		Entry("should accept BGPFilterRuleV4 with single operation", api.BGPFilterRuleV4{
 			Action: "Accept",
 			Operations: []api.BGPFilterOperation{
-				{SetPriority: &api.BGPFilterSetPriority{Value: 256}},
+				{SetPriority: &api.BGPFilterSetPriority{Value: intHelper(256)}},
 			},
 		}, true),
 		Entry("should accept BGPFilterRuleV4 with multiple operations", api.BGPFilterRuleV4{
 			Action: "Accept",
 			Operations: []api.BGPFilterOperation{
-				{AddCommunity: &api.BGPFilterAddCommunity{Value: "65000:100"}},
+				{AddCommunity: &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")}},
 				{PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
 			},
 		}, true),
@@ -3915,4 +3915,13 @@ func mustParsePortRange(min, max uint16) numorstring.Port {
 
 func int32Helper(i int32) *int32 {
 	return &i
+}
+
+func intHelper(i int) *int {
+	return &i
+}
+
+func communityValHelper(s string) *api.BGPCommunityValue {
+	v := api.BGPCommunityValue(s)
+	return &v
 }
