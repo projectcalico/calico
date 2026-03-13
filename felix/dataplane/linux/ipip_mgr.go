@@ -158,7 +158,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 }
 
 func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if isRemoteVTEPRoute(r, proto.IPPoolType_IPIP) {
+	if isRemoteTunnelRoute(r, proto.IPPoolType_IPIP) {
 		// Ignore remote VTEP routes since they are only applicable to VXLAN encapsulation.
 		return nil
 	}

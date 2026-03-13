@@ -129,13 +129,13 @@ func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
 	return routeProtocol
 }
 
-// isRemoteVTEPRoute returns true if the route update signifies a need to program
+// isRemoteTunnelRoute returns true if the route update signifies a need to program
 // a directly connected route on the VXLAN device for a remote tunnel endpoint. This is needed
 // in a few cases in order to ensure host <-> pod connectivity over the tunnel.
 // This happens when tunnel addresses are selected from an IP pool with blocks of a single address.
 // These also need routes of the form "<IP> dev vxlan.calico" rather than "<block> via <TunnelEndpoint>".
 // This is only applicable to VXLAN encapsulation.
-func isRemoteVTEPRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
+func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
 	return msg.IpPoolType == ippoolType && // Ignore irrelevant messages.
 		isType(msg, proto.RouteType_REMOTE_TUNNEL) && isType(msg, proto.RouteType_REMOTE_WORKLOAD)
 }
@@ -172,8 +172,14 @@ func (m *routeManager) OnUpdate(protoBufMsg any) {
 			m.routesDirty = true
 		}
 
-		if isRemoteVTEPRoute(msg, m.ippoolType) || isBorrowedRoute(msg, m.ippoolType) {
+		if isRemoteTunnelRoute(msg, m.ippoolType) {
 			m.logCtx.WithField("msg", msg).Debug("Route manager received route update for remote tunnel endpoint")
+			m.routesByDest[msg.Dst] = msg
+			m.routesDirty = true
+		}
+
+		if isBorrowedRoute(msg, m.ippoolType) {
+			m.logCtx.WithField("msg", msg).Debug("Route manager received route update for a borrowed address")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
 		}
