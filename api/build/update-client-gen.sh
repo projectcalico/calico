@@ -23,6 +23,15 @@ set -o pipefail
 REPO_ROOT=$(realpath $(dirname "${BASH_SOURCE}")/..)
 BINDIR=${REPO_ROOT}/bin
 
+APPLY_CONFIG_PKG="github.com/projectcalico/api/pkg/client/applyconfiguration_generated"
+
+# Generate apply configurations (required for NewClientset in fake clientset)
+applyconfiguration-gen "$@" \
+		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+		--output-dir "${REPO_ROOT}/pkg/client/applyconfiguration_generated" \
+		--output-pkg "${APPLY_CONFIG_PKG}" \
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 # Generate the versioned clientset (pkg/client/clientset_generated/clientset)
 client-gen "$@" \
 		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
@@ -30,7 +39,8 @@ client-gen "$@" \
 		--input "projectcalico/v3" \
 		--output-dir "${REPO_ROOT}/pkg/client/clientset_generated" \
 		--clientset-path "github.com/projectcalico/api/pkg/client/clientset_generated/" \
-		--clientset-name "clientset"
+		--clientset-name "clientset" \
+		--apply-configuration-package "${APPLY_CONFIG_PKG}"
 # generate lister
 lister-gen "$@" \
 		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
