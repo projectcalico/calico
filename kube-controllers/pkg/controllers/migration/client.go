@@ -47,7 +47,7 @@ func (c *migrationClient) Get(ctx context.Context, name string) (*DatastoreMigra
 func (c *migrationClient) UpdateStatus(ctx context.Context, dm *DatastoreMigration) (*DatastoreMigration, error) {
 	uns, err := toUnstructured(dm)
 	if err != nil {
-		return nil, fmt.Errorf("converting to unstructured: %v", err)
+		return nil, fmt.Errorf("converting to unstructured: %w", err)
 	}
 	updated, err := c.client.Resource(DatastoreMigrationGVR).UpdateStatus(ctx, uns, metav1.UpdateOptions{})
 	if err != nil {
@@ -60,7 +60,7 @@ func (c *migrationClient) UpdateStatus(ctx context.Context, dm *DatastoreMigrati
 func (c *migrationClient) Update(ctx context.Context, dm *DatastoreMigration) (*DatastoreMigration, error) {
 	uns, err := toUnstructured(dm)
 	if err != nil {
-		return nil, fmt.Errorf("converting to unstructured: %v", err)
+		return nil, fmt.Errorf("converting to unstructured: %w", err)
 	}
 	updated, err := c.client.Resource(DatastoreMigrationGVR).Update(ctx, uns, metav1.UpdateOptions{})
 	if err != nil {
@@ -72,7 +72,7 @@ func (c *migrationClient) Update(ctx context.Context, dm *DatastoreMigration) (*
 func fromUnstructured(uns *unstructured.Unstructured) (*DatastoreMigration, error) {
 	dm := &DatastoreMigration{}
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uns.Object, dm); err != nil {
-		return nil, fmt.Errorf("converting from unstructured: %v", err)
+		return nil, fmt.Errorf("converting from unstructured: %w", err)
 	}
 	return dm, nil
 }
@@ -80,7 +80,7 @@ func fromUnstructured(uns *unstructured.Unstructured) (*DatastoreMigration, erro
 func toUnstructured(dm *DatastoreMigration) (*unstructured.Unstructured, error) {
 	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(dm)
 	if err != nil {
-		return nil, fmt.Errorf("converting to unstructured: %v", err)
+		return nil, fmt.Errorf("converting to unstructured: %w", err)
 	}
 	return &unstructured.Unstructured{Object: obj}, nil
 }

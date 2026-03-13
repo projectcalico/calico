@@ -187,7 +187,7 @@ func (c *migrationController) reconcile() error {
 		if kerrors.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("getting DatastoreMigration: %v", err)
+		return fmt.Errorf("getting DatastoreMigration: %w", err)
 	}
 
 	logCtx := log.WithFields(log.Fields{
@@ -228,13 +228,13 @@ func (c *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 	if !hasFinalizer(dm) {
 		logCtx.Info("Adding finalizer to DatastoreMigration CR")
 		if err := c.addFinalizer(dm); err != nil {
-			return fmt.Errorf("adding finalizer: %v", err)
+			return fmt.Errorf("adding finalizer: %w", err)
 		}
 		// Re-fetch after metadata update to avoid conflicts.
 		var err error
 		dm, err = c.migClient.Get(c.ctx, dm.Name)
 		if err != nil {
-			return fmt.Errorf("re-fetching DatastoreMigration after finalizer: %v", err)
+			return fmt.Errorf("re-fetching DatastoreMigration after finalizer: %w", err)
 		}
 	}
 
@@ -242,7 +242,7 @@ func (c *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 	crdClient := c.dynamicClient.Resource(crdGVR)
 	crdList, err := crdClient.List(c.ctx, metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("listing CRDs for pre-validation: %v", err)
+		return fmt.Errorf("listing CRDs for pre-validation: %w", err)
 	}
 	v1CRDCount := 0
 	for _, crd := range crdList.Items {
@@ -263,7 +263,7 @@ func (c *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 		if kerrors.IsNotFound(err) {
 			logCtx.Warn("APIService v3.projectcalico.org not found — may not be running with API server aggregation")
 		} else {
-			return fmt.Errorf("checking APIService: %v", err)
+			return fmt.Errorf("checking APIService: %w", err)
 		}
 	} else if apiSvc.Labels != nil && apiSvc.Labels["kube-aggregator.kubernetes.io/automanaged"] == "true" {
 		c.setFailedStatus(dm, "APIService v3.projectcalico.org is automanaged (CRD-backed), not aggregated — migration requires an aggregated API server")
@@ -346,7 +346,7 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 	// Re-fetch after metadata update to avoid stale ResourceVersion.
 	refreshed, err := c.migClient.Get(c.ctx, dm.Name)
 	if err != nil {
-		return fmt.Errorf("re-fetching DatastoreMigration after APIService save: %v", err)
+		return fmt.Errorf("re-fetching DatastoreMigration after APIService save: %w", err)
 	}
 	*dm = *refreshed
 
@@ -520,7 +520,7 @@ func (c *migrationController) handleCompletedCleanup(logCtx *log.Entry, dm *Data
 	crdClient := c.dynamicClient.Resource(crdGVR)
 	crdList, err := crdClient.List(c.ctx, metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("listing CRDs: %v", err)
+		return fmt.Errorf("listing CRDs: %w", err)
 	}
 
 	deleted := 0
@@ -532,7 +532,7 @@ func (c *migrationController) handleCompletedCleanup(logCtx *log.Entry, dm *Data
 		logCtx.WithField("crd", crd.GetName()).Info("Deleting v1 CRD")
 		if err := crdClient.Delete(c.ctx, crd.GetName(), metav1.DeleteOptions{}); err != nil {
 			if !kerrors.IsNotFound(err) {
-				return fmt.Errorf("deleting CRD %s: %v", crd.GetName(), err)
+				return fmt.Errorf("deleting CRD %s: %w", crd.GetName(), err)
 			}
 		}
 		deleted++
@@ -572,7 +572,7 @@ func (c *migrationController) handleAbort(logCtx *log.Entry, dm *DatastoreMigrat
 	// Step 4: Restore the aggregated APIService from the saved annotation.
 	if err := c.restoreAPIService(logCtx, dm); err != nil {
 		logCtx.WithError(err).Error("Failed to restore APIService during abort")
-		return fmt.Errorf("restoring APIService: %v", err)
+		return fmt.Errorf("restoring APIService: %w", err)
 	}
 
 	return c.removeFinalizer(dm)
@@ -619,7 +619,7 @@ func (c *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *Dat
 			logCtx.Debug("APIService already deleted")
 			return nil
 		}
-		return fmt.Errorf("getting APIService for save: %v", err)
+		return fmt.Errorf("getting APIService for save: %w", err)
 	}
 
 	// Check if it's already a CRD-backed (automanaged) APIService. If so,
@@ -640,7 +640,7 @@ func (c *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *Dat
 
 		data, err := json.Marshal(saved)
 		if err != nil {
-			return fmt.Errorf("serializing APIService: %v", err)
+			return fmt.Errorf("serializing APIService: %w", err)
 		}
 
 		if dm.Annotations == nil {
@@ -648,7 +648,7 @@ func (c *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *Dat
 		}
 		dm.Annotations[savedAPIServiceAnnotation] = string(data)
 		if err := c.updateMetadata(dm); err != nil {
-			return fmt.Errorf("saving APIService annotation: %v", err)
+			return fmt.Errorf("saving APIService annotation: %w", err)
 		}
 		logCtx.Info("Saved APIService to annotation")
 	}
@@ -660,7 +660,7 @@ func (c *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *Dat
 			logCtx.Debug("APIService already deleted")
 			return nil
 		}
-		return fmt.Errorf("deleting APIService: %v", err)
+		return fmt.Errorf("deleting APIService: %w", err)
 	}
 	logCtx.Info("Deleted APIService v3.projectcalico.org")
 	return nil
@@ -680,11 +680,11 @@ func (c *migrationController) restoreAPIService(logCtx *log.Entry, dm *Datastore
 		logCtx.Info("Deleting automanaged APIService to restore aggregated one")
 		if err := c.apiregClient.APIServices().Delete(c.ctx, apiServiceName, metav1.DeleteOptions{}); err != nil {
 			if !kerrors.IsNotFound(err) {
-				return fmt.Errorf("deleting automanaged APIService: %v", err)
+				return fmt.Errorf("deleting automanaged APIService: %w", err)
 			}
 		}
 	} else if !kerrors.IsNotFound(err) {
-		return fmt.Errorf("checking existing APIService: %v", err)
+		return fmt.Errorf("checking existing APIService: %w", err)
 	}
 
 	savedData := ""
@@ -698,7 +698,7 @@ func (c *migrationController) restoreAPIService(logCtx *log.Entry, dm *Datastore
 
 	apiSvc := &apiregv1.APIService{}
 	if err := json.Unmarshal([]byte(savedData), apiSvc); err != nil {
-		return fmt.Errorf("deserializing saved APIService: %v", err)
+		return fmt.Errorf("deserializing saved APIService: %w", err)
 	}
 
 	_, err = c.apiregClient.APIServices().Create(c.ctx, apiSvc, metav1.CreateOptions{})
@@ -707,7 +707,7 @@ func (c *migrationController) restoreAPIService(logCtx *log.Entry, dm *Datastore
 			logCtx.Info("APIService already recreated (possibly by operator)")
 			return nil
 		}
-		return fmt.Errorf("creating restored APIService: %v", err)
+		return fmt.Errorf("creating restored APIService: %w", err)
 	}
 	logCtx.Info("Restored aggregated APIService v3.projectcalico.org")
 	return nil
@@ -730,17 +730,17 @@ func (c *migrationController) lockDatastore(logCtx *log.Entry) error {
 		if kerrors.IsNotFound(err) {
 			_, err = c.v3Client.ClusterInformations().Create(c.ctx, ci, metav1.CreateOptions{})
 			if err != nil {
-				return fmt.Errorf("creating v3 ClusterInformation: %v", err)
+				return fmt.Errorf("creating v3 ClusterInformation: %w", err)
 			}
 			logCtx.Info("Created v3 ClusterInformation with DatastoreReady=false")
 		} else {
-			return fmt.Errorf("getting v3 ClusterInformation: %v", err)
+			return fmt.Errorf("getting v3 ClusterInformation: %w", err)
 		}
 	} else if existing.Spec.DatastoreReady == nil || *existing.Spec.DatastoreReady {
 		existing.Spec.DatastoreReady = &ready
 		_, err = c.v3Client.ClusterInformations().Update(c.ctx, existing, metav1.UpdateOptions{})
 		if err != nil {
-			return fmt.Errorf("updating v3 ClusterInformation: %v", err)
+			return fmt.Errorf("updating v3 ClusterInformation: %w", err)
 		}
 		logCtx.Info("Set DatastoreReady=false on v3 ClusterInformation")
 	} else {
@@ -760,14 +760,14 @@ func (c *migrationController) lockDatastore(logCtx *log.Entry) error {
 func (c *migrationController) unlockDatastore(logCtx *log.Entry) error {
 	existing, err := c.v3Client.ClusterInformations().Get(c.ctx, clusterInfoName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("getting v3 ClusterInformation for unlock: %v", err)
+		return fmt.Errorf("getting v3 ClusterInformation for unlock: %w", err)
 	}
 
 	ready := true
 	existing.Spec.DatastoreReady = &ready
 	_, err = c.v3Client.ClusterInformations().Update(c.ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
-		return fmt.Errorf("unlocking v3 datastore: %v", err)
+		return fmt.Errorf("unlocking v3 datastore: %w", err)
 	}
 	logCtx.Info("Set DatastoreReady=true on v3 ClusterInformation")
 
@@ -788,7 +788,7 @@ func (c *migrationController) setV1ClusterInfoReady(logCtx *log.Entry, ready boo
 	}
 	kvp, err := c.backendClient.Get(c.ctx, key, "")
 	if err != nil {
-		return fmt.Errorf("getting v1 ClusterInformation: %v", err)
+		return fmt.Errorf("getting v1 ClusterInformation: %w", err)
 	}
 
 	ci := kvp.Value.(*apiv3.ClusterInformation)
@@ -801,7 +801,7 @@ func (c *migrationController) setV1ClusterInfoReady(logCtx *log.Entry, ready boo
 	kvp.Value = ci
 	_, err = c.backendClient.Update(c.ctx, kvp)
 	if err != nil {
-		return fmt.Errorf("updating v1 ClusterInformation: %v", err)
+		return fmt.Errorf("updating v1 ClusterInformation: %w", err)
 	}
 	logCtx.WithField("ready", ready).Info("Updated v1 ClusterInformation DatastoreReady")
 	return nil

@@ -171,7 +171,7 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 	// Phase 1: List all v1 resources and convert to v3 objects sequentially.
 	v1List, err := m.ListV1(ctx, bc)
 	if err != nil {
-		return nil, fmt.Errorf("listing v1 %s resources: %v", m.Kind, err)
+		return nil, fmt.Errorf("listing v1 %s resources: %w", m.Kind, err)
 	}
 	logCtx.WithField("count", len(v1List.KVPairs)).Info("Listed v1 resources")
 
@@ -183,7 +183,7 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 
 		v3Obj, err := m.Convert(kvp)
 		if err != nil {
-			return nil, fmt.Errorf("converting %s/%s: %v", m.Kind, key.Name, err)
+			return nil, fmt.Errorf("converting %s/%s: %w", m.Kind, key.Name, err)
 		}
 
 		// Copy OwnerReferences from the v1 source. UIDs referencing Calico
@@ -312,7 +312,7 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 	})
 	if err != nil {
 		return migrationWorkResult{
-			err: fmt.Errorf("checking existing v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
+			err: fmt.Errorf("checking existing v3 %s/%s: %w", m.Kind, v3Obj.GetName(), err),
 		}
 	}
 
@@ -356,7 +356,7 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: v3UID}
 		}
 		return migrationWorkResult{
-			err: fmt.Errorf("creating v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
+			err: fmt.Errorf("creating v3 %s/%s: %w", m.Kind, v3Obj.GetName(), err),
 		}
 	}
 	item.logCtx.Debug("Successfully migrated resource")
@@ -375,7 +375,7 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 	})
 	if err != nil {
 		return migrationWorkResult{
-			err: fmt.Errorf("reading back created v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
+			err: fmt.Errorf("reading back created v3 %s/%s: %w", m.Kind, v3Obj.GetName(), err),
 		}
 	}
 	var v3UID types.UID
@@ -419,7 +419,7 @@ func RemapOwnerReferences(ctx context.Context, uidMap map[types.UID]types.UID, m
 
 		v3List, err := m.ListV3(ctx)
 		if err != nil {
-			return fmt.Errorf("listing v3 %s for ownerref remapping: %v", m.Kind, err)
+			return fmt.Errorf("listing v3 %s for ownerref remapping: %w", m.Kind, err)
 		}
 
 		for _, obj := range v3List {
@@ -442,7 +442,7 @@ func RemapOwnerReferences(ctx context.Context, uidMap map[types.UID]types.UID, m
 			if changed {
 				obj.SetOwnerReferences(ownerRefs)
 				if err := m.UpdateV3(ctx, obj); err != nil {
-					return fmt.Errorf("updating ownerrefs on %s/%s: %v", m.Kind, obj.GetName(), err)
+					return fmt.Errorf("updating ownerrefs on %s/%s: %w", m.Kind, obj.GetName(), err)
 				}
 				remapped++
 			}
