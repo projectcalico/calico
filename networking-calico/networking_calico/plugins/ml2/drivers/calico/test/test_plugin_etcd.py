@@ -1876,20 +1876,20 @@ class TestLiveMigration(TestPluginEtcdBase):
                 "namespace": self.namespace,
             },
             "spec": {
-                "Source": {
-                    "WorkloadEndpoint": {
-                        "Hostname": source_host,
-                        "OrchestratorID": "openstack",
-                        "WorkloadID": self.namespace + "/" + lib.port1["device_id"],
-                        "EndpointID": lib.port1["id"],
+                "source": {
+                    "workloadEndpoint": {
+                        "hostname": source_host,
+                        "orchestratorID": "openstack",
+                        "workloadID": self.namespace + "/" + lib.port1["device_id"],
+                        "endpointID": lib.port1["id"],
                     },
                 },
-                "Target": {
-                    "WorkloadEndpoint": {
-                        "Hostname": dest_host,
-                        "OrchestratorID": "openstack",
-                        "WorkloadID": self.namespace + "/" + lib.port1["device_id"],
-                        "EndpointID": lib.port1["id"],
+                "target": {
+                    "workloadEndpoint": {
+                        "hostname": dest_host,
+                        "orchestratorID": "openstack",
+                        "workloadID": self.namespace + "/" + lib.port1["device_id"],
+                        "endpointID": lib.port1["id"],
                     },
                 },
             },

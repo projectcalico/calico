@@ -1081,20 +1081,20 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     namespace,
                     dest_wep_name,
                     {
-                        "Source": {
-                            "WorkloadEndpoint": {
-                                "Hostname": port["binding:host_id"],
-                                "OrchestratorID": "openstack",
-                                "WorkloadID": namespace + "/" + port["device_id"],
-                                "EndpointID": port["id"],
+                        "source": {
+                            "workloadEndpoint": {
+                                "hostname": port["binding:host_id"],
+                                "orchestratorID": "openstack",
+                                "workloadID": namespace + "/" + port["device_id"],
+                                "endpointID": port["id"],
                             },
                         },
-                        "Target": {
-                            "WorkloadEndpoint": {
-                                "Hostname": dest_host,
-                                "OrchestratorID": "openstack",
-                                "WorkloadID": namespace + "/" + port["device_id"],
-                                "EndpointID": port["id"],
+                        "target": {
+                            "workloadEndpoint": {
+                                "hostname": dest_host,
+                                "orchestratorID": "openstack",
+                                "workloadID": namespace + "/" + port["device_id"],
+                                "endpointID": port["id"],
                             },
                         },
                     },
