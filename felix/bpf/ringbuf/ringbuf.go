@@ -16,6 +16,7 @@ package ringbuf
 
 import (
 	"encoding/binary"
+	stderrors "errors"
 	"os"
 	"sync/atomic"
 	"unsafe"
@@ -166,8 +167,7 @@ func New(m maps.Map, maxEntries int) (*RingBuffer, error) {
 	// Create epoll for blocking on the map FD.
 	rb.epollFD, err = unix.EpollCreate1(0)
 	if err != nil {
-		rb.cleanup()
-		return nil, errors.Wrap(err, "EpollCreate1")
+		return nil, stderrors.Join(errors.Wrap(err, "EpollCreate1"), rb.cleanup())
 	}
 
 	epollEvent := unix.EpollEvent{
@@ -175,8 +175,7 @@ func New(m maps.Map, maxEntries int) (*RingBuffer, error) {
 		Fd:     int32(rb.mapFD),
 	}
 	if err := unix.EpollCtl(rb.epollFD, unix.EPOLL_CTL_ADD, rb.mapFD, &epollEvent); err != nil {
-		rb.cleanup()
-		return nil, errors.Wrap(err, "EpollCtl")
+		return nil, stderrors.Join(errors.Wrap(err, "EpollCtl"), rb.cleanup())
 	}
 
 	return rb, nil
