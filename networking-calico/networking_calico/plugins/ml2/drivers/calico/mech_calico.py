@@ -1074,7 +1074,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
                 # Create LiveMigration resource.
                 namespace = self.endpoint_syncer.namespace
-                source_wep_name = endpoint_name(port)
                 dest_wep_name = endpoint_name(dest_port)
                 migration_uid = datamodel_v3.put(
                     "LiveMigration",
