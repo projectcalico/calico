@@ -121,7 +121,7 @@ validate_cluster() {
 
     # Check IPAM state
     info "Checking IPAM allocation for vm1..."
-    HANDLE=$(calicoctl ipam show --ip="$VM1_IP" 2>/dev/null | grep "Handle ID:" | awk '{print $3}')
+    HANDLE=$(calicoctl ipam show --ip="$VM1_IP" --allow-version-mismatch 2>/dev/null | grep "Handle ID:" | awk '{print $3}')
     if echo "$HANDLE" | grep -q "vmi.default.vm1"; then
         pass "VM-based handle ID: $HANDLE"
     else
@@ -166,10 +166,10 @@ create_bgp_peer() {
     phase "PHASE 2: BGPPeer Setup"
 
     info "Ensuring Calico BGPPeer exists for TOR node..."
-    if calicoctl get bgppeer tor-bgp-peer >/dev/null 2>&1; then
+    if calicoctl get bgppeer tor-bgp-peer --allow-version-mismatch >/dev/null 2>&1; then
         pass "BGPPeer 'tor-bgp-peer' already exists"
     else
-        calicoctl apply -f - <<EOF
+        calicoctl apply --allow-version-mismatch -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
