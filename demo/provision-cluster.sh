@@ -4,11 +4,10 @@
 # This script provisions a cluster from scratch:
 #   1. Create profile template (gcp-kubevirt.tpl.yaml)
 #   2. Initialize profile with bz init (Song's branch)
-#   3. (removed — uses latest hashrelease by default)
-#   4. Provision GCP VMs with bz provision
-#   5. Install Calico and deploy KubeVirt with gkm
-#   6. Setup TOR node BGP
-#   7. Verify everything is running
+#   3. Provision GCP VMs with bz provision
+#   4. Install Calico and deploy KubeVirt with gkm
+#   5. Setup TOR node BGP
+#   6. Verify everything is running
 #
 # Prerequisites:
 #   - bz CLI on PATH
@@ -116,14 +115,13 @@ else
     pass "Profile initialized"
 fi
 
+TASKVARS="$PROFILE_DIR/Taskvars.yml"
+
 # ============================================================
-#  Step 4: Provision GCP VMs
+#  Step 4: Provision Cluster (~20 minutes)
 # ============================================================
 
 phase "Step 4: Provision Cluster (~20 minutes)"
-
-TASKVARS="$PROFILE_DIR/Taskvars.yml"
-[ -f "$TASKVARS" ] || fail "Taskvars.yml not found at $TASKVARS"
 
 info "Running bz provision..."
 (cd "$PROFILE_DIR" && bz provision) || fail "bz provision failed"
