@@ -146,6 +146,18 @@ type ClientOptions struct {
 // fake or custom clients for testing, without needing a CalicoAPIConfigSpec or real
 // Kubernetes connection. Returns an error if required fields (ClientSet, RESTClient) are
 // missing.
+//
+// When using fake.NewClientset() for testing, be aware that the fake client does not
+// replicate full API server behavior. In particular:
+//   - No server-side validation (CEL rules, admission webhooks, OpenAPI schema checks).
+//   - No field selector or label selector filtering on List operations.
+//   - No resource version conflict detection (optimistic concurrency).
+//   - No defaulting or API version conversion.
+//   - Subresource updates are not reflected in the parent resource.
+//
+// The fake client is suitable for testing application-level logic (CRUD sequencing,
+// controller behavior, error handling). For tests that depend on validation, selectors,
+// or conflict detection, use envtest or a real cluster.
 func NewWithOptions(opts ClientOptions) (api.Client, error) {
 	if opts.ClientSet == nil {
 		return nil, fmt.Errorf("ClientSet is required")
