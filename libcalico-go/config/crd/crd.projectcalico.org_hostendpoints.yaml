@@ -64,10 +64,12 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: at least one of interfaceName or expectedIPs must be specified
+                  reason: FieldValueInvalid
                   rule:
                     (has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs)
                     && size(self.expectedIPs) > 0)
                 - message: node must be specified
+                  reason: FieldValueInvalid
                   rule: has(self.node) && size(self.node) > 0
           type: object
       served: true

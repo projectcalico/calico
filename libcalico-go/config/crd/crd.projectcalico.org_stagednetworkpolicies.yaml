@@ -120,6 +120,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -146,6 +147,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -215,12 +217,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)
@@ -321,6 +326,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -347,6 +353,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -416,12 +423,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)

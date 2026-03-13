@@ -248,12 +248,14 @@ spec:
                 - message:
                     nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is
                     false
+                  reason: FieldValueForbidden
                   rule:
                     "!has(self.nodeMeshPassword) || !has(self.nodeToNodeMeshEnabled)
                     || self.nodeToNodeMeshEnabled == true"
                 - message:
                     nodeMeshMaxRestartTime cannot be set when nodeToNodeMeshEnabled
                     is false
+                  reason: FieldValueForbidden
                   rule:
                     "!has(self.nodeMeshMaxRestartTime) || !has(self.nodeToNodeMeshEnabled)
                     || self.nodeToNodeMeshEnabled == true"
@@ -334,10 +336,12 @@ spec:
                     x-kubernetes-map-type: atomic
                     x-kubernetes-validations:
                       - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
                         rule:
                           (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
                           && size(self.matchOperator) > 0)
                       - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
                           > 0)"
@@ -386,10 +390,12 @@ spec:
                     x-kubernetes-map-type: atomic
                     x-kubernetes-validations:
                       - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
                         rule:
                           (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
                           && size(self.matchOperator) > 0)
                       - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
                           > 0)"
@@ -438,10 +444,12 @@ spec:
                     x-kubernetes-map-type: atomic
                     x-kubernetes-validations:
                       - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
                         rule:
                           (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
                           && size(self.matchOperator) > 0)
                       - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
                           > 0)"
@@ -490,10 +498,12 @@ spec:
                     x-kubernetes-map-type: atomic
                     x-kubernetes-validations:
                       - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
                         rule:
                           (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
                           && size(self.matchOperator) > 0)
                       - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
                           > 0)"
@@ -604,26 +614,32 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: node and nodeSelector cannot both be set
+                  reason: FieldValueForbidden
                   rule:
                     (!has(self.node) || size(self.node) == 0) || (!has(self.nodeSelector)
                     || size(self.nodeSelector) == 0)
                 - message: peerIP and peerSelector cannot both be set
+                  reason: FieldValueForbidden
                   rule:
                     (!has(self.peerIP) || size(self.peerIP) == 0) || (!has(self.peerSelector)
                     || size(self.peerSelector) == 0)
                 - message: asNumber must be empty when peerSelector is set
+                  reason: FieldValueForbidden
                   rule:
                     (!has(self.peerSelector) || size(self.peerSelector) == 0) || !has(self.asNumber)
                     || self.asNumber == 0
                 - message: peerIP must be empty when localWorkloadSelector is set
+                  reason: FieldValueForbidden
                   rule:
                     (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
                     == 0) || (!has(self.peerIP) || size(self.peerIP) == 0)
                 - message: peerSelector must be empty when localWorkloadSelector is set
+                  reason: FieldValueForbidden
                   rule:
                     (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
                     == 0) || (!has(self.peerSelector) || size(self.peerSelector) == 0)
                 - message: asNumber is required when localWorkloadSelector is set
+                  reason: FieldValueInvalid
                   rule:
                     (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
                     == 0) || (has(self.asNumber) && self.asNumber != 0)
@@ -2299,6 +2315,7 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: routeTableRange and routeTableRanges cannot both be set
+                  reason: FieldValueForbidden
                   rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           type: object
       served: true
@@ -2431,6 +2448,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -2457,6 +2475,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -2526,12 +2545,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)
@@ -2632,6 +2654,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -2658,6 +2681,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -2727,12 +2751,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)
@@ -2771,20 +2798,24 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: preDNAT and doNotTrack cannot both be true
+                  reason: FieldValueForbidden
                   rule:
                     "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
                     && self.preDNAT))"
                 - message: preDNAT policy cannot have any egress rules
+                  reason: FieldValueForbidden
                   rule:
                     (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
                     size(self.egress) == 0
                 - message: preDNAT policy cannot have 'Egress' type
+                  reason: FieldValueForbidden
                   rule:
                     (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
                     t == 'Egress')
                 - message:
                     applyOnForward must be true if either preDNAT or doNotTrack
                     is true
+                  reason: FieldValueInvalid
                   rule:
                     (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
                     || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
@@ -2898,10 +2929,12 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: at least one of interfaceName or expectedIPs must be specified
+                  reason: FieldValueInvalid
                   rule:
                     (has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs)
                     && size(self.expectedIPs) > 0)
                 - message: node must be specified
+                  reason: FieldValueInvalid
                   rule: has(self.node) && size(self.node) > 0
           type: object
       served: true
@@ -3141,6 +3174,7 @@ spec:
                     - message:
                         Block size cannot be changed; follow IP pool migration
                         guide to avoid corruption.
+                      reason: FieldValueInvalid
                       rule: self == oldSelf
                 cidr:
                   format: cidr
@@ -3149,6 +3183,7 @@ spec:
                     - message:
                         CIDR cannot be changed; follow IP pool migration guide
                         to avoid corruption.
+                      reason: FieldValueInvalid
                       rule: self == oldSelf
                 disableBGPExport:
                   type: boolean
@@ -3177,11 +3212,13 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: ipipMode and vxlanMode cannot both be enabled
+                  reason: FieldValueForbidden
                   rule:
                     "!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode
                     == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode)
                     == 0 || size(self.vxlanMode) == 0"
                 - message: LoadBalancer IP pool cannot have IPIP or VXLAN enabled
+                  reason: FieldValueForbidden
                   rule:
                     "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
                     || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode
@@ -3190,6 +3227,7 @@ spec:
                 - message:
                     LoadBalancer cannot be combined with Workload or Tunnel allowed
                     uses
+                  reason: FieldValueForbidden
                   rule:
                     "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
                     || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')"
@@ -3632,6 +3670,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -3658,6 +3697,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -3727,12 +3767,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)
@@ -3833,6 +3876,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -3859,6 +3903,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -3928,12 +3973,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)
@@ -4136,6 +4184,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -4162,6 +4211,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -4231,12 +4281,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)
@@ -4337,6 +4390,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -4363,6 +4417,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -4432,12 +4487,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)
@@ -4484,20 +4542,24 @@ spec:
               type: object
               x-kubernetes-validations:
                 - message: preDNAT and doNotTrack cannot both be true
+                  reason: FieldValueForbidden
                   rule:
                     "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
                     && self.preDNAT))"
                 - message: preDNAT policy cannot have any egress rules
+                  reason: FieldValueForbidden
                   rule:
                     (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
                     size(self.egress) == 0
                 - message: preDNAT policy cannot have 'Egress' type
+                  reason: FieldValueForbidden
                   rule:
                     (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
                     t == 'Egress')
                 - message:
                     applyOnForward must be true if either preDNAT or doNotTrack
                     is true
+                  reason: FieldValueInvalid
                   rule:
                     (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
                     || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
@@ -4885,6 +4947,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -4911,6 +4974,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -4980,12 +5044,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)
@@ -5086,6 +5153,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
@@ -5112,6 +5180,7 @@ spec:
                         type: object
                         x-kubernetes-validations:
                           - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
@@ -5181,12 +5250,15 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
                         rule:
                           "!has(self.http) || !has(self.protocol) || self.protocol
                           == 'TCP'"
                       - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
                         rule: self.action == 'Allow' || !has(self.http)
                       - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
                         rule:
                           "!has(self.destination) || !has(self.destination.services)
                           || (!has(self.destination.ports) || size(self.destination.ports)
