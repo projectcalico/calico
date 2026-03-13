@@ -791,7 +791,10 @@ func (c *migrationController) setV1ClusterInfoReady(logCtx *log.Entry, ready boo
 		return fmt.Errorf("getting v1 ClusterInformation: %w", err)
 	}
 
-	ci := kvp.Value.(*apiv3.ClusterInformation)
+	ci, ok := kvp.Value.(*apiv3.ClusterInformation)
+	if !ok {
+		return fmt.Errorf("unexpected type for v1 ClusterInformation: %T", kvp.Value)
+	}
 	if ci.Spec.DatastoreReady != nil && *ci.Spec.DatastoreReady == ready {
 		logCtx.WithField("ready", ready).Debug("v1 ClusterInformation already at desired state")
 		return nil

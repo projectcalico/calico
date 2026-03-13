@@ -16,6 +16,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -58,7 +59,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindTier)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.Tier)
+			v1, ok := kvp.Value.(*apiv3.Tier)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for Tier: %T", kvp.Value)
+			}
 			v3 := &apiv3.Tier{
 				TypeMeta:   newV3TypeMeta(apiv3.KindTier),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -68,7 +72,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.Tiers().Create(ctx, obj.(*apiv3.Tier), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.Tier)
+			if !ok {
+				return fmt.Errorf("unexpected type for Tier: %T", obj)
+			}
+			_, err := pc.Tiers().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -79,7 +87,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.Tier).Spec, b.(*apiv3.Tier).Spec)
+			aTyped, ok := a.(*apiv3.Tier)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.Tier)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.Tiers().List(ctx, metav1.ListOptions{})
@@ -93,7 +109,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.Tiers().Update(ctx, obj.(*apiv3.Tier), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.Tier)
+			if !ok {
+				return fmt.Errorf("unexpected type for Tier: %T", obj)
+			}
+			_, err := pc.Tiers().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -109,7 +129,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindFelixConfiguration)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.FelixConfiguration)
+			v1, ok := kvp.Value.(*apiv3.FelixConfiguration)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for FelixConfiguration: %T", kvp.Value)
+			}
 			v3 := &apiv3.FelixConfiguration{
 				TypeMeta:   newV3TypeMeta(apiv3.KindFelixConfiguration),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -119,7 +142,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.FelixConfigurations().Create(ctx, obj.(*apiv3.FelixConfiguration), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.FelixConfiguration)
+			if !ok {
+				return fmt.Errorf("unexpected type for FelixConfiguration: %T", obj)
+			}
+			_, err := pc.FelixConfigurations().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -130,7 +157,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.FelixConfiguration).Spec, b.(*apiv3.FelixConfiguration).Spec)
+			aTyped, ok := a.(*apiv3.FelixConfiguration)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.FelixConfiguration)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.FelixConfigurations().List(ctx, metav1.ListOptions{})
@@ -144,7 +179,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.FelixConfigurations().Update(ctx, obj.(*apiv3.FelixConfiguration), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.FelixConfiguration)
+			if !ok {
+				return fmt.Errorf("unexpected type for FelixConfiguration: %T", obj)
+			}
+			_, err := pc.FelixConfigurations().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -160,7 +199,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindBGPConfiguration)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.BGPConfiguration)
+			v1, ok := kvp.Value.(*apiv3.BGPConfiguration)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for BGPConfiguration: %T", kvp.Value)
+			}
 			v3 := &apiv3.BGPConfiguration{
 				TypeMeta:   newV3TypeMeta(apiv3.KindBGPConfiguration),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -170,7 +212,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.BGPConfigurations().Create(ctx, obj.(*apiv3.BGPConfiguration), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.BGPConfiguration)
+			if !ok {
+				return fmt.Errorf("unexpected type for BGPConfiguration: %T", obj)
+			}
+			_, err := pc.BGPConfigurations().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -181,7 +227,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.BGPConfiguration).Spec, b.(*apiv3.BGPConfiguration).Spec)
+			aTyped, ok := a.(*apiv3.BGPConfiguration)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.BGPConfiguration)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.BGPConfigurations().List(ctx, metav1.ListOptions{})
@@ -195,7 +249,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.BGPConfigurations().Update(ctx, obj.(*apiv3.BGPConfiguration), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.BGPConfiguration)
+			if !ok {
+				return fmt.Errorf("unexpected type for BGPConfiguration: %T", obj)
+			}
+			_, err := pc.BGPConfigurations().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -211,7 +269,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindKubeControllersConfiguration)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.KubeControllersConfiguration)
+			v1, ok := kvp.Value.(*apiv3.KubeControllersConfiguration)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for KubeControllersConfiguration: %T", kvp.Value)
+			}
 			v3 := &apiv3.KubeControllersConfiguration{
 				TypeMeta:   newV3TypeMeta(apiv3.KindKubeControllersConfiguration),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -221,7 +282,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.KubeControllersConfigurations().Create(ctx, obj.(*apiv3.KubeControllersConfiguration), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.KubeControllersConfiguration)
+			if !ok {
+				return fmt.Errorf("unexpected type for KubeControllersConfiguration: %T", obj)
+			}
+			_, err := pc.KubeControllersConfigurations().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -232,7 +297,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.KubeControllersConfiguration).Spec, b.(*apiv3.KubeControllersConfiguration).Spec)
+			aTyped, ok := a.(*apiv3.KubeControllersConfiguration)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.KubeControllersConfiguration)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.KubeControllersConfigurations().List(ctx, metav1.ListOptions{})
@@ -246,7 +319,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.KubeControllersConfigurations().Update(ctx, obj.(*apiv3.KubeControllersConfiguration), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.KubeControllersConfiguration)
+			if !ok {
+				return fmt.Errorf("unexpected type for KubeControllersConfiguration: %T", obj)
+			}
+			_, err := pc.KubeControllersConfigurations().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -262,7 +339,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindIPPool)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.IPPool)
+			v1, ok := kvp.Value.(*apiv3.IPPool)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for IPPool: %T", kvp.Value)
+			}
 			v3 := &apiv3.IPPool{
 				TypeMeta:   newV3TypeMeta(apiv3.KindIPPool),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -272,7 +352,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPPools().Create(ctx, obj.(*apiv3.IPPool), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.IPPool)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPPool: %T", obj)
+			}
+			_, err := pc.IPPools().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -283,7 +367,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.IPPool).Spec, b.(*apiv3.IPPool).Spec)
+			aTyped, ok := a.(*apiv3.IPPool)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.IPPool)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.IPPools().List(ctx, metav1.ListOptions{})
@@ -297,7 +389,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPPools().Update(ctx, obj.(*apiv3.IPPool), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.IPPool)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPPool: %T", obj)
+			}
+			_, err := pc.IPPools().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -313,7 +409,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindIPReservation)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.IPReservation)
+			v1, ok := kvp.Value.(*apiv3.IPReservation)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for IPReservation: %T", kvp.Value)
+			}
 			v3 := &apiv3.IPReservation{
 				TypeMeta:   newV3TypeMeta(apiv3.KindIPReservation),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -323,7 +422,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPReservations().Create(ctx, obj.(*apiv3.IPReservation), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.IPReservation)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPReservation: %T", obj)
+			}
+			_, err := pc.IPReservations().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -334,7 +437,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.IPReservation).Spec, b.(*apiv3.IPReservation).Spec)
+			aTyped, ok := a.(*apiv3.IPReservation)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.IPReservation)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.IPReservations().List(ctx, metav1.ListOptions{})
@@ -348,7 +459,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPReservations().Update(ctx, obj.(*apiv3.IPReservation), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.IPReservation)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPReservation: %T", obj)
+			}
+			_, err := pc.IPReservations().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -364,7 +479,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindBGPPeer)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.BGPPeer)
+			v1, ok := kvp.Value.(*apiv3.BGPPeer)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for BGPPeer: %T", kvp.Value)
+			}
 			v3 := &apiv3.BGPPeer{
 				TypeMeta:   newV3TypeMeta(apiv3.KindBGPPeer),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -374,7 +492,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.BGPPeers().Create(ctx, obj.(*apiv3.BGPPeer), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.BGPPeer)
+			if !ok {
+				return fmt.Errorf("unexpected type for BGPPeer: %T", obj)
+			}
+			_, err := pc.BGPPeers().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -385,7 +507,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.BGPPeer).Spec, b.(*apiv3.BGPPeer).Spec)
+			aTyped, ok := a.(*apiv3.BGPPeer)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.BGPPeer)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.BGPPeers().List(ctx, metav1.ListOptions{})
@@ -399,7 +529,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.BGPPeers().Update(ctx, obj.(*apiv3.BGPPeer), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.BGPPeer)
+			if !ok {
+				return fmt.Errorf("unexpected type for BGPPeer: %T", obj)
+			}
+			_, err := pc.BGPPeers().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -415,7 +549,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindBGPFilter)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.BGPFilter)
+			v1, ok := kvp.Value.(*apiv3.BGPFilter)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for BGPFilter: %T", kvp.Value)
+			}
 			v3 := &apiv3.BGPFilter{
 				TypeMeta:   newV3TypeMeta(apiv3.KindBGPFilter),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -425,7 +562,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.BGPFilters().Create(ctx, obj.(*apiv3.BGPFilter), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.BGPFilter)
+			if !ok {
+				return fmt.Errorf("unexpected type for BGPFilter: %T", obj)
+			}
+			_, err := pc.BGPFilters().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -436,7 +577,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.BGPFilter).Spec, b.(*apiv3.BGPFilter).Spec)
+			aTyped, ok := a.(*apiv3.BGPFilter)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.BGPFilter)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.BGPFilters().List(ctx, metav1.ListOptions{})
@@ -450,7 +599,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.BGPFilters().Update(ctx, obj.(*apiv3.BGPFilter), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.BGPFilter)
+			if !ok {
+				return fmt.Errorf("unexpected type for BGPFilter: %T", obj)
+			}
+			_, err := pc.BGPFilters().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -466,7 +619,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindGlobalNetworkPolicy)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.GlobalNetworkPolicy)
+			v1, ok := kvp.Value.(*apiv3.GlobalNetworkPolicy)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for GlobalNetworkPolicy: %T", kvp.Value)
+			}
 			name := migratedPolicyName(v1.Name, v1.Spec.Tier)
 			v3 := &apiv3.GlobalNetworkPolicy{
 				TypeMeta:   newV3TypeMeta(apiv3.KindGlobalNetworkPolicy),
@@ -477,7 +633,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.GlobalNetworkPolicies().Create(ctx, obj.(*apiv3.GlobalNetworkPolicy), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.GlobalNetworkPolicy)
+			if !ok {
+				return fmt.Errorf("unexpected type for GlobalNetworkPolicy: %T", obj)
+			}
+			_, err := pc.GlobalNetworkPolicies().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -488,7 +648,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.GlobalNetworkPolicy).Spec, b.(*apiv3.GlobalNetworkPolicy).Spec)
+			aTyped, ok := a.(*apiv3.GlobalNetworkPolicy)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.GlobalNetworkPolicy)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.GlobalNetworkPolicies().List(ctx, metav1.ListOptions{})
@@ -502,7 +670,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.GlobalNetworkPolicies().Update(ctx, obj.(*apiv3.GlobalNetworkPolicy), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.GlobalNetworkPolicy)
+			if !ok {
+				return fmt.Errorf("unexpected type for GlobalNetworkPolicy: %T", obj)
+			}
+			_, err := pc.GlobalNetworkPolicies().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -519,7 +691,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1NamespacedResources(ctx, bc, apiv3.KindNetworkPolicy)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.NetworkPolicy)
+			v1, ok := kvp.Value.(*apiv3.NetworkPolicy)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for NetworkPolicy: %T", kvp.Value)
+			}
 			name := migratedPolicyName(v1.Name, v1.Spec.Tier)
 			v3 := &apiv3.NetworkPolicy{
 				TypeMeta: newV3TypeMeta(apiv3.KindNetworkPolicy),
@@ -545,7 +720,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.NetworkPolicy).Spec, b.(*apiv3.NetworkPolicy).Spec)
+			aTyped, ok := a.(*apiv3.NetworkPolicy)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.NetworkPolicy)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.NetworkPolicies("").List(ctx, metav1.ListOptions{})
@@ -576,7 +759,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindStagedGlobalNetworkPolicy)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.StagedGlobalNetworkPolicy)
+			v1, ok := kvp.Value.(*apiv3.StagedGlobalNetworkPolicy)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for StagedGlobalNetworkPolicy: %T", kvp.Value)
+			}
 			name := migratedPolicyName(v1.Name, v1.Spec.Tier)
 			v3 := &apiv3.StagedGlobalNetworkPolicy{
 				TypeMeta:   newV3TypeMeta(apiv3.KindStagedGlobalNetworkPolicy),
@@ -587,7 +773,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.StagedGlobalNetworkPolicies().Create(ctx, obj.(*apiv3.StagedGlobalNetworkPolicy), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.StagedGlobalNetworkPolicy)
+			if !ok {
+				return fmt.Errorf("unexpected type for StagedGlobalNetworkPolicy: %T", obj)
+			}
+			_, err := pc.StagedGlobalNetworkPolicies().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -598,7 +788,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.StagedGlobalNetworkPolicy).Spec, b.(*apiv3.StagedGlobalNetworkPolicy).Spec)
+			aTyped, ok := a.(*apiv3.StagedGlobalNetworkPolicy)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.StagedGlobalNetworkPolicy)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.StagedGlobalNetworkPolicies().List(ctx, metav1.ListOptions{})
@@ -612,7 +810,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.StagedGlobalNetworkPolicies().Update(ctx, obj.(*apiv3.StagedGlobalNetworkPolicy), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.StagedGlobalNetworkPolicy)
+			if !ok {
+				return fmt.Errorf("unexpected type for StagedGlobalNetworkPolicy: %T", obj)
+			}
+			_, err := pc.StagedGlobalNetworkPolicies().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -629,7 +831,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1NamespacedResources(ctx, bc, apiv3.KindStagedNetworkPolicy)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.StagedNetworkPolicy)
+			v1, ok := kvp.Value.(*apiv3.StagedNetworkPolicy)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for StagedNetworkPolicy: %T", kvp.Value)
+			}
 			name := migratedPolicyName(v1.Name, v1.Spec.Tier)
 			v3 := &apiv3.StagedNetworkPolicy{
 				TypeMeta: newV3TypeMeta(apiv3.KindStagedNetworkPolicy),
@@ -655,7 +860,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.StagedNetworkPolicy).Spec, b.(*apiv3.StagedNetworkPolicy).Spec)
+			aTyped, ok := a.(*apiv3.StagedNetworkPolicy)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.StagedNetworkPolicy)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.StagedNetworkPolicies("").List(ctx, metav1.ListOptions{})
@@ -687,7 +900,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1NamespacedResources(ctx, bc, apiv3.KindStagedKubernetesNetworkPolicy)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.StagedKubernetesNetworkPolicy)
+			v1, ok := kvp.Value.(*apiv3.StagedKubernetesNetworkPolicy)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for StagedKubernetesNetworkPolicy: %T", kvp.Value)
+			}
 			v3 := &apiv3.StagedKubernetesNetworkPolicy{
 				TypeMeta: newV3TypeMeta(apiv3.KindStagedKubernetesNetworkPolicy),
 				ObjectMeta: metav1.ObjectMeta{
@@ -712,7 +928,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.StagedKubernetesNetworkPolicy).Spec, b.(*apiv3.StagedKubernetesNetworkPolicy).Spec)
+			aTyped, ok := a.(*apiv3.StagedKubernetesNetworkPolicy)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.StagedKubernetesNetworkPolicy)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.StagedKubernetesNetworkPolicies("").List(ctx, metav1.ListOptions{})
@@ -743,7 +967,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindHostEndpoint)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.HostEndpoint)
+			v1, ok := kvp.Value.(*apiv3.HostEndpoint)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for HostEndpoint: %T", kvp.Value)
+			}
 			v3 := &apiv3.HostEndpoint{
 				TypeMeta:   newV3TypeMeta(apiv3.KindHostEndpoint),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -753,7 +980,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.HostEndpoints().Create(ctx, obj.(*apiv3.HostEndpoint), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.HostEndpoint)
+			if !ok {
+				return fmt.Errorf("unexpected type for HostEndpoint: %T", obj)
+			}
+			_, err := pc.HostEndpoints().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -764,7 +995,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.HostEndpoint).Spec, b.(*apiv3.HostEndpoint).Spec)
+			aTyped, ok := a.(*apiv3.HostEndpoint)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.HostEndpoint)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.HostEndpoints().List(ctx, metav1.ListOptions{})
@@ -778,7 +1017,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.HostEndpoints().Update(ctx, obj.(*apiv3.HostEndpoint), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.HostEndpoint)
+			if !ok {
+				return fmt.Errorf("unexpected type for HostEndpoint: %T", obj)
+			}
+			_, err := pc.HostEndpoints().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -794,7 +1037,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindGlobalNetworkSet)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.GlobalNetworkSet)
+			v1, ok := kvp.Value.(*apiv3.GlobalNetworkSet)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for GlobalNetworkSet: %T", kvp.Value)
+			}
 			v3 := &apiv3.GlobalNetworkSet{
 				TypeMeta:   newV3TypeMeta(apiv3.KindGlobalNetworkSet),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -804,7 +1050,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.GlobalNetworkSets().Create(ctx, obj.(*apiv3.GlobalNetworkSet), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.GlobalNetworkSet)
+			if !ok {
+				return fmt.Errorf("unexpected type for GlobalNetworkSet: %T", obj)
+			}
+			_, err := pc.GlobalNetworkSets().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -815,7 +1065,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.GlobalNetworkSet).Spec, b.(*apiv3.GlobalNetworkSet).Spec)
+			aTyped, ok := a.(*apiv3.GlobalNetworkSet)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.GlobalNetworkSet)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.GlobalNetworkSets().List(ctx, metav1.ListOptions{})
@@ -829,7 +1087,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.GlobalNetworkSets().Update(ctx, obj.(*apiv3.GlobalNetworkSet), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.GlobalNetworkSet)
+			if !ok {
+				return fmt.Errorf("unexpected type for GlobalNetworkSet: %T", obj)
+			}
+			_, err := pc.GlobalNetworkSets().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -846,7 +1108,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1NamespacedResources(ctx, bc, apiv3.KindNetworkSet)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.NetworkSet)
+			v1, ok := kvp.Value.(*apiv3.NetworkSet)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for NetworkSet: %T", kvp.Value)
+			}
 			v3 := &apiv3.NetworkSet{
 				TypeMeta: newV3TypeMeta(apiv3.KindNetworkSet),
 				ObjectMeta: metav1.ObjectMeta{
@@ -871,7 +1136,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.NetworkSet).Spec, b.(*apiv3.NetworkSet).Spec)
+			aTyped, ok := a.(*apiv3.NetworkSet)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.NetworkSet)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.NetworkSets("").List(ctx, metav1.ListOptions{})
@@ -902,7 +1175,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindIPAMConfiguration)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.IPAMConfiguration)
+			v1, ok := kvp.Value.(*apiv3.IPAMConfiguration)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for IPAMConfiguration: %T", kvp.Value)
+			}
 			v3 := &apiv3.IPAMConfiguration{
 				TypeMeta:   newV3TypeMeta(apiv3.KindIPAMConfiguration),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -912,7 +1188,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPAMConfigurations().Create(ctx, obj.(*apiv3.IPAMConfiguration), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.IPAMConfiguration)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPAMConfiguration: %T", obj)
+			}
+			_, err := pc.IPAMConfigurations().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -923,7 +1203,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.IPAMConfiguration).Spec, b.(*apiv3.IPAMConfiguration).Spec)
+			aTyped, ok := a.(*apiv3.IPAMConfiguration)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.IPAMConfiguration)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.IPAMConfigurations().List(ctx, metav1.ListOptions{})
@@ -937,7 +1225,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPAMConfigurations().Update(ctx, obj.(*apiv3.IPAMConfiguration), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.IPAMConfiguration)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPAMConfiguration: %T", obj)
+			}
+			_, err := pc.IPAMConfigurations().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -953,7 +1245,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindBlockAffinity)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.BlockAffinity)
+			v1, ok := kvp.Value.(*apiv3.BlockAffinity)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for BlockAffinity: %T", kvp.Value)
+			}
 			v3 := &apiv3.BlockAffinity{
 				TypeMeta:   newV3TypeMeta(apiv3.KindBlockAffinity),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -963,7 +1258,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.BlockAffinities().Create(ctx, obj.(*apiv3.BlockAffinity), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.BlockAffinity)
+			if !ok {
+				return fmt.Errorf("unexpected type for BlockAffinity: %T", obj)
+			}
+			_, err := pc.BlockAffinities().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -974,7 +1273,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.BlockAffinity).Spec, b.(*apiv3.BlockAffinity).Spec)
+			aTyped, ok := a.(*apiv3.BlockAffinity)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.BlockAffinity)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.BlockAffinities().List(ctx, metav1.ListOptions{})
@@ -988,7 +1295,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.BlockAffinities().Update(ctx, obj.(*apiv3.BlockAffinity), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.BlockAffinity)
+			if !ok {
+				return fmt.Errorf("unexpected type for BlockAffinity: %T", obj)
+			}
+			_, err := pc.BlockAffinities().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -1005,7 +1316,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1IPAMBlocks(ctx, bc)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.IPAMBlock)
+			v1, ok := kvp.Value.(*apiv3.IPAMBlock)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for IPAMBlock: %T", kvp.Value)
+			}
 			v3 := &apiv3.IPAMBlock{
 				TypeMeta:   newV3TypeMeta(KindIPAMBlock),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -1015,7 +1329,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPAMBlocks().Create(ctx, obj.(*apiv3.IPAMBlock), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.IPAMBlock)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPAMBlock: %T", obj)
+			}
+			_, err := pc.IPAMBlocks().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -1026,7 +1344,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.IPAMBlock).Spec, b.(*apiv3.IPAMBlock).Spec)
+			aTyped, ok := a.(*apiv3.IPAMBlock)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.IPAMBlock)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.IPAMBlocks().List(ctx, metav1.ListOptions{})
@@ -1040,7 +1366,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPAMBlocks().Update(ctx, obj.(*apiv3.IPAMBlock), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.IPAMBlock)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPAMBlock: %T", obj)
+			}
+			_, err := pc.IPAMBlocks().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -1057,7 +1387,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1IPAMHandles(ctx, bc)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.IPAMHandle)
+			v1, ok := kvp.Value.(*apiv3.IPAMHandle)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for IPAMHandle: %T", kvp.Value)
+			}
 			v3 := &apiv3.IPAMHandle{
 				TypeMeta:   newV3TypeMeta(KindIPAMHandle),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -1067,7 +1400,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPAMHandles("").Create(ctx, obj.(*apiv3.IPAMHandle), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.IPAMHandle)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPAMHandle: %T", obj)
+			}
+			_, err := pc.IPAMHandles("").Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -1078,7 +1415,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.IPAMHandle).Spec, b.(*apiv3.IPAMHandle).Spec)
+			aTyped, ok := a.(*apiv3.IPAMHandle)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.IPAMHandle)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.IPAMHandles("").List(ctx, metav1.ListOptions{})
@@ -1092,7 +1437,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.IPAMHandles("").Update(ctx, obj.(*apiv3.IPAMHandle), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.IPAMHandle)
+			if !ok {
+				return fmt.Errorf("unexpected type for IPAMHandle: %T", obj)
+			}
+			_, err := pc.IPAMHandles("").Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -1108,7 +1457,10 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return listV1Resources(ctx, bc, apiv3.KindCalicoNodeStatus)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.CalicoNodeStatus)
+			v1, ok := kvp.Value.(*apiv3.CalicoNodeStatus)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for CalicoNodeStatus: %T", kvp.Value)
+			}
 			v3 := &apiv3.CalicoNodeStatus{
 				TypeMeta:   newV3TypeMeta(apiv3.KindCalicoNodeStatus),
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -1118,7 +1470,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return v3, nil
 		},
 		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.CalicoNodeStatuses().Create(ctx, obj.(*apiv3.CalicoNodeStatus), metav1.CreateOptions{})
+			typed, ok := obj.(*apiv3.CalicoNodeStatus)
+			if !ok {
+				return fmt.Errorf("unexpected type for CalicoNodeStatus: %T", obj)
+			}
+			_, err := pc.CalicoNodeStatuses().Create(ctx, typed, metav1.CreateOptions{})
 			return err
 		},
 		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
@@ -1129,7 +1485,15 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return obj, err
 		},
 		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.CalicoNodeStatus).Spec, b.(*apiv3.CalicoNodeStatus).Spec)
+			aTyped, ok := a.(*apiv3.CalicoNodeStatus)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.CalicoNodeStatus)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
 		},
 		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
 			list, err := pc.CalicoNodeStatuses().List(ctx, metav1.ListOptions{})
@@ -1143,7 +1507,11 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 			return result, nil
 		},
 		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			_, err := pc.CalicoNodeStatuses().Update(ctx, obj.(*apiv3.CalicoNodeStatus), metav1.UpdateOptions{})
+			typed, ok := obj.(*apiv3.CalicoNodeStatus)
+			if !ok {
+				return fmt.Errorf("unexpected type for CalicoNodeStatus: %T", obj)
+			}
+			_, err := pc.CalicoNodeStatuses().Update(ctx, typed, metav1.UpdateOptions{})
 			return err
 		},
 		DeleteV3: func(ctx context.Context, name, namespace string) error {
@@ -1166,7 +1534,10 @@ func listV1IPAMBlocks(ctx context.Context, bc api.Client) (*model.KVPairList, er
 		Revision: v1List.Revision,
 	}
 	for _, kvp := range v1List.KVPairs {
-		block := kvp.Value.(*model.AllocationBlock)
+		block, ok := kvp.Value.(*model.AllocationBlock)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for AllocationBlock: %T", kvp.Value)
+		}
 		name := names.CIDRToName(block.CIDR)
 
 		attrs := make([]apiv3.AllocationAttribute, len(block.Attributes))
@@ -1218,8 +1589,15 @@ func listV1IPAMHandles(ctx context.Context, bc api.Client) (*model.KVPairList, e
 		Revision: v1List.Revision,
 	}
 	for _, kvp := range v1List.KVPairs {
-		handle := kvp.Value.(*model.IPAMHandle)
-		name := kvp.Key.(model.IPAMHandleKey).HandleID
+		handle, ok := kvp.Value.(*model.IPAMHandle)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for IPAMHandle: %T", kvp.Value)
+		}
+		handleKey, ok := kvp.Key.(model.IPAMHandleKey)
+		if !ok {
+			return nil, fmt.Errorf("unexpected key type for IPAMHandle: %T", kvp.Key)
+		}
+		name := handleKey.HandleID
 
 		v3Handle := &apiv3.IPAMHandle{
 			TypeMeta:   newV3TypeMeta(KindIPAMHandle),

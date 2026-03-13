@@ -177,8 +177,14 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 
 	workItems := make([]migrationWorkItem, 0, len(v1List.KVPairs))
 	for _, kvp := range v1List.KVPairs {
-		key := kvp.Key.(model.ResourceKey)
-		v1Src := kvp.Value.(metav1.Object)
+		key, ok := kvp.Key.(model.ResourceKey)
+		if !ok {
+			return nil, fmt.Errorf("unexpected key type for %s: %T", m.Kind, kvp.Key)
+		}
+		v1Src, ok := kvp.Value.(metav1.Object)
+		if !ok {
+			return nil, fmt.Errorf("unexpected value type for %s/%s: %T", m.Kind, key.Name, kvp.Value)
+		}
 		v1UID := v1Src.GetUID()
 
 		v3Obj, err := m.Convert(kvp)
