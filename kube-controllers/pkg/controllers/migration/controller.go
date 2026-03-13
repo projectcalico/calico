@@ -195,6 +195,12 @@ func (m *migrationController) reconcile() error {
 		"phase": dm.Status.Phase,
 	})
 
+	// Validate Spec.Kind before proceeding.
+	if dm.Spec.Kind != DatastoreMigrationKindV1ToV3 {
+		m.setFailedStatus(dm, fmt.Sprintf("unsupported migration kind: %q (only %q is supported)", dm.Spec.Kind, DatastoreMigrationKindV1ToV3))
+		return m.updateStatus(dm)
+	}
+
 	// If the CR is being deleted, run the finalizer logic.
 	if dm.DeletionTimestamp != nil {
 		return m.handleDeletion(logCtx, dm)
