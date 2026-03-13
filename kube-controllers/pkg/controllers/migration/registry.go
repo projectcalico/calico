@@ -344,8 +344,16 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 	})
 	if err != nil {
 		if kerrors.IsAlreadyExists(err) {
-			item.logCtx.Debug("v3 resource was created concurrently, skipping")
-			return migrationWorkResult{skipped: true}
+			item.logCtx.Debug("v3 resource was created concurrently, reading back for UID mapping")
+			readBack, getErr := m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+			if getErr != nil {
+				return migrationWorkResult{err: fmt.Errorf("reading back AlreadyExists v3 %s/%s: %w", m.Kind, v3Obj.GetName(), getErr)}
+			}
+			var v3UID types.UID
+			if readBack != nil {
+				v3UID = readBack.GetUID()
+			}
+			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: v3UID}
 		}
 		return migrationWorkResult{
 			err: fmt.Errorf("creating v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
