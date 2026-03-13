@@ -35,7 +35,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -125,7 +124,7 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, deferredInformers *kubevirt.DeferredInformers) *IPAMController {
+func NewIPAMController(cfg apiv3.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, deferredInformers *kubevirt.DeferredInformers) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -200,7 +199,7 @@ type IPAMController struct {
 	clientset  kubernetes.Interface
 	podLister  v1lister.PodLister
 	nodeLister v1lister.NodeLister
-	config     config.NodeControllerConfig
+	config     apiv3.NodeControllerConfig
 
 	// deferredInformers provides thread-safe access to KubeVirt VM/VMI cache
 	// indexers. The indexers may be populated lazily after startup if KubeVirt
