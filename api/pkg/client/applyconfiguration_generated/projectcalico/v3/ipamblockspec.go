@@ -85,7 +85,7 @@ func (b *IPAMBlockSpecApplyConfiguration) WithAllocations(values ...*int) *IPAMB
 		if values[i] == nil {
 			panic("nil value passed to WithAllocations")
 		}
-		b.Allocations = append(b.Allocations, values[i])
+		b.Allocations = append(b.Allocations, *values[i])
 	}
 	return b
 }

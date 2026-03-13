@@ -1228,7 +1228,7 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithFailsafeInboundHostPorts(
 	return b
 }
 
-func (b *FelixConfigurationSpecApplyConfiguration) ensureOutboundProtoPortApplyConfigurationExists() {
+func (b *FelixConfigurationSpecApplyConfiguration) ensureProtoPortApplyConfigurationExists() {
 	if b.FailsafeOutboundHostPorts == nil {
 		b.FailsafeOutboundHostPorts = &[]ProtoPortApplyConfiguration{}
 	}
@@ -1238,7 +1238,7 @@ func (b *FelixConfigurationSpecApplyConfiguration) ensureOutboundProtoPortApplyC
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the FailsafeOutboundHostPorts field.
 func (b *FelixConfigurationSpecApplyConfiguration) WithFailsafeOutboundHostPorts(values ...*ProtoPortApplyConfiguration) *FelixConfigurationSpecApplyConfiguration {
-	b.ensureOutboundProtoPortApplyConfigurationExists()
+	b.ensureProtoPortApplyConfigurationExists()
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithFailsafeOutboundHostPorts")

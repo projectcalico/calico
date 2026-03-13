@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.0
+go 1.26.1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/emicklei/go-restful v2.15.0+incompatible
 github.com/emicklei/go-restful/v3 v3.12.2
@@ -34,12 +34,12 @@ google.golang.org/protobuf v1.36.10
 gopkg.in/evanphx/json-patch.v4 v4.13.0
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.35.1
-k8s.io/apimachinery v0.35.1
-k8s.io/client-go v0.35.1
+k8s.io/api v0.35.2
+k8s.io/apimachinery v0.35.2
+k8s.io/client-go v0.35.2
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
-k8s.io/kube-aggregator v0.35.1
+k8s.io/kube-aggregator v0.35.2
 k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
 k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730

@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.0
+go 1.26.1
 cel.dev/expr v0.24.0
 github.com/NYTimes/gziphandler v1.1.1
 github.com/antlr4-go/antlr/v4 v4.13.0
@@ -98,20 +98,20 @@ gopkg.in/go-playground/validator.v9 v9.30.2
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/natefinch/lumberjack.v2 v2.2.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.35.1
-k8s.io/apiextensions-apiserver v0.35.1
-k8s.io/apimachinery v0.35.1
-k8s.io/apiserver v0.35.1
-k8s.io/client-go v0.35.1
-k8s.io/component-base v0.35.1
-k8s.io/component-helpers v0.35.1
-k8s.io/controller-manager v0.35.1
+k8s.io/api v0.35.2
+k8s.io/apiextensions-apiserver v0.35.2
+k8s.io/apimachinery v0.35.2
+k8s.io/apiserver v0.35.2
+k8s.io/client-go v0.35.2
+k8s.io/component-base v0.35.2
+k8s.io/component-helpers v0.35.2
+k8s.io/controller-manager v0.35.2
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
-k8s.io/kms v0.35.1
+k8s.io/kms v0.35.2
 k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
-k8s.io/kubelet v0.35.1
-k8s.io/kubernetes v1.35.1
+k8s.io/kubelet v0.35.2
+k8s.io/kubernetes v1.35.2
 k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 kubevirt.io/api v1.8.0-alpha.0
 kubevirt.io/containerized-data-importer-api v1.63.1
