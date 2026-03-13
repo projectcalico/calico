@@ -171,12 +171,12 @@ func tlsDialViaHTTPProxy(d *net.Dialer, destination string, proxyTargetURL *url.
 
 	// Build the HTTP CONNECT request.
 	var requestBuilder strings.Builder
-	requestBuilder.WriteString(fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n", destination, destination))
+	fmt.Fprintf(&requestBuilder, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n", destination, destination)
 	if proxyTargetURL.User != nil {
 		username := proxyTargetURL.User.Username()
 		password, _ := proxyTargetURL.User.Password()
 		encodedCredentials := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
-		requestBuilder.WriteString(fmt.Sprintf("Proxy-Authorization: Basic %s\r\n", encodedCredentials))
+		fmt.Fprintf(&requestBuilder, "Proxy-Authorization: Basic %s\r\n", encodedCredentials)
 	}
 	requestBuilder.WriteString("\r\n")
 
