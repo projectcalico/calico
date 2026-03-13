@@ -133,6 +133,7 @@ type CalcGraph struct {
 	profileDecoder          *ProfileDecoder
 	encapsulationResolver   *EncapsulationResolver
 	policyResolver          *PolicyResolver
+	liveMigrationCalculator *LiveMigrationCalculator
 }
 
 func (g *CalcGraph) OnUpdates(updates []api.Update) {
@@ -377,6 +378,20 @@ func NewCalculationGraph(
 	// And hook its output to the callbacks.
 	polResolver.RegisterCallback(callbacks)
 	cg.policyResolver = polResolver
+
+	// Create and hook up the live migration calculator.
+	cg.liveMigrationCalculator = NewLiveMigrationCalculator(
+		cg.activeRulesCalculator,
+		polResolver.OnEndpointComputedDataUpdate,
+	)
+	localEndpointDispatcher.Register(
+		model.WorkloadEndpointKey{},
+		cg.liveMigrationCalculator.OnUpdate,
+	)
+	allUpdDispatcher.Register(
+		model.ResourceKey{},
+		cg.liveMigrationCalculator.OnUpdate,
+	)
 
 	if conf.IsIstioAmbientModeEnabled() {
 		_ = NewIstioCalculator(activeRulesCalc, ruleScanner, callbacks, ipsetMemberIndex, polResolver.OnEndpointComputedDataUpdate)
