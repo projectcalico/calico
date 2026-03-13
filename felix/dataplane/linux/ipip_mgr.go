@@ -158,6 +158,10 @@ func (m *ipipManager) CompleteDeferredWork() error {
 }
 
 func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	if isRemoteVTEPRoute(r) {
+		// Ignore remote VTEP routes since only applicable VXLAN encapsulation.
+		return nil
+	}
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
