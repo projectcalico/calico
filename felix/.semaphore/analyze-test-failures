@@ -63,7 +63,8 @@ import sys, json
 data = json.load(sys.stdin)
 for asset in data.get('assets', []):
     name = asset['name']
-    if 'linux' in name and 'amd64' in name:
+    # Match the CI archive (fv-tests-guru_*), not the tools archive (fv-tests-guru-tools_*).
+    if 'linux' in name and 'amd64' in name and not name.startswith('fv-tests-guru-tools'):
         print(asset['url'] + ' ' + name)
         break
 " 2>/dev/null) || true
