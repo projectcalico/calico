@@ -515,9 +515,16 @@ func TestLifecycle_AbortCleansUpPartialV3Resources(t *testing.T) {
 	tierStore := newInMemoryStore()
 	withTestRegistry(t, []ResourceMigrator{tierMigrator(tierStore)})
 
-	// Pre-populate the v3 store as if migration created some tiers.
-	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
-	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "security"}})
+	// Pre-populate the v3 store as if migration created some tiers
+	// (with the migration annotation that gets stamped during create).
+	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{
+		Name:        "default",
+		Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
+	}})
+	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{
+		Name:        "security",
+		Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
+	}})
 
 	cr := createTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
 	c, _ := testController(t, cr)

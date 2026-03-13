@@ -122,6 +122,10 @@ func migratedPolicyName(name, tier string) string {
 	return name
 }
 
+// migratedByAnnotation is set on v3 resources created during migration so
+// the abort path can distinguish them from pre-existing v3 resources.
+const migratedByAnnotation = "migration.projectcalico.org/migrated-by"
+
 // defaultWorkerCount is the number of concurrent workers for creating v3
 // resources within a single resource type. The design doc suggests 10 as a
 // conservative default; on clusters with a healthy API server, higher values
@@ -339,6 +343,15 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 		item.logCtx.Warn(ci.String())
 		return migrationWorkResult{conflict: ci}
 	}
+
+	// Stamp the migration annotation so the abort path can distinguish
+	// resources created by migration from pre-existing v3 resources.
+	annotations := v3Obj.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[migratedByAnnotation] = "v1-to-v3"
+	v3Obj.SetAnnotations(annotations)
 
 	// Create the v3 resource (with retry).
 	err = wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {

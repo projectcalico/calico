@@ -599,6 +599,12 @@ func (m *migrationController) cleanupPartialV3Resources(logCtx *log.Entry) {
 		}
 		deleted := 0
 		for _, obj := range v3List {
+			// Only delete resources that were created by migration, not
+			// pre-existing v3 resources.
+			annotations := obj.GetAnnotations()
+			if annotations == nil || annotations[migratedByAnnotation] == "" {
+				continue
+			}
 			name := obj.GetName()
 			ns := obj.GetNamespace()
 			if err := migrator.DeleteV3(m.ctx, name, ns); err != nil {
