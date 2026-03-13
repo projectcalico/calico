@@ -39,6 +39,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
@@ -332,6 +333,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		psnaStart: 20000,
 		psnatEnd:  30000,
 		dscp:      -1,
+		istioDSCP: -1,
 	}
 
 	for _, o := range opts {
@@ -601,16 +603,16 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, maglevMap maps.Map
-	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6       maps.Map
-	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMapXDP                                                          maps.Map
-	policyJumpMap                                                                                                            []maps.Map
-	ringBufMap, ringBufDropsMap                                                                                              maps.Map
-	profilingMap, ipfragsMapTmp                                                                                              maps.Map
-	qosMap                                                                                                                   maps.Map
-	ctlbProgsMap                                                                                                             []maps.Map
-	progMap                                                                                                                  []maps.Map
-	allMaps                                                                                                                  []maps.Map
+	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, maglevMap, allowSourcesMap maps.Map
+	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6, allowSourcesMapV6     maps.Map
+	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMapXDP                                                                           maps.Map
+	policyJumpMap                                                                                                                             []maps.Map
+	ringBufMap, ringBufDropsMap                                                                                                               maps.Map
+	profilingMap, ipfragsMapTmp                                                                                                               maps.Map
+	qosMap                                                                                                                                    maps.Map
+	ctlbProgsMap                                                                                                                              []maps.Map
+	progMap                                                                                                                                   []maps.Map
+	allMaps                                                                                                                                   []maps.Map
 )
 
 func initMapsOnce() {
@@ -647,6 +649,8 @@ func initMapsOnce() {
 		qosMap = qos.Map()
 		maglevMap = nat.MaglevMap()
 		maglevMapV6 = nat.MaglevMapV6()
+		allowSourcesMap = allowsources.Map()
+		allowSourcesMapV6 = allowsources.MapV6()
 
 		ringBufMap = ringbuf.Map("rb_evnt", 1024*1024)
 		ringBufDropsMap = ringbuf.DropsMap()
@@ -655,6 +659,7 @@ func initMapsOnce() {
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
 			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6,
+			allowSourcesMap, allowSourcesMapV6,
 			ringBufMap, ringBufDropsMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
@@ -847,10 +852,16 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsEgressPacketRateConfigured
 				}
 
+				if topts.workloadSrcSpoofingConfigured {
+					globals.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
+				}
+
 				globals.DSCP = -1
 				if topts.dscp >= 0 {
 					globals.DSCP = topts.dscp
 				}
+
+				globals.IstioDSCP = topts.istioDSCP
 
 				if topts.ipv6 {
 					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
@@ -1211,22 +1222,24 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 }
 
 type testOpts struct {
-	description          string
-	subtests             bool
-	logLevel             log.Level
-	xdp                  bool
-	psnaStart            uint32
-	psnatEnd             uint32
-	hostNetworked        bool
-	fromHost             bool
-	progLog              string
-	ipv6                 bool
-	objname              string
-	flowLogsEnabled      bool
-	natOutExcludeHosts   bool
-	ingressQoSPacketRate bool
-	egressQoSPacketRate  bool
-	dscp                 int8
+	description                   string
+	subtests                      bool
+	logLevel                      log.Level
+	xdp                           bool
+	psnaStart                     uint32
+	psnatEnd                      uint32
+	hostNetworked                 bool
+	fromHost                      bool
+	progLog                       string
+	ipv6                          bool
+	objname                       string
+	flowLogsEnabled               bool
+	natOutExcludeHosts            bool
+	ingressQoSPacketRate          bool
+	egressQoSPacketRate           bool
+	dscp                          int8
+	istioDSCP                     int8
+	workloadSrcSpoofingConfigured bool
 }
 
 type testOption func(opts *testOpts)
@@ -1315,6 +1328,18 @@ func withObjName(name string) testOption {
 func withDescription(desc string) testOption {
 	return func(o *testOpts) {
 		o.description = desc
+	}
+}
+
+func withWorkloadSrcSpoofingConfigured() testOption {
+	return func(o *testOpts) {
+		o.workloadSrcSpoofingConfigured = true
+	}
+}
+
+func withIstioDSCP(value uint8) testOption {
+	return func(o *testOpts) {
+		o.istioDSCP = int8(value)
 	}
 }
 

@@ -21,37 +21,6 @@ metadata:
     name: tigera-operator
     openshift.io/run-level: "0"
 ---
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: tigera-operator-secrets
-  namespace: tigera-operator
-  labels:
-    k8s-app: tigera-operator
-subjects:
-  - kind: ServiceAccount
-    name: tigera-operator
-    namespace: tigera-operator
-roleRef:
-  kind: ClusterRole
-  name: tigera-operator-secrets
-  apiGroup: rbac.authorization.k8s.io
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: tigera-operator
-  labels:
-    k8s-app: tigera-operator
-subjects:
-  - kind: ServiceAccount
-    name: tigera-operator
-    namespace: tigera-operator
-roleRef:
-  kind: ClusterRole
-  name: tigera-operator
-  apiGroup: rbac.authorization.k8s.io
----
 # Permissions required to manipulate operator secrets for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -166,6 +135,7 @@ rules:
       - whiskers.operator.tigera.io
       - goldmanes.operator.tigera.io
       - managementclusterconnections.operator.tigera.io
+      - istios.operator.tigera.io
   # We need update and delete access for the ClusterNetworkPolicy CRD to set owner references
   # when assuming control of pre-existing CRDs, for example on OCP.
   - apiGroups:
@@ -301,6 +271,9 @@ rules:
       - whiskers
       - whiskers/finalizers
       - whiskers/status
+      - istios
+      - istios/finalizers
+      - istios/status
     verbs:
       - get
       - list
@@ -423,6 +396,7 @@ rules:
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
+      - validatingwebhookconfigurations
       - mutatingwebhookconfigurations
     verbs:
       - create
@@ -436,6 +410,15 @@ rules:
       - mutatingwebhookconfigurations
     resourceNames:
       - envoy-gateway-topology-injector.tigera-gateway
+    verbs:
+      - update
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    resourceNames:
+      - istiod-default-validator
+      - istio-validator-calico-system
     verbs:
       - update
   # Needed for operator lock
@@ -560,7 +543,7 @@ rules:
       - list
       - watch
       - delete
-  # For Tiers controller, the operator needs to read/watch access to NetworkPolicies and GlobalNetworkPolicies.
+  # The operator needs to manage NetworkPolicies and GlobalNetworkPolicies via the projectcalico.org API group.
   - apiGroups:
       - projectcalico.org
     resources:
@@ -570,7 +553,11 @@ rules:
       - get
       - list
       - watch
-  # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
+      - create
+      - update
+      - patch
+      - delete
+  # For tiered network policy actions, calico-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
     resourceNames:
@@ -594,7 +581,7 @@ rules:
       - list
       - watch
       - get
-  # For tiered network policy actions, tigera-apiserver requires get authorization on the associated tier.
+  # For tiered network policy actions, calico-apiserver requires get authorization on the associated tier.
   - apiGroups:
       - projectcalico.org
     resourceNames:
@@ -695,6 +682,54 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - update
+    resourceNames:
+      - istiod
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tigera-operator-secrets
+  namespace: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+roleRef:
+  kind: ClusterRole
+  name: tigera-operator-secrets
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+roleRef:
+  kind: ClusterRole
+  name: tigera-operator
+  apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: v1
 kind: ServiceAccount
