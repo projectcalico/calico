@@ -1616,9 +1616,9 @@ func TestStatistics(t *testing.T) {
 				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: true,
 				PolicyMatch: &proto.PolicyMatch{
-					Tier:      hitToMatch.Tier,
-					Name:      hitToMatch.Name,
-					Namespace: hitToMatch.Namespace,
+					Tier:      &proto.StringMatch{Value: hitToMatch.Tier},
+					Name:      &proto.StringMatch{Value: hitToMatch.Name},
+					Namespace: &proto.StringMatch{Value: hitToMatch.Namespace},
 					Kind:      hitToMatch.Kind,
 				},
 			})

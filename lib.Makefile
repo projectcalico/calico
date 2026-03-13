@@ -1049,21 +1049,42 @@ ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
 	)
 endif
 
+# retry_docker_cmd retries a docker command up to a specified number of times.
+# Usage: $(call retry_docker_cmd,<description>,<docker command>,<max retries>,<retry delay>)
+define retry_docker_cmd
+	i=1; \
+	while [ $$i -le $(3) ]; do \
+		$(2) && break; \
+		echo "WARNING: $(1) failed (attempt $$i/$(3)), retrying in $(4)s..."; \
+		if [ $$i -eq $(3) ]; then exit 1; fi; \
+		sleep $(4); \
+		i=$$((i + 1)); \
+	done
+endef
+
+# Configuration options for retrying docker commands 
+MANIFEST_RETRIES ?= 5
+MANIFEST_RETRY_DELAY ?= 5
+
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
 push-image-arch-to-registry-%:
 # If the registry we want to push to doesn't not support manifests don't push the ARCH image.
-	$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*
+	$(call retry_docker_cmd,docker push with quiet flag,$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*,$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 	$(if $(filter $*,amd64),\
-		$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),\
+		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))\
 		$(NOECHO) $(NOOP)\
 	)
 
 # push multi-arch manifest where supported.
 push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
 sub-manifest-%:
-	$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)))
-	$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG)
+	@if [ -z "$(MANIFEST_RETRIES)" ] || ! printf '%s\n' "$(MANIFEST_RETRIES)" | grep -Eq '^[0-9]+$$' || [ "$(MANIFEST_RETRIES)" -lt 1 ]; then \
+		echo "ERROR: MANIFEST_RETRIES must be a positive integer, got '$(MANIFEST_RETRIES)'"; \
+		exit 1; \
+	fi
+	$(call retry_docker_cmd,docker manifest create,$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES))),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
+	$(call retry_docker_cmd,docker manifest push,$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 
 push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
@@ -1656,6 +1677,46 @@ kind-reload: kind-build-images
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
+
+###############################################################################
+# Common functions for setting up a local envtest environment.
+###############################################################################
+ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
+ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
+# Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
+# Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
+ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
+
+## Download envtest binaries (kube-apiserver, etcd) for use by tests that use controller-runtime envtest.
+.PHONY: setup-envtest
+setup-envtest: $(ENVTEST_ASSETS_MARKER)
+$(ENVTEST_ASSETS_MARKER):
+	@echo "Setting up envtest binaries for Kubernetes $(ENVTEST_K8S_VERSION)..."
+	mkdir -p $(ENVTEST_DIR)
+	rm -f $(ENVTEST_DIR)/.envtest-*
+	$(DOCKER_GO_BUILD) sh -c \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
+	touch $@
+
+# Minimum supported Kubernetes version for CEL XValidation (GA in 1.29).
+MIN_K8S_VERSION ?= v1.29.0
+ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+# Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
+ENVTEST_MIN_K8S_MINOR := $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2)
+ENVTEST_MIN_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-min-$(ENVTEST_MIN_K8S_VERSION)
+
+## Download envtest binaries for the minimum supported Kubernetes version.
+.PHONY: setup-envtest-min
+setup-envtest-min: $(ENVTEST_MIN_ASSETS_MARKER)
+$(ENVTEST_MIN_ASSETS_MARKER):
+	@echo "Setting up envtest binaries for minimum K8s $(ENVTEST_MIN_K8S_VERSION)..."
+	mkdir -p $(ENVTEST_DIR)
+	$(DOCKER_GO_BUILD) sh -c \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
+	touch $@
 
 ###############################################################################
 # Common functions for launching a local etcd instance.

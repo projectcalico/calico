@@ -62,8 +62,11 @@ type BGPFilterSpec struct {
 
 // BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.
 // +mapType=atomic
+// +kubebuilder:validation:XValidation:rule="(has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator) && size(self.matchOperator) > 0)",message="cidr and matchOperator must both be set or both be empty",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.prefixLength) || (has(self.cidr) && size(self.cidr) > 0)",message="cidr is required when prefixLength is set",reason=FieldValueInvalid
 type BGPFilterRuleV4 struct {
 	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:MaxLength=18
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv4"`
 
 	PrefixLength *BGPFilterPrefixLengthV4 `json:"prefixLength,omitempty" validate:"omitempty"`
@@ -79,8 +82,11 @@ type BGPFilterRuleV4 struct {
 
 // BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.
 // +mapType=atomic
+// +kubebuilder:validation:XValidation:rule="(has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator) && size(self.matchOperator) > 0)",message="cidr and matchOperator must both be set or both be empty",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.prefixLength) || (has(self.cidr) && size(self.cidr) > 0)",message="cidr is required when prefixLength is set",reason=FieldValueInvalid
 type BGPFilterRuleV6 struct {
 	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:MaxLength=43
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv6"`
 
 	PrefixLength *BGPFilterPrefixLengthV6 `json:"prefixLength,omitempty" validate:"omitempty"`
@@ -125,10 +131,10 @@ const (
 type BGPFilterMatchOperator string
 
 const (
-	Equal    BGPFilterMatchOperator = "Equal"
-	NotEqual BGPFilterMatchOperator = "NotEqual"
-	In       BGPFilterMatchOperator = "In"
-	NotIn    BGPFilterMatchOperator = "NotIn"
+	MatchOperatorEqual    BGPFilterMatchOperator = "Equal"
+	MatchOperatorNotEqual BGPFilterMatchOperator = "NotEqual"
+	MatchOperatorIn       BGPFilterMatchOperator = "In"
+	MatchOperatorNotIn    BGPFilterMatchOperator = "NotIn"
 )
 
 // +kubebuilder:validation:Enum=Accept;Reject
