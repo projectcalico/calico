@@ -1,0 +1,5 @@
+!!! GENERATED FILE, DO NOT EDIT !!!
+Run 'make gen-deps-files' to regenerate.
+
+go 1.26.1
+github.com/projectcalico/calico
