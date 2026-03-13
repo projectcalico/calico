@@ -203,6 +203,16 @@ func (in *BGPConfigurationSpec) DeepCopyInto(out *BGPConfigurationSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.IPv4NormalRoutePriority != nil {
+		in, out := &in.IPv4NormalRoutePriority, &out.IPv4NormalRoutePriority
+		*out = new(int)
+		**out = **in
+	}
+	if in.IPv6NormalRoutePriority != nil {
+		in, out := &in.IPv6NormalRoutePriority, &out.IPv6NormalRoutePriority
+		*out = new(int)
+		**out = **in
+	}
 	return
 }
 
