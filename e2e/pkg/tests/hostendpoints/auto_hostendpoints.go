@@ -314,6 +314,15 @@ func updateHostEndpointConfig(client ctrlclient.Client, desiredKCC v3.KubeContro
 		if err != nil {
 			return err
 		}
+		if currentKCC.Status.RunningConfig == nil {
+			return fmt.Errorf("status.runningConfig is nil")
+		}
+		if currentKCC.Status.RunningConfig.Controllers.Node == nil {
+			return fmt.Errorf("status.runningConfig.controllers.node is nil")
+		}
+		if currentKCC.Status.RunningConfig.Controllers.Node.HostEndpoint == nil {
+			return fmt.Errorf("status.runningConfig.controllers.node.hostEndpoint is nil")
+		}
 
 		// Check if the current configuration matches the desired configuration.
 		if currentKCC.Status.RunningConfig == nil {
