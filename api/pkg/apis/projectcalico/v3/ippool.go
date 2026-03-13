@@ -84,10 +84,12 @@ type IPPoolStatus struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode) == 0 || size(self.vxlanMode) == 0",message="ipipMode and vxlanMode cannot both be enabled",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) == 0 || self.vxlanMode == 'Never')",message="LoadBalancer IP pool cannot have IPIP or VXLAN enabled",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')",message="LoadBalancer cannot be combined with Workload or Tunnel allowed uses",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode == 'Never' || size(self.ipipMode) == 0",message="IPIP is not supported on IPv6 pools",reason=FieldValueForbidden
 type IPPoolSpec struct {
 	// The pool CIDR.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:MaxLength=48
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="CIDR cannot be changed; follow IP pool migration guide to avoid corruption.",reason=FieldValueInvalid
 	CIDR string `json:"cidr" validate:"net"`
 

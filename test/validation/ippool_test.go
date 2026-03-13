@@ -32,6 +32,11 @@ func nextPoolCIDR() string {
 	return fmt.Sprintf("10.%d.%d.0/24", poolCounter/256, poolCounter%256)
 }
 
+func nextPoolCIDRv6() string {
+	poolCounter++
+	return fmt.Sprintf("fd00:%x::/112", poolCounter)
+}
+
 func TestIPPool_Validation(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -90,6 +95,57 @@ func TestIPPool_Validation(t *testing.T) {
 				Spec: v3.IPPoolSpec{
 					CIDR:        nextPoolCIDR(),
 					AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel},
+				},
+			},
+		},
+		{
+			name: "IPv6 pool with IPIP enabled is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:     nextPoolCIDRv6(),
+					IPIPMode: v3.IPIPModeAlways,
+				},
+			},
+			wantErr: "IPIP is not supported on IPv6 pools",
+		},
+		{
+			name: "IPv6 pool with IPIP CrossSubnet is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:     nextPoolCIDRv6(),
+					IPIPMode: v3.IPIPModeCrossSubnet,
+				},
+			},
+			wantErr: "IPIP is not supported on IPv6 pools",
+		},
+		{
+			name: "IPv6 pool with IPIP Never is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:     nextPoolCIDRv6(),
+					IPIPMode: v3.IPIPModeNever,
+				},
+			},
+		},
+		{
+			name: "IPv6 pool without IPIP is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: nextPoolCIDRv6(),
+				},
+			},
+		},
+		{
+			name: "IPv4 pool with IPIP enabled is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:     nextPoolCIDR(),
+					IPIPMode: v3.IPIPModeAlways,
 				},
 			},
 		},
