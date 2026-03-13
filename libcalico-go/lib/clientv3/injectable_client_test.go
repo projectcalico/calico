@@ -35,7 +35,7 @@ import (
 // for testing the clientv3 injection stack.
 func newTestBackend(t *testing.T) (bapi.Client, *fake.Clientset) {
 	t.Helper()
-	fakeClientset := fake.NewSimpleClientset()
+	fakeClientset := fake.NewClientset()
 	fakeREST := &fakerest.RESTClient{
 		NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
 		GroupVersion: schema.GroupVersion{

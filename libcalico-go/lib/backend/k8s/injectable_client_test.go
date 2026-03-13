@@ -34,7 +34,7 @@ import (
 // newTestClientOptions builds a ClientOptions with a fake clientset and a fake REST
 // client, sufficient for testing core k8s resource operations through the backend.
 func newTestClientOptions() (ClientOptions, *fake.Clientset) {
-	fakeClientset := fake.NewSimpleClientset()
+	fakeClientset := fake.NewClientset()
 	fakeREST := &fakerest.RESTClient{
 		NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
 		GroupVersion: schema.GroupVersion{
@@ -83,6 +83,26 @@ func TestNewWithOptions(t *testing.T) {
 	}
 	if node.Labels["env"] != "test" {
 		t.Errorf("expected label env=test, got %v", node.Labels)
+	}
+
+	// Update the node by adding a Calico-managed label through the backend.
+	// Use the projectcalico.org prefix so it isn't treated as a k8s-owned label.
+	kvp.Value.(*internalapi.Node).Labels["projectcalico.org/test"] = "updated"
+	kvp, err = kc.Update(ctx, kvp)
+	if err != nil {
+		t.Fatalf("failed to update node through backend: %v", err)
+	}
+	if kvp.Value.(*internalapi.Node).Labels["projectcalico.org/test"] != "updated" {
+		t.Errorf("expected label projectcalico.org/test=updated after update, got %v", kvp.Value.(*internalapi.Node).Labels)
+	}
+
+	// Verify the update is reflected in a fresh Get.
+	kvp, err = kc.Get(ctx, model.ResourceKey{Name: "test-node", Kind: internalapi.KindNode}, "")
+	if err != nil {
+		t.Fatalf("failed to get node after update: %v", err)
+	}
+	if kvp.Value.(*internalapi.Node).Labels["projectcalico.org/test"] != "updated" {
+		t.Errorf("expected label projectcalico.org/test=updated on re-read, got %v", kvp.Value.(*internalapi.Node).Labels)
 	}
 
 	// List should return the node.
