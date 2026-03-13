@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -265,7 +265,7 @@ func (m *vxlanManager) updateNeighborsAndAllowedSources() {
 }
 
 func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) {
+	if isRemoteVTEPRoute(r, proto.IPPoolType_VXLAN) || isBorrowedRoute(r, proto.IPPoolType_VXLAN) {
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{
