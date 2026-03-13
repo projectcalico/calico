@@ -135,15 +135,15 @@ func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
 // This happens when tunnel addresses are selected from an IP pool with blocks of a single address.
 // These also need routes of the form "<IP> dev vxlan.calico" rather than "<block> via <TunnelEndpoint>".
 // This is only applicable to VXLAN encapsulation.
-func isRemoteVTEPRoute(msg *proto.RouteUpdate, IpPoolType proto.IPPoolType) bool {
-	return msg.IpPoolType == IpPoolType && // Ignore irrelavant messages.
+func isRemoteVTEPRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
+	return msg.IpPoolType == ippoolType && // Ignore irrelevant messages.
 		isType(msg, proto.RouteType_REMOTE_TUNNEL) && isType(msg, proto.RouteType_REMOTE_WORKLOAD)
 }
 
 // If we receive a route for a borrowed tunnel IP, we need to make sure to program a route for it as it
 // won't be covered by the block route.
 func isBorrowedRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
-	return msg.IpPoolType == ippoolType && // Ignore irrelavant messages.
+	return msg.IpPoolType == ippoolType && // Ignore irrelevant messages.
 		isType(msg, proto.RouteType_REMOTE_TUNNEL) && msg.Borrowed
 }
 

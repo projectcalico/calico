@@ -533,7 +533,7 @@ var _ = Describe("VXLANManager", func() {
 	})
 
 	It("should program directly connected routes for remote VTEPs", func() {
-		By("Sending a borrowed tunnel IP address")
+		By("Sending a non-borrowed tunnel IP address")
 		vxlanMgr.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_TUNNEL | proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
@@ -546,7 +546,7 @@ var _ = Describe("VXLANManager", func() {
 		err := vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// Expect a directly connected route to the borrowed IP.
+		// Expect a directly connected route for the remote VTEP.
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4][0]).To(Equal(
 			routetable.Target{
@@ -569,7 +569,7 @@ var _ = Describe("VXLANManager", func() {
 	})
 
 	It("IPv6: should program directly connected routes for remote VTEPs", func() {
-		By("Sending a borrowed tunnel IP address")
+		By("Sending a non-borrowed tunnel IP address")
 		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_TUNNEL | proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
@@ -582,7 +582,7 @@ var _ = Describe("VXLANManager", func() {
 		err := vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// Expect a directly connected route to the borrowed IP.
+		// Expect a directly connected route for the remote VTEP.
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6][0]).To(Equal(
 			routetable.Target{
