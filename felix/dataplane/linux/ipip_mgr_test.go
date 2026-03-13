@@ -330,7 +330,7 @@ var _ = Describe("IPIPManager", func() {
 		err := ipipMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// Expect expect no route.
+		// Expect no route.
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 
 		// Delete the route.
