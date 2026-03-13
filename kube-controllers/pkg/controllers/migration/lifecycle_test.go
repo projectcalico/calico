@@ -36,9 +36,15 @@ import (
 // registry for the duration of the test, restoring the original on cleanup.
 func withTestRegistry(t *testing.T, migrators []ResourceMigrator) {
 	t.Helper()
+	registryMu.Lock()
 	saved := registry
 	registry = migrators
-	t.Cleanup(func() { registry = saved })
+	registryMu.Unlock()
+	t.Cleanup(func() {
+		registryMu.Lock()
+		registry = saved
+		registryMu.Unlock()
+	})
 }
 
 // inMemoryStore is a concurrency-safe in-memory store for v3 objects, used by

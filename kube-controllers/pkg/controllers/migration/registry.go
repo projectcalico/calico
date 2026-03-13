@@ -93,17 +93,25 @@ type MigrationResult struct {
 }
 
 // registry holds all registered resource migrators, ordered by migration priority.
-var registry []ResourceMigrator
+var (
+	registryMu sync.Mutex
+	registry   []ResourceMigrator
+)
 
 // Register adds a ResourceMigrator to the global registry.
 func Register(m ResourceMigrator) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
 	registry = append(registry, m)
 }
 
-// GetRegistry returns all registered migrators, sorted by Order.
+// GetRegistry returns a copy of all registered migrators.
 func GetRegistry() []ResourceMigrator {
-	// Registry is already built in order via init() calls.
-	return registry
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	result := make([]ResourceMigrator, len(registry))
+	copy(result, registry)
+	return result
 }
 
 // migratedPolicyName handles the default. prefix removal for default-tier policies.
