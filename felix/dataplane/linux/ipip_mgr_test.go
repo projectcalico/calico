@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -293,6 +293,45 @@ var _ = Describe("IPIPManager", func() {
 				GW:       ip.FromString("172.0.2.2"),
 				Protocol: 80,
 			}))
+
+		// Delete the route.
+		ipipMgr.OnUpdate(&proto.RouteRemove{
+			Dst: "10.0.1.1/32",
+		})
+
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+	})
+
+	It("should not program routes for remote tunnel endpoint", func() {
+		By("Sending host updates")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		By("Sending a tunnel IP address")
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_TUNNEL | proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "10.0.1.1/32",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+			Borrowed:    false,
+		})
+
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect expect no route.
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 
 		// Delete the route.
 		ipipMgr.OnUpdate(&proto.RouteRemove{
