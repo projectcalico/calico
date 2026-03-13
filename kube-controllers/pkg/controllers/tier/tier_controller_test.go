@@ -77,7 +77,7 @@ func TestReconcile_AddsFinalizer(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "my-tier"},
 		Spec:       v3.TierSpec{},
 	}
-	cli := fake.NewSimpleClientset(tier)
+	cli := fake.NewClientset(tier)
 	c := newTestController(cli, tier)
 
 	if err := c.reconcile("my-tier"); err != nil {
@@ -98,7 +98,7 @@ func TestReconcile_SkipsFinalizerIfAlreadyPresent(t *testing.T) {
 		},
 		Spec: v3.TierSpec{},
 	}
-	cli := fake.NewSimpleClientset(tier)
+	cli := fake.NewClientset(tier)
 	c := newTestController(cli, tier)
 
 	if err := c.reconcile("my-tier"); err != nil {
@@ -122,7 +122,7 @@ func TestReconcile_RemovesFinalizerWhenNoPolicies(t *testing.T) {
 		},
 		Spec: v3.TierSpec{},
 	}
-	cli := fake.NewSimpleClientset(tier)
+	cli := fake.NewClientset(tier)
 	c := newTestController(cli, tier)
 
 	if err := c.reconcile("my-tier"); err != nil {
@@ -150,7 +150,7 @@ func TestReconcile_KeepsFinalizerWhenPoliciesExist(t *testing.T) {
 		Spec:       v3.GlobalNetworkPolicySpec{Tier: "my-tier"},
 	}
 
-	cli := fake.NewSimpleClientset(tier, gnp)
+	cli := fake.NewClientset(tier, gnp)
 	c := newTestController(cli, tier, gnp)
 
 	if err := c.reconcile("my-tier"); err != nil {
@@ -191,7 +191,7 @@ func TestReconcile_DeletingTierWithoutFinalizer(t *testing.T) {
 		},
 		Spec: v3.TierSpec{},
 	}
-	cli := fake.NewSimpleClientset(tier)
+	cli := fake.NewClientset(tier)
 	c := newTestController(cli, tier)
 
 	if err := c.reconcile("my-tier"); err != nil {
@@ -206,7 +206,7 @@ func TestReconcile_DeletingTierWithoutFinalizer(t *testing.T) {
 }
 
 func TestReconcile_TierNotInCache(t *testing.T) {
-	cli := fake.NewSimpleClientset()
+	cli := fake.NewClientset()
 	c := newTestController(cli, nil)
 
 	if err := c.reconcile("nonexistent"); err != nil {
@@ -302,7 +302,7 @@ func TestCountPoliciesInTier(t *testing.T) {
 		Spec:       v3.GlobalNetworkPolicySpec{Tier: "other-tier"},
 	}
 
-	cli := fake.NewSimpleClientset()
+	cli := fake.NewClientset()
 	c := newTestController(cli, nil, gnp1, gnp2, gnpOther)
 
 	counts, err := c.countPoliciesInTier("my-tier")
