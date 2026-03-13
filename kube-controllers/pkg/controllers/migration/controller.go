@@ -833,10 +833,16 @@ func (c *migrationController) updateStatus(dm *DatastoreMigration) error {
 
 // updateMetadata updates the metadata (annotations, finalizers, labels) of a
 // DatastoreMigration CR. This uses Update (not UpdateStatus) to persist
-// metadata changes like annotations and finalizers.
+// metadata changes like annotations and finalizers. It updates dm in-place
+// with the server's response so callers can continue making updates without
+// re-fetching.
 func (c *migrationController) updateMetadata(dm *DatastoreMigration) error {
-	_, err := c.migClient.Update(c.ctx, dm)
-	return err
+	refreshed, err := c.migClient.Update(c.ctx, dm)
+	if err != nil {
+		return err
+	}
+	*dm = *refreshed
+	return nil
 }
 
 // addFinalizer adds the migration finalizer to the DatastoreMigration CR.
