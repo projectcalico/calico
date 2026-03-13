@@ -41,6 +41,14 @@ func setup(t *testing.T) (clientset.Interface, func()) {
 }
 
 func TestBGPFilterValidation(t *testing.T) {
+	communityVal := func(s string) *v3.BGPCommunityValue {
+		v := v3.BGPCommunityValue(s)
+		return &v
+	}
+	intPtr := func(i int) *int {
+		return &i
+	}
+
 	type bgpFilterTest struct {
 		name  string
 		obj   *v3.BGPFilter
@@ -99,7 +107,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					{
 						Action: v3.Accept,
 						Operations: []v3.BGPFilterOperation{
-							{SetPriority: &v3.BGPFilterSetPriority{Value: 100}},
+							{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(100)}},
 						},
 					},
 				}},
@@ -114,7 +122,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					{
 						Action: v3.Reject,
 						Operations: []v3.BGPFilterOperation{
-							{SetPriority: &v3.BGPFilterSetPriority{Value: 100}},
+							{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(100)}},
 						},
 					},
 				}},
@@ -130,7 +138,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					{
 						Action: v3.Reject,
 						Operations: []v3.BGPFilterOperation{
-							{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65000:100"}},
+							{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:100")}},
 						},
 					},
 				}},
@@ -148,7 +156,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					{
 						Action: v3.Accept,
 						Operations: []v3.BGPFilterOperation{
-							{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65000:100"}},
+							{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:100")}},
 						},
 					},
 				}},
@@ -164,8 +172,8 @@ func TestBGPFilterValidation(t *testing.T) {
 						Action: v3.Accept,
 						Operations: []v3.BGPFilterOperation{
 							{
-								AddCommunity: &v3.BGPFilterAddCommunity{Value: "65000:100"},
-								SetPriority:  &v3.BGPFilterSetPriority{Value: 100},
+								AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:100")},
+								SetPriority:  &v3.BGPFilterSetPriority{Value: intPtr(100)},
 							},
 						},
 					},
@@ -183,9 +191,9 @@ func TestBGPFilterValidation(t *testing.T) {
 						Action: v3.Accept,
 						Operations: []v3.BGPFilterOperation{
 							{
-								AddCommunity:  &v3.BGPFilterAddCommunity{Value: "65000:100"},
+								AddCommunity:  &v3.BGPFilterAddCommunity{Value: communityVal("65000:100")},
 								PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}},
-								SetPriority:   &v3.BGPFilterSetPriority{Value: 100},
+								SetPriority:   &v3.BGPFilterSetPriority{Value: intPtr(100)},
 							},
 						},
 					},
@@ -271,7 +279,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					{
 						Action: v3.Accept,
 						Operations: []v3.BGPFilterOperation{
-							{AddCommunity: &v3.BGPFilterAddCommunity{Value: "100:200"}},
+							{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("100:200")}},
 						},
 					},
 				}},
@@ -286,7 +294,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					{
 						Action: v3.Accept,
 						Operations: []v3.BGPFilterOperation{
-							{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65000:100:200"}},
+							{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:100:200")}},
 						},
 					},
 				}},
@@ -301,7 +309,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					{
 						Action: v3.Accept,
 						Operations: []v3.BGPFilterOperation{
-							{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65536:100"}},
+							{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65536:100")}},
 						},
 					},
 				}},
@@ -317,7 +325,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					{
 						Action: v3.Accept,
 						Operations: []v3.BGPFilterOperation{
-							{AddCommunity: &v3.BGPFilterAddCommunity{Value: "garbage"}},
+							{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("garbage")}},
 						},
 					},
 				}},
@@ -617,7 +625,7 @@ func TestBGPFilterValidation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-std-max"},
 				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
 					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
-						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65535:65535"}},
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65535:65535")}},
 					}},
 				}},
 			},
@@ -629,7 +637,7 @@ func TestBGPFilterValidation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-lg-max"},
 				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
 					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
-						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "4294967295:4294967295:4294967295"}},
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("4294967295:4294967295:4294967295")}},
 					}},
 				}},
 			},
@@ -641,7 +649,7 @@ func TestBGPFilterValidation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-over16"},
 				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
 					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
-						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65536:65536"}},
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65536:65536")}},
 					}},
 				}},
 			},
@@ -654,7 +662,7 @@ func TestBGPFilterValidation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-over32"},
 				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
 					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
-						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "4294967296:0:0"}},
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("4294967296:0:0")}},
 					}},
 				}},
 			},
@@ -667,7 +675,7 @@ func TestBGPFilterValidation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "addcomm-lead0"},
 				Spec: v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{
 					{Action: v3.Accept, Operations: []v3.BGPFilterOperation{
-						{AddCommunity: &v3.BGPFilterAddCommunity{Value: "0100:200"}},
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("0100:200")}},
 					}},
 				}},
 			},

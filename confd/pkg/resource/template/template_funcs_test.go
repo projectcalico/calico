@@ -10,6 +10,15 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 )
 
+func communityVal(s string) *v3.BGPCommunityValue {
+	v := v3.BGPCommunityValue(s)
+	return &v
+}
+
+func intPtr(i int) *int {
+	return &i
+}
+
 func Test_hashToIPv4_invalid_range(t *testing.T) {
 	expectedRouterId := "207.94.5.27"
 	nodeName := "Testrobin123"
@@ -320,14 +329,14 @@ func Test_filterOperationStatements(t *testing.T) {
 		{
 			name: "add standard community",
 			ops: []v3.BGPFilterOperation{
-				{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65000:100"}},
+				{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:100")}},
 			},
 			expected: []string{"bgp_community.add((65000, 100));"},
 		},
 		{
 			name: "add large community",
 			ops: []v3.BGPFilterOperation{
-				{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65000:10:20"}},
+				{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:10:20")}},
 			},
 			expected: []string{"bgp_large_community.add((65000, 10, 20));"},
 		},
@@ -348,16 +357,16 @@ func Test_filterOperationStatements(t *testing.T) {
 		{
 			name: "set priority",
 			ops: []v3.BGPFilterOperation{
-				{SetPriority: &v3.BGPFilterSetPriority{Value: 512}},
+				{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(512)}},
 			},
 			expected: []string{"krt_metric = 512;"},
 		},
 		{
 			name: "multiple operations",
 			ops: []v3.BGPFilterOperation{
-				{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65001:200"}},
+				{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65001:200")}},
 				{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
-				{SetPriority: &v3.BGPFilterSetPriority{Value: 100}},
+				{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(100)}},
 			},
 			expected: []string{
 				"bgp_community.add((65001, 200));",
@@ -388,7 +397,7 @@ func Test_filterStatementWithOperations(t *testing.T) {
 		priority: &prio,
 		action:   v3.Accept,
 		operations: []v3.BGPFilterOperation{
-			{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65001:200"}},
+			{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65001:200")}},
 			{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
 		},
 	}
@@ -414,7 +423,7 @@ func Test_BGPFilterBIRDFuncs_WithCommunitiesASPathPriorityAndOperations(t *testi
 				Action:      v3.Accept,
 				Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100"}},
 				Operations: []v3.BGPFilterOperation{
-					{SetPriority: &v3.BGPFilterSetPriority{Value: 100}},
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(100)}},
 				},
 			},
 			// Import rule: match AS path prefix and set priority
@@ -422,7 +431,7 @@ func Test_BGPFilterBIRDFuncs_WithCommunitiesASPathPriorityAndOperations(t *testi
 				Action:       v3.Accept,
 				ASPathPrefix: []numorstring.ASNumber{65000, 65001},
 				Operations: []v3.BGPFilterOperation{
-					{SetPriority: &v3.BGPFilterSetPriority{Value: 200}},
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(200)}},
 				},
 			},
 		},
@@ -432,7 +441,7 @@ func Test_BGPFilterBIRDFuncs_WithCommunitiesASPathPriorityAndOperations(t *testi
 				Action:   v3.Accept,
 				Priority: &prio,
 				Operations: []v3.BGPFilterOperation{
-					{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65001:200"}},
+					{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65001:200")}},
 				},
 			},
 			// Export rule: match priority and prepend AS path
@@ -550,8 +559,8 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 				Interface:     "eth0",
 				Action:        v3.Accept,
 				Operations: []v3.BGPFilterOperation{
-					{SetPriority: &v3.BGPFilterSetPriority{Value: 256}},
-					{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65000:200"}},
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(256)}},
+					{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:200")}},
 					{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65001, 65002}}},
 				},
 			},
@@ -564,7 +573,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 				Priority:      &prio100,
 				Action:        v3.Accept,
 				Operations: []v3.BGPFilterOperation{
-					{SetPriority: &v3.BGPFilterSetPriority{Value: 1024}},
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(1024)}},
 				},
 			},
 			{
@@ -583,7 +592,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 				Priority:      &prio100,
 				Action:        v3.Accept,
 				Operations: []v3.BGPFilterOperation{
-					{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65000:300:400"}},
+					{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:300:400")}},
 					{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{64999}}},
 				},
 			},
@@ -699,7 +708,7 @@ func Test_BGPFilterBIRDFuncs_CommunityMatchOnExport(t *testing.T) {
 				Action:      v3.Accept,
 				Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:42"}},
 				Operations: []v3.BGPFilterOperation{
-					{AddCommunity: &v3.BGPFilterAddCommunity{Value: "65001:100"}},
+					{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65001:100")}},
 				},
 			},
 			{
@@ -748,7 +757,7 @@ func Test_BGPFilterBIRDFuncs_MixedPeerTypeAndNonPeerTypeRules(t *testing.T) {
 				CIDR:          "10.0.0.0/8",
 				MatchOperator: v3.In,
 				Operations: []v3.BGPFilterOperation{
-					{SetPriority: &v3.BGPFilterSetPriority{Value: 100}},
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(100)}},
 				},
 			},
 			{

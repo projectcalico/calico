@@ -76,9 +76,9 @@ type BGPFilterRuleV4 struct {
 	// PrefixLength further constrains the CIDR match by restricting the range of allowed
 	// prefix lengths.  For example, CIDR "10.0.0.0/8" with MatchOperator "In" and
 	// PrefixLength {min: 16, max: 24} matches any route within 10.0.0.0/8 whose prefix
-	// length is between /16 and /24.  Only meaningful when CIDR is also specified; if
-	// PrefixLength is nil, the CIDR's own prefix length is used as the minimum and /32
-	// (for V4) as the maximum.
+	// length is between /16 and /24.  Requires CIDR to be set; if CIDR is omitted,
+	// PrefixLength is ignored.  If PrefixLength is nil and CIDR is set, the CIDR's own
+	// prefix length is used as the minimum and /32 (for V4) as the maximum.
 	// +optional
 	PrefixLength *BGPFilterPrefixLengthV4 `json:"prefixLength,omitempty" validate:"omitempty"`
 
@@ -149,9 +149,9 @@ type BGPFilterRuleV6 struct {
 	// PrefixLength further constrains the CIDR match by restricting the range of allowed
 	// prefix lengths.  For example, CIDR "fd00::/8" with MatchOperator "In" and
 	// PrefixLength {min: 48, max: 64} matches any route within fd00::/8 whose prefix
-	// length is between /48 and /64.  Only meaningful when CIDR is also specified; if
-	// PrefixLength is nil, the CIDR's own prefix length is used as the minimum and /128
-	// (for V6) as the maximum.
+	// length is between /48 and /64.  Requires CIDR to be set; if CIDR is omitted,
+	// PrefixLength is ignored.  If PrefixLength is nil and CIDR is set, the CIDR's own
+	// prefix length is used as the minimum and /128 (for V6) as the maximum.
 	// +optional
 	PrefixLength *BGPFilterPrefixLengthV6 `json:"prefixLength,omitempty" validate:"omitempty"`
 
@@ -282,7 +282,8 @@ type BGPFilterCommunityMatch struct {
 // BGPFilterOperation is a discriminated union representing a single route modification.
 // Exactly one field must be set.
 // +mapType=atomic
-// +kubebuilder:validation:XValidation:rule="(has(self.addCommunity) ? 1 : 0) + (has(self.prependASPath) ? 1 : 0) + (has(self.setPriority) ? 1 : 0) == 1",message="exactly one operation must be set"
+// +kubebuilder:validation:MinProperties=1
+// +kubebuilder:validation:MaxProperties=1
 type BGPFilterOperation struct {
 	// AddCommunity adds the specified BGP community to the route.
 	// +optional
@@ -302,7 +303,7 @@ type BGPFilterOperation struct {
 // +mapType=atomic
 type BGPFilterAddCommunity struct {
 	// Value is the BGP community to add.
-	Value BGPCommunityValue `json:"value" validate:"required"`
+	Value *BGPCommunityValue `json:"value" validate:"required"`
 }
 
 // BGPFilterPrependASPath specifies AS numbers to prepend to a route's AS path.
@@ -323,7 +324,7 @@ type BGPFilterSetPriority struct {
 	// ...RoutePriority fields.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=2147483646
-	Value int `json:"value" validate:"required,gte=1,lte=2147483646"`
+	Value *int `json:"value" validate:"required,gte=1,lte=2147483646"`
 }
 
 // New BGPFilter creates a new (zeroed) BGPFilter struct with the TypeMetadata

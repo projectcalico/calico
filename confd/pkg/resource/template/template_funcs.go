@@ -277,14 +277,17 @@ func filterOperationStatements(operations []v3.BGPFilterOperation) ([]string, er
 	var stmts []string
 	for _, op := range operations {
 		if op.AddCommunity != nil {
-			parts := strings.Split(string(op.AddCommunity.Value), ":")
+			if op.AddCommunity.Value == nil {
+				return nil, fmt.Errorf("BGPFilter AddCommunity operation has nil value")
+			}
+			parts := strings.Split(string(*op.AddCommunity.Value), ":")
 			switch len(parts) {
 			case 2:
 				stmts = append(stmts, fmt.Sprintf("bgp_community.add((%s, %s));", parts[0], parts[1]))
 			case 3:
 				stmts = append(stmts, fmt.Sprintf("bgp_large_community.add((%s, %s, %s));", parts[0], parts[1], parts[2]))
 			default:
-				return nil, fmt.Errorf("invalid community value format in BGPFilter operation: %s", op.AddCommunity.Value)
+				return nil, fmt.Errorf("invalid community value format in BGPFilter operation: %s", *op.AddCommunity.Value)
 			}
 		} else if op.PrependASPath != nil {
 			// BIRD prepends one ASN at a time. The last prepend ends up first in the path,
@@ -293,7 +296,10 @@ func filterOperationStatements(operations []v3.BGPFilterOperation) ([]string, er
 				stmts = append(stmts, fmt.Sprintf("bgp_path.prepend(%s);", op.PrependASPath.Prefix[i].String()))
 			}
 		} else if op.SetPriority != nil {
-			stmts = append(stmts, fmt.Sprintf("krt_metric = %d;", op.SetPriority.Value))
+			if op.SetPriority.Value == nil {
+				return nil, fmt.Errorf("BGPFilter SetPriority operation has nil value")
+			}
+			stmts = append(stmts, fmt.Sprintf("krt_metric = %d;", *op.SetPriority.Value))
 		} else {
 			return nil, fmt.Errorf("BGPFilter operation has no field set")
 		}
