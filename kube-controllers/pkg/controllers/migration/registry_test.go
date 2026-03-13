@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -448,6 +449,214 @@ func TestListV1IPAMHandles(t *testing.T) {
 	}
 	if handle.Spec.Block["10.0.0.0/26"] != 3 {
 		t.Errorf("expected block count 3 for 10.0.0.0/26, got %d", handle.Spec.Block["10.0.0.0/26"])
+	}
+}
+
+func TestMigrateIPAMBlock_Full(t *testing.T) {
+	ctx := context.Background()
+	_, cidr, _ := net.ParseCIDR("192.168.1.0/26")
+	cnetCIDR := cnet.IPNet{IPNet: *cidr}
+	blockUID := types.UID("v1-block-uid")
+
+	// 1. Setup v1 backend with a diverse set of IPAM allocations.
+	v1Block := &model.AllocationBlock{
+		CIDR:     cnetCIDR,
+		Affinity: strPtr("host:node-1"),
+		// Allocations point to indices in the Attributes array.
+		// 0: Pod, 1: Unallocated, 2: LoadBalancer, 3: KubeVirt VM, 4: Leaked, 5: Incomplete
+		Allocations: []*int{intPtr(0), nil, intPtr(1), intPtr(2), intPtr(3), intPtr(4)},
+		Unallocated: []int{1, 6, 7},
+		Attributes: []model.AllocationAttribute{
+			{
+				// Standard Pod allocation
+				HandleID:         strPtr("k8s-pod-network.abc-123"),
+				ActiveOwnerAttrs: map[string]string{"pod": "test-pod", "namespace": "default"},
+			},
+			{
+				// LoadBalancer IP allocation
+				HandleID:         strPtr("lb-handle-555"),
+				ActiveOwnerAttrs: map[string]string{"service": "my-lb-service", "namespace": "kube-system"},
+			},
+			{
+				// KubeVirt VM allocation
+				HandleID:         strPtr("kubevirt-vm-handle-99"),
+				ActiveOwnerAttrs: map[string]string{"vm": "my-virtual-machine", "namespace": "vms"},
+			},
+			{
+				// Leaked allocation: has handle but no owner attributes
+				HandleID:         strPtr("leaked-handle-404"),
+				ActiveOwnerAttrs: map[string]string{},
+			},
+			{
+				// Incomplete allocation: has attributes but nil handle (rare but possible in v1)
+				HandleID:            nil,
+				ActiveOwnerAttrs:    map[string]string{"unknown": "source"},
+				AlternateOwnerAttrs: map[string]string{"fallback": "info"},
+			},
+		},
+		SequenceNumber: 42,
+		SequenceNumberForAllocation: map[string]uint64{
+			"0": 10,
+			"1": 20,
+			"2": 30,
+		},
+	}
+	bc := &mockBackendClient{
+		ipamBlocks: []*model.KVPair{
+			{
+				Key:      model.BlockKey{CIDR: cnetCIDR},
+				Value:    v1Block,
+				UID:      &blockUID,
+				Revision: "rv-1",
+			},
+		},
+	}
+
+	// 2. Define a migrator that uses the real logic but a mock store for v3.
+	store := newInMemoryStore()
+	migrator := ResourceMigrator{
+		Kind:   KindIPAMBlock,
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) { return listV1IPAMBlocks(ctx, c) },
+		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+			v1 := kvp.Value.(*apiv3.IPAMBlock)
+			v3 := &apiv3.IPAMBlock{
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+		CreateV3: func(ctx context.Context, obj metav1.Object) error { store.create(obj); return nil },
+		GetV3:    func(ctx context.Context, name, ns string) (metav1.Object, error) { return store.get(name, ns), nil },
+		SpecsEqual: func(a, b metav1.Object) bool {
+			return reflect.DeepEqual(a.(*apiv3.IPAMBlock).Spec, b.(*apiv3.IPAMBlock).Spec)
+		},
+	}
+
+	// 3. Run migration.
+	result, err := MigrateResourceType(ctx, bc, migrator)
+	if err != nil {
+		t.Fatalf("migration failed: %v", err)
+	}
+
+	// 4. Verify results.
+	if result.Migrated != 1 {
+		t.Errorf("expected 1 migrated, got %d", result.Migrated)
+	}
+	v3Obj := store.get("192-168-1-0-26", "")
+	if v3Obj == nil {
+		t.Fatal("v3 IPAMBlock not found in store")
+	}
+	v3Block := v3Obj.(*apiv3.IPAMBlock)
+
+	// Verify all critical fields are preserved.
+	if v3Block.Spec.CIDR != "192.168.1.0/26" {
+		t.Errorf("wrong CIDR: %s", v3Block.Spec.CIDR)
+	}
+	if !reflect.DeepEqual(v3Block.Spec.Allocations, v1Block.Allocations) {
+		t.Errorf("allocations mismatch")
+	}
+	if len(v3Block.Spec.Attributes) != 5 {
+		t.Errorf("expected 5 attributes, got %d", len(v3Block.Spec.Attributes))
+	}
+
+	// Spot check specific allocation types in v3.
+	attrPod := v3Block.Spec.Attributes[0]
+	if *attrPod.HandleID != "k8s-pod-network.abc-123" || attrPod.ActiveOwnerAttrs["pod"] != "test-pod" {
+		t.Errorf("Pod attribute mismatch: %v", attrPod)
+	}
+
+	attrLB := v3Block.Spec.Attributes[1]
+	if *attrLB.HandleID != "lb-handle-555" || attrLB.ActiveOwnerAttrs["service"] != "my-lb-service" {
+		t.Errorf("LoadBalancer attribute mismatch: %v", attrLB)
+	}
+
+	attrVM := v3Block.Spec.Attributes[2]
+	if *attrVM.HandleID != "kubevirt-vm-handle-99" || attrVM.ActiveOwnerAttrs["vm"] != "my-virtual-machine" {
+		t.Errorf("KubeVirt VM attribute mismatch: %v", attrVM)
+	}
+
+	attrLeaked := v3Block.Spec.Attributes[3]
+	if *attrLeaked.HandleID != "leaked-handle-404" || len(attrLeaked.ActiveOwnerAttrs) != 0 {
+		t.Errorf("Leaked attribute mismatch: %v", attrLeaked)
+	}
+
+	attrIncomplete := v3Block.Spec.Attributes[4]
+	if attrIncomplete.HandleID != nil || attrIncomplete.ActiveOwnerAttrs["unknown"] != "source" || attrIncomplete.AlternateOwnerAttrs["fallback"] != "info" {
+		t.Errorf("Incomplete attribute mismatch: %v", attrIncomplete)
+	}
+
+	if v3Block.Spec.SequenceNumber != 42 {
+		t.Errorf("wrong sequence number: %d", v3Block.Spec.SequenceNumber)
+	}
+}
+
+func TestMigrateIPAMHandle_Full(t *testing.T) {
+	ctx := context.Background()
+	handleUID := types.UID("v1-handle-uid")
+
+	// 1. Setup v1 backend.
+	v1Handle := &model.IPAMHandle{
+		HandleID: "k8s-pod-network.abc-123",
+		Block:    map[string]int{"10.0.0.0/26": 5, "10.0.0.64/26": 2},
+		Deleted:  false,
+	}
+	bc := &mockBackendClient{
+		ipamHandles: []*model.KVPair{
+			{
+				Key:      model.IPAMHandleKey{HandleID: v1Handle.HandleID},
+				Value:    v1Handle,
+				UID:      &handleUID,
+				Revision: "rv-2",
+			},
+		},
+	}
+
+	// 2. Define migrator.
+	store := newInMemoryStore()
+	migrator := ResourceMigrator{
+		Kind:   KindIPAMHandle,
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) { return listV1IPAMHandles(ctx, c) },
+		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+			v1 := kvp.Value.(*apiv3.IPAMHandle)
+			v3 := &apiv3.IPAMHandle{
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+		CreateV3: func(ctx context.Context, obj metav1.Object) error { store.create(obj); return nil },
+		GetV3:    func(ctx context.Context, name, ns string) (metav1.Object, error) { return store.get(name, ns), nil },
+		SpecsEqual: func(a, b metav1.Object) bool {
+			return reflect.DeepEqual(a.(*apiv3.IPAMHandle).Spec, b.(*apiv3.IPAMHandle).Spec)
+		},
+	}
+
+	// 3. Run migration.
+	result, err := MigrateResourceType(ctx, bc, migrator)
+	if err != nil {
+		t.Fatalf("migration failed: %v", err)
+	}
+
+	// 4. Verify results.
+	if result.Migrated != 1 {
+		t.Errorf("expected 1 migrated, got %d", result.Migrated)
+	}
+	v3Obj := store.get("k8s-pod-network.abc-123", "")
+	if v3Obj == nil {
+		t.Fatal("v3 IPAMHandle not found in store")
+	}
+	v3Handle := v3Obj.(*apiv3.IPAMHandle)
+
+	if v3Handle.Spec.HandleID != v1Handle.HandleID {
+		t.Errorf("wrong HandleID: %s", v3Handle.Spec.HandleID)
+	}
+	if v3Handle.Spec.Block["10.0.0.0/26"] != 5 {
+		t.Errorf("wrong block count: %v", v3Handle.Spec.Block)
+	}
+	if v3Handle.Spec.Block["10.0.0.64/26"] != 2 {
+		t.Errorf("wrong block count: %v", v3Handle.Spec.Block)
 	}
 }
 

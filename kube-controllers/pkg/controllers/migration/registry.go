@@ -71,11 +71,21 @@ type ResourceMigrator struct {
 	DeleteV3 func(ctx context.Context, name, namespace string) error
 }
 
+// ConflictInfo identifies a resource that exists in v3 with a different spec than v1.
+type ConflictInfo struct {
+	Kind string
+	Name string
+}
+
+func (c ConflictInfo) String() string {
+	return fmt.Sprintf("%s/%s: v3 resource exists with different spec", c.Kind, c.Name)
+}
+
 // MigrationResult tracks the result of migrating a single resource type.
 type MigrationResult struct {
 	Migrated  int
 	Skipped   int
-	Conflicts []string
+	Conflicts []ConflictInfo
 
 	// UIDMapping records v1 UID → v3 UID for resources that were created or
 	// already existed. Used by RemapOwnerReferences after all types are migrated.
@@ -141,7 +151,7 @@ type migrationWorkItem struct {
 type migrationWorkResult struct {
 	migrated bool
 	skipped  bool
-	conflict string
+	conflict *ConflictInfo
 	v1UID    types.UID
 	v3UID    types.UID
 	err      error
@@ -238,8 +248,8 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 		if r.skipped {
 			result.Skipped++
 		}
-		if r.conflict != "" {
-			result.Conflicts = append(result.Conflicts, r.conflict)
+		if r.conflict != nil {
+			result.Conflicts = append(result.Conflicts, *r.conflict)
 		}
 		if r.v1UID != "" && r.v3UID != "" {
 			result.UIDMapping[r.v1UID] = r.v3UID
@@ -253,6 +263,33 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 	}).Info("Completed migration for resource type")
 
 	return result, nil
+}
+
+// CheckConflicts lists all v1 resources for a given migrator and checks each
+// one against the corresponding v3 resource. It returns a ConflictInfo for
+// each resource where the v3 spec differs from the converted v1 spec.
+func CheckConflicts(ctx context.Context, bc api.Client, m ResourceMigrator) ([]ConflictInfo, error) {
+	v1List, err := m.ListV1(ctx, bc)
+	if err != nil {
+		return nil, fmt.Errorf("listing v1 %s: %w", m.Kind, err)
+	}
+
+	var conflicts []ConflictInfo
+	for _, kvp := range v1List.KVPairs {
+		v1Obj, err := m.Convert(kvp)
+		if err != nil {
+			return nil, fmt.Errorf("converting v1 %s: %w", m.Kind, err)
+		}
+
+		v3Obj, err := m.GetV3(ctx, v1Obj.GetName(), v1Obj.GetNamespace())
+		if err != nil {
+			return nil, fmt.Errorf("getting v3 %s/%s: %w", m.Kind, v1Obj.GetName(), err)
+		}
+		if v3Obj != nil && !m.SpecsEqual(v1Obj, v3Obj) {
+			conflicts = append(conflicts, ConflictInfo{Kind: m.Kind, Name: v1Obj.GetName()})
+		}
+	}
+	return conflicts, nil
 }
 
 // migrateOneResource handles the create/check/conflict logic for a single
@@ -284,9 +321,9 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 			item.logCtx.Debug("v3 resource already exists with matching spec, skipping")
 			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: existing.GetUID()}
 		}
-		conflict := fmt.Sprintf("%s/%s: v3 resource exists with different spec", m.Kind, v3Obj.GetName())
-		item.logCtx.Warn(conflict)
-		return migrationWorkResult{conflict: conflict}
+		ci := &ConflictInfo{Kind: m.Kind, Name: v3Obj.GetName()}
+		item.logCtx.Warn(ci.String())
+		return migrationWorkResult{conflict: ci}
 	}
 
 	// Create the v3 resource (with retry).

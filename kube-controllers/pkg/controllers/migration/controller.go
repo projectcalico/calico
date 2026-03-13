@@ -205,6 +205,8 @@ func (c *migrationController) reconcile() error {
 		return c.handlePending(logCtx, dm)
 	case DatastoreMigrationPhaseMigrating:
 		return c.handleMigrating(logCtx, dm)
+	case DatastoreMigrationPhaseWaitingForConflictResolution:
+		return c.handleWaiting(logCtx, dm)
 	case DatastoreMigrationPhaseConverged:
 		return c.handleConverged(logCtx, dm)
 	case DatastoreMigrationPhaseComplete:
@@ -359,7 +361,7 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 		return migrators[i].Order < migrators[j].Order
 	})
 
-	var allConflicts []string
+	var allConflicts []ConflictInfo
 	uidMap := make(map[types.UID]types.UID)
 
 	// Initialize progress tracking.
@@ -418,18 +420,20 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 
 	// Update conditions for conflicts.
 	dm.Status.Conditions = nil
-	for _, conflict := range allConflicts {
+	for _, ci := range allConflicts {
 		dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
 			Type:               conditionTypeConflict,
 			Status:             metav1.ConditionTrue,
 			Reason:             conditionReasonResourceMismatch,
-			Message:            conflict,
+			Message:            ci.String(),
 			LastTransitionTime: metav1.Now(),
 		})
 	}
 
 	if len(allConflicts) > 0 {
 		logCtx.WithField("conflicts", len(allConflicts)).Warn("Migration has conflicts that need manual resolution")
+		dm.Status.Phase = DatastoreMigrationPhaseWaitingForConflictResolution
+		setPhaseMetric(DatastoreMigrationPhaseWaitingForConflictResolution)
 		return c.updateStatus(dm)
 	}
 
@@ -448,6 +452,36 @@ func (c *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 		return err
 	}
 
+	return c.updateStatus(dm)
+}
+
+// handleWaiting re-checks all previously conflicting resource types by
+// re-running CheckConflicts against the registry. If no conflicts remain,
+// it transitions back to Migrating to complete the migration.
+func (c *migrationController) handleWaiting(logCtx *log.Entry, dm *DatastoreMigration) error {
+	logCtx.Info("Re-checking conflicts")
+
+	migrators := GetRegistry()
+	var remaining []ConflictInfo
+	for _, m := range migrators {
+		conflicts, err := CheckConflicts(c.ctx, c.backendClient, m)
+		if err != nil {
+			logCtx.WithError(err).WithField("kind", m.Kind).Warn("Failed to check conflicts")
+			remaining = append(remaining, ConflictInfo{Kind: m.Kind, Name: "unknown (check failed)"})
+			continue
+		}
+		remaining = append(remaining, conflicts...)
+	}
+
+	if len(remaining) > 0 {
+		logCtx.WithField("conflicts", len(remaining)).Debug("Conflicts still present")
+		return nil
+	}
+
+	logCtx.Info("All conflicts resolved, transitioning back to Migrating")
+	dm.Status.Conditions = nil
+	dm.Status.Phase = DatastoreMigrationPhaseMigrating
+	setPhaseMetric(DatastoreMigrationPhaseMigrating)
 	return c.updateStatus(dm)
 }
 
