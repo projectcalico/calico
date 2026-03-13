@@ -236,12 +236,6 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 		if err := m.addFinalizer(dm); err != nil {
 			return fmt.Errorf("adding finalizer: %w", err)
 		}
-		// Re-fetch after metadata update to avoid conflicts.
-		var err error
-		dm, err = m.migClient.Get(m.ctx, dm.Name)
-		if err != nil {
-			return fmt.Errorf("re-fetching DatastoreMigration after finalizer: %w", err)
-		}
 	}
 
 	// Pre-validation: check that v1 CRDs exist.
@@ -348,13 +342,6 @@ func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 	if err := m.saveAndDeleteAPIService(logCtx, dm); err != nil {
 		return err
 	}
-
-	// Re-fetch after metadata update to avoid stale ResourceVersion.
-	refreshed, err := m.migClient.Get(m.ctx, dm.Name)
-	if err != nil {
-		return fmt.Errorf("re-fetching DatastoreMigration after APIService save: %w", err)
-	}
-	*dm = *refreshed
 
 	// Step 2: Create v3 ClusterInformation with DatastoreReady=false to lock the datastore.
 	if err := m.lockDatastore(logCtx); err != nil {
