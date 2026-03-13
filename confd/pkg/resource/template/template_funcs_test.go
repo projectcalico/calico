@@ -280,7 +280,7 @@ func Test_filterMatchASPathPrefix(t *testing.T) {
 		{
 			name:     "single ASN",
 			prefix:   []numorstring.ASNumber{65000},
-			expected: "(bgp_path.first = 65000)",
+			expected: "(bgp_path ~ [= 65000 * =])",
 		},
 		{
 			name:     "multiple ASNs",
@@ -608,7 +608,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 	expectedV4 := []string{
 		"# v4 BGPFilter full-example",
 		"function 'bgp_full-example_importFilterV4'(bool is_same_as) {",
-		`  if (is_same_as) then { if ((net ~ [ 10.244.0.0/16{24,28} ])&&((defined(ifname))&&(ifname ~ "eth0"))&&((65000, 100) ~ bgp_community)&&(bgp_path.first = 65000)&&(krt_metric = 512)) then { krt_metric = 256; bgp_community.add((65000, 200)); bgp_path.prepend(65002); bgp_path.prepend(65001); accept; } }`,
+		`  if (is_same_as) then { if ((net ~ [ 10.244.0.0/16{24,28} ])&&((defined(ifname))&&(ifname ~ "eth0"))&&((65000, 100) ~ bgp_community)&&(bgp_path ~ [= 65000 * =])&&(krt_metric = 512)) then { krt_metric = 256; bgp_community.add((65000, 200)); bgp_path.prepend(65002); bgp_path.prepend(65001); accept; } }`,
 		"  if (!is_same_as) then { if ((net ~ 10.244.0.0/16)&&((65000, 100, 999) ~ bgp_large_community)&&(bgp_path ~ [= 65000 65001 * =])&&(krt_metric = 100)) then { krt_metric = 1024; accept; } }",
 		"  reject;",
 		"}",

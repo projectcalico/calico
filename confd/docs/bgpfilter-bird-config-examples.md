@@ -94,7 +94,7 @@ appear in the "BGP Filters" section of `bird.cfg`, shared by all peers.
 ```bird
 # v4 BGPFilter full-example
 function 'bgp_full-example_importFilterV4'(bool is_same_as) {
-  if (is_same_as) then { if ((net ~ [ 10.244.0.0/16{24,28} ])&&((defined(ifname))&&(ifname ~ "eth0"))&&((65000, 100) ~ bgp_community)&&(bgp_path.first = 65000)&&(krt_metric = 512)) then { krt_metric = 256; bgp_community.add((65000, 200)); bgp_path.prepend(65002); bgp_path.prepend(65001); accept; } }
+  if (is_same_as) then { if ((net ~ [ 10.244.0.0/16{24,28} ])&&((defined(ifname))&&(ifname ~ "eth0"))&&((65000, 100) ~ bgp_community)&&(bgp_path ~ [= 65000 * =])&&(krt_metric = 512)) then { krt_metric = 256; bgp_community.add((65000, 200)); bgp_path.prepend(65002); bgp_path.prepend(65001); accept; } }
   if (!is_same_as) then { if ((net ~ 10.244.0.0/16)&&((65000, 100, 999) ~ bgp_large_community)&&(bgp_path ~ [= 65000 65001 * =])&&(krt_metric = 100)) then { krt_metric = 1024; accept; } }
   reject;
 }
@@ -115,7 +115,7 @@ Match conditions (AND-ed):
 | CIDR+PrefixLength | `(net ~ [ 10.244.0.0/16{24,28} ])` | `filterMatchCIDR` + `filterMatchPrefixLength` |
 | Interface | `((defined(ifname))&&(ifname ~ "eth0"))` | `filterMatchInterface` |
 | Communities | `((65000, 100) ~ bgp_community)` | `filterMatchCommunity` (standard) |
-| ASPathPrefix | `(bgp_path.first = 65000)` | `filterMatchASPathPrefix` (single ASN) |
+| ASPathPrefix | `(bgp_path ~ [= 65000 * =])` | `filterMatchASPathPrefix` |
 | Priority | `(krt_metric = 512)` | `filterMatchPriority` |
 
 Operations (in order):
@@ -218,7 +218,7 @@ Relevant excerpts only -- boilerplate like router id, kernel protocol, etc. omit
 # -------------- BGP Filters ------------------
 # v4 BGPFilter full-example
 function 'bgp_full-example_importFilterV4'(bool is_same_as) {
-  if (is_same_as) then { if ((net ~ [ 10.244.0.0/16{24,28} ])&&((defined(ifname))&&(ifname ~ "eth0"))&&((65000, 100) ~ bgp_community)&&(bgp_path.first = 65000)&&(krt_metric = 512)) then { krt_metric = 256; bgp_community.add((65000, 200)); bgp_path.prepend(65002); bgp_path.prepend(65001); accept; } }
+  if (is_same_as) then { if ((net ~ [ 10.244.0.0/16{24,28} ])&&((defined(ifname))&&(ifname ~ "eth0"))&&((65000, 100) ~ bgp_community)&&(bgp_path ~ [= 65000 * =])&&(krt_metric = 512)) then { krt_metric = 256; bgp_community.add((65000, 200)); bgp_path.prepend(65002); bgp_path.prepend(65001); accept; } }
   if (!is_same_as) then { if ((net ~ 10.244.0.0/16)&&((65000, 100, 999) ~ bgp_large_community)&&(bgp_path ~ [= 65000 65001 * =])&&(krt_metric = 100)) then { krt_metric = 1024; accept; } }
   reject;
 }
@@ -360,8 +360,8 @@ export filter {
 | Interface | `((defined(ifname))&&(ifname ~ "eth0"))` | |
 | Communities (standard) | `((65000, 100) ~ bgp_community)` | |
 | Communities (large) | `((65000, 100, 200) ~ bgp_large_community)` | |
-| ASPathPrefix (single) | `(bgp_path.first = 65000)` | |
-| ASPathPrefix (multi) | `(bgp_path ~ [= 65000 65001 * =])` | |
+| ASPathPrefix | `(bgp_path ~ [= 65000 * =])` | single ASN |
+| ASPathPrefix | `(bgp_path ~ [= 65000 65001 * =])` | multi ASN |
 | Priority | `(krt_metric = 512)` | |
 | PeerType=iBGP | `if (is_same_as) then { <rule> }` | function-level guard |
 | PeerType=eBGP | `if (!is_same_as) then { <rule> }` | function-level guard |

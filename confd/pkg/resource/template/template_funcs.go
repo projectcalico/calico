@@ -252,10 +252,6 @@ func filterMatchASPathPrefix(asPathPrefix []numorstring.ASNumber) (string, error
 	if len(asPathPrefix) == 0 {
 		return "", fmt.Errorf("empty AS path prefix in BGPFilter")
 	}
-	if len(asPathPrefix) == 1 {
-		return fmt.Sprintf("(bgp_path.first = %s)", asPathPrefix[0].String()), nil
-	}
-	// Multiple ASNs: bgp_path ~ [= ASN1 ASN2 ... * =]
 	var asns []string
 	for _, asn := range asPathPrefix {
 		asns = append(asns, asn.String())
