@@ -2050,6 +2050,48 @@ func init() {
 			},
 		}, false),
 
+		// (API) BGPFilterOperation
+		Entry("should accept BGPFilterOperation with AddCommunity set", api.BGPFilterOperation{
+			AddCommunity: &api.BGPFilterAddCommunity{Value: "65000:100"},
+		}, true),
+		Entry("should accept BGPFilterOperation with PrependASPath set", api.BGPFilterOperation{
+			PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}},
+		}, true),
+		Entry("should accept BGPFilterOperation with SetPriority set", api.BGPFilterOperation{
+			SetPriority: &api.BGPFilterSetPriority{Value: 256},
+		}, true),
+		Entry("should reject BGPFilterOperation with no fields set", api.BGPFilterOperation{}, false),
+		Entry("should reject BGPFilterOperation with two fields set", api.BGPFilterOperation{
+			AddCommunity: &api.BGPFilterAddCommunity{Value: "65000:100"},
+			SetPriority:  &api.BGPFilterSetPriority{Value: 256},
+		}, false),
+		Entry("should reject BGPFilterOperation with all fields set", api.BGPFilterOperation{
+			AddCommunity:  &api.BGPFilterAddCommunity{Value: "65000:100"},
+			PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}},
+			SetPriority:   &api.BGPFilterSetPriority{Value: 256},
+		}, false),
+
+		// (API) BGPFilterRuleV4 with Operations
+		Entry("should accept BGPFilterRuleV4 with single operation", api.BGPFilterRuleV4{
+			Action: "Accept",
+			Operations: []api.BGPFilterOperation{
+				{SetPriority: &api.BGPFilterSetPriority{Value: 256}},
+			},
+		}, true),
+		Entry("should accept BGPFilterRuleV4 with multiple operations", api.BGPFilterRuleV4{
+			Action: "Accept",
+			Operations: []api.BGPFilterOperation{
+				{AddCommunity: &api.BGPFilterAddCommunity{Value: "65000:100"}},
+				{PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
+			},
+		}, true),
+		Entry("should reject BGPFilterRuleV4 with empty operation", api.BGPFilterRuleV4{
+			Action: "Accept",
+			Operations: []api.BGPFilterOperation{
+				{},
+			},
+		}, false),
+
 		// (API) BGPPeerSpec
 		Entry("should accept valid BGPPeerSpec", api.BGPPeerSpec{PeerIP: ipv4_1}, true),
 		Entry("should reject invalid BGPPeerSpec (IPv4)", api.BGPPeerSpec{PeerIP: bad_ipv4_1}, false),
