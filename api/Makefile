@@ -133,7 +133,7 @@ clean-generated:
 	find $(TOP_SRC_DIRS) -name zz_generated* -exec rm {} \;
 	# rollback changes to the generated clientset directories
 	# find $(TOP_SRC_DIRS) -type d -name *_generated -exec rm -rf {} \;
-	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/openapi
+	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/client/applyconfiguration_generated pkg/openapi
 
 clean-bin:
 	rm -rf $(BINDIR) \
