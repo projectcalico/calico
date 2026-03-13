@@ -179,7 +179,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					},
 				}},
 			},
-			err:   "exactly one operation must be set",
+			err:   "must have at most 1",
 			valid: false,
 		},
 		{
@@ -199,7 +199,7 @@ func TestBGPFilterValidation(t *testing.T) {
 					},
 				}},
 			},
-			err:   "exactly one operation must be set",
+			err:   "must have at most 1",
 			valid: false,
 		},
 
