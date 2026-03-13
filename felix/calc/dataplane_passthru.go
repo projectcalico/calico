@@ -108,7 +108,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 				h.callbacks.OnServiceUpdate(kubernetesServiceToProto(update.Value.(*kapiv1.Service)))
 			}
 		} else if key.Kind == internalapi.KindNode {
-			// Handle node resource to pass-through HostMetadataV6Update/HostMetadataV6Remove messages
+			// Handle node resource to pass-through HostMetadataV4V6Update/HostMetadataV4V6Remove messages
 			// with IPv6 node address updates. IPv4 updates are handled above my model.HostIPKey updates.
 			log.WithField("update", update).Debug("Passing-through a Node IPv6 address update")
 			log.WithField("update", update).Debug("Passing-through a Node update")
