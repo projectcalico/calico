@@ -4,7 +4,7 @@
 # This script provisions a cluster from scratch:
 #   1. Create profile template (gcp-kubevirt.tpl.yaml)
 #   2. Initialize profile with bz init (Song's branch)
-#   3. Replace hashrelease URLs in Taskvars.yml
+#   3. (removed — uses latest hashrelease by default)
 #   4. Provision GCP VMs with bz provision
 #   5. Install Calico and deploy KubeVirt with gkm
 #   6. Setup TOR node BGP
@@ -33,7 +33,6 @@ info() { echo -e "${YELLOW}[INFO]${NC} $1"; }
 phase() { echo -e "\n${BLUE}========== $1 ==========${NC}\n"; }
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-HASHRELEASE_URL="https://2026-03-06-master-overbuilt.docs.eng.tigera.net"
 SECRETS_PATH="${SECRETS_PATH:-$HOME/.banzai/secrets}"
 MACHINE_TYPE="${MACHINE_TYPE:-n2-standard-4}"
 
@@ -118,35 +117,23 @@ else
 fi
 
 # ============================================================
-#  Step 4: Replace hashrelease URLs in Taskvars.yml
+#  Step 4: Provision GCP VMs
 # ============================================================
 
-phase "Step 4: Set Hashrelease URLs"
+phase "Step 4: Provision Cluster (~20 minutes)"
 
 TASKVARS="$PROFILE_DIR/Taskvars.yml"
 [ -f "$TASKVARS" ] || fail "Taskvars.yml not found at $TASKVARS"
-
-info "Setting hashrelease to $HASHRELEASE_URL"
-sed -i "s|^RELEASE_ARTIFACTS_URL:.*|RELEASE_ARTIFACTS_URL: ${HASHRELEASE_URL}/|" "$TASKVARS"
-sed -i "s|^DOCS_MANIFEST_URL:.*|DOCS_MANIFEST_URL: ${HASHRELEASE_URL}/manifests|" "$TASKVARS"
-sed -i "s|^DOCS_URL:.*|DOCS_URL: ${HASHRELEASE_URL}/|" "$TASKVARS"
-pass "Hashrelease URLs updated in Taskvars.yml"
-
-# ============================================================
-#  Step 5: Provision GCP VMs
-# ============================================================
-
-phase "Step 5: Provision Cluster (~20 minutes)"
 
 info "Running bz provision..."
 (cd "$PROFILE_DIR" && bz provision) || fail "bz provision failed"
 pass "Cluster provisioned"
 
 # ============================================================
-#  Step 6: Install Calico and deploy KubeVirt
+#  Step 5: Install Calico and deploy KubeVirt
 # ============================================================
 
-phase "Step 6: Install Calico & KubeVirt (~15 minutes)"
+phase "Step 5: Install Calico & KubeVirt (~15 minutes)"
 
 export BZ_ROOT_DIR="$PROFILE_DIR"
 
@@ -166,10 +153,10 @@ gkm run install-calico-parent && \
 pass "Calico and KubeVirt deployed"
 
 # ============================================================
-#  Step 7: Setup TOR node
+#  Step 6: Setup TOR node
 # ============================================================
 
-phase "Step 7: Setup TOR Node"
+phase "Step 6: Setup TOR Node"
 
 info "Running gkm setup-tor..."
 gkm run setup-tor || fail "gkm setup-tor failed"
@@ -203,10 +190,10 @@ else
 fi
 
 # ============================================================
-#  Step 8: Verify
+#  Step 7: Verify
 # ============================================================
 
-phase "Step 8: Verify"
+phase "Step 7: Verify"
 
 KUBECONFIG_PATH=$(grep '^KUBECONFIG:' "$TASKVARS" | awk '{print $2}')
 export KUBECONFIG="$KUBECONFIG_PATH"
