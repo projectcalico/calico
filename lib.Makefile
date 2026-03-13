@@ -1661,6 +1661,46 @@ kind-reload: kind-build-images
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 
 ###############################################################################
+# Common functions for setting up a local envtest environment.
+###############################################################################
+ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
+ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
+# Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
+# Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
+ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
+
+## Download envtest binaries (kube-apiserver, etcd) for use by tests that use controller-runtime envtest.
+.PHONY: setup-envtest
+setup-envtest: $(ENVTEST_ASSETS_MARKER)
+$(ENVTEST_ASSETS_MARKER):
+	@echo "Setting up envtest binaries for Kubernetes $(ENVTEST_K8S_VERSION)..."
+	mkdir -p $(ENVTEST_DIR)
+	rm -f $(ENVTEST_DIR)/.envtest-*
+	$(DOCKER_GO_BUILD) sh -c \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
+	touch $@
+
+# Minimum supported Kubernetes version for CEL XValidation (GA in 1.29).
+MIN_K8S_VERSION ?= v1.29.0
+ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+# Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
+ENVTEST_MIN_K8S_MINOR := $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2)
+ENVTEST_MIN_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-min-$(ENVTEST_MIN_K8S_VERSION)
+
+## Download envtest binaries for the minimum supported Kubernetes version.
+.PHONY: setup-envtest-min
+setup-envtest-min: $(ENVTEST_MIN_ASSETS_MARKER)
+$(ENVTEST_MIN_ASSETS_MARKER):
+	@echo "Setting up envtest binaries for minimum K8s $(ENVTEST_MIN_K8S_VERSION)..."
+	mkdir -p $(ENVTEST_DIR)
+	$(DOCKER_GO_BUILD) sh -c \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
+	touch $@
+
+###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)

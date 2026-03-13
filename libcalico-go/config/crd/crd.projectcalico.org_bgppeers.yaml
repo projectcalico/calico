@@ -41,6 +41,7 @@ spec:
                   format: int32
                   type: integer
                 localWorkloadSelector:
+                  maxLength: 4096
                   type: string
                 maxRestartTime:
                   type: string
@@ -51,8 +52,10 @@ spec:
                     - Keep
                   type: string
                 node:
+                  maxLength: 253
                   type: string
                 nodeSelector:
+                  maxLength: 4096
                   type: string
                 numAllowedLocalASNumbers:
                   format: int32
@@ -74,8 +77,10 @@ spec:
                       x-kubernetes-map-type: atomic
                   type: object
                 peerIP:
+                  maxLength: 64
                   type: string
                 peerSelector:
+                  maxLength: 4096
                   type: string
                 reachableBy:
                   type: string
@@ -96,6 +101,37 @@ spec:
                 ttlSecurity:
                   type: integer
               type: object
+              x-kubernetes-validations:
+                - message: node and nodeSelector cannot both be set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.node) || size(self.node) == 0) || (!has(self.nodeSelector)
+                    || size(self.nodeSelector) == 0)
+                - message: peerIP and peerSelector cannot both be set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.peerIP) || size(self.peerIP) == 0) || (!has(self.peerSelector)
+                    || size(self.peerSelector) == 0)
+                - message: asNumber must be empty when peerSelector is set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.peerSelector) || size(self.peerSelector) == 0) || !has(self.asNumber)
+                    || self.asNumber == 0
+                - message: peerIP must be empty when localWorkloadSelector is set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (!has(self.peerIP) || size(self.peerIP) == 0)
+                - message: peerSelector must be empty when localWorkloadSelector is set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (!has(self.peerSelector) || size(self.peerSelector) == 0)
+                - message: asNumber is required when localWorkloadSelector is set
+                  reason: FieldValueInvalid
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (has(self.asNumber) && self.asNumber != 0)
           type: object
       served: true
       storage: true
