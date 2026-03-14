@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -511,6 +511,78 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect a directly connected route to the borrowed IP.
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6][0]).To(Equal(
+			routetable.Target{
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("fc00:10:244::1/112"),
+				},
+				MTU: 6666,
+			}))
+
+		// Delete the route.
+		vxlanMgrV6.OnUpdate(&proto.RouteRemove{
+			Dst: "fc00:10:244::1/112",
+		})
+
+		err = vxlanMgrV6.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
+	})
+
+	It("should program directly connected routes for remote VTEPs", func() {
+		By("Sending a non-borrowed tunnel IP address")
+		vxlanMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_TUNNEL | proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "10.0.1.1/32",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.16.0.1",
+			Borrowed:    false,
+		})
+
+		err := vxlanMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a directly connected route for the remote VTEP.
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4][0]).To(Equal(
+			routetable.Target{
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
+				},
+				MTU: 4444,
+			}))
+
+		// Delete the route.
+		vxlanMgr.OnUpdate(&proto.RouteRemove{
+			Dst: "10.0.1.1/32",
+		})
+
+		err = vxlanMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(0))
+	})
+
+	It("IPv6: should program directly connected routes for remote VTEPs", func() {
+		By("Sending a non-borrowed tunnel IP address")
+		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_TUNNEL | proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "fc00:10:244::1/112",
+			DstNodeName: "node2",
+			DstNodeIp:   "fc00:10:10::8",
+			Borrowed:    false,
+		})
+
+		err := vxlanMgrV6.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a directly connected route for the remote VTEP.
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6][0]).To(Equal(
 			routetable.Target{
