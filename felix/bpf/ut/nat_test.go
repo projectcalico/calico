@@ -1881,11 +1881,13 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 			fmt.Printf("pktR = %+v\n", pktR)
-			ipv4L := pktR.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+			ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+			Expect(ipv4L).NotTo(BeNil(), "no IPv4 layer in response packet")
+			ipv4R := ipv4L.(*layers.IPv4)
 			if attempt == 0 {
-				firstIP = ipv4L.DstIP
+				firstIP = ipv4R.DstIP
 			} else {
-				Expect(ipv4L.DstIP).To(Equal(firstIP), "SYN retries should go to the same backend")
+				Expect(ipv4R.DstIP).To(Equal(firstIP), "SYN retries should go to the same backend")
 			}
 		}
 
@@ -1900,8 +1902,10 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 			fmt.Printf("pktR = %+v\n", pktR)
-			ipv4L := pktR.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-			if !firstIP.Equal(ipv4L.DstIP) {
+			ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+			Expect(ipv4L).NotTo(BeNil(), "no IPv4 layer in response packet")
+			ipv4R := ipv4L.(*layers.IPv4)
+			if !firstIP.Equal(ipv4R.DstIP) {
 				seenOtherIP = true
 				break
 			}

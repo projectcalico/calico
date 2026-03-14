@@ -299,7 +299,7 @@ type testLogger interface {
 }
 
 func startBPFLogging() *exec.Cmd {
-	cmd := exec.Command("/usr/bin/bpftool", "prog", "tracelog")
+	cmd := exec.Command("/usr/sbin/bpftool", "prog", "tracelog")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Start()
@@ -1373,6 +1373,13 @@ func layersMatchFields(l gopacket.Layer, ignore ...string) types.GomegaMatcher {
 	return PointTo(MatchFields(IgnoreMissing|IgnoreExtras, f))
 }
 
+func applicationPayload(pkt gopacket.Packet) gopacket.Payload {
+	if app := pkt.ApplicationLayer(); app != nil {
+		return gopacket.Payload(app.Payload())
+	}
+	return gopacket.Payload(nil)
+}
+
 func udpResponseRaw(in []byte) []byte {
 	pkt := gopacket.NewPacket(in, layers.LayerTypeEthernet, gopacket.Default)
 	ethL := pkt.Layer(layers.LayerTypeEthernet)
@@ -1391,7 +1398,7 @@ func udpResponseRaw(in []byte) []byte {
 
 	out := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true},
-		ethR, ipv4R, udpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+		ethR, ipv4R, udpR, applicationPayload(pkt))
 	Expect(err).NotTo(HaveOccurred())
 
 	return out.Bytes()
@@ -1420,7 +1427,7 @@ func udpResponseRawV6(in []byte) []byte {
 
 	_ = udpR.SetNetworkLayerForChecksum(ipv6R)
 
-	lrs = append(lrs, udpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+	lrs = append(lrs, udpR, applicationPayload(pkt))
 
 	out := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true}, lrs...)
@@ -1451,7 +1458,7 @@ func tcpResponseRaw(in []byte) []byte {
 
 	out := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true},
-		ethR, ipv4R, tcpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+		ethR, ipv4R, tcpR, applicationPayload(pkt))
 	Expect(err).NotTo(HaveOccurred())
 
 	return out.Bytes()
@@ -1479,7 +1486,7 @@ func tcpResponseRawV6(in []byte) []byte {
 
 	out := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true},
-		ethR, ipv6R, tcpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+		ethR, ipv6R, tcpR, applicationPayload(pkt))
 	Expect(err).NotTo(HaveOccurred())
 
 	return out.Bytes()
@@ -1731,7 +1738,11 @@ func testPacket(family int, eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket
 	p := gopacket.NewPacket(pkt.bytes, layers.LayerTypeEthernet, gopacket.Default)
 	fmt.Printf("p = %+v\n", p)
 
-	e := p.Layer(layers.LayerTypeEthernet).(*layers.Ethernet)
+	ethL := p.Layer(layers.LayerTypeEthernet)
+	if ethL == nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("no Ethernet layer in packet")
+	}
+	e := ethL.(*layers.Ethernet)
 
 	var (
 		ipl   gopacket.Layer
@@ -1751,6 +1762,9 @@ func testPacket(family int, eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket
 		}
 		if proto == layers.IPProtocolIPv6HopByHop {
 			l := p.Layer(layers.LayerTypeIPv6HopByHop)
+			if l == nil {
+				return nil, nil, nil, nil, nil, fmt.Errorf("IPv6 HopByHop header indicated but layer not found")
+			}
 			proto = l.(*layers.IPv6HopByHop).NextHeader
 		}
 		ipl = ipv6L

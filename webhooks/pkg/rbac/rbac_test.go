@@ -278,7 +278,7 @@ func TestParsePolicy(t *testing.T) {
 
 func TestNewTieredRBACHook(t *testing.T) {
 	mockAuthz := &MockTierAuthorizer{}
-	fakeCS := fakecalicoclient.NewSimpleClientset()
+	fakeCS := fakecalicoclient.NewClientset()
 	h := NewTieredRBACHook(mockAuthz, fakeCS.ProjectcalicoV3().Tiers())
 	assert.NotNil(t, h)
 
@@ -638,7 +638,7 @@ func TestAuthorize(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockAuthz := &MockTierAuthorizer{}
-			fakeCS := fakecalicoclient.NewSimpleClientset(tc.tiers...)
+			fakeCS := fakecalicoclient.NewClientset(tc.tiers...)
 			h := &tieredRBACHook{authz: mockAuthz, tierGetter: fakeCS.ProjectcalicoV3().Tiers()}
 			tc.setupMock(mockAuthz)
 			resp := h.authorize(tc.ar)
