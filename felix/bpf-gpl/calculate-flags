@@ -7,9 +7,7 @@
 filename=$1 # Example: from_wep_host_drop_fib_debug.o
 args=()
 
-if [[ "${filename}" =~ .*co-re.* ]]; then
-  args+=("-DBPF_CORE_SUPPORTED")
-fi
+args+=("-DBPF_CORE_SUPPORTED")
 if [[ "${filename}" =~ .*debug.* ]]; then
   args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG")
 elif [[ "${filename}" =~ .*no_log.* ]]; then
@@ -24,7 +22,6 @@ fi
 
 if [[ "${filename}" =~ test_.* ]]; then
   args+=("-DUNITTEST")
-  args+=("-DBPF_CORE_SUPPORTED")
 fi
 
 if [[ "${filename}" =~ .*_v6.ll ]]; then
