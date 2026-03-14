@@ -190,11 +190,16 @@ func checkICMPv6PortUnreachable(pktR gopacket.Packet, ipv6 *layers.IPv6) {
 	icmp := *icmpR
 	_ = icmp.SetNetworkLayerForChecksum(ipv6L.(gopacket.NetworkLayer))
 
+	ethLayer := pktR.Layer(layers.LayerTypeEthernet)
+	Expect(ethLayer).NotTo(BeNil(), "no Ethernet layer in response packet")
+	appLayer := pktR.ApplicationLayer()
+	Expect(appLayer).NotTo(BeNil(), "no Application layer in response packet")
+
 	cpkt := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(cpkt, gopacket.SerializeOptions{ComputeChecksums: true},
-		(pktR.Layer(layers.LayerTypeEthernet)).(gopacket.SerializableLayer),
+		ethLayer.(gopacket.SerializableLayer),
 		ipv6L.(gopacket.SerializableLayer), &icmp,
-		(pktR.ApplicationLayer()).(gopacket.SerializableLayer))
+		appLayer.(gopacket.SerializableLayer))
 	Expect(err).NotTo(HaveOccurred())
 
 	fmt.Printf("pktR.Bytes() = %+v\n", pktR.Data())

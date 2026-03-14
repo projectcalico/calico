@@ -111,6 +111,10 @@ log_monitor_regexps=(
   "^\[success\]"
   "^\[error\]"
   "RUNNER:"
+  # gotestsum --format testname output patterns (used by BPF UT batch)
+  "^PASS "
+  "^FAIL "
+  "^DONE "
 )
 
 # Combine the regexps; in Perl mode, grep only supports one
