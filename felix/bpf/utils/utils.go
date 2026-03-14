@@ -40,20 +40,9 @@ import (
 )
 
 var memLockOnce sync.Once
-var BTFEnabled bool
 
-func init() {
-	BTFEnabled = SupportsBTF()
-}
-
-func SupportsBTF() bool {
-	_, err := os.Stat("/sys/kernel/btf/vmlinux")
-	if err != nil {
-		log.WithError(err).Debug("BTF not supported")
-		return false
-	}
-	return true
-}
+// BTFEnabled is always true since we require kernel 5.10+ which supports CO-RE/BTF.
+const BTFEnabled = true
 
 func IncreaseLockedMemoryQuota() {
 	memLockOnce.Do(func() {
