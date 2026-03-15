@@ -392,7 +392,7 @@ func Test_filterOperationStatements(t *testing.T) {
 func Test_filterStatementWithOperations(t *testing.T) {
 	prio := 512
 	args := filterArgs{
-		operator: v3.In,
+		operator: v3.MatchOperatorIn,
 		cidr:     "10.0.0.0/8",
 		priority: &prio,
 		action:   v3.Accept,
@@ -493,14 +493,14 @@ func Test_BGPFilterBIRDFuncs_WithPeerType(t *testing.T) {
 			{
 				Action:        v3.Accept,
 				PeerType:      v3.BGPFilterPeerTypeEBGP,
-				MatchOperator: v3.In,
+				MatchOperator: v3.MatchOperatorIn,
 				CIDR:          "10.0.0.0/8",
 			},
 			// iBGP-only rule
 			{
 				Action:        v3.Reject,
 				PeerType:      v3.BGPFilterPeerTypeIBGP,
-				MatchOperator: v3.In,
+				MatchOperator: v3.MatchOperatorIn,
 				CIDR:          "10.0.0.0/8",
 			},
 			// No PeerType - applies to all
@@ -550,7 +550,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 		ImportV4: []v3.BGPFilterRuleV4{
 			{
 				CIDR:          "10.244.0.0/16",
-				MatchOperator: v3.In,
+				MatchOperator: v3.MatchOperatorIn,
 				PrefixLength:  &v3.BGPFilterPrefixLengthV4{Min: int32Helper(24), Max: int32Helper(28)},
 				PeerType:      v3.BGPFilterPeerTypeIBGP,
 				Communities:   &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100"}},
@@ -566,7 +566,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 			},
 			{
 				CIDR:          "10.244.0.0/16",
-				MatchOperator: v3.In,
+				MatchOperator: v3.MatchOperatorIn,
 				PeerType:      v3.BGPFilterPeerTypeEBGP,
 				Communities:   &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100:999"}},
 				ASPathPrefix:  []numorstring.ASNumber{65000, 65001},
@@ -583,7 +583,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 		ExportV4: []v3.BGPFilterRuleV4{
 			{
 				CIDR:          "192.168.0.0/16",
-				MatchOperator: v3.In,
+				MatchOperator: v3.MatchOperatorIn,
 				Source:        v3.BGPFilterSourceRemotePeers,
 				Interface:     "eth1",
 				PeerType:      v3.BGPFilterPeerTypeEBGP,
@@ -598,7 +598,7 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 			},
 			{
 				CIDR:          "10.0.0.0/8",
-				MatchOperator: v3.Equal,
+				MatchOperator: v3.MatchOperatorEqual,
 				PeerType:      v3.BGPFilterPeerTypeIBGP,
 				Action:        v3.Accept,
 			},
@@ -657,14 +657,14 @@ func Test_BGPFilterBIRDFuncs_SimpleExample(t *testing.T) {
 		ImportV4: []v3.BGPFilterRuleV4{
 			{
 				CIDR:          "10.0.0.0/8",
-				MatchOperator: v3.In,
+				MatchOperator: v3.MatchOperatorIn,
 				Action:        v3.Reject,
 			},
 		},
 		ExportV4: []v3.BGPFilterRuleV4{
 			{
 				CIDR:          "192.168.0.0/16",
-				MatchOperator: v3.Equal,
+				MatchOperator: v3.MatchOperatorEqual,
 				Action:        v3.Accept,
 			},
 		},
@@ -755,7 +755,7 @@ func Test_BGPFilterBIRDFuncs_MixedPeerTypeAndNonPeerTypeRules(t *testing.T) {
 				Action:        v3.Accept,
 				PeerType:      v3.BGPFilterPeerTypeIBGP,
 				CIDR:          "10.0.0.0/8",
-				MatchOperator: v3.In,
+				MatchOperator: v3.MatchOperatorIn,
 				Operations: []v3.BGPFilterOperation{
 					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(100)}},
 				},
@@ -763,7 +763,7 @@ func Test_BGPFilterBIRDFuncs_MixedPeerTypeAndNonPeerTypeRules(t *testing.T) {
 			{
 				Action:        v3.Reject,
 				CIDR:          "172.16.0.0/12",
-				MatchOperator: v3.In,
+				MatchOperator: v3.MatchOperatorIn,
 			},
 			{
 				Action:   v3.Accept,
