@@ -93,3 +93,21 @@ func WithClientCustomizer(customizer func(pod *v1.Pod)) ClientOption {
 		return nil
 	}
 }
+
+// WithCapture configures the client pod with NET_RAW and NET_ADMIN capabilities required
+// for packet capture with tcpdump. Use this when calling ExpectEncrypted/ExpectPlaintext.
+func WithCapture() ClientOption {
+	return WithClientCustomizer(func(pod *v1.Pod) {
+		pod.Spec.SecurityContext = &v1.PodSecurityContext{RunAsUser: ptrInt64(0)}
+		if len(pod.Spec.Containers) > 0 {
+			pod.Spec.Containers[0].SecurityContext = &v1.SecurityContext{
+				RunAsUser: ptrInt64(0),
+				Capabilities: &v1.Capabilities{
+					Add: []v1.Capability{"NET_RAW", "NET_ADMIN"},
+				},
+			}
+		}
+	})
+}
+
+func ptrInt64(v int64) *int64 { return &v }
