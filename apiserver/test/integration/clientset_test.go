@@ -2260,19 +2260,19 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	}
 
 	for i := range size {
-		if bgpFilterNew.Spec.ExportV4[i] != bgpFilter.Spec.ExportV4[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ExportV4[i], bgpFilter.Spec.ExportV4[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ExportV4: \n%+v\n%+v",
 				bgpFilter.Spec.ExportV4, bgpFilterNew.Spec.ExportV4)
 		}
-		if bgpFilterNew.Spec.ImportV4[i] != bgpFilter.Spec.ImportV4[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ImportV4[i], bgpFilter.Spec.ImportV4[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ImportV4: \n%+v\n%+v",
 				bgpFilter.Spec.ImportV4, bgpFilterNew.Spec.ImportV4)
 		}
-		if bgpFilterNew.Spec.ExportV6[i] != bgpFilter.Spec.ExportV6[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ExportV6[i], bgpFilter.Spec.ExportV6[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ExportV6: \n%+v\n%+v",
 				bgpFilter.Spec.ExportV6, bgpFilterNew.Spec.ExportV6)
 		}
-		if bgpFilterNew.Spec.ImportV6[i] != bgpFilter.Spec.ImportV6[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ImportV6[i], bgpFilter.Spec.ImportV6[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ImportV6: \n%+v\n%+v",
 				bgpFilter.Spec.ImportV6, bgpFilterNew.Spec.ImportV6)
 		}
