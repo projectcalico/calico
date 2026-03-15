@@ -291,6 +291,7 @@ spec:
                         type: array
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
                       communities:
                         properties:
@@ -390,6 +391,16 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                     x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
                       - message: operations may only be used with action Accept
                         rule:
                           "!has(self.operations) || size(self.operations) == 0 ||
@@ -410,6 +421,7 @@ spec:
                         type: array
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
                       communities:
                         properties:
@@ -509,6 +521,16 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                     x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
                       - message: operations may only be used with action Accept
                         rule:
                           "!has(self.operations) || size(self.operations) == 0 ||
@@ -529,6 +551,7 @@ spec:
                         type: array
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
                       communities:
                         properties:
@@ -628,6 +651,16 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                     x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
                       - message: operations may only be used with action Accept
                         rule:
                           "!has(self.operations) || size(self.operations) == 0 ||
@@ -648,6 +681,7 @@ spec:
                         type: array
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
                       communities:
                         properties:
@@ -747,6 +781,16 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                     x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
                       - message: operations may only be used with action Accept
                         rule:
                           "!has(self.operations) || size(self.operations) == 0 ||
