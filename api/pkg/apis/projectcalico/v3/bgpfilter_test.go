@@ -60,7 +60,7 @@ func TestBGPFilterValidation(t *testing.T) {
 			name: "basic valid BGPFilter",
 			obj: &v3.BGPFilter{
 				ObjectMeta: metav1.ObjectMeta{Name: "valid-bgpfilter"},
-				Spec:       v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{{CIDR: "10.0.0.0/24", Action: v3.Accept}}},
+				Spec:       v3.BGPFilterSpec{ExportV4: []v3.BGPFilterRuleV4{{CIDR: "10.0.0.0/24", MatchOperator: v3.MatchOperatorIn, Action: v3.Accept}}},
 			},
 			valid: true,
 		},
