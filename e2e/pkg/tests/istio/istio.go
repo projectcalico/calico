@@ -22,9 +22,9 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 	gomega "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
