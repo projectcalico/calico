@@ -58,9 +58,9 @@ func FilterUpdates(ctx context.Context,
 	defer close(linkOutC)
 
 	// Drain input channels on exit to unblock netlink goroutines that may
-	// be blocked on a channel send.  The netlink library closes these
-	// channels when its goroutines exit (after seeing the closed socket),
-	// so the drain goroutines will eventually terminate.
+	// be blocked on a channel send.  Callers must ensure the input channels
+	// are eventually closed (e.g., by closing the netlink subscription) so
+	// that the drain goroutines can terminate.
 	defer func() {
 		go func() {
 			for range linkInC {
