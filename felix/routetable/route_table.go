@@ -598,8 +598,14 @@ func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
 		delete(arps, addr)
 		if len(arps) == 0 {
 			delete(r.permanentARPs, ifaceName)
+			r.ifacesToARP.Discard(ifaceName)
 		}
 	}
+}
+
+// IfacesToARPLen returns the size of the ifacesToARP set. For testing only.
+func (r *RouteTable) IfacesToARPLen() int {
+	return r.ifacesToARP.Len()
 }
 
 func (r *RouteTable) addOwningIface(class RouteClass, ifaceName string, routeKey RouteKey) {
@@ -956,6 +962,7 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 
 	if r.fullResyncNeeded {
 		// Mark to reprogram static ARP for all interfaces.
+		r.ifacesToARP.Clear()
 		for ifaceName := range r.permanentARPs {
 			r.ifacesToARP.Add(ifaceName)
 		}
