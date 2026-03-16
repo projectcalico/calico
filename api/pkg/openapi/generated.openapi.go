@@ -847,6 +847,20 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							Format:      "",
 						},
 					},
+					"ipv4NormalRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPv4NormalRoutePriority is the normal route priority (metric) that Felix uses for IPv4 workload routes. This must match the value configured in FelixConfiguration. BIRD uses this to identify elevated-priority routes during live migration and to override local workload routes with higher-priority BGP-learned routes. [Default: 1024]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ipv6NormalRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPv6NormalRoutePriority is the normal route priority (metric) that Felix uses for IPv6 workload routes. This must match the value configured in FelixConfiguration. BIRD uses this to identify elevated-priority routes during live migration and to override local workload routes with higher-priority BGP-learned routes. [Default: 1024]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},
