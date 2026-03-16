@@ -195,9 +195,9 @@ func initObjectFiles() {
 			if l == "off" {
 				l = "no_log"
 			}
-			filename := "xdp_" + l + "_co-re.o"
+			filename := "xdp_" + l + ".o"
 			if family == 6 {
-				filename = "xdp_" + l + "_co-re_v6.o"
+				filename = "xdp_" + l + "_v6.o"
 			}
 
 			SetObjectFile(AttachType{

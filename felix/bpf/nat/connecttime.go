@@ -307,7 +307,7 @@ func ProgFileName(logLevel, ipver string) string {
 		logLevel = "no_log"
 	}
 
-	return fmt.Sprintf("connect_balancer_%s_co-re_v%s.o", logLevel, ipver)
+	return fmt.Sprintf("connect_balancer_%s_v%s.o", logLevel, ipver)
 }
 
 func ensureCgroupPath(cgroupv2 string) (string, error) {

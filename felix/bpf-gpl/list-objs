@@ -10,18 +10,18 @@
 # WARNING: naming and set of cases must be kept in sync with tc.ProgFilename() in Felix's compiler.go.
 
 emit_filename() {
-  echo "bin/${from_or_to}_${ep_type}_${host_drop}${extra}${log_level}_co-re.o"
-  echo "bin/${from_or_to}_${ep_type}_${host_drop}${extra}${log_level}_co-re_v6.o"
+  echo "bin/${from_or_to}_${ep_type}_${host_drop}${extra}${log_level}.o"
+  echo "bin/${from_or_to}_${ep_type}_${host_drop}${extra}${log_level}_v6.o"
 }
 
 for log_level in debug no_log; do
-  echo "bin/conntrack_cleanup_${log_level}_co-re_v4.o"
-  echo "bin/conntrack_cleanup_${log_level}_co-re_v6.o"
-  echo "bin/connect_balancer_${log_level}_co-re_v4.o"
-  echo "bin/connect_balancer_${log_level}_co-re_v46.o"
-  echo "bin/connect_balancer_${log_level}_co-re_v6.o"
-  echo "bin/xdp_${log_level}_co-re.o"
-  echo "bin/xdp_${log_level}_co-re_v6.o"
+  echo "bin/conntrack_cleanup_${log_level}_v4.o"
+  echo "bin/conntrack_cleanup_${log_level}_v6.o"
+  echo "bin/connect_balancer_${log_level}_v4.o"
+  echo "bin/connect_balancer_${log_level}_v46.o"
+  echo "bin/connect_balancer_${log_level}_v6.o"
+  echo "bin/xdp_${log_level}.o"
+  echo "bin/xdp_${log_level}_v6.o"
   directions="from to"
   for host_drop in "" "host_drop_"; do
     if [ "${host_drop}" = "host_drop_" ]; then

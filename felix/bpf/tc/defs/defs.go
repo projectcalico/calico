@@ -192,12 +192,12 @@ func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostD
 	case EpTypeVXLAN:
 		epTypeShort = "vxlan"
 	}
-	corePart := "_co-re"
+	var versionPart string
 	if ipVer == 6 {
-		corePart += "_v6"
+		versionPart = "_v6"
 	}
 
 	oFileName := fmt.Sprintf("%v_%v_%s%s%v%s.o",
-		toOrFrom, epTypeShort, hostDropPart, dsrPart, logLevel, corePart)
+		toOrFrom, epTypeShort, hostDropPart, dsrPart, logLevel, versionPart)
 	return oFileName
 }

@@ -56,13 +56,13 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	objects["tc_preamble_ingress.o"] = struct{}{}
 	objects["tc_preamble_egress.o"] = struct{}{}
 	objects["xdp_preamble.o"] = struct{}{}
-	objects["conntrack_cleanup_debug_co-re_v4.o"] = struct{}{}
-	objects["conntrack_cleanup_debug_co-re_v6.o"] = struct{}{}
-	objects["conntrack_cleanup_no_log_co-re_v4.o"] = struct{}{}
-	objects["conntrack_cleanup_no_log_co-re_v6.o"] = struct{}{}
+	objects["conntrack_cleanup_debug_v4.o"] = struct{}{}
+	objects["conntrack_cleanup_debug_v6.o"] = struct{}{}
+	objects["conntrack_cleanup_no_log_v4.o"] = struct{}{}
+	objects["conntrack_cleanup_no_log_v6.o"] = struct{}{}
 	for _, logLevel := range []string{"debug", "no_log"} {
 		for _, ipv := range []string{"v46", "v4", "v6"} {
-			filename := "connect_balancer_" + logLevel + "_co-re_" + ipv + ".o"
+			filename := "connect_balancer_" + logLevel + "_" + ipv + ".o"
 			objects[filename] = struct{}{}
 		}
 	}

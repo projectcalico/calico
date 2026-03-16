@@ -231,20 +231,12 @@ ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
 	$(COMPILE)
 %_debug_v4.ll: %.c %.d calculate-flags
 	$(COMPILE)
-%_no_log_co-re_v4.ll: %.c %.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v4.ll: %.c %.d calculate-flags
-	$(COMPILE)
 
 %_v4.ll: %_v4.c %_v4.d calculate-flags
 	$(COMPILE)
 %_no_log_v4.ll: %_v4.c %_v4.d calculate-flags
 	$(COMPILE)
 %_debug_v4.ll: %_v4.c %_v4.d calculate-flags
-	$(COMPILE)
-%_no_log_co-re_v4.ll: %_v4.c %_v4.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v4.ll: %_v4.c %_v4.d calculate-flags
 	$(COMPILE)
 
 %_v46.ll: %_v46.c %_v46.d calculate-flags
@@ -253,20 +245,12 @@ ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
 	$(COMPILE)
 %_debug_v46.ll: %_v46.c %_v46.d calculate-flags
 	$(COMPILE)
-%_no_log_co-re_v46.ll: %_v46.c %_v46.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v46.ll: %_v46.c %_v46.d calculate-flags
-	$(COMPILE)
 
 %_v6.ll: %_v6.c %_v6.d calculate-flags
 	$(COMPILE)
 %_no_log_v6.ll: %_v6.c %_v6.d calculate-flags
 	$(COMPILE)
 %_debug_v6.ll: %_v6.c %_v6.d calculate-flags
-	$(COMPILE)
-%_no_log_co-re_v6.ll: %_v6.c %_v6.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v6.ll: %_v6.c %_v6.d calculate-flags
 	$(COMPILE)
 
 %_v6.ll: %.c %_v6.d calculate-flags
@@ -275,18 +259,10 @@ ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
 	$(COMPILE)
 %_debug_v6.ll: %.c %_v6.d calculate-flags
 	$(COMPILE)
-%_no_log_co-re_v6.ll: %.c %_v6.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v6.ll: %.c %_v6.d calculate-flags
-	$(COMPILE)
 
 %_no_log.ll: %.c %.d calculate-flags
 	$(COMPILE)
 %_debug.ll: %.c %.d calculate-flags
-	$(COMPILE)
-%_no_log_co-re.ll: %.c %.d calculate-flags
-	$(COMPILE)
-%_debug_co-re.ll: %.c %.d calculate-flags
 	$(COMPILE)
 
 bin/%_v4.o: %_v4.ll | bin
