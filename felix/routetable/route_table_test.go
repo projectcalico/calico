@@ -523,6 +523,12 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 
+				// Simulate a resync or interface state change re-adding the
+				// iface to ifacesToARP (as would happen in production between
+				// Apply cycles).
+				rt.IfacesToARPAdd(link.LinkAttrs.Name)
+				Expect(rt.IfacesToARPLen()).To(Equal(1))
+
 				// Remove the route (and its ARP entry).
 				rt.RouteRemove(RouteClassLocalWorkload, link.LinkAttrs.Name, RouteKey{CIDR: cidr, Priority: routePriorityForTest})
 
@@ -541,6 +547,10 @@ var _ = Describe("RouteTable", func() {
 				}})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
+
+				// Simulate a resync re-adding the iface to ifacesToARP.
+				rt.IfacesToARPAdd(link.LinkAttrs.Name)
+				Expect(rt.IfacesToARPLen()).To(Equal(1))
 
 				// Remove all routes for the interface.
 				rt.SetRoutes(RouteClassLocalWorkload, link.LinkAttrs.Name, nil)
