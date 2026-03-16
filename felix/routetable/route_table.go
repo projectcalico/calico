@@ -521,6 +521,7 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 
 	// Clean out the pending ARP list, then recalculate it below.
 	delete(r.permanentARPs, ifaceName)
+	r.ifacesToARP.Discard(ifaceName)
 	for routeKey, target := range newTargets {
 		// addOwningIface() calls recalculateDesiredKernelRoute.
 		r.addOwningIface(routeClass, ifaceName, routeKey)
@@ -588,6 +589,7 @@ func (r *RouteTable) updatePermanentARP(ifaceName string, addr ip.Addr, mac net.
 		r.permanentARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
 	}
 	r.permanentARPs[ifaceName][addr] = mac
+	r.ifacesToARP.Add(ifaceName)
 }
 
 func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
@@ -598,6 +600,7 @@ func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
 		delete(arps, addr)
 		if len(arps) == 0 {
 			delete(r.permanentARPs, ifaceName)
+			r.ifacesToARP.Discard(ifaceName)
 		}
 	}
 }
@@ -956,6 +959,7 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 
 	if r.fullResyncNeeded {
 		// Mark to reprogram static ARP for all interfaces.
+		r.ifacesToARP.Clear()
 		for ifaceName := range r.permanentARPs {
 			r.ifacesToARP.Add(ifaceName)
 		}
