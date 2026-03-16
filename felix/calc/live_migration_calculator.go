@@ -330,18 +330,20 @@ func (lmc *LiveMigrationCalculator) liveMigrationRoleAndUID(wd *wepData) (proto.
 	return proto.LiveMigrationRole_NO_ROLE, ""
 }
 
-// uidFromLMKeys returns the UID from one of the LiveMigration resources
-// referenced by the given set of keys, or "" if none has a UID.
+// uidFromLMKeys returns the greatest UID from the LiveMigration resources
+// referenced by the given set of keys, or "" if none has a UID.  Taking the
+// greatest ensures a deterministic result when multiple LMs reference the same WEP.
 func (lmc *LiveMigrationCalculator) uidFromLMKeys(keys set.Set[model.ResourceKey]) string {
 	if keys == nil {
 		return ""
 	}
+	best := ""
 	for lmKey := range keys.All() {
-		if lm, ok := lmc.liveMigrations[lmKey]; ok && string(lm.UID) != "" {
-			return string(lm.UID)
+		if lm, ok := lmc.liveMigrations[lmKey]; ok && string(lm.UID) > best {
+			best = string(lm.UID)
 		}
 	}
-	return ""
+	return best
 }
 
 func (lmc *LiveMigrationCalculator) refDirectName(
