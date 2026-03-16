@@ -17,6 +17,7 @@ package ringbuf
 import (
 	"encoding/binary"
 	stderrors "errors"
+	"fmt"
 	"os"
 	"sync/atomic"
 	"unsafe"
@@ -32,9 +33,11 @@ const (
 	ringbufHdrSize = 8
 
 	// busyBit indicates the record is still being written by the kernel.
+	// Matches BPF_RINGBUF_BUSY_BIT from include/uapi/linux/bpf.h.
 	busyBit = 1 << 31
 	// discardBit indicates the record was discarded and should be skipped.
-	discardBit = 1 << 29
+	// Matches BPF_RINGBUF_DISCARD_BIT from include/uapi/linux/bpf.h.
+	discardBit = 1 << 30
 	// lenMask clears the top 2 flag bits to get the actual data length.
 	lenMask = ^uint32(busyBit | discardBit)
 )
@@ -132,8 +135,34 @@ func ReadDrops(m maps.Map) (uint64, error) {
 	return total, nil
 }
 
+// RoundUpSize rounds size up to the next power of two if it isn't one already.
+// BPF_MAP_TYPE_RINGBUF requires a power-of-two size. Returns the rounded size
+// and whether rounding was needed.
+func RoundUpSize(size int) (int, bool) {
+	if size <= 0 {
+		return 1, true
+	}
+	if size&(size-1) == 0 {
+		return size, false
+	}
+	n := size - 1
+	n |= n >> 1
+	n |= n >> 2
+	n |= n >> 4
+	n |= n >> 8
+	n |= n >> 16
+	n |= n >> 32
+	return n + 1, true
+}
+
 // New creates a new RingBuffer reader for the given BPF ring buffer map.
-func New(m maps.Map, maxEntries int) (*RingBuffer, error) {
+// size is the ring buffer size in bytes and must be a power of two
+// (required by the kernel ring buffer ABI).
+func New(m maps.Map, size int) (*RingBuffer, error) {
+	if size <= 0 || size&(size-1) != 0 {
+		return nil, fmt.Errorf("size must be a power of two, got %d", size)
+	}
+
 	fd := m.MapFD()
 	pageSize := os.Getpagesize()
 
@@ -143,7 +172,8 @@ func New(m maps.Map, maxEntries int) (*RingBuffer, error) {
 		bpfMap:   m,
 		mapFD:    int(fd),
 		pageSize: pageSize,
-		mask:     uint64(maxEntries) - 1,
+		mask:     uint64(size) - 1,
+		epollFD:  -1,
 	}
 
 	// Map writable consumer page.
@@ -154,8 +184,8 @@ func New(m maps.Map, maxEntries int) (*RingBuffer, error) {
 	rb.consumerPos = (*uint64)(unsafe.Pointer(&rb.consumerMem[0]))
 
 	// Map read-only producer page and data pages.
-	// Data is double-mapped (2 * maxEntries) for contiguous wraparound reads.
-	prodMmapSize := pageSize + 2*maxEntries
+	// Data is double-mapped (2 * size) for contiguous wraparound reads.
+	prodMmapSize := pageSize + 2*size
 	rb.producerMem, err = unix.Mmap(rb.mapFD, int64(pageSize), prodMmapSize, unix.PROT_READ, unix.MAP_SHARED)
 	if err != nil {
 		_ = unix.Munmap(rb.consumerMem)
@@ -203,6 +233,11 @@ func (rb *RingBuffer) Next() (Event, error) {
 		if err != nil {
 			if errors.Is(err, unix.EINTR) {
 				continue
+			}
+			// If Close() was called concurrently, the epoll FD was closed
+			// and EpollWait returns EBADF. Treat as normal shutdown.
+			if rb.closed.Load() {
+				return Event{}, unix.EINTR
 			}
 			return Event{}, errors.Wrap(err, "EpollWait")
 		}
@@ -266,9 +301,9 @@ func (rb *RingBuffer) Close() error {
 }
 
 func (rb *RingBuffer) cleanup() error {
-	if rb.epollFD > 0 {
+	if rb.epollFD >= 0 {
 		unix.Close(rb.epollFD)
-		rb.epollFD = 0
+		rb.epollFD = -1
 	}
 	if rb.producerMem != nil {
 		_ = unix.Munmap(rb.producerMem)
