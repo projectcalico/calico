@@ -380,6 +380,7 @@ fv-no-prereqs:
 	  ARCH=$(ARCH) \
 	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
 	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
+	  FELIX_FV_NETKIT="$(FELIX_FV_NETKIT)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
 	  CALICO_API_GROUP=$(CALICO_API_GROUP) \
@@ -399,6 +400,9 @@ fv-bpf:
 
 fv-bpf-no-prereqs:
 	$(MAKE) fv-no-prereqs FELIX_FV_ENABLE_BPF=true
+
+fv-bpf-netkit:
+	$(MAKE) fv FELIX_FV_ENABLE_BPF=true FELIX_FV_NETKIT=Enabled
 
 fv-nft:
 	$(MAKE) fv FELIX_FV_NFTABLES=Enabled
