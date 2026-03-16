@@ -57,6 +57,23 @@ func FilterUpdates(ctx context.Context,
 	defer close(routeOutC)
 	defer close(linkOutC)
 
+	// Drain input channels on exit to unblock netlink goroutines that may
+	// be blocked on a channel send.  The netlink library closes these
+	// channels when its goroutines exit (after seeing the closed socket),
+	// so the drain goroutines will eventually terminate.
+	defer func() {
+		go func() {
+			for range linkInC {
+			}
+			logrus.Debug("FilterUpdates: link input channel drained")
+		}()
+		go func() {
+			for range routeInC {
+			}
+			logrus.Debug("FilterUpdates: route input channel drained")
+		}()
+	}()
+
 	u := &updateFilter{
 		Time: timeshim.RealTime(),
 	}
