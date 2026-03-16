@@ -41,7 +41,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	celvalidator "github.com/projectcalico/calico/libcalico-go/lib/validator/cel"
 )
 
 var validate *validator.Validate
@@ -156,15 +155,15 @@ func Validate(current any) error {
 		verr = convertError(err)
 	}
 
-	// Also run CEL validation rules from the CRD schemas. In Kubernetes
-	// datastore mode, the API server enforces these rules via x-kubernetes-validations.
-	// In etcd mode there is no API server, so we enforce them here.
+	// Run CRD validation rules (OpenAPI schema constraints + CEL
+	// x-kubernetes-validations). In Kubernetes datastore mode, the API server
+	// enforces these. In etcd mode there is no API server, so we enforce them here.
 	if rObj, ok := current.(runtime.Object); ok {
-		if celErrs := celvalidator.Validate(context.Background(), rObj, nil); len(celErrs) > 0 {
-			for _, e := range celErrs {
+		if crdErrs := validateCRD(context.Background(), rObj, nil); len(crdErrs) > 0 {
+			for _, e := range crdErrs {
 				name := e.Field
 				if name == "" || name == "<nil>" {
-					name = rObj.GetObjectKind().GroupVersionKind().Kind
+					name = resolveKind(rObj)
 				}
 				verr.ErroredFields = append(verr.ErroredFields, errors.ErroredField{
 					Name:   name,
