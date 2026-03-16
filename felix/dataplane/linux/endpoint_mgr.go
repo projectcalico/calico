@@ -474,8 +474,12 @@ func (m *endpointManager) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID
 		m.pendingLiveMigrationStates[id] = state
 	}
 	// Mark the endpoint dirty so CompleteDeferredWork re-evaluates its routes.
-	if ep := m.activeWlEndpoints[id]; ep != nil {
-		m.pendingWlEpUpdates[id] = ep
+	// Only if there isn't already a pending WEP update, to avoid clobbering a
+	// more recent proto with stale activeWlEndpoints data.
+	if _, alreadyPending := m.pendingWlEpUpdates[id]; !alreadyPending {
+		if ep := m.activeWlEndpoints[id]; ep != nil {
+			m.pendingWlEpUpdates[id] = ep
+		}
 	}
 }
 
