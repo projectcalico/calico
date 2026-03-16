@@ -39,14 +39,8 @@ type LiveMigrationCalculator struct {
 	endpointKeys [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]
 	// workloadKeys tracks LiveMigration resources that reference an entire workload
 	// (endpointID empty, matching all endpoints for that workload).
-	workloadKeys   [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]
-	selectorKeys   map[string]set.Set[model.ResourceKey]
-
-	// pendingSelectorMatches tracks WEPs that were matched by a computed selector callback
-	// before the LMC had processed the WEP update.  This can happen because the ARC's
-	// handler runs before the LMC's handler in the dispatcher chain.  The value is the
-	// selector string that matched.
-	pendingSelectorMatches map[wepOwnerID]string
+	workloadKeys [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]
+	selectorKeys map[string]set.Set[model.ResourceKey]
 }
 
 type sourceOrTarget int
@@ -98,7 +92,6 @@ func NewLiveMigrationCalculator(
 			map[wepOwnerID]set.Set[model.ResourceKey]{},
 		},
 		selectorKeys: map[string]set.Set[model.ResourceKey]{},
-		pendingSelectorMatches: map[wepOwnerID]string{},
 	}
 	activeRulesCalc.RegisterPolicyMatchListener(lmc)
 	return lmc
@@ -138,14 +131,6 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 				}
 			}
 
-			if sel, ok := lmc.pendingSelectorMatches[exactID]; ok {
-				logrus.WithFields(logrus.Fields{
-					"wep":      exactID,
-					"selector": sel,
-				}).Debug("LiveMigrationCalculator: applying pending selector match")
-				wd.targetSelectorMatched = sel
-				delete(lmc.pendingSelectorMatches, exactID)
-			}
 			lmc.weps[exactID] = wd
 			role, uid := lmc.liveMigrationRoleAndUID(wd)
 			lmc.indicateRole(key, role, uid)
@@ -252,17 +237,11 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 			lmc.withRoleUpdateIfNeeded(wd, func() {
 				wd.targetSelectorMatched = cs
 			})
-		} else {
-			// WEP not yet tracked; the ARC handler runs before ours in the
-			// dispatcher chain, so we may receive selector match callbacks
-			// before our OnUpdate has processed the WEP.  Record it so we can
-			// pick it up when the WEP is processed.
-			logrus.WithFields(logrus.Fields{
-				"wep":      exactID,
-				"selector": cs,
-			}).Debug("LiveMigrationCalculator: selector matched unknown WEP, queuing")
-			lmc.pendingSelectorMatches[exactID] = cs
 		}
+		// If the WEP isn't tracked yet, we can ignore this callback.  The LMC is
+		// registered on localEndpointDispatcher before the ARC, so it always sees WEP
+		// updates first.  A selector callback for an unknown WEP means the WEP was
+		// filtered out (e.g. non-local) and we don't need to track it.
 	}
 }
 
@@ -280,9 +259,6 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, ep
 			lmc.withRoleUpdateIfNeeded(wd, func() {
 				wd.targetSelectorMatched = ""
 			})
-		} else {
-			// Undo a pending match if there was one.
-			delete(lmc.pendingSelectorMatches, exactID)
 		}
 	}
 }
