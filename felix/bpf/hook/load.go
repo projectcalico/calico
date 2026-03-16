@@ -68,12 +68,13 @@ const (
 var All = []Hook{Ingress, Egress, XDP}
 
 type AttachType struct {
-	Hook       Hook
-	Family     int
-	Type       tcdefs.EndpointType
-	LogLevel   string
-	ToHostDrop bool
-	DSR        bool
+	Hook           Hook
+	Family         int
+	Type           tcdefs.EndpointType
+	LogLevel       string
+	ToHostDrop     bool
+	DSR            bool
+	ProgAttachType string // "TC", "TCX", or "Netkit" — used as cache key to separate programs with different expected_attach_type
 }
 
 func (at AttachType) ObjectFile() string {
