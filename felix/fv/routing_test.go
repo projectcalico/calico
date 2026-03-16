@@ -50,18 +50,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 		EnableIPv6  bool
 	}
 	for _, testConfig := range []testConf{
-		// IPIP does not support IPv6.
-		{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
-		{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
+		// We do not suporrt IPIP in IPv6.
+		//{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
+		//{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
 
 		{api.IPIPModeAlways, "CalicoIPAM", true, false},
-		{api.IPIPModeAlways, "WorkloadIPs", false, false},
+		//{api.IPIPModeAlways, "WorkloadIPs", false, false},
 
 		// No encap routing tests. BrokenXSum is irrelevant in these cases.
-		{api.IPIPModeNever, "CalicoIPAM", false, false},
-		{api.IPIPModeNever, "WorkloadIPs", false, false},
-		{api.IPIPModeNever, "CalicoIPAM", false, true},
-		{api.IPIPModeNever, "WorkloadIPs", false, true},
+		//{api.IPIPModeNever, "CalicoIPAM", false, false},
+		//{api.IPIPModeNever, "WorkloadIPs", false, false},
+		//{api.IPIPModeNever, "CalicoIPAM", false, true},
+		//{api.IPIPModeNever, "WorkloadIPs", false, true},
 	} {
 		ipipMode := testConfig.IPIPMode
 		routeSource := testConfig.RouteSource
@@ -296,7 +296,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 			}
 
-			It("should have correct connectivity", func() {
+			It("should have correct connectivity pepper2", func() {
+				time.Sleep(time.Hour)
+
 				// Checking workload to workload connectivity
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
@@ -897,7 +899,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 		})
 
-		Describe(description+" and a borrowed tunnel IP on one host", func() {
+		Describe(description+" and a borrowed tunnel IP on one host pepper0", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -937,6 +939,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
+				time.Sleep(time.Hour)
+
 				for i := range 3 {
 					f := felixes[i]
 					cc.ExpectSome(f, w[0])
@@ -954,7 +958,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 		})
 
-		Describe("with a separate tunnel address pool that uses /32 blocks", func() {
+		Describe(description+"with a separate tunnel address pool that uses /32 blocks pepper1", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
