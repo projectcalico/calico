@@ -136,6 +136,9 @@ func ObjectFile(at AttachType) string {
 	objectFilesLock.Lock()
 	defer objectFilesLock.Unlock()
 
+	// ProgAttachType is not part of the object file selection — the same
+	// BPF object is used for TC, TCX, and Netkit. Zero it out for lookup.
+	at.ProgAttachType = ""
 	return objectFiles[at]
 }
 
