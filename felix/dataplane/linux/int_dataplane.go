@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,6 +49,7 @@ import (
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	bpfringbuf "github.com/projectcalico/calico/felix/bpf/ringbuf"
 	bpfroutes "github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
@@ -917,6 +919,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
+	ringBufSize := calcRingBufSize(config.BPFExportBufferSizeMB)
+	bpfringbuf.SetMapSize(ringBufSize)
 
 	var (
 		bpfEndpointManager *bpfEndpointManager
@@ -930,11 +934,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// Initialisation needed for bpf.
 	if config.BPFEnabled && config.FlowLogsEnabled {
 		var err error
-		// convert buffer size to bytes.
-		ringSize := config.BPFExportBufferSizeMB * 1024 * 1024
-		bpfEvnt, err = events.New(events.SourcePerfEvents, ringSize)
+		bpfEvnt, err = events.New(events.SourceRingBuffer, ringBufSize)
 		if err != nil {
-			log.WithError(err).Error("Failed to create perf event")
+			log.WithError(err).Error("Failed to create ring buffer event source")
 		} else {
 			bpfEventPoller = newBpfEventPoller(bpfEvnt)
 		}
@@ -3101,4 +3103,21 @@ func conntrackMapSizeFromFile() (int, error) {
 		return 0, err
 	}
 	return strconv.Atoi(strings.TrimSpace(string(data)))
+}
+
+// calcRingBufSize returns the BPF ring buffer size in bytes. If configuredMB
+// is set (> 0), it is used as the total size in MB. Otherwise, NumCPU * 1MB
+// is used to match the old per-CPU perf array capacity. The result is rounded
+// up to a power of two as required by BPF_MAP_TYPE_RINGBUF.
+func calcRingBufSize(configuredMB int) int {
+	sizeMB := configuredMB
+	if sizeMB <= 0 {
+		sizeMB = runtime.NumCPU() // numCPU * 1 MB
+	}
+	sizeMB, roundedUp := bpfringbuf.RoundUpSize(sizeMB)
+	if roundedUp {
+		log.Infof("BPF ring buffer size rounded up to next power of two: %dMB", sizeMB)
+	}
+	log.Infof("BPF ring buffer total size: %dMB", sizeMB)
+	return sizeMB * 1024 * 1024
 }
