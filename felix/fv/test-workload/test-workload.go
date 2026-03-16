@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -47,7 +48,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--mtu=<mtu>] [--listen-any-ip] <interface-name> <ip-address> <ports>
+  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--mtu=<mtu>] [--listen-any-ip] [--netkit] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -81,6 +82,10 @@ func main() {
 	listenAnyIP := false
 	if arg, ok := arguments["--listen-any-ip"]; ok && arg.(bool) {
 		listenAnyIP = true
+	}
+	useNetkit := false
+	if arg, ok := arguments["--netkit"]; ok && arg.(bool) {
+		useNetkit = true
 	}
 
 	ports := strings.Split(portsStr, ",")
@@ -118,11 +123,6 @@ func main() {
 		}
 		log.WithField("namespace", namespace.Path()).Debug("Created namespace")
 
-		conf := types.NetConf{
-			MTU:       mtu,
-			NumQueues: 1,
-		}
-		dp := linux.NewLinuxDataplane(conf, log.WithField("ns", namespace.Path()))
 		hostVethName := interfaceName
 		var addrs []*cniv1.IPConfig
 		if ipv4Addr != "" {
@@ -153,15 +153,25 @@ func main() {
 		panicIfError(err)
 
 		defer hostNlHandle.Close()
-		_, err = dp.DoWorkloadNetnsSetUp(
-			hostNlHandle,
-			namespace.Path(),
-			addrs,
-			"eth0",
-			hostVethName,
-			routes,
-			nil,
-		)
+
+		if useNetkit {
+			err = doNetkitSetUp(hostNlHandle, namespace, addrs, "eth0", hostVethName, routes, mtu)
+		} else {
+			conf := types.NetConf{
+				MTU:       mtu,
+				NumQueues: 1,
+			}
+			dp := linux.NewLinuxDataplane(conf, log.WithField("ns", namespace.Path()))
+			_, err = dp.DoWorkloadNetnsSetUp(
+				hostNlHandle,
+				namespace.Path(),
+				addrs,
+				"eth0",
+				hostVethName,
+				routes,
+				nil,
+			)
+		}
 		panicIfError(err)
 	} else {
 		namespace, err = ns.GetCurrentNS()
@@ -434,6 +444,191 @@ func loopRespondingToPackets(logCxt *log.Entry, p net.PacketConn) {
 			logCxt.WithError(err).WithField("remoteAddr", addr).Info("Responded")
 		}
 	}
+}
+
+// doNetkitSetUp creates a netkit L2 pair instead of a veth pair for the workload.
+// The primary (host-side) end stays in the host namespace; the peer is moved into
+// the workload namespace. IP addresses, routes and sysctls are configured to match
+// what DoWorkloadNetnsSetUp does for veth pairs.
+func doNetkitSetUp(
+	hostNlHandle *netlink.Handle,
+	workloadNS ns.NetNS,
+	ipAddrs []*cniv1.IPConfig,
+	contIfName string,
+	hostIfName string,
+	routes []*net.IPNet,
+	mtu int,
+) error {
+	// Clean up if host-side interface already exists.
+	if oldLink, err := hostNlHandle.LinkByName(hostIfName); err == nil {
+		if err = hostNlHandle.LinkDel(oldLink); err != nil {
+			return fmt.Errorf("failed to delete old host interface %v: %v", hostIfName, err)
+		}
+		log.Infof("Cleaned up old host interface: %v", hostIfName)
+	}
+
+	// Determine IP versions present.
+	var hasIPv4, hasIPv6 bool
+	for _, addr := range ipAddrs {
+		if addr.Address.IP.To4() != nil {
+			hasIPv4 = true
+			addr.Address.Mask = net.CIDRMask(32, 32)
+		} else if addr.Address.IP.To16() != nil {
+			hasIPv6 = true
+			addr.Address.Mask = net.CIDRMask(128, 128)
+		}
+	}
+
+	// Create netkit in host namespace, with peer placed in workload namespace.
+	la := netlink.NewLinkAttrs()
+	la.Name = hostIfName
+	la.MTU = mtu
+	nk := &netlink.Netkit{
+		LinkAttrs: la,
+		Mode:      netlink.NETKIT_MODE_L2,
+	}
+	nk.SetPeerAttrs(&netlink.LinkAttrs{
+		Name:      contIfName,
+		Namespace: netlink.NsFd(int(workloadNS.Fd())),
+	})
+	if err := netlink.LinkAdd(nk); err != nil {
+		return fmt.Errorf("failed to add netkit pair (%s, %s): %w", hostIfName, contIfName, err)
+	}
+	log.Infof("Created netkit pair: host=%s container=%s (in workload NS)", hostIfName, contIfName)
+
+	// Configure host-side interface: MAC, proxy_arp, bring up.
+	hostLink, err := hostNlHandle.LinkByName(hostIfName)
+	if err != nil {
+		return fmt.Errorf("failed to find host-side netkit %s: %w", hostIfName, err)
+	}
+	hostMAC, _ := net.ParseMAC("ee:ee:ee:ee:ee:ee")
+	if err := hostNlHandle.LinkSetHardwareAddr(hostLink, hostMAC); err != nil {
+		log.Warnf("Failed to set MAC on %s: %v (using kernel-assigned MAC)", hostIfName, err)
+	}
+
+	// Host-side sysctls (proxy_arp, forwarding, etc.)
+	if hasIPv4 {
+		writeProcSysOrLog("/proc/sys/net/ipv4/conf/%s/route_localnet", hostIfName, "1")
+		writeProcSysOrLog("/proc/sys/net/ipv4/neigh/%s/proxy_delay", hostIfName, "0")
+		writeProcSysOrLog("/proc/sys/net/ipv4/conf/%s/proxy_arp", hostIfName, "1")
+		writeProcSysOrLog("/proc/sys/net/ipv4/conf/%s/forwarding", hostIfName, "1")
+	}
+	if hasIPv6 {
+		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/accept_dad", hostIfName, "0")
+		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/disable_ipv6", hostIfName, "0")
+		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/proxy_ndp", hostIfName, "1")
+		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/forwarding", hostIfName, "1")
+	}
+
+	if err := hostNlHandle.LinkSetUp(hostLink); err != nil {
+		return fmt.Errorf("failed to set %s up: %w", hostIfName, err)
+	}
+
+	// Configure container-side interface inside the workload namespace.
+	err = workloadNS.Do(func(_ ns.NetNS) error {
+		contLink, err := netlink.LinkByName(contIfName)
+		if err != nil {
+			return fmt.Errorf("failed to find container netkit %s: %w", contIfName, err)
+		}
+
+		if hasIPv6 {
+			// Disable DAD before bringing the interface up.
+			if err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_dad", contIfName), "0"); err != nil {
+				return err
+			}
+		}
+
+		if err := netlink.LinkSetUp(contLink); err != nil {
+			return fmt.Errorf("failed to set %s up: %w", contIfName, err)
+		}
+
+		// Add IP addresses.
+		for _, addr := range ipAddrs {
+			if err := netlink.AddrAdd(contLink, &netlink.Addr{IPNet: &addr.Address}); err != nil {
+				return fmt.Errorf("failed to add IP %v to %s: %w", addr.Address, contIfName, err)
+			}
+		}
+
+		// Add IPv4 routes.
+		if hasIPv4 {
+			gw := net.IPv4(169, 254, 1, 1)
+			gwNet := &net.IPNet{IP: gw, Mask: net.CIDRMask(32, 32)}
+			if err := netlink.RouteAdd(&netlink.Route{
+				LinkIndex: contLink.Attrs().Index,
+				Scope:     netlink.SCOPE_LINK,
+				Dst:       gwNet,
+			}); err != nil {
+				return fmt.Errorf("failed to add gateway route: %w", err)
+			}
+			for _, r := range routes {
+				if r.IP.To4() == nil {
+					continue
+				}
+				if err := netlink.RouteAdd(&netlink.Route{
+					LinkIndex: contLink.Attrs().Index,
+					Dst:       r,
+					Gw:        gw,
+				}); err != nil {
+					return fmt.Errorf("failed to add IPv4 route %v: %w", r, err)
+				}
+			}
+		}
+
+		// Add IPv6 routes.
+		if hasIPv6 {
+			// Enable IPv6 in the namespace.
+			_ = writeProcSys("/proc/sys/net/ipv6/conf/all/disable_ipv6", "0")
+			_ = writeProcSys("/proc/sys/net/ipv6/conf/default/disable_ipv6", "0")
+			_ = writeProcSys("/proc/sys/net/ipv6/conf/lo/disable_ipv6", "0")
+
+			// Get the host-side link-local address for use as IPv6 gateway.
+			var hostIPv6 net.IP
+			for i := range 10 {
+				if i > 0 {
+					time.Sleep(50 * time.Millisecond)
+				}
+				addrs, err := hostNlHandle.AddrList(hostLink, netlink.FAMILY_V6)
+				if err == nil && len(addrs) > 0 {
+					hostIPv6 = addrs[0].IP
+					break
+				}
+			}
+			if hostIPv6 == nil {
+				return fmt.Errorf("failed to get IPv6 link-local address for %s", hostIfName)
+			}
+			for _, r := range routes {
+				if r.IP.To4() != nil {
+					continue
+				}
+				if err := netlink.RouteAdd(&netlink.Route{
+					LinkIndex: contLink.Attrs().Index,
+					Dst:       r,
+					Gw:        hostIPv6,
+				}); err != nil {
+					return fmt.Errorf("failed to add IPv6 route %v: %w", r, err)
+				}
+			}
+		}
+
+		// Container-side sysctls (rp_filter, etc.)
+		if hasIPv4 {
+			_ = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", contIfName), "1")
+		}
+
+		return nil
+	})
+	return err
+}
+
+func writeProcSysOrLog(pathFmt, ifName, value string) {
+	path := fmt.Sprintf(pathFmt, ifName)
+	if err := writeProcSys(path, value); err != nil {
+		log.Warnf("Failed to write %s=%s: %v", path, value, err)
+	}
+}
+
+func writeProcSys(path, value string) error {
+	return os.WriteFile(path, []byte(value), 0644)
 }
 
 func panicIfError(err error) {
