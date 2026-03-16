@@ -1640,6 +1640,46 @@ kind-reload: kind-build-images
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 
 ###############################################################################
+# Dev build & push workflow — build all images, tag with a custom tag, and
+# optionally push to a personal Docker Hub registry.
+###############################################################################
+DEV_IMAGE_TAG ?= $(GIT_VERSION)
+
+# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/<name>:$(DEV_IMAGE_TAG)
+DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_REGISTRY)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
+DEV_OPERATOR_IMAGE = $(DEV_IMAGE_REGISTRY)/operator:$(DEV_IMAGE_TAG)
+
+## Build all component images and tag them for the dev registry.
+.PHONY: dev-image
+dev-image: $(KIND_IMAGE_MARKERS)
+ifndef DEV_IMAGE_REGISTRY
+	$(error DEV_IMAGE_REGISTRY is required (e.g., make dev-image DEV_IMAGE_REGISTRY=caseydavenport DEV_IMAGE_TAG=my-feature))
+endif
+	@for img in $(KIND_CALICO_IMAGES); do \
+	  base=$${img%%:*}; \
+	  name=$${base#calico/}; \
+	  docker tag $$base:latest-$(ARCH) $(DEV_IMAGE_REGISTRY)/$$name:$(DEV_IMAGE_TAG); \
+	  echo "Tagged $(DEV_IMAGE_REGISTRY)/$$name:$(DEV_IMAGE_TAG)"; \
+	done
+	cd $(KIND_INFRA_DIR) && \
+	  BRANCH=$(OPERATOR_BRANCH) \
+	  DEV_IMAGE_TAG=$(DEV_IMAGE_TAG) \
+	  DEV_IMAGE_REGISTRY=$(DEV_IMAGE_REGISTRY) \
+	  ./build-operator.sh
+	@echo "All images tagged for $(DEV_IMAGE_REGISTRY) with tag $(DEV_IMAGE_TAG)"
+
+## Push all dev-tagged images to the registry.
+.PHONY: dev-push
+dev-push: dev-image
+	@for img in $(DEV_CALICO_IMAGES); do \
+	  echo "Pushing $$img"; \
+	  docker push $$img; \
+	done
+	echo "Pushing $(DEV_OPERATOR_IMAGE)"
+	docker push $(DEV_OPERATOR_IMAGE)
+	@echo "All images pushed to $(DEV_IMAGE_REGISTRY) with tag $(DEV_IMAGE_TAG)"
+
+###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)
