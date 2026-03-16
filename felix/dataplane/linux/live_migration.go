@@ -225,25 +225,19 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 		switch input {
 		case liveMigrationInputTarget:
 			next = liveMigrationStateTarget
-			f.startGARPDetection()
 		}
 	case liveMigrationStateTarget:
 		switch input {
 		case liveMigrationInputGARPDetected:
 			next = liveMigrationStateLive
-			f.stopGARPDetection()
 		case liveMigrationInputNoRole:
 			// Live migration completed but we missed the GARP.  Go straight to
 			// TimeWait to allow routing to settle before reverting to normal.
 			next = liveMigrationStateTimeWait
-			f.stopGARPDetection()
-			f.startElevatedRoutingTimer()
 		case liveMigrationInputSource:
 			next = liveMigrationStateBase
-			f.stopGARPDetection()
 		case liveMigrationInputDeleted:
 			next = liveMigrationStateBase
-			f.stopGARPDetection()
 		}
 	case liveMigrationStateLive:
 		switch input {
@@ -251,7 +245,6 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 			// Live migration complete.  Start the timer to allow routing to
 			// settle everywhere before reverting to normal routing.
 			next = liveMigrationStateTimeWait
-			f.startElevatedRoutingTimer()
 		case liveMigrationInputSource:
 			// Re-migration: this WEP is now the source of a new live migration.
 			next = liveMigrationStateBase
@@ -267,10 +260,8 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 		case liveMigrationInputSource:
 			// Re-migration: this WEP is now the source of a new live migration.
 			next = liveMigrationStateBase
-			f.stopElevatedRoutingTimer()
 		case liveMigrationInputDeleted:
 			next = liveMigrationStateBase
-			f.stopElevatedRoutingTimer()
 		}
 	}
 
@@ -280,6 +271,24 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 			"from":         f.currentState,
 			"to":           next,
 		}).Info("Live migration state transition")
+
+		// Do actions that we should always do when leaving a state.
+		switch f.currentState {
+		case liveMigrationStateTarget:
+			f.stopGARPDetection()
+		case liveMigrationStateTimeWait:
+			f.stopElevatedRoutingTimer()
+		}
+
+		// Do actions that we should always do when entering a state.
+		switch next {
+		case liveMigrationStateTarget:
+			f.startGARPDetection()
+		case liveMigrationStateTimeWait:
+			f.startElevatedRoutingTimer()
+		}
+
+		// Update state.
 		f.currentState = next
 		f.emitStateChange(next)
 	} else {
