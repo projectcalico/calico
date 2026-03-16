@@ -66,8 +66,8 @@ func newLiveMigrationMonitor(convergenceTime time.Duration) *liveMigrationMonito
 	return &liveMigrationMonitor{
 		roles:         make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
 		fsms:          make(map[types.WorkloadEndpointID]*liveMigrationFSM),
-		timerC:        make(chan types.WorkloadEndpointID, 100),
-		garpC:         make(chan types.WorkloadEndpointID, 100),
+		timerC:        make(chan types.WorkloadEndpointID),
+		garpC:         make(chan types.WorkloadEndpointID),
 		ifaceNames:    make(map[types.WorkloadEndpointID]string),
 		migrationUIDs: make(map[types.WorkloadEndpointID]string),
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
@@ -322,11 +322,7 @@ func (f *liveMigrationFSM) startElevatedRoutingTimer() {
 	f.logCtx.WithField("duration", f.monitor.convergenceTime).Debug("Starting elevated routing timer")
 	id := f.id
 	f.timer = time.AfterFunc(f.monitor.convergenceTime, func() {
-		select {
-		case f.monitor.timerC <- id:
-		default:
-			logrus.WithField("id", id).Warn("Live migration timer channel full, dropping timer pop")
-		}
+		f.monitor.timerC <- id
 	})
 }
 
@@ -369,11 +365,7 @@ func detectGARP(logCtx *logrus.Entry, id types.WorkloadEndpointID,
 	for packet := range packetSource.Packets() {
 		if isGARPOrRARP(packet) {
 			logCtx.Info("Detected GARP/RARP packet on workload interface")
-			select {
-			case garpC <- id:
-			default:
-				logCtx.Warn("GARP detection channel full, dropping notification")
-			}
+			garpC <- id
 			return
 		}
 	}

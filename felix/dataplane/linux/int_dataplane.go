@@ -2360,8 +2360,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onIfaceMonitorMessage(ifaceUpdate)
 		case id := <-d.liveMigrationMonitor.timerC:
 			d.onLiveMigrationTimerPop(id)
+			drainChan(d.liveMigrationMonitor.timerC, d.onLiveMigrationTimerPop)
 		case id := <-d.liveMigrationMonitor.garpC:
 			d.onLiveMigrationGARPDetected(id)
+			drainChan(d.liveMigrationMonitor.garpC, d.onLiveMigrationGARPDetected)
 		case name := <-d.ipipParentIfaceC:
 			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.noEncapParentIfaceC:
