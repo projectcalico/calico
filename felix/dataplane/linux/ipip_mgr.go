@@ -159,8 +159,9 @@ func (m *ipipManager) CompleteDeferredWork() error {
 }
 
 func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if isRemoteTunnelRoute(r, proto.IPPoolType_IPIP) {
-		// Ignore remote tunnel endpoint routes since they are not applicable to IPIP encapsulation.
+	// Ignore remote tunnel endpoint routes since they are not applicable to IPIP encapsulation, but we also need
+	// to program routes for borrowed addresses.
+	if isRemoteTunnelRoute(r, proto.IPPoolType_IPIP) && !isBorrowedRoute(r, proto.IPPoolType_IPIP) {
 		return nil
 	}
 
@@ -171,23 +172,6 @@ func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetabl
 		return nil
 	}
 
-	logrus.Infof("sina")
-	if isBorrowedRoute(r, proto.IPPoolType_IPIP) {
-		logrus.Infof("sina0")
-		// We treat remote tunnel routes as directly connected. They don't have a gateway of
-		// the VTEP because they ARE the VTEP!
-		return &routetable.Target{
-			Type: routetable.TargetTypeOnLink,
-			RouteKey: routetable.RouteKey{
-				CIDR: cidr,
-			},
-			GW:       ip.FromString(remoteAddr),
-			Protocol: m.routeProtocol,
-			MTU:      m.dpConfig.IPIPMTU,
-		}
-	}
-
-	logrus.Infof("sina1")
 	return &routetable.Target{
 		Type: routetable.TargetTypeOnLink,
 		RouteKey: routetable.RouteKey{
