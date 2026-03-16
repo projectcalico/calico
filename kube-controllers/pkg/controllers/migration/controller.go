@@ -478,12 +478,49 @@ func (m *migrationController) handleWaiting(logCtx *log.Entry, dm *DatastoreMigr
 	return m.updateStatus(dm)
 }
 
-// handleConverged transitions to Complete once the operator and components have
-// switched over to the new API version. Currently transitions immediately;
-// once Felix and Typha report their active API group (CORE-12315), this should
-// wait until all instances confirm they are reading from projectcalico.org/v3.
+// handleConverged waits for all components to switch to the v3 API group
+// before transitioning to Complete. It checks the calico-node DaemonSet for
+// the CALICO_API_GROUP env var and verifies the rollout is fully complete.
 func (m *migrationController) handleConverged(logCtx *log.Entry, dm *DatastoreMigration) error {
-	logCtx.Info("Migration converged, transitioning to Complete")
+	ds, err := m.k8sClient.AppsV1().DaemonSets("calico-system").Get(m.ctx, "calico-node", metav1.GetOptions{})
+	if err != nil {
+		logCtx.WithError(err).Info("Failed to get calico-node DaemonSet, will retry")
+		return nil
+	}
+
+	// Check if calico-node has been configured with the v3 API group.
+	hasV3Env := false
+	for _, c := range ds.Spec.Template.Spec.Containers {
+		for _, e := range c.Env {
+			if e.Name == "CALICO_API_GROUP" && e.Value == "projectcalico.org/v3" {
+				hasV3Env = true
+				break
+			}
+		}
+	}
+	if !hasV3Env {
+		logCtx.Info("Waiting for calico-node DaemonSet to be configured with CALICO_API_GROUP=projectcalico.org/v3")
+		return nil
+	}
+
+	// Verify the rollout is complete — all pods running the new template.
+	if ds.Status.ObservedGeneration != ds.Generation {
+		logCtx.Info("Waiting for calico-node DaemonSet rollout to be observed")
+		return nil
+	}
+	if ds.Status.UpdatedNumberScheduled != ds.Status.DesiredNumberScheduled {
+		logCtx.WithFields(log.Fields{
+			"updatedNumberScheduled": ds.Status.UpdatedNumberScheduled,
+			"desiredNumberScheduled": ds.Status.DesiredNumberScheduled,
+		}).Info("Waiting for calico-node DaemonSet rollout to complete")
+		return nil
+	}
+	if ds.Status.NumberUnavailable > 0 {
+		logCtx.WithField("numberUnavailable", ds.Status.NumberUnavailable).Info("Waiting for all calico-node pods to be available")
+		return nil
+	}
+
+	logCtx.Info("All calico-node pods running with v3 API group, transitioning to Complete")
 	now := metav1.Now()
 	dm.Status.Phase = DatastoreMigrationPhaseComplete
 	dm.Status.CompletedAt = &now

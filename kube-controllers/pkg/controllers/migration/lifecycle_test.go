@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -389,6 +391,9 @@ func TestLifecycle_FullMigration(t *testing.T) {
 	if dm.Annotations == nil || dm.Annotations[savedAPIServiceAnnotation] == "" {
 		t.Error("expected saved APIService annotation on CR")
 	}
+
+	// Simulate the operator rolling out calico-node with the v3 API group env var.
+	createReadyCalicoNodeDS(t, c)
 
 	// Reconcile 3: transitions from Converged to Complete.
 	if err := c.reconcile(); err != nil {
@@ -880,5 +885,52 @@ func createV3CRD(name string) *unstructured.Unstructured {
 				"group": "projectcalico.org",
 			},
 		},
+	}
+}
+
+// createReadyCalicoNodeDS creates a calico-node DaemonSet with the CALICO_API_GROUP
+// env var set and a fully rolled out status, simulating what the operator does after
+// detecting that migration has converged.
+func createReadyCalicoNodeDS(t *testing.T, c *migrationController) {
+	t.Helper()
+	ds := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "calico-node",
+			Namespace:  "calico-system",
+			Generation: 1,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"k8s-app": "calico-node"},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"k8s-app": "calico-node"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "calico-node",
+							Image: "calico/node:latest",
+							Env: []corev1.EnvVar{
+								{Name: "CALICO_API_GROUP", Value: "projectcalico.org/v3"},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: appsv1.DaemonSetStatus{
+			ObservedGeneration:     1,
+			DesiredNumberScheduled: 3,
+			CurrentNumberScheduled: 3,
+			UpdatedNumberScheduled: 3,
+			NumberAvailable:        3,
+			NumberReady:            3,
+		},
+	}
+	_, err := c.k8sClient.AppsV1().DaemonSets("calico-system").Create(c.ctx, ds, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("creating calico-node DaemonSet: %v", err)
 	}
 }
