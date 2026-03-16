@@ -141,6 +141,7 @@ const (
 	IfaceTypeL3
 	IfaceTypeBond
 	IfaceTypeBondSlave
+	IfaceTypeNetkit
 	IfaceTypeUnknown
 )
 
@@ -2395,6 +2396,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		endpointID   *types.WorkloadEndpointID
 		ifaceUp      bool
 		ifindex      int
+		ifaceType    IfaceType
 		hasIstioDSCP bool
 	)
 
@@ -2405,6 +2407,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		ifindex = iface.info.ifIndex
 		endpointID = iface.info.endpointID
 		state = iface.dpState
+		ifaceType = iface.info.ifaceType
 		hasIstioDSCP = iface.info.hasIstioDSCP
 		return false
 	})
@@ -2421,25 +2424,29 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	// datastore.  If we don't have an endpoint then we'll attach a program to block traffic and we'll
 	// get the jump map ready to insert the policy if the endpoint shows up.
 
-	// Attach the qdisc first; it is shared between the directions.
-	existed, err := m.dp.ensureQdisc(ifaceName)
-	if err != nil {
-		if isLinkNotFoundError(err) {
-			// Interface is gone, nothing to do.
-			logrus.WithField("ifaceName", ifaceName).Debug(
-				"Ignoring request to program interface that is not present.")
-			return state, nil
+	// Netkit devices don't need a qdisc — only legacy TC does.
+	if ifaceType != IfaceTypeNetkit {
+		// Attach the qdisc first; it is shared between the directions.
+		existed, err := m.dp.ensureQdisc(ifaceName)
+		if err != nil {
+			if isLinkNotFoundError(err) {
+				// Interface is gone, nothing to do.
+				logrus.WithField("ifaceName", ifaceName).Debug(
+					"Ignoring request to program interface that is not present.")
+				return state, nil
+			}
+			return state, err
 		}
-		return state, err
-	}
-	if !existed {
-		// Cannot be ready if the qdisc is not there so no program can be
-		// attached. Do the full attach!
-		state.v4Readiness = ifaceNotReady
-		state.v6Readiness = ifaceNotReady
+		if !existed {
+			// Cannot be ready if the qdisc is not there so no program can be
+			// attached. Do the full attach!
+			state.v4Readiness = ifaceNotReady
+			state.v6Readiness = ifaceNotReady
+		}
 	}
 
 	var (
+		err                   error
 		ingressErr, egressErr error
 		err4, err6            error
 		ingressAP4, egressAP4 *tc.AttachPoint
@@ -2468,6 +2475,13 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
+
+	// For netkit devices, override the attachment mechanism to use native netkit BPF
+	// attachment instead of TC/TCX. This is per-device: veth and netkit endpoints can
+	// coexist on the same node.
+	if ifaceType == IfaceTypeNetkit && tc.IsNetkitSupported() {
+		ap.AttachType = apiv3.BPFAttachOption(tc.AttachOptionNetkit)
+	}
 	if wep != nil && wep.QosControls != nil {
 		// QoSControls are present, update state
 
@@ -3863,8 +3877,8 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
 	return tc.EnsureQdisc(iface)
 }
 
-func (m *bpfEndpointManager) loadTCObj(at hook.AttachType, pm *hook.ProgramsMap) (hook.Layout, error) {
-	result, err := pm.LoadObj(at, string(m.bpfAttachType), m.disabledOptionalProgs)
+func (m *bpfEndpointManager) loadTCObj(at hook.AttachType, pm *hook.ProgramsMap, progAttachType string) (hook.Layout, error) {
+	result, err := pm.LoadObj(at, progAttachType, m.disabledOptionalProgs)
 	if err != nil {
 		return nil, err
 	}
@@ -3875,7 +3889,7 @@ func (m *bpfEndpointManager) loadTCObj(at hook.AttachType, pm *hook.ProgramsMap)
 	}
 
 	at.LogLevel = "off"
-	resultNoDebug, err := pm.LoadObj(at, string(m.bpfAttachType), m.disabledOptionalProgs)
+	resultNoDebug, err := pm.LoadObj(at, progAttachType, m.disabledOptionalProgs)
 	if err != nil {
 		return nil, err
 	}
@@ -3914,24 +3928,29 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 	var err error
 
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
+		// Derive the program attach type from the attach point. For netkit
+		// devices this will be "Netkit", otherwise it comes from the global config.
+		progAttachType := string(aptc.AttachType)
+
 		at := hook.AttachType{
-			Hook:       aptc.HookName(),
-			Type:       aptc.Type,
-			LogLevel:   aptc.LogLevel,
-			ToHostDrop: aptc.ToHostDrop,
-			DSR:        aptc.DSR,
+			Hook:           aptc.HookName(),
+			Family:         int(ipFamily),
+			Type:           aptc.Type,
+			LogLevel:       aptc.LogLevel,
+			ToHostDrop:     aptc.ToHostDrop,
+			DSR:            aptc.DSR,
+			ProgAttachType: progAttachType,
 		}
 
-		at.Family = int(ipFamily)
 		policyIdx := aptc.PolicyIdxV4
 		ap.Log().Debugf("ensureProgramLoaded %d", ipFamily)
 		if ipFamily == proto.IPVersion_IPV6 {
-			if aptc.HookLayoutV6, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap)); err != nil {
+			if aptc.HookLayoutV6, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
 				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 			}
 			policyIdx = aptc.PolicyIdxV6
 		} else {
-			if aptc.HookLayoutV4, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap)); err != nil {
+			if aptc.HookLayoutV4, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
 				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 			}
 		}
@@ -4719,6 +4738,8 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 	}
 
 	switch link.Type() {
+	case "netkit":
+		return IfaceTypeNetkit
 	case "ipip":
 		return IfaceTypeIPIP
 	case "wireguard":
