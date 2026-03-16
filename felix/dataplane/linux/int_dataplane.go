@@ -22,7 +22,6 @@ import (
 	"os"
 	"reflect"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -906,10 +905,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
-	// Scale ring buffer size by NumCPU to preserve the same total buffer capacity
-	// as the old per-CPU perf event array. With perf, BPFExportBufferSizeMB was
-	// allocated per CPU; the ring buffer is shared, so we multiply to match.
-	ringBufSize := config.BPFExportBufferSizeMB * 1024 * 1024 * runtime.NumCPU()
+	ringBufSize := calcRingBufSize(config.BPFExportBufferSizeMB)
 	bpfringbuf.SetMapSize(ringBufSize)
 
 	var (
@@ -3033,4 +3029,33 @@ func conntrackMapSizeFromFile() (int, error) {
 		return 0, err
 	}
 	return strconv.Atoi(strings.TrimSpace(string(data)))
+}
+
+// calcRingBufSize computes the ring buffer size in bytes. It scales
+// BPFExportBufferSizeMB by the number of possible CPUs (to preserve the same
+// total capacity as the old per-CPU perf event array), then rounds up to the
+// next power of two (kernel requirement for ring buffer maps).
+func calcRingBufSize(perCPUMB int) int {
+	numCPUs := bpfmaps.NumPossibleCPUs()
+	sizeMB := perCPUMB * numCPUs
+
+	if sizeMB&(sizeMB-1) != 0 {
+		sizeMB = nextPowerOfTwo(sizeMB)
+		log.Infof("Ring buffer size rounded up to %d MB (next power of two)", sizeMB)
+	}
+
+	log.Infof("Ring buffer size: %d MB (%d MB per CPU x %d CPUs)", sizeMB, perCPUMB, numCPUs)
+	return sizeMB * 1024 * 1024
+}
+
+func nextPowerOfTwo(v int) int {
+	v--
+	v |= v >> 1
+	v |= v >> 2
+	v |= v >> 4
+	v |= v >> 8
+	v |= v >> 16
+	v |= v >> 32
+	v++
+	return v
 }

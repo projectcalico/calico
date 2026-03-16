@@ -32,9 +32,6 @@ import (
 type Type uint16
 
 const (
-	// MaxCPUs is the currenty supported max number of CPUs
-	MaxCPUs = 512
-
 	// TypeProtoStats protocol v4 stats
 	TypeProtoStats Type = 1
 	// TypeDNSEvent reports information on DNS packets
