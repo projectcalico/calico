@@ -73,9 +73,7 @@ def put(
       e.g. "12345", and indicates that the write should only proceed if
       replacing an existing value with that mod_revision.
 
-    Returns the resource's metadata UID (a string) if the write happened
-    successfully; None if not.  The returned UID is truthy on success, so
-    callers that previously checked truthiness are unaffected.
+    Returns True if the write happened successfully; False if not.
     """
     key = _build_key(resource_kind, namespace, name)
     value = None
@@ -118,10 +116,7 @@ def put(
         value["metadata"]["labels"] = labels
     # Set the new spec (overriding whatever may already be there).
     value["spec"] = spec
-    uid = value["metadata"]["uid"]
-    if etcdv3.put(key, json.dumps(value), mod_revision=mod_revision):
-        return uid
-    return None
+    return etcdv3.put(key, json.dumps(value), mod_revision=mod_revision)
 
 
 def get(resource_kind, name):
@@ -228,15 +223,6 @@ def delete(resource_kind, namespace, name, mod_revision=None):
     """
     key = _build_key(resource_kind, namespace, name)
     return etcdv3.delete(key, mod_revision=mod_revision)
-
-
-def get_uid(resource_kind, namespace, name):
-    """Read the metadata UID of a Calico v3 resource."""
-    try:
-        value, _ = _get_with_metadata(resource_kind, namespace, name)
-        return value.get("metadata", {}).get("uid", "unknown")
-    except Exception:
-        return "unknown"
 
 
 SANITIZE_LABEL_MAX_LENGTH = 63

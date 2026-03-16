@@ -810,69 +810,13 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					}
 				}
 
-				// Collect the IP prefixes that we want to route locally to this endpoint:
 				logCxt.Info("Updating endpoint routes.")
-				var (
-					ipStrings  []string
-					natInfos   []*proto.NatInfo
-					addrSuffix string
-				)
-				if m.ipVersion == 4 {
-					ipStrings = workload.Ipv4Nets
-					natInfos = workload.Ipv4Nat
-					addrSuffix = "/32"
-				} else {
-					ipStrings = workload.Ipv6Nets
-					natInfos = workload.Ipv6Nat
-					addrSuffix = "/128"
-				}
-				alreadyCopied := false
-				for _, natInfo := range natInfos {
-					if m.cfg.floatingIPsEnabled || id.OrchestratorId == apiv3.OrchestratorOpenStack {
-						if !alreadyCopied {
-							ipStrings = append([]string(nil), ipStrings...)
-							alreadyCopied = true
-						}
-						ipStrings = append(ipStrings, natInfo.ExtIp+addrSuffix)
-					}
-				}
-
-				var mac net.HardwareAddr
-				if workload.Mac != "" {
-					var err error
-					mac, err = net.ParseMAC(workload.Mac)
-					if err != nil {
-						logCxt.WithError(err).Error(
-							"Failed to parse endpoint's MAC address")
-					}
-				}
-				var routeTargets []routetable.Target
-				lmState, hasLMState := m.pendingLiveMigrationStates[id]
-				if hasLMState && lmState == liveMigrationStateTarget {
-					logCxt.Debug("Live migration target, suppressing routes")
-				} else if adminUp {
-					routePriority := m.cfg.normalRoutePriority
-					if hasLMState {
-						// Live or TimeWait: use elevated priority.
-						routePriority = m.cfg.elevatedRoutePriority
-						logCxt.WithField("priority", routePriority).Debug(
-							"Endpoint up, adding routes with elevated priority for live migration")
-					} else {
-						logCxt.Debug("Endpoint up, adding routes")
-					}
-					for _, s := range ipStrings {
-						routeTargets = append(routeTargets, routetable.Target{
-							RouteKey: routetable.RouteKey{
-								CIDR:     ip.MustParseCIDROrIP(s),
-								Priority: routePriority,
-							},
-							DestMAC: mac,
-						})
-					}
+				if adminUp {
+					m.routeTable.SetRoutes(workload.Name, m.calculateRoutes(logCxt, id, workload))
 				} else {
 					logCxt.Debug("Endpoint down, removing routes")
+					m.routeTable.SetRoutes(workload.Name, nil)
 				}
-				m.routeTable.SetRoutes(workload.Name, routeTargets)
 				m.wlIfaceNamesToReconfigure.Add(workload.Name)
 				m.activeWlEndpoints[id] = workload
 				m.activeWlIfaceNameToID[workload.Name] = id
@@ -992,6 +936,78 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		}
 		m.wlIfaceNamesToReconfigure.Discard(ifaceName)
 	}
+}
+
+func (m *endpointManager) calculateRoutes(
+	logCxt *log.Entry,
+	id types.WorkloadEndpointID,
+	workload *proto.WorkloadEndpoint,
+) (
+	routeTargets []routetable.Target,
+) {
+	lmState, hasLMState := m.pendingLiveMigrationStates[id]
+	if hasLMState && lmState == liveMigrationStateTarget {
+		logCxt.Debug("Live migration target, suppressing routes")
+		return
+	}
+
+	// Collect the IP prefixes that we want to route locally to this endpoint:
+	var (
+		ipStrings  []string
+		natInfos   []*proto.NatInfo
+		addrSuffix string
+	)
+	if m.ipVersion == 4 {
+		ipStrings = workload.Ipv4Nets
+		natInfos = workload.Ipv4Nat
+		addrSuffix = "/32"
+	} else {
+		ipStrings = workload.Ipv6Nets
+		natInfos = workload.Ipv6Nat
+		addrSuffix = "/128"
+	}
+	alreadyCopied := false
+	for _, natInfo := range natInfos {
+		if m.cfg.floatingIPsEnabled || id.OrchestratorId == apiv3.OrchestratorOpenStack {
+			if !alreadyCopied {
+				ipStrings = append([]string(nil), ipStrings...)
+				alreadyCopied = true
+			}
+			ipStrings = append(ipStrings, natInfo.ExtIp+addrSuffix)
+		}
+	}
+
+	var mac net.HardwareAddr
+	if workload.Mac != "" {
+		var err error
+		mac, err = net.ParseMAC(workload.Mac)
+		if err != nil {
+			logCxt.WithError(err).Error(
+				"Failed to parse endpoint's MAC address")
+		}
+	}
+
+	routePriority := m.cfg.normalRoutePriority
+	if hasLMState {
+		// Live or TimeWait: use elevated priority.
+		routePriority = m.cfg.elevatedRoutePriority
+		logCxt.WithField("priority", routePriority).Debug(
+			"Endpoint up, adding routes with elevated priority for live migration")
+	} else {
+		logCxt.Debug("Endpoint up, adding routes")
+	}
+
+	for _, s := range ipStrings {
+		routeTargets = append(routeTargets, routetable.Target{
+			RouteKey: routetable.RouteKey{
+				CIDR:     ip.MustParseCIDROrIP(s),
+				Priority: routePriority,
+			},
+			DestMAC: mac,
+		})
+	}
+
+	return
 }
 
 func (m *endpointManager) updateWorkloadEndpointChains(

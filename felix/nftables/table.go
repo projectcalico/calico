@@ -302,6 +302,70 @@ func NewTable(
 	// as well as the base chains that we program which start with "nat", "filter", "mangle", "raw".
 	ourChainsRegexp := regexp.MustCompile("^(cali|nat|filter|mangle|raw)-.*")
 
+	nftFamily := knftables.IPv4Family
+	ipsetFamily := ipsets.IPFamilyV4
+	if ipVersion == 6 {
+		nftFamily = knftables.IPv6Family
+		ipsetFamily = ipsets.IPFamilyV6
+	}
+
+	logFields := logrus.Fields{
+		"ipVersion": ipVersion,
+		"table":     name,
+	}
+
+	return newTable(
+		name, ipVersion, hashPrefix, featureDetector, options, required,
+		ourChainsRegexp, baseChains, nftFamily, ipsetFamily,
+		logFields, fmt.Sprintf("%d", ipVersion),
+	)
+}
+
+// NewARPTable creates a new NftablesTable in the ARP family. This is used for
+// proxy ARP suppression, preventing the host from responding to ARP requests
+// from workloads for their own IPs. The ARP family table has a single
+// filter-OUTPUT base chain.
+func NewARPTable(
+	name string,
+	hashPrefix string,
+	featureDetector environment.FeatureDetectorIface,
+	options TableOptions,
+	required bool,
+) *NftablesTable {
+	// Match dynamically-programmed chains ("cali-arp-*" for workload and dispatch chains)
+	// and base chains ("filter-OUTPUT", prefixed by the table layer name).
+	ourChainsRegexp := regexp.MustCompile("^(cali|filter)-.*")
+
+	logFields := logrus.Fields{
+		"ipVersion": 4,
+		"table":     name,
+		"family":    "arp",
+	}
+
+	return newTable(
+		name, 4, hashPrefix, featureDetector, options, required,
+		ourChainsRegexp, arpBaseChains, knftables.ARPFamily, ipsets.IPFamilyV4,
+		logFields, "arp",
+	)
+}
+
+// newTable is the shared constructor for both NewTable and NewARPTable. The two
+// public constructors differ only in the nftables family, base chain set,
+// chain-ownership regexp, and logging labels; everything else is identical.
+func newTable(
+	name string,
+	ipVersion uint8,
+	hashPrefix string,
+	featureDetector environment.FeatureDetectorIface,
+	options TableOptions,
+	required bool,
+	ourChainsRegexp *regexp.Regexp,
+	baseChainDefs map[string]knftables.Chain,
+	nftFamily knftables.Family,
+	ipsetFamily ipsets.IPFamily,
+	logFields logrus.Fields,
+	gaugeLabel string,
+) *NftablesTable {
 	// Pre-populate the insert and append table with empty lists for each kernel chain.  Ensures that we
 	// clean up any chains that we hooked on a previous run.
 	inserts := map[string][]generictables.Rule{}
@@ -312,7 +376,7 @@ func NewTable(
 
 	if !options.Disabled {
 		// Only add the base chains if the table is enabled.
-		for _, baseChain := range baseChains {
+		for _, baseChain := range baseChainDefs {
 			inserts[baseChain.Name] = []generictables.Rule{}
 			appends[baseChain.Name] = []generictables.Rule{}
 			chainNameToChain[baseChain.Name] = &generictables.Chain{
@@ -337,21 +401,10 @@ func NewTable(
 		now = options.NowOverride
 	}
 
-	logFields := logrus.Fields{
-		"ipVersion": ipVersion,
-		"table":     name,
-	}
-
 	if options.NewDataplane == nil {
 		options.NewDataplane = knftables.New
 	}
 
-	nftFamily := knftables.IPv4Family
-	ipsetFamily := ipsets.IPFamilyV4
-	if ipVersion == 6 {
-		nftFamily = knftables.IPv6Family
-		ipsetFamily = ipsets.IPFamilyV6
-	}
 	nft, err := options.NewDataplane(nftFamily, name)
 	if err != nil {
 		if required {
@@ -367,7 +420,7 @@ func NewTable(
 		IPSetsDataplane:        NewIPSets(ipv, nft, options.OpRecorder),
 		name:                   name,
 		nft:                    nft,
-		baseChainDefs:          baseChains,
+		baseChainDefs:          baseChainDefs,
 		render:                 NewNFTRenderer(hashPrefix, ipVersion),
 		ipVersion:              ipVersion,
 		featureDetector:        featureDetector,
@@ -393,131 +446,8 @@ func NewTable(
 		timeSleep: sleep,
 		timeNow:   now,
 
-		gaugeNumChains: gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion)),
-		gaugeNumRules:  gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion)),
-		opReporter:     options.OpRecorder,
-
-		disabled: options.Disabled,
-
-		contextTimeout: defaultTimeout,
-	}
-	table.MapsDataplane = NewMaps(
-		ipv,
-		nft,
-		table.increfChain,
-		table.decrefChain,
-		options.OpRecorder,
-	)
-
-	if options.OnStillAlive != nil {
-		table.onStillAlive = options.OnStillAlive
-	} else {
-		table.onStillAlive = func() {}
-	}
-
-	return table
-}
-
-// NewARPTable creates a new NftablesTable in the ARP family. This is used for
-// proxy ARP suppression, preventing the host from responding to ARP requests
-// from workloads for their own IPs. The ARP family table has a single
-// filter-OUTPUT base chain.
-func NewARPTable(
-	name string,
-	hashPrefix string,
-	featureDetector environment.FeatureDetectorIface,
-	options TableOptions,
-	required bool,
-) *NftablesTable {
-	// Match dynamically-programmed chains ("cali-arp-*" for workload and dispatch chains)
-	// and base chains ("filter-OUTPUT", prefixed by the table layer name).
-	ourChainsRegexp := regexp.MustCompile("^(cali|filter)-.*")
-
-	inserts := map[string][]generictables.Rule{}
-	appends := map[string][]generictables.Rule{}
-	chainNameToChain := map[string]*generictables.Chain{}
-	dirtyBaseChains := set.New[string]()
-	refcounts := map[string]int{}
-
-	if !options.Disabled {
-		for _, baseChain := range arpBaseChains {
-			inserts[baseChain.Name] = []generictables.Rule{}
-			appends[baseChain.Name] = []generictables.Rule{}
-			chainNameToChain[baseChain.Name] = &generictables.Chain{
-				Name:  baseChain.Name,
-				Rules: []generictables.Rule{},
-			}
-			dirtyBaseChains.Add(baseChain.Name)
-			refcounts[baseChain.Name] += 1
-		}
-	}
-
-	newCmd := cmdshim.NewRealCmd
-	sleep := time.Sleep
-	if options.SleepOverride != nil {
-		sleep = options.SleepOverride
-	}
-	now := time.Now
-	if options.NowOverride != nil {
-		now = options.NowOverride
-	}
-
-	logFields := logrus.Fields{
-		"ipVersion": 4,
-		"table":     name,
-		"family":    "arp",
-	}
-
-	if options.NewDataplane == nil {
-		options.NewDataplane = knftables.New
-	}
-
-	nft, err := options.NewDataplane(knftables.ARPFamily, name)
-	if err != nil {
-		if required {
-			logrus.WithError(err).Panic("Failed to create knftables ARP client")
-		} else {
-			logrus.WithError(err).Info("Failed to create knftables ARP client")
-			return nil
-		}
-	}
-
-	// ARP is IPv4-only; use IPv4 IP set config for the renderer.
-	ipsetFamily := ipsets.IPFamilyV4
-	ipv := ipsets.NewIPVersionConfig(ipsetFamily, ipsets.IPSetNamePrefix, nil, nil)
-
-	table := &NftablesTable{
-		IPSetsDataplane:        NewIPSets(ipv, nft, options.OpRecorder),
-		name:                   name,
-		nft:                    nft,
-		baseChainDefs:          arpBaseChains,
-		render:                 NewNFTRenderer(hashPrefix, 4),
-		ipVersion:              4,
-		featureDetector:        featureDetector,
-		chainToInsertedRules:   inserts,
-		chainToAppendedRules:   appends,
-		dirtyBaseChains:        dirtyBaseChains,
-		chainNameToChain:       chainNameToChain,
-		chainRefCounts:         refcounts,
-		dirtyChains:            set.New[string](),
-		chainToDataplaneHashes: map[string][]string{},
-		chainToFullRules:       map[string][]*knftables.Rule{},
-		logCxt:                 logrus.WithFields(logFields),
-		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
-			logutilslc.OptInterval(30*time.Second),
-			logutilslc.OptBurst(100),
-		).WithFields(logFields),
-		hashCommentPrefix: hashPrefix,
-		ourChainsRegexp:   ourChainsRegexp,
-
-		refreshInterval: options.RefreshInterval,
-
-		newCmd:    newCmd,
-		timeSleep: sleep,
-		timeNow:   now,
-
-		gaugeNumChains: gaugeNumChains.WithLabelValues("arp"),
-		gaugeNumRules:  gaugeNumRules.WithLabelValues("arp"),
+		gaugeNumChains: gaugeNumChains.WithLabelValues(gaugeLabel),
+		gaugeNumRules:  gaugeNumRules.WithLabelValues(gaugeLabel),
 		opReporter:     options.OpRecorder,
 
 		disabled: options.Disabled,
