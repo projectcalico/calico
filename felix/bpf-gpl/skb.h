@@ -83,11 +83,9 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct cali_tc_ctx *ctx)
 }
 
 static CALI_BPF_INLINE bool skb_is_gso(struct __sk_buff *skb) {
-#ifdef BPF_CORE_SUPPORTED
 	if (bpf_core_field_exists(skb->gso_size)) {
 		return (skb->gso_size > 0);
 	}
-#endif
 	return (skb->gso_segs > 1);
 }
 
@@ -211,7 +209,6 @@ static CALI_BPF_INLINE void skb_set_mark(struct __sk_buff *skb, __u32 mark)
 static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 {
 	if (ctx->state->flags & CALI_ST_LOG_PACKET) {
-#ifdef BPF_CORE_SUPPORTED
 		if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_trace_vprintk)) {
 #if CALI_F_XDP
 #define DIR_STR "X"
@@ -239,7 +236,6 @@ static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 			bpf_trace_vprintk(fmt, sizeof(fmt), args, sizeof(args));
 			return;
 		}
-#endif
 		if (accepted) {
 			bpf_log("ALLOWED");
 		} else {

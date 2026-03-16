@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
-	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 )
 
 func init() {
@@ -181,7 +180,6 @@ func initObjectFiles() {
 								epToHostDrop,
 								dsr,
 								logLevel,
-								bpfutils.BTFEnabled,
 							)
 							SetObjectFile(attachType, filename)
 						}
@@ -199,7 +197,7 @@ func initObjectFiles() {
 			}
 			filename := "xdp_" + l + ".o"
 			if family == 6 {
-				filename = "xdp_" + l + "_co-re_v6.o"
+				filename = "xdp_" + l + "_v6.o"
 			}
 
 			SetObjectFile(AttachType{
