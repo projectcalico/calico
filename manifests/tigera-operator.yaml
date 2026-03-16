@@ -463,6 +463,19 @@ rules:
       - get
       - list
       - watch
+  # The operator manages MutatingAdmissionPolicy resources for CRD defaulting (k8s 1.32+).
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingadmissionpolicies
+      - mutatingadmissionpolicybindings
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # Add the appropriate pod security policy permissions
   - apiGroups:
       - policy
