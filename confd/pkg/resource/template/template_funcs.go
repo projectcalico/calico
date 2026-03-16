@@ -383,11 +383,12 @@ func hasPeerTypeRules(rules []filterArgs) bool {
 
 // BGPFilterBIRDFuncs generates the definitions of a set of BIRD functions for all configured BGPFilter resources.
 //
-// When any rule within a filter uses PeerType, the generated function takes a bool parameter:
+// For each direction (import/export), if any rule for that direction within a filter uses PeerType,
+// the generated function for that direction takes a bool parameter:
 //
 //	function 'bgp_myfilter_importFilterV4'(bool is_same_as) { ... }
 //
-// Rules with PeerType are then wrapped in if (is_same_as) / if (!is_same_as) guards.
+// Within such a function, rules with PeerType are wrapped in if (is_same_as) / if (!is_same_as) guards.
 func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 	var lines []string
 	var versionStr string
@@ -414,7 +415,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 		var filter v3.BGPFilter
 		err := json.Unmarshal([]byte(kvp.Value), &filter)
 		if err != nil {
-			return nil, fmt.Errorf("error unmarshalling JSON: %s", err)
+			return nil, fmt.Errorf("error unmarshalling JSON: %w", err)
 		}
 
 		// Build rules for each direction, converting V4/V6 to unified filterArgs.
