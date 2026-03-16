@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -45,16 +46,15 @@ func TestBuildImportFilter_DefaultAccept(t *testing.T) {
 	c := &client{}
 
 	// Test with no filter - should return default accept
-	result := c.buildImportFilter(nil, "64512", "64512", 4)
+	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "accept;")
-	assert.Contains(t, result, "# Prior to introduction of BGP Filters")
 }
 
 func TestBuildImportFilter_EmptyFilters(t *testing.T) {
 	c := &client{}
 
 	// Test with empty filters array - should return default accept
-	result := c.buildImportFilter([]string{}, "64512", "64512", 4)
+	result := c.buildImportFilter([]string{}, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "accept;")
 }
 
@@ -62,8 +62,8 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 	c := &client{}
 
 	// Test that IPv4 and IPv6 return appropriate default
-	resultV4 := c.buildImportFilter(nil, "64512", "64512", 4)
-	resultV6 := c.buildImportFilter(nil, "64512", "64512", 6)
+	resultV4 := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
+	resultV6 := c.buildImportFilter(nil, "64512", "64512", 6, 1024)
 
 	// Both should have accept by default
 	assert.Contains(t, resultV4, "accept;")
@@ -73,17 +73,27 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 func TestBuildExportFilter_SameAS(t *testing.T) {
 	c := &client{}
 
-	// Same AS should result in reject (via calico_export_to_bgp_peers(true))
-	result := c.buildExportFilter(nil, "64512", "64512", 4)
+	// Same AS = iBGP — should include LOCAL_PREF conversion and calico_export_to_bgp_peers(true)
+	result := c.buildExportFilter(nil, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
 	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
 	assert.Contains(t, result, "reject;")
+}
+
+func TestBuildExportFilter_DifferentAS_NoLocalPref(t *testing.T) {
+	c := &client{}
+
+	// Different AS = eBGP — should NOT include LOCAL_PREF conversion
+	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
+	assert.NotContains(t, result, "bgp_local_pref = 2147483647 - krt_metric")
+	assert.Contains(t, result, "calico_export_to_bgp_peers(false)")
 }
 
 func TestBuildExportFilter_DifferentAS_NoFilter(t *testing.T) {
 	c := &client{}
 
 	// Different AS with no filter should use default export filter
-	result := c.buildExportFilter(nil, "65000", "64512", 4)
+	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "calico_export_to_bgp_peers(false)")
 }
 
@@ -91,8 +101,8 @@ func TestBuildExportFilter_IPv4vsIPv6(t *testing.T) {
 	c := &client{}
 
 	// Test that both IPv4 and IPv6 work
-	resultV4 := c.buildExportFilter(nil, "65000", "64512", 4)
-	resultV6 := c.buildExportFilter(nil, "65000", "64512", 6)
+	resultV4 := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
+	resultV6 := c.buildExportFilter(nil, "65000", "64512", 6, 1024)
 
 	// Both should have export filter
 	assert.Contains(t, resultV4, "calico_export_to_bgp_peers")
@@ -103,7 +113,7 @@ func TestBuildExportFilter_EmptyFilters(t *testing.T) {
 	c := &client{}
 
 	// Test with empty filters array
-	result := c.buildExportFilter([]string{}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{}, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "calico_export_to_bgp_peers")
 }
 
@@ -700,6 +710,84 @@ func TestPopulateNodeConfig_DefaultLogLevel(t *testing.T) {
 
 	// Default debug mode when no log level is set
 	assert.Equal(t, "{ states }", config.DebugMode)
+}
+
+func TestPopulateNodeConfig_NormalRoutePriority_Default(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+	c := newTestClient(cache, nil)
+
+	config := &types.BirdBGPConfig{}
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// Default should be 1024
+	assert.Equal(t, 1024, config.NormalRoutePriority)
+}
+
+func TestPopulateNodeConfig_NormalRoutePriority_FromBGPConfig(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+	c := newTestClient(cache, nil)
+
+	prio := 500
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			IPv4NormalRoutePriority: &prio,
+		},
+	}
+
+	config := &types.BirdBGPConfig{}
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+	assert.Equal(t, 500, config.NormalRoutePriority)
+}
+
+func TestPopulateNodeConfig_NormalRoutePriority_IPv6(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+	c := newTestClient(cache, nil)
+
+	prio4 := 500
+	prio6 := 800
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			IPv4NormalRoutePriority: &prio4,
+			IPv6NormalRoutePriority: &prio6,
+		},
+	}
+
+	config := &types.BirdBGPConfig{}
+	err := c.populateNodeConfig(config, 6)
+	require.NoError(t, err)
+	assert.Equal(t, 800, config.NormalRoutePriority)
 }
 
 // =============================================================================
@@ -1771,7 +1859,7 @@ func TestBuildImportFilter_WithBGPFilter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"my-filter"}, "64512", "64512", 4)
+	result := c.buildImportFilter([]string{"my-filter"}, "64512", "64512", 4, 1024)
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-filter_importFilterV4'();")
@@ -1805,7 +1893,7 @@ func TestBuildImportFilter_WithMultipleBGPFilters(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"filter1", "filter2"}, "64512", "64512", 4)
+	result := c.buildImportFilter([]string{"filter1", "filter2"}, "64512", "64512", 4, 1024)
 
 	// Should include both filter function calls
 	assert.Contains(t, result, "'bgp_filter1_importFilterV4'();")
@@ -1831,7 +1919,7 @@ func TestBuildImportFilter_IPv6Filter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"ipv6-filter"}, "64512", "64512", 6)
+	result := c.buildImportFilter([]string{"ipv6-filter"}, "64512", "64512", 6, 1024)
 
 	// Should use V6 suffix
 	assert.Contains(t, result, "'bgp_ipv6-filter_importFilterV6'();")
@@ -1854,7 +1942,7 @@ func TestBuildImportFilter_FilterWithNoImportRules(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"export-only"}, "64512", "64512", 4)
+	result := c.buildImportFilter([]string{"export-only"}, "64512", "64512", 4, 1024)
 
 	// Should NOT include the filter call since there are no import rules
 	assert.NotContains(t, result, "'bgp_export-only_importFilterV4'();")
@@ -1869,7 +1957,7 @@ func TestBuildImportFilter_FilterNotFound(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"nonexistent-filter"}, "64512", "64512", 4)
+	result := c.buildImportFilter([]string{"nonexistent-filter"}, "64512", "64512", 4, 1024)
 
 	// Should NOT include the filter call since filter doesn't exist
 	assert.NotContains(t, result, "'bgp_nonexistent-filter_importFilterV4'();")
@@ -1896,7 +1984,7 @@ func TestBuildExportFilter_WithBGPFilter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildExportFilter([]string{"my-export-filter"}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"my-export-filter"}, "65000", "64512", 4, 1024)
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-export-filter_exportFilterV4'();")
@@ -1923,7 +2011,7 @@ func TestBuildExportFilter_IPv6Filter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildExportFilter([]string{"ipv6-export"}, "65000", "64512", 6)
+	result := c.buildExportFilter([]string{"ipv6-export"}, "65000", "64512", 6, 1024)
 
 	// Should use V6 suffix
 	assert.Contains(t, result, "'bgp_ipv6-export_exportFilterV6'();")
@@ -1946,7 +2034,7 @@ func TestBuildExportFilter_FilterWithNoExportRules(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildExportFilter([]string{"import-only"}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"import-only"}, "65000", "64512", 4, 1024)
 
 	// Should NOT include the filter call since there are no export rules
 	assert.NotContains(t, result, "'bgp_import-only_exportFilterV4'();")
@@ -1974,7 +2062,7 @@ func TestBuildImportFilter_WithPeerType_SameAS(t *testing.T) {
 	c := newTestClient(cache, nil)
 
 	// Same AS → sameAS=true → is_same_as=true
-	result := c.buildImportFilter([]string{"pt-filter"}, "64512", "64512", 4)
+	result := c.buildImportFilter([]string{"pt-filter"}, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(true);")
 	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
 }
@@ -1999,7 +2087,7 @@ func TestBuildImportFilter_WithPeerType_DifferentAS(t *testing.T) {
 	c := newTestClient(cache, nil)
 
 	// Different AS → sameAS=false → is_same_as=false
-	result := c.buildImportFilter([]string{"pt-filter"}, "65000", "64512", 4)
+	result := c.buildImportFilter([]string{"pt-filter"}, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(false);")
 	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
 }
@@ -2024,7 +2112,7 @@ func TestBuildImportFilter_WithoutPeerType_NoParam(t *testing.T) {
 	c := newTestClient(cache, nil)
 
 	// No PeerType rules → function called without parameter
-	result := c.buildImportFilter([]string{"no-pt-filter"}, "65000", "64512", 4)
+	result := c.buildImportFilter([]string{"no-pt-filter"}, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "'bgp_no-pt-filter_importFilterV4'();")
 	assert.NotContains(t, result, "'bgp_no-pt-filter_importFilterV4'(true);")
 	assert.NotContains(t, result, "'bgp_no-pt-filter_importFilterV4'(false);")
@@ -2050,7 +2138,7 @@ func TestBuildExportFilter_WithPeerType_SameAS(t *testing.T) {
 	c := newTestClient(cache, nil)
 
 	// Same AS → sameAS=true → is_same_as=true
-	result := c.buildExportFilter([]string{"pt-export"}, "64512", "64512", 4)
+	result := c.buildExportFilter([]string{"pt-export"}, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(true);")
 	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
 }
@@ -2075,7 +2163,7 @@ func TestBuildExportFilter_WithPeerType_DifferentAS(t *testing.T) {
 	c := newTestClient(cache, nil)
 
 	// Different AS → sameAS=false → is_same_as=false
-	result := c.buildExportFilter([]string{"pt-export"}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"pt-export"}, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(false);")
 	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
 }
@@ -2100,7 +2188,7 @@ func TestBuildExportFilter_WithoutPeerType_NoParam(t *testing.T) {
 	c := newTestClient(cache, nil)
 
 	// No PeerType rules → function called without parameter
-	result := c.buildExportFilter([]string{"no-pt-export"}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"no-pt-export"}, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "'bgp_no-pt-export_exportFilterV4'();")
 	assert.NotContains(t, result, "'bgp_no-pt-export_exportFilterV4'(true);")
 	assert.NotContains(t, result, "'bgp_no-pt-export_exportFilterV4'(false);")
@@ -2137,7 +2225,7 @@ func TestBuildImportFilter_MixedPeerTypeAndNonPeerType(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"with-pt", "without-pt"}, "65000", "64512", 4)
+	result := c.buildImportFilter([]string{"with-pt", "without-pt"}, "65000", "64512", 4, 1024)
 
 	// PeerType filter gets the bool parameter
 	assert.Contains(t, result, "'bgp_with-pt_importFilterV4'(false);")
@@ -2508,4 +2596,46 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestBuildImportFilter_iBGP(t *testing.T) {
+	c := &client{}
+
+	// Same AS = iBGP — should default krt_metric, convert from bgp_local_pref, and set preference
+	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "krt_metric = 1024;")
+	assert.Contains(t, result, "krt_metric = 2147483647 - bgp_local_pref")
+	assert.Contains(t, result, "if (krt_metric < 1024) then")
+	assert.Contains(t, result, "preference = 200;")
+	assert.Contains(t, result, "accept;")
+}
+
+func TestBuildImportFilter_eBGP(t *testing.T) {
+	c := &client{}
+
+	// Different AS = eBGP — should default krt_metric and set preference, but no LOCAL_PREF conversion
+	result := c.buildImportFilter(nil, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "krt_metric = 1024;")
+	assert.NotContains(t, result, "krt_metric = 2147483647 - bgp_local_pref")
+	assert.Contains(t, result, "if (krt_metric < 1024) then")
+	assert.Contains(t, result, "preference = 200;")
+	assert.Contains(t, result, "accept;")
+}
+
+func TestBuildImportFilter_CustomPriority(t *testing.T) {
+	c := &client{}
+
+	// Custom priority should appear in both the default and the preference check
+	result := c.buildImportFilter(nil, "64512", "64512", 4, 2000)
+	assert.Contains(t, result, "krt_metric = 2000;")
+	assert.Contains(t, result, "if (krt_metric < 2000) then")
+}
+
+func TestBuildExportFilter_iBGP_CustomPriority(t *testing.T) {
+	c := &client{}
+
+	// iBGP with custom priority — LOCAL_PREF conversion should still appear
+	result := c.buildExportFilter(nil, "64512", "64512", 4, 2000)
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
+	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
 }
