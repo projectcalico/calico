@@ -34,16 +34,7 @@ int calico_connect_v46(struct bpf_sock_addr *ctx)
 	int ret = 1;
 	__be32 ipv4;
 
-#ifdef BPF_CORE_SUPPORTED
 	CALI_DEBUG("connect_v46 %pI6", ctx->user_ip6);
-#else
-	CALI_DEBUG("connect_v46 ip[0-1] %x%x",
-			ctx->user_ip6[0],
-			ctx->user_ip6[1]);
-	CALI_DEBUG("connect_v46 ip[2-3] %x%x",
-			ctx->user_ip6[2],
-			ctx->user_ip6[3]);
-#endif
 
 	if (is_ipv4_as_ipv6(ctx->user_ip6)) {
 		goto v4;
@@ -74,16 +65,7 @@ int calico_sendmsg_v46(struct bpf_sock_addr *ctx)
 
 	__be32 ipv4;
 
-#ifdef BPF_CORE_SUPPORTED
 	CALI_DEBUG("sendmsg_v46 %pI6", ctx->user_ip6);
-#else
-	CALI_DEBUG("sendmsg_v46 ip[0-1] %x%x",
-			ctx->user_ip6[0],
-			ctx->user_ip6[1]);
-	CALI_DEBUG("sendmsg_v46 ip[2-3] %x%x",
-			ctx->user_ip6[2],
-			ctx->user_ip6[3]);
-#endif
 
 	if (is_ipv4_as_ipv6(ctx->user_ip6)) {
 		goto v4;
@@ -115,16 +97,7 @@ int calico_recvmsg_v46(struct bpf_sock_addr *ctx)
 
 	__be32 ipv4;
 
-#ifdef BPF_CORE_SUPPORTED
 	CALI_DEBUG("recvmsg_v46 %pI6", ctx->user_ip6);
-#else
-	CALI_DEBUG("recvmsg_v46 ip[0-1] %x%x",
-			ctx->user_ip6[0],
-			ctx->user_ip6[1]);
-	CALI_DEBUG("recvmsg_v46 ip[2-3] %x%x",
-			ctx->user_ip6[2],
-			ctx->user_ip6[3]);
-#endif
 
 	if (is_ipv4_as_ipv6(ctx->user_ip6)) {
 		goto v4;

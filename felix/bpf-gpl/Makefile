@@ -141,7 +141,6 @@ UT_CFLAGS=\
 	-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG \
 	-DUNITTEST \
 	-DCALI_LOG_PFX=UNITTEST \
-	-DBPF_CORE_SUPPORTED	\
 	-I .
 
 # Mini-UT programs that test one or two functions.  These are each in their own files.
@@ -313,7 +312,7 @@ bin:
 .PRECIOUS: %.d %_v6.d
 
 COMPILE_DEPS=set -e; rm -f $@; \
-		$(CC) -MP -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
+		$(CC) -MP -M $(CFLAGS) $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
