@@ -1404,6 +1404,84 @@ func TestAttachTcx(t *testing.T) {
 	Expect(len(tcxProgs)).To(Equal(1))
 }
 
+func TestAttachNetkit(t *testing.T) {
+	RegisterTestingT(t)
+
+	if !tc.IsNetkitSupported() {
+		t.Skip("Netkit not supported on this kernel")
+	}
+
+	bpfmaps, err := bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+
+	loglevel := "off"
+	bpfConfig := &linux.Config{
+		Hostname:              "uthost",
+		BPFLogLevel:           loglevel,
+		BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+		VXLANMTU:              1000,
+		VXLANPort:             1234,
+		BPFNodePortDSREnabled: false,
+		RulesConfig: rules.Config{
+			EndpointToHostAction: "RETURN",
+		},
+		BPFExtToServiceConnmark: 0,
+		BPFPolicyDebugEnabled:   true,
+		BPFAttachType:           v3.BPFAttachOptionTCX, // Global default is TCX; netkit is auto-detected per device.
+	}
+
+	bpfEpMgr, err := newBPFTestEpMgr(
+		bpfConfig,
+		bpfmaps,
+		regexp.MustCompile("^workloadep[0123]"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create a netkit device instead of a veth. Felix should auto-detect it
+	// and use native netkit BPF attachment.
+	workload0 := createNetkitName("workloadep0")
+	defer deleteLink(workload0)
+
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+		Id: &proto.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "workloadep0",
+			EndpointId:     "workloadep0",
+		},
+		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep0"},
+	})
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+
+	// Netkit should not create a qdisc.
+	hasQdisc, err := tc.HasQdisc("workloadep0")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(hasQdisc).To(BeFalse())
+
+	// No TC programs should be attached.
+	progs, err := tc.ListAttachedPrograms("workloadep0", hook.Ingress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(progs)).To(Equal(0))
+
+	// No TCX programs should be attached.
+	tcxProgs, err := tc.ListAttachedTcxPrograms("workloadep0", "ingress")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(tcxProgs)).To(Equal(0))
+
+	// No TCX pins should exist.
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).To(HaveOccurred())
+
+	// Netkit pins should exist for both ingress and egress.
+	_, err = os.Stat(bpfdefs.NetkitPinDir + "/workloadep0_ingress")
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.NetkitPinDir + "/workloadep0_egress")
+	Expect(err).NotTo(HaveOccurred())
+}
+
 func TestLogFilters(t *testing.T) {
 	RegisterTestingT(t)
 
