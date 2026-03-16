@@ -229,10 +229,7 @@ func NewCalculationGraph(
 	// Create and register the live migration calculator on localEndpointDispatcher BEFORE
 	// the active rules calculator.  This ensures the LMC sees WEP updates first, so its
 	// wepData is already populated when the ARC fires computed selector match callbacks.
-	cg.liveMigrationCalculator = NewLiveMigrationCalculator(
-		cg.activeRulesCalculator,
-		nil, // onEndpointComputedData wired up later, after polResolver is created
-	)
+	cg.liveMigrationCalculator = NewLiveMigrationCalculator(cg.activeRulesCalculator)
 	localEndpointDispatcher.Register(
 		model.WorkloadEndpointKey{},
 		cg.liveMigrationCalculator.OnUpdate,
@@ -395,7 +392,7 @@ func NewCalculationGraph(
 	// Wire up the live migration calculator's output callback and remaining dispatcher
 	// registration, now that polResolver exists.  (The LMC was created and registered on
 	// localEndpointDispatcher earlier, before the ARC, to ensure correct dispatch ordering.)
-	cg.liveMigrationCalculator.onEndpointComputedData = polResolver.OnEndpointComputedDataUpdate
+	cg.liveMigrationCalculator.OnEndpointComputedData = polResolver.OnEndpointComputedDataUpdate
 	allUpdDispatcher.Register(
 		model.ResourceKey{},
 		cg.liveMigrationCalculator.OnUpdate,

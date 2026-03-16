@@ -31,7 +31,7 @@ import (
 // proto.WorkloadEndpoints that are sent to the dataplane.
 type LiveMigrationCalculator struct {
 	activeRulesCalc        *ActiveRulesCalculator
-	onEndpointComputedData EndpointComputedDataUpdater
+	OnEndpointComputedData EndpointComputedDataUpdater
 	weps                   map[wepOwnerID]*wepData
 	liveMigrations         map[model.ResourceKey]internalapi.LiveMigration
 	// endpointKeys tracks LiveMigration resources that reference a specific endpoint
@@ -74,15 +74,11 @@ type wepData struct {
 	targetSelectorMatched string
 }
 
-func NewLiveMigrationCalculator(
-	activeRulesCalc *ActiveRulesCalculator,
-	onEndpointComputedDataUpdater EndpointComputedDataUpdater,
-) *LiveMigrationCalculator {
+func NewLiveMigrationCalculator(activeRulesCalc *ActiveRulesCalculator) *LiveMigrationCalculator {
 	lmc := &LiveMigrationCalculator{
-		activeRulesCalc:        activeRulesCalc,
-		onEndpointComputedData: onEndpointComputedDataUpdater,
-		weps:                   map[wepOwnerID]*wepData{},
-		liveMigrations:         map[model.ResourceKey]internalapi.LiveMigration{},
+		activeRulesCalc: activeRulesCalc,
+		weps:            map[wepOwnerID]*wepData{},
+		liveMigrations:  map[model.ResourceKey]internalapi.LiveMigration{},
 		endpointKeys: [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]{
 			map[wepOwnerID]set.Set[model.ResourceKey]{},
 			map[wepOwnerID]set.Set[model.ResourceKey]{},
@@ -238,10 +234,11 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 				wd.targetSelectorMatched = cs
 			})
 		}
-		// If the WEP isn't tracked yet, we can ignore this callback.  The LMC is
-		// registered on localEndpointDispatcher before the ARC, so it always sees WEP
-		// updates first.  A selector callback for an unknown WEP means the WEP was
-		// filtered out (e.g. non-local) and we don't need to track it.
+		// If the WEP isn't tracked yet, we can ignore this callback.  The LMC is registered
+		// on localEndpointDispatcher before the ARC, so it always sees WEP updates first.
+		// The unknown WEP case here (wd == nil) shouldn't occur because
+		// LiveMigrationCalculator sees the same set of local WEPs as ActiveRulesCalculator,
+		// but it's harmless to be defensive here.
 	}
 }
 
@@ -501,7 +498,7 @@ func (lmc *LiveMigrationCalculator) indicateRole(key model.WorkloadEndpointKey, 
 		"role": role,
 		"uid":  uid,
 	}).Debug("LiveMigrationCalculator: emitting role for WEP")
-	lmc.onEndpointComputedData(key, EPCompDataKindLiveMigration, &liveMigrationRole{role: role, uid: uid})
+	lmc.OnEndpointComputedData(key, EPCompDataKindLiveMigration, &liveMigrationRole{role: role, uid: uid})
 }
 
 type liveMigrationRole struct {
