@@ -465,6 +465,19 @@ rules:
       - get
       - list
       - watch
+  # The operator manages MutatingAdmissionPolicy resources for CRD defaulting (k8s 1.32+).
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingadmissionpolicies
+      - mutatingadmissionpolicybindings
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
       - config.openshift.io
