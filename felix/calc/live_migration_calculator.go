@@ -32,8 +32,8 @@ import (
 type LiveMigrationCalculator struct {
 	activeRulesCalc        *ActiveRulesCalculator
 	onEndpointComputedData EndpointComputedDataUpdater
-	weps           map[wepOwnerID]*wepData
-	liveMigrations map[model.ResourceKey]internalapi.LiveMigration
+	weps                   map[wepOwnerID]*wepData
+	liveMigrations         map[model.ResourceKey]internalapi.LiveMigration
 	// endpointKeys tracks LiveMigration resources that reference a specific endpoint
 	// (all four fields of wepOwnerID set).
 	endpointKeys [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]
@@ -81,8 +81,8 @@ func NewLiveMigrationCalculator(
 	lmc := &LiveMigrationCalculator{
 		activeRulesCalc:        activeRulesCalc,
 		onEndpointComputedData: onEndpointComputedDataUpdater,
-		weps:           map[wepOwnerID]*wepData{},
-		liveMigrations: map[model.ResourceKey]internalapi.LiveMigration{},
+		weps:                   map[wepOwnerID]*wepData{},
+		liveMigrations:         map[model.ResourceKey]internalapi.LiveMigration{},
 		endpointKeys: [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]{
 			map[wepOwnerID]set.Set[model.ResourceKey]{},
 			map[wepOwnerID]set.Set[model.ResourceKey]{},
