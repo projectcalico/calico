@@ -17,6 +17,7 @@ package ifacemonitor
 import (
 	"context"
 	"net"
+	"sync"
 	"syscall"
 	"time"
 
@@ -78,7 +79,23 @@ mainLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Info("FilterUpdates: Context expired, stopping")
+			logrus.Info("FilterUpdates: Context expired, draining input channels")
+			// Drain input channels to unblock netlink goroutines that may be
+			// blocked on a channel send.  The netlink library closes these
+			// channels when its goroutines exit (after seeing the closed socket).
+			var wg sync.WaitGroup
+			wg.Go(func() {
+				for range linkInC {
+				}
+				logrus.Debug("FilterUpdates: link input channel drained")
+			})
+			wg.Go(func() {
+				for range routeInC {
+				}
+				logrus.Debug("FilterUpdates: route input channel drained")
+			})
+			wg.Wait()
+			logrus.Info("FilterUpdates: input channels drained, stopping")
 			return
 		case linkUpd, ok := <-linkInC:
 			if !ok {
