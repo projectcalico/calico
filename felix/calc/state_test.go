@@ -52,6 +52,7 @@ type State struct {
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
 	ExpectedHostMetadataV4V6             map[string]*proto.HostMetadataV4V6Update
 	ExpectedEndpointComputedData         map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData
+	ExpectedLiveMigrationRoles           map[string]proto.LiveMigrationRole
 	ExpectedNumberOfALPPolicies          int
 	ExpectedNumberOfTiers                int
 	ExpectedNumberOfPolicies             int
@@ -82,6 +83,7 @@ func NewState() State {
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
 		ExpectedHostMetadataV4V6:             make(map[string]*proto.HostMetadataV4V6Update),
 		ExpectedEndpointComputedData:         make(map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData),
+		ExpectedLiveMigrationRoles:           make(map[string]proto.LiveMigrationRole),
 		ExpectedNumberOfPolicies:             -1,
 		ExpectedNumberOfTiers:                -1,
 		ExpectedEncapsulation:                &proto.Encapsulation{},
@@ -100,6 +102,7 @@ func (s State) Copy() State {
 	maps.Copy(cpy.ExpectedPreDNATEndpointPolicyOrder, s.ExpectedPreDNATEndpointPolicyOrder)
 	maps.Copy(cpy.ExpectedHostMetadataV4V6, s.ExpectedHostMetadataV4V6)
 	maps.Copy(cpy.ExpectedEndpointComputedData, s.ExpectedEndpointComputedData)
+	maps.Copy(cpy.ExpectedLiveMigrationRoles, s.ExpectedLiveMigrationRoles)
 
 	cpy.ExpectedPolicyIDs = s.ExpectedPolicyIDs.Copy()
 	cpy.ExpectedUntrackedPolicyIDs = s.ExpectedUntrackedPolicyIDs.Copy()
@@ -279,6 +282,16 @@ func (s State) withWireguardEndpoints(endpoints ...types.WireguardEndpointUpdate
 func (s State) withWireguardV6Endpoints(endpoints ...types.WireguardEndpointV6Update) (newState State) {
 	newState = s.Copy()
 	newState.ExpectedWireguardV6Endpoints = set.FromArray(endpoints)
+	return newState
+}
+
+func (s State) withLiveMigrationRole(endpointID string, role proto.LiveMigrationRole) (newState State) {
+	newState = s.Copy()
+	if role == proto.LiveMigrationRole_NO_ROLE {
+		delete(newState.ExpectedLiveMigrationRoles, endpointID)
+	} else {
+		newState.ExpectedLiveMigrationRoles[endpointID] = role
+	}
 	return newState
 }
 
