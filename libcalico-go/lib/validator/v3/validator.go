@@ -90,23 +90,7 @@ var (
 	bgpFilterPrefixLengthV6 = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$")
 	ignoredInterfaceRegex   = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
 	ifaceFilterRegex        = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
-	actionRegex             = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
-	protocolRegex           = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
-	ipipModeRegex           = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	assignmentModeRegex     = regexp.MustCompile("^(Automatic|Manual)$")
-	assignIPsRegex          = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
-	logLevelRegex           = regexp.MustCompile("^(Trace|Debug|Info|Warning|Error|Fatal)$")
-	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
-	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
-	bpfCTLBRegex            = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
-	bpfHostNatRegex         = regexp.MustCompile("^(Disabled|Enabled)$")
-	datastoreType           = regexp.MustCompile("^(etcdv3|kubernetes)$")
-	routeSource             = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
-	dropAcceptReturnRegex   = regexp.MustCompile("^(Drop|Accept|Return)$")
-	acceptReturnRegex       = regexp.MustCompile("^(Accept|Return)$")
-	dropRejectRegex         = regexp.MustCompile("^(Drop|Reject)$")
-	ipTypeRegex             = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
+	protocolRegex = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
 	standardCommunity       = regexp.MustCompile(`^(\d+):(\d+)$`)
 	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 	number                  = regexp.MustCompile(`(\d+)`)
@@ -124,8 +108,6 @@ var (
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
 
-	filterActionRegex  = regexp.MustCompile("^(Accept|Reject)$")
-	matchOperatorRegex = regexp.MustCompile("^(Equal|In|NotEqual|NotIn)$")
 
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
@@ -140,8 +122,6 @@ var (
 	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
 	routeTablesReservedLinux = []int{253, 254, 255}
 
-	stagedActionRegex = regexp.MustCompile("^(" + string(api.StagedActionSet) + "|" + string(api.StagedActionDelete) +
-		"|" + string(api.StagedActionLearn) + "|" + string(api.StagedActionIgnore) + ")$")
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -197,33 +177,34 @@ func init() {
 	validate = validator.New()
 
 	// Register field validators.
-	registerFieldValidator("action", validateAction)
+	// These validators are now enforced by CRD schema validation in
+	// crd_validation.go. We still register them as no-ops because
+	// go-playground/validator panics on unknown validation tags.
+	for _, tag := range []string{
+		"action", "ipVersion", "ipIpMode", "vxlanMode", "assignmentMode",
+		"assignIPs", "policyType", "logLevel", "bpfLogLevel", "bpfServiceMode",
+		"bpfConnectTimeLoadBalancing", "bpfHostNetworkedNATWithoutCTLB",
+		"dropAcceptReturn", "acceptReturn", "dropReject", "datastoreType",
+		"ipType", "sourceAddress",
+		"filterAction", "matchOperator", "stagedAction", "iptablesBackend",
+	} {
+		registerFieldValidator(tag, func(fl validator.FieldLevel) bool { return true })
+	}
+
+	// Validators kept because CRD schemas lack the constraint.
+	registerFieldValidator("createDefaultHostEndpoint", validateCreateDefaultHostEndpoint)
+
+	// Register field validators for constraints NOT covered by CRD schemas.
 	registerFieldValidator("interface", validateInterface)
 	registerFieldValidator("bgpFilterInterface", validateBGPFilterInterface)
 	registerFieldValidator("bgpFilterPrefixLengthV4", validateBGPFilterPrefixLengthV4)
 	registerFieldValidator("bgpFilterPrefixLengthV6", validateBGPFilterPrefixLengthV6)
 	registerFieldValidator("ignoredInterface", validateIgnoredInterface)
-	registerFieldValidator("datastoreType", validateDatastoreType)
 	registerFieldValidator("name", validateName)
 	registerFieldValidator("containerID", validateContainerID)
 	registerFieldValidator("selector", validateSelector)
 	registerFieldValidator("labels", validateLabels)
-	registerFieldValidator("ipVersion", validateIPVersion)
-	registerFieldValidator("ipIpMode", validateIPIPMode)
-	registerFieldValidator("stagedAction", validateStagedAction)
-	registerFieldValidator("vxlanMode", validateVXLANMode)
-	registerFieldValidator("assignmentMode", validateAssignmentMode)
-	registerFieldValidator("assignIPs", validateAssignIPs)
-	registerFieldValidator("policyType", validatePolicyType)
-	registerFieldValidator("logLevel", validateLogLevel)
-	registerFieldValidator("bpfLogLevel", validateBPFLogLevel)
 	registerFieldValidator("bpfLogFilters", validateBPFLogFilters)
-	registerFieldValidator("bpfServiceMode", validateBPFServiceMode)
-	registerFieldValidator("bpfConnectTimeLoadBalancing", validateBPFConnectTimeLoadBalancing)
-	registerFieldValidator("bpfHostNetworkedNATWithoutCTLB", validateBPFHostNetworkedNat)
-	registerFieldValidator("dropAcceptReturn", validateFelixEtoHAction)
-	registerFieldValidator("acceptReturn", validateAcceptReturn)
-	registerFieldValidator("dropReject", validateDropReject)
 	registerFieldValidator("portName", validatePortName)
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
@@ -231,26 +212,13 @@ func init() {
 	registerFieldValidator("interfaceSlice", validateInterfaceSlice)
 	registerFieldValidator("ifaceFilterSlice", validateIfaceFilterSlice)
 	registerFieldValidator("mac", validateMAC)
-	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("keyValueList", validateKeyValueList)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
-	registerFieldValidator("ipType", validateIPType)
-	registerFieldValidator("createDefaultHostEndpoint", validateCreateDefaultHostEndpoint)
-
-	registerFieldValidator("sourceAddress", RegexValidator("SourceAddress", SourceAddressRegex))
 	registerFieldValidator("regexp", validateRegexp)
 	registerFieldValidator("routeSource", validateRouteSource)
 	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
 	registerFieldValidator("IP:port", validateIPPort)
 	registerFieldValidator("reachableBy", validateReachableByField)
-
-	// Register filter action and match operator validators (used in BGPFilter)
-	registerFieldValidator("filterAction", RegexValidator("FilterAction", filterActionRegex))
-	registerFieldValidator("matchOperator", RegexValidator("MatchOperator", matchOperatorRegex))
-
-	// Register filter action and match operator validators (used in BGPFilter)
-	registerFieldValidator("filterAction", RegexValidator("FilterAction", filterActionRegex))
-	registerFieldValidator("matchOperator", RegexValidator("MatchOperator", matchOperatorRegex))
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -333,12 +301,6 @@ func registerStructValidator(validator *validator.Validate, fn validator.StructL
 	validator.RegisterStructValidation(fn, t...)
 }
 
-func validateAction(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate action: %s", s)
-	return actionRegex.MatchString(s)
-}
-
 func validateInterface(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate interface: %s", s)
@@ -405,12 +367,6 @@ func validateIfaceFilterSlice(fl validator.FieldLevel) bool {
 	return true
 }
 
-func validateDatastoreType(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Datastore Type: %s", s)
-	return datastoreType.MatchString(s)
-}
-
 func validateRegexp(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate regexp: %s", s)
@@ -466,48 +422,6 @@ func validateMustBeFalse(fl validator.FieldLevel) bool {
 	return !fl.Field().Bool()
 }
 
-func validateIPVersion(fl validator.FieldLevel) bool {
-	ver := fl.Field().Int()
-	log.Debugf("Validate ip version: %d", ver)
-	return ver == 4 || ver == 6
-}
-
-func validateIPIPMode(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate IPIP Mode: %s", s)
-	return ipipModeRegex.MatchString(s)
-}
-
-func validateIPType(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate IPType: %s", s)
-	return ipTypeRegex.MatchString(s)
-}
-
-func validateStagedAction(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate StagedAction Mode: %s", s)
-	return stagedActionRegex.MatchString(s)
-}
-
-func validateVXLANMode(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate VXLAN Mode: %s", s)
-	return vxlanModeRegex.MatchString(s)
-}
-
-func validateAssignmentMode(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Assignemnt Mode: %s", s)
-	return assignmentModeRegex.MatchString(s)
-}
-
-func validateAssignIPs(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Assign IPs: %s", s)
-	return assignIPsRegex.MatchString(s)
-}
-
 func validateCreateDefaultHostEndpoint(fl validator.FieldLevel) bool {
 	s := api.DefaultHostEndpointMode(fl.Field().String())
 	return s == api.DefaultHostEndpointsEnabled || s == api.DefaultHostEndpointsDisabled
@@ -536,18 +450,6 @@ func ValidateMAC(mac string) error {
 	return err
 }
 
-func validateIptablesBackend(fl validator.FieldLevel) bool {
-	s := api.IptablesBackend(fl.Field().String())
-	log.Debugf("Validate Iptables Backend: %s", s)
-	return s == "" || s == api.IptablesBackendAuto || s == api.IptablesBackendNFTables || s == api.IptablesBackendLegacy
-}
-
-func validateLogLevel(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Felix log level: %s", s)
-	return logLevelRegex.MatchString(s)
-}
-
 func validateBPFLogFilters(fl validator.FieldLevel) bool {
 	log.Debugf("Validate Felix BPF log level: %s", fl.Field().String())
 
@@ -563,48 +465,6 @@ func validateBPFLogFilters(fl validator.FieldLevel) bool {
 	}
 
 	return true
-}
-
-func validateBPFLogLevel(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Felix BPF log level: %s", s)
-	return bpfLogLevelRegex.MatchString(s)
-}
-
-func validateBPFServiceMode(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Felix BPF service mode: %s", s)
-	return bpfServiceModeRegex.MatchString(s)
-}
-
-func validateBPFConnectTimeLoadBalancing(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Felix BPF ConnectTimeLoadBalancing: %s", s)
-	return bpfCTLBRegex.MatchString(s)
-}
-
-func validateBPFHostNetworkedNat(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Felix BPF HostNetworked NAT: %s", s)
-	return bpfHostNatRegex.MatchString(s)
-}
-
-func validateFelixEtoHAction(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Felix DefaultEndpointToHostAction: %s", s)
-	return dropAcceptReturnRegex.MatchString(s)
-}
-
-func validateAcceptReturn(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Accept Return Action: %s", s)
-	return acceptReturnRegex.MatchString(s)
-}
-
-func validateDropReject(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate Drop Reject Action: %s", s)
-	return dropRejectRegex.MatchString(s)
 }
 
 func validateSelector(fl validator.FieldLevel) bool {
@@ -637,15 +497,6 @@ func validateLabels(fl validator.FieldLevel) bool {
 		}
 	}
 	return true
-}
-
-func validatePolicyType(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate policy type: %s", s)
-	if s == string(api.PolicyTypeIngress) || s == string(api.PolicyTypeEgress) {
-		return true
-	}
-	return false
 }
 
 func validateProtocol(structLevel validator.StructLevel) {
