@@ -20,6 +20,9 @@ set -o pipefail
 
 echo "[INFO] starting prologue"
 
+echo "[INFO] Configuring needrestart to auto mode to prevent interactive prompts hanging CI jobs..."
+if [ -d /etc/needrestart ]; then sudo mkdir -p /etc/needrestart/conf.d && echo '$nrconf{restart} = '"'"'a'"'"';' | sudo tee /etc/needrestart/conf.d/50-autorestart.conf > /dev/null; fi
+
 echo "[INFO] Clean out language tools we don't use to free up disk"
 sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*} /root/.local/share/heroku /usr/local/lib/heroku
 
