@@ -4,6 +4,7 @@
 # The binary is built separately using the Makefile, which compiles ztunnel with Calico patches applied.
 
 ARG CALICO_BASE
+ARG ISTIO_ZTUNNEL_BASE_IMAGE_REGISTRY
 ARG ISTIO_ZTUNNEL_VERSION
 ARG BRANCH_NAME
 
