@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Michal <michal@tigera.io>
+Date: Thu, 13 Mar 2026 09:10:00 -0700
+Subject: [PATCH] Bump github.com/docker/cli to v29.2.0
+
+---
+ go.mod | 2 +-
+ go.sum | 2 ++
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+--- a/go.mod
++++ b/go.mod
+@@ -15,7 +15,7 @@
+ 	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443
+ 	github.com/containers/image/v5 v5.36.0
+ 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+-	github.com/docker/cli v28.3.3+incompatible
++	github.com/docker/cli v29.2.0+incompatible
+ 	github.com/docker/docker v28.3.3+incompatible
+ 	github.com/dominikbraun/graph v0.23.0
+ 	github.com/envoyproxy/go-control-plane v0.13.5-0.20250724095927-7a953c2d3b3e
+--- a/go.sum
++++ b/go.sum
+@@ -282,6 +282,8 @@
+ github.com/dlclark/regexp2 v1.11.5/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
+ github.com/docker/cli v28.3.3+incompatible h1:fp9ZHAr1WWPGdIWBM1b3zLtgCF+83gRdVMTJsUeiyAo=
+ github.com/docker/cli v28.3.3+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
++github.com/docker/cli v29.2.0+incompatible h1:9oBd9+YM7rxjZLfyMGxjraKBKE4/nVyvVfN4qNl9XRM=
++github.com/docker/cli v29.2.0+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
+ github.com/docker/distribution v2.8.3+incompatible h1:AtKxIZ36LoNK51+Z6RpzLpddBirtxJnzDrHLEKxTAYk=
+ github.com/docker/distribution v2.8.3+incompatible/go.mod h1:J2gT2udsDAN96Uj4KfcMRqY0/ypR+oyYUYmja8H+y+w=
+ github.com/docker/docker v28.3.3+incompatible h1:Dypm25kh4rmk49v1eiVbsAtpAsYURjYkaKubwuBdxEI=
+--
+2.43.0
+

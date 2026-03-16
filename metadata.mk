@@ -4,6 +4,7 @@
 
 # The version of calico/go-build and calico/base to use.
 GO_BUILD_VER=1.25.7-llvm18.1.8-k8s1.34.4
+RUST_BUILD_VER=1.93.1
 CALICO_BASE_VER=ubi9-1771532994
 
 # Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.

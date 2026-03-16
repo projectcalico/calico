@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/gopacket/gopacket"
@@ -38,10 +39,8 @@ type garpHandle interface {
 	gopacket.PacketDataSource
 }
 
-// liveMigrationStateUpdate is a pseudo-proto message emitted by the liveMigrationMonitor
-// when a per-workload FSM changes state.  It is fanned out to all managers (like
-// ifaceStateUpdate) so that the endpoint manager can adjust routing for live-migrating
-// workloads.
+// liveMigrationStateUpdate records a per-workload FSM state change that the
+// liveMigrationMonitor needs to forward to its listener (the endpoint manager).
 type liveMigrationStateUpdate struct {
 	ID    types.WorkloadEndpointID
 	State liveMigrationState
@@ -49,12 +48,13 @@ type liveMigrationStateUpdate struct {
 
 // liveMigrationMonitor tracks per-workload live migration state that cannot be inferred
 // statelessly from the datastore.  It sees WorkloadEndpoint updates, extracts the live
-// migration role, and drives a per-workload FSM whose state changes are signalled to the
-// rest of the dataplane as liveMigrationStateUpdate messages.
+// migration role, and drives a per-workload FSM whose state changes are forwarded to
+// the endpoint manager via the liveMigrationListener interface during ResolveUpdateBatch.
 type liveMigrationMonitor struct {
 	roles           map[types.WorkloadEndpointID]proto.LiveMigrationRole
 	fsms            map[types.WorkloadEndpointID]*liveMigrationFSM
 	pendingUpdates  []liveMigrationStateUpdate
+	listener        liveMigrationListener
 	timerC          chan types.WorkloadEndpointID
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
@@ -67,8 +67,8 @@ func newLiveMigrationMonitor(convergenceTime time.Duration) *liveMigrationMonito
 	return &liveMigrationMonitor{
 		roles:         make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
 		fsms:          make(map[types.WorkloadEndpointID]*liveMigrationFSM),
-		timerC:        make(chan types.WorkloadEndpointID, 100),
-		garpC:         make(chan types.WorkloadEndpointID, 100),
+		timerC:        make(chan types.WorkloadEndpointID),
+		garpC:         make(chan types.WorkloadEndpointID),
 		ifaceNames:    make(map[types.WorkloadEndpointID]string),
 		migrationUIDs: make(map[types.WorkloadEndpointID]string),
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
@@ -78,11 +78,16 @@ func newLiveMigrationMonitor(convergenceTime time.Duration) *liveMigrationMonito
 	}
 }
 
-// PendingUpdates returns the accumulated FSM state changes and clears the buffer.
-func (m *liveMigrationMonitor) PendingUpdates() []liveMigrationStateUpdate {
-	updates := m.pendingUpdates
-	m.pendingUpdates = nil
-	return updates
+// ResolveUpdateBatch drains accumulated FSM state changes and forwards them
+// to the endpoint manager via the liveMigrationListener interface.  This runs
+// before CompleteDeferredWork, so the endpoint manager sees the state changes
+// before it programs the dataplane.
+func (m *liveMigrationMonitor) ResolveUpdateBatch() error {
+	for _, update := range m.pendingUpdates {
+		m.listener.OnLiveMigrationStateUpdate(update.ID, update.State)
+	}
+	m.pendingUpdates = m.pendingUpdates[:0]
+	return nil
 }
 
 func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
@@ -209,6 +214,7 @@ type liveMigrationFSM struct {
 	migrationUID string
 	timer        *time.Timer
 	pcapHandle   garpHandle
+	garpWG       sync.WaitGroup
 }
 
 func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
@@ -221,25 +227,19 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 		switch input {
 		case liveMigrationInputTarget:
 			next = liveMigrationStateTarget
-			f.startGARPDetection()
 		}
 	case liveMigrationStateTarget:
 		switch input {
 		case liveMigrationInputGARPDetected:
 			next = liveMigrationStateLive
-			f.stopGARPDetection()
 		case liveMigrationInputNoRole:
 			// Live migration completed but we missed the GARP.  Go straight to
 			// TimeWait to allow routing to settle before reverting to normal.
 			next = liveMigrationStateTimeWait
-			f.stopGARPDetection()
-			f.startElevatedRoutingTimer()
 		case liveMigrationInputSource:
 			next = liveMigrationStateBase
-			f.stopGARPDetection()
 		case liveMigrationInputDeleted:
 			next = liveMigrationStateBase
-			f.stopGARPDetection()
 		}
 	case liveMigrationStateLive:
 		switch input {
@@ -247,7 +247,6 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 			// Live migration complete.  Start the timer to allow routing to
 			// settle everywhere before reverting to normal routing.
 			next = liveMigrationStateTimeWait
-			f.startElevatedRoutingTimer()
 		case liveMigrationInputSource:
 			// Re-migration: this WEP is now the source of a new live migration.
 			next = liveMigrationStateBase
@@ -263,10 +262,8 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 		case liveMigrationInputSource:
 			// Re-migration: this WEP is now the source of a new live migration.
 			next = liveMigrationStateBase
-			f.stopElevatedRoutingTimer()
 		case liveMigrationInputDeleted:
 			next = liveMigrationStateBase
-			f.stopElevatedRoutingTimer()
 		}
 	}
 
@@ -276,6 +273,24 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 			"from":         f.currentState,
 			"to":           next,
 		}).Info("Live migration state transition")
+
+		// Do actions that we should always do when leaving a state.
+		switch f.currentState {
+		case liveMigrationStateTarget:
+			f.stopGARPDetection()
+		case liveMigrationStateTimeWait:
+			f.stopElevatedRoutingTimer()
+		}
+
+		// Do actions that we should always do when entering a state.
+		switch next {
+		case liveMigrationStateTarget:
+			f.startGARPDetection()
+		case liveMigrationStateTimeWait:
+			f.startElevatedRoutingTimer()
+		}
+
+		// Update state.
 		f.currentState = next
 		f.emitStateChange(next)
 	} else {
@@ -302,7 +317,11 @@ func (f *liveMigrationFSM) startGARPDetection() {
 		return
 	}
 	f.pcapHandle = handle
-	go detectGARP(f.logCtx, f.id, handle, f.monitor.garpC)
+	f.garpWG.Add(1)
+	go func() {
+		defer f.garpWG.Done()
+		detectGARP(f.logCtx, f.id, handle, f.monitor.garpC)
+	}()
 }
 
 func (f *liveMigrationFSM) stopGARPDetection() {
@@ -310,6 +329,9 @@ func (f *liveMigrationFSM) stopGARPDetection() {
 		if err := f.pcapHandle.Close(); err != nil {
 			f.logCtx.WithError(err).Debug("Error closing GARP detection handle")
 		}
+		// Wait for the detectGARP goroutine to exit.  Closing the handle causes
+		// packetSource.Packets() to return, so this should complete almost immediately.
+		f.garpWG.Wait()
 		f.pcapHandle = nil
 	}
 }
@@ -318,11 +340,7 @@ func (f *liveMigrationFSM) startElevatedRoutingTimer() {
 	f.logCtx.WithField("duration", f.monitor.convergenceTime).Debug("Starting elevated routing timer")
 	id := f.id
 	f.timer = time.AfterFunc(f.monitor.convergenceTime, func() {
-		select {
-		case f.monitor.timerC <- id:
-		default:
-			logrus.WithField("id", id).Warn("Live migration timer channel full, dropping timer pop")
-		}
+		f.monitor.timerC <- id
 	})
 }
 
@@ -365,11 +383,7 @@ func detectGARP(logCtx *logrus.Entry, id types.WorkloadEndpointID,
 	for packet := range packetSource.Packets() {
 		if isGARPOrRARP(packet) {
 			logCtx.Info("Detected GARP/RARP packet on workload interface")
-			select {
-			case garpC <- id:
-			default:
-				logCtx.Warn("GARP detection channel full, dropping notification")
-			}
+			garpC <- id
 			return
 		}
 	}
@@ -402,7 +416,6 @@ func isGARPOrRARP(packet gopacket.Packet) bool {
 }
 
 func (m *liveMigrationMonitor) CompleteDeferredWork() error {
-	// Nothing to do; state changes are emitted synchronously via pendingUpdates
-	// and drained by the main loop.
+	// Nothing to do; state changes are forwarded in ResolveUpdateBatch.
 	return nil
 }

@@ -47,13 +47,11 @@ func newTestLMCEnv() *testLMCEnv {
 	arc.RuleScanner = &noopRuleScanner{}
 	env.arc = arc
 
-	env.lmc = NewLiveMigrationCalculator(
-		arc,
-		func(key model.WorkloadEndpointKey, kind EndpointComputedDataKind, data EndpointComputedData) {
-			lmr := data.(*liveMigrationRole)
-			env.roleEvents = append(env.roleEvents, roleEvent{key: key, role: lmr.role, uid: lmr.uid})
-		},
-	)
+	env.lmc = NewLiveMigrationCalculator(arc)
+	env.lmc.OnEndpointComputedData = func(key model.WorkloadEndpointKey, kind EndpointComputedDataKind, data EndpointComputedData) {
+		lmr := data.(*liveMigrationRole)
+		env.roleEvents = append(env.roleEvents, roleEvent{key: key, role: lmr.role, uid: lmr.uid})
+	}
 	return env
 }
 

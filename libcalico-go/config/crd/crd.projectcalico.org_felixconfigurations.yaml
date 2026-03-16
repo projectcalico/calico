@@ -1385,6 +1385,10 @@ spec:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
               type: object
+              x-kubernetes-validations:
+                - message: routeTableRange and routeTableRanges cannot both be set
+                  reason: FieldValueForbidden
+                  rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           type: object
       served: true
       storage: true
