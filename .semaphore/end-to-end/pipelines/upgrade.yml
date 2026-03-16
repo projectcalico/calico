@@ -128,26 +128,6 @@ blocks:
             - env_var: DATAPLANE
               values: ["CalicoBPF"]
 
-        - name: Openshift - 4.16
-          execution_time_limit:
-            hours: 4
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          agent:
-            machine:
-              type: f1-standard-2
-              os_image: ubuntu2204
-          env_vars:
-            - name: PROVISIONER
-              value: aws-openshift
-          matrix:
-            - env_var: OPENSHIFT_VERSION
-              values: ["4.19.20"]
-            - env_var: DATAPLANE
-              values: ["CalicoIptables"]
-            - env_var: INSTALLER
-              values: ["operator"]
-
         - name: RKE2
           execution_time_limit:
             hours: 4
@@ -165,6 +145,30 @@ blocks:
               values: ["operator"]
             - env_var: DATAPLANE
               values: ["CalicoIptables"]
+
+  - name: calico tests - openshift
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      jobs:
+        - name: Openshift
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: aws-openshift
+          matrix:
+            - env_var: OPENSHIFT_VERSION
+              values: ["4.19.20"]
+            - env_var: DATAPLANE
+              values: ["CalicoIptables"]
+            - env_var: INSTALLER
+              values: ["operator"]
 
 promotions:
   - name: Cleanup jobs
