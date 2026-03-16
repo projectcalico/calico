@@ -813,6 +813,11 @@ func init() {
 		Entry("should reject HealthTimeoutOverride -1", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: v1.Duration{Duration: -1}}}}, false),
 		Entry("should reject HealthTimeoutOverride with bad name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "%", Timeout: v1.Duration{Duration: 10}}}}, false),
 		Entry("should reject HealthTimeoutOverride with no name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "", Timeout: v1.Duration{Duration: 10}}}}, false),
+		Entry("invalid route priority 0", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(0)}, false),
+		Entry("valid route priority 1", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(1)}, true),
+		Entry("valid route priority 10000", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(10000)}, true),
+		Entry("valid route priority 2147483646", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(2147483646)}, true),
+		Entry("invalid route priority 2147483647", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(2147483647)}, false),
 
 		// (API) Protocol
 		Entry("should accept protocol TCP", protocolFromString("TCP"), true),

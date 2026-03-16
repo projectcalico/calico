@@ -133,6 +133,7 @@ type CalcGraph struct {
 	profileDecoder          *ProfileDecoder
 	encapsulationResolver   *EncapsulationResolver
 	policyResolver          *PolicyResolver
+	liveMigrationCalculator *LiveMigrationCalculator
 }
 
 func (g *CalcGraph) OnUpdates(updates []api.Update) {
@@ -223,8 +224,21 @@ func NewCalculationGraph(
 	//             ...
 	//
 	activeRulesCalc := NewActiveRulesCalculator()
-	activeRulesCalc.RegisterWith(localEndpointDispatcher, allUpdDispatcher)
 	cg.activeRulesCalculator = activeRulesCalc
+
+	// Create and register the live migration calculator on localEndpointDispatcher BEFORE
+	// the active rules calculator.  This ensures the LMC sees WEP updates first, so its
+	// wepData is already populated when the ARC fires computed selector match callbacks.
+	cg.liveMigrationCalculator = NewLiveMigrationCalculator(
+		cg.activeRulesCalculator,
+		nil, // onEndpointComputedData wired up later, after polResolver is created
+	)
+	localEndpointDispatcher.Register(
+		model.WorkloadEndpointKey{},
+		cg.liveMigrationCalculator.OnUpdate,
+	)
+
+	activeRulesCalc.RegisterWith(localEndpointDispatcher, allUpdDispatcher)
 
 	// The active rules calculator only figures out which rules are active, it doesn't extract
 	// any information from the rules.  The rule scanner takes the output from the active rules
@@ -377,6 +391,15 @@ func NewCalculationGraph(
 	// And hook its output to the callbacks.
 	polResolver.RegisterCallback(callbacks)
 	cg.policyResolver = polResolver
+
+	// Wire up the live migration calculator's output callback and remaining dispatcher
+	// registration, now that polResolver exists.  (The LMC was created and registered on
+	// localEndpointDispatcher earlier, before the ARC, to ensure correct dispatch ordering.)
+	cg.liveMigrationCalculator.onEndpointComputedData = polResolver.OnEndpointComputedDataUpdate
+	allUpdDispatcher.Register(
+		model.ResourceKey{},
+		cg.liveMigrationCalculator.OnUpdate,
+	)
 
 	if conf.IsIstioAmbientModeEnabled() {
 		_ = NewIstioCalculator(activeRulesCalc, ruleScanner, callbacks, ipsetMemberIndex, polResolver.OnEndpointComputedDataUpdate)
