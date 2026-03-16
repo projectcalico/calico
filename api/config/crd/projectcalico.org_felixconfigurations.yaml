@@ -374,6 +374,15 @@ spec:
                   type: string
                 ipv6Support:
                   type: boolean
+                istioAmbientMode:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                istioDSCPMark:
+                  pattern: ^.*
+                  type: integer
+                  x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   items:
                     anyOf:
@@ -583,6 +592,10 @@ spec:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
               type: object
+              x-kubernetes-validations:
+                - message: routeTableRange and routeTableRanges cannot both be set
+                  reason: FieldValueForbidden
+                  rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           required:
             - metadata
             - spec
