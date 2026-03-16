@@ -19,6 +19,7 @@ BUILD_IMAGES ?= $(CI_BUILD_IMAGES) $(ISTIO_ZTUNNEL_IMAGE)
 ISTIO_VERSION ?= 1.28.1
 ISTIO_ZTUNNEL_VERSION ?= $(shell grep -E '^ZTUNNEL_VERSION[[:space:]]*=' $(REPO_ROOT)/third_party/istio-ztunnel/Makefile | cut -d '=' -f2 | tr -d ' ')
 ISTIO_ZTUNNEL_BASE_IMAGE_REGISTRY ?= quay.io
+BRANCH_NAME ?= $(if $(SEMAPHORE_GIT_BRANCH),$(SEMAPHORE_GIT_BRANCH),master)
 
 ##############################################################################
 # Include lib.Makefile before anything else
