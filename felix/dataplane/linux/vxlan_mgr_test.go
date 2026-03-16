@@ -221,7 +221,7 @@ var _ = Describe("VXLANManager", func() {
 			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.0/26",
-			DstNodeName: "node0",
+			DstNodeName: "node1",
 			DstNodeIp:   "172.8.8.8",
 			SameSubnet:  true,
 		})
@@ -318,7 +318,7 @@ var _ = Describe("VXLANManager", func() {
 			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::/112",
-			DstNodeName: "node0",
+			DstNodeName: "node1",
 			DstNodeIp:   "fc00:10:10::8",
 			SameSubnet:  true,
 		})
@@ -530,5 +530,143 @@ var _ = Describe("VXLANManager", func() {
 
 		// Expect no routes.
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
+	})
+
+	It("should only program black hole routes for local endpoints", func() {
+		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+			Node:           "node1",
+			Mac:            "00:0a:74:9d:68:16",
+			Ipv4Addr:       "10.0.0.0",
+			ParentDeviceIp: "172.0.0.2",
+		})
+
+		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+			Node:           "node2",
+			Mac:            "00:0a:95:9d:68:16",
+			Ipv4Addr:       "10.0.80.0/32",
+			ParentDeviceIp: "172.0.12.1",
+		})
+
+		localVTEP := vxlanMgr.getLocalVTEP()
+		Expect(localVTEP).NotTo(BeNil())
+
+		vxlanMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		Expect(vxlanMgr.myVTEP).NotTo(BeNil())
+		Expect(vxlanMgr.routeMgr.parentDevice).NotTo(BeEmpty())
+
+		parent, err := vxlanMgr.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(parent).NotTo(BeNil())
+
+		link, addr, err := vxlanMgr.device(parent)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = vxlanMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(parent).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		vxlanMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "172.0.0.0/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.8.8.8",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /32 should not be programmed as blackhole.
+		vxlanMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "172.0.0.1/32",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.8.8.7",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+
+		err = vxlanMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1)) // Black hole route
+	})
+
+	It("IPv6: should only program black hole routes for local endpoints", func() {
+		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+			Node:             "node1",
+			MacV6:            "00:0a:74:9d:68:16",
+			Ipv6Addr:         "fd00:10:244::",
+			ParentDeviceIpv6: "fc00:10:96::2",
+		})
+
+		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+			Node:             "node2",
+			MacV6:            "00:0a:95:9d:68:16",
+			Ipv6Addr:         "fd00:10:96::/112",
+			ParentDeviceIpv6: "fc00:10:10::1",
+		})
+
+		localVTEP := vxlanMgrV6.getLocalVTEP()
+		Expect(localVTEP).NotTo(BeNil())
+
+		vxlanMgrV6.routeMgr.OnParentDeviceUpdate("eth0")
+
+		Expect(vxlanMgrV6.myVTEP).NotTo(BeNil())
+		Expect(vxlanMgrV6.routeMgr.parentDevice).NotTo(BeEmpty())
+
+		parent, err := vxlanMgrV6.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(parent).NotTo(BeNil())
+
+		link, addr, err := vxlanMgrV6.device(parent)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = vxlanMgrV6.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(parent).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "fc00:10:244::/112",
+			DstNodeName: "node1",
+			DstNodeIp:   "fc00:10:10::8",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /128 should not be programmed as blackhole.
+		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "fc00:10:244::1/128",
+			DstNodeName: "node1",
+			DstNodeIp:   "fc00:10:10::7",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.currentRoutes["vxlan-v6.calico"]).To(HaveLen(0))
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+
+		err = vxlanMgrV6.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(rt.currentRoutes["vxlan-v6.calico"]).To(HaveLen(0))
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1)) // Black hole route
 	})
 })
