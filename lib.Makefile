@@ -1412,6 +1412,7 @@ run-k8s-apiserver: run-etcd
 			--max-requests-inflight=0 \
 			--enable-aggregator-routing \
 			--requestheader-client-ca-file=/home/user/certs/ca.pem \
+			--requestheader-allowed-names \
 			--requestheader-username-headers=X-Remote-User \
 			--requestheader-group-headers=X-Remote-Group \
 			--requestheader-extra-headers-prefix=X-Remote-Extra- \
