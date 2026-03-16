@@ -342,28 +342,6 @@ blocks:
             - name: IP_FAMILY
               value: ipv4
 
-        # operator, calicocni, 4.18, amd64, bpf, ipv4, openshift, RHCOS, kdd, n/a, no-kube-proxy, autohep
-        - name: Openshift OCP
-          execution_time_limit:
-            hours: 6
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          agent:
-            machine:
-              type: f1-standard-2
-              os_image: ubuntu2204
-          env_vars:
-            - name: OPENSHIFT_VERSION
-              value: "4.18.17"
-            - name: PROVISIONER
-              value: aws-openshift
-            - name: INSTALLER
-              value: operator
-            - name: DATAPLANE
-              value: "CalicoBPF"
-            - name: IP_FAMILY
-              value: ipv4
-
         # helmerator, calicocni, stable-3, arm64, bpf, ipv4, EKS, kdd, wireguard, amazonlinux2023, no-kube-proxy, nodelocaldns, [bpf lb interop, bpf DSR]
         - name: EKS w/ calico CNI
           execution_time_limit:
@@ -519,3 +497,30 @@ blocks:
               value: "true"
             # - name: ENABLE_NODE_LOCAL_DNS_CACHE # nodelocaldns - doesn't appear to work with RKE2
             #   value: "true"
+
+  # operator, calicocni, 4.18, amd64, bpf, ipv4, openshift, RHCOS, kdd, n/a, no-kube-proxy, autohep
+  # Openshift needs f1-standard-2 (more disk) so it lives in its own block.
+  - name: "Openshift"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      jobs:
+        - name: Openshift OCP
+          execution_time_limit:
+            hours: 6
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: OPENSHIFT_VERSION
+              value: "4.18.17"
+            - name: PROVISIONER
+              value: aws-openshift
+            - name: INSTALLER
+              value: operator
+            - name: DATAPLANE
+              value: "CalicoBPF"
+            - name: IP_FAMILY
+              value: ipv4
