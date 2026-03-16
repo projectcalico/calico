@@ -274,6 +274,7 @@ rules:
       - projectcalico.org
     resources:
       - felixconfigurations
+      - bgpconfigurations
       - ippools
     verbs:
       - create
@@ -424,6 +425,19 @@ rules:
       - get
       - list
       - watch
+  # The operator manages MutatingAdmissionPolicy resources for CRD defaulting (k8s 1.32+).
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingadmissionpolicies
+      - mutatingadmissionpolicybindings
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
       - config.openshift.io
@@ -515,8 +529,9 @@ rules:
       - watch
       - create
       - update
+      - patch
       - delete
-  # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
+  # For tiered network policy actions, calico-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
     resourceNames:
@@ -540,7 +555,7 @@ rules:
       - list
       - watch
       - get
-  # For tiered network policy actions, tigera-apiserver requires get authorization on the associated tier.
+  # For tiered network policy actions, calico-apiserver requires get authorization on the associated tier.
   - apiGroups:
       - projectcalico.org
     resourceNames:

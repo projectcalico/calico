@@ -813,6 +813,11 @@ func init() {
 		Entry("should reject HealthTimeoutOverride -1", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "Valid", Timeout: v1.Duration{Duration: -1}}}}, false),
 		Entry("should reject HealthTimeoutOverride with bad name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "%", Timeout: v1.Duration{Duration: 10}}}}, false),
 		Entry("should reject HealthTimeoutOverride with no name", api.FelixConfigurationSpec{HealthTimeoutOverrides: []api.HealthTimeoutOverride{{Name: "", Timeout: v1.Duration{Duration: 10}}}}, false),
+		Entry("invalid route priority 0", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(0)}, false),
+		Entry("valid route priority 1", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(1)}, true),
+		Entry("valid route priority 10000", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(10000)}, true),
+		Entry("valid route priority 2147483646", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(2147483646)}, true),
+		Entry("invalid route priority 2147483647", api.FelixConfigurationSpec{IPv4ElevatedRoutePriority: intHelper(2147483647)}, false),
 
 		// (API) Protocol
 		Entry("should accept protocol TCP", protocolFromString("TCP"), true),
@@ -2047,6 +2052,48 @@ func init() {
 			Action:    "Reject",
 			PrefixLength: &api.BGPFilterPrefixLengthV6{
 				Min: int32Helper(120),
+			},
+		}, false),
+
+		// (API) BGPFilterOperation
+		Entry("should accept BGPFilterOperation with AddCommunity set", api.BGPFilterOperation{
+			AddCommunity: &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
+		}, true),
+		Entry("should accept BGPFilterOperation with PrependASPath set", api.BGPFilterOperation{
+			PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}},
+		}, true),
+		Entry("should accept BGPFilterOperation with SetPriority set", api.BGPFilterOperation{
+			SetPriority: &api.BGPFilterSetPriority{Value: intHelper(256)},
+		}, true),
+		Entry("should reject BGPFilterOperation with no fields set", api.BGPFilterOperation{}, false),
+		Entry("should reject BGPFilterOperation with two fields set", api.BGPFilterOperation{
+			AddCommunity: &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
+			SetPriority:  &api.BGPFilterSetPriority{Value: intHelper(256)},
+		}, false),
+		Entry("should reject BGPFilterOperation with all fields set", api.BGPFilterOperation{
+			AddCommunity:  &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
+			PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}},
+			SetPriority:   &api.BGPFilterSetPriority{Value: intHelper(256)},
+		}, false),
+
+		// (API) BGPFilterRuleV4 with Operations
+		Entry("should accept BGPFilterRuleV4 with single operation", api.BGPFilterRuleV4{
+			Action: "Accept",
+			Operations: []api.BGPFilterOperation{
+				{SetPriority: &api.BGPFilterSetPriority{Value: intHelper(256)}},
+			},
+		}, true),
+		Entry("should accept BGPFilterRuleV4 with multiple operations", api.BGPFilterRuleV4{
+			Action: "Accept",
+			Operations: []api.BGPFilterOperation{
+				{AddCommunity: &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")}},
+				{PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
+			},
+		}, true),
+		Entry("should reject BGPFilterRuleV4 with empty operation", api.BGPFilterRuleV4{
+			Action: "Accept",
+			Operations: []api.BGPFilterOperation{
+				{},
 			},
 		}, false),
 
@@ -3873,4 +3920,13 @@ func mustParsePortRange(min, max uint16) numorstring.Port {
 
 func int32Helper(i int32) *int32 {
 	return &i
+}
+
+func intHelper(i int) *int {
+	return &i
+}
+
+func communityValHelper(s string) *api.BGPCommunityValue {
+	v := api.BGPCommunityValue(s)
+	return &v
 }

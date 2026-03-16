@@ -150,6 +150,21 @@ All new `.go` files require:
 
 eBPF files in `felix/bpf-gpl/` require dual Apache/GPL headers with SPDX identifiers. The pre-commit hook validates license headers.
 
+### File layout
+
+- Place utility methods/functions after (but close to) the methods/functions 
+  that use them, generally want the context that a function is called in to 
+  appear before the detail of the function body.
+- For files that contain "object" structs:
+  - Small typedefs/enums/constants.
+  - Main struct definition
+  - Constructors
+  - Methods; in some intuitive ordering
+    - Expected call order works well for readability "Add" before "Remove", "Start" before "Stop"
+    - Group similar methods together
+  - Utility functions; can be interspersed with methods if tightly coupled with particular methods.
+  - Larger secondary structs at the bottom.
+
 ## Repository Architecture
 
 ### Component Dependency Order

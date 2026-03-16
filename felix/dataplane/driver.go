@@ -423,6 +423,13 @@ func StartDataplaneDriver(
 
 			RouteSource: configParams.RouteSource,
 
+			IPv4NormalRoutePriority:   configParams.IPv4NormalRoutePriority,
+			IPv4ElevatedRoutePriority: configParams.IPv4ElevatedRoutePriority,
+			IPv6NormalRoutePriority:   configParams.IPv6NormalRoutePriority,
+			IPv6ElevatedRoutePriority: configParams.IPv6ElevatedRoutePriority,
+
+			LiveMigrationRouteConvergenceTime: configParams.LiveMigrationRouteConvergenceTime,
+
 			KubernetesProvider: configParams.KubernetesProvider(),
 			Collector:          collector,
 			LookupsCache:       lc,
@@ -434,6 +441,10 @@ func StartDataplaneDriver(
 		if configParams.BPFExternalServiceMode == "dsr" {
 			dpConfig.BPFNodePortDSREnabled = true
 			dpConfig.BPFDSROptoutCIDRs = configParams.BPFDSROptoutCIDRs
+		}
+
+		if configParams.WorkloadSourceSpoofing == "Any" {
+			dpConfig.WorkloadSourceSpoofing = true
 		}
 
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
