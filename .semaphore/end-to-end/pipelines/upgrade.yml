@@ -158,7 +158,7 @@ blocks:
           type: f1-standard-2
           os_image: ubuntu2204
       jobs:
-        - name: Openshift - 4.16
+        - name: Openshift
           execution_time_limit:
             hours: 4
           commands:
