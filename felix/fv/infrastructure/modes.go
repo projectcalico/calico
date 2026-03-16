@@ -20,3 +20,9 @@ import "os"
 func NFTMode() bool {
 	return os.Getenv("FELIX_FV_NFTABLES") == "Enabled"
 }
+
+// NetkitMode returns true if FV tests are configured to use netkit devices
+// instead of veth pairs for workload endpoints.
+func NetkitMode() bool {
+	return os.Getenv("FELIX_FV_NETKIT") == "Enabled"
+}
