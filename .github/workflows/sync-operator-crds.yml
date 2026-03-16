@@ -45,5 +45,5 @@ jobs:
             `${{ matrix.branch }}` and regeneration of manifests.
 
             Triggered by scheduled workflow.
-          labels: auto-sync,docs-not-required,release-note-not-required
+          labels: auto-sync,docs-not-required,release-note-not-required,skip-bot-cherry-pick
           delete-branch: true
