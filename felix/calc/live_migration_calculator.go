@@ -32,10 +32,15 @@ import (
 type LiveMigrationCalculator struct {
 	activeRulesCalc        *ActiveRulesCalculator
 	onEndpointComputedData EndpointComputedDataUpdater
-	weps                   map[wepOwnerID]*wepData
-	liveMigrations         map[model.ResourceKey]internalapi.LiveMigration
-	directNameKeys         [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]
-	selectorKeys           map[string]set.Set[model.ResourceKey]
+	weps           map[wepOwnerID]*wepData
+	liveMigrations map[model.ResourceKey]internalapi.LiveMigration
+	// endpointKeys tracks LiveMigration resources that reference a specific endpoint
+	// (all four fields of wepOwnerID set).
+	endpointKeys [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]
+	// workloadKeys tracks LiveMigration resources that reference an entire workload
+	// (endpointID empty, matching all endpoints for that workload).
+	workloadKeys   [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]
+	selectorKeys   map[string]set.Set[model.ResourceKey]
 
 	// pendingSelectorMatches tracks WEPs that were matched by a computed selector callback
 	// before the LMC had processed the WEP update.  This can happen because the ARC's
@@ -82,13 +87,17 @@ func NewLiveMigrationCalculator(
 	lmc := &LiveMigrationCalculator{
 		activeRulesCalc:        activeRulesCalc,
 		onEndpointComputedData: onEndpointComputedDataUpdater,
-		weps:                   map[wepOwnerID]*wepData{},
-		liveMigrations:         map[model.ResourceKey]internalapi.LiveMigration{},
-		directNameKeys: [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]{
+		weps:           map[wepOwnerID]*wepData{},
+		liveMigrations: map[model.ResourceKey]internalapi.LiveMigration{},
+		endpointKeys: [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]{
 			map[wepOwnerID]set.Set[model.ResourceKey]{},
 			map[wepOwnerID]set.Set[model.ResourceKey]{},
 		},
-		selectorKeys:           map[string]set.Set[model.ResourceKey]{},
+		workloadKeys: [numSourceOrTarget]map[wepOwnerID]set.Set[model.ResourceKey]{
+			map[wepOwnerID]set.Set[model.ResourceKey]{},
+			map[wepOwnerID]set.Set[model.ResourceKey]{},
+		},
+		selectorKeys: map[string]set.Set[model.ResourceKey]{},
 		pendingSelectorMatches: map[wepOwnerID]string{},
 	}
 	activeRulesCalc.RegisterPolicyMatchListener(lmc)
@@ -121,13 +130,11 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			// Check for direct-name matches: both exact endpoint-level and workload-level.
 			workloadID := exactID.workloadLevel()
 			for _, sot := range []sourceOrTarget{source, target} {
-				if lmc.directNameKeys[sot][exactID] != nil {
-					wd.directNameKeys[sot].AddSet(lmc.directNameKeys[sot][exactID])
+				if lmc.endpointKeys[sot][exactID] != nil {
+					wd.directNameKeys[sot].AddSet(lmc.endpointKeys[sot][exactID])
 				}
-				if workloadID != exactID {
-					if lmc.directNameKeys[sot][workloadID] != nil {
-						wd.directNameKeys[sot].AddSet(lmc.directNameKeys[sot][workloadID])
-					}
+				if lmc.workloadKeys[sot][workloadID] != nil {
+					wd.directNameKeys[sot].AddSet(lmc.workloadKeys[sot][workloadID])
 				}
 			}
 
@@ -386,12 +393,16 @@ func (lmc *LiveMigrationCalculator) refDirectName(
 	}
 
 	// Update tracking for WEPs that we might hear about later.
-	directNameKeysForName := lmc.directNameKeys[sourceOrTarget][ownerID]
-	if directNameKeysForName == nil {
-		directNameKeysForName = set.New[model.ResourceKey]()
-		lmc.directNameKeys[sourceOrTarget][ownerID] = directNameKeysForName
+	keysMap := lmc.endpointKeys[sourceOrTarget]
+	if ownerID.isWorkloadLevel() {
+		keysMap = lmc.workloadKeys[sourceOrTarget]
 	}
-	directNameKeysForName.Add(lmKey)
+	keysForOwner := keysMap[ownerID]
+	if keysForOwner == nil {
+		keysForOwner = set.New[model.ResourceKey]()
+		keysMap[ownerID] = keysForOwner
+	}
+	keysForOwner.Add(lmKey)
 }
 
 func (lmc *LiveMigrationCalculator) unrefDirectName(
@@ -419,11 +430,15 @@ func (lmc *LiveMigrationCalculator) unrefDirectName(
 	}
 
 	// Update tracking for WEPs that we might hear about later.
-	directNameKeysForName := lmc.directNameKeys[sourceOrTarget][ownerID]
-	if directNameKeysForName != nil {
-		directNameKeysForName.Discard(lmKey)
-		if directNameKeysForName.Len() == 0 {
-			delete(lmc.directNameKeys[sourceOrTarget], ownerID)
+	keysMap := lmc.endpointKeys[sourceOrTarget]
+	if ownerID.isWorkloadLevel() {
+		keysMap = lmc.workloadKeys[sourceOrTarget]
+	}
+	keysForOwner := keysMap[ownerID]
+	if keysForOwner != nil {
+		keysForOwner.Discard(lmKey)
+		if keysForOwner.Len() == 0 {
+			delete(keysMap, ownerID)
 		}
 	}
 }
