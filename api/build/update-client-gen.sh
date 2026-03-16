@@ -23,6 +23,35 @@ set -o pipefail
 REPO_ROOT=$(realpath $(dirname "${BASH_SOURCE}")/..)
 BINDIR=${REPO_ROOT}/bin
 
+APPLY_CONFIG_PKG="github.com/projectcalico/api/pkg/client/applyconfiguration_generated"
+APPLY_CONFIG_DIR="${REPO_ROOT}/pkg/client/applyconfiguration_generated"
+
+# Install applyconfiguration-gen if not already present in the build image.
+if ! command -v applyconfiguration-gen &> /dev/null; then
+	echo "Installing applyconfiguration-gen..."
+	go install k8s.io/code-generator/cmd/applyconfiguration-gen@v0.35.2
+fi
+
+# Generate OpenAPI schema JSON for applyconfiguration-gen.
+# This populates the structured-merge-diff type information in internal/internal.go,
+# which is required for fake.NewClientset() to work correctly.
+OPENAPI_SCHEMA=$(mktemp)
+trap "rm -f ${OPENAPI_SCHEMA}" EXIT
+echo "Generating OpenAPI schema for applyconfiguration-gen..."
+go run "${REPO_ROOT}/hack/openapi-schema/" > "${OPENAPI_SCHEMA}"
+
+# Generate apply configurations (required for NewClientset in fake clientset)
+applyconfiguration-gen "$@" \
+		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+		--openapi-schema "${OPENAPI_SCHEMA}" \
+		--output-dir "${APPLY_CONFIG_DIR}" \
+		--output-pkg "${APPLY_CONFIG_PKG}" \
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+# Patch applyconfiguration-gen bugs (see patches/0002-* and patches/0003-*).
+patch -p2 -d "${REPO_ROOT}" < "${REPO_ROOT}/patches/0002-Fix-duplicate-ensureProtoPort-method-in-FelixConfigurationSpec.patch"
+patch -p2 -d "${REPO_ROOT}" < "${REPO_ROOT}/patches/0003-Fix-pointer-slice-append-in-IPAMBlockSpec-Allocations.patch"
+
 # Generate the versioned clientset (pkg/client/clientset_generated/clientset)
 client-gen "$@" \
 		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
@@ -30,7 +59,8 @@ client-gen "$@" \
 		--input "projectcalico/v3" \
 		--output-dir "${REPO_ROOT}/pkg/client/clientset_generated" \
 		--clientset-path "github.com/projectcalico/api/pkg/client/clientset_generated/" \
-		--clientset-name "clientset"
+		--clientset-name "clientset" \
+		--apply-configuration-package "${APPLY_CONFIG_PKG}"
 # generate lister
 lister-gen "$@" \
 		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
