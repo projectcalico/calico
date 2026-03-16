@@ -347,6 +347,22 @@ func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
 	return &Link{link: link}, nil
 }
 
+func (o *Obj) AttachNetkit(secName, ifName string) (*Link, error) {
+	cSecName := C.CString(secName)
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cSecName))
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting ifindex for %s: %w", ifName, err)
+	}
+	link, err := C.bpf_netkit_program_attach(o.obj, cSecName, C.int(ifIndex))
+	if err != nil {
+		return nil, fmt.Errorf("error attaching netkit program: %w", err)
+	}
+	return &Link{link: link}, nil
+}
+
 func (o *Obj) AttachXDP(ifName, progName string, oldID int, mode uint) (int, error) {
 	cProgName := C.CString(progName)
 	cIfName := C.CString(ifName)
@@ -610,6 +626,9 @@ const (
 	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
 	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
 	AttachTypeXDP        uint32 = C.BPF_XDP
+
+	AttachTypeNetkitPrimary uint32 = C.BPF_NETKIT_PRIMARY
+	AttachTypeNetkitPeer    uint32 = C.BPF_NETKIT_PEER
 )
 
 func (t *TcGlobalData) Set(m *Map) error {

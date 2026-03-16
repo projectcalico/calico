@@ -334,7 +334,8 @@ func (pm *ProgramsMap) configureMapsAndPrograms(obj *libbpf.Obj, file, progAttac
 			mapName, m.KeySize(), m.ValueSize(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
 	}
 
-	if progAttachType == "TCX" {
+	switch progAttachType {
+	case "TCX":
 		for prog, err := obj.FirstProgram(); prog != nil && err == nil; prog, err = prog.NextProgram() {
 			attachType := libbpf.AttachTypeTcxEgress
 			if pm.expectedAttachType == "ingress" {
@@ -342,6 +343,19 @@ func (pm *ProgramsMap) configureMapsAndPrograms(obj *libbpf.Obj, file, progAttac
 			}
 			if err := obj.SetAttachType(prog.Name(), attachType); err != nil {
 				return fmt.Errorf("error setting attach type for program %s: %w", prog.Name(), err)
+			}
+		}
+	case "Netkit":
+		for prog, err := obj.FirstProgram(); prog != nil && err == nil; prog, err = prog.NextProgram() {
+			// Map direction to netkit attach type:
+			// ingress ProgramsMap (traffic from pod) -> BPF_NETKIT_PEER
+			// egress ProgramsMap (traffic to pod) -> BPF_NETKIT_PRIMARY
+			attachType := libbpf.AttachTypeNetkitPrimary
+			if pm.expectedAttachType == "ingress" {
+				attachType = libbpf.AttachTypeNetkitPeer
+			}
+			if err := obj.SetAttachType(prog.Name(), attachType); err != nil {
+				return fmt.Errorf("error setting netkit attach type for program %s: %w", prog.Name(), err)
 			}
 		}
 	}
