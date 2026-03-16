@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -126,8 +126,9 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+		} else {
+			m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		}
-		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		m.maybeUpdateRoutes()
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
@@ -158,6 +159,12 @@ func (m *ipipManager) CompleteDeferredWork() error {
 }
 
 func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	// Ignore remote tunnel endpoint routes since they are not applicable to IPIP encapsulation, but we also need
+	// to program routes for borrowed addresses.
+	if isRemoteTunnelRoute(r, proto.IPPoolType_IPIP) && !isBorrowedRoute(r, proto.IPPoolType_IPIP) {
+		return nil
+	}
+
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
