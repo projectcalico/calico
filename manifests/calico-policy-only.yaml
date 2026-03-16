@@ -2349,8 +2349,8 @@ spec:
                 nftablesMode:
                   default: Auto
                   description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                    "NFTablesMode configures the use of nftables for policy
+                    programming in Felix. [Default: Auto]"
                   enum:
                     - Disabled
                     - Enabled
@@ -2360,6 +2360,16 @@ spec:
                   description:
                     "NftablesRefreshInterval controls the interval at which
                     Felix periodically refreshes the nftables rules. [Default: 90s]"
+                  type: string
+                nftablesSupport:
+                  default: Enabled
+                  description: |-
+                    NFTablesSupport configures whether nftables can be used for purposes other than policy
+                    programming in Felix. [Default: Enabled]
+                  enum:
+                    - Disabled
+                    - Enabled
+                    - Auto
                   type: string
                 openstackRegion:
                   description: |-

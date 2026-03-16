@@ -1128,7 +1128,7 @@ network stack is used.
 
 ### `NFTablesMode` (config file) / `nftablesMode` (YAML)
 
-Configures nftables support in Felix.
+Configures the use of nftables for policy programming in Felix.
 
 | Detail |   |
 | --- | --- |
@@ -1138,6 +1138,20 @@ Configures nftables support in Felix.
 | `FelixConfiguration` field | `nftablesMode` (YAML) `NFTablesMode` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Auto` |
+
+### `NFTablesSupport` (config file) / `nftablesSupport` (YAML)
+
+Configures whether nftables can be used for purposes other than policy
+programming in Felix.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_NFTablesSupport` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Enabled` |
+| `FelixConfiguration` field | `nftablesSupport` (YAML) `NFTablesSupport` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Enabled` |
 
 ### `NetlinkTimeoutSecs` (config file) / `netlinkTimeout` (YAML)
 
