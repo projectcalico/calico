@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,6 +49,7 @@ import (
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	bpfringbuf "github.com/projectcalico/calico/felix/bpf/ringbuf"
 	bpfroutes "github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
@@ -917,6 +919,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
+	// Scale ring buffer size by NumCPU to preserve the same total buffer capacity
+	// as the old per-CPU perf event array. With perf, BPFExportBufferSizeMB was
+	// allocated per CPU; the ring buffer is shared, so we multiply to match.
+	ringBufSize := config.BPFExportBufferSizeMB * 1024 * 1024 * runtime.NumCPU()
+	bpfringbuf.SetMapSize(ringBufSize)
 
 	var (
 		bpfEndpointManager *bpfEndpointManager
@@ -930,11 +937,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// Initialisation needed for bpf.
 	if config.BPFEnabled && config.FlowLogsEnabled {
 		var err error
-		// convert buffer size to bytes.
-		ringSize := config.BPFExportBufferSizeMB * 1024 * 1024
-		bpfEvnt, err = events.New(events.SourcePerfEvents, ringSize)
+		bpfEvnt, err = events.New(events.SourceRingBuffer, ringBufSize)
 		if err != nil {
-			log.WithError(err).Error("Failed to create perf event")
+			log.WithError(err).Error("Failed to create ring buffer event source")
 		} else {
 			bpfEventPoller = newBpfEventPoller(bpfEvnt)
 		}
