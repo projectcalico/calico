@@ -71,11 +71,21 @@ type ResourceMigrator struct {
 	DeleteV3 func(ctx context.Context, name, namespace string) error
 }
 
+// ConflictInfo identifies a resource that exists in v3 with a different spec than v1.
+type ConflictInfo struct {
+	Kind string
+	Name string
+}
+
+func (c ConflictInfo) String() string {
+	return fmt.Sprintf("%s/%s: v3 resource exists with different spec", c.Kind, c.Name)
+}
+
 // MigrationResult tracks the result of migrating a single resource type.
 type MigrationResult struct {
 	Migrated  int
 	Skipped   int
-	Conflicts []string
+	Conflicts []ConflictInfo
 
 	// UIDMapping records v1 UID → v3 UID for resources that were created or
 	// already existed. Used by RemapOwnerReferences after all types are migrated.
@@ -83,17 +93,25 @@ type MigrationResult struct {
 }
 
 // registry holds all registered resource migrators, ordered by migration priority.
-var registry []ResourceMigrator
+var (
+	registryMu sync.Mutex
+	registry   []ResourceMigrator
+)
 
 // Register adds a ResourceMigrator to the global registry.
 func Register(m ResourceMigrator) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
 	registry = append(registry, m)
 }
 
-// GetRegistry returns all registered migrators, sorted by Order.
+// GetRegistry returns a copy of all registered migrators.
 func GetRegistry() []ResourceMigrator {
-	// Registry is already built in order via init() calls.
-	return registry
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	result := make([]ResourceMigrator, len(registry))
+	copy(result, registry)
+	return result
 }
 
 // migratedPolicyName handles the default. prefix removal for default-tier policies.
@@ -103,6 +121,10 @@ func migratedPolicyName(name, tier string) string {
 	}
 	return name
 }
+
+// migratedByAnnotation is set on v3 resources created during migration so
+// the abort path can distinguish them from pre-existing v3 resources.
+const migratedByAnnotation = "migration.projectcalico.org/migrated-by"
 
 // defaultWorkerCount is the number of concurrent workers for creating v3
 // resources within a single resource type. The design doc suggests 10 as a
@@ -141,7 +163,7 @@ type migrationWorkItem struct {
 type migrationWorkResult struct {
 	migrated bool
 	skipped  bool
-	conflict string
+	conflict *ConflictInfo
 	v1UID    types.UID
 	v3UID    types.UID
 	err      error
@@ -161,19 +183,25 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 	// Phase 1: List all v1 resources and convert to v3 objects sequentially.
 	v1List, err := m.ListV1(ctx, bc)
 	if err != nil {
-		return nil, fmt.Errorf("listing v1 %s resources: %v", m.Kind, err)
+		return nil, fmt.Errorf("listing v1 %s resources: %w", m.Kind, err)
 	}
 	logCtx.WithField("count", len(v1List.KVPairs)).Info("Listed v1 resources")
 
 	workItems := make([]migrationWorkItem, 0, len(v1List.KVPairs))
 	for _, kvp := range v1List.KVPairs {
-		key := kvp.Key.(model.ResourceKey)
-		v1Src := kvp.Value.(metav1.Object)
+		key, ok := kvp.Key.(model.ResourceKey)
+		if !ok {
+			return nil, fmt.Errorf("unexpected key type for %s: %T", m.Kind, kvp.Key)
+		}
+		v1Src, ok := kvp.Value.(metav1.Object)
+		if !ok {
+			return nil, fmt.Errorf("unexpected value type for %s/%s: %T", m.Kind, key.Name, kvp.Value)
+		}
 		v1UID := v1Src.GetUID()
 
 		v3Obj, err := m.Convert(kvp)
 		if err != nil {
-			return nil, fmt.Errorf("converting %s/%s: %v", m.Kind, key.Name, err)
+			return nil, fmt.Errorf("converting %s/%s: %w", m.Kind, key.Name, err)
 		}
 
 		// Copy OwnerReferences from the v1 source. UIDs referencing Calico
@@ -238,8 +266,8 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 		if r.skipped {
 			result.Skipped++
 		}
-		if r.conflict != "" {
-			result.Conflicts = append(result.Conflicts, r.conflict)
+		if r.conflict != nil {
+			result.Conflicts = append(result.Conflicts, *r.conflict)
 		}
 		if r.v1UID != "" && r.v3UID != "" {
 			result.UIDMapping[r.v1UID] = r.v3UID
@@ -253,6 +281,33 @@ func MigrateResourceType(ctx context.Context, bc api.Client, m ResourceMigrator)
 	}).Info("Completed migration for resource type")
 
 	return result, nil
+}
+
+// CheckConflicts lists all v1 resources for a given migrator and checks each
+// one against the corresponding v3 resource. It returns a ConflictInfo for
+// each resource where the v3 spec differs from the converted v1 spec.
+func CheckConflicts(ctx context.Context, bc api.Client, m ResourceMigrator) ([]ConflictInfo, error) {
+	v1List, err := m.ListV1(ctx, bc)
+	if err != nil {
+		return nil, fmt.Errorf("listing v1 %s: %w", m.Kind, err)
+	}
+
+	var conflicts []ConflictInfo
+	for _, kvp := range v1List.KVPairs {
+		v1Obj, err := m.Convert(kvp)
+		if err != nil {
+			return nil, fmt.Errorf("converting v1 %s: %w", m.Kind, err)
+		}
+
+		v3Obj, err := m.GetV3(ctx, v1Obj.GetName(), v1Obj.GetNamespace())
+		if err != nil {
+			return nil, fmt.Errorf("getting v3 %s/%s: %w", m.Kind, v1Obj.GetName(), err)
+		}
+		if v3Obj != nil && !m.SpecsEqual(v1Obj, v3Obj) {
+			conflicts = append(conflicts, ConflictInfo{Kind: m.Kind, Name: v1Obj.GetName()})
+		}
+	}
+	return conflicts, nil
 }
 
 // migrateOneResource handles the create/check/conflict logic for a single
@@ -275,7 +330,7 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 	})
 	if err != nil {
 		return migrationWorkResult{
-			err: fmt.Errorf("checking existing v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
+			err: fmt.Errorf("checking existing v3 %s/%s: %w", m.Kind, v3Obj.GetName(), err),
 		}
 	}
 
@@ -284,10 +339,19 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 			item.logCtx.Debug("v3 resource already exists with matching spec, skipping")
 			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: existing.GetUID()}
 		}
-		conflict := fmt.Sprintf("%s/%s: v3 resource exists with different spec", m.Kind, v3Obj.GetName())
-		item.logCtx.Warn(conflict)
-		return migrationWorkResult{conflict: conflict}
+		ci := &ConflictInfo{Kind: m.Kind, Name: v3Obj.GetName()}
+		item.logCtx.Warn(ci.String())
+		return migrationWorkResult{conflict: ci}
 	}
+
+	// Stamp the migration annotation so the abort path can distinguish
+	// resources created by migration from pre-existing v3 resources.
+	annotations := v3Obj.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[migratedByAnnotation] = "v1-to-v3"
+	v3Obj.SetAnnotations(annotations)
 
 	// Create the v3 resource (with retry).
 	err = wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
@@ -307,11 +371,19 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 	})
 	if err != nil {
 		if kerrors.IsAlreadyExists(err) {
-			item.logCtx.Debug("v3 resource was created concurrently, skipping")
-			return migrationWorkResult{skipped: true}
+			item.logCtx.Debug("v3 resource was created concurrently, reading back for UID mapping")
+			readBack, getErr := m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+			if getErr != nil {
+				return migrationWorkResult{err: fmt.Errorf("reading back AlreadyExists v3 %s/%s: %w", m.Kind, v3Obj.GetName(), getErr)}
+			}
+			var v3UID types.UID
+			if readBack != nil {
+				v3UID = readBack.GetUID()
+			}
+			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: v3UID}
 		}
 		return migrationWorkResult{
-			err: fmt.Errorf("creating v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
+			err: fmt.Errorf("creating v3 %s/%s: %w", m.Kind, v3Obj.GetName(), err),
 		}
 	}
 	item.logCtx.Debug("Successfully migrated resource")
@@ -330,7 +402,7 @@ func migrateOneResource(ctx context.Context, m ResourceMigrator, item migrationW
 	})
 	if err != nil {
 		return migrationWorkResult{
-			err: fmt.Errorf("reading back created v3 %s/%s: %v", m.Kind, v3Obj.GetName(), err),
+			err: fmt.Errorf("reading back created v3 %s/%s: %w", m.Kind, v3Obj.GetName(), err),
 		}
 	}
 	var v3UID types.UID
@@ -374,7 +446,7 @@ func RemapOwnerReferences(ctx context.Context, uidMap map[types.UID]types.UID, m
 
 		v3List, err := m.ListV3(ctx)
 		if err != nil {
-			return fmt.Errorf("listing v3 %s for ownerref remapping: %v", m.Kind, err)
+			return fmt.Errorf("listing v3 %s for ownerref remapping: %w", m.Kind, err)
 		}
 
 		for _, obj := range v3List {
@@ -397,7 +469,7 @@ func RemapOwnerReferences(ctx context.Context, uidMap map[types.UID]types.UID, m
 			if changed {
 				obj.SetOwnerReferences(ownerRefs)
 				if err := m.UpdateV3(ctx, obj); err != nil {
-					return fmt.Errorf("updating ownerrefs on %s/%s: %v", m.Kind, obj.GetName(), err)
+					return fmt.Errorf("updating ownerrefs on %s/%s: %w", m.Kind, obj.GetName(), err)
 				}
 				remapped++
 			}

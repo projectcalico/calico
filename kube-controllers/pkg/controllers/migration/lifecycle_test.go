@@ -36,9 +36,15 @@ import (
 // registry for the duration of the test, restoring the original on cleanup.
 func withTestRegistry(t *testing.T, migrators []ResourceMigrator) {
 	t.Helper()
+	registryMu.Lock()
 	saved := registry
 	registry = migrators
-	t.Cleanup(func() { registry = saved })
+	registryMu.Unlock()
+	t.Cleanup(func() {
+		registryMu.Lock()
+		registry = saved
+		registryMu.Unlock()
+	})
 }
 
 // inMemoryStore is a concurrency-safe in-memory store for v3 objects, used by
@@ -509,9 +515,16 @@ func TestLifecycle_AbortCleansUpPartialV3Resources(t *testing.T) {
 	tierStore := newInMemoryStore()
 	withTestRegistry(t, []ResourceMigrator{tierMigrator(tierStore)})
 
-	// Pre-populate the v3 store as if migration created some tiers.
-	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
-	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "security"}})
+	// Pre-populate the v3 store as if migration created some tiers
+	// (with the migration annotation that gets stamped during create).
+	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{
+		Name:        "default",
+		Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
+	}})
+	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{
+		Name:        "security",
+		Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
+	}})
 
 	cr := createTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
 	c, _ := testController(t, cr)
@@ -669,9 +682,9 @@ func TestLifecycle_ResumeMidMigration(t *testing.T) {
 	}
 }
 
-// TestLifecycle_MigrationWithConflicts verifies that conflicts are reported
-// without failing the migration, and the phase stays at Migrating (waiting
-// for conflict resolution).
+// TestLifecycle_MigrationWithConflicts verifies the conflict resolution
+// lifecycle: conflicts transition to WaitingForConflictResolution, and
+// resolving them transitions back to Migrating.
 func TestLifecycle_MigrationWithConflicts(t *testing.T) {
 	tierStore := newInMemoryStore()
 	withTestRegistry(t, []ResourceMigrator{tierMigrator(tierStore)})
@@ -713,24 +726,31 @@ func TestLifecycle_MigrationWithConflicts(t *testing.T) {
 		t.Fatalf("getting CR: %v", err)
 	}
 
-	// Should stay in Migrating with conflicts reported.
-	if dm.Status.Phase != DatastoreMigrationPhaseMigrating {
-		t.Errorf("expected Migrating (conflicts prevent Converged), got %s", dm.Status.Phase)
+	// Should transition to WaitingForConflictResolution.
+	if dm.Status.Phase != DatastoreMigrationPhaseWaitingForConflictResolution {
+		t.Errorf("expected WaitingForConflictResolution, got %s", dm.Status.Phase)
 	}
 	if dm.Status.Progress.Conflicts != 1 {
 		t.Errorf("expected 1 conflict, got %d", dm.Status.Progress.Conflicts)
 	}
-	if len(dm.Status.Conditions) == 0 {
-		t.Error("expected conflict conditions on status")
+
+	// Resolve the conflict.
+	tierStore.update(&apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.TierSpec{Order: floatPtr(100)}, // matches v1 now
+	})
+
+	// Reconcile should transition back to Migrating.
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile (after resolution): %v", err)
 	}
-	foundConflict := false
-	for _, cond := range dm.Status.Conditions {
-		if cond.Type == conditionTypeConflict {
-			foundConflict = true
-		}
+
+	dm, err = c.migClient.Get(c.ctx, defaultMigrationName)
+	if err != nil {
+		t.Fatalf("getting CR: %v", err)
 	}
-	if !foundConflict {
-		t.Error("expected at least one Conflict condition")
+	if dm.Status.Phase != DatastoreMigrationPhaseMigrating {
+		t.Errorf("expected Migrating after conflict resolution, got %s", dm.Status.Phase)
 	}
 }
 

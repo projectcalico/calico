@@ -43,6 +43,13 @@ const (
 	// during this phase.
 	DatastoreMigrationPhaseMigrating DatastoreMigrationPhase = "Migrating"
 
+	// DatastoreMigrationPhaseWaitingForConflictResolution indicates the migration
+	// encountered resource conflicts (v3 resources exist with different content).
+	// The datastore remains locked (DatastoreReady=false) in this phase. The
+	// controller periodically re-checks and transitions back to Migrating once
+	// all conflicts are resolved.
+	DatastoreMigrationPhaseWaitingForConflictResolution DatastoreMigrationPhase = "WaitingForConflictResolution"
+
 	// DatastoreMigrationPhaseConverged indicates all resources have been migrated
 	// successfully with no conflicts and the datastore has been unlocked.
 	DatastoreMigrationPhaseConverged DatastoreMigrationPhase = "Converged"
