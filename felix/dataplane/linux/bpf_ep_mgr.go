@@ -1124,6 +1124,18 @@ func cleanupTcxPins(iface string) {
 	}
 }
 
+func cleanupNetkitPins(iface string) {
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		ap := tc.AttachPoint{
+			AttachPoint: bpf.AttachPoint{
+				Iface: iface,
+				Hook:  attachHook,
+			},
+		}
+		os.Remove(ap.NetkitProgPinPath())
+	}
+}
+
 func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
 	ap := tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
@@ -1189,12 +1201,13 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		return
 	}
 
-	if update.State == ifacemonitor.StateNotPresent && m.bpfAttachType == apiv3.BPFAttachOptionTCX {
-		// Delete the tcx pins if the interface is gone.
+	if update.State == ifacemonitor.StateNotPresent {
+		// Delete tcx/netkit pins if the interface is gone.
 		// Check if the interface still exists, as we might get events out of order.
 		_, err := m.dp.getIfaceLink(update.Name)
 		if err != nil {
 			cleanupTcxPins(update.Name)
+			cleanupNetkitPins(update.Name)
 		}
 	}
 	// Should be safe without the lock since there shouldn't be any active background threads
@@ -1228,6 +1241,12 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			allIfaces.Discard(update.Name)
 			m.hostIfaceTrees.deleteIface(update.Name)
 			m.dirtyIfaceNames.AddSet(allIfaces)
+		}
+	} else if update.State != ifacemonitor.StateNotPresent {
+		// For workload interfaces, detect netkit devices so Felix can use
+		// native BPF attachment instead of TC/TCX.
+		if link, err := m.dp.getIfaceLink(update.Name); err == nil {
+			curIfaceType = m.getIfaceTypeFromLink(link)
 		}
 	}
 
@@ -2395,10 +2414,10 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
 
-	// For netkit devices, override the attachment mechanism to use native netkit BPF
-	// attachment instead of TC/TCX. This is per-device: veth and netkit endpoints can
-	// coexist on the same node.
-	if ifaceType == IfaceTypeNetkit && tc.IsNetkitSupported() {
+	// For workload netkit devices, override the attachment mechanism to use native
+	// netkit BPF attachment instead of TC/TCX. Only workload interfaces are ours to
+	// manage this way — other netkit devices (host/data interfaces) are not ours.
+	if ifaceType == IfaceTypeNetkit && m.isWorkloadIface(ifaceName) && tc.IsNetkitSupported() {
 		ap.AttachType = apiv3.BPFAttachOption(tc.AttachOptionNetkit)
 	}
 	if wep != nil && wep.QosControls != nil {

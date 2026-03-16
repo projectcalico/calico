@@ -111,6 +111,19 @@ func createVethName(name string) netlink.Link {
 	return veth
 }
 
+func createNetkitName(name string) netlink.Link {
+	la := netlink.NewLinkAttrs()
+	la.Name = name
+	la.Flags = net.FlagUp
+	var nk netlink.Link = &netlink.Netkit{
+		LinkAttrs: la,
+		Mode:      netlink.NETKIT_MODE_L2,
+	}
+	err := netlink.LinkAdd(nk)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("failed to create test netkit: %q", name))
+	return nk
+}
+
 func createHostIf(name string) netlink.Link {
 	la := netlink.NewLinkAttrs()
 	la.Name = name
