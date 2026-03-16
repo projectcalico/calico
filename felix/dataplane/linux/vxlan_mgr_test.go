@@ -590,7 +590,7 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = vxlanMgr.CompleteDeferredWork()
