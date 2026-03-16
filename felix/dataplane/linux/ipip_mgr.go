@@ -126,8 +126,9 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+		} else {
+			m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		}
-		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		m.maybeUpdateRoutes()
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
@@ -162,6 +163,7 @@ func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetabl
 		// Ignore remote tunnel endpoint routes since they are not applicable to IPIP encapsulation.
 		return nil
 	}
+
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
@@ -169,6 +171,23 @@ func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetabl
 		return nil
 	}
 
+	logrus.Infof("sina")
+	if isBorrowedRoute(r, proto.IPPoolType_IPIP) {
+		logrus.Infof("sina0")
+		// We treat remote tunnel routes as directly connected. They don't have a gateway of
+		// the VTEP because they ARE the VTEP!
+		return &routetable.Target{
+			Type: routetable.TargetTypeOnLink,
+			RouteKey: routetable.RouteKey{
+				CIDR: cidr,
+			},
+			GW:       ip.FromString(remoteAddr),
+			Protocol: m.routeProtocol,
+			MTU:      m.dpConfig.IPIPMTU,
+		}
+	}
+
+	logrus.Infof("sina1")
 	return &routetable.Target{
 		Type: routetable.TargetTypeOnLink,
 		RouteKey: routetable.RouteKey{

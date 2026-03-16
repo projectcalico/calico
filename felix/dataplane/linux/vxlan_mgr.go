@@ -268,6 +268,7 @@ func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetab
 	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) || isBorrowedRoute(r, proto.IPPoolType_VXLAN) {
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
+		logrus.Infof("here")
 		return &routetable.Target{
 			RouteKey: routetable.RouteKey{
 				CIDR: cidr,
