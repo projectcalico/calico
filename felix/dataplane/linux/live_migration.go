@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/gopacket/gopacket"
@@ -213,6 +214,7 @@ type liveMigrationFSM struct {
 	migrationUID string
 	timer        *time.Timer
 	pcapHandle   garpHandle
+	garpWG       sync.WaitGroup
 }
 
 func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
@@ -315,7 +317,11 @@ func (f *liveMigrationFSM) startGARPDetection() {
 		return
 	}
 	f.pcapHandle = handle
-	go detectGARP(f.logCtx, f.id, handle, f.monitor.garpC)
+	f.garpWG.Add(1)
+	go func() {
+		defer f.garpWG.Done()
+		detectGARP(f.logCtx, f.id, handle, f.monitor.garpC)
+	}()
 }
 
 func (f *liveMigrationFSM) stopGARPDetection() {
@@ -323,6 +329,9 @@ func (f *liveMigrationFSM) stopGARPDetection() {
 		if err := f.pcapHandle.Close(); err != nil {
 			f.logCtx.WithError(err).Debug("Error closing GARP detection handle")
 		}
+		// Wait for the detectGARP goroutine to exit.  Closing the handle causes
+		// packetSource.Packets() to return, so this should complete almost immediately.
+		f.garpWG.Wait()
 		f.pcapHandle = nil
 	}
 }
