@@ -748,7 +748,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./scripts/body_flannel-migration.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_flannel-migration.sh
           matrix:
             - env_var: DOWNLEVEL_MANIFEST
               values:
