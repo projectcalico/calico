@@ -64,14 +64,14 @@ const (
 	DatastoreMigrationPhaseFailed DatastoreMigrationPhase = "Failed"
 )
 
-// DatastoreMigrationKind identifies the type of migration to perform.
+// DatastoreMigrationType identifies the type of migration to perform.
 // +kubebuilder:validation:Enum=V1ToV3
-type DatastoreMigrationKind string
+type DatastoreMigrationType string
 
 const (
-	// DatastoreMigrationKindV1ToV3 migrates resources from crd.projectcalico.org/v1
+	// DatastoreMigrationTypeV1ToV3 migrates resources from crd.projectcalico.org/v1
 	// CRDs to projectcalico.org/v3 CRDs.
-	DatastoreMigrationKindV1ToV3 DatastoreMigrationKind = "V1ToV3"
+	DatastoreMigrationTypeV1ToV3 DatastoreMigrationType = "V1ToV3"
 )
 
 // DatastoreMigration triggers and tracks the migration of Calico resources
@@ -109,9 +109,9 @@ type DatastoreMigrationList struct {
 // triggered by deleting the CR while in a non-Complete phase; the finalizer
 // handles cleanup and APIService restoration.
 type DatastoreMigrationSpec struct {
-	// Kind specifies the migration to perform (e.g., V1ToV3).
+	// Type specifies the migration to perform (e.g., V1ToV3).
 	// +kubebuilder:validation:Required
-	Kind DatastoreMigrationKind `json:"kind"`
+	Type DatastoreMigrationType `json:"type"`
 }
 
 // DatastoreMigrationStatus reports the observed state of the migration.

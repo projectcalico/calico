@@ -95,7 +95,7 @@ func createTestCR(t *testing.T, name string, phase DatastoreMigrationPhase) *uns
 			Name: name,
 		},
 		Spec: DatastoreMigrationSpec{
-			Kind: DatastoreMigrationKindV1ToV3,
+			Type: DatastoreMigrationTypeV1ToV3,
 		},
 	}
 	if phase != "" {
@@ -123,7 +123,7 @@ func createTestCRWithDeletion(t *testing.T, name string, phase DatastoreMigratio
 			DeletionTimestamp: &now,
 		},
 		Spec: DatastoreMigrationSpec{
-			Kind: DatastoreMigrationKindV1ToV3,
+			Type: DatastoreMigrationTypeV1ToV3,
 		},
 	}
 	dm.Status.Phase = phase

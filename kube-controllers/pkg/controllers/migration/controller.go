@@ -195,9 +195,9 @@ func (m *migrationController) reconcile() error {
 		"phase": dm.Status.Phase,
 	})
 
-	// Validate Spec.Kind before proceeding.
-	if dm.Spec.Kind != DatastoreMigrationKindV1ToV3 {
-		m.setFailedStatus(dm, fmt.Sprintf("unsupported migration kind: %q (only %q is supported)", dm.Spec.Kind, DatastoreMigrationKindV1ToV3))
+	// Validate Spec.Type before proceeding.
+	if dm.Spec.Type != DatastoreMigrationTypeV1ToV3 {
+		m.setFailedStatus(dm, fmt.Sprintf("unsupported migration type: %q (only %q is supported)", dm.Spec.Type, DatastoreMigrationTypeV1ToV3))
 		return m.updateStatus(dm)
 	}
 
