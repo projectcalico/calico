@@ -32,14 +32,42 @@ import (
 
 var testConvergenceTime = 30 * time.Second
 
-// newTestMonitor creates a liveMigrationMonitor with a no-op GARP handle factory,
-// preventing tests from opening real AF_PACKET sockets.
+// fakeLiveMigrationListener captures state updates for test assertions.
+type fakeLiveMigrationListener struct {
+	updates []liveMigrationStateUpdate
+}
+
+func (f *fakeLiveMigrationListener) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState) {
+	f.updates = append(f.updates, liveMigrationStateUpdate{ID: id, State: state})
+}
+
+func (f *fakeLiveMigrationListener) drain() []liveMigrationStateUpdate {
+	updates := f.updates
+	f.updates = nil
+	return updates
+}
+
+// newTestMonitor creates a liveMigrationMonitor with a no-op GARP handle factory
+// and a fake listener, preventing tests from opening real AF_PACKET sockets.
 func newTestMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
 	m := newLiveMigrationMonitor(convergenceTime)
 	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
 		return newFakeGARPHandle(), nil
 	}
+	m.listener = &fakeLiveMigrationListener{}
 	return m
+}
+
+// testListener returns the fake listener from a test monitor.
+func testListener(m *liveMigrationMonitor) *fakeLiveMigrationListener {
+	return m.listener.(*fakeLiveMigrationListener)
+}
+
+// drainUpdates resolves the current batch and returns the updates delivered to
+// the fake listener.  This replaces the old PendingUpdates() method in tests.
+func drainUpdates(m *liveMigrationMonitor) []liveMigrationStateUpdate {
+	_ = m.ResolveUpdateBatch()
+	return testListener(m).drain()
 }
 
 // testFSM creates a liveMigrationFSM in the given state, wired to a monitor for
@@ -161,7 +189,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 
-		updates := m.PendingUpdates()
+		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		g.Expect(updates[0].State).To(Equal(liveMigrationStateTarget))
 		g.Expect(updates[0].ID).To(Equal(wepID1))
@@ -171,10 +199,10 @@ func TestMonitorOnUpdate(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		m.PendingUpdates() // drain
+		drainUpdates(m) // drain
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-		updates := m.PendingUpdates()
+		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + NoRole → TimeWait
 		g.Expect(updates[0].State).To(Equal(liveMigrationStateTimeWait))
@@ -184,10 +212,10 @@ func TestMonitorOnUpdate(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
-		updates := m.PendingUpdates()
+		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + Source → Base
 		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
@@ -197,10 +225,10 @@ func TestMonitorOnUpdate(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		g.Expect(m.PendingUpdates()).To(BeEmpty())
+		g.Expect(drainUpdates(m)).To(BeEmpty())
 	})
 
 	t.Run("unrelated message type is ignored", func(t *testing.T) {
@@ -214,10 +242,10 @@ func TestMonitorOnUpdate(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		m.OnUpdate(wepRemove(wepID1))
-		updates := m.PendingUpdates()
+		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		// Target + Deleted → Base
 		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
@@ -231,7 +259,7 @@ func TestMonitorOnUpdate(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 		// Should not panic; FSM is created at Base, gets Deleted (no-op), cleaned up.
 		m.OnUpdate(wepRemove(wepID1))
-		g.Expect(m.PendingUpdates()).To(BeEmpty())
+		g.Expect(drainUpdates(m)).To(BeEmpty())
 		g.Expect(m.fsms).To(BeEmpty())
 	})
 
@@ -261,22 +289,22 @@ func TestFSMLifecycle(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		m.OnGARPDetected(wepID1)
 		g.Expect(m.fsms).To(HaveLen(1))
-		updates := m.PendingUpdates()
+		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		g.Expect(updates[0].State).To(Equal(liveMigrationStateLive))
 	})
 
-	t.Run("PendingUpdates drains and clears buffer", func(t *testing.T) {
+	t.Run("ResolveUpdateBatch drains and clears buffer", func(t *testing.T) {
 		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 
-		g.Expect(m.PendingUpdates()).To(HaveLen(1))
-		g.Expect(m.PendingUpdates()).To(BeEmpty())
+		g.Expect(drainUpdates(m)).To(HaveLen(1))
+		g.Expect(drainUpdates(m)).To(BeEmpty())
 	})
 
 	t.Run("stopGARPDetection closes handle when leaving Target", func(t *testing.T) {
@@ -291,11 +319,11 @@ func TestFSMLifecycle(t *testing.T) {
 
 		// Drive to Target (starts detection).
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		// Drive to Base via Source input (calls stopGARPDetection).
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		// Verify the handle was closed and goroutine exited.
 		g.Eventually(fakeHandle.IsClosed, 2*time.Second, 10*time.Millisecond).Should(BeTrue())
@@ -326,7 +354,7 @@ func TestFSMLifecycle(t *testing.T) {
 				LiveMigrationRole: proto.LiveMigrationRole_TARGET,
 			},
 		})
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		// startGARPDetection should skip because ifaceName is empty.
 		g.Expect(handleCreated).To(BeFalse())
@@ -390,14 +418,14 @@ func TestLiveMigrationScenarios(t *testing.T) {
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		m.OnUpdate(wepUpdate(wepID2, proto.LiveMigrationRole_TARGET))
-		updates := m.PendingUpdates()
+		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(2))
 		g.Expect(updates[0]).To(Equal(liveMigrationStateUpdate{ID: wepID1, State: liveMigrationStateTarget}))
 		g.Expect(updates[1]).To(Equal(liveMigrationStateUpdate{ID: wepID2, State: liveMigrationStateTarget}))
 
 		// Drive WEP1 to Live via GARP, WEP2 stays in Target.
 		m.OnGARPDetected(wepID1)
-		updates = m.PendingUpdates()
+		updates = drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		g.Expect(updates[0]).To(Equal(liveMigrationStateUpdate{ID: wepID1, State: liveMigrationStateLive}))
 		// WEP2 FSM should still exist in Target.
@@ -410,11 +438,11 @@ func TestLiveMigrationScenarios(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		// Same role again.
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		g.Expect(m.PendingUpdates()).To(BeEmpty())
+		g.Expect(drainUpdates(m)).To(BeEmpty())
 	})
 
 	t.Run("full lifecycle: TARGET → GARP → NO_ROLE → TimerPop", func(t *testing.T) {
@@ -446,11 +474,11 @@ func TestLiveMigrationTimer(t *testing.T) {
 		m := newTestMonitor(50 * time.Millisecond)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		m.PendingUpdates() // drain
+		drainUpdates(m) // drain
 
 		// Drive to TimeWait via NoRole (starts the timer).
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-		m.PendingUpdates() // drain
+		drainUpdates(m) // drain
 
 		// Wait for timer to fire and deliver the ID.
 		select {
@@ -462,7 +490,7 @@ func TestLiveMigrationTimer(t *testing.T) {
 
 		// Simulate main loop calling OnTimerPop.
 		m.OnTimerPop(wepID1)
-		updates := m.PendingUpdates()
+		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		g.Expect(updates[0].State).To(Equal(liveMigrationStateBase))
 		g.Expect(m.fsms).To(BeEmpty())
@@ -472,15 +500,15 @@ func TestLiveMigrationTimer(t *testing.T) {
 		m := newTestMonitor(500 * time.Millisecond)
 
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		// Drive to TimeWait (starts timer).
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		// Now drive to Base via Source (stops timer).
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		// Timer should not fire.
 		select {
@@ -517,7 +545,7 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 
 		// Simulate main loop calling OnGARPDetected.
 		m.OnGARPDetected(wepID1)
-		updates := m.PendingUpdates()
+		updates := drainUpdates(m)
 		g.Expect(updates).To(HaveLen(1))
 		g.Expect(updates[0].State).To(Equal(liveMigrationStateLive))
 	})
@@ -605,10 +633,10 @@ func TestIsGARPOrRARP(t *testing.T) {
 
 // --- Test helpers ---
 
-// expectUpdate drains PendingUpdates and checks that exactly one update was emitted with
+// expectUpdate drains pending updates and checks that exactly one update was emitted with
 // the given state.
 func expectUpdate(g Gomega, m *liveMigrationMonitor, expectedState liveMigrationState) {
-	updates := m.PendingUpdates()
+	updates := drainUpdates(m)
 	g.Expect(updates).To(HaveLen(1), "expected exactly one pending update")
 	g.Expect(updates[0].State).To(Equal(expectedState))
 }
@@ -738,7 +766,7 @@ func TestMigrationUIDTracking(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_TARGET, "uid-xyz-789"))
-		m.PendingUpdates()
+		drainUpdates(m)
 
 		// GARP detected → Live
 		m.OnGARPDetected(wepID1)

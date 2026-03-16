@@ -44,6 +44,10 @@ type hepListener interface {
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
+type liveMigrationListener interface {
+	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState)
+}
+
 type endpointManagerCallbacks struct {
 	addInterface           *common.AddInterfaceFuncs
 	removeInterface        *common.RemoveInterfaceFuncs
@@ -456,20 +460,22 @@ func (m *endpointManager) OnUpdate(protoBufMsg any) {
 	case *proto.GlobalBGPConfigUpdate:
 		log.Debug("GlobalBGPConfig updated.")
 		m.onBGPConfigUpdate(msg)
-	case *liveMigrationStateUpdate:
-		log.WithFields(log.Fields{
-			"id":    msg.ID,
-			"state": msg.State,
-		}).Debug("Live migration state update")
-		if msg.State == liveMigrationStateBase {
-			delete(m.pendingLiveMigrationStates, msg.ID)
-		} else {
-			m.pendingLiveMigrationStates[msg.ID] = msg.State
-		}
-		// Mark the endpoint dirty so CompleteDeferredWork re-evaluates its routes.
-		if ep := m.activeWlEndpoints[msg.ID]; ep != nil {
-			m.pendingWlEpUpdates[msg.ID] = ep
-		}
+	}
+}
+
+func (m *endpointManager) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState) {
+	log.WithFields(log.Fields{
+		"id":    id,
+		"state": state,
+	}).Debug("Live migration state update")
+	if state == liveMigrationStateBase {
+		delete(m.pendingLiveMigrationStates, id)
+	} else {
+		m.pendingLiveMigrationStates[id] = state
+	}
+	// Mark the endpoint dirty so CompleteDeferredWork re-evaluates its routes.
+	if ep := m.activeWlEndpoints[id]; ep != nil {
+		m.pendingWlEpUpdates[id] = ep
 	}
 }
 

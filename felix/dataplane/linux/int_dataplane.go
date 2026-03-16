@@ -1160,6 +1160,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
+	dp.liveMigrationMonitor.listener = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 
@@ -2489,10 +2490,6 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg any) {
 	for _, mgr := range d.allManagers {
 		mgr.OnUpdate(msg)
 	}
-	// The live migration monitor may have accumulated FSM state changes from the
-	// message we just fanned out.  Drain them and fan out to all managers as
-	// pseudo-proto messages.
-	d.dispatchLiveMigrationUpdates()
 	switch msg.(type) {
 	case *proto.InSync:
 		log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
@@ -2524,25 +2521,12 @@ func (d *InternalDataplane) onIfaceMonitorMessage(ifaceUpdate any) {
 
 func (d *InternalDataplane) onLiveMigrationTimerPop(id types.WorkloadEndpointID) {
 	d.liveMigrationMonitor.OnTimerPop(id)
-	d.dispatchLiveMigrationUpdates()
 	d.dataplaneNeedsSync = true
 }
 
 func (d *InternalDataplane) onLiveMigrationGARPDetected(id types.WorkloadEndpointID) {
 	d.liveMigrationMonitor.OnGARPDetected(id)
-	d.dispatchLiveMigrationUpdates()
 	d.dataplaneNeedsSync = true
-}
-
-// dispatchLiveMigrationUpdates drains accumulated FSM state changes from the
-// live migration monitor and fans them out to all managers.
-func (d *InternalDataplane) dispatchLiveMigrationUpdates() {
-	for _, update := range d.liveMigrationMonitor.PendingUpdates() {
-		update := update
-		for _, mgr := range d.allManagers {
-			mgr.OnUpdate(&update)
-		}
-	}
 }
 
 func (d *InternalDataplane) processIfaceUpdate(ifaceUpdate any) {

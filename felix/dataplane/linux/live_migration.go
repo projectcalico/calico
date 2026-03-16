@@ -38,10 +38,8 @@ type garpHandle interface {
 	gopacket.PacketDataSource
 }
 
-// liveMigrationStateUpdate is a pseudo-proto message emitted by the liveMigrationMonitor
-// when a per-workload FSM changes state.  It is fanned out to all managers (like
-// ifaceStateUpdate) so that the endpoint manager can adjust routing for live-migrating
-// workloads.
+// liveMigrationStateUpdate records a per-workload FSM state change that the
+// liveMigrationMonitor needs to forward to its listener (the endpoint manager).
 type liveMigrationStateUpdate struct {
 	ID    types.WorkloadEndpointID
 	State liveMigrationState
@@ -49,12 +47,13 @@ type liveMigrationStateUpdate struct {
 
 // liveMigrationMonitor tracks per-workload live migration state that cannot be inferred
 // statelessly from the datastore.  It sees WorkloadEndpoint updates, extracts the live
-// migration role, and drives a per-workload FSM whose state changes are signalled to the
-// rest of the dataplane as liveMigrationStateUpdate messages.
+// migration role, and drives a per-workload FSM whose state changes are forwarded to
+// the endpoint manager via the liveMigrationListener interface during ResolveUpdateBatch.
 type liveMigrationMonitor struct {
 	roles           map[types.WorkloadEndpointID]proto.LiveMigrationRole
 	fsms            map[types.WorkloadEndpointID]*liveMigrationFSM
 	pendingUpdates  []liveMigrationStateUpdate
+	listener        liveMigrationListener
 	timerC          chan types.WorkloadEndpointID
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
@@ -78,11 +77,16 @@ func newLiveMigrationMonitor(convergenceTime time.Duration) *liveMigrationMonito
 	}
 }
 
-// PendingUpdates returns the accumulated FSM state changes and clears the buffer.
-func (m *liveMigrationMonitor) PendingUpdates() []liveMigrationStateUpdate {
-	updates := m.pendingUpdates
-	m.pendingUpdates = nil
-	return updates
+// ResolveUpdateBatch drains accumulated FSM state changes and forwards them
+// to the endpoint manager via the liveMigrationListener interface.  This runs
+// before CompleteDeferredWork, so the endpoint manager sees the state changes
+// before it programs the dataplane.
+func (m *liveMigrationMonitor) ResolveUpdateBatch() error {
+	for _, update := range m.pendingUpdates {
+		m.listener.OnLiveMigrationStateUpdate(update.ID, update.State)
+	}
+	m.pendingUpdates = m.pendingUpdates[:0]
+	return nil
 }
 
 func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
@@ -402,7 +406,6 @@ func isGARPOrRARP(packet gopacket.Packet) bool {
 }
 
 func (m *liveMigrationMonitor) CompleteDeferredWork() error {
-	// Nothing to do; state changes are emitted synchronously via pendingUpdates
-	// and drained by the main loop.
+	// Nothing to do; state changes are forwarded in ResolveUpdateBatch.
 	return nil
 }

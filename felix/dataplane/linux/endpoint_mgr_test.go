@@ -2382,10 +2382,10 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 				Context("when live migration state becomes Target", func() {
 					JustBeforeEach(func() {
-						epMgr.OnUpdate(&liveMigrationStateUpdate{
-							ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
-							State: liveMigrationStateTarget,
-						})
+						epMgr.OnLiveMigrationStateUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							liveMigrationStateTarget,
+						)
 						applyUpdates(epMgr)
 					})
 
@@ -2395,10 +2395,10 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					Context("when live migration state becomes Live", func() {
 						JustBeforeEach(func() {
-							epMgr.OnUpdate(&liveMigrationStateUpdate{
-								ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
-								State: liveMigrationStateLive,
-							})
+							epMgr.OnLiveMigrationStateUpdate(
+								types.ProtoToWorkloadEndpointID(&wlEPID1),
+								liveMigrationStateLive,
+							)
 							applyUpdates(epMgr)
 						})
 
@@ -2408,10 +2408,10 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 						Context("when live migration state becomes TimeWait", func() {
 							JustBeforeEach(func() {
-								epMgr.OnUpdate(&liveMigrationStateUpdate{
-									ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
-									State: liveMigrationStateTimeWait,
-								})
+								epMgr.OnLiveMigrationStateUpdate(
+									types.ProtoToWorkloadEndpointID(&wlEPID1),
+									liveMigrationStateTimeWait,
+								)
 								applyUpdates(epMgr)
 							})
 
@@ -2421,10 +2421,10 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 							Context("when live migration state becomes Base", func() {
 								JustBeforeEach(func() {
-									epMgr.OnUpdate(&liveMigrationStateUpdate{
-										ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
-										State: liveMigrationStateBase,
-									})
+									epMgr.OnLiveMigrationStateUpdate(
+										types.ProtoToWorkloadEndpointID(&wlEPID1),
+										liveMigrationStateBase,
+									)
 									applyUpdates(epMgr)
 								})
 
@@ -2438,10 +2438,10 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 				Context("when endpoint is removed while in live migration", func() {
 					JustBeforeEach(func() {
-						epMgr.OnUpdate(&liveMigrationStateUpdate{
-							ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
-							State: liveMigrationStateLive,
-						})
+						epMgr.OnLiveMigrationStateUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							liveMigrationStateLive,
+						)
 						applyUpdates(epMgr)
 						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &wlEPID1})
 						applyUpdates(epMgr)
@@ -2457,10 +2457,10 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			Context("when live migration state arrives before endpoint", func() {
 				JustBeforeEach(func() {
 					// Live migration state update arrives but WEP isn't active yet.
-					epMgr.OnUpdate(&liveMigrationStateUpdate{
-						ID:    types.ProtoToWorkloadEndpointID(&wlEPID1),
-						State: liveMigrationStateTarget,
-					})
+					epMgr.OnLiveMigrationStateUpdate(
+						types.ProtoToWorkloadEndpointID(&wlEPID1),
+						liveMigrationStateTarget,
+					)
 					// Now the WEP arrives.
 					epMgr.OnUpdate(wlEPUpdate)
 					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
