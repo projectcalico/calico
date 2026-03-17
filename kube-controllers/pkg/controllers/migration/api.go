@@ -82,6 +82,7 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Types",type=string,JSONPath=`.status.progress.typeProgress`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Current Type",type=string,JSONPath=`.status.progress.currentType`,priority=1
 // +kubebuilder:printcolumn:name="Migrated",type=integer,JSONPath=`.status.progress.migrated`,priority=1
@@ -117,6 +118,9 @@ type DatastoreMigrationSpec struct {
 type DatastoreMigrationStatus struct {
 	// Phase is the current phase of the migration state machine.
 	Phase DatastoreMigrationPhase `json:"phase,omitempty"`
+	// Message is a human-readable status message describing what the controller
+	// is currently doing or waiting on.
+	Message string `json:"message,omitempty"`
 	// StartedAt is the timestamp when the migration transitioned to Migrating.
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
 	// CompletedAt is the timestamp when the migration transitioned to Complete.

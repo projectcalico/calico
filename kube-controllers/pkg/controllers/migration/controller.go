@@ -251,7 +251,8 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 	}
 	if len(forbidden) > 0 {
 		logCtx.WithField("kinds", forbidden).Info("Waiting for migration RBAC — cannot list v1 resources for some types")
-		return nil
+		dm.Status.Message = "Waiting for migration RBAC permissions"
+		return m.updateStatus(dm)
 	}
 
 	// Pre-validation: check that v1 CRDs exist.
@@ -353,6 +354,7 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 // handleMigrating runs the core migration logic.
 func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration in progress")
+	dm.Status.Message = "Migrating resources"
 
 	// Step 1: Save and delete the APIService to route v3 requests to CRDs.
 	if err := m.saveAndDeleteAPIService(logCtx, dm); err != nil {
@@ -445,6 +447,7 @@ func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 	if len(allConflicts) > 0 {
 		logCtx.WithField("conflicts", len(allConflicts)).Warn("Migration has conflicts that need manual resolution")
 		dm.Status.Phase = DatastoreMigrationPhaseWaitingForConflictResolution
+		dm.Status.Message = fmt.Sprintf("%d resource conflicts need manual resolution", len(allConflicts))
 		setPhaseMetric(DatastoreMigrationPhaseWaitingForConflictResolution)
 		return m.updateStatus(dm)
 	}
@@ -456,6 +459,7 @@ func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 
 	// No conflicts — transition to Converged.
 	dm.Status.Phase = DatastoreMigrationPhaseConverged
+	dm.Status.Message = "Waiting for components to switch to v3 API group"
 	setPhaseMetric(DatastoreMigrationPhaseConverged)
 	logCtx.Info("Migration converged, unlocking datastore")
 
@@ -519,29 +523,34 @@ func (m *migrationController) handleConverged(logCtx *log.Entry, dm *DatastoreMi
 	}
 	if !hasV3Env {
 		logCtx.Info("Waiting for calico-node DaemonSet to be configured with CALICO_API_GROUP=projectcalico.org/v3")
-		return nil
+		dm.Status.Message = "Waiting for operator to configure calico-node with v3 API group"
+		return m.updateStatus(dm)
 	}
 
 	// Verify the rollout is complete — all pods running the new template.
 	if ds.Status.ObservedGeneration != ds.Generation {
 		logCtx.Info("Waiting for calico-node DaemonSet rollout to be observed")
-		return nil
+		dm.Status.Message = "Waiting for calico-node rollout to begin"
+		return m.updateStatus(dm)
 	}
 	if ds.Status.UpdatedNumberScheduled != ds.Status.DesiredNumberScheduled {
 		logCtx.WithFields(log.Fields{
 			"updatedNumberScheduled": ds.Status.UpdatedNumberScheduled,
 			"desiredNumberScheduled": ds.Status.DesiredNumberScheduled,
 		}).Info("Waiting for calico-node DaemonSet rollout to complete")
-		return nil
+		dm.Status.Message = fmt.Sprintf("Waiting for calico-node rollout (%d/%d updated)", ds.Status.UpdatedNumberScheduled, ds.Status.DesiredNumberScheduled)
+		return m.updateStatus(dm)
 	}
 	if ds.Status.NumberUnavailable > 0 {
 		logCtx.WithField("numberUnavailable", ds.Status.NumberUnavailable).Info("Waiting for all calico-node pods to be available")
-		return nil
+		dm.Status.Message = fmt.Sprintf("Waiting for calico-node pods to be available (%d unavailable)", ds.Status.NumberUnavailable)
+		return m.updateStatus(dm)
 	}
 
 	logCtx.Info("All calico-node pods running with v3 API group, transitioning to Complete")
 	now := metav1.Now()
 	dm.Status.Phase = DatastoreMigrationPhaseComplete
+	dm.Status.Message = "Migration complete"
 	dm.Status.CompletedAt = &now
 	setPhaseMetric(DatastoreMigrationPhaseComplete)
 	return m.updateStatus(dm)

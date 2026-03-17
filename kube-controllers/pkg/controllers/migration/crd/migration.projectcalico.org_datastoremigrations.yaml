@@ -21,6 +21,9 @@ spec:
     - jsonPath: .status.progress.typeProgress
       name: Types
       type: string
+    - jsonPath: .status.message
+      name: Message
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -77,6 +80,8 @@ spec:
             properties:
               completedAt:
                 format: date-time
+                type: string
+              message:
                 type: string
               conditions:
                 items:
