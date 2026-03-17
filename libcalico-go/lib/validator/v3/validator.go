@@ -288,6 +288,7 @@ func init() {
 	registerStructValidator(validate, validateBGPPeerSpec, api.BGPPeerSpec{})
 	registerStructValidator(validate, validateBGPFilterRuleV4, api.BGPFilterRuleV4{})
 	registerStructValidator(validate, validateBGPFilterRuleV6, api.BGPFilterRuleV6{})
+	registerStructValidator(validate, validateBGPFilterOperation, api.BGPFilterOperation{})
 	registerStructValidator(validate, validateNetworkPolicy, api.NetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkPolicy, api.GlobalNetworkPolicy{})
 	registerStructValidator(validate, validateStagedGlobalNetworkPolicy, api.StagedGlobalNetworkPolicy{})
@@ -1607,6 +1608,24 @@ func validateBGPFilterRule(
 	if cidr == "" && prefixLengthV6 != nil {
 		structLevel.ReportError(prefixLengthV6, "PrefixLength", "",
 			reason("CIDR cannot be empty when PrefixLength is not"), "")
+	}
+}
+
+func validateBGPFilterOperation(structLevel validator.StructLevel) {
+	op := structLevel.Current().Interface().(api.BGPFilterOperation)
+	count := 0
+	if op.AddCommunity != nil {
+		count++
+	}
+	if op.PrependASPath != nil {
+		count++
+	}
+	if op.SetPriority != nil {
+		count++
+	}
+	if count != 1 {
+		structLevel.ReportError(op, "BGPFilterOperation", "",
+			reason("exactly one operation must be set"), "")
 	}
 }
 

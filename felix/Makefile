@@ -210,7 +210,7 @@ PROD_BPF_GPL_PROGS=$(addprefix bin/bpf/, $(notdir $(BPF_GPL_O_FILES)))
 PROD_BPF_PROGS=$(PROD_BPF_APACHE_PROGS) $(PROD_BPF_GPL_PROGS)
 
 .PHONY: build-bpf clean-bpf
-build-bpf: $(PROD_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
+build-bpf: $(LIBBPF_A) $(PROD_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
 
 $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	rm -rf bin/bpf
