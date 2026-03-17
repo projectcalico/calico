@@ -17,6 +17,7 @@ package intdataplane
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -27,8 +28,6 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcapgo"
 	"github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -65,16 +64,16 @@ type liveMigrationMonitor struct {
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
 	migrationUIDs   map[types.WorkloadEndpointID]string
+	vmiNames        map[types.WorkloadEndpointID]string
 	newGARPHandle   func(string) (garpHandle, error)
 	convergenceTime time.Duration
 
 	// ipamClient is the Calico IPAM client used to swap owner attributes
-	// when live migration completes.  May be nil if not available.
-	ipamClient    ipam.Interface
-	kubeClientSet *kubernetes.Clientset
+	// when live migration completes.  May be nil if IPAM support is not available.
+	ipamClient ipam.Interface
 }
 
-func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Interface, kubeClientSet *kubernetes.Clientset) *liveMigrationMonitor {
+func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Interface) *liveMigrationMonitor {
 	return &liveMigrationMonitor{
 		roles:         make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
 		fsms:          make(map[types.WorkloadEndpointID]*liveMigrationFSM),
@@ -82,12 +81,12 @@ func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Inte
 		garpC:         make(chan types.WorkloadEndpointID),
 		ifaceNames:    make(map[types.WorkloadEndpointID]string),
 		migrationUIDs: make(map[types.WorkloadEndpointID]string),
+		vmiNames:      make(map[types.WorkloadEndpointID]string),
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
 			return pcapgo.NewEthernetHandle(ifaceName)
 		},
 		convergenceTime: convergenceTime,
 		ipamClient:      ipamClient,
-		kubeClientSet:   kubeClientSet,
 	}
 }
 
@@ -111,6 +110,9 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		if uid := msg.Endpoint.LiveMigrationUid; uid != "" {
 			m.migrationUIDs[id] = uid
 		}
+		if vmiName := msg.Endpoint.LiveMigrationVmiName; vmiName != "" {
+			m.vmiNames[id] = vmiName
+		}
 		oldRole := m.roles[id]
 		newRole := msg.Endpoint.LiveMigrationRole
 		m.roles[id] = newRole
@@ -129,6 +131,7 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 		delete(m.roles, id)
 		delete(m.ifaceNames, id)
 		delete(m.migrationUIDs, id)
+		delete(m.vmiNames, id)
 		m.executeFSM(id, liveMigrationInputDeleted)
 	}
 }
@@ -431,14 +434,20 @@ func isGARPOrRARP(packet gopacket.Packet) bool {
 }
 
 // startIPAMOwnerSwap begins an asynchronous IPAM owner attribute swap when a
-// live migration completes (Target→Live transition).  It looks up the VMI name
-// from the target pod's labels via the Kubernetes API, then calls
-// vmipam.EnsureActiveVMOwnerAttrs to atomically promote the alternate (target)
-// owner attributes to active.  This runs in a goroutine to avoid blocking the
-// dataplane main loop.
+// live migration completes (Target→Live transition).  It uses the VMI name
+// from the proto.WorkloadEndpoint (extracted from the pod's labels by the calc
+// graph) and calls vmipam.EnsureActiveVMOwnerAttrs to atomically promote the
+// alternate (target) owner attributes to active.  Transient errors are retried
+// with backoff.  This runs in a goroutine to avoid blocking the dataplane main loop.
 func (f *liveMigrationFSM) startIPAMOwnerSwap() {
-	if f.monitor.ipamClient == nil || f.monitor.kubeClientSet == nil {
-		f.logCtx.Debug("IPAM client or KubeClientSet not available, skipping owner swap")
+	if f.monitor.ipamClient == nil {
+		f.logCtx.Debug("IPAM client not available, skipping owner swap")
+		return
+	}
+
+	vmiName := f.monitor.vmiNames[f.id]
+	if vmiName == "" {
+		f.logCtx.Debug("No VMI name available, skipping IPAM owner swap")
 		return
 	}
 
@@ -455,33 +464,39 @@ func (f *liveMigrationFSM) startIPAMOwnerSwap() {
 	logCtx := f.logCtx.WithFields(logrus.Fields{
 		"namespace": namespace,
 		"pod":       podName,
+		"vmiName":   vmiName,
 	})
+	logCtx.Info("Starting IPAM owner attribute swap for live migration")
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		// Look up the VMI name from the target pod's labels.
-		pod, err := f.monitor.kubeClientSet.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
-		if err != nil {
-			logCtx.WithError(err).Warn("Failed to look up pod for IPAM owner swap")
-			return
+		const maxRetries = 5
+		backoff := 100 * time.Millisecond
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			err := vmipam.EnsureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, "", namespace, vmiName, podName)
+			if err == nil {
+				logCtx.Info("Successfully swapped IPAM owner attributes")
+				return
+			}
+			if errors.Is(err, vmipam.ErrAlternateOwnerEmpty) || errors.Is(err, vmipam.ErrAlternateOwnerMismatch) {
+				logCtx.WithError(err).Warn("Non-retryable error swapping IPAM owner attributes")
+				return
+			}
+			logCtx.WithError(err).WithField("attempt", attempt).Warn(
+				"Transient error swapping IPAM owner attributes, will retry")
+			if attempt < maxRetries {
+				select {
+				case <-time.After(backoff):
+					backoff *= 2
+				case <-ctx.Done():
+					logCtx.Warn("Context cancelled while retrying IPAM owner swap")
+					return
+				}
+			}
 		}
-		vmiName := pod.Labels["vmi.kubevirt.io/id"]
-		if vmiName == "" {
-			logCtx.Debug("Pod has no vmi.kubevirt.io/id label, skipping IPAM owner swap")
-			return
-		}
-
-		logCtx = logCtx.WithField("vmiName", vmiName)
-		logCtx.Info("Starting IPAM owner attribute swap for live migration")
-
-		err = vmipam.EnsureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, "", namespace, vmiName, podName)
-		if err != nil {
-			logCtx.WithError(err).Warn("Failed to swap IPAM owner attributes")
-			return
-		}
-		logCtx.Info("Successfully swapped IPAM owner attributes")
+		logCtx.Warn("Exhausted retries for IPAM owner attribute swap")
 	}()
 }
 

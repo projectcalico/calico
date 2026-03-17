@@ -288,8 +288,7 @@ type Config struct {
 	LiveMigrationRouteConvergenceTime time.Duration
 
 	// IPAMClient is the Calico IPAM client used to swap owner attributes
-	// when a KubeVirt live migration completes.  May be nil if live migration
-	// IPAM support is not available.
+	// when a KubeVirt live migration completes.
 	IPAMClient ipam.Interface
 
 	KubernetesProvider felixconfig.Provider
@@ -521,7 +520,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		getKubeProxyNftablesEnabled: detectKubeProxyNftablesMode,
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
-	dp.liveMigrationMonitor = newLiveMigrationMonitor(config.LiveMigrationRouteConvergenceTime, config.IPAMClient, config.KubeClientSet)
+	dp.liveMigrationMonitor = newLiveMigrationMonitor(config.LiveMigrationRouteConvergenceTime, config.IPAMClient)
 	dp.RegisterManager(dp.liveMigrationMonitor)
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
