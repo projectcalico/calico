@@ -146,21 +146,10 @@ func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runti
 		return field.ErrorList{field.InternalError(nil, fmt.Errorf("failed to convert object to unstructured: %w", err))}
 	}
 
-	// Apply CRD schema defaults to the unstructured representation, then
-	// marshal them back into the typed object so the caller sees the
-	// defaulted values.
-	if s, ok := schemas[kind]; ok {
-		schemadefaulting.Default(unstructuredObj, s)
+	// Apply CRD schema defaults to the unstructured representation.
+	applyCRDDefaults(unstructuredObj, kind)
 
-		raw, err := json.Marshal(unstructuredObj)
-		if err != nil {
-			return field.ErrorList{field.InternalError(nil, fmt.Errorf("failed to marshal defaulted %s: %w", kind, err))}
-		}
-		if err := json.Unmarshal(raw, obj); err != nil {
-			return field.ErrorList{field.InternalError(nil, fmt.Errorf("failed to unmarshal defaulted %s: %w", kind, err))}
-		}
-	}
-
+	// Validate the defaulted unstructured data.
 	var allErrs field.ErrorList
 
 	// Run OpenAPI schema validation (MinItems, MaxLength, Pattern, Enum, etc.).
@@ -182,47 +171,23 @@ func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runti
 		allErrs = append(allErrs, celErrs...)
 	}
 
+	// Convert the defaulted unstructured data back into the typed object
+	// so the caller sees the applied defaults.
+	if m, ok := unstructuredObj.(map[string]any); ok {
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(m, obj); err != nil {
+			allErrs = append(allErrs, field.InternalError(nil, fmt.Errorf("failed to convert defaulted %s from unstructured: %w", kind, err)))
+		}
+	}
+
 	return allErrs
 }
 
-// ApplyCRDDefaults applies CRD schema default values to the given object,
-// matching the defaulting behavior the Kubernetes API server performs on
-// admission. This is needed for etcd-mode clients where no API server is
-// present to apply defaults.
-//
-// The object is modified in-place. Returns an error only on conversion
-// failures; returns nil if the object's Kind has no CRD schema or no
-// defaults to apply.
-func ApplyCRDDefaults(obj runtime.Object) error {
-	if crdInitErr != nil {
-		return crdInitErr
+// applyCRDDefaults applies CRD schema default values to an unstructured
+// object representation in-place. This is a no-op if the kind has no schema.
+func applyCRDDefaults(unstructuredObj any, kind string) {
+	if s, ok := schemas[kind]; ok {
+		schemadefaulting.Default(unstructuredObj, s)
 	}
-
-	kind := resolveKind(obj)
-	s, ok := schemas[kind]
-	if !ok {
-		return nil
-	}
-
-	// Convert to unstructured so we can apply defaults.
-	unstructuredObj, err := toUnstructured(obj)
-	if err != nil {
-		return fmt.Errorf("failed to convert %s to unstructured: %w", kind, err)
-	}
-
-	// Apply CRD schema defaults to the unstructured representation.
-	schemadefaulting.Default(unstructuredObj, s)
-
-	// Marshal the defaulted unstructured map back into the typed object.
-	raw, err := json.Marshal(unstructuredObj)
-	if err != nil {
-		return fmt.Errorf("failed to marshal defaulted %s: %w", kind, err)
-	}
-	if err := json.Unmarshal(raw, obj); err != nil {
-		return fmt.Errorf("failed to unmarshal defaulted %s: %w", kind, err)
-	}
-
-	return nil
 }
 
 // resolveKind returns the Kind string for a runtime.Object, falling back to
