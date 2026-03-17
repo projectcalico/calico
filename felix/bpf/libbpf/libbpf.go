@@ -615,6 +615,7 @@ func (t *TcGlobalData) Set(m *Map) error {
 		C.short(t.IstioDSCP),
 		C.uint(t.MaglevLUTSize),
 		C.uint(t.IPFragTimeout),
+		C.uint(t.HostIfindex),
 	)
 
 	return err
