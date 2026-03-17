@@ -321,9 +321,13 @@ type bpfEndpointManager struct {
 	legacyCleanUp           bool
 	hostIfaceTrees          bpfIfaceTrees
 
-	jumpMapAllocs    map[hook.Hook]*jumpMapAlloc
-	policyTcAllowFDs [2]bpf.ProgFD
-	policyTcDenyFDs  [2]bpf.ProgFD
+	jumpMapAllocs          map[hook.Hook]*jumpMapAlloc
+	netkitJumpMapAllocs    map[hook.Hook]*jumpMapAlloc
+	policyTcAllowFDs       [2]bpf.ProgFD
+	policyTcDenyFDs        [2]bpf.ProgFD
+	policyNetkitAllowFDs   [2]bpf.ProgFD
+	policyNetkitDenyFDs    [2]bpf.ProgFD
+	netkitPoliciesLoaded   sync.Once
 
 	ruleRenderer bpfAllowChainRenderer
 
@@ -509,6 +513,10 @@ func NewBPFEndpointManager(
 			hook.Ingress: newJumpMapAlloc("ingress", jump.TCMaxEntryPoints),
 			hook.Egress:  newJumpMapAlloc("egress", jump.TCMaxEntryPoints),
 			hook.XDP:     newJumpMapAlloc("xdp", jump.XDPMaxEntryPoints),
+		},
+		netkitJumpMapAllocs: map[hook.Hook]*jumpMapAlloc{
+			hook.Ingress: newJumpMapAlloc("netkit-ingress", jump.TCMaxEntryPoints),
+			hook.Egress:  newJumpMapAlloc("netkit-egress", jump.TCMaxEntryPoints),
 		},
 		ruleRenderer:     iptablesRuleRenderer,
 		onStillAlive:     livenessCallback,
@@ -752,7 +760,11 @@ func (m *bpfEndpointManager) repinJumpMaps() error {
 	for _, mp := range m.commonMaps.JumpMaps {
 		mps = append(mps, mp)
 	}
+	for _, mp := range m.commonMaps.NetkitJumpMaps {
+		mps = append(mps, mp)
+	}
 	mps = append(mps, m.commonMaps.ProgramsMaps...)
+	mps = append(mps, m.commonMaps.NetkitProgramsMaps...)
 	for _, mp := range mps {
 		pin := path.Join(tmp, mp.GetName())
 		if err := libbpf.ObjPin(int(mp.MapFD()), pin); err != nil {
@@ -1645,59 +1657,113 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 	return nil
 }
 
-// loadDefaultPolicies loads the default allow and deny policy programs for the given hook
-// and not policy direction.
+// loadDefaultPolicies loads the default allow and deny policy programs for the given hook.
 func (m *bpfEndpointManager) loadDefaultPolicies(hk hook.Hook) error {
+	allowFD, denyFD, err := m.loadDefaultPolicyPrograms(hk, string(m.bpfAttachType), nil)
+	if err != nil {
+		return err
+	}
+	m.policyTcAllowFDs[hk] = allowFD
+	m.policyTcDenyFDs[hk] = denyFD
+	return nil
+}
+
+// ensureNetkitDefaultPolicies lazily loads netkit default policy programs on first use.
+func (m *bpfEndpointManager) ensureNetkitDefaultPolicies() error {
+	var loadErr error
+	m.netkitPoliciesLoaded.Do(func() {
+		for _, hk := range []hook.Hook{hook.Ingress, hook.Egress} {
+			var pinOverrides map[string]string
+			if hk == hook.Ingress {
+				pinOverrides = hook.NetkitPinOverridesIngress()
+			} else {
+				pinOverrides = hook.NetkitPinOverridesEgress()
+			}
+			allowFD, denyFD, err := m.loadDefaultPolicyPrograms(hk, tc.AttachOptionNetkit, pinOverrides)
+			if err != nil {
+				loadErr = fmt.Errorf("loading netkit default policies for %s: %w", hk, err)
+				return
+			}
+			m.policyNetkitAllowFDs[hk] = allowFD
+			m.policyNetkitDenyFDs[hk] = denyFD
+		}
+	})
+	return loadErr
+}
+
+// loadDefaultPolicyPrograms loads the default allow/deny policy programs for the
+// given hook and attach type. mapPinOverrides allows redirecting prog_array maps
+// to alternate pin paths (used for netkit).
+func (m *bpfEndpointManager) loadDefaultPolicyPrograms(
+	hk hook.Hook,
+	progAttachType string,
+	mapPinOverrides map[string]string,
+) (allowFD, denyFD bpf.ProgFD, err error) {
 	file := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("policy_default_%s.o", hk))
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
-		return fmt.Errorf("file %s: %w", file, err)
+		return 0, 0, fmt.Errorf("file %s: %w", file, err)
 	}
 
-	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		mapName := m.Name()
+	for mp, err := obj.FirstMap(); mp != nil && err == nil; mp, err = mp.NextMap() {
+		mapName := mp.Name()
 		if strings.HasPrefix(mapName, ".rodata") {
 			continue
 		}
 		if size := maps.Size(mapName); size != 0 {
-			if err := m.SetSize(size); err != nil {
-				return fmt.Errorf("error resizing map %s: %w", mapName, err)
+			if err := mp.SetSize(size); err != nil {
+				return 0, 0, fmt.Errorf("error resizing map %s: %w", mapName, err)
 			}
 		}
-		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
-			return fmt.Errorf("error pinning map %s: %w", mapName, err)
+		pinPath := path.Join(bpfdefs.GlobalPinDir, mapName)
+		if override, ok := mapPinOverrides[mapName]; ok {
+			pinPath = override
+		}
+		if err := mp.SetPinPath(pinPath); err != nil {
+			return 0, 0, fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
 	}
 
-	if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+	switch progAttachType {
+	case string(apiv3.BPFAttachOptionTCX):
 		for p, err := obj.FirstProgram(); p != nil && err == nil; p, err = p.NextProgram() {
 			attachType := libbpf.AttachTypeTcxEgress
 			if hk == hook.Ingress {
 				attachType = libbpf.AttachTypeTcxIngress
 			}
 			if err := obj.SetAttachType(p.Name(), attachType); err != nil {
-				return fmt.Errorf("error setting attach type for program %s: %w", p.Name(), err)
+				return 0, 0, fmt.Errorf("error setting attach type for program %s: %w", p.Name(), err)
+			}
+		}
+	case tc.AttachOptionNetkit:
+		for p, err := obj.FirstProgram(); p != nil && err == nil; p, err = p.NextProgram() {
+			attachType := libbpf.AttachTypeNetkitPrimary
+			if hk == hook.Ingress {
+				attachType = libbpf.AttachTypeNetkitPeer
+			}
+			if err := obj.SetAttachType(p.Name(), attachType); err != nil {
+				return 0, 0, fmt.Errorf("error setting netkit attach type for program %s: %w", p.Name(), err)
 			}
 		}
 	}
 
 	if err := obj.Load(); err != nil {
-		return fmt.Errorf("default policies: %w", err)
+		return 0, 0, fmt.Errorf("default policies (%s): %w", progAttachType, err)
 	}
 
 	fd, err := obj.ProgramFD("calico_tc_deny")
 	if err != nil {
-		return fmt.Errorf("failed to load default deny policy program: %w", err)
+		return 0, 0, fmt.Errorf("failed to load default deny policy program: %w", err)
 	}
-	m.policyTcDenyFDs[hk] = bpf.ProgFD(fd)
+	denyFD = bpf.ProgFD(fd)
 
 	fd, err = obj.ProgramFD("calico_tc_allow")
 	if err != nil {
-		return fmt.Errorf("failed to load default allow policy program: %w", err)
+		return 0, 0, fmt.Errorf("failed to load default allow policy program: %w", err)
 	}
-	m.policyTcAllowFDs[hk] = bpf.ProgFD(fd)
+	allowFD = bpf.ProgFD(fd)
 
-	return nil
+	return allowFD, denyFD, nil
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
@@ -2198,11 +2264,15 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	}
 }
 
-func (m *bpfEndpointManager) allocJumpIndicesForWEP(ifaceName string, idx *bpfInterfaceJumpIndices) error {
+func (m *bpfEndpointManager) allocJumpIndicesForWEP(ifaceName string, isNetkit bool, idx *bpfInterfaceJumpIndices) error {
+	allocs := m.jumpMapAllocs
+	if isNetkit {
+		allocs = m.netkitJumpMapAllocs
+	}
 	for _, h := range []hook.Hook{hook.Ingress, hook.Egress} {
 		if idx.policyIdx[h] == -1 {
 			var err error
-			idx.policyIdx[h], err = m.jumpMapAllocs[h].Get(ifaceName)
+			idx.policyIdx[h], err = allocs[h].Get(ifaceName)
 			if err != nil {
 				return err
 			}
@@ -2239,9 +2309,11 @@ func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, xdpM
 func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInterfaceState) error {
 	var err error
 
+	isNetkit := string(ap.AttachType) == tc.AttachOptionNetkit
+
 	// Allocate indices for IPv4
 	if m.v4 != nil {
-		err = m.allocJumpIndicesForWEP(ap.IfaceName(), &state.v4)
+		err = m.allocJumpIndicesForWEP(ap.IfaceName(), isNetkit, &state.v4)
 		if err != nil {
 			return err
 		}
@@ -2249,16 +2321,20 @@ func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInt
 
 	// Allocate indices for IPv6
 	if m.v6 != nil {
-		err = m.allocJumpIndicesForWEP(ap.IfaceName(), &state.v6)
+		err = m.allocJumpIndicesForWEP(ap.IfaceName(), isNetkit, &state.v6)
 		if err != nil {
 			return err
 		}
 	}
 
+	filterAllocs := m.jumpMapAllocs
+	if isNetkit {
+		filterAllocs = m.netkitJumpMapAllocs
+	}
 	if ap.LogLevel == "debug" {
 		for _, h := range []hook.Hook{hook.Ingress, hook.Egress} {
 			if state.filterIdx[h] == -1 {
-				state.filterIdx[h], err = m.jumpMapAllocs[h].Get(ap.IfaceName())
+				state.filterIdx[h], err = filterAllocs[h].Get(ap.IfaceName())
 				if err != nil {
 					return err
 				}
@@ -2269,7 +2345,7 @@ func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInt
 			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook]); err != nil {
 				logrus.WithError(err).Warn("Filter program may leak.")
 			}
-			if err := m.jumpMapAllocs[attachHook].Put(state.filterIdx[attachHook], ap.IfaceName()); err != nil {
+			if err := filterAllocs[attachHook].Put(state.filterIdx[attachHook], ap.IfaceName()); err != nil {
 				logrus.WithError(err).Errorf("Filter hook %s", attachHook)
 			}
 			state.filterIdx[attachHook] = -1
@@ -2419,6 +2495,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	// manage this way — other netkit devices (host/data interfaces) are not ours.
 	if ifaceType == IfaceTypeNetkit && m.isWorkloadIface(ifaceName) && tc.IsNetkitSupported() {
 		ap.AttachType = apiv3.BPFAttachOption(tc.AttachOptionNetkit)
+		// Netkit programs have a different expected_attach_type and cannot
+		// share prog_array maps with TC/TCX programs. Use separate maps.
+		// Note: the AP is copied for both directions in applyPolicyToWeps,
+		// so we set overrides for both ingress and egress here. The ProgramsMap
+		// is set per-direction in wepApplyPolicyToDirection.
+		ap.MapPinOverrides = hook.NetkitPinOverridesBoth()
 	}
 	if wep != nil && wep.QosControls != nil {
 		// QoSControls are present, update state
@@ -3175,9 +3257,10 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 		}
 	}
 
-	ap.ProgramsMap = d.mgr.commonMaps.ProgramsMaps[hook.Ingress]
-	if ap.Hook == hook.Egress {
-		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMaps[hook.Egress]
+	if string(ap.AttachType) == tc.AttachOptionNetkit {
+		ap.ProgramsMap = d.mgr.commonMaps.NetkitProgramsMaps[ap.Hook]
+	} else {
+		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMaps[ap.Hook]
 	}
 
 	if d.mgr.FlowLogsEnabled() {
@@ -3867,14 +3950,24 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 		}
 
 		jmpMap := m.commonMaps.JumpMaps[aptc.Hook]
+		allowFDs := m.policyTcAllowFDs
+		denyFDs := m.policyTcDenyFDs
+		if string(aptc.AttachType) == tc.AttachOptionNetkit {
+			jmpMap = m.commonMaps.NetkitJumpMaps[aptc.Hook]
+			if err := m.ensureNetkitDefaultPolicies(); err != nil {
+				return err
+			}
+			allowFDs = m.policyNetkitAllowFDs
+			denyFDs = m.policyNetkitDenyFDs
+		}
 		// Load default policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
 			err = maps.UpdateMapEntry(jmpMap.MapFD(),
-				jump.Key(policyIdx), jump.Value(m.policyTcAllowFDs[aptc.Hook].FD()))
+				jump.Key(policyIdx), jump.Value(allowFDs[aptc.Hook].FD()))
 		case hook.DefPolicyDeny:
 			err = maps.UpdateMapEntry(jmpMap.MapFD(),
-				jump.Key(policyIdx), jump.Value(m.policyTcDenyFDs[aptc.Hook].FD()))
+				jump.Key(policyIdx), jump.Value(denyFDs[aptc.Hook].FD()))
 		}
 
 		if err != nil {
@@ -4054,7 +4147,12 @@ func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor
 	}
 
 	attachType := uint32(0)
-	if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+	if string(ap.AttachType) == tc.AttachOptionNetkit {
+		attachType = libbpf.AttachTypeNetkitPrimary
+		if ap.Hook == hook.Ingress {
+			attachType = libbpf.AttachTypeNetkitPeer
+		}
+	} else if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
 		attachType = libbpf.AttachTypeTcxIngress
 		if ap.Hook == hook.Egress {
 			attachType = libbpf.AttachTypeTcxEgress
@@ -4077,7 +4175,11 @@ func (m *bpfEndpointManager) updateLogFilter(ap attachPoint) error {
 			return err
 		}
 		defer fd.Close()
-		if err := m.commonMaps.JumpMaps[t.Hook].Update(jump.Key(idx), jump.Value(fd.FD())); err != nil {
+		jmpMap := m.commonMaps.JumpMaps[t.Hook]
+		if string(t.AttachType) == tc.AttachOptionNetkit {
+			jmpMap = m.commonMaps.NetkitJumpMaps[t.Hook]
+		}
+		if err := jmpMap.Update(jump.Key(idx), jump.Value(fd.FD())); err != nil {
 			return fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", ap.HookName(), idx, fd.FD(), err)
 		}
 
@@ -4204,7 +4306,13 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 	if apTc, ok := ap.(*tc.AttachPoint); ok {
 		staticProgsMap = apTc.ProgramsMap
 		polProgsMap = m.commonMaps.JumpMaps[apTc.Hook]
-		if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+		if string(apTc.AttachType) == tc.AttachOptionNetkit {
+			polProgsMap = m.commonMaps.NetkitJumpMaps[apTc.Hook]
+			attachType = libbpf.AttachTypeNetkitPrimary
+			if apTc.Hook == hook.Ingress {
+				attachType = libbpf.AttachTypeNetkitPeer
+			}
+		} else if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
 			attachType = libbpf.AttachTypeTcxIngress
 			if apTc.Hook == hook.Egress {
 				attachType = libbpf.AttachTypeTcxEgress
