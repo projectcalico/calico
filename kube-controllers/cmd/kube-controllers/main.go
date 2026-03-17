@@ -554,10 +554,7 @@ func (cc *controllerControl) InitControllers(
 	// Register the datastore migration controller. This controller watches for
 	// DatastoreMigration CRs and drives the v1-to-v3 CRD migration.
 	if v3c != nil {
-		type accessor interface {
-			Backend() bapi.Client
-		}
-		bc := calicoClient.(accessor).Backend()
+		bc := calicoClient.(bapi.BackendAccessor).Backend()
 
 		dynClient, err := dynamic.NewForConfig(k8sconfig)
 		if err != nil {

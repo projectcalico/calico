@@ -560,10 +560,19 @@ func (m *migrationController) handleDeletion(logCtx *logrus.Entry, dm *Datastore
 		return nil
 	}
 
-	if dm.Status.Phase == DatastoreMigrationPhaseComplete {
+	switch dm.Status.Phase {
+	case DatastoreMigrationPhaseComplete:
 		return m.handleCompletedCleanup(logCtx, dm)
+	case DatastoreMigrationPhaseConverged:
+		// Once converged, the operator may have started rolling out pods with
+		// v3 mode. Aborting is unsafe — the migration must complete from this
+		// point. The finalizer blocks deletion until the phase reaches Complete.
+		logCtx.Warn("Cannot abort from Converged phase — migration must complete. Waiting for Complete phase.")
+		dm.Status.Message = "Deletion blocked: migration is Converged and cannot be rolled back. Wait for migration to complete."
+		return m.updateStatus(dm)
+	default:
+		return m.handleAbort(logCtx, dm)
 	}
-	return m.handleAbort(logCtx, dm)
 }
 
 // handleCompletedCleanup deletes v1 CRDs once the DatastoreMigration object
@@ -573,6 +582,8 @@ func (m *migrationController) handleCompletedCleanup(logCtx *logrus.Entry, dm *D
 	logCtx.Info("Migration complete, cleaning up v1 CRDs")
 
 	// List all CRDs in the crd.projectcalico.org group and delete them.
+	// CRDs are only created by whatever installed them (operator, helm, kubectl);
+	// the apiserver does not recreate them after deletion.
 	crdClient := m.dynamicClient.Resource(crdGVR)
 	crdList, err := crdClient.List(m.ctx, metav1.ListOptions{})
 	if err != nil {
