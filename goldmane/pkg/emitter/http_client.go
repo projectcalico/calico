@@ -80,7 +80,7 @@ func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Clie
 }
 
 func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*emitterClient, error) {
-	// Create an initial HTTP client, and a function to help encapsualte the reload logic.
+	// Create an initial HTTP client, and a function to help encapsulate the reload logic.
 	client, err := newHTTPClient(caCert, clientKey, clientCert, serverName)
 	if err != nil {
 		return nil, err
