@@ -33,6 +33,7 @@ endif
 	xargs -I {} sh -c 'if ! grep -q "Copyright (c)" "{}"; then sed "s/YEAR/'$$YEAR'/g" hack/copyright.template | (cat -; echo; cat "{}") > temp && mv temp "{}"; fi'
 
 clean:
+	rm -rf .dev-stamps/
 	$(MAKE) -C api clean
 	$(MAKE) -C apiserver clean
 	$(MAKE) -C app-policy clean

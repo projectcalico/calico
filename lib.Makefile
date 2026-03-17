@@ -1719,6 +1719,100 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 	touch $@
 
 ###############################################################################
+# Dev build & push workflow — build all images, tag with a custom tag, and
+# optionally push to a personal Docker Hub registry.
+#
+# Images are only re-tagged / re-pushed when their docker image ID changes,
+# and the operator is only rebuilt when its inputs change. This makes repeated
+# runs fast when only one component has been modified.
+#
+# Usage:
+#   make dev-push DEV_IMAGE_PATH=caseydavenport DEV_IMAGE_TAG=my-feature
+#
+# To force a full rebuild, remove the stamp directory:
+#   rm -rf .dev-stamps && make dev-push ...
+###############################################################################
+DEV_IMAGE_TAG ?= $(GIT_VERSION)
+DEV_IMAGE_REGISTRY ?= docker.io
+DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
+
+# Map calico/<name>:test-build → $(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
+DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PATH)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
+DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PATH)/operator:$(DEV_IMAGE_TAG)
+
+## Build all component images and tag them for the dev registry. Only re-tags
+## images whose underlying docker image ID has changed since the last run.
+.PHONY: dev-image
+dev-image: $(KIND_IMAGE_MARKERS)
+ifndef DEV_IMAGE_PATH
+	$(error DEV_IMAGE_PATH is required (e.g., make dev-image DEV_IMAGE_PATH=caseydavenport DEV_IMAGE_TAG=my-feature))
+endif
+	@mkdir -p $(DEV_STAMP_DIR)
+	@tagged=0; skipped=0; \
+	for img in $(KIND_CALICO_IMAGES); do \
+	  base=$${img%%:*}; \
+	  name=$${base#calico/}; \
+	  dev_img=$(DEV_IMAGE_PATH)/$$name:$(DEV_IMAGE_TAG); \
+	  cur_id=$$(docker image inspect $$base:latest-$(ARCH) --format '{{.Id}}' 2>/dev/null || echo "none"); \
+	  stamp=$(DEV_STAMP_DIR)/$$name.image-id; \
+	  prev_id=$$(cat "$$stamp" 2>/dev/null || echo ""); \
+	  if [ "$$cur_id" = "$$prev_id" ]; then \
+	    skipped=$$((skipped + 1)); \
+	  else \
+	    docker tag $$base:latest-$(ARCH) $$dev_img; \
+	    echo "$$cur_id" > "$$stamp"; \
+	    echo "Tagged $$dev_img"; \
+	    tagged=$$((tagged + 1)); \
+	  fi; \
+	done; \
+	echo "Calico images: $$tagged tagged, $$skipped unchanged"
+	@$(MAKE) --no-print-directory dev-image-operator
+	@echo "dev-image complete"
+
+## Build the operator image if its inputs have changed.
+.PHONY: dev-image-operator
+dev-image-operator:
+	@mkdir -p $(DEV_STAMP_DIR)
+	@versions_hash=$$(md5sum $(KIND_INFRA_DIR)/calico_versions.yml | cut -d' ' -f1); \
+	cur_inputs="$(DEV_IMAGE_TAG):$(DEV_IMAGE_REGISTRY):$(DEV_IMAGE_PATH):$(OPERATOR_BRANCH):$$versions_hash"; \
+	stamp=$(DEV_STAMP_DIR)/operator.inputs; \
+	prev_inputs=$$(cat "$$stamp" 2>/dev/null || echo ""); \
+	if [ "$$cur_inputs" = "$$prev_inputs" ]; then \
+	  echo "Operator unchanged (inputs match)"; \
+	else \
+	  echo "Building operator (inputs changed)..."; \
+	  cd $(KIND_INFRA_DIR) && \
+	    REPO=$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) \
+	    BRANCH=$(OPERATOR_BRANCH) \
+	    DEV_IMAGE_TAG=$(DEV_IMAGE_TAG) \
+	    DEV_IMAGE_REGISTRY=$(DEV_IMAGE_REGISTRY) \
+	    DEV_IMAGE_PATH=$(DEV_IMAGE_PATH) \
+	    ./build-operator.sh; \
+	  echo "$$cur_inputs" > "$$stamp"; \
+	fi
+
+## Push all dev-tagged images to the registry. Only pushes images whose
+## docker image ID has changed since the last push.
+.PHONY: dev-push
+dev-push: dev-image
+	@pushed=0; skipped=0; \
+	for img in $(DEV_CALICO_IMAGES) $(DEV_OPERATOR_IMAGE); do \
+	  local_id=$$(docker image inspect "$$img" --format '{{.Id}}' 2>/dev/null || echo "none"); \
+	  stamp_name=$$(echo "$$img" | tr '/:' '__'); \
+	  stamp=$(DEV_STAMP_DIR)/$$stamp_name.pushed-id; \
+	  prev_id=$$(cat "$$stamp" 2>/dev/null || echo ""); \
+	  if [ "$$local_id" = "$$prev_id" ]; then \
+	    skipped=$$((skipped + 1)); \
+	  else \
+	    echo "Pushing $$img"; \
+	    docker push "$$img"; \
+	    echo "$$local_id" > "$$stamp"; \
+	    pushed=$$((pushed + 1)); \
+	  fi; \
+	done; \
+	echo "dev-push complete: $$pushed pushed, $$skipped already up-to-date"
+
+###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)

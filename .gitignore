@@ -1,5 +1,6 @@
 *.created*
 *.pyc
+.dev-stamps/
 .go-pkg-cache/
 .idea
 .vscode
@@ -26,6 +27,7 @@ builder.coverprofile
 
 /* Image build stamp files for kind testing */
 .stamp.*
+hack/test/kind/infra/operator
 
 /* Created by local kind cluster */
 hack/test/kind/kind
