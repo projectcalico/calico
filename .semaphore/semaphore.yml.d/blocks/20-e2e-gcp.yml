@@ -29,7 +29,7 @@
       - name: PRIVATE_REGISTRY
         value: "quay.io/"
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+        value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
       - name: USE_API_SERVER
         value: "false"
     jobs:

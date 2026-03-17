@@ -34,7 +34,7 @@ global_job_config:
     - name: RUN_LOCAL_TESTS
       value: "true"
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+      value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
     - name: USE_PRIVATE_REGISTRY
       value: "true"
     - name: PRIVATE_REGISTRY
