@@ -155,10 +155,14 @@ func Validate(current any) error {
 		verr = convertError(err)
 	}
 
-	// Run CRD validation rules (OpenAPI schema constraints + CEL
-	// x-kubernetes-validations). In Kubernetes datastore mode, the API server
-	// enforces these. In etcd mode there is no API server, so we enforce them here.
+	// Apply CRD schema defaults and then run CRD validation rules (OpenAPI
+	// schema constraints + CEL x-kubernetes-validations). In Kubernetes
+	// datastore mode, the API server handles both defaulting and validation
+	// on admission. In etcd mode there is no API server, so we do both here.
 	if rObj, ok := current.(runtime.Object); ok {
+		if err := ApplyCRDDefaults(rObj); err != nil {
+			log.WithError(err).Warn("Failed to apply CRD defaults")
+		}
 		if crdErrs := validateCRD(context.Background(), rObj, nil); len(crdErrs) > 0 {
 			for _, e := range crdErrs {
 				name := e.Field
