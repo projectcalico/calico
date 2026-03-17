@@ -652,9 +652,9 @@ func TestLifecycle_OwnerRefRemapping_NativeOwner(t *testing.T) {
 	}
 }
 
-// TestLifecycle_MigrationError verifies that a fatal error during resource
-// migration transitions the CR to Failed.
-func TestLifecycle_MigrationError(t *testing.T) {
+// TestLifecycle_MigrationError_Retryable verifies that a retryable error during
+// resource migration is returned (so the workqueue retries) rather than going terminal.
+func TestLifecycle_MigrationError_Retryable(t *testing.T) {
 	failingMigrator := ResourceMigrator{
 		Kind:         "FailType",
 		Order:        OrderTiers,
@@ -681,22 +681,13 @@ func TestLifecycle_MigrationError(t *testing.T) {
 		Revision: "1",
 	}
 
-	if err := c.reconcile(); err != nil {
-		t.Fatalf("reconcile: %v", err)
+	// A list failure is retryable — reconcile should return a non-terminal error.
+	err := c.reconcile()
+	if err == nil {
+		t.Fatal("expected error from list failure")
 	}
-
-	dm := getMigrationCR(t, c, defaultMigrationName)
-	if dm.Status.Phase != DatastoreMigrationPhaseFailed {
-		t.Errorf("expected Failed, got %s", dm.Status.Phase)
-	}
-	foundFailed := false
-	for _, cond := range dm.Status.Conditions {
-		if cond.Type == conditionTypeFailed {
-			foundFailed = true
-		}
-	}
-	if !foundFailed {
-		t.Error("expected Failed condition")
+	if isTerminal(err) {
+		t.Errorf("expected retryable error, got terminal: %v", err)
 	}
 }
 

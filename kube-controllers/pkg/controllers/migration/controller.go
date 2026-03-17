@@ -39,8 +39,10 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/kube-controllers/pkg/discovery"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 const (
@@ -177,13 +179,34 @@ func (m *migrationController) processNextWorkItem() bool {
 	defer m.queue.Done(key)
 
 	if err := m.reconcile(); err != nil {
-		logrus.WithError(err).Error("Migration reconcile error")
-		m.queue.AddRateLimited(key)
+		if isTerminal(err) {
+			logrus.WithError(err).Error("Terminal migration error, setting Failed status")
+			m.handleTerminalError(err)
+			m.queue.Forget(key)
+		} else {
+			logrus.WithError(err).Error("Migration reconcile error, will retry")
+			m.queue.AddRateLimited(key)
+		}
 		return true
 	}
 
 	m.queue.Forget(key)
 	return true
+}
+
+// handleTerminalError fetches the current CR and sets it to Failed with the
+// error message. If the CR can't be fetched or updated, the error is logged
+// but not retried — the next reconcile will pick it up.
+func (m *migrationController) handleTerminalError(err error) {
+	dm := &DatastoreMigration{}
+	if getErr := m.rtClient.Get(m.ctx, types.NamespacedName{Name: defaultMigrationName}, dm); getErr != nil {
+		logrus.WithError(getErr).Error("Failed to fetch CR for terminal error status update")
+		return
+	}
+	m.setFailedStatus(dm, err.Error())
+	if updateErr := m.updateStatus(dm); updateErr != nil {
+		logrus.WithError(updateErr).Error("Failed to update CR status for terminal error")
+	}
 }
 
 func (m *migrationController) reconcile() error {
@@ -202,8 +225,7 @@ func (m *migrationController) reconcile() error {
 
 	// Validate Spec.Type before proceeding.
 	if dm.Spec.Type != DatastoreMigrationTypeAPIServerToCRDs {
-		m.setFailedStatus(dm, fmt.Sprintf("unsupported migration type: %q (only %q is supported)", dm.Spec.Type, DatastoreMigrationTypeAPIServerToCRDs))
-		return m.updateStatus(dm)
+		return asTerminal(fmt.Errorf("unsupported migration type: %q (only %q is supported)", dm.Spec.Type, DatastoreMigrationTypeAPIServerToCRDs))
 	}
 
 	// If the CR is being deleted, run the finalizer logic.
@@ -274,8 +296,7 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 		}
 	}
 	if v1CRDCount == 0 {
-		m.setFailedStatus(dm, "no v1 CRDs (crd.projectcalico.org) found — nothing to migrate")
-		return m.updateStatus(dm)
+		return asTerminal(fmt.Errorf("no v1 CRDs (crd.projectcalico.org) found — nothing to migrate"))
 	}
 	logCtx.WithField("v1CRDs", v1CRDCount).Info("Found v1 CRDs to migrate")
 
@@ -288,25 +309,16 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 			return fmt.Errorf("checking APIService: %w", err)
 		}
 	} else if apiSvc.Labels != nil && apiSvc.Labels["kube-aggregator.kubernetes.io/automanaged"] == "true" {
-		m.setFailedStatus(dm, "APIService v3.projectcalico.org is automanaged (CRD-backed), not aggregated — migration requires an aggregated API server")
-		return m.updateStatus(dm)
+		return asTerminal(fmt.Errorf("APIService v3.projectcalico.org is automanaged (CRD-backed), not aggregated — migration requires an aggregated API server"))
 	}
 
-	// Detect install namespace.
-	installNamespace := "kube-system"
-	_, err = m.k8sClient.CoreV1().Namespaces().Get(m.ctx, "calico-system", metav1.GetOptions{})
-	if err == nil {
-		installNamespace = "calico-system"
-	}
+	// Detect install namespace from the serviceaccount namespace file.
+	installNamespace := names.OwnNamespace()
 
-	// Detect install type (operator vs manifest).
+	// Detect install type by checking whether the operator API group is registered.
 	installType := "manifest"
-	for _, ns := range []string{installNamespace, "tigera-operator"} {
-		_, err = m.k8sClient.AppsV1().Deployments(ns).Get(m.ctx, "tigera-operator", metav1.GetOptions{})
-		if err == nil {
-			installType = "operator"
-			break
-		}
+	if discovery.IsOperatorManaged(m.k8sClient.Discovery()) {
+		installType = "operator"
 	}
 	logCtx.WithFields(logrus.Fields{
 		"installNamespace": installNamespace,
@@ -401,8 +413,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 		migrationTypeDuration.WithLabelValues(migrator.Kind).Observe(time.Since(typeStart).Seconds())
 		if err != nil {
 			migrationResourceErrors.WithLabelValues(migrator.Kind).Inc()
-			m.setFailedStatus(dm, fmt.Sprintf("failed migrating %s: %v", migrator.Kind, err))
-			return m.updateStatus(dm)
+			return fmt.Errorf("migrating %s: %w", migrator.Kind, err)
 		}
 
 		migrationResourcesTotal.WithLabelValues(migrator.Kind, "migrated").Add(float64(result.Migrated))
@@ -433,8 +444,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 
 	// Second pass: remap OwnerReference UIDs that point to Calico resources.
 	if err := RemapOwnerReferences(m.ctx, m.rtClient, uidMap, migrators); err != nil {
-		m.setFailedStatus(dm, fmt.Sprintf("failed remapping OwnerReferences: %v", err))
-		return m.updateStatus(dm)
+		return fmt.Errorf("remapping OwnerReferences: %w", err)
 	}
 
 	// Update conditions for conflicts.
@@ -510,7 +520,7 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreM
 // before transitioning to Complete. It checks the calico-node DaemonSet for
 // the CALICO_API_GROUP env var and verifies the rollout is fully complete.
 func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *DatastoreMigration) error {
-	ds, err := m.k8sClient.AppsV1().DaemonSets("calico-system").Get(m.ctx, "calico-node", metav1.GetOptions{})
+	ds, err := m.k8sClient.AppsV1().DaemonSets(names.OwnNamespace()).Get(m.ctx, "calico-node", metav1.GetOptions{})
 	if err != nil {
 		logCtx.WithError(err).Info("Failed to get calico-node DaemonSet, will retry")
 		return nil

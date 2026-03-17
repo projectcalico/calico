@@ -254,37 +254,19 @@ func TestReconcile_FailedIsNoOp(t *testing.T) {
 	}
 }
 
-// TestPreValidation_NoV1CRDs verifies that pre-validation fails when no v1 CRDs exist.
+// TestPreValidation_NoV1CRDs verifies that pre-validation returns a terminal error when no v1 CRDs exist.
 func TestPreValidation_NoV1CRDs(t *testing.T) {
 	c, _ := newTestController(t)
 	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, ""))
 
-	// First reconcile adds the finalizer.
-	if err := c.reconcile(); err != nil {
-		t.Fatalf("first reconcile failed: %v", err)
+	// Reconcile adds the finalizer and then runs pre-validation in the same
+	// pass — no v1 CRDs should return a terminal error.
+	err := c.reconcile()
+	if err == nil {
+		t.Fatal("expected terminal error when no v1 CRDs exist")
 	}
-
-	// Second reconcile runs pre-validation — no v1 CRDs should cause Failed.
-	if err := c.reconcile(); err != nil {
-		t.Fatalf("second reconcile failed: %v", err)
-	}
-
-	dm := getMigrationCR(t, c, defaultMigrationName)
-
-	if dm.Status.Phase != DatastoreMigrationPhaseFailed {
-		t.Errorf("expected Failed phase when no v1 CRDs exist, got %s", dm.Status.Phase)
-	}
-
-	// Check for appropriate condition message.
-	found := false
-	for _, cond := range dm.Status.Conditions {
-		if cond.Type == conditionTypeFailed && cond.Reason == conditionReasonMigrationError {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected Failed condition with MigrationError reason")
+	if !isTerminal(err) {
+		t.Errorf("expected terminal error, got: %v", err)
 	}
 }
 
@@ -313,20 +295,14 @@ func TestPreValidation_AutomanagedAPIService(t *testing.T) {
 		t.Fatalf("creating APIService: %v", err)
 	}
 
-	// First reconcile adds the finalizer.
-	if err := c.reconcile(); err != nil {
-		t.Fatalf("first reconcile failed: %v", err)
+	// Reconcile adds the finalizer and then runs pre-validation — automanaged
+	// APIService should return a terminal error.
+	err := c.reconcile()
+	if err == nil {
+		t.Fatal("expected terminal error for automanaged APIService")
 	}
-
-	// Second reconcile should fail because APIService is automanaged.
-	if err := c.reconcile(); err != nil {
-		t.Fatalf("second reconcile failed: %v", err)
-	}
-
-	dm := getMigrationCR(t, c, defaultMigrationName)
-
-	if dm.Status.Phase != DatastoreMigrationPhaseFailed {
-		t.Errorf("expected Failed phase for automanaged APIService, got %s", dm.Status.Phase)
+	if !isTerminal(err) {
+		t.Errorf("expected terminal error, got: %v", err)
 	}
 }
 
@@ -658,6 +634,9 @@ func TestMigrateResourceType_ConvertError(t *testing.T) {
 	_, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
 	if err == nil {
 		t.Fatal("expected error from Convert failure")
+	}
+	if !isTerminal(err) {
+		t.Errorf("expected terminal error for conversion failure, got: %v", err)
 	}
 }
 

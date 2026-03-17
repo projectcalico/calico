@@ -185,17 +185,17 @@ func MigrateResourceType(ctx context.Context, bc api.Client, rtClient client.Cli
 	for _, kvp := range v1List.KVPairs {
 		key, ok := kvp.Key.(model.ResourceKey)
 		if !ok {
-			return nil, fmt.Errorf("unexpected key type for %s: %T", m.Kind, kvp.Key)
+			return nil, asTerminal(fmt.Errorf("unexpected key type for %s: %T", m.Kind, kvp.Key))
 		}
 		v1Src, ok := kvp.Value.(metav1.Object)
 		if !ok {
-			return nil, fmt.Errorf("unexpected value type for %s/%s: %T", m.Kind, key.Name, kvp.Value)
+			return nil, asTerminal(fmt.Errorf("unexpected value type for %s/%s: %T", m.Kind, key.Name, kvp.Value))
 		}
 		v1UID := v1Src.GetUID()
 
 		v3Obj, err := m.Convert(kvp)
 		if err != nil {
-			return nil, fmt.Errorf("converting %s/%s: %w", m.Kind, key.Name, err)
+			return nil, asTerminal(fmt.Errorf("converting %s/%s: %w", m.Kind, key.Name, err))
 		}
 
 		// Copy OwnerReferences from the v1 source. UIDs referencing Calico
