@@ -82,6 +82,7 @@ type AttachPoint struct {
 	MaglevLUTSize                 uint32
 	IPFragTimeout                 uint32
 	ProgramsMap                   maps.Map
+	MapPinOverrides               map[string]string // prog_array pin path overrides for netkit
 }
 
 // AttachOptionNetkit is used internally to signal netkit attachment.
@@ -101,7 +102,7 @@ func (ap *AttachPoint) Log() *log.Entry {
 }
 
 func (ap *AttachPoint) loadObject(file string, configurator bpf.ObjectConfigurator) (*libbpf.Obj, error) {
-	obj, err := bpf.LoadObjectWithOptions(file, ap.Configure(), configurator)
+	obj, err := bpf.LoadObjectWithPinOverrides(file, ap.Configure(), configurator, ap.MapPinOverrides)
 	if err != nil {
 		return nil, fmt.Errorf("error loading %s: %w", file, err)
 	}
