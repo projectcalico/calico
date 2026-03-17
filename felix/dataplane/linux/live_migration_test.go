@@ -942,7 +942,7 @@ func (i *fakeIPAM) ReleasePoolAffinities(ctx context.Context, pool cnet.IPNet) e
 func (i *fakeIPAM) ReleaseBlockAffinity(ctx context.Context, block *model.AllocationBlock, mustBeEmpty bool) error {
 	return nil
 }
-func (i *fakeIPAM) GetIPAMConfig(ctx context.Context) (*ipam.IPAMConfig, error) { return nil, nil }
+func (i *fakeIPAM) GetIPAMConfig(ctx context.Context) (*ipam.IPAMConfig, error)  { return nil, nil }
 func (i *fakeIPAM) SetIPAMConfig(ctx context.Context, cfg ipam.IPAMConfig) error { return nil }
 func (i *fakeIPAM) RemoveIPAMHost(ctx context.Context, affinityCfg ipam.AffinityConfig) error {
 	return nil
