@@ -108,5 +108,6 @@ local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
 local:pkg/buildinfo
 local:webhooks/cmd
+local:webhooks/pkg/clusterinfo
 local:webhooks/pkg/rbac
 local:webhooks/pkg/utils
