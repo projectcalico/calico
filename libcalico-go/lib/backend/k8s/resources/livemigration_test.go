@@ -220,6 +220,15 @@ var _ = Describe("LiveMigrationClient", func() {
 			// Both matching and noSourcePod are in matching phases; noSourcePod
 			// now emits a LiveMigration without Source (SourcePod is optional).
 			Expect(kvps.KVPairs).To(HaveLen(2))
+
+			// Verify that only the expected LiveMigrations are returned.
+			var names []string
+			for _, kvp := range kvps.KVPairs {
+				lm := kvp.Value.(*internalapi.LiveMigration)
+				names = append(names, lm.Name)
+			}
+			Expect(names).To(ConsistOf("vmim-running", "vmim-no-src"))
+			Expect(names).NotTo(ContainElement("vmim-succeeded"))
 		})
 	})
 
