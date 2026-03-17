@@ -239,12 +239,18 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 	}
 
 	// Pre-validation: verify we have the RBAC permissions needed for migration.
-	// The operator creates the migration ClusterRole asynchronously, so we may need
-	// to wait for it on the first reconcile.
-	testGVR := schema.GroupVersionResource{Group: "crd.projectcalico.org", Version: "v1", Resource: "felixconfigurations"}
-	_, err := m.dynamicClient.Resource(testGVR).List(m.ctx, metav1.ListOptions{Limit: 1})
-	if err != nil && kerrors.IsForbidden(err) {
-		logCtx.Info("Waiting for migration RBAC permissions to be granted by the operator")
+	// The operator creates the migration ClusterRole asynchronously when it sees
+	// this CR, so we may need to wait a reconcile or two for it.
+	migrators := GetRegistry()
+	var forbidden []string
+	for _, migrator := range migrators {
+		_, err := migrator.ListV1(m.ctx, m.backendClient)
+		if err != nil && kerrors.IsForbidden(err) {
+			forbidden = append(forbidden, migrator.Kind)
+		}
+	}
+	if len(forbidden) > 0 {
+		logCtx.WithField("kinds", forbidden).Info("Waiting for migration RBAC — cannot list v1 resources for some types")
 		return nil
 	}
 
@@ -303,7 +309,7 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 
 	// Pre-check conflicts: for each registered migrator, list v1 resources, convert,
 	// and check if v3 equivalents exist with different specs. Log warnings only.
-	migrators := GetRegistry()
+	migrators = GetRegistry()
 	preCheckConflicts := 0
 	for _, migrator := range migrators {
 		if migrator.ListV1 == nil || migrator.Convert == nil || migrator.GetV3 == nil || migrator.SpecsEqual == nil {

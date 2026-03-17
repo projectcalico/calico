@@ -54,20 +54,11 @@ func testController(t *testing.T, objects ...runtime.Object) (*migrationControll
 		&unstructured.UnstructuredList{},
 	)
 
-	// Register the v1 FelixConfiguration GVR so the RBAC pre-check in handlePending
-	// can list it without panicking.
-	felixGVR := schema.GroupVersionResource{Group: "crd.projectcalico.org", Version: "v1", Resource: "felixconfigurations"}
-	scheme.AddKnownTypeWithName(
-		felixGVR.GroupVersion().WithKind("FelixConfigurationList"),
-		&unstructured.UnstructuredList{},
-	)
-
 	dynClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(
 		scheme,
 		map[schema.GroupVersionResource]string{
 			DatastoreMigrationGVR: "DatastoreMigrationList",
 			crdGVR:                "CustomResourceDefinitionList",
-			felixGVR:              "FelixConfigurationList",
 		},
 		objects...,
 	)
