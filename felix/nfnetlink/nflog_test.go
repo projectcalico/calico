@@ -16,7 +16,6 @@ package nfnetlink
 
 import (
 	"net"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -67,9 +66,9 @@ var _ = Describe("parseAndAggregateFlowLogs", func() {
 		msg := makeNflogMessage()
 		resChan <- [][]byte{msg, msg, msg}
 
-		// Wait for ticker flush.
+		// Wait for ticker flush (generous timeout for CI).
 		var aggregate map[NflogPacketTuple]*NflogPacketAggregate
-		Eventually(ch, 5*AggregationDuration).Should(Receive(&aggregate))
+		Eventually(ch, "1s").Should(Receive(&aggregate))
 
 		// Should have exactly 1 tuple with the packet count summed to 3.
 		Expect(aggregate).To(HaveLen(1))
@@ -80,10 +79,7 @@ var _ = Describe("parseAndAggregateFlowLogs", func() {
 
 		// Close input; output channel should eventually close.
 		close(resChan)
-		Eventually(func() bool {
-			_, ok := <-ch
-			return ok
-		}, time.Second).Should(BeFalse())
+		Eventually(ch, "1s").Should(BeClosed())
 	})
 
 	It("should flush remaining data when input channel closes", func() {
@@ -99,7 +95,7 @@ var _ = Describe("parseAndAggregateFlowLogs", func() {
 
 		// The final flush should deliver the data even without a ticker fire.
 		var aggregate map[NflogPacketTuple]*NflogPacketAggregate
-		Eventually(ch, time.Second).Should(Receive(&aggregate))
+		Eventually(ch, "1s").Should(Receive(&aggregate))
 		Expect(aggregate).To(HaveLen(1))
 		for _, agg := range aggregate {
 			Expect(agg.Prefixes).To(HaveLen(1))
@@ -107,10 +103,7 @@ var _ = Describe("parseAndAggregateFlowLogs", func() {
 		}
 
 		// Output channel should be closed.
-		Eventually(func() bool {
-			_, ok := <-ch
-			return ok
-		}, time.Second).Should(BeFalse())
+		Eventually(ch, "1s").Should(BeClosed())
 	})
 
 	It("should close output channel when input closes with no data", func() {
@@ -122,9 +115,6 @@ var _ = Describe("parseAndAggregateFlowLogs", func() {
 		close(resChan)
 
 		// Output channel should close without sending any data.
-		Eventually(func() bool {
-			_, ok := <-ch
-			return ok
-		}, time.Second).Should(BeFalse())
+		Eventually(ch, "1s").Should(BeClosed())
 	})
 })
