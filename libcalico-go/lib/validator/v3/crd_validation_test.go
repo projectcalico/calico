@@ -230,6 +230,223 @@ func TestCRDValidation_IPPool(t *testing.T) {
 	})
 }
 
+// TestApplyCRDDefaults_Tier verifies that CRD schema defaults are applied to
+// Tier objects. The Tier CRD has a default of "Deny" for spec.defaultAction.
+func TestApplyCRDDefaults_Tier(t *testing.T) {
+	defaultOrder := apiv3.DefaultTierOrder
+
+	// Create a default tier without setting defaultAction.
+	tier := &apiv3.Tier{
+		TypeMeta:   metav1.TypeMeta{Kind: "Tier", APIVersion: "projectcalico.org/v3"},
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.TierSpec{Order: &defaultOrder},
+	}
+
+	if tier.Spec.DefaultAction != nil {
+		t.Fatalf("expected nil DefaultAction before defaulting, got %v", *tier.Spec.DefaultAction)
+	}
+
+	if err := ApplyCRDDefaults(tier); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if tier.Spec.DefaultAction == nil {
+		t.Fatal("expected DefaultAction to be set after defaulting, got nil")
+	}
+	if *tier.Spec.DefaultAction != apiv3.Deny {
+		t.Errorf("expected DefaultAction %q, got %q", apiv3.Deny, *tier.Spec.DefaultAction)
+	}
+}
+
+// TestApplyCRDDefaults_IPPool verifies CRD defaults for IPPool. The CRD
+// schema defaults spec.assignmentMode to "Automatic".
+func TestApplyCRDDefaults_IPPool(t *testing.T) {
+	pool := &apiv3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+		Spec: apiv3.IPPoolSpec{
+			CIDR: "10.0.0.0/24",
+		},
+	}
+
+	if pool.Spec.AssignmentMode != nil {
+		t.Fatalf("expected nil AssignmentMode before defaulting, got %v", *pool.Spec.AssignmentMode)
+	}
+
+	if err := ApplyCRDDefaults(pool); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if pool.Spec.AssignmentMode == nil {
+		t.Fatal("expected AssignmentMode to be set after defaulting, got nil")
+	}
+	if *pool.Spec.AssignmentMode != apiv3.Automatic {
+		t.Errorf("expected AssignmentMode %q, got %q", apiv3.Automatic, *pool.Spec.AssignmentMode)
+	}
+}
+
+// TestApplyCRDDefaults_DoesNotOverwrite verifies that defaults do not
+// overwrite explicitly set values.
+func TestApplyCRDDefaults_DoesNotOverwrite(t *testing.T) {
+	customOrder := float64(100)
+	allow := apiv3.Allow
+
+	tier := &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-tier"},
+		Spec:       apiv3.TierSpec{Order: &customOrder, DefaultAction: &allow},
+	}
+
+	if err := ApplyCRDDefaults(tier); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if *tier.Spec.DefaultAction != apiv3.Allow {
+		t.Errorf("expected DefaultAction to remain %q, got %q", apiv3.Allow, *tier.Spec.DefaultAction)
+	}
+}
+
+// TestApplyCRDDefaults_TierValidationWithDefault verifies that a Tier with
+// no explicit defaultAction gets the CRD default ("Deny") applied before
+// validation, allowing the 'default' tier to pass CEL rules.
+func TestApplyCRDDefaults_TierValidationWithDefault(t *testing.T) {
+	defaultOrder := apiv3.DefaultTierOrder
+
+	// Without defaulting, this would fail CEL validation because the
+	// 'default' tier requires defaultAction == "Deny".
+	tier := &apiv3.Tier{
+		TypeMeta:   metav1.TypeMeta{Kind: "Tier", APIVersion: "projectcalico.org/v3"},
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.TierSpec{Order: &defaultOrder},
+	}
+
+	err := Validate(tier)
+	if err != nil {
+		t.Errorf("expected no error after defaulting + validation, got: %v", err)
+	}
+}
+
+// TestApplyCRDDefaults_UnknownKind verifies that defaulting is a no-op for
+// unknown kinds.
+func TestApplyCRDDefaults_UnknownKind(t *testing.T) {
+	obj := &apiv3.Tier{}
+	obj.APIVersion = "fake/v1"
+	obj.Kind = "FakeKind"
+
+	if err := ApplyCRDDefaults(obj); err != nil {
+		t.Errorf("expected no error for unknown kind, got: %v", err)
+	}
+}
+
+// TestApplyCRDDefaults_NetworkPolicy verifies that the tier field (a plain
+// string, not a pointer) gets defaulted to "default".
+func TestApplyCRDDefaults_NetworkPolicy(t *testing.T) {
+	np := &apiv3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+		Spec:       apiv3.NetworkPolicySpec{},
+	}
+
+	if np.Spec.Tier != "" {
+		t.Fatalf("expected empty Tier before defaulting, got %q", np.Spec.Tier)
+	}
+
+	if err := ApplyCRDDefaults(np); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if np.Spec.Tier != "default" {
+		t.Errorf("expected Tier %q, got %q", "default", np.Spec.Tier)
+	}
+}
+
+// TestApplyCRDDefaults_BGPConfiguration verifies defaults on BGPConfiguration.
+// The CRD defaults logSeverityScreen to "Info".
+func TestApplyCRDDefaults_BGPConfiguration(t *testing.T) {
+	bgp := &apiv3.BGPConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.BGPConfigurationSpec{},
+	}
+
+	if bgp.Spec.LogSeverityScreen != "" {
+		t.Fatalf("expected empty LogSeverityScreen before defaulting, got %q", bgp.Spec.LogSeverityScreen)
+	}
+
+	if err := ApplyCRDDefaults(bgp); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if bgp.Spec.LogSeverityScreen != "Info" {
+		t.Errorf("expected LogSeverityScreen %q, got %q", "Info", bgp.Spec.LogSeverityScreen)
+	}
+}
+
+// TestApplyCRDDefaults_FelixConfiguration verifies defaults on FelixConfiguration.
+// The CRD defaults nftablesMode to "Auto".
+func TestApplyCRDDefaults_FelixConfiguration(t *testing.T) {
+	fc := &apiv3.FelixConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.FelixConfigurationSpec{},
+	}
+
+	if fc.Spec.NFTablesMode != nil {
+		t.Fatalf("expected nil NFTablesMode before defaulting, got %v", *fc.Spec.NFTablesMode)
+	}
+
+	if err := ApplyCRDDefaults(fc); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if fc.Spec.NFTablesMode == nil {
+		t.Fatal("expected NFTablesMode to be set after defaulting, got nil")
+	}
+	if *fc.Spec.NFTablesMode != apiv3.NFTablesModeAuto {
+		t.Errorf("expected NFTablesMode %q, got %q", apiv3.NFTablesModeAuto, *fc.Spec.NFTablesMode)
+	}
+}
+
+// TestApplyCRDDefaults_StagedGlobalNetworkPolicy verifies that multiple
+// defaults are applied to the same resource. The CRD defaults both
+// stagedAction to "Set" and tier to "default".
+func TestApplyCRDDefaults_StagedGlobalNetworkPolicy(t *testing.T) {
+	sgnp := &apiv3.StagedGlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-staged-policy"},
+		Spec:       apiv3.StagedGlobalNetworkPolicySpec{},
+	}
+
+	if sgnp.Spec.StagedAction != "" {
+		t.Fatalf("expected empty StagedAction before defaulting, got %q", sgnp.Spec.StagedAction)
+	}
+	if sgnp.Spec.Tier != "" {
+		t.Fatalf("expected empty Tier before defaulting, got %q", sgnp.Spec.Tier)
+	}
+
+	if err := ApplyCRDDefaults(sgnp); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if sgnp.Spec.StagedAction != apiv3.StagedActionSet {
+		t.Errorf("expected StagedAction %q, got %q", apiv3.StagedActionSet, sgnp.Spec.StagedAction)
+	}
+	if sgnp.Spec.Tier != "default" {
+		t.Errorf("expected Tier %q, got %q", "default", sgnp.Spec.Tier)
+	}
+}
+
+// TestApplyCRDDefaults_StringFieldDoesNotOverwrite verifies that a non-empty
+// string field is not overwritten by the CRD default.
+func TestApplyCRDDefaults_StringFieldDoesNotOverwrite(t *testing.T) {
+	np := &apiv3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+		Spec:       apiv3.NetworkPolicySpec{Tier: "my-custom-tier"},
+	}
+
+	if err := ApplyCRDDefaults(np); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if np.Spec.Tier != "my-custom-tier" {
+		t.Errorf("expected Tier to remain %q, got %q", "my-custom-tier", np.Spec.Tier)
+	}
+}
+
 // TestCRDValidation_CombinedWithStructValidation verifies that both Go struct
 // validation errors and CRD validation errors are reported together.
 func TestCRDValidation_CombinedWithStructValidation(t *testing.T) {
