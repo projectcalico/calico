@@ -1,5 +1,6 @@
 *.created*
 *.pyc
+.dev-stamps/
 .go-pkg-cache/
 .idea
 .vscode
