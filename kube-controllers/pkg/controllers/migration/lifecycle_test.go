@@ -37,7 +37,7 @@ import (
 )
 
 // newAggregatedAPIService creates an aggregated (non-automanaged) APIService in the controller's fake apiregistration client.
-func newAggregatedAPIService(t *testing.T, c *migrationController) {
+func newAggregatedAPIService(t *testing.T, c *testController) {
 	t.Helper()
 	apiSvc := &apiregv1.APIService{
 		ObjectMeta: metav1.ObjectMeta{
@@ -60,7 +60,7 @@ func newAggregatedAPIService(t *testing.T, c *migrationController) {
 }
 
 // TestLifecycle_FullMigration exercises the complete happy-path lifecycle:
-// Pending → (add finalizer) → (pre-validate) → Migrating → Converged → Complete,
+// Pending -> (add finalizer) -> (pre-validate) -> Migrating -> Converged -> Complete,
 // with actual resource types registered and migrated.
 func TestLifecycle_FullMigration(t *testing.T) {
 	withTestRegistry(t, []ResourceMigrator{
@@ -69,9 +69,9 @@ func TestLifecycle_FullMigration(t *testing.T) {
 	})
 
 	tierUID := types.UID("v1-tier-security-uid")
-	cr := newTestCR(t, defaultMigrationName, "")
 	v1CRD := newV1CRD("tiers.crd.projectcalico.org")
-	c, _ := newTestController(t, cr, v1CRD)
+	c, _ := newTestController(t, v1CRD)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, ""))
 
 	// Set up v1 resources in the mock backend.
 	bc := c.backendClient.(*mockBackendClient)
@@ -137,12 +137,9 @@ func TestLifecycle_FullMigration(t *testing.T) {
 
 	// Reconcile 1: handlePending adds finalizer, pre-validates, transitions to Migrating.
 	if err := c.reconcile(); err != nil {
-		t.Fatalf("reconcile 1 (Pending → Migrating): %v", err)
+		t.Fatalf("reconcile 1 (Pending -> Migrating): %v", err)
 	}
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR after reconcile 1: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 	if !hasFinalizer(dm) {
 		t.Fatal("expected finalizer after reconcile 1")
 	}
@@ -155,12 +152,9 @@ func TestLifecycle_FullMigration(t *testing.T) {
 
 	// Reconcile 2: runs migration, transitions to Converged.
 	if err := c.reconcile(); err != nil {
-		t.Fatalf("reconcile 2 (Migrating → Converged): %v", err)
+		t.Fatalf("reconcile 2 (Migrating -> Converged): %v", err)
 	}
-	dm, err = c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR after reconcile 2: %v", err)
-	}
+	dm = getMigrationCR(t, c, defaultMigrationName)
 	if dm.Status.Phase != DatastoreMigrationPhaseConverged {
 		t.Fatalf("expected Converged after reconcile 2, got %s", dm.Status.Phase)
 	}
@@ -189,7 +183,7 @@ func TestLifecycle_FullMigration(t *testing.T) {
 		t.Error("tier 'security' not found in v3 store")
 	}
 
-	// Verify GNP names: default.test-deny-all → test-deny-all (prefix stripped).
+	// Verify GNP names: default.test-deny-all -> test-deny-all (prefix stripped).
 	gnpDeny := &apiv3.GlobalNetworkPolicy{}
 	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "test-deny-all"}, gnpDeny); getErr != nil {
 		t.Error("GNP 'test-deny-all' not found (expected default. prefix stripped)")
@@ -221,7 +215,7 @@ func TestLifecycle_FullMigration(t *testing.T) {
 	}
 
 	// Verify APIService was deleted (or replaced by automanaged).
-	_, err = c.apiregClient.APIServices().Get(c.ctx, apiServiceName, metav1.GetOptions{})
+	_, err := c.apiregClient.APIServices().Get(c.ctx, apiServiceName, metav1.GetOptions{})
 	if err == nil {
 		t.Error("expected APIService to be deleted after migration")
 	} else if !kerrors.IsNotFound(err) {
@@ -238,12 +232,9 @@ func TestLifecycle_FullMigration(t *testing.T) {
 
 	// Reconcile 3: transitions from Converged to Complete.
 	if err := c.reconcile(); err != nil {
-		t.Fatalf("reconcile 3 (Converged → Complete): %v", err)
+		t.Fatalf("reconcile 3 (Converged -> Complete): %v", err)
 	}
-	dm, err = c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR after reconcile 3: %v", err)
-	}
+	dm = getMigrationCR(t, c, defaultMigrationName)
 	if dm.Status.Phase != DatastoreMigrationPhaseComplete {
 		t.Fatalf("expected Complete after reconcile 3, got %s", dm.Status.Phase)
 	}
@@ -262,9 +253,9 @@ func TestLifecycle_FullMigration(t *testing.T) {
 func TestLifecycle_APIServiceSaveRestore(t *testing.T) {
 	withTestRegistry(t, nil)
 
-	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
 	v1CRD := newV1CRD("tiers.crd.projectcalico.org")
-	c, _ := newTestController(t, cr, v1CRD)
+	c, _ := newTestController(t, v1CRD)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	bc := c.backendClient.(*mockBackendClient)
 	ready := true
@@ -292,10 +283,7 @@ func TestLifecycle_APIServiceSaveRestore(t *testing.T) {
 	}
 
 	// Verify annotation was saved.
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 	savedData := dm.Annotations[savedAPIServiceAnnotation]
 	if savedData == "" {
 		t.Fatal("expected saved APIService annotation")
@@ -318,11 +306,13 @@ func TestLifecycle_APIServiceSaveRestore(t *testing.T) {
 
 	// Now simulate abort: create a deletion-marked CR with the saved annotation.
 	crAbort := newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	crAbort.Object["metadata"].(map[string]any)["annotations"] = map[string]any{
+	crAbort.Annotations = map[string]string{
 		savedAPIServiceAnnotation: savedData,
 	}
 
-	cAbort, _ := newTestController(t, crAbort)
+	cAbort, _ := newTestController(t)
+	createMigrationCR(t, cAbort, crAbort)
+
 	bcAbort := cAbort.backendClient.(*mockBackendClient)
 	readyFalse := false
 	bcAbort.clusterInfo = &model.KVPair{
@@ -360,8 +350,8 @@ func TestLifecycle_APIServiceSaveRestore(t *testing.T) {
 func TestLifecycle_AbortCleansUpPartialV3Resources(t *testing.T) {
 	withTestRegistry(t, []ResourceMigrator{tierMigrator()})
 
-	cr := newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	// Pre-populate the v3 store as if migration created some tiers
 	// (with the migration annotation that gets stamped during create).
@@ -403,13 +393,10 @@ func TestLifecycle_AbortCleansUpPartialV3Resources(t *testing.T) {
 		t.Error("expected tier 'security' to be deleted during abort cleanup")
 	}
 
-	// Verify finalizer was removed.
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
-	if hasFinalizer(dm) {
-		t.Error("expected finalizer to be removed after abort")
+	// The CR should be fully deleted (finalizer removed, DeletionTimestamp was set).
+	dm := &DatastoreMigration{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: defaultMigrationName}, dm); !kerrors.IsNotFound(err) {
+		t.Errorf("expected CR to be deleted after abort, got err: %v", err)
 	}
 }
 
@@ -423,8 +410,8 @@ func TestLifecycle_V1CRDCleanupOnDelete(t *testing.T) {
 	// A non-v1 CRD that should not be deleted.
 	v3CRD := newV3CRD("tiers.projectcalico.org")
 
-	cr := newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseComplete)
-	c, _ := newTestController(t, cr, v1CRD1, v1CRD2, v3CRD)
+	c, _ := newTestController(t, v1CRD1, v1CRD2, v3CRD)
+	createMigrationCR(t, c, newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseComplete))
 
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("reconcile (completed cleanup): %v", err)
@@ -455,13 +442,10 @@ func TestLifecycle_V1CRDCleanupOnDelete(t *testing.T) {
 		t.Error("v3 CRD tiers.projectcalico.org should not have been deleted")
 	}
 
-	// Verify finalizer was removed.
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
-	if hasFinalizer(dm) {
-		t.Error("expected finalizer removed after completed cleanup")
+	// The CR should be fully deleted (finalizer removed, DeletionTimestamp was set).
+	dm := &DatastoreMigration{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: defaultMigrationName}, dm); !kerrors.IsNotFound(err) {
+		t.Errorf("expected CR to be deleted after completed cleanup, got err: %v", err)
 	}
 }
 
@@ -471,9 +455,9 @@ func TestLifecycle_V1CRDCleanupOnDelete(t *testing.T) {
 func TestLifecycle_ResumeMidMigration(t *testing.T) {
 	withTestRegistry(t, []ResourceMigrator{tierMigrator()})
 
-	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
 	v1CRD := newV1CRD("tiers.crd.projectcalico.org")
-	c, _ := newTestController(t, cr, v1CRD)
+	c, _ := newTestController(t, v1CRD)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	// Simulate restart: one tier was already migrated.
 	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{
@@ -511,10 +495,7 @@ func TestLifecycle_ResumeMidMigration(t *testing.T) {
 		t.Fatalf("reconcile (resume): %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 	if dm.Status.Phase != DatastoreMigrationPhaseConverged {
 		t.Fatalf("expected Converged after resume, got %s", dm.Status.Phase)
 	}
@@ -542,8 +523,8 @@ func TestLifecycle_ResumeMidMigration(t *testing.T) {
 func TestLifecycle_MigrationWithConflicts(t *testing.T) {
 	withTestRegistry(t, []ResourceMigrator{tierMigrator()})
 
-	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	// Pre-populate a conflicting v3 tier with a different spec.
 	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{
@@ -576,10 +557,7 @@ func TestLifecycle_MigrationWithConflicts(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 
 	// Should transition to WaitingForConflictResolution.
 	if dm.Status.Phase != DatastoreMigrationPhaseWaitingForConflictResolution {
@@ -604,10 +582,7 @@ func TestLifecycle_MigrationWithConflicts(t *testing.T) {
 		t.Fatalf("reconcile (after resolution): %v", err)
 	}
 
-	dm, err = c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm = getMigrationCR(t, c, defaultMigrationName)
 	if dm.Status.Phase != DatastoreMigrationPhaseMigrating {
 		t.Errorf("expected Migrating after conflict resolution, got %s", dm.Status.Phase)
 	}
@@ -620,8 +595,8 @@ func TestLifecycle_OwnerRefRemapping_NativeOwner(t *testing.T) {
 	withTestRegistry(t, []ResourceMigrator{gnpMigrator()})
 
 	nsUID := types.UID("namespace-uid-12345")
-	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	bc := c.backendClient.(*mockBackendClient)
 	bc.resources = map[string][]*model.KVPair{
@@ -692,8 +667,8 @@ func TestLifecycle_MigrationError(t *testing.T) {
 	}
 	withTestRegistry(t, []ResourceMigrator{failingMigrator})
 
-	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	bc := c.backendClient.(*mockBackendClient)
 	ready := true
@@ -710,10 +685,7 @@ func TestLifecycle_MigrationError(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 	if dm.Status.Phase != DatastoreMigrationPhaseFailed {
 		t.Errorf("expected Failed, got %s", dm.Status.Phase)
 	}
@@ -755,9 +727,9 @@ func TestLifecycle_FullMigrationWithContentVerification(t *testing.T) {
 		bgpPeerMigrator(),
 	})
 
-	cr := newTestCR(t, defaultMigrationName, "")
 	v1CRD := newV1CRD("tiers.crd.projectcalico.org")
-	c, _ := newTestController(t, cr, v1CRD)
+	c, _ := newTestController(t, v1CRD)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, ""))
 
 	bc := c.backendClient.(*mockBackendClient)
 
@@ -849,10 +821,7 @@ func TestLifecycle_FullMigrationWithContentVerification(t *testing.T) {
 		t.Fatalf("reconcile 2: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 	if dm.Status.Phase != DatastoreMigrationPhaseConverged {
 		t.Fatalf("expected Converged, got %s", dm.Status.Phase)
 	}
@@ -915,7 +884,7 @@ func TestLifecycle_FullMigrationWithContentVerification(t *testing.T) {
 // newReadyCalicoNodeDS creates a calico-node DaemonSet with the CALICO_API_GROUP
 // env var set and a fully rolled out status, simulating what the operator does after
 // detecting that migration has converged.
-func newReadyCalicoNodeDS(t *testing.T, c *migrationController) {
+func newReadyCalicoNodeDS(t *testing.T, c *testController) {
 	t.Helper()
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{

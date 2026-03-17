@@ -42,8 +42,18 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
+// testController bundles the migrationController with its underlying object tracker,
+// which is needed to seed deletion-marked objects (the fake client strips DeletionTimestamp
+// on Create, so we use tracker.Add for those).
+type testController struct {
+	*migrationController
+	tracker k8stesting.ObjectTracker
+}
+
 // newTestController creates a migrationController with fake clients for unit testing.
-func newTestController(t *testing.T, objects ...runtime.Object) (*migrationController, *fakedynamic.FakeDynamicClient) {
+// The dynamicObjects parameter should only contain unstructured objects for the dynamic
+// client (e.g., CRDs). DatastoreMigration CRs should be created via createMigrationCR.
+func newTestController(t *testing.T, dynamicObjects ...runtime.Object) (*testController, *fakedynamic.FakeDynamicClient) {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
@@ -51,22 +61,13 @@ func newTestController(t *testing.T, objects ...runtime.Object) (*migrationContr
 		schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}.GroupVersion().WithKind("CustomResourceDefinitionList"),
 		&unstructured.UnstructuredList{},
 	)
-	scheme.AddKnownTypeWithName(
-		DatastoreMigrationGVR.GroupVersion().WithKind("DatastoreMigration"),
-		&unstructured.Unstructured{},
-	)
-	scheme.AddKnownTypeWithName(
-		DatastoreMigrationGVR.GroupVersion().WithKind("DatastoreMigrationList"),
-		&unstructured.UnstructuredList{},
-	)
 
 	dynClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(
 		scheme,
 		map[schema.GroupVersionResource]string{
-			DatastoreMigrationGVR: "DatastoreMigrationList",
-			crdGVR:                "CustomResourceDefinitionList",
+			crdGVR: "CustomResourceDefinitionList",
 		},
-		objects...,
+		dynamicObjects...,
 	)
 
 	k8sClient := fake.NewSimpleClientset()
@@ -79,71 +80,74 @@ func newTestController(t *testing.T, objects ...runtime.Object) (*migrationContr
 	if err := apiv3.AddToScheme(rtScheme); err != nil {
 		t.Fatalf("failed to add Calico v3 types to scheme: %v", err)
 	}
+	if err := AddToScheme(rtScheme); err != nil {
+		t.Fatalf("failed to add migration types to scheme: %v", err)
+	}
 	codecs := serializer.NewCodecFactory(rtScheme)
 	tracker := k8stesting.NewObjectTracker(rtScheme, codecs.UniversalDecoder())
-	fakeRT := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(tracker).Build()
+	fakeRT := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(tracker).WithStatusSubresource(&DatastoreMigration{}).Build()
 
-	c := &migrationController{
-		ctx:           context.Background(),
-		k8sClient:     k8sClient,
-		backendClient: bc,
-		rtClient:      &uidAssigningClient{Client: fakeRT},
-		dynamicClient: dynClient,
-		apiregClient:  apiregCS.ApiregistrationV1(),
-		migClient:     newMigrationClient(dynClient),
+	c := &testController{
+		migrationController: &migrationController{
+			ctx:           context.Background(),
+			k8sClient:     k8sClient,
+			backendClient: bc,
+			rtClient:      &uidAssigningClient{Client: fakeRT},
+			dynamicClient: dynClient,
+			apiregClient:  apiregCS.ApiregistrationV1(),
+		},
+		tracker: tracker,
 	}
 	return c, dynClient
 }
 
-// newTestCR creates a DatastoreMigration CR as unstructured for the fake dynamic client.
-func newTestCR(t *testing.T, name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
+// createMigrationCR creates a DatastoreMigration CR for testing. Objects with a
+// DeletionTimestamp are added directly via the tracker (the fake client strips
+// DeletionTimestamp on Create); all others go through the normal client.
+func createMigrationCR(t *testing.T, c *testController, dm *DatastoreMigration) {
+	t.Helper()
+	if dm.DeletionTimestamp != nil {
+		// tracker.Add requires a ResourceVersion.
+		if dm.ResourceVersion == "" {
+			dm.ResourceVersion = "1"
+		}
+		if err := c.tracker.Add(dm); err != nil {
+			t.Fatalf("adding DatastoreMigration CR to tracker: %v", err)
+		}
+		return
+	}
+	if err := c.rtClient.Create(context.Background(), dm); err != nil {
+		t.Fatalf("creating DatastoreMigration CR: %v", err)
+	}
+}
+
+// newTestCR creates a typed DatastoreMigration for testing.
+func newTestCR(t *testing.T, name string, phase DatastoreMigrationPhase) *DatastoreMigration {
 	t.Helper()
 	dm := &DatastoreMigration{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: Group + "/" + Version,
-			Kind:       "DatastoreMigration",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Spec: DatastoreMigrationSpec{
-			Type: DatastoreMigrationTypeV1ToV3,
-		},
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
 	}
 	if phase != "" {
 		dm.Status.Phase = phase
 	}
-	uns, err := toUnstructured(dm)
-	if err != nil {
-		t.Fatalf("failed to create test CR: %v", err)
-	}
-	return uns
+	return dm
 }
 
 // newTestCRWithDeletion creates a DatastoreMigration CR with a finalizer and deletion timestamp.
-func newTestCRWithDeletion(t *testing.T, name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
+func newTestCRWithDeletion(t *testing.T, name string, phase DatastoreMigrationPhase) *DatastoreMigration {
 	t.Helper()
 	now := metav1.Now()
 	dm := &DatastoreMigration{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: Group + "/" + Version,
-			Kind:       "DatastoreMigration",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			Finalizers:        []string{finalizerName},
 			DeletionTimestamp: &now,
 		},
-		Spec: DatastoreMigrationSpec{
-			Type: DatastoreMigrationTypeV1ToV3,
-		},
+		Spec: DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
 	}
 	dm.Status.Phase = phase
-	uns, err := toUnstructured(dm)
-	if err != nil {
-		t.Fatalf("failed to create test CR with deletion: %v", err)
-	}
-	return uns
+	return dm
 }
 
 // newV1CRD creates a fake v1 CRD as unstructured for pre-validation tests.
@@ -166,6 +170,16 @@ func testLogEntry() *logrus.Entry {
 	return logrus.WithField("test", true)
 }
 
+// getMigrationCR fetches the DatastoreMigration CR from the rtClient.
+func getMigrationCR(t *testing.T, c *testController, name string) *DatastoreMigration {
+	t.Helper()
+	dm := &DatastoreMigration{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: name}, dm); err != nil {
+		t.Fatalf("getting DatastoreMigration CR %q: %v", name, err)
+	}
+	return dm
+}
+
 // TestReconcile_NoCR verifies that reconcile is a no-op when no DatastoreMigration CR exists.
 func TestReconcile_NoCR(t *testing.T) {
 	c, _ := newTestController(t)
@@ -178,20 +192,16 @@ func TestReconcile_NoCR(t *testing.T) {
 
 // TestReconcile_PendingToMigrating verifies the Pending-to-Migrating transition including finalizer addition and pre-validation.
 func TestReconcile_PendingToMigrating(t *testing.T) {
-	cr := newTestCR(t, defaultMigrationName, "")
 	v1CRD := newV1CRD("bgppeers.crd.projectcalico.org")
-
-	c, _ := newTestController(t, cr, v1CRD)
+	c, _ := newTestController(t, v1CRD)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, ""))
 
 	// First reconcile: adds finalizer.
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("first reconcile (add finalizer) failed: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR after first reconcile: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 	if !hasFinalizer(dm) {
 		t.Error("expected finalizer to be added after first reconcile")
 	}
@@ -202,10 +212,7 @@ func TestReconcile_PendingToMigrating(t *testing.T) {
 		t.Fatalf("second reconcile failed: %v", err)
 	}
 
-	dm, err = c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR after second reconcile: %v", err)
-	}
+	dm = getMigrationCR(t, c, defaultMigrationName)
 
 	// With no registered migrators, the controller runs through the entire
 	// migration in a single reconcile: Pending -> Migrating -> Converged.
@@ -219,17 +226,14 @@ func TestReconcile_PendingToMigrating(t *testing.T) {
 
 // TestReconcile_CompleteIsNoOp verifies that the Complete phase is a terminal no-op.
 func TestReconcile_CompleteIsNoOp(t *testing.T) {
-	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseComplete)
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseComplete))
 
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("expected no error for Complete phase, got: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 	if dm.Status.Phase != DatastoreMigrationPhaseComplete {
 		t.Errorf("expected phase Complete, got %s", dm.Status.Phase)
 	}
@@ -237,17 +241,14 @@ func TestReconcile_CompleteIsNoOp(t *testing.T) {
 
 // TestReconcile_FailedIsNoOp verifies that the Failed phase is a terminal no-op.
 func TestReconcile_FailedIsNoOp(t *testing.T) {
-	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseFailed)
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseFailed))
 
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("expected no error for Failed phase, got: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 	if dm.Status.Phase != DatastoreMigrationPhaseFailed {
 		t.Errorf("expected phase Failed, got %s", dm.Status.Phase)
 	}
@@ -255,8 +256,8 @@ func TestReconcile_FailedIsNoOp(t *testing.T) {
 
 // TestPreValidation_NoV1CRDs verifies that pre-validation fails when no v1 CRDs exist.
 func TestPreValidation_NoV1CRDs(t *testing.T) {
-	cr := newTestCR(t, defaultMigrationName, "")
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, ""))
 
 	// First reconcile adds the finalizer.
 	if err := c.reconcile(); err != nil {
@@ -268,10 +269,7 @@ func TestPreValidation_NoV1CRDs(t *testing.T) {
 		t.Fatalf("second reconcile failed: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 
 	if dm.Status.Phase != DatastoreMigrationPhaseFailed {
 		t.Errorf("expected Failed phase when no v1 CRDs exist, got %s", dm.Status.Phase)
@@ -292,10 +290,9 @@ func TestPreValidation_NoV1CRDs(t *testing.T) {
 
 // TestPreValidation_AutomanagedAPIService verifies that pre-validation fails when the APIService is CRD-backed (automanaged).
 func TestPreValidation_AutomanagedAPIService(t *testing.T) {
-	cr := newTestCR(t, defaultMigrationName, "")
 	v1CRD := newV1CRD("bgppeers.crd.projectcalico.org")
-
-	c, _ := newTestController(t, cr, v1CRD)
+	c, _ := newTestController(t, v1CRD)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, ""))
 
 	// Create an automanaged (CRD-backed) APIService.
 	apiSvc := &apiregv1.APIService{
@@ -326,10 +323,7 @@ func TestPreValidation_AutomanagedAPIService(t *testing.T) {
 		t.Fatalf("second reconcile failed: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 
 	if dm.Status.Phase != DatastoreMigrationPhaseFailed {
 		t.Errorf("expected Failed phase for automanaged APIService, got %s", dm.Status.Phase)
@@ -434,28 +428,26 @@ func TestUnlockDatastore(t *testing.T) {
 
 // TestHandleDeletion_Complete verifies that the finalizer is removed when a Complete CR is deleted.
 func TestHandleDeletion_Complete(t *testing.T) {
-	cr := newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseComplete)
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseComplete))
 
 	// Reconcile should run the completed cleanup path (delete v1 CRDs).
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("reconcile for Complete deletion failed: %v", err)
 	}
 
-	// The CR should have its finalizer removed.
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
-	if hasFinalizer(dm) {
-		t.Error("expected finalizer to be removed after completed cleanup")
+	// The CR should be fully deleted (finalizer removed, DeletionTimestamp was set).
+	dm := &DatastoreMigration{}
+	err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: defaultMigrationName}, dm)
+	if !kerrors.IsNotFound(err) {
+		t.Errorf("expected CR to be deleted after completed cleanup, got err: %v", err)
 	}
 }
 
 // TestHandleDeletion_Abort verifies that aborting a non-Complete CR restores v1 ClusterInformation and removes the finalizer.
 func TestHandleDeletion_Abort(t *testing.T) {
-	cr := newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	// Set up v1 backend mock as locked.
 	bc, ok := c.backendClient.(*mockBackendClient)
@@ -476,12 +468,10 @@ func TestHandleDeletion_Abort(t *testing.T) {
 		t.Fatalf("reconcile for abort failed: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
-	if hasFinalizer(dm) {
-		t.Error("expected finalizer to be removed after abort")
+	// The CR should be fully deleted (finalizer removed, DeletionTimestamp was set).
+	dm := &DatastoreMigration{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: defaultMigrationName}, dm); !kerrors.IsNotFound(err) {
+		t.Errorf("expected CR to be deleted after abort, got err: %v", err)
 	}
 
 	// Verify v1 ClusterInformation was restored to ready.
@@ -678,8 +668,8 @@ func TestMigrateResourceType_ConvertError(t *testing.T) {
 func TestConflictDetection_PhaseTransition(t *testing.T) {
 	withTestRegistry(t, []ResourceMigrator{tierMigrator(), gnpMigrator()})
 
-	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	c, _ := newTestController(t, cr)
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	// Pre-create a conflicting GNP with a different spec than the v1 source.
 	if err := c.rtClient.Create(c.ctx, &apiv3.GlobalNetworkPolicy{
@@ -724,10 +714,7 @@ func TestConflictDetection_PhaseTransition(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
+	dm := getMigrationCR(t, c, defaultMigrationName)
 
 	// Should transition to WaitingForConflictResolution.
 	if dm.Status.Phase != DatastoreMigrationPhaseWaitingForConflictResolution {
@@ -783,11 +770,14 @@ func TestAbortRollback_CleansUpMigratedResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshaling APIService: %v", err)
 	}
+
 	cr := newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	cr.Object["metadata"].(map[string]any)["annotations"] = map[string]any{
+	cr.Annotations = map[string]string{
 		savedAPIServiceAnnotation: string(apiSvcJSON),
 	}
-	c, _ := newTestController(t, cr)
+
+	c, _ := newTestController(t)
+	createMigrationCR(t, c, cr)
 
 	// Simulate partial v3 resources that were created by migration.
 	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{
@@ -866,13 +856,10 @@ func TestAbortRollback_CleansUpMigratedResources(t *testing.T) {
 		t.Error("expected v1 ClusterInformation DatastoreReady=true after abort")
 	}
 
-	// Verify finalizer was removed.
-	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
-	if err != nil {
-		t.Fatalf("getting CR: %v", err)
-	}
-	if hasFinalizer(dm) {
-		t.Error("expected finalizer to be removed after abort")
+	// The CR should be fully deleted (finalizer removed, DeletionTimestamp was set).
+	dm := &DatastoreMigration{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: defaultMigrationName}, dm); !kerrors.IsNotFound(err) {
+		t.Errorf("expected CR to be deleted after abort, got err: %v", err)
 	}
 }
 

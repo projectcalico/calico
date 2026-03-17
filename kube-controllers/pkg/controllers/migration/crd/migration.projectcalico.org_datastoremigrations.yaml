@@ -71,7 +71,7 @@ spec:
             properties:
               type:
                 enum:
-                - V1ToV3
+                - APIServerToCRDs
                 type: string
             required:
             - type

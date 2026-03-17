@@ -23,6 +23,7 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -79,20 +80,26 @@ type ControllerConfig struct {
 	RTClient      rtclient.Client
 	DynamicClient dynamic.Interface
 	APIRegClient  apiregv1client.ApiregistrationV1Interface
+	CRDClient     apiextclient.Interface
 }
 
 // NewController creates a new migration controller. It watches for DatastoreMigration CRs
-// and drives the v1-to-v3 CRD migration state machine.
+// and drives the v1-to-v3 CRD migration state machine. The returned controller defers
+// startup until the DatastoreMigration CRD is installed and Established.
 func NewController(cfg ControllerConfig) controller.Controller {
-	return &migrationController{
+	m := &migrationController{
 		ctx:           cfg.Ctx,
 		k8sClient:     cfg.K8sClient,
 		backendClient: cfg.BackendClient,
 		rtClient:      cfg.RTClient,
 		dynamicClient: cfg.DynamicClient,
 		apiregClient:  cfg.APIRegClient,
-		migClient:     newMigrationClient(cfg.DynamicClient),
 	}
+	return controller.NewDeferredCRDController(
+		"datastoremigrations.migration.projectcalico.org",
+		cfg.CRDClient,
+		m,
+	)
 }
 
 // resyncPeriod controls how frequently the informer re-lists all resources.
@@ -107,14 +114,17 @@ type migrationController struct {
 	rtClient      rtclient.Client
 	dynamicClient dynamic.Interface
 	apiregClient  apiregv1client.ApiregistrationV1Interface
-	migClient     *migrationClient
 	queue         workqueue.TypedRateLimitingInterface[string]
 }
 
-func (m *migrationController) Run(stop chan struct{}) {
-	logrus.Info("Starting datastore migration controller")
-	defer logrus.Info("Stopping datastore migration controller")
+// RunWithContext is called by the DeferredCRDController once the DatastoreMigration
+// CRD is established. The context is cancelled when the CRD is removed or the
+// parent controller is stopped.
+func (m *migrationController) RunWithContext(ctx context.Context) {
+	logrus.Info("DatastoreMigration CRD established, starting migration controller")
+	defer logrus.Info("Stopping migration controller")
 
+	m.ctx = ctx
 	m.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
 	defer m.queue.ShutDown()
 
@@ -138,9 +148,6 @@ func (m *migrationController) Run(stop chan struct{}) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(m.ctx)
-	defer cancel()
-
 	go informer.Run(ctx.Done())
 
 	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
@@ -148,11 +155,6 @@ func (m *migrationController) Run(stop chan struct{}) {
 		return
 	}
 	logrus.Info("Migration informer cache synced")
-
-	go func() {
-		<-stop
-		cancel()
-	}()
 
 	for m.processNextWorkItem() {
 	}
@@ -185,8 +187,8 @@ func (m *migrationController) processNextWorkItem() bool {
 }
 
 func (m *migrationController) reconcile() error {
-	dm, err := m.migClient.Get(m.ctx, defaultMigrationName)
-	if err != nil {
+	dm := &DatastoreMigration{}
+	if err := m.rtClient.Get(m.ctx, types.NamespacedName{Name: defaultMigrationName}, dm); err != nil {
 		if kerrors.IsNotFound(err) {
 			return nil
 		}
@@ -199,8 +201,8 @@ func (m *migrationController) reconcile() error {
 	})
 
 	// Validate Spec.Type before proceeding.
-	if dm.Spec.Type != DatastoreMigrationTypeV1ToV3 {
-		m.setFailedStatus(dm, fmt.Sprintf("unsupported migration type: %q (only %q is supported)", dm.Spec.Type, DatastoreMigrationTypeV1ToV3))
+	if dm.Spec.Type != DatastoreMigrationTypeAPIServerToCRDs {
+		m.setFailedStatus(dm, fmt.Sprintf("unsupported migration type: %q (only %q is supported)", dm.Spec.Type, DatastoreMigrationTypeAPIServerToCRDs))
 		return m.updateStatus(dm)
 	}
 
@@ -903,29 +905,18 @@ func (m *migrationController) setFailedStatus(dm *DatastoreMigration, message st
 }
 
 // updateStatus updates the status subresource of a DatastoreMigration CR.
-// It updates dm in-place with the server's response (including new ResourceVersion)
-// so callers can continue making updates without re-fetching.
+// The controller-runtime client updates dm in-place with the server's response
+// (including new ResourceVersion) so callers can continue making updates.
 func (m *migrationController) updateStatus(dm *DatastoreMigration) error {
-	refreshed, err := m.migClient.UpdateStatus(m.ctx, dm)
-	if err != nil {
-		return err
-	}
-	*dm = *refreshed
-	return nil
+	return m.rtClient.Status().Update(m.ctx, dm)
 }
 
 // updateMetadata updates the metadata (annotations, finalizers, labels) of a
 // DatastoreMigration CR. This uses Update (not UpdateStatus) to persist
-// metadata changes like annotations and finalizers. It updates dm in-place
-// with the server's response so callers can continue making updates without
-// re-fetching.
+// metadata changes like annotations and finalizers. The controller-runtime
+// client updates dm in-place with the server's response.
 func (m *migrationController) updateMetadata(dm *DatastoreMigration) error {
-	refreshed, err := m.migClient.Update(m.ctx, dm)
-	if err != nil {
-		return err
-	}
-	*dm = *refreshed
-	return nil
+	return m.rtClient.Update(m.ctx, dm)
 }
 
 // addFinalizer adds the migration finalizer to the DatastoreMigration CR.
