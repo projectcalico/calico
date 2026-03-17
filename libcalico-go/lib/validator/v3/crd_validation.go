@@ -16,6 +16,7 @@ package v3
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -185,10 +186,50 @@ func toUnstructured(obj runtime.Object) (any, error) {
 		return u.Object, nil
 	}
 
-	// Convert typed object to unstructured map.
-	data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	// Use JSON round-trip instead of runtime.DefaultUnstructuredConverter so
+	// that numeric types match what the API server sees. The converter uses
+	// reflection and preserves Go types (e.g. uint32 → uint64), but the API
+	// server receives JSON where all numbers decode as float64 or int64.
+	// Without this, CEL rules fail at runtime with type mismatches like
+	// "expected int, got uint64" for fields such as numorstring.ASNumber.
+	raw, err := json.Marshal(obj)
 	if err != nil {
 		return nil, err
 	}
+	var data map[string]any
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return nil, err
+	}
+	// encoding/json decodes all numbers as float64 into interface{}, but CEL
+	// expects integer-typed fields as int64. Convert exact-integer float64
+	// values to int64, matching the k8s API server's internal representation.
+	normalizeNumbers(data)
 	return data, nil
+}
+
+// normalizeNumbers recursively walks an unstructured map and converts float64
+// values that represent exact integers to int64.
+func normalizeNumbers(v any) {
+	switch val := v.(type) {
+	case map[string]any:
+		for k, elem := range val {
+			if f, ok := elem.(float64); ok {
+				if f == float64(int64(f)) {
+					val[k] = int64(f)
+				}
+			} else {
+				normalizeNumbers(elem)
+			}
+		}
+	case []any:
+		for i, elem := range val {
+			if f, ok := elem.(float64); ok {
+				if f == float64(int64(f)) {
+					val[i] = int64(f)
+				}
+			} else {
+				normalizeNumbers(elem)
+			}
+		}
+	}
 }

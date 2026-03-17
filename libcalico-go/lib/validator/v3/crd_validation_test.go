@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -148,6 +149,45 @@ func TestCRDValidation_BGPPeer(t *testing.T) {
 				Spec:       apiv3.BGPPeerSpec{NextHopMode: &invalidMode},
 			},
 			errSubstr: "supported values",
+		},
+	})
+}
+
+// TestCRDValidation_BGPPeer_ASNumber tests CEL rules involving asNumber, which
+// is a uint32 Go type. Verifies the JSON round-trip in toUnstructured() produces
+// the correct int type for CEL evaluation.
+func TestCRDValidation_BGPPeer_ASNumber(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "localWorkloadSelector with asNumber passes",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					LocalWorkloadSelector: "color == 'red'",
+					ASNumber:              numorstring.ASNumber(65401),
+				},
+			},
+		},
+		{
+			name: "localWorkloadSelector without asNumber fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					LocalWorkloadSelector: "color == 'red'",
+				},
+			},
+			errSubstr: "asNumber is required",
+		},
+		{
+			name: "peerSelector with asNumber fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerSelector: "has(label)",
+					ASNumber:     numorstring.ASNumber(65401),
+				},
+			},
+			errSubstr: "asNumber must be empty",
 		},
 	})
 }
