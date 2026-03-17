@@ -7,7 +7,9 @@
     secrets:
       - name: banzai-secrets
     prologue:
-      commands_file: .semaphore/end-to-end/scripts/global_prologue.sh
+      commands:
+        - checkout
+        - source .semaphore/end-to-end/scripts/global_prologue.sh
     epilogue:
       always:
         commands:
