@@ -375,7 +375,7 @@ var _ = Describe("LiveMigrationClient", func() {
 				Expect(event.Type).To(Equal(api.WatchAdded))
 				Expect(event.New.Value).To(BeNil())
 			case <-timer.C:
-				// Expected: no event received.
+				Fail("expected a watch event for Pending phase VMIM")
 			}
 
 			w.Stop()
