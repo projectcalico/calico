@@ -87,7 +87,7 @@ endif
 .PHONY: register
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --privileged --rm calico/binfmt:qemu-v10.1.3 --install all || true
+	docker run --privileged --rm calico/binfmt:qemu-v10.1.4 --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
@@ -1412,6 +1412,7 @@ run-k8s-apiserver: run-etcd
 			--max-requests-inflight=0 \
 			--enable-aggregator-routing \
 			--requestheader-client-ca-file=/home/user/certs/ca.pem \
+			--requestheader-allowed-names=kubernetes \
 			--requestheader-username-headers=X-Remote-User \
 			--requestheader-group-headers=X-Remote-Group \
 			--requestheader-extra-headers-prefix=X-Remote-Extra- \
