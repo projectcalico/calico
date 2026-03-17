@@ -78,9 +78,10 @@ type mockDataplane struct {
 	netlinkShim          netlinkshim.Interface
 	natDevicesConfigured bool
 
-	ensureStartedFn    func()
-	ensureQdiscFn      func(string) (bool, error)
-	interfaceByIndexFn func(ifindex int) (*net.Interface, error)
+	ensureStartedFn        func()
+	ensureQdiscFn          func(string) (bool, error)
+	interfaceByIndexFn     func(ifindex int) (*net.Interface, error)
+	ensureProgramLoadedErr error // if set, ensureProgramLoaded returns this error
 
 	jitHarden             bool
 	finalTrampolineStride int
@@ -140,6 +141,10 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	if m.ensureProgramLoadedErr != nil {
+		return m.ensureProgramLoadedErr
+	}
 
 	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		apxdp.HookLayoutV4 = hook.Layout{
@@ -3086,6 +3091,53 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(bookkeepingSetV6.Len()).To(Equal(0))
 		})
 
+	})
+
+	Context("with permanent BPF load failure", func() {
+		JustBeforeEach(func() {
+			dp = newMockDataplane()
+			mockDP = dp
+			newBpfEpMgr(false)
+			// Simulate a permanent load failure (kernel verifier rejection).
+			dp.ensureProgramLoadedErr = fmt.Errorf(
+				"error loading program: %w: %w",
+				hook.ErrPermanentLoadFailure,
+				errors.New("invalid argument"),
+			)
+		})
+
+		It("should stop retrying and set permanentBPFErr on data interface", func() {
+			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp, Index: 3})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(bpfEpMgr.permanentBPFErr).NotTo(BeNil())
+			Expect(bpfEpMgr.dirtyIfaceNames.Len()).To(Equal(0),
+				"interface should be removed from dirty set on permanent failure")
+
+			// Second CompleteDeferredWork should not retry.
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bpfEpMgr.permanentBPFErr).NotTo(BeNil())
+		})
+
+		It("should stop retrying and set permanentBPFErr on workload interface", func() {
+			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     "cali12345",
+					EndpointId:     "cali12345",
+				},
+				Endpoint: &proto.WorkloadEndpoint{Name: "cali12345"},
+			})
+			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(bpfEpMgr.permanentBPFErr).NotTo(BeNil())
+			Expect(bpfEpMgr.dirtyIfaceNames.Len()).To(Equal(0),
+				"interface should be removed from dirty set on permanent failure")
+		})
 	})
 })
 
