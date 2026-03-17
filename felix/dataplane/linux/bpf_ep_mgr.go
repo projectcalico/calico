@@ -1717,21 +1717,6 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 	}
 
-	// Copy data from old map to the new map
-	m.copyDeltaOnce.Do(func() {
-		logrus.Info("Copy delta entries from old map to the new map")
-		var err error
-		if m.v6 != nil {
-			err = m.v6.CtMap.CopyDeltaFromOldMap()
-		}
-		if m.v4 != nil {
-			err = m.v4.CtMap.CopyDeltaFromOldMap()
-		}
-		if err != nil {
-			logrus.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
-		}
-	})
-
 	return nil
 }
 
@@ -1745,6 +1730,23 @@ func (m *bpfEndpointManager) ApplyBPFPrograms() error {
 	if m.bpfPolicyDebugEnabled {
 		m.removeDirtyPolicies()
 	}
+
+	// Copy data from old conntrack map to the new map.  Must happen after
+	// programs are applied above so that old programs are no longer writing
+	// to the old map.
+	m.copyDeltaOnce.Do(func() {
+		logrus.Info("Copy delta entries from old map to the new map")
+		var err error
+		if m.v6 != nil {
+			err = m.v6.CtMap.CopyDeltaFromOldMap()
+		}
+		if m.v4 != nil {
+			err = m.v4.CtMap.CopyDeltaFromOldMap()
+		}
+		if err != nil {
+			logrus.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+		}
+	})
 
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
 
