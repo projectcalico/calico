@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"context"
 	"io"
 	"net"
 	"sync"
@@ -28,6 +29,9 @@ import (
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var testConvergenceTime = 30 * time.Second
@@ -50,7 +54,7 @@ func (f *fakeLiveMigrationListener) drain() []liveMigrationStateUpdate {
 // newTestMonitor creates a liveMigrationMonitor with a no-op GARP handle factory
 // and a fake listener, preventing tests from opening real AF_PACKET sockets.
 func newTestMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
-	m := newLiveMigrationMonitor(convergenceTime)
+	m := newLiveMigrationMonitor(convergenceTime, &fakeIPAM{})
 	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
 		return newFakeGARPHandle(), nil
 	}
@@ -112,6 +116,18 @@ func wepUpdateWithUID(id types.WorkloadEndpointID, role proto.LiveMigrationRole,
 			Name:              "cali" + id.EndpointId,
 			LiveMigrationRole: role,
 			LiveMigrationUid:  uid,
+		},
+	}
+}
+
+func wepUpdateWithVMIName(id types.WorkloadEndpointID, role proto.LiveMigrationRole, uid, vmiName string) *proto.WorkloadEndpointUpdate {
+	return &proto.WorkloadEndpointUpdate{
+		Id: protoWEPID(id),
+		Endpoint: &proto.WorkloadEndpoint{
+			Name:                 "cali" + id.EndpointId,
+			LiveMigrationRole:    role,
+			LiveMigrationUid:     uid,
+			LiveMigrationVmiName: vmiName,
 		},
 	}
 }
@@ -778,6 +794,105 @@ func TestMigrationUIDTracking(t *testing.T) {
 	})
 }
 
+func TestVMINameTracking(t *testing.T) {
+	t.Run("VMI name stored from WEP update", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithVMIName(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		g.Expect(m.vmiNames[wepID1]).To(Equal("my-vmi"))
+	})
+
+	t.Run("VMI name cleaned up on WEP remove", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithVMIName(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		g.Expect(m.vmiNames).To(HaveKey(wepID1))
+
+		m.OnUpdate(wepRemove(wepID1))
+		g.Expect(m.vmiNames).NotTo(HaveKey(wepID1))
+	})
+
+	t.Run("empty VMI name is not stored", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+		g.Expect(m.vmiNames).NotTo(HaveKey(wepID1))
+	})
+
+	t.Run("IPAM swap skipped when no VMI name", func(t *testing.T) {
+		m := newTestMonitor(testConvergenceTime)
+		m.ensureActiveVMOwnerAttrs = func(
+			ctx context.Context,
+			ipamClient ipam.Interface,
+			networkName string,
+			namespace string,
+			vmiName string,
+			targetPodName string,
+		) error {
+			t.Error("ensureActiveVMOwnerAttrs should not have been called")
+			return nil
+		}
+
+		// WEP with namespace/pod format and UID but no VMI name.
+		wepIDWithNS := types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
+			EndpointId:     "ep-1",
+		}
+		m.OnUpdate(wepUpdateWithUID(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1"))
+		drainUpdates(m)
+
+		// Trigger Target→Live.  Swap should be skipped due to missing VMI name.
+		m.OnGARPDetected(wepIDWithNS)
+		drainUpdates(m)
+	})
+
+	t.Run("IPAM swap executed on Target to Live transition", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		// Use a workload ID with namespace/pod format so the parser succeeds.
+		wepIDWithNS := types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
+			EndpointId:     "ep-1",
+		}
+
+		called := make(chan struct{}, 1)
+		m.ensureActiveVMOwnerAttrs = func(
+			ctx context.Context,
+			ipamClient ipam.Interface,
+			networkName string,
+			namespace string,
+			vmiName string,
+			targetPodName string,
+		) error {
+			g.Expect(namespace).To(Equal("test-ns"))
+			g.Expect(vmiName).To(Equal("my-vmi"))
+			g.Expect(targetPodName).To(Equal("virt-launcher-vm1-abc"))
+			called <- struct{}{}
+			return nil
+		}
+
+		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		drainUpdates(m)
+
+		// Trigger Target→Live via GARP.
+		m.OnGARPDetected(wepIDWithNS)
+		drainUpdates(m)
+
+		select {
+		case <-called:
+			// Success — IPAM swap was invoked.
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for ensureActiveVMOwnerAttrs to be called")
+		}
+	})
+}
+
 func TestLiveMigrationStateString(t *testing.T) {
 	g := NewWithT(t)
 	g.Expect(liveMigrationStateBase.String()).To(Equal("Base"))
@@ -796,4 +911,49 @@ func TestLiveMigrationInputString(t *testing.T) {
 	g.Expect(liveMigrationInputTimerPop.String()).To(Equal("TimerPop"))
 	g.Expect(liveMigrationInputDeleted.String()).To(Equal("Deleted"))
 	g.Expect(liveMigrationInput(99).String()).To(Equal("Unknown(99)"))
+}
+
+type fakeIPAM struct{}
+
+func (i *fakeIPAM) AssignIP(ctx context.Context, args ipam.AssignIPArgs) error { return nil }
+func (i *fakeIPAM) AutoAssign(ctx context.Context, args ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
+	return nil, nil, nil
+}
+func (i *fakeIPAM) ReleaseIPs(ctx context.Context, ips ...ipam.ReleaseOptions) ([]cnet.IP, []ipam.ReleaseOptions, error) {
+	return nil, nil, nil
+}
+func (i *fakeIPAM) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (*model.AllocationAttribute, error) {
+	return nil, nil
+}
+func (i *fakeIPAM) IPsByHandle(ctx context.Context, handleID string) ([]cnet.IP, error) {
+	return nil, nil
+}
+func (i *fakeIPAM) ReleaseByHandle(ctx context.Context, handleID string) error { return nil }
+func (i *fakeIPAM) ClaimAffinity(ctx context.Context, cidr cnet.IPNet, affinityCfg ipam.AffinityConfig) ([]cnet.IPNet, []cnet.IPNet, error) {
+	return nil, nil, nil
+}
+func (i *fakeIPAM) ReleaseAffinity(ctx context.Context, cidr cnet.IPNet, host string, mustBeEmpty bool) error {
+	return nil
+}
+func (i *fakeIPAM) ReleaseHostAffinities(ctx context.Context, affinityCfg ipam.AffinityConfig, mustBeEmpty bool) error {
+	return nil
+}
+func (i *fakeIPAM) ReleasePoolAffinities(ctx context.Context, pool cnet.IPNet) error { return nil }
+func (i *fakeIPAM) ReleaseBlockAffinity(ctx context.Context, block *model.AllocationBlock, mustBeEmpty bool) error {
+	return nil
+}
+func (i *fakeIPAM) GetIPAMConfig(ctx context.Context) (*ipam.IPAMConfig, error) { return nil, nil }
+func (i *fakeIPAM) SetIPAMConfig(ctx context.Context, cfg ipam.IPAMConfig) error { return nil }
+func (i *fakeIPAM) RemoveIPAMHost(ctx context.Context, affinityCfg ipam.AffinityConfig) error {
+	return nil
+}
+func (i *fakeIPAM) GetUtilization(ctx context.Context, args ipam.GetUtilizationArgs) ([]*ipam.PoolUtilization, error) {
+	return nil, nil
+}
+func (i *fakeIPAM) EnsureBlock(ctx context.Context, args ipam.BlockArgs) (*cnet.IPNet, *cnet.IPNet, error) {
+	return nil, nil, nil
+}
+func (i *fakeIPAM) UpgradeHost(ctx context.Context, nodeName string) error { return nil }
+func (i *fakeIPAM) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *ipam.OwnerAttributeUpdates, preconditions *ipam.OwnerAttributePreconditions) error {
+	return nil
 }
