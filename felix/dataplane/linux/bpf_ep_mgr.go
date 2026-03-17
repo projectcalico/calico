@@ -2500,6 +2500,10 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		// so we set overrides for both ingress and egress here. The ProgramsMap
 		// is set per-direction in wepApplyPolicyToDirection.
 		ap.MapPinOverrides = hook.NetkitPinOverridesBoth()
+		// bpf_redirect_peer requires a TC ingress context (skb_at_tc_ingress),
+		// but netkit programs run in xmit context. Disable redirect_peer so the
+		// FIB path uses plain bpf_redirect instead.
+		ap.RedirectPeer = false
 	}
 	if wep != nil && wep.QosControls != nil {
 		// QoSControls are present, update state
