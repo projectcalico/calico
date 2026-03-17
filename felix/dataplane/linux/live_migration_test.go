@@ -50,7 +50,7 @@ func (f *fakeLiveMigrationListener) drain() []liveMigrationStateUpdate {
 // newTestMonitor creates a liveMigrationMonitor with a no-op GARP handle factory
 // and a fake listener, preventing tests from opening real AF_PACKET sockets.
 func newTestMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
-	m := newLiveMigrationMonitor(convergenceTime)
+	m := newLiveMigrationMonitor(convergenceTime, nil)
 	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
 		return newFakeGARPHandle(), nil
 	}
@@ -112,6 +112,18 @@ func wepUpdateWithUID(id types.WorkloadEndpointID, role proto.LiveMigrationRole,
 			Name:              "cali" + id.EndpointId,
 			LiveMigrationRole: role,
 			LiveMigrationUid:  uid,
+		},
+	}
+}
+
+func wepUpdateWithVMIName(id types.WorkloadEndpointID, role proto.LiveMigrationRole, uid, vmiName string) *proto.WorkloadEndpointUpdate {
+	return &proto.WorkloadEndpointUpdate{
+		Id: protoWEPID(id),
+		Endpoint: &proto.WorkloadEndpoint{
+			Name:                 "cali" + id.EndpointId,
+			LiveMigrationRole:    role,
+			LiveMigrationUid:     uid,
+			LiveMigrationVmiName: vmiName,
 		},
 	}
 }
@@ -775,6 +787,59 @@ func TestMigrationUIDTracking(t *testing.T) {
 		// NoRole → TimeWait
 		m.OnUpdate(wepUpdateWithUID(wepID1, proto.LiveMigrationRole_NO_ROLE, "uid-xyz-789"))
 		g.Expect(m.fsms[wepID1].migrationUID).To(Equal("uid-xyz-789"))
+	})
+}
+
+func TestVMINameTracking(t *testing.T) {
+	t.Run("VMI name stored from WEP update", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithVMIName(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		g.Expect(m.vmiNames[wepID1]).To(Equal("my-vmi"))
+	})
+
+	t.Run("VMI name cleaned up on WEP remove", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithVMIName(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		g.Expect(m.vmiNames).To(HaveKey(wepID1))
+
+		m.OnUpdate(wepRemove(wepID1))
+		g.Expect(m.vmiNames).NotTo(HaveKey(wepID1))
+	})
+
+	t.Run("empty VMI name is not stored", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+		g.Expect(m.vmiNames).NotTo(HaveKey(wepID1))
+	})
+
+	t.Run("IPAM swap skipped when no IPAM client", func(t *testing.T) {
+		m := newTestMonitor(testConvergenceTime)
+
+		m.OnUpdate(wepUpdateWithVMIName(wepID1, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		drainUpdates(m)
+
+		// Trigger Target→Live (GARP detected).  Should not panic even though
+		// ipamClient is nil.
+		m.OnGARPDetected(wepID1)
+		drainUpdates(m)
+	})
+
+	t.Run("IPAM swap skipped when no VMI name", func(t *testing.T) {
+		m := newTestMonitor(testConvergenceTime)
+
+		// WEP with no VMI name.
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+		drainUpdates(m)
+
+		// Trigger Target→Live.  Should not panic.
+		m.OnGARPDetected(wepID1)
+		drainUpdates(m)
 	})
 }
 

@@ -82,6 +82,7 @@ import (
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -285,6 +286,10 @@ type Config struct {
 	IPv6ElevatedRoutePriority int
 
 	LiveMigrationRouteConvergenceTime time.Duration
+
+	// IPAMClient is the Calico IPAM client used to swap owner attributes
+	// when a KubeVirt live migration completes.
+	IPAMClient ipam.Interface
 
 	KubernetesProvider felixconfig.Provider
 
@@ -515,7 +520,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		getKubeProxyNftablesEnabled: detectKubeProxyNftablesMode,
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
-	dp.liveMigrationMonitor = newLiveMigrationMonitor(config.LiveMigrationRouteConvergenceTime)
+	dp.liveMigrationMonitor = newLiveMigrationMonitor(config.LiveMigrationRouteConvergenceTime, config.IPAMClient)
 	dp.RegisterManager(dp.liveMigrationMonitor)
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
