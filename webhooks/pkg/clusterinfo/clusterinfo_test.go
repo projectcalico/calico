@@ -24,7 +24,7 @@ import (
 )
 
 func TestAdmit(t *testing.T) {
-	namespace = "calico-system"
+	w := &webhook{namespace: "calico-system"}
 
 	tests := []struct {
 		name        string
@@ -99,7 +99,7 @@ func TestAdmit(t *testing.T) {
 					},
 				},
 			}
-			resp := admit(ar)
+			resp := w.admit(ar)
 			assert.Equal(t, tt.expectAllow, resp.Allowed, "unexpected admission result for %s", tt.name)
 			if !tt.expectAllow {
 				assert.Equal(t, metav1.StatusReasonMethodNotAllowed, resp.Result.Reason)
@@ -109,7 +109,7 @@ func TestAdmit(t *testing.T) {
 }
 
 func TestIsAllowedUser(t *testing.T) {
-	namespace = "calico-system"
+	w := &webhook{namespace: "calico-system"}
 
 	tests := []struct {
 		username string
@@ -128,7 +128,7 @@ func TestIsAllowedUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.username, func(t *testing.T) {
-			assert.Equal(t, tt.allowed, isAllowedUser(tt.username))
+			assert.Equal(t, tt.allowed, w.isAllowedUser(tt.username))
 		})
 	}
 }

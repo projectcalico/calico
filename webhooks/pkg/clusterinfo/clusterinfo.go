@@ -37,9 +37,9 @@ var allowedServiceAccounts = map[string]struct{}{
 	"calico-kube-controllers": {},
 }
 
-// namespace is the namespace the webhook pod is running in, used to validate
-// that allowed service accounts are in the expected namespace.
-var namespace string
+type webhook struct {
+	namespace string
+}
 
 // RegisterHook registers the ClusterInformation write-protection webhook handler at the /cluster-info path.
 func RegisterHook(handleFn utils.HandleFn) {
@@ -47,13 +47,13 @@ func RegisterHook(handleFn utils.HandleFn) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to read pod namespace")
 	}
-	namespace = strings.TrimSpace(string(ns))
+	w := &webhook{namespace: strings.TrimSpace(string(ns))}
 	logrus.WithFields(logrus.Fields{
 		"path":      "/cluster-info",
-		"namespace": namespace,
+		"namespace": w.namespace,
 	}).Info("Registering ClusterInformation write-protection webhook")
 
-	handler := utils.NewDelegateToV1AdmitHandler(admit)
+	handler := utils.NewDelegateToV1AdmitHandler(w.admit)
 	http.HandleFunc("/cluster-info", handleFn(handler))
 }
 
@@ -61,7 +61,7 @@ func RegisterHook(handleFn utils.HandleFn) {
 // Delete operations on ClusterInformation unless the request originates from an allowed Calico
 // system service account. This mirrors the write protection that the Calico API server provides
 // when running in aggregated API mode.
-func admit(ar v1.AdmissionReview) *v1.AdmissionResponse {
+func (w *webhook) admit(ar v1.AdmissionReview) *v1.AdmissionResponse {
 	logCtx := logrus.WithFields(logrus.Fields{
 		"uid":       ar.Request.UID,
 		"operation": ar.Request.Operation,
@@ -70,7 +70,7 @@ func admit(ar v1.AdmissionReview) *v1.AdmissionResponse {
 	})
 	logCtx.Debug("Handling ClusterInformation admission review")
 
-	if isAllowedUser(ar.Request.UserInfo.Username) {
+	if w.isAllowedUser(ar.Request.UserInfo.Username) {
 		logCtx.Debug("Allowing write from system service account")
 		return &v1.AdmissionResponse{Allowed: true}
 	}
@@ -90,12 +90,12 @@ func admit(ar v1.AdmissionReview) *v1.AdmissionResponse {
 // that is permitted to write ClusterInformation. Service account usernames follow the format
 // "system:serviceaccount:<namespace>:<name>". The service account must be in the same namespace
 // as the webhook pod.
-func isAllowedUser(username string) bool {
+func (w *webhook) isAllowedUser(username string) bool {
 	parts := strings.Split(username, ":")
 	if len(parts) != 4 || parts[0] != "system" || parts[1] != "serviceaccount" {
 		return false
 	}
-	if parts[2] != namespace {
+	if parts[2] != w.namespace {
 		return false
 	}
 	_, ok := allowedServiceAccounts[parts[3]]
