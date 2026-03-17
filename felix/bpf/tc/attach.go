@@ -526,6 +526,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		DSCP:          ap.DSCP,
 		IstioDSCP:     ap.IstioDSCP,
 		MaglevLUTSize: ap.MaglevLUTSize,
+		HostIfindex:   uint32(ap.IfIndex),
 	}
 
 	if ap.Profiling == "Enabled" {
