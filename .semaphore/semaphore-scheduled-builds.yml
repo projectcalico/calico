@@ -581,7 +581,6 @@ blocks:
       hours: 4
     task:
       secrets:
-        - name: marvin-github-ssh-private-key
         - name: banzai-secrets
       prologue:
         commands_file: .semaphore/end-to-end/scripts/global_prologue.sh
