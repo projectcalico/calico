@@ -336,6 +336,117 @@ func TestApplyCRDDefaults_UnknownKind(t *testing.T) {
 	}
 }
 
+// TestApplyCRDDefaults_NetworkPolicy verifies that the tier field (a plain
+// string, not a pointer) gets defaulted to "default".
+func TestApplyCRDDefaults_NetworkPolicy(t *testing.T) {
+	np := &apiv3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+		Spec:       apiv3.NetworkPolicySpec{},
+	}
+
+	if np.Spec.Tier != "" {
+		t.Fatalf("expected empty Tier before defaulting, got %q", np.Spec.Tier)
+	}
+
+	if err := ApplyCRDDefaults(np); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if np.Spec.Tier != "default" {
+		t.Errorf("expected Tier %q, got %q", "default", np.Spec.Tier)
+	}
+}
+
+// TestApplyCRDDefaults_BGPConfiguration verifies defaults on BGPConfiguration.
+// The CRD defaults logSeverityScreen to "Info".
+func TestApplyCRDDefaults_BGPConfiguration(t *testing.T) {
+	bgp := &apiv3.BGPConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.BGPConfigurationSpec{},
+	}
+
+	if bgp.Spec.LogSeverityScreen != "" {
+		t.Fatalf("expected empty LogSeverityScreen before defaulting, got %q", bgp.Spec.LogSeverityScreen)
+	}
+
+	if err := ApplyCRDDefaults(bgp); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if bgp.Spec.LogSeverityScreen != "Info" {
+		t.Errorf("expected LogSeverityScreen %q, got %q", "Info", bgp.Spec.LogSeverityScreen)
+	}
+}
+
+// TestApplyCRDDefaults_FelixConfiguration verifies defaults on FelixConfiguration.
+// The CRD defaults nftablesMode to "Auto".
+func TestApplyCRDDefaults_FelixConfiguration(t *testing.T) {
+	fc := &apiv3.FelixConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.FelixConfigurationSpec{},
+	}
+
+	if fc.Spec.NFTablesMode != nil {
+		t.Fatalf("expected nil NFTablesMode before defaulting, got %v", *fc.Spec.NFTablesMode)
+	}
+
+	if err := ApplyCRDDefaults(fc); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if fc.Spec.NFTablesMode == nil {
+		t.Fatal("expected NFTablesMode to be set after defaulting, got nil")
+	}
+	if *fc.Spec.NFTablesMode != apiv3.NFTablesModeAuto {
+		t.Errorf("expected NFTablesMode %q, got %q", apiv3.NFTablesModeAuto, *fc.Spec.NFTablesMode)
+	}
+}
+
+// TestApplyCRDDefaults_StagedGlobalNetworkPolicy verifies that multiple
+// defaults are applied to the same resource. The CRD defaults both
+// stagedAction to "Set" and tier to "default".
+func TestApplyCRDDefaults_StagedGlobalNetworkPolicy(t *testing.T) {
+	sgnp := &apiv3.StagedGlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-staged-policy"},
+		Spec:       apiv3.StagedGlobalNetworkPolicySpec{},
+	}
+
+	if sgnp.Spec.StagedAction != "" {
+		t.Fatalf("expected empty StagedAction before defaulting, got %q", sgnp.Spec.StagedAction)
+	}
+	if sgnp.Spec.Tier != "" {
+		t.Fatalf("expected empty Tier before defaulting, got %q", sgnp.Spec.Tier)
+	}
+
+	if err := ApplyCRDDefaults(sgnp); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if sgnp.Spec.StagedAction != apiv3.StagedActionSet {
+		t.Errorf("expected StagedAction %q, got %q", apiv3.StagedActionSet, sgnp.Spec.StagedAction)
+	}
+	if sgnp.Spec.Tier != "default" {
+		t.Errorf("expected Tier %q, got %q", "default", sgnp.Spec.Tier)
+	}
+}
+
+// TestApplyCRDDefaults_StringFieldDoesNotOverwrite verifies that a non-empty
+// string field is not overwritten by the CRD default.
+func TestApplyCRDDefaults_StringFieldDoesNotOverwrite(t *testing.T) {
+	np := &apiv3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+		Spec:       apiv3.NetworkPolicySpec{Tier: "my-custom-tier"},
+	}
+
+	if err := ApplyCRDDefaults(np); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if np.Spec.Tier != "my-custom-tier" {
+		t.Errorf("expected Tier to remain %q, got %q", "my-custom-tier", np.Spec.Tier)
+	}
+}
+
 // TestCRDValidation_CombinedWithStructValidation verifies that both Go struct
 // validation errors and CRD validation errors are reported together.
 func TestCRDValidation_CombinedWithStructValidation(t *testing.T) {
