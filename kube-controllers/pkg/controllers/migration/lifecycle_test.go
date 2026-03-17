@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -809,6 +810,243 @@ func createV3CRD(name string) *unstructured.Unstructured {
 				"group": "projectcalico.org",
 			},
 		},
+	}
+}
+
+// felixConfigMigrator creates a test ResourceMigrator for FelixConfiguration.
+func felixConfigMigrator() ResourceMigrator {
+	return ResourceMigrator{
+		Kind:         apiv3.KindFelixConfiguration,
+		Order:        OrderConfigSingletons,
+		V3Object:     func() rtclient.Object { return &apiv3.FelixConfiguration{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.FelixConfigurationList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.FelixConfiguration).Spec },
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, c, apiv3.KindFelixConfiguration)
+		},
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
+			v1 := kvp.Value.(*apiv3.FelixConfiguration)
+			v3 := &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+	}
+}
+
+// ipPoolMigrator creates a test ResourceMigrator for IPPool.
+func ipPoolMigrator() ResourceMigrator {
+	return ResourceMigrator{
+		Kind:         apiv3.KindIPPool,
+		Order:        OrderNetworkInfra,
+		V3Object:     func() rtclient.Object { return &apiv3.IPPool{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.IPPoolList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.IPPool).Spec },
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, c, apiv3.KindIPPool)
+		},
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
+			v1 := kvp.Value.(*apiv3.IPPool)
+			v3 := &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+	}
+}
+
+// bgpPeerMigrator creates a test ResourceMigrator for BGPPeer.
+func bgpPeerMigrator() ResourceMigrator {
+	return ResourceMigrator{
+		Kind:         apiv3.KindBGPPeer,
+		Order:        OrderNetworkInfra,
+		V3Object:     func() rtclient.Object { return &apiv3.BGPPeer{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.BGPPeerList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.BGPPeer).Spec },
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, c, apiv3.KindBGPPeer)
+		},
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
+			v1 := kvp.Value.(*apiv3.BGPPeer)
+			v3 := &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+	}
+}
+
+// TestLifecycle_FullMigrationWithContentVerification exercises a full migration
+// with multiple diverse resource types and verifies that spec fields are
+// faithfully preserved in the v3 resources.
+func TestLifecycle_FullMigrationWithContentVerification(t *testing.T) {
+	withTestRegistry(t, []ResourceMigrator{
+		tierMigrator(),
+		felixConfigMigrator(),
+		ipPoolMigrator(),
+		bgpPeerMigrator(),
+	})
+
+	cr := createTestCR(t, defaultMigrationName, "")
+	v1CRD := createV1CRD("tiers.crd.projectcalico.org")
+	c, _ := testController(t, cr, v1CRD)
+
+	bc := c.backendClient.(*mockBackendClient)
+
+	// Build diverse v1 resources.
+	boolTrue := true
+	floatingIP := apiv3.FloatingIPsEnabled
+	int32Val := int32(90)
+	v1FelixSpec := apiv3.FelixConfigurationSpec{
+		LogSeverityScreen: "Debug",
+		IPIPEnabled:       &boolTrue,
+		FloatingIPs:       &floatingIP,
+	}
+	v1IPPoolSpec := apiv3.IPPoolSpec{
+		CIDR:         "10.244.0.0/16",
+		NATOutgoing:  true,
+		NodeSelector: "all()",
+		BlockSize:    26,
+		VXLANMode:    apiv3.VXLANModeAlways,
+	}
+	v1BGPPeerSpec := apiv3.BGPPeerSpec{
+		PeerIP:   "192.168.1.1",
+		ASNumber: 64512,
+		MaxRestartTime: &metav1.Duration{
+			Duration: 120000000000,
+		},
+		KeepOriginalNextHop:      true,
+		NumAllowedLocalASNumbers: &int32Val,
+	}
+
+	bc.resources = map[string][]*model.KVPair{
+		apiv3.KindTier: {
+			{
+				Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
+				Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default", UID: "tier-uid"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+			},
+		},
+		apiv3.KindFelixConfiguration: {
+			{
+				Key: model.ResourceKey{Kind: apiv3.KindFelixConfiguration, Name: "default"},
+				Value: &apiv3.FelixConfiguration{
+					ObjectMeta: metav1.ObjectMeta{Name: "default", UID: "fc-uid"},
+					Spec:       v1FelixSpec,
+				},
+			},
+		},
+		apiv3.KindIPPool: {
+			{
+				Key: model.ResourceKey{Kind: apiv3.KindIPPool, Name: "default-pool"},
+				Value: &apiv3.IPPool{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "default-pool",
+						UID:    "pool-uid",
+						Labels: map[string]string{"env": "test"},
+					},
+					Spec: v1IPPoolSpec,
+				},
+			},
+		},
+		apiv3.KindBGPPeer: {
+			{
+				Key: model.ResourceKey{Kind: apiv3.KindBGPPeer, Name: "peer1"},
+				Value: &apiv3.BGPPeer{
+					ObjectMeta: metav1.ObjectMeta{Name: "peer1", UID: "peer-uid"},
+					Spec:       v1BGPPeerSpec,
+				},
+			},
+		},
+	}
+
+	ready := true
+	bc.clusterInfo = &model.KVPair{
+		Key: model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName},
+		Value: &apiv3.ClusterInformation{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName},
+			Spec:       apiv3.ClusterInformationSpec{DatastoreReady: &ready},
+		},
+		Revision: "1",
+	}
+
+	createAggregatedAPIService(t, c)
+
+	// Reconcile 1: Pending -> Migrating.
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile 1: %v", err)
+	}
+
+	// Reconcile 2: Migrating -> Converged.
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile 2: %v", err)
+	}
+
+	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
+	if err != nil {
+		t.Fatalf("getting CR: %v", err)
+	}
+	if dm.Status.Phase != DatastoreMigrationPhaseConverged {
+		t.Fatalf("expected Converged, got %s", dm.Status.Phase)
+	}
+	if dm.Status.Progress.Migrated != 4 {
+		t.Errorf("expected 4 migrated resources, got %d", dm.Status.Progress.Migrated)
+	}
+
+	// Verify FelixConfiguration content.
+	v3Felix := &apiv3.FelixConfiguration{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "default"}, v3Felix); err != nil {
+		t.Fatal("FelixConfiguration 'default' not found in v3")
+	}
+	if v3Felix.Spec.LogSeverityScreen != v1FelixSpec.LogSeverityScreen {
+		t.Errorf("FelixConfiguration LogSeverityScreen mismatch: got %s, want %s", v3Felix.Spec.LogSeverityScreen, v1FelixSpec.LogSeverityScreen)
+	}
+	if !reflect.DeepEqual(v3Felix.Spec.IPIPEnabled, v1FelixSpec.IPIPEnabled) {
+		t.Errorf("FelixConfiguration IPIPEnabled mismatch: got %v", v3Felix.Spec.IPIPEnabled)
+	}
+
+	// Verify IPPool content.
+	v3Pool := &apiv3.IPPool{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "default-pool"}, v3Pool); err != nil {
+		t.Fatal("IPPool 'default-pool' not found in v3")
+	}
+	if v3Pool.Spec.CIDR != v1IPPoolSpec.CIDR {
+		t.Errorf("IPPool CIDR mismatch: got %s, want %s", v3Pool.Spec.CIDR, v1IPPoolSpec.CIDR)
+	}
+	if v3Pool.Spec.NATOutgoing != v1IPPoolSpec.NATOutgoing {
+		t.Errorf("IPPool NATOutgoing mismatch: got %v", v3Pool.Spec.NATOutgoing)
+	}
+	if v3Pool.Spec.BlockSize != v1IPPoolSpec.BlockSize {
+		t.Errorf("IPPool BlockSize mismatch: got %d, want %d", v3Pool.Spec.BlockSize, v1IPPoolSpec.BlockSize)
+	}
+	if v3Pool.Spec.VXLANMode != v1IPPoolSpec.VXLANMode {
+		t.Errorf("IPPool VXLANMode mismatch: got %s, want %s", v3Pool.Spec.VXLANMode, v1IPPoolSpec.VXLANMode)
+	}
+	if v3Pool.Labels["env"] != "test" {
+		t.Errorf("IPPool label 'env' not preserved: got %v", v3Pool.Labels)
+	}
+
+	// Verify BGPPeer content.
+	v3Peer := &apiv3.BGPPeer{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "peer1"}, v3Peer); err != nil {
+		t.Fatal("BGPPeer 'peer1' not found in v3")
+	}
+	if v3Peer.Spec.PeerIP != v1BGPPeerSpec.PeerIP {
+		t.Errorf("BGPPeer PeerIP mismatch: got %s, want %s", v3Peer.Spec.PeerIP, v1BGPPeerSpec.PeerIP)
+	}
+	if v3Peer.Spec.ASNumber != v1BGPPeerSpec.ASNumber {
+		t.Errorf("BGPPeer ASNumber mismatch: got %v, want %v", v3Peer.Spec.ASNumber, v1BGPPeerSpec.ASNumber)
+	}
+	if v3Peer.Spec.KeepOriginalNextHop != true {
+		t.Errorf("BGPPeer KeepOriginalNextHop mismatch: got %v", v3Peer.Spec.KeepOriginalNextHop)
+	}
+	if !reflect.DeepEqual(v3Peer.Spec.MaxRestartTime, v1BGPPeerSpec.MaxRestartTime) {
+		t.Errorf("BGPPeer MaxRestartTime mismatch: got %v, want %v", v3Peer.Spec.MaxRestartTime, v1BGPPeerSpec.MaxRestartTime)
 	}
 }
 

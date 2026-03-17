@@ -692,6 +692,195 @@ func TestMigrateResourceType_ConvertError(t *testing.T) {
 	}
 }
 
+// TestConflictDetection_PhaseTransition verifies that when a v3 resource
+// exists with a different spec than the v1 source, the controller detects
+// the conflict, transitions to WaitingForConflictResolution, and records
+// the conflict details in the CR status.
+func TestConflictDetection_PhaseTransition(t *testing.T) {
+	withTestRegistry(t, []ResourceMigrator{tierMigrator(), gnpMigrator()})
+
+	cr := createTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
+	c, _ := testController(t, cr)
+
+	// Pre-create a conflicting GNP with a different spec than the v1 source.
+	if err := c.rtClient.Create(c.ctx, &apiv3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-deny-all"},
+		Spec: apiv3.GlobalNetworkPolicySpec{
+			Tier: "security",
+		},
+	}); err != nil {
+		t.Fatalf("creating conflicting GNP: %v", err)
+	}
+
+	bc := c.backendClient.(*mockBackendClient)
+	bc.resources = map[string][]*model.KVPair{
+		apiv3.KindTier: {
+			{
+				Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
+				Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+			},
+		},
+		apiv3.KindGlobalNetworkPolicy: {
+			{
+				Key: model.ResourceKey{Kind: apiv3.KindGlobalNetworkPolicy, Name: "default.test-deny-all"},
+				Value: &apiv3.GlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: "default.test-deny-all"},
+					Spec:       apiv3.GlobalNetworkPolicySpec{Tier: "default"},
+				},
+			},
+		},
+	}
+
+	ready := true
+	bc.clusterInfo = &model.KVPair{
+		Key: model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName},
+		Value: &apiv3.ClusterInformation{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName},
+			Spec:       apiv3.ClusterInformationSpec{DatastoreReady: &ready},
+		},
+		Revision: "1",
+	}
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+
+	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
+	if err != nil {
+		t.Fatalf("getting CR: %v", err)
+	}
+
+	// Should transition to WaitingForConflictResolution.
+	if dm.Status.Phase != DatastoreMigrationPhaseWaitingForConflictResolution {
+		t.Errorf("expected WaitingForConflictResolution, got %s", dm.Status.Phase)
+	}
+	if dm.Status.Progress.Conflicts != 1 {
+		t.Errorf("expected 1 conflict, got %d", dm.Status.Progress.Conflicts)
+	}
+
+	// Verify condition details.
+	found := false
+	for _, cond := range dm.Status.Conditions {
+		if cond.Type == conditionTypeConflict && cond.Status == metav1.ConditionTrue {
+			found = true
+			if cond.Reason != conditionReasonResourceMismatch {
+				t.Errorf("expected reason %s, got %s", conditionReasonResourceMismatch, cond.Reason)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected Conflict condition with ConditionTrue")
+	}
+
+	// The tier should have been migrated successfully despite the GNP conflict.
+	tier := &apiv3.Tier{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "default"}, tier); getErr != nil {
+		t.Error("tier 'default' should have been migrated even with GNP conflict")
+	}
+}
+
+// TestAbortRollback_CleansUpMigratedResources verifies that when a migration
+// is aborted (CR deleted mid-migration), partial v3 resources are cleaned up,
+// the APIService is restored, and v1 ClusterInformation is unlocked.
+func TestAbortRollback_CleansUpMigratedResources(t *testing.T) {
+	withTestRegistry(t, []ResourceMigrator{tierMigrator(), gnpMigrator()})
+
+	// Simulate mid-migration: CR is being deleted while in Migrating phase.
+	// The saved APIService annotation allows restore.
+	apiSvcJSON := `{"metadata":{"name":"v3.projectcalico.org"},"spec":{"group":"projectcalico.org","version":"v3","service":{"namespace":"calico-apiserver","name":"calico-api"},"groupPriorityMinimum":1500,"versionPriority":200}}`
+	cr := createTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
+	cr.Object["metadata"].(map[string]interface{})["annotations"] = map[string]interface{}{
+		savedAPIServiceAnnotation: apiSvcJSON,
+	}
+	c, _ := testController(t, cr)
+
+	// Simulate partial v3 resources that were created by migration.
+	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "default",
+			Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
+		},
+		Spec: apiv3.TierSpec{Order: floatPtr(100)},
+	}); err != nil {
+		t.Fatalf("creating tier: %v", err)
+	}
+	if err := c.rtClient.Create(c.ctx, &apiv3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "test-policy",
+			Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
+		},
+		Spec: apiv3.GlobalNetworkPolicySpec{Tier: "default"},
+	}); err != nil {
+		t.Fatalf("creating GNP: %v", err)
+	}
+	// A pre-existing v3 resource (no migration annotation) should be preserved.
+	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "preexisting"},
+		Spec:       apiv3.TierSpec{Order: floatPtr(50)},
+	}); err != nil {
+		t.Fatalf("creating preexisting tier: %v", err)
+	}
+
+	bc := c.backendClient.(*mockBackendClient)
+	readyFalse := false
+	bc.clusterInfo = &model.KVPair{
+		Key: model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName},
+		Value: &apiv3.ClusterInformation{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName},
+			Spec:       apiv3.ClusterInformationSpec{DatastoreReady: &readyFalse},
+		},
+		Revision: "1",
+	}
+
+	// Reconcile the abort.
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile (abort): %v", err)
+	}
+
+	// Verify migrated v3 resources were cleaned up.
+	tier := &apiv3.Tier{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "default"}, tier); !kerrors.IsNotFound(err) {
+		t.Errorf("expected migrated tier 'default' to be deleted, err: %v", err)
+	}
+	gnp := &apiv3.GlobalNetworkPolicy{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "test-policy"}, gnp); !kerrors.IsNotFound(err) {
+		t.Errorf("expected migrated GNP 'test-policy' to be deleted, err: %v", err)
+	}
+
+	// Verify pre-existing v3 resource was NOT deleted.
+	preexisting := &apiv3.Tier{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "preexisting"}, preexisting); err != nil {
+		t.Error("pre-existing tier 'preexisting' should NOT have been deleted during abort")
+	}
+
+	// Verify APIService was restored.
+	restored, err := c.apiregClient.APIServices().Get(c.ctx, apiServiceName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected APIService to be restored, got: %v", err)
+	}
+	if restored.Spec.Service == nil || restored.Spec.Service.Name != "calico-api" {
+		t.Errorf("restored APIService has wrong service: %v", restored.Spec.Service)
+	}
+
+	// Verify v1 ClusterInformation was restored to ready.
+	ci, ok := bc.clusterInfo.Value.(*apiv3.ClusterInformation)
+	if !ok {
+		t.Fatalf("unexpected type: %T", bc.clusterInfo.Value)
+	}
+	if ci.Spec.DatastoreReady == nil || !*ci.Spec.DatastoreReady {
+		t.Error("expected v1 ClusterInformation DatastoreReady=true after abort")
+	}
+
+	// Verify finalizer was removed.
+	dm, err := c.migClient.Get(c.ctx, defaultMigrationName)
+	if err != nil {
+		t.Fatalf("getting CR: %v", err)
+	}
+	if hasFinalizer(dm) {
+		t.Error("expected finalizer to be removed after abort")
+	}
+}
+
 func TestMigrateResourceType_EmptyList(t *testing.T) {
 	ctx := context.Background()
 

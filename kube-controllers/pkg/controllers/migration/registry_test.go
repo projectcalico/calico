@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,6 +49,9 @@ func TestMigratedPolicyName(t *testing.T) {
 		{"empty tier with prefix", "default.my-policy", "", "my-policy"},
 		{"non-default tier with prefix", "default.my-policy", "security", "default.my-policy"},
 		{"non-default tier", "my-policy", "security", "my-policy"},
+		{"non-default tier keeps own prefix", "security.my-policy", "security", "security.my-policy"},
+		{"name is just the prefix", "default.", "default", ""},
+		{"multiple dots in name", "default.my.dotted.policy", "default", "my.dotted.policy"},
 	}
 
 	for _, tt := range tests {
@@ -615,6 +620,431 @@ func TestMigrateIPAMHandle_Full(t *testing.T) {
 	}
 	if v3Handle.Spec.Block["10.0.0.64/26"] != 2 {
 		t.Errorf("wrong block count: %v", v3Handle.Spec.Block)
+	}
+}
+
+// resetMetricVec resets a CounterVec by collecting all metrics and deleting their
+// label combinations. This isolates test cases that inspect metric values.
+func resetMetricVec(cv *prometheus.CounterVec) {
+	ch := make(chan prometheus.Metric, 100)
+	cv.Collect(ch)
+	close(ch)
+	for range ch {
+	}
+	cv.Reset()
+}
+
+func TestMigrateResourceType_Metrics(t *testing.T) {
+	t.Run("migrated counter", func(t *testing.T) {
+		resetMetricVec(migrationResourcesTotal)
+		resetMetricVec(migrationRetries)
+
+		ctx := context.Background()
+		bc := &mockBackendClient{
+			resources: map[string][]*model.KVPair{
+				apiv3.KindTier: {
+					{
+						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "t1"},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "t1"}, Spec: apiv3.TierSpec{Order: floatPtr(10)}},
+					},
+					{
+						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "t2"},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "t2"}, Spec: apiv3.TierSpec{Order: floatPtr(20)}},
+					},
+				},
+			},
+		}
+		fakeRT := newTestRTClient(t)
+		migrator := testTierMigrator()
+
+		result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.Migrated != 2 {
+			t.Fatalf("expected 2 migrated, got %d", result.Migrated)
+		}
+
+		// The handleMigrating method in the controller calls
+		// migrationResourcesTotal.Add() after MigrateResourceType returns.
+		// Simulate that here to verify the metric pipeline works.
+		migrationResourcesTotal.WithLabelValues(apiv3.KindTier, "migrated").Add(float64(result.Migrated))
+		val := testutil.ToFloat64(migrationResourcesTotal.WithLabelValues(apiv3.KindTier, "migrated"))
+		if val != 2 {
+			t.Errorf("expected migrated counter == 2, got %f", val)
+		}
+	})
+
+	t.Run("skipped counter", func(t *testing.T) {
+		resetMetricVec(migrationResourcesTotal)
+
+		ctx := context.Background()
+		bc := &mockBackendClient{
+			resources: map[string][]*model.KVPair{
+				apiv3.KindTier: {
+					{
+						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+					},
+				},
+			},
+		}
+		fakeRT := newTestRTClient(t)
+		if err := fakeRT.Create(ctx, &apiv3.Tier{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec:       apiv3.TierSpec{Order: floatPtr(100)},
+		}); err != nil {
+			t.Fatalf("creating existing tier: %v", err)
+		}
+
+		result, err := MigrateResourceType(ctx, bc, fakeRT, testTierMigrator())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		migrationResourcesTotal.WithLabelValues(apiv3.KindTier, "skipped").Add(float64(result.Skipped))
+		val := testutil.ToFloat64(migrationResourcesTotal.WithLabelValues(apiv3.KindTier, "skipped"))
+		if val != 1 {
+			t.Errorf("expected skipped counter == 1, got %f", val)
+		}
+	})
+
+	t.Run("conflict counter", func(t *testing.T) {
+		resetMetricVec(migrationResourcesTotal)
+
+		ctx := context.Background()
+		bc := &mockBackendClient{
+			resources: map[string][]*model.KVPair{
+				apiv3.KindTier: {
+					{
+						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+					},
+				},
+			},
+		}
+		fakeRT := newTestRTClient(t)
+		if err := fakeRT.Create(ctx, &apiv3.Tier{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec:       apiv3.TierSpec{Order: floatPtr(999)},
+		}); err != nil {
+			t.Fatalf("creating conflicting tier: %v", err)
+		}
+
+		result, err := MigrateResourceType(ctx, bc, fakeRT, testTierMigrator())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		migrationResourcesTotal.WithLabelValues(apiv3.KindTier, "conflict").Add(float64(len(result.Conflicts)))
+		val := testutil.ToFloat64(migrationResourcesTotal.WithLabelValues(apiv3.KindTier, "conflict"))
+		if val != 1 {
+			t.Errorf("expected conflict counter == 1, got %f", val)
+		}
+	})
+
+	t.Run("retry counter on transient error", func(t *testing.T) {
+		resetMetricVec(migrationRetries)
+
+		ctx := context.Background()
+		bc := &mockBackendClient{
+			resources: map[string][]*model.KVPair{
+				apiv3.KindTier: {
+					{
+						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "retry-tier"},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "retry-tier"}, Spec: apiv3.TierSpec{Order: floatPtr(50)}},
+					},
+				},
+			},
+		}
+
+		rtScheme := runtime.NewScheme()
+		if err := apiv3.AddToScheme(rtScheme); err != nil {
+			t.Fatalf("failed to add scheme: %v", err)
+		}
+		calls := 0
+		inner := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(k8stesting.NewObjectTracker(rtScheme, serializer.NewCodecFactory(rtScheme).UniversalDecoder())).Build()
+		wrapper := &retryTestClient{Client: inner, createCalls: &calls}
+
+		migrator := testTierMigrator()
+		_, err := MigrateResourceType(ctx, bc, wrapper, migrator)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// The retryTestClient fails the first Create, triggering a retry.
+		// The retry path increments migrationRetries.
+		retryVal := testutil.ToFloat64(migrationRetries.WithLabelValues(apiv3.KindTier, "create"))
+		if retryVal < 1 {
+			t.Errorf("expected retry counter >= 1, got %f", retryVal)
+		}
+	})
+}
+
+func TestMigrateResourceType_ContentVerification(t *testing.T) {
+	ctx := context.Background()
+
+	action := apiv3.Action("Allow")
+	v1Spec := apiv3.TierSpec{Order: floatPtr(77), DefaultAction: &action}
+	v1Labels := map[string]string{"team": "networking", "env": "staging"}
+	v1Annotations := map[string]string{
+		"projectcalico.org/metadata": "filtered-out",
+		"custom.io/reason":           "test-annotation",
+		"another.io/data":            "extra-value",
+	}
+
+	bc := &mockBackendClient{
+		resources: map[string][]*model.KVPair{
+			apiv3.KindTier: {
+				{
+					Key: model.ResourceKey{Kind: apiv3.KindTier, Name: "content-tier"},
+					Value: &apiv3.Tier{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        "content-tier",
+							Labels:      v1Labels,
+							Annotations: v1Annotations,
+						},
+						Spec: v1Spec,
+					},
+				},
+			},
+		},
+	}
+
+	fakeRT := newTestRTClient(t)
+
+	// Use a migrator that calls copyLabelsAndAnnotations, matching the real
+	// production Convert functions in resources.go.
+	migrator := ResourceMigrator{
+		Kind:         apiv3.KindTier,
+		Order:        OrderTiers,
+		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, c, apiv3.KindTier)
+		},
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
+			v1 := kvp.Value.(*apiv3.Tier)
+			v3 := &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+	}
+
+	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Migrated != 1 {
+		t.Fatalf("expected 1 migrated, got %d", result.Migrated)
+	}
+
+	tier := &apiv3.Tier{}
+	if err := fakeRT.Get(ctx, types.NamespacedName{Name: "content-tier"}, tier); err != nil {
+		t.Fatalf("failed to get tier: %v", err)
+	}
+
+	// Verify name.
+	if tier.Name != "content-tier" {
+		t.Errorf("expected name content-tier, got %s", tier.Name)
+	}
+
+	// Verify spec fields match exactly.
+	if tier.Spec.Order == nil || *tier.Spec.Order != 77 {
+		t.Errorf("expected Order 77, got %v", tier.Spec.Order)
+	}
+	if tier.Spec.DefaultAction == nil || *tier.Spec.DefaultAction != apiv3.Action("Allow") {
+		t.Errorf("expected DefaultAction Allow, got %v", tier.Spec.DefaultAction)
+	}
+
+	// Verify labels were copied verbatim.
+	if len(tier.Labels) != 2 {
+		t.Errorf("expected 2 labels, got %d: %v", len(tier.Labels), tier.Labels)
+	}
+	if tier.Labels["team"] != "networking" {
+		t.Errorf("expected label team=networking, got %s", tier.Labels["team"])
+	}
+	if tier.Labels["env"] != "staging" {
+		t.Errorf("expected label env=staging, got %s", tier.Labels["env"])
+	}
+
+	// Verify annotations: projectcalico.org/metadata filtered, others preserved,
+	// plus the migration annotation added by MigrateResourceType.
+	if tier.Annotations["custom.io/reason"] != "test-annotation" {
+		t.Errorf("expected annotation custom.io/reason=test-annotation, got %s", tier.Annotations["custom.io/reason"])
+	}
+	if tier.Annotations["another.io/data"] != "extra-value" {
+		t.Errorf("expected annotation another.io/data=extra-value, got %s", tier.Annotations["another.io/data"])
+	}
+	if _, ok := tier.Annotations["projectcalico.org/metadata"]; ok {
+		t.Error("projectcalico.org/metadata annotation should have been filtered out")
+	}
+	if tier.Annotations[migratedByAnnotation] != "v1-to-v3" {
+		t.Errorf("expected migration annotation, got %v", tier.Annotations[migratedByAnnotation])
+	}
+}
+
+func TestRemapOwnerReferences(t *testing.T) {
+	ctx := context.Background()
+
+	// Build a fake RT client and create v3 resources as if migration already ran.
+	fakeRT := newTestRTClient(t)
+
+	// Tier "security" was migrated: v1 UID was "v1-tier-uid", v3 UID is "v3-tier-uid".
+	if err := fakeRT.Create(ctx, &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "security", UID: "v3-tier-uid"},
+		Spec:       apiv3.TierSpec{Order: floatPtr(200)},
+	}); err != nil {
+		t.Fatalf("creating tier: %v", err)
+	}
+
+	// GNP "test-deny" was migrated and has an OwnerRef pointing to the OLD v1 tier UID.
+	if err := fakeRT.Create(ctx, &apiv3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-deny",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "projectcalico.org/v3",
+					Kind:       "Tier",
+					Name:       "security",
+					UID:        "v1-tier-uid",
+				},
+			},
+		},
+		Spec: apiv3.GlobalNetworkPolicySpec{Tier: "default"},
+	}); err != nil {
+		t.Fatalf("creating GNP: %v", err)
+	}
+
+	// GNP "native-owner" has an OwnerRef to a Namespace (non-Calico), should stay unchanged.
+	if err := fakeRT.Create(ctx, &apiv3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "native-owner",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "v1",
+					Kind:       "Namespace",
+					Name:       "kube-system",
+					UID:        "ns-uid-unchanged",
+				},
+			},
+		},
+		Spec: apiv3.GlobalNetworkPolicySpec{Tier: "default"},
+	}); err != nil {
+		t.Fatalf("creating GNP: %v", err)
+	}
+
+	uidMap := map[types.UID]types.UID{
+		"v1-tier-uid": "v3-tier-uid",
+	}
+
+	migrators := []ResourceMigrator{
+		{
+			Kind:         apiv3.KindTier,
+			V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
+			V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
+			GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
+		},
+		{
+			Kind:         apiv3.KindGlobalNetworkPolicy,
+			V3Object:     func() rtclient.Object { return &apiv3.GlobalNetworkPolicy{} },
+			V3ObjectList: func() rtclient.ObjectList { return &apiv3.GlobalNetworkPolicyList{} },
+			GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.GlobalNetworkPolicy).Spec },
+		},
+	}
+
+	if err := RemapOwnerReferences(ctx, fakeRT, uidMap, migrators); err != nil {
+		t.Fatalf("RemapOwnerReferences failed: %v", err)
+	}
+
+	// Verify the GNP's OwnerRef was remapped to the v3 tier UID.
+	gnp := &apiv3.GlobalNetworkPolicy{}
+	if err := fakeRT.Get(ctx, types.NamespacedName{Name: "test-deny"}, gnp); err != nil {
+		t.Fatalf("getting GNP: %v", err)
+	}
+	if len(gnp.OwnerReferences) != 1 {
+		t.Fatalf("expected 1 ownerRef, got %d", len(gnp.OwnerReferences))
+	}
+	if gnp.OwnerReferences[0].UID != "v3-tier-uid" {
+		t.Errorf("expected ownerRef UID to be remapped to v3-tier-uid, got %s", gnp.OwnerReferences[0].UID)
+	}
+
+	// Verify the native-owner GNP's OwnerRef was NOT remapped.
+	gnpNative := &apiv3.GlobalNetworkPolicy{}
+	if err := fakeRT.Get(ctx, types.NamespacedName{Name: "native-owner"}, gnpNative); err != nil {
+		t.Fatalf("getting native-owner GNP: %v", err)
+	}
+	if len(gnpNative.OwnerReferences) != 1 {
+		t.Fatalf("expected 1 ownerRef, got %d", len(gnpNative.OwnerReferences))
+	}
+	if gnpNative.OwnerReferences[0].UID != "ns-uid-unchanged" {
+		t.Errorf("expected native ownerRef UID to be preserved (ns-uid-unchanged), got %s", gnpNative.OwnerReferences[0].UID)
+	}
+}
+
+func TestRemapOwnerReferences_EmptyMap(t *testing.T) {
+	ctx := context.Background()
+	fakeRT := newTestRTClient(t)
+
+	// Should be a no-op with an empty UID map.
+	if err := RemapOwnerReferences(ctx, fakeRT, nil, nil); err != nil {
+		t.Fatalf("expected no error with empty map, got: %v", err)
+	}
+}
+
+func TestCheckConflicts(t *testing.T) {
+	ctx := context.Background()
+
+	bc := &mockBackendClient{
+		resources: map[string][]*model.KVPair{
+			apiv3.KindTier: {
+				{
+					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "matching"},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "matching"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+				},
+				{
+					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "conflicting"},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "conflicting"}, Spec: apiv3.TierSpec{Order: floatPtr(200)}},
+				},
+				{
+					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "missing"},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "missing"}, Spec: apiv3.TierSpec{Order: floatPtr(300)}},
+				},
+			},
+		},
+	}
+
+	fakeRT := newTestRTClient(t)
+	// Pre-create matching and conflicting tiers in v3.
+	if err := fakeRT.Create(ctx, &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "matching"},
+		Spec:       apiv3.TierSpec{Order: floatPtr(100)},
+	}); err != nil {
+		t.Fatalf("creating matching tier: %v", err)
+	}
+	if err := fakeRT.Create(ctx, &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "conflicting"},
+		Spec:       apiv3.TierSpec{Order: floatPtr(999)},
+	}); err != nil {
+		t.Fatalf("creating conflicting tier: %v", err)
+	}
+
+	migrator := testTierMigrator()
+	conflicts, err := CheckConflicts(ctx, bc, fakeRT, migrator)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Only "conflicting" should be reported; "matching" has same spec, "missing" doesn't exist.
+	if len(conflicts) != 1 {
+		t.Fatalf("expected 1 conflict, got %d: %v", len(conflicts), conflicts)
+	}
+	if conflicts[0].Name != "conflicting" {
+		t.Errorf("expected conflict on 'conflicting', got %s", conflicts[0].Name)
 	}
 }
 
