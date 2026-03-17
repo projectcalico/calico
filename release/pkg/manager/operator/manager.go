@@ -55,7 +55,12 @@ type OperatorManager struct {
 	// calicoDir is the absolute path to the root directory of the calico repository
 	calicoDir string
 
+	// calicoVersion is the version of calico to use for the operator. This is only used for hashreleases.
 	calicoVersion string
+
+	// pinnedComponentsFile is the path to the file containing the pinned components for the operator.
+	// This is used for hashreleases and supersedes using calicoVersion.
+	pinnedComponentsFile string
 
 	// image is the name of the operator image (e.g. tigera/operator)
 	image string
@@ -120,7 +125,10 @@ func (o *OperatorManager) Build() error {
 	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, r))
 	env = append(env, fmt.Sprintf("%s_IMAGE_PATH=%s", defaultProductEnvPrefix, i))
 	if o.isHashRelease {
-		if o.calicoVersion != "" {
+		if o.pinnedComponentsFile != "" {
+			env = append(env, fmt.Sprintf("%s_VERSIONS=%s", defaultProductEnvPrefix, o.pinnedComponentsFile))
+			logFields["pinned_components_file"] = o.pinnedComponentsFile
+		} else if o.calicoVersion != "" {
 			env = append(env, fmt.Sprintf("%s_VERSION=%s", defaultProductEnvPrefix, o.calicoVersion))
 			logFields["calico_version"] = o.calicoVersion
 		}
@@ -200,8 +208,13 @@ func (o *OperatorManager) PreBuildValidation() error {
 	if dirty {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them"))
 	}
-	if o.isHashRelease && (o.calicoVersion == "" || o.calicoDir == "") {
-		errStack = errors.Join(errStack, errors.New("hashrelease requires calico version and directory to be specified"))
+	if o.isHashRelease {
+		if o.calicoVersion == "" || o.pinnedComponentsFile == "" {
+			errStack = errors.Join(errStack, errors.New("hashrelease requires either a calico version or the pinned components file to be specified"))
+		}
+		if o.calicoDir == "" {
+			errStack = errors.Join(errStack, errors.New("hashrelease requires the calico directory to be specified"))
+		}
 	}
 	if !o.validateBranch {
 		return errStack
