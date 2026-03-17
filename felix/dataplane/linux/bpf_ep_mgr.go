@@ -1723,15 +1723,6 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		logrus.Info("BPF counters synced.")
 	})
 
-	m.applyProgramsToDirtyDataInterfaces()
-	m.updateWEPsInDataplane()
-	if m.bpfPolicyDebugEnabled {
-		m.removeDirtyPolicies()
-	}
-
-	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
-	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
-
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
 		// Update all existing IPs of dirty services
 		for svc := range m.dirtyServices.All() {
@@ -1741,6 +1732,41 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 			m.dirtyServices.Discard(svc)
 		}
 	}
+
+	return nil
+}
+
+// ApplyBPFPrograms attaches BPF programs to interfaces and updates related dataplane
+// state.  It is called from the main apply loop after IP sets have been written to
+// the dataplane, ensuring that policy rules referencing IP sets don't produce spurious
+// denies for newly-added workloads whose IPs are freshly added to IP sets.
+func (m *bpfEndpointManager) ApplyBPFPrograms() error {
+	m.applyProgramsToDirtyDataInterfaces()
+	m.updateWEPsInDataplane()
+	if m.bpfPolicyDebugEnabled {
+		m.removeDirtyPolicies()
+	}
+
+	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
+
+	// Copy data from old conntrack map to the new map.  Must happen after
+	// programs are applied above so that old programs are no longer writing
+	// to the old map.
+	m.copyDeltaOnce.Do(func() {
+		logrus.Info("Copy delta entries from old map to the new map")
+		var err error
+		if m.v6 != nil {
+			err = m.v6.CtMap.CopyDeltaFromOldMap()
+		}
+		if m.v4 != nil {
+			err = m.v4.CtMap.CopyDeltaFromOldMap()
+		}
+		if err != nil {
+			logrus.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+		}
+	})
+
+	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
 
 	if err := m.ifStateMap.ApplyAllChanges(); err != nil {
 		logrus.WithError(err).Warn("Failed to write updates to ifstate BPF map.")
@@ -1759,20 +1785,6 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		m.happyWEPsDirty = false
 	}
 	bpfHappyEndpointsGauge.Set(float64(len(m.happyWEPs)))
-	// Copy data from old map to the new map
-	m.copyDeltaOnce.Do(func() {
-		logrus.Info("Copy delta entries from old map to the new map")
-		var err error
-		if m.v6 != nil {
-			err = m.v6.CtMap.CopyDeltaFromOldMap()
-		}
-		if m.v4 != nil {
-			err = m.v4.CtMap.CopyDeltaFromOldMap()
-		}
-		if err != nil {
-			logrus.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
-		}
-	})
 
 	if m.dirtyIfaceNames.Len() == 0 {
 		if m.removeOldJumps {
