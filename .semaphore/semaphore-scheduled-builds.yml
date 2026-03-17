@@ -577,8 +577,6 @@ blocks:
       when: "true or change_in(['/e2e/**'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
       - Prerequisites
-    execution_time_limit:
-      hours: 4
     task:
       secrets:
         - name: banzai-secrets
