@@ -968,6 +968,29 @@ type FelixConfigurationSpec struct {
 	// run in network-policy mode only.
 	RouteSyncDisabled *bool `json:"routeSyncDisabled,omitempty"`
 
+	// Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
+	// values mean lower priority. [Default: 1024]
+	IPv4NormalRoutePriority *int `json:"ipv4NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+	// Route Priority value for an elevated priority Calico-programmed IPv4 route.  Note, higher
+	// values mean lower priority.  Elevated priority is used during VM live migration, and for
+	// optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
+	// [Default: 512]
+	IPv4ElevatedRoutePriority *int `json:"ipv4ElevatedRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+	// Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
+	// values mean lower priority. [Default: 1024]
+	IPv6NormalRoutePriority *int `json:"ipv6NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+	// Route Priority value for an elevated priority Calico-programmed IPv6 route.  Note, higher
+	// values mean lower priority.  Elevated priority is used during VM live migration, and for
+	// optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
+	// [Default: 512]
+	IPv6ElevatedRoutePriority *int `json:"ipv6ElevatedRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+	// LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
+	// VM live migration completes.  This allows routes to converge across the cluster before
+	// reverting to normal priority. [Default: 30s]
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$`
+	LiveMigrationRouteConvergenceTime *metav1.Duration `json:"liveMigrationRouteConvergenceTime,omitempty" configv1timescale:"seconds"`
+
 	// WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]
 	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`
 

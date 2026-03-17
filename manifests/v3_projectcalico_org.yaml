@@ -34919,6 +34919,14 @@ spec:
                 iptablesRefreshInterval:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                ipv4ElevatedRoutePriority:
+                  type: integer
+                ipv4NormalRoutePriority:
+                  type: integer
+                ipv6ElevatedRoutePriority:
+                  type: integer
+                ipv6NormalRoutePriority:
+                  type: integer
                 ipv6Support:
                   type: boolean
                 istioAmbientMode:
@@ -34938,6 +34946,9 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                liveMigrationRouteConvergenceTime:
+                  pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
                 logActionRateLimit:
                   pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
                   type: string
@@ -38476,18 +38487,18 @@ spec:
             - message: The 'kube-admin' tier must have default action 'Pass'
               reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'kube-admin' ? self.spec.defaultAction ==
-                'Pass' : true"
+                "self.metadata.name == 'kube-admin' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'kube-baseline' tier must have default action 'Pass'
               reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'kube-baseline' ? self.spec.defaultAction
-                == 'Pass' : true"
+                "self.metadata.name == 'kube-baseline' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'default' tier must have default action 'Deny'
               reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny'
-                : true"
+                "self.metadata.name == 'default' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Deny') : true"
       served: true
       storage: true
       subresources:

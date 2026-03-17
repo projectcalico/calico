@@ -184,6 +184,11 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		Expect(err).NotTo(HaveOccurred())
 		expectFinalizerPresent(cli, pool.Name)
 
+		// Sleep to ensure distinct creation timestamps. The pool controller uses
+		// creation time to break ties between overlapping pools with the same sort
+		// category, and k8s timestamps have second precision.
+		time.Sleep(1 * time.Second)
+
 		// Create a second IP pool that overlaps with the first.
 		overlappingPool := &v3.IPPool{
 			ObjectMeta: metav1.ObjectMeta{
@@ -199,6 +204,8 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		// Expect the second pool to have a status condition indicating it overlaps with another pool.
 		expectPoolNotAllocatable(cli, overlappingPool.Name)
 
+		time.Sleep(1 * time.Second)
+
 		// Create a third pool that also overlaps with both the first and second pools.
 		anotherOverlappingPool := &v3.IPPool{
 			ObjectMeta: metav1.ObjectMeta{
@@ -210,6 +217,8 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		}
 		err = cli.Create(context.Background(), anotherOverlappingPool)
 		Expect(err).NotTo(HaveOccurred())
+
+		time.Sleep(1 * time.Second)
 
 		// Create a fourth pool that does NOT overlap with the first pool, but does
 		// overlap with the second pool. We expect this pool to be allowed.
