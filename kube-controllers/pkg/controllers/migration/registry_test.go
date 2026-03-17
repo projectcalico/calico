@@ -19,12 +19,16 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"sync"
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	k8stesting "k8s.io/client-go/testing"
+	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakertclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -129,6 +133,39 @@ func (m *mockBackendClient) Update(ctx context.Context, kvp *model.KVPair) (*mod
 	return nil, fmt.Errorf("not found: %v", kvp.Key)
 }
 
+func newTestRTClient(t *testing.T) rtclient.Client {
+	t.Helper()
+	s := runtime.NewScheme()
+	if err := apiv3.AddToScheme(s); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
+	}
+	// Use a simple object tracker to avoid structured merge diff panics on
+	// types with []*int fields (e.g., IPAMBlock.Spec.Allocations).
+	codecs := serializer.NewCodecFactory(s)
+	tracker := k8stesting.NewObjectTracker(s, codecs.UniversalDecoder())
+	return fakertclient.NewClientBuilder().WithScheme(s).WithObjectTracker(tracker).Build()
+}
+
+func testTierMigrator() ResourceMigrator {
+	return ResourceMigrator{
+		Kind:         apiv3.KindTier,
+		Order:        OrderTiers,
+		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
+		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, c, apiv3.KindTier)
+		},
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
+			v1 := kvp.Value.(*apiv3.Tier)
+			return &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}, nil
+		},
+	}
+}
+
 func TestMigrateResourceType_NewResources(t *testing.T) {
 	ctx := context.Background()
 
@@ -147,38 +184,10 @@ func TestMigrateResourceType_NewResources(t *testing.T) {
 		},
 	}
 
-	var (
-		created []string
-		mu      sync.Mutex
-	)
-	migrator := ResourceMigrator{
-		Kind:  apiv3.KindTier,
-		Order: OrderTiers,
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, c, apiv3.KindTier)
-		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.Tier)
-			return &apiv3.Tier{
-				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
-				Spec:       *v1.Spec.DeepCopy(),
-			}, nil
-		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			mu.Lock()
-			created = append(created, obj.GetName())
-			mu.Unlock()
-			return nil
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			return nil, nil // doesn't exist
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return false
-		},
-	}
+	fakeRT := newTestRTClient(t)
+	migrator := testTierMigrator()
 
-	result, err := MigrateResourceType(ctx, bc, migrator)
+	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -191,9 +200,6 @@ func TestMigrateResourceType_NewResources(t *testing.T) {
 	}
 	if len(result.Conflicts) != 0 {
 		t.Errorf("expected 0 conflicts, got %d", len(result.Conflicts))
-	}
-	if len(created) != 2 {
-		t.Errorf("expected 2 creates, got %d", len(created))
 	}
 }
 
@@ -211,39 +217,18 @@ func TestMigrateResourceType_SkipExisting(t *testing.T) {
 		},
 	}
 
-	existingTier := &apiv3.Tier{
+	fakeRT := newTestRTClient(t)
+	// Pre-create a matching tier so migration skips it.
+	if err := fakeRT.Create(ctx, &apiv3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
 		Spec:       apiv3.TierSpec{Order: floatPtr(100)},
+	}); err != nil {
+		t.Fatalf("creating existing tier: %v", err)
 	}
 
-	migrator := ResourceMigrator{
-		Kind:  apiv3.KindTier,
-		Order: OrderTiers,
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, c, apiv3.KindTier)
-		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.Tier)
-			return &apiv3.Tier{
-				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
-				Spec:       *v1.Spec.DeepCopy(),
-			}, nil
-		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			t.Fatal("CreateV3 should not be called for existing matching resource")
-			return nil
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			return existingTier, nil
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			aSpec := a.(*apiv3.Tier).Spec
-			bSpec := b.(*apiv3.Tier).Spec
-			return *aSpec.Order == *bSpec.Order
-		},
-	}
+	migrator := testTierMigrator()
 
-	result, err := MigrateResourceType(ctx, bc, migrator)
+	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -270,39 +255,18 @@ func TestMigrateResourceType_Conflict(t *testing.T) {
 		},
 	}
 
-	existingTier := &apiv3.Tier{
+	fakeRT := newTestRTClient(t)
+	// Pre-create a conflicting tier with a different spec.
+	if err := fakeRT.Create(ctx, &apiv3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(999)}, // different
+		Spec:       apiv3.TierSpec{Order: floatPtr(999)},
+	}); err != nil {
+		t.Fatalf("creating conflicting tier: %v", err)
 	}
 
-	migrator := ResourceMigrator{
-		Kind:  apiv3.KindTier,
-		Order: OrderTiers,
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, c, apiv3.KindTier)
-		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.Tier)
-			return &apiv3.Tier{
-				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
-				Spec:       *v1.Spec.DeepCopy(),
-			}, nil
-		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			t.Fatal("CreateV3 should not be called when there's a conflict")
-			return nil
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			return existingTier, nil
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			aSpec := a.(*apiv3.Tier).Spec
-			bSpec := b.(*apiv3.Tier).Spec
-			return *aSpec.Order == *bSpec.Order
-		},
-	}
+	migrator := testTierMigrator()
 
-	result, err := MigrateResourceType(ctx, bc, migrator)
+	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -512,12 +476,15 @@ func TestMigrateIPAMBlock_Full(t *testing.T) {
 		},
 	}
 
-	// 2. Define a migrator that uses the real logic but a mock store for v3.
-	store := newInMemoryStore()
+	// 2. Define a migrator that uses the real logic with a fake RT client.
+	fakeRT := newTestRTClient(t)
 	migrator := ResourceMigrator{
-		Kind:   KindIPAMBlock,
+		Kind:         KindIPAMBlock,
+		V3Object:     func() rtclient.Object { return &apiv3.IPAMBlock{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.IPAMBlockList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.IPAMBlock).Spec },
 		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) { return listV1IPAMBlocks(ctx, c) },
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			v1 := kvp.Value.(*apiv3.IPAMBlock)
 			v3 := &apiv3.IPAMBlock{
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -526,15 +493,10 @@ func TestMigrateIPAMBlock_Full(t *testing.T) {
 			copyLabelsAndAnnotations(v1, v3)
 			return v3, nil
 		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error { store.create(obj); return nil },
-		GetV3:    func(ctx context.Context, name, ns string) (metav1.Object, error) { return store.get(name, ns), nil },
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.IPAMBlock).Spec, b.(*apiv3.IPAMBlock).Spec)
-		},
 	}
 
 	// 3. Run migration.
-	result, err := MigrateResourceType(ctx, bc, migrator)
+	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
 	if err != nil {
 		t.Fatalf("migration failed: %v", err)
 	}
@@ -543,11 +505,10 @@ func TestMigrateIPAMBlock_Full(t *testing.T) {
 	if result.Migrated != 1 {
 		t.Errorf("expected 1 migrated, got %d", result.Migrated)
 	}
-	v3Obj := store.get("192-168-1-0-26", "")
-	if v3Obj == nil {
-		t.Fatal("v3 IPAMBlock not found in store")
+	v3Block := &apiv3.IPAMBlock{}
+	if getErr := fakeRT.Get(ctx, types.NamespacedName{Name: "192-168-1-0-26"}, v3Block); getErr != nil {
+		t.Fatalf("v3 IPAMBlock not found: %v", getErr)
 	}
-	v3Block := v3Obj.(*apiv3.IPAMBlock)
 
 	// Verify all critical fields are preserved.
 	if v3Block.Spec.CIDR != "192.168.1.0/26" {
@@ -613,11 +574,14 @@ func TestMigrateIPAMHandle_Full(t *testing.T) {
 	}
 
 	// 2. Define migrator.
-	store := newInMemoryStore()
+	fakeRT := newTestRTClient(t)
 	migrator := ResourceMigrator{
-		Kind:   KindIPAMHandle,
+		Kind:         KindIPAMHandle,
+		V3Object:     func() rtclient.Object { return &apiv3.IPAMHandle{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.IPAMHandleList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.IPAMHandle).Spec },
 		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) { return listV1IPAMHandles(ctx, c) },
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			v1 := kvp.Value.(*apiv3.IPAMHandle)
 			v3 := &apiv3.IPAMHandle{
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -626,15 +590,10 @@ func TestMigrateIPAMHandle_Full(t *testing.T) {
 			copyLabelsAndAnnotations(v1, v3)
 			return v3, nil
 		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error { store.create(obj); return nil },
-		GetV3:    func(ctx context.Context, name, ns string) (metav1.Object, error) { return store.get(name, ns), nil },
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return reflect.DeepEqual(a.(*apiv3.IPAMHandle).Spec, b.(*apiv3.IPAMHandle).Spec)
-		},
 	}
 
 	// 3. Run migration.
-	result, err := MigrateResourceType(ctx, bc, migrator)
+	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
 	if err != nil {
 		t.Fatalf("migration failed: %v", err)
 	}
@@ -643,11 +602,10 @@ func TestMigrateIPAMHandle_Full(t *testing.T) {
 	if result.Migrated != 1 {
 		t.Errorf("expected 1 migrated, got %d", result.Migrated)
 	}
-	v3Obj := store.get("k8s-pod-network.abc-123", "")
-	if v3Obj == nil {
-		t.Fatal("v3 IPAMHandle not found in store")
+	v3Handle := &apiv3.IPAMHandle{}
+	if getErr := fakeRT.Get(ctx, types.NamespacedName{Name: "k8s-pod-network.abc-123"}, v3Handle); getErr != nil {
+		t.Fatalf("v3 IPAMHandle not found: %v", getErr)
 	}
-	v3Handle := v3Obj.(*apiv3.IPAMHandle)
 
 	if v3Handle.Spec.HandleID != v1Handle.HandleID {
 		t.Errorf("wrong HandleID: %s", v3Handle.Spec.HandleID)

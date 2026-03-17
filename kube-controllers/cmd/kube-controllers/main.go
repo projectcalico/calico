@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -31,6 +32,7 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"k8s.io/apiserver/pkg/storage/etcd3"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -38,6 +40,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	apiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
@@ -564,8 +567,24 @@ func (cc *controllerControl) InitControllers(
 			log.WithError(err).Fatal("Failed to create apiregistration client for migration controller")
 		}
 
-		dsmigration.RegisterOSSResources(v3c)
-		migrationController := dsmigration.NewController(ctx, k8sClientset, bc, v3c.ProjectcalicoV3(), dynClient, apiregCS.ApiregistrationV1())
+		migrationScheme := k8sruntime.NewScheme()
+		if err := apiv3.AddToScheme(migrationScheme); err != nil {
+			log.WithError(err).Fatal("Failed to add Calico v3 types to scheme for migration controller")
+		}
+		rtClient, err := rtclient.New(k8sconfig, rtclient.Options{Scheme: migrationScheme})
+		if err != nil {
+			log.WithError(err).Fatal("Failed to create controller-runtime client for migration controller")
+		}
+
+		dsmigration.RegisterOSSResources()
+		migrationController := dsmigration.NewController(dsmigration.ControllerConfig{
+			Ctx:           ctx,
+			K8sClient:     k8sClientset,
+			BackendClient: bc,
+			RTClient:      rtClient,
+			DynamicClient: dynClient,
+			APIRegClient:  apiregCS.ApiregistrationV1(),
+		})
 		cc.controllers["DatastoreMigration"] = migrationController
 	}
 

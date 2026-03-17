@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -29,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -49,71 +49,18 @@ func withTestRegistry(t *testing.T, migrators []ResourceMigrator) {
 	})
 }
 
-// inMemoryStore is a concurrency-safe in-memory store for v3 objects, used by
-// test migrators to simulate the v3 API server.
-type inMemoryStore struct {
-	mu      sync.Mutex
-	objects map[string]metav1.Object
-}
-
-func newInMemoryStore() *inMemoryStore {
-	return &inMemoryStore{objects: make(map[string]metav1.Object)}
-}
-
-func (s *inMemoryStore) key(name, namespace string) string {
-	if namespace != "" {
-		return namespace + "/" + name
-	}
-	return name
-}
-
-func (s *inMemoryStore) get(name, namespace string) metav1.Object {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.objects[s.key(name, namespace)]
-}
-
-func (s *inMemoryStore) create(obj metav1.Object) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Assign a deterministic UID based on the name so tests can verify UID mapping.
-	if obj.GetUID() == "" {
-		obj.SetUID(types.UID("v3-uid-" + obj.GetName()))
-	}
-	s.objects[s.key(obj.GetName(), obj.GetNamespace())] = obj
-}
-
-func (s *inMemoryStore) update(obj metav1.Object) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.objects[s.key(obj.GetName(), obj.GetNamespace())] = obj
-}
-
-func (s *inMemoryStore) list() []metav1.Object {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]metav1.Object, 0, len(s.objects))
-	for _, obj := range s.objects {
-		out = append(out, obj)
-	}
-	return out
-}
-
-func (s *inMemoryStore) delete(name, namespace string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.objects, s.key(name, namespace))
-}
-
-// tierMigrator creates a test ResourceMigrator for Tiers backed by the given store.
-func tierMigrator(store *inMemoryStore) ResourceMigrator {
+// tierMigrator creates a test ResourceMigrator for Tiers that uses the controller's rtClient.
+func tierMigrator() ResourceMigrator {
 	return ResourceMigrator{
-		Kind:  apiv3.KindTier,
-		Order: OrderTiers,
+		Kind:         apiv3.KindTier,
+		Order:        OrderTiers,
+		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
 		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
 			return listV1Resources(ctx, c, apiv3.KindTier)
 		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			v1 := kvp.Value.(*apiv3.Tier)
 			v3 := &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
@@ -122,44 +69,21 @@ func tierMigrator(store *inMemoryStore) ResourceMigrator {
 			copyLabelsAndAnnotations(v1, v3)
 			return v3, nil
 		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			store.create(obj)
-			return nil
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			return store.get(name, namespace), nil
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			aT := a.(*apiv3.Tier)
-			bT := b.(*apiv3.Tier)
-			if aT.Spec.Order == nil || bT.Spec.Order == nil {
-				return aT.Spec.Order == bT.Spec.Order
-			}
-			return *aT.Spec.Order == *bT.Spec.Order
-		},
-		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
-			return store.list(), nil
-		},
-		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			store.update(obj)
-			return nil
-		},
-		DeleteV3: func(ctx context.Context, name, namespace string) error {
-			store.delete(name, namespace)
-			return nil
-		},
 	}
 }
 
 // gnpMigrator creates a test ResourceMigrator for GlobalNetworkPolicies.
-func gnpMigrator(store *inMemoryStore) ResourceMigrator {
+func gnpMigrator() ResourceMigrator {
 	return ResourceMigrator{
-		Kind:  apiv3.KindGlobalNetworkPolicy,
-		Order: OrderPolicy,
+		Kind:         apiv3.KindGlobalNetworkPolicy,
+		Order:        OrderPolicy,
+		V3Object:     func() rtclient.Object { return &apiv3.GlobalNetworkPolicy{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.GlobalNetworkPolicyList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.GlobalNetworkPolicy).Spec },
 		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
 			return listV1Resources(ctx, c, apiv3.KindGlobalNetworkPolicy)
 		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			v1 := kvp.Value.(*apiv3.GlobalNetworkPolicy)
 			v3Name := migratedPolicyName(v1.Name, v1.Spec.Tier)
 			v3 := &apiv3.GlobalNetworkPolicy{
@@ -169,27 +93,14 @@ func gnpMigrator(store *inMemoryStore) ResourceMigrator {
 			copyLabelsAndAnnotations(v1, v3)
 			return v3, nil
 		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			store.create(obj)
-			return nil
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			return store.get(name, namespace), nil
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return a.(*apiv3.GlobalNetworkPolicy).Spec.Tier == b.(*apiv3.GlobalNetworkPolicy).Spec.Tier
-		},
-		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
-			return store.list(), nil
-		},
-		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
-			store.update(obj)
-			return nil
-		},
-		DeleteV3: func(ctx context.Context, name, namespace string) error {
-			store.delete(name, namespace)
-			return nil
-		},
+	}
+}
+
+// getFromRT is a helper to read a v3 object from the rtClient in tests.
+func getFromRT(t *testing.T, c *migrationController, obj rtclient.Object, name string) {
+	t.Helper()
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: name}, obj); err != nil {
+		t.Fatalf("getting %T %s from rtClient: %v", obj, name, err)
 	}
 }
 
@@ -220,11 +131,9 @@ func createAggregatedAPIService(t *testing.T, c *migrationController) {
 // Pending → (add finalizer) → (pre-validate) → Migrating → Converged → Complete,
 // with actual resource types registered and migrated.
 func TestLifecycle_FullMigration(t *testing.T) {
-	tierStore := newInMemoryStore()
-	gnpStore := newInMemoryStore()
 	withTestRegistry(t, []ResourceMigrator{
-		tierMigrator(tierStore),
-		gnpMigrator(gnpStore),
+		tierMigrator(),
+		gnpMigrator(),
 	})
 
 	tierUID := types.UID("v1-tier-security-uid")
@@ -339,41 +248,41 @@ func TestLifecycle_FullMigration(t *testing.T) {
 	}
 
 	// Verify tiers were migrated.
-	if tierStore.get("default", "") == nil {
+	tierDefault := &apiv3.Tier{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "default"}, tierDefault); getErr != nil {
 		t.Error("tier 'default' not found in v3 store")
 	}
-	if tierStore.get("security", "") == nil {
+	tierSecurity := &apiv3.Tier{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "security"}, tierSecurity); getErr != nil {
 		t.Error("tier 'security' not found in v3 store")
 	}
 
 	// Verify GNP names: default.test-deny-all → test-deny-all (prefix stripped).
-	if gnpStore.get("test-deny-all", "") == nil {
+	gnpDeny := &apiv3.GlobalNetworkPolicy{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "test-deny-all"}, gnpDeny); getErr != nil {
 		t.Error("GNP 'test-deny-all' not found (expected default. prefix stripped)")
 	}
 	// Non-default tier policy keeps its name.
-	if gnpStore.get("security.test-allow-dns", "") == nil {
+	gnpAllow := &apiv3.GlobalNetworkPolicy{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "security.test-allow-dns"}, gnpAllow); getErr != nil {
 		t.Error("GNP 'security.test-allow-dns' not found")
 	}
 
 	// Verify OwnerRef remapping: the GNP that had an ownerRef to the v1 security
 	// tier should now point to the v3 UID.
-	gnpObj := gnpStore.get("test-deny-all", "")
-	if gnpObj == nil {
-		t.Fatal("GNP 'test-deny-all' not in store for ownerref check")
-	}
-	ownerRefs := gnpObj.GetOwnerReferences()
+	ownerRefs := gnpDeny.GetOwnerReferences()
 	if len(ownerRefs) != 1 {
 		t.Fatalf("expected 1 ownerRef on GNP, got %d", len(ownerRefs))
 	}
-	v3TierUID := tierStore.get("security", "").GetUID()
+	v3TierUID := tierSecurity.GetUID()
 	if ownerRefs[0].UID != v3TierUID {
 		t.Errorf("expected GNP ownerRef UID to be remapped to v3 tier UID %s, got %s", v3TierUID, ownerRefs[0].UID)
 	}
 
 	// Verify v3 ClusterInformation was unlocked.
-	v3ci, err := c.v3Client.ClusterInformations().Get(c.ctx, clusterInfoName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("getting v3 ClusterInformation: %v", err)
+	v3ci := &apiv3.ClusterInformation{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: clusterInfoName}, v3ci); getErr != nil {
+		t.Fatalf("getting v3 ClusterInformation: %v", getErr)
 	}
 	if v3ci.Spec.DatastoreReady == nil || !*v3ci.Spec.DatastoreReady {
 		t.Error("expected v3 ClusterInformation DatastoreReady=true after Converged")
@@ -517,22 +426,25 @@ func TestLifecycle_APIServiceSaveRestore(t *testing.T) {
 // TestLifecycle_AbortCleansUpPartialV3Resources verifies that aborting a
 // migration deletes any v3 resources that were partially created.
 func TestLifecycle_AbortCleansUpPartialV3Resources(t *testing.T) {
-	tierStore := newInMemoryStore()
-	withTestRegistry(t, []ResourceMigrator{tierMigrator(tierStore)})
-
-	// Pre-populate the v3 store as if migration created some tiers
-	// (with the migration annotation that gets stamped during create).
-	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{
-		Name:        "default",
-		Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
-	}})
-	tierStore.create(&apiv3.Tier{ObjectMeta: metav1.ObjectMeta{
-		Name:        "security",
-		Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
-	}})
+	withTestRegistry(t, []ResourceMigrator{tierMigrator()})
 
 	cr := createTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
 	c, _ := testController(t, cr)
+
+	// Pre-populate the v3 store as if migration created some tiers
+	// (with the migration annotation that gets stamped during create).
+	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{
+		Name:        "default",
+		Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
+	}}); err != nil {
+		t.Fatalf("creating tier: %v", err)
+	}
+	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{
+		Name:        "security",
+		Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
+	}}); err != nil {
+		t.Fatalf("creating tier: %v", err)
+	}
 
 	bc := c.backendClient.(*mockBackendClient)
 	ready := false
@@ -550,10 +462,12 @@ func TestLifecycle_AbortCleansUpPartialV3Resources(t *testing.T) {
 	}
 
 	// Verify partial v3 resources were cleaned up.
-	if tierStore.get("default", "") != nil {
+	tierDefault := &apiv3.Tier{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "default"}, tierDefault); !kerrors.IsNotFound(err) {
 		t.Error("expected tier 'default' to be deleted during abort cleanup")
 	}
-	if tierStore.get("security", "") != nil {
+	tierSecurity := &apiv3.Tier{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "security"}, tierSecurity); !kerrors.IsNotFound(err) {
 		t.Error("expected tier 'security' to be deleted during abort cleanup")
 	}
 
@@ -623,18 +537,19 @@ func TestLifecycle_V1CRDCleanupOnDelete(t *testing.T) {
 // while in the Migrating phase, re-reconciling picks up where it left off
 // (idempotent: resources already migrated are skipped).
 func TestLifecycle_ResumeMidMigration(t *testing.T) {
-	tierStore := newInMemoryStore()
-	withTestRegistry(t, []ResourceMigrator{tierMigrator(tierStore)})
-
-	// Simulate restart: CR is in Migrating phase, one tier was already migrated.
-	tierStore.create(&apiv3.Tier{
-		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(100)},
-	})
+	withTestRegistry(t, []ResourceMigrator{tierMigrator()})
 
 	cr := createTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
 	v1CRD := createV1CRD("tiers.crd.projectcalico.org")
 	c, _ := testController(t, cr, v1CRD)
+
+	// Simulate restart: one tier was already migrated.
+	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.TierSpec{Order: floatPtr(100)},
+	}); err != nil {
+		t.Fatalf("pre-creating tier: %v", err)
+	}
 
 	bc := c.backendClient.(*mockBackendClient)
 	bc.resources = map[string][]*model.KVPair{
@@ -679,10 +594,12 @@ func TestLifecycle_ResumeMidMigration(t *testing.T) {
 	}
 
 	// Verify both tiers exist in the store.
-	if tierStore.get("default", "") == nil {
+	td := &apiv3.Tier{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "default"}, td); getErr != nil {
 		t.Error("tier 'default' not in v3 store")
 	}
-	if tierStore.get("security", "") == nil {
+	ts := &apiv3.Tier{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "security"}, ts); getErr != nil {
 		t.Error("tier 'security' not in v3 store")
 	}
 }
@@ -691,17 +608,18 @@ func TestLifecycle_ResumeMidMigration(t *testing.T) {
 // lifecycle: conflicts transition to WaitingForConflictResolution, and
 // resolving them transitions back to Migrating.
 func TestLifecycle_MigrationWithConflicts(t *testing.T) {
-	tierStore := newInMemoryStore()
-	withTestRegistry(t, []ResourceMigrator{tierMigrator(tierStore)})
-
-	// Pre-populate a conflicting v3 tier with a different spec.
-	tierStore.create(&apiv3.Tier{
-		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(999)},
-	})
+	withTestRegistry(t, []ResourceMigrator{tierMigrator()})
 
 	cr := createTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
 	c, _ := testController(t, cr)
+
+	// Pre-populate a conflicting v3 tier with a different spec.
+	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.TierSpec{Order: floatPtr(999)},
+	}); err != nil {
+		t.Fatalf("creating conflicting tier: %v", err)
+	}
 
 	bc := c.backendClient.(*mockBackendClient)
 	bc.resources = map[string][]*model.KVPair{
@@ -739,11 +657,15 @@ func TestLifecycle_MigrationWithConflicts(t *testing.T) {
 		t.Errorf("expected 1 conflict, got %d", dm.Status.Progress.Conflicts)
 	}
 
-	// Resolve the conflict.
-	tierStore.update(&apiv3.Tier{
-		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(100)}, // matches v1 now
-	})
+	// Resolve the conflict by updating the existing tier to match v1 spec.
+	existing := &apiv3.Tier{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "default"}, existing); getErr != nil {
+		t.Fatalf("getting tier for update: %v", getErr)
+	}
+	existing.Spec.Order = floatPtr(100)
+	if updateErr := c.rtClient.Update(c.ctx, existing); updateErr != nil {
+		t.Fatalf("updating tier: %v", updateErr)
+	}
 
 	// Reconcile should transition back to Migrating.
 	if err := c.reconcile(); err != nil {
@@ -763,8 +685,7 @@ func TestLifecycle_MigrationWithConflicts(t *testing.T) {
 // pointing to native K8s resources (e.g., Namespace) are preserved as-is
 // during migration — only Calico OwnerRefs get remapped.
 func TestLifecycle_OwnerRefRemapping_NativeOwner(t *testing.T) {
-	gnpStore := newInMemoryStore()
-	withTestRegistry(t, []ResourceMigrator{gnpMigrator(gnpStore)})
+	withTestRegistry(t, []ResourceMigrator{gnpMigrator()})
 
 	nsUID := types.UID("namespace-uid-12345")
 	cr := createTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
@@ -808,8 +729,8 @@ func TestLifecycle_OwnerRefRemapping_NativeOwner(t *testing.T) {
 	}
 
 	// Verify the native OwnerRef UID was preserved (not remapped).
-	gnp := gnpStore.get("my-policy", "")
-	if gnp == nil {
+	gnp := &apiv3.GlobalNetworkPolicy{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: "my-policy"}, gnp); getErr != nil {
 		t.Fatal("GNP 'my-policy' not found in v3 store")
 	}
 	ownerRefs := gnp.GetOwnerReferences()
@@ -828,8 +749,11 @@ func TestLifecycle_OwnerRefRemapping_NativeOwner(t *testing.T) {
 // migration transitions the CR to Failed.
 func TestLifecycle_MigrationError(t *testing.T) {
 	failingMigrator := ResourceMigrator{
-		Kind:  "FailType",
-		Order: OrderTiers,
+		Kind:         "FailType",
+		Order:        OrderTiers,
+		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
+		GetSpec:      func(obj rtclient.Object) any { return nil },
 		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
 			return nil, fmt.Errorf("simulated list failure")
 		},

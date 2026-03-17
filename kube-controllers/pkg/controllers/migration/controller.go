@@ -18,12 +18,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	calicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	apiregv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
+	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -71,24 +72,27 @@ const (
 	conditionReasonMigrationError   = "MigrationError"
 )
 
+// ControllerConfig holds all dependencies for creating the migration controller.
+type ControllerConfig struct {
+	Ctx           context.Context
+	K8sClient     kubernetes.Interface
+	BackendClient api.Client
+	RTClient      rtclient.Client
+	DynamicClient dynamic.Interface
+	APIRegClient  apiregv1client.ApiregistrationV1Interface
+}
+
 // NewController creates a new migration controller. It watches for DatastoreMigration CRs
 // and drives the v1-to-v3 CRD migration state machine.
-func NewController(
-	ctx context.Context,
-	k8sClient kubernetes.Interface,
-	backendClient api.Client,
-	v3Client calicov3.ProjectcalicoV3Interface,
-	dynamicClient dynamic.Interface,
-	apiregClient apiregv1client.ApiregistrationV1Interface,
-) controller.Controller {
+func NewController(cfg ControllerConfig) controller.Controller {
 	return &migrationController{
-		ctx:           ctx,
-		k8sClient:     k8sClient,
-		backendClient: backendClient,
-		v3Client:      v3Client,
-		dynamicClient: dynamicClient,
-		apiregClient:  apiregClient,
-		migClient:     newMigrationClient(dynamicClient),
+		ctx:           cfg.Ctx,
+		k8sClient:     cfg.K8sClient,
+		backendClient: cfg.BackendClient,
+		rtClient:      cfg.RTClient,
+		dynamicClient: cfg.DynamicClient,
+		apiregClient:  cfg.APIRegClient,
+		migClient:     newMigrationClient(cfg.DynamicClient),
 	}
 }
 
@@ -101,7 +105,7 @@ type migrationController struct {
 	ctx           context.Context
 	k8sClient     kubernetes.Interface
 	backendClient api.Client
-	v3Client      calicov3.ProjectcalicoV3Interface
+	rtClient      rtclient.Client
 	dynamicClient dynamic.Interface
 	apiregClient  apiregv1client.ApiregistrationV1Interface
 	migClient     *migrationClient
@@ -109,8 +113,8 @@ type migrationController struct {
 }
 
 func (m *migrationController) Run(stop chan struct{}) {
-	log.Info("Starting datastore migration controller")
-	defer log.Info("Stopping datastore migration controller")
+	logrus.Info("Starting datastore migration controller")
+	defer logrus.Info("Stopping datastore migration controller")
 
 	m.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
 	defer m.queue.ShutDown()
@@ -131,7 +135,7 @@ func (m *migrationController) Run(stop chan struct{}) {
 	}
 	_, err := informer.AddEventHandler(handler)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to add event handler to informer")
+		logrus.WithError(err).Fatal("Failed to add event handler to informer")
 		return
 	}
 
@@ -141,10 +145,10 @@ func (m *migrationController) Run(stop chan struct{}) {
 	go informer.Run(ctx.Done())
 
 	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
-		log.Error("Failed to sync informer cache")
+		logrus.Error("Failed to sync informer cache")
 		return
 	}
-	log.Info("Migration informer cache synced")
+	logrus.Info("Migration informer cache synced")
 
 	go func() {
 		<-stop
@@ -158,7 +162,7 @@ func (m *migrationController) Run(stop chan struct{}) {
 func (m *migrationController) enqueue(obj interface{}) {
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
-		log.WithError(err).Error("Failed to get key for object")
+		logrus.WithError(err).Error("Failed to get key for object")
 		return
 	}
 	m.queue.Add(key)
@@ -172,7 +176,7 @@ func (m *migrationController) processNextWorkItem() bool {
 	defer m.queue.Done(key)
 
 	if err := m.reconcile(); err != nil {
-		log.WithError(err).Error("Migration reconcile error")
+		logrus.WithError(err).Error("Migration reconcile error")
 		m.queue.AddRateLimited(key)
 		return true
 	}
@@ -190,7 +194,7 @@ func (m *migrationController) reconcile() error {
 		return fmt.Errorf("getting DatastoreMigration: %w", err)
 	}
 
-	logCtx := log.WithFields(log.Fields{
+	logCtx := logrus.WithFields(logrus.Fields{
 		"name":  dm.Name,
 		"phase": dm.Status.Phase,
 	})
@@ -227,7 +231,7 @@ func (m *migrationController) reconcile() error {
 }
 
 // handlePending validates prerequisites, adds the finalizer, and transitions to Migrating.
-func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigration) error {
+func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration is pending, validating prerequisites")
 
 	// Add the finalizer if not already present.
@@ -303,7 +307,7 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 			break
 		}
 	}
-	logCtx.WithFields(log.Fields{
+	logCtx.WithFields(logrus.Fields{
 		"installNamespace": installNamespace,
 		"installType":      installType,
 	}).Info("Detected installation details")
@@ -313,7 +317,7 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 	migrators = GetRegistry()
 	preCheckConflicts := 0
 	for _, migrator := range migrators {
-		if migrator.ListV1 == nil || migrator.Convert == nil || migrator.GetV3 == nil || migrator.SpecsEqual == nil {
+		if migrator.ListV1 == nil || migrator.Convert == nil || migrator.V3Object == nil || migrator.GetSpec == nil {
 			continue
 		}
 		v1List, err := migrator.ListV1(m.ctx, m.backendClient)
@@ -326,13 +330,13 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 			if err != nil {
 				continue
 			}
-			existing, err := migrator.GetV3(m.ctx, v3Obj.GetName(), v3Obj.GetNamespace())
+			existing, err := getV3Object(m.ctx, m.rtClient, migrator, v3Obj.GetName(), v3Obj.GetNamespace())
 			if err != nil || existing == nil {
 				continue
 			}
-			if !migrator.SpecsEqual(v3Obj, existing) {
+			if !reflect.DeepEqual(migrator.GetSpec(v3Obj), migrator.GetSpec(existing)) {
 				preCheckConflicts++
-				logCtx.WithFields(log.Fields{
+				logCtx.WithFields(logrus.Fields{
 					"kind": migrator.Kind,
 					"name": v3Obj.GetName(),
 				}).Warn("Pre-check: v3 resource exists with different spec (will be reported as conflict during migration)")
@@ -352,7 +356,7 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 }
 
 // handleMigrating runs the core migration logic.
-func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMigration) error {
+func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration in progress")
 	dm.Status.Message = "Migrating resources"
 
@@ -392,7 +396,7 @@ func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 		}
 
 		typeStart := time.Now()
-		result, err := MigrateResourceType(m.ctx, m.backendClient, migrator)
+		result, err := MigrateResourceType(m.ctx, m.backendClient, m.rtClient, migrator)
 		migrationTypeDuration.WithLabelValues(migrator.Kind).Observe(time.Since(typeStart).Seconds())
 		if err != nil {
 			migrationResourceErrors.WithLabelValues(migrator.Kind).Inc()
@@ -427,7 +431,7 @@ func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 	dm.Status.Progress.CurrentType = ""
 
 	// Second pass: remap OwnerReference UIDs that point to Calico resources.
-	if err := RemapOwnerReferences(m.ctx, uidMap, migrators); err != nil {
+	if err := RemapOwnerReferences(m.ctx, m.rtClient, uidMap, migrators); err != nil {
 		m.setFailedStatus(dm, fmt.Sprintf("failed remapping OwnerReferences: %v", err))
 		return m.updateStatus(dm)
 	}
@@ -474,13 +478,13 @@ func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 // handleWaiting re-checks all previously conflicting resource types by
 // re-running CheckConflicts against the registry. If no conflicts remain,
 // it transitions back to Migrating to complete the migration.
-func (m *migrationController) handleWaiting(logCtx *log.Entry, dm *DatastoreMigration) error {
+func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Re-checking conflicts")
 
 	migrators := GetRegistry()
 	var remaining []ConflictInfo
 	for _, migrator := range migrators {
-		conflicts, err := CheckConflicts(m.ctx, m.backendClient, migrator)
+		conflicts, err := CheckConflicts(m.ctx, m.backendClient, m.rtClient, migrator)
 		if err != nil {
 			logCtx.WithError(err).WithField("kind", migrator.Kind).Warn("Failed to check conflicts")
 			remaining = append(remaining, ConflictInfo{Kind: migrator.Kind, Name: "unknown (check failed)"})
@@ -504,7 +508,7 @@ func (m *migrationController) handleWaiting(logCtx *log.Entry, dm *DatastoreMigr
 // handleConverged waits for all components to switch to the v3 API group
 // before transitioning to Complete. It checks the calico-node DaemonSet for
 // the CALICO_API_GROUP env var and verifies the rollout is fully complete.
-func (m *migrationController) handleConverged(logCtx *log.Entry, dm *DatastoreMigration) error {
+func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	ds, err := m.k8sClient.AppsV1().DaemonSets("calico-system").Get(m.ctx, "calico-node", metav1.GetOptions{})
 	if err != nil {
 		logCtx.WithError(err).Info("Failed to get calico-node DaemonSet, will retry")
@@ -534,7 +538,7 @@ func (m *migrationController) handleConverged(logCtx *log.Entry, dm *DatastoreMi
 		return m.updateStatus(dm)
 	}
 	if ds.Status.UpdatedNumberScheduled != ds.Status.DesiredNumberScheduled {
-		logCtx.WithFields(log.Fields{
+		logCtx.WithFields(logrus.Fields{
 			"updatedNumberScheduled": ds.Status.UpdatedNumberScheduled,
 			"desiredNumberScheduled": ds.Status.DesiredNumberScheduled,
 		}).Info("Waiting for calico-node DaemonSet rollout to complete")
@@ -557,7 +561,7 @@ func (m *migrationController) handleConverged(logCtx *log.Entry, dm *DatastoreMi
 }
 
 // handleDeletion runs the finalizer logic when the DatastoreMigration CR is being deleted.
-func (m *migrationController) handleDeletion(logCtx *log.Entry, dm *DatastoreMigration) error {
+func (m *migrationController) handleDeletion(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	if !hasFinalizer(dm) {
 		return nil
 	}
@@ -571,7 +575,7 @@ func (m *migrationController) handleDeletion(logCtx *log.Entry, dm *DatastoreMig
 // handleCompletedCleanup deletes v1 CRDs once the DatastoreMigration object
 // has been deleted and is finalizing. If this errors, the workqueue will
 // re-enqueue the item and retry since the finalizer is still present.
-func (m *migrationController) handleCompletedCleanup(logCtx *log.Entry, dm *DatastoreMigration) error {
+func (m *migrationController) handleCompletedCleanup(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration complete, cleaning up v1 CRDs")
 
 	// List all CRDs in the crd.projectcalico.org group and delete them.
@@ -602,7 +606,7 @@ func (m *migrationController) handleCompletedCleanup(logCtx *log.Entry, dm *Data
 
 // handleAbort restores the cluster to pre-migration state when the CR is deleted
 // before migration completes.
-func (m *migrationController) handleAbort(logCtx *log.Entry, dm *DatastoreMigration) error {
+func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration incomplete, aborting and restoring pre-migration state")
 
 	// Step 1: Delete partial v3 resources that were created during migration.
@@ -619,7 +623,8 @@ func (m *migrationController) handleAbort(logCtx *log.Entry, dm *DatastoreMigrat
 
 	// Step 3: Delete the v3 ClusterInformation if it was created with
 	// DatastoreReady=false, so components don't stay paused after restore.
-	if err := m.v3Client.ClusterInformations().Delete(m.ctx, clusterInfoName, metav1.DeleteOptions{}); err != nil {
+	ciObj := &apiv3.ClusterInformation{ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName}}
+	if err := m.rtClient.Delete(m.ctx, ciObj); err != nil {
 		if !kerrors.IsNotFound(err) {
 			logCtx.WithError(err).Warn("Failed to delete v3 ClusterInformation during abort")
 		}
@@ -638,37 +643,36 @@ func (m *migrationController) handleAbort(logCtx *log.Entry, dm *DatastoreMigrat
 
 // cleanupPartialV3Resources deletes v3 resources that were created during
 // migration. This is best-effort: failures are logged but don't block the abort.
-func (m *migrationController) cleanupPartialV3Resources(logCtx *log.Entry) {
+func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry) {
 	migrators := GetRegistry()
 	for _, migrator := range migrators {
-		if migrator.ListV3 == nil || migrator.DeleteV3 == nil {
+		if migrator.V3ObjectList == nil {
 			continue
 		}
-		v3List, err := migrator.ListV3(m.ctx)
-		if err != nil {
+		list := migrator.V3ObjectList()
+		if err := m.rtClient.List(m.ctx, list); err != nil {
 			logCtx.WithError(err).WithField("kind", migrator.Kind).Warn("Failed to list v3 resources for cleanup")
 			continue
 		}
+		items := extractItems(list)
 		deleted := 0
-		for _, obj := range v3List {
+		for _, obj := range items {
 			// Only delete resources that were created by migration, not
 			// pre-existing v3 resources.
 			annotations := obj.GetAnnotations()
 			if annotations == nil || annotations[migratedByAnnotation] == "" {
 				continue
 			}
-			name := obj.GetName()
-			ns := obj.GetNamespace()
-			if err := migrator.DeleteV3(m.ctx, name, ns); err != nil {
+			if err := m.rtClient.Delete(m.ctx, obj); err != nil {
 				if !kerrors.IsNotFound(err) {
-					logCtx.WithError(err).WithFields(log.Fields{"kind": migrator.Kind, "name": name, "namespace": ns}).Warn("Failed to delete v3 resource during abort")
+					logCtx.WithError(err).WithFields(logrus.Fields{"kind": migrator.Kind, "name": obj.GetName(), "namespace": obj.GetNamespace()}).Warn("Failed to delete v3 resource during abort")
 				}
 				continue
 			}
 			deleted++
 		}
 		if deleted > 0 {
-			logCtx.WithFields(log.Fields{"kind": migrator.Kind, "deleted": deleted}).Info("Deleted partial v3 resources")
+			logCtx.WithFields(logrus.Fields{"kind": migrator.Kind, "deleted": deleted}).Info("Deleted partial v3 resources")
 		}
 	}
 }
@@ -676,7 +680,7 @@ func (m *migrationController) cleanupPartialV3Resources(logCtx *log.Entry) {
 // saveAndDeleteAPIService saves the current APIService to an annotation on the
 // DatastoreMigration CR, then deletes it. If the APIService is already gone
 // (e.g., controller restarted mid-migration), this is a no-op.
-func (m *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *DatastoreMigration) error {
+func (m *migrationController) saveAndDeleteAPIService(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	apiSvc, err := m.apiregClient.APIServices().Get(m.ctx, apiServiceName, metav1.GetOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
@@ -731,7 +735,7 @@ func (m *migrationController) saveAndDeleteAPIService(logCtx *log.Entry, dm *Dat
 }
 
 // restoreAPIService recreates the aggregated APIService from the saved annotation.
-func (m *migrationController) restoreAPIService(logCtx *log.Entry, dm *DatastoreMigration) error {
+func (m *migrationController) restoreAPIService(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	// Check if an aggregated APIService already exists (e.g., operator recreated it).
 	existing, err := m.apiregClient.APIServices().Get(m.ctx, apiServiceName, metav1.GetOptions{})
 	if err == nil {
@@ -781,7 +785,7 @@ func (m *migrationController) restoreAPIService(logCtx *log.Entry, dm *Datastore
 // DatastoreReady=false to signal components to pause and retain cached dataplane state.
 // When creating the v3 ClusterInformation, it copies the full spec from the v1
 // resource so that fields like ClusterGUID, ClusterType, and CalicoVersion are preserved.
-func (m *migrationController) lockDatastore(logCtx *log.Entry) error {
+func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 	// Read the v1 ClusterInformation to use as the base for the v3 resource.
 	ready := false
 	v1Key := model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName}
@@ -804,12 +808,12 @@ func (m *migrationController) lockDatastore(logCtx *log.Entry) error {
 		}
 	}
 
-	existing, err := m.v3Client.ClusterInformations().Get(m.ctx, clusterInfoName, metav1.GetOptions{})
+	existing := &apiv3.ClusterInformation{}
+	err = m.rtClient.Get(m.ctx, types.NamespacedName{Name: clusterInfoName}, existing)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			_, err = m.v3Client.ClusterInformations().Create(m.ctx, ci, metav1.CreateOptions{})
-			if err != nil {
-				return fmt.Errorf("creating v3 ClusterInformation: %w", err)
+			if createErr := m.rtClient.Create(m.ctx, ci); createErr != nil {
+				return fmt.Errorf("creating v3 ClusterInformation: %w", createErr)
 			}
 			logCtx.Info("Created v3 ClusterInformation with DatastoreReady=false")
 		} else {
@@ -817,9 +821,8 @@ func (m *migrationController) lockDatastore(logCtx *log.Entry) error {
 		}
 	} else if existing.Spec.DatastoreReady == nil || *existing.Spec.DatastoreReady {
 		existing.Spec.DatastoreReady = &ready
-		_, err = m.v3Client.ClusterInformations().Update(m.ctx, existing, metav1.UpdateOptions{})
-		if err != nil {
-			return fmt.Errorf("updating v3 ClusterInformation: %w", err)
+		if updateErr := m.rtClient.Update(m.ctx, existing); updateErr != nil {
+			return fmt.Errorf("updating v3 ClusterInformation: %w", updateErr)
 		}
 		logCtx.Info("Set DatastoreReady=false on v3 ClusterInformation")
 	} else {
@@ -842,16 +845,15 @@ func (m *migrationController) lockDatastore(logCtx *log.Entry) error {
 // block CNI ADD/DEL operations. This prevents IPAM leaks during the rollout
 // window — CNI operations retry until the component restarts with v3 mode,
 // at which point they read the unlocked v3 ClusterInformation.
-func (m *migrationController) unlockDatastore(logCtx *log.Entry) error {
-	existing, err := m.v3Client.ClusterInformations().Get(m.ctx, clusterInfoName, metav1.GetOptions{})
-	if err != nil {
+func (m *migrationController) unlockDatastore(logCtx *logrus.Entry) error {
+	existing := &apiv3.ClusterInformation{}
+	if err := m.rtClient.Get(m.ctx, types.NamespacedName{Name: clusterInfoName}, existing); err != nil {
 		return fmt.Errorf("getting v3 ClusterInformation for unlock: %w", err)
 	}
 
 	ready := true
 	existing.Spec.DatastoreReady = &ready
-	_, err = m.v3Client.ClusterInformations().Update(m.ctx, existing, metav1.UpdateOptions{})
-	if err != nil {
+	if err := m.rtClient.Update(m.ctx, existing); err != nil {
 		return fmt.Errorf("unlocking v3 datastore: %w", err)
 	}
 	logCtx.Info("Set DatastoreReady=true on v3 ClusterInformation (v1 remains locked)")
@@ -861,7 +863,7 @@ func (m *migrationController) unlockDatastore(logCtx *log.Entry) error {
 
 // setV1ClusterInfoReady sets DatastoreReady on the v1 ClusterInformation via the
 // libcalico-go backend client. If the v1 resource doesn't exist, this is a no-op.
-func (m *migrationController) setV1ClusterInfoReady(logCtx *log.Entry, ready bool) error {
+func (m *migrationController) setV1ClusterInfoReady(logCtx *logrus.Entry, ready bool) error {
 	key := model.ResourceKey{
 		Kind: apiv3.KindClusterInformation,
 		Name: clusterInfoName,

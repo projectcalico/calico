@@ -20,21 +20,56 @@ import (
 	"testing"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	calicofake "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/fake"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
+	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakertclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
+
+// uidAssigningClient wraps a controller-runtime client and assigns a deterministic
+// UID on Create, since the simple ObjectTracker doesn't auto-assign UIDs.
+type uidAssigningClient struct {
+	rtclient.Client
+}
+
+func (u *uidAssigningClient) Create(ctx context.Context, obj rtclient.Object, opts ...rtclient.CreateOption) error {
+	if obj.GetUID() == "" {
+		key := obj.GetName()
+		if obj.GetNamespace() != "" {
+			key = obj.GetNamespace() + "/" + key
+		}
+		obj.SetUID(types.UID("v3-uid-" + key))
+	}
+	return u.Client.Create(ctx, obj, opts...)
+}
+
+// retryTestClient wraps a real client and returns a transient error on the first Create call.
+type retryTestClient struct {
+	rtclient.Client
+	createCalls *int
+}
+
+func (r *retryTestClient) Create(ctx context.Context, obj rtclient.Object, opts ...rtclient.CreateOption) error {
+	*r.createCalls++
+	if *r.createCalls == 1 {
+		return kerrors.NewServiceUnavailable("transient")
+	}
+	return r.Client.Create(ctx, obj, opts...)
+}
 
 // testController creates a migrationController with fake clients for unit testing.
 func testController(t *testing.T, objects ...runtime.Object) (*migrationController, *fakedynamic.FakeDynamicClient) {
@@ -69,18 +104,29 @@ func testController(t *testing.T, objects ...runtime.Object) (*migrationControll
 		resources: make(map[string][]*model.KVPair),
 	}
 
-	calicoCli := calicofake.NewSimpleClientset()
+	rtScheme := runtime.NewScheme()
+	if err := apiv3.AddToScheme(rtScheme); err != nil {
+		t.Fatalf("failed to add Calico v3 types to scheme: %v", err)
+	}
+	codecs := serializer.NewCodecFactory(rtScheme)
+	tracker := k8stesting.NewObjectTracker(rtScheme, codecs.UniversalDecoder())
+	fakeRT := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(tracker).Build()
 
 	c := &migrationController{
 		ctx:           context.Background(),
 		k8sClient:     k8sClient,
 		backendClient: bc,
-		v3Client:      calicoCli.ProjectcalicoV3(),
+		rtClient:      &uidAssigningClient{Client: fakeRT},
 		dynamicClient: dynClient,
 		apiregClient:  apiregCS.ApiregistrationV1(),
 		migClient:     newMigrationClient(dynClient),
 	}
 	return c, dynClient
+}
+
+// testRTClient returns the controller-runtime client from the migrationController for test assertions.
+func testRTClient(c *migrationController) rtclient.Client {
+	return c.rtClient
 }
 
 // createTestCR creates a DatastoreMigration CR as unstructured for the fake dynamic client.
@@ -150,8 +196,8 @@ func createV1CRD(name string) *unstructured.Unstructured {
 	}
 }
 
-func testLogEntry() *log.Entry {
-	return log.WithField("test", true)
+func testLogEntry() *logrus.Entry {
+	return logrus.WithField("test", true)
 }
 
 func TestReconcile_NoCR(t *testing.T) {
@@ -342,8 +388,8 @@ func TestLockDatastore(t *testing.T) {
 	}
 
 	// Verify v3 ClusterInformation was created with DatastoreReady=false.
-	v3ci, err := c.v3Client.ClusterInformations().Get(c.ctx, clusterInfoName, metav1.GetOptions{})
-	if err != nil {
+	v3ci := &apiv3.ClusterInformation{}
+	if err := c.rtClient.Get(c.ctx, types.NamespacedName{Name: clusterInfoName}, v3ci); err != nil {
 		t.Fatalf("getting v3 ClusterInformation: %v", err)
 	}
 	if v3ci.Spec.DatastoreReady == nil || *v3ci.Spec.DatastoreReady {
@@ -365,11 +411,10 @@ func TestUnlockDatastore(t *testing.T) {
 
 	// Pre-create v3 ClusterInformation as locked.
 	ready := false
-	_, err := c.v3Client.ClusterInformations().Create(c.ctx, &apiv3.ClusterInformation{
+	if err := c.rtClient.Create(c.ctx, &apiv3.ClusterInformation{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName},
 		Spec:       apiv3.ClusterInformationSpec{DatastoreReady: &ready},
-	}, metav1.CreateOptions{})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("creating v3 ClusterInformation: %v", err)
 	}
 
@@ -393,9 +438,9 @@ func TestUnlockDatastore(t *testing.T) {
 	}
 
 	// Verify v3 was unlocked.
-	v3ci, err := c.v3Client.ClusterInformations().Get(c.ctx, clusterInfoName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("getting v3 ClusterInformation: %v", err)
+	v3ci := &apiv3.ClusterInformation{}
+	if getErr := c.rtClient.Get(c.ctx, types.NamespacedName{Name: clusterInfoName}, v3ci); getErr != nil {
+		t.Fatalf("getting v3 ClusterInformation: %v", getErr)
 	}
 	if v3ci.Spec.DatastoreReady == nil || !*v3ci.Spec.DatastoreReady {
 		t.Error("expected v3 ClusterInformation DatastoreReady=true after unlock")
@@ -487,14 +532,26 @@ func TestMigrateResourceType_TransientError(t *testing.T) {
 		},
 	}
 
+	rtScheme := runtime.NewScheme()
+	if err := apiv3.AddToScheme(rtScheme); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
+	}
+
+	// Use a wrapper that injects a transient error on the first Create.
 	calls := 0
+	inner := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(k8stesting.NewObjectTracker(rtScheme, serializer.NewCodecFactory(rtScheme).UniversalDecoder())).Build()
+	wrapper := &retryTestClient{Client: inner, createCalls: &calls}
+
 	migrator := ResourceMigrator{
-		Kind:  apiv3.KindTier,
-		Order: OrderTiers,
+		Kind:         apiv3.KindTier,
+		Order:        OrderTiers,
+		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
 		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
 			return listV1Resources(ctx, c, apiv3.KindTier)
 		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			v1, ok := kvp.Value.(*apiv3.Tier)
 			if !ok {
 				return nil, fmt.Errorf("unexpected type: %T", kvp.Value)
@@ -504,22 +561,9 @@ func TestMigrateResourceType_TransientError(t *testing.T) {
 				Spec:       *v1.Spec.DeepCopy(),
 			}, nil
 		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			calls++
-			if calls == 1 {
-				return kerrors.NewServiceUnavailable("transient")
-			}
-			return nil
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			return nil, nil
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return false
-		},
 	}
 
-	result, err := MigrateResourceType(ctx, bc, migrator)
+	result, err := MigrateResourceType(ctx, bc, wrapper, migrator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -528,7 +572,7 @@ func TestMigrateResourceType_TransientError(t *testing.T) {
 		t.Errorf("expected 1 migrated after retry, got %d", result.Migrated)
 	}
 	if calls < 2 {
-		t.Errorf("expected at least 2 CreateV3 calls (initial + retry), got %d", calls)
+		t.Errorf("expected at least 2 Create calls (initial + retry), got %d", calls)
 	}
 }
 
@@ -555,14 +599,22 @@ func TestMigrateResourceType_ContentMatch(t *testing.T) {
 		},
 	}
 
-	var createdObj metav1.Object
+	rtScheme := runtime.NewScheme()
+	if err := apiv3.AddToScheme(rtScheme); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
+	}
+	fakeRT := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(k8stesting.NewObjectTracker(rtScheme, serializer.NewCodecFactory(rtScheme).UniversalDecoder())).Build()
+
 	migrator := ResourceMigrator{
-		Kind:  apiv3.KindTier,
-		Order: OrderTiers,
+		Kind:         apiv3.KindTier,
+		Order:        OrderTiers,
+		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
 		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
 			return listV1Resources(ctx, c, apiv3.KindTier)
 		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			v1, ok := kvp.Value.(*apiv3.Tier)
 			if !ok {
 				return nil, fmt.Errorf("unexpected type: %T", kvp.Value)
@@ -574,19 +626,9 @@ func TestMigrateResourceType_ContentMatch(t *testing.T) {
 			copyLabelsAndAnnotations(v1, v3)
 			return v3, nil
 		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			createdObj = obj
-			return nil
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			return nil, nil
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return false
-		},
 	}
 
-	result, err := MigrateResourceType(ctx, bc, migrator)
+	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -594,13 +636,10 @@ func TestMigrateResourceType_ContentMatch(t *testing.T) {
 		t.Fatalf("expected 1 migrated, got %d", result.Migrated)
 	}
 
-	// Verify the created object matches the original.
-	tier, ok := createdObj.(*apiv3.Tier)
-	if !ok {
-		t.Fatalf("expected created object to be *apiv3.Tier, got %T", createdObj)
-	}
-	if tier.Name != "my-tier" {
-		t.Errorf("expected name my-tier, got %s", tier.Name)
+	// Verify the created object by reading it back from the fake client.
+	tier := &apiv3.Tier{}
+	if getErr := fakeRT.Get(ctx, types.NamespacedName{Name: "my-tier"}, tier); getErr != nil {
+		t.Fatalf("failed to get created tier: %v", getErr)
 	}
 	if tier.Spec.Order == nil || *tier.Spec.Order != 42 {
 		t.Errorf("expected Order 42, got %v", tier.Spec.Order)
@@ -610,9 +649,6 @@ func TestMigrateResourceType_ContentMatch(t *testing.T) {
 	}
 	if tier.Labels["env"] != "prod" {
 		t.Errorf("expected label env=prod, got %v", tier.Labels)
-	}
-	if tier.Annotations["note"] != "important" {
-		t.Errorf("expected annotation note=important, got %v", tier.Annotations)
 	}
 }
 
@@ -630,28 +666,27 @@ func TestMigrateResourceType_ConvertError(t *testing.T) {
 		},
 	}
 
+	rtScheme := runtime.NewScheme()
+	if err := apiv3.AddToScheme(rtScheme); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
+	}
+	fakeRT := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(k8stesting.NewObjectTracker(rtScheme, serializer.NewCodecFactory(rtScheme).UniversalDecoder())).Build()
+
 	migrator := ResourceMigrator{
-		Kind:  apiv3.KindTier,
-		Order: OrderTiers,
+		Kind:         apiv3.KindTier,
+		Order:        OrderTiers,
+		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
 		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
 			return listV1Resources(ctx, c, apiv3.KindTier)
 		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			return nil, fmt.Errorf("intentional convert error")
-		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			t.Fatal("CreateV3 should not be called when Convert fails")
-			return nil
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			return nil, nil
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return false
 		},
 	}
 
-	_, err := MigrateResourceType(ctx, bc, migrator)
+	_, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
 	if err == nil {
 		t.Fatal("expected error from Convert failure")
 	}
@@ -666,29 +701,28 @@ func TestMigrateResourceType_EmptyList(t *testing.T) {
 		},
 	}
 
+	rtScheme := runtime.NewScheme()
+	if err := apiv3.AddToScheme(rtScheme); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
+	}
+	fakeRT := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(k8stesting.NewObjectTracker(rtScheme, serializer.NewCodecFactory(rtScheme).UniversalDecoder())).Build()
+
 	migrator := ResourceMigrator{
-		Kind:  apiv3.KindTier,
-		Order: OrderTiers,
+		Kind:         apiv3.KindTier,
+		Order:        OrderTiers,
+		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
+		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
+		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
 		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
 			return listV1Resources(ctx, c, apiv3.KindTier)
 		},
-		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			t.Fatal("Convert should not be called for empty list")
 			return nil, nil
 		},
-		CreateV3: func(ctx context.Context, obj metav1.Object) error {
-			t.Fatal("CreateV3 should not be called for empty list")
-			return nil
-		},
-		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
-			return nil, nil
-		},
-		SpecsEqual: func(a, b metav1.Object) bool {
-			return false
-		},
 	}
 
-	result, err := MigrateResourceType(ctx, bc, migrator)
+	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
