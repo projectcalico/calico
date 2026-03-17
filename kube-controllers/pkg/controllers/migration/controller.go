@@ -238,6 +238,16 @@ func (m *migrationController) handlePending(logCtx *log.Entry, dm *DatastoreMigr
 		}
 	}
 
+	// Pre-validation: verify we have the RBAC permissions needed for migration.
+	// The operator creates the migration ClusterRole asynchronously, so we may need
+	// to wait for it on the first reconcile.
+	testGVR := schema.GroupVersionResource{Group: "crd.projectcalico.org", Version: "v1", Resource: "felixconfigurations"}
+	_, err := m.dynamicClient.Resource(testGVR).List(m.ctx, metav1.ListOptions{Limit: 1})
+	if err != nil && kerrors.IsForbidden(err) {
+		logCtx.Info("Waiting for migration RBAC permissions to be granted by the operator")
+		return nil
+	}
+
 	// Pre-validation: check that v1 CRDs exist.
 	crdClient := m.dynamicClient.Resource(crdGVR)
 	crdList, err := crdClient.List(m.ctx, metav1.ListOptions{})
