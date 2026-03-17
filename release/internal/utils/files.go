@@ -89,6 +89,19 @@ func DirExists(path string) (bool, error) {
 	return false, err
 }
 
+// FileExists validates if a given (relative or absolute) path exists
+// and is a regular file
+func FileExists(path string) (bool, error) {
+	stat, err := os.Stat(path)
+	if err == nil {
+		return stat.Mode().IsRegular(), nil
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
+}
+
 // CheckBinary searches the current PATH for a binary and returns an error if it's not found
 func CheckBinary(binaryName, neededFor string) error {
 	if path, err := exec.LookPath(binaryName); err != nil {
