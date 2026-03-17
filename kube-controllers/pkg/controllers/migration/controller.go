@@ -27,7 +27,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -36,6 +35,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	apiregv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
+	"k8s.io/utils/ptr"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
@@ -97,8 +97,8 @@ func NewController(cfg ControllerConfig) controller.Controller {
 }
 
 // resyncPeriod controls how frequently the informer re-lists all resources.
-// This ensures the Converged phase gets periodic re-checks (future-proofing
-// for Felix/Typha active-API-group detection).
+// This ensures the Converged phase gets periodic re-checks for component
+// API group switchover detection.
 const resyncPeriod = 60 * time.Second
 
 type migrationController struct {
@@ -123,13 +123,13 @@ func (m *migrationController) Run(stop chan struct{}) {
 	informer := factory.ForResource(DatastoreMigrationGVR).Informer()
 
 	handler := cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			m.enqueue(obj)
 		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
+		UpdateFunc: func(oldObj, newObj any) {
 			m.enqueue(newObj)
 		},
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			m.enqueue(obj)
 		},
 	}
@@ -159,7 +159,7 @@ func (m *migrationController) Run(stop chan struct{}) {
 	}
 }
 
-func (m *migrationController) enqueue(obj interface{}) {
+func (m *migrationController) enqueue(obj any) {
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get key for object")
@@ -468,7 +468,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	logCtx.Info("Migration converged, unlocking datastore")
 
 	// Step 4: Unlock the datastore.
-	if err := m.unlockDatastore(logCtx); err != nil {
+	if err := m.unlockV3CRDDatastore(logCtx); err != nil {
 		return err
 	}
 
@@ -661,6 +661,7 @@ func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry) {
 			// pre-existing v3 resources.
 			annotations := obj.GetAnnotations()
 			if annotations == nil || annotations[migratedByAnnotation] == "" {
+				logCtx.WithFields(logrus.Fields{"kind": migrator.Kind, "name": obj.GetName()}).Debug("Skipping non-migrated v3 resource during cleanup")
 				continue
 			}
 			if err := m.rtClient.Delete(m.ctx, obj); err != nil {
@@ -787,7 +788,6 @@ func (m *migrationController) restoreAPIService(logCtx *logrus.Entry, dm *Datast
 // resource so that fields like ClusterGUID, ClusterType, and CalicoVersion are preserved.
 func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 	// Read the v1 ClusterInformation to use as the base for the v3 resource.
-	ready := false
 	v1Key := model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName}
 	v1KVP, err := m.backendClient.Get(m.ctx, v1Key, "")
 	if err != nil {
@@ -798,13 +798,13 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 	ci := &apiv3.ClusterInformation{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName},
 		Spec: apiv3.ClusterInformationSpec{
-			DatastoreReady: &ready,
+			DatastoreReady: ptr.To(false),
 		},
 	}
 	if v1KVP != nil {
 		if v1CI, ok := v1KVP.Value.(*apiv3.ClusterInformation); ok {
 			ci.Spec = *v1CI.Spec.DeepCopy()
-			ci.Spec.DatastoreReady = &ready
+			ci.Spec.DatastoreReady = ptr.To(false)
 		}
 	}
 
@@ -820,7 +820,7 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 			return fmt.Errorf("getting v3 ClusterInformation: %w", err)
 		}
 	} else if existing.Spec.DatastoreReady == nil || *existing.Spec.DatastoreReady {
-		existing.Spec.DatastoreReady = &ready
+		existing.Spec.DatastoreReady = ptr.To(false)
 		if updateErr := m.rtClient.Update(m.ctx, existing); updateErr != nil {
 			return fmt.Errorf("updating v3 ClusterInformation: %w", updateErr)
 		}
@@ -837,7 +837,7 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 	return nil
 }
 
-// unlockDatastore sets DatastoreReady=true on the v3 ClusterInformation,
+// unlockV3CRDDatastore sets DatastoreReady=true on the v3 ClusterInformation,
 // signaling components that have switched to v3 to resume normal operation.
 //
 // The v1 ClusterInformation is intentionally left locked. Components still
@@ -845,14 +845,13 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 // block CNI ADD/DEL operations. This prevents IPAM leaks during the rollout
 // window — CNI operations retry until the component restarts with v3 mode,
 // at which point they read the unlocked v3 ClusterInformation.
-func (m *migrationController) unlockDatastore(logCtx *logrus.Entry) error {
+func (m *migrationController) unlockV3CRDDatastore(logCtx *logrus.Entry) error {
 	existing := &apiv3.ClusterInformation{}
 	if err := m.rtClient.Get(m.ctx, types.NamespacedName{Name: clusterInfoName}, existing); err != nil {
 		return fmt.Errorf("getting v3 ClusterInformation for unlock: %w", err)
 	}
 
-	ready := true
-	existing.Spec.DatastoreReady = &ready
+	existing.Spec.DatastoreReady = ptr.To(true)
 	if err := m.rtClient.Update(m.ctx, existing); err != nil {
 		return fmt.Errorf("unlocking v3 datastore: %w", err)
 	}
@@ -946,21 +945,4 @@ func (m *migrationController) removeFinalizer(dm *DatastoreMigration) error {
 	}
 	dm.Finalizers = finalizers
 	return m.updateMetadata(dm)
-}
-
-// hasFinalizer returns true if the DatastoreMigration CR has the migration finalizer.
-func hasFinalizer(dm *DatastoreMigration) bool {
-	for _, f := range dm.Finalizers {
-		if f == finalizerName {
-			return true
-		}
-	}
-	return false
-}
-
-// crdGVR is the GVR for CustomResourceDefinition objects.
-var crdGVR = schema.GroupVersionResource{
-	Group:    "apiextensions.k8s.io",
-	Version:  "v1",
-	Resource: "customresourcedefinitions",
 }

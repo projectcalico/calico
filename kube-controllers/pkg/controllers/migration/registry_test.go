@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/utils/ptr"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakertclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -179,11 +180,11 @@ func TestMigrateResourceType_NewResources(t *testing.T) {
 			apiv3.KindTier: {
 				{
 					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
-					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](100)}},
 				},
 				{
 					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "security"},
-					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "security"}, Spec: apiv3.TierSpec{Order: floatPtr(200)}},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "security"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](200)}},
 				},
 			},
 		},
@@ -216,7 +217,7 @@ func TestMigrateResourceType_SkipExisting(t *testing.T) {
 			apiv3.KindTier: {
 				{
 					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
-					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](100)}},
 				},
 			},
 		},
@@ -226,7 +227,7 @@ func TestMigrateResourceType_SkipExisting(t *testing.T) {
 	// Pre-create a matching tier so migration skips it.
 	if err := fakeRT.Create(ctx, &apiv3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(100)},
+		Spec:       apiv3.TierSpec{Order: ptr.To[float64](100)},
 	}); err != nil {
 		t.Fatalf("creating existing tier: %v", err)
 	}
@@ -254,7 +255,7 @@ func TestMigrateResourceType_Conflict(t *testing.T) {
 			apiv3.KindTier: {
 				{
 					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
-					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](100)}},
 				},
 			},
 		},
@@ -264,7 +265,7 @@ func TestMigrateResourceType_Conflict(t *testing.T) {
 	// Pre-create a conflicting tier with a different spec.
 	if err := fakeRT.Create(ctx, &apiv3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(999)},
+		Spec:       apiv3.TierSpec{Order: ptr.To[float64](999)},
 	}); err != nil {
 		t.Fatalf("creating conflicting tier: %v", err)
 	}
@@ -295,11 +296,11 @@ func TestListV1IPAMBlocks(t *testing.T) {
 				Key: model.BlockKey{CIDR: cnetCIDR},
 				Value: &model.AllocationBlock{
 					CIDR:        cnetCIDR,
-					Affinity:    strPtr("host:node-1"),
-					Allocations: []*int{intPtr(0), nil, nil},
+					Affinity:    ptr.To("host:node-1"),
+					Allocations: []*int{ptr.To(0), nil, nil},
 					Unallocated: []int{1, 2},
 					Attributes: []model.AllocationAttribute{
-						{HandleID: strPtr("handle-1"), ActiveOwnerAttrs: map[string]string{"pod": "test-pod"}},
+						{HandleID: ptr.To("handle-1"), ActiveOwnerAttrs: map[string]string{"pod": "test-pod"}},
 					},
 					SequenceNumber:              5,
 					SequenceNumberForAllocation: map[string]uint64{"0": 3},
@@ -430,30 +431,30 @@ func TestMigrateIPAMBlock_Full(t *testing.T) {
 	// 1. Setup v1 backend with a diverse set of IPAM allocations.
 	v1Block := &model.AllocationBlock{
 		CIDR:     cnetCIDR,
-		Affinity: strPtr("host:node-1"),
+		Affinity: ptr.To("host:node-1"),
 		// Allocations point to indices in the Attributes array.
 		// 0: Pod, 1: Unallocated, 2: LoadBalancer, 3: KubeVirt VM, 4: Leaked, 5: Incomplete
-		Allocations: []*int{intPtr(0), nil, intPtr(1), intPtr(2), intPtr(3), intPtr(4)},
+		Allocations: []*int{ptr.To(0), nil, ptr.To(1), ptr.To(2), ptr.To(3), ptr.To(4)},
 		Unallocated: []int{1, 6, 7},
 		Attributes: []model.AllocationAttribute{
 			{
 				// Standard Pod allocation
-				HandleID:         strPtr("k8s-pod-network.abc-123"),
+				HandleID:         ptr.To("k8s-pod-network.abc-123"),
 				ActiveOwnerAttrs: map[string]string{"pod": "test-pod", "namespace": "default"},
 			},
 			{
 				// LoadBalancer IP allocation
-				HandleID:         strPtr("lb-handle-555"),
+				HandleID:         ptr.To("lb-handle-555"),
 				ActiveOwnerAttrs: map[string]string{"service": "my-lb-service", "namespace": "kube-system"},
 			},
 			{
 				// KubeVirt VM allocation
-				HandleID:         strPtr("kubevirt-vm-handle-99"),
+				HandleID:         ptr.To("kubevirt-vm-handle-99"),
 				ActiveOwnerAttrs: map[string]string{"vm": "my-virtual-machine", "namespace": "vms"},
 			},
 			{
 				// Leaked allocation: has handle but no owner attributes
-				HandleID:         strPtr("leaked-handle-404"),
+				HandleID:         ptr.To("leaked-handle-404"),
 				ActiveOwnerAttrs: map[string]string{},
 			},
 			{
@@ -645,11 +646,11 @@ func TestMigrateResourceType_Metrics(t *testing.T) {
 				apiv3.KindTier: {
 					{
 						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "t1"},
-						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "t1"}, Spec: apiv3.TierSpec{Order: floatPtr(10)}},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "t1"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](10)}},
 					},
 					{
 						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "t2"},
-						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "t2"}, Spec: apiv3.TierSpec{Order: floatPtr(20)}},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "t2"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](20)}},
 					},
 				},
 			},
@@ -684,7 +685,7 @@ func TestMigrateResourceType_Metrics(t *testing.T) {
 				apiv3.KindTier: {
 					{
 						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
-						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](100)}},
 					},
 				},
 			},
@@ -692,7 +693,7 @@ func TestMigrateResourceType_Metrics(t *testing.T) {
 		fakeRT := newTestRTClient(t)
 		if err := fakeRT.Create(ctx, &apiv3.Tier{
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       apiv3.TierSpec{Order: floatPtr(100)},
+			Spec:       apiv3.TierSpec{Order: ptr.To[float64](100)},
 		}); err != nil {
 			t.Fatalf("creating existing tier: %v", err)
 		}
@@ -718,7 +719,7 @@ func TestMigrateResourceType_Metrics(t *testing.T) {
 				apiv3.KindTier: {
 					{
 						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
-						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](100)}},
 					},
 				},
 			},
@@ -726,7 +727,7 @@ func TestMigrateResourceType_Metrics(t *testing.T) {
 		fakeRT := newTestRTClient(t)
 		if err := fakeRT.Create(ctx, &apiv3.Tier{
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       apiv3.TierSpec{Order: floatPtr(999)},
+			Spec:       apiv3.TierSpec{Order: ptr.To[float64](999)},
 		}); err != nil {
 			t.Fatalf("creating conflicting tier: %v", err)
 		}
@@ -752,7 +753,7 @@ func TestMigrateResourceType_Metrics(t *testing.T) {
 				apiv3.KindTier: {
 					{
 						Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "retry-tier"},
-						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "retry-tier"}, Spec: apiv3.TierSpec{Order: floatPtr(50)}},
+						Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "retry-tier"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](50)}},
 					},
 				},
 			},
@@ -785,7 +786,7 @@ func TestMigrateResourceType_ContentVerification(t *testing.T) {
 	ctx := context.Background()
 
 	action := apiv3.Action("Allow")
-	v1Spec := apiv3.TierSpec{Order: floatPtr(77), DefaultAction: &action}
+	v1Spec := apiv3.TierSpec{Order: ptr.To[float64](77), DefaultAction: &action}
 	v1Labels := map[string]string{"team": "networking", "env": "staging"}
 	v1Annotations := map[string]string{
 		"projectcalico.org/metadata": "filtered-out",
@@ -897,7 +898,7 @@ func TestRemapOwnerReferences(t *testing.T) {
 	// Tier "security" was migrated: v1 UID was "v1-tier-uid", v3 UID is "v3-tier-uid".
 	if err := fakeRT.Create(ctx, &apiv3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "security", UID: "v3-tier-uid"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(200)},
+		Spec:       apiv3.TierSpec{Order: ptr.To[float64](200)},
 	}); err != nil {
 		t.Fatalf("creating tier: %v", err)
 	}
@@ -1004,15 +1005,15 @@ func TestCheckConflicts(t *testing.T) {
 			apiv3.KindTier: {
 				{
 					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "matching"},
-					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "matching"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "matching"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](100)}},
 				},
 				{
 					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "conflicting"},
-					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "conflicting"}, Spec: apiv3.TierSpec{Order: floatPtr(200)}},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "conflicting"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](200)}},
 				},
 				{
 					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "missing"},
-					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "missing"}, Spec: apiv3.TierSpec{Order: floatPtr(300)}},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "missing"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](300)}},
 				},
 			},
 		},
@@ -1022,13 +1023,13 @@ func TestCheckConflicts(t *testing.T) {
 	// Pre-create matching and conflicting tiers in v3.
 	if err := fakeRT.Create(ctx, &apiv3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "matching"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(100)},
+		Spec:       apiv3.TierSpec{Order: ptr.To[float64](100)},
 	}); err != nil {
 		t.Fatalf("creating matching tier: %v", err)
 	}
 	if err := fakeRT.Create(ctx, &apiv3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "conflicting"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(999)},
+		Spec:       apiv3.TierSpec{Order: ptr.To[float64](999)},
 	}); err != nil {
 		t.Fatalf("creating conflicting tier: %v", err)
 	}
@@ -1046,16 +1047,4 @@ func TestCheckConflicts(t *testing.T) {
 	if conflicts[0].Name != "conflicting" {
 		t.Errorf("expected conflict on 'conflicting', got %s", conflicts[0].Name)
 	}
-}
-
-func floatPtr(f float64) *float64 {
-	return &f
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func intPtr(i int) *int {
-	return &i
 }

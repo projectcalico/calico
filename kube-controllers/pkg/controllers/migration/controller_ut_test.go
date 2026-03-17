@@ -16,6 +16,7 @@ package migration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -33,6 +34,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
+	"k8s.io/utils/ptr"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakertclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -71,8 +73,8 @@ func (r *retryTestClient) Create(ctx context.Context, obj rtclient.Object, opts 
 	return r.Client.Create(ctx, obj, opts...)
 }
 
-// testController creates a migrationController with fake clients for unit testing.
-func testController(t *testing.T, objects ...runtime.Object) (*migrationController, *fakedynamic.FakeDynamicClient) {
+// newTestController creates a migrationController with fake clients for unit testing.
+func newTestController(t *testing.T, objects ...runtime.Object) (*migrationController, *fakedynamic.FakeDynamicClient) {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
@@ -124,13 +126,8 @@ func testController(t *testing.T, objects ...runtime.Object) (*migrationControll
 	return c, dynClient
 }
 
-// testRTClient returns the controller-runtime client from the migrationController for test assertions.
-func testRTClient(c *migrationController) rtclient.Client {
-	return c.rtClient
-}
-
-// createTestCR creates a DatastoreMigration CR as unstructured for the fake dynamic client.
-func createTestCR(t *testing.T, name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
+// newTestCR creates a DatastoreMigration CR as unstructured for the fake dynamic client.
+func newTestCR(t *testing.T, name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
 	t.Helper()
 	dm := &DatastoreMigration{
 		TypeMeta: metav1.TypeMeta{
@@ -154,8 +151,8 @@ func createTestCR(t *testing.T, name string, phase DatastoreMigrationPhase) *uns
 	return uns
 }
 
-// createTestCRWithDeletion creates a DatastoreMigration CR with a finalizer and deletion timestamp.
-func createTestCRWithDeletion(t *testing.T, name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
+// newTestCRWithDeletion creates a DatastoreMigration CR with a finalizer and deletion timestamp.
+func newTestCRWithDeletion(t *testing.T, name string, phase DatastoreMigrationPhase) *unstructured.Unstructured {
 	t.Helper()
 	now := metav1.Now()
 	dm := &DatastoreMigration{
@@ -180,16 +177,16 @@ func createTestCRWithDeletion(t *testing.T, name string, phase DatastoreMigratio
 	return uns
 }
 
-// createV1CRD creates a fake v1 CRD as unstructured for pre-validation tests.
-func createV1CRD(name string) *unstructured.Unstructured {
+// newV1CRD creates a fake v1 CRD as unstructured for pre-validation tests.
+func newV1CRD(name string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "apiextensions.k8s.io/v1",
 			"kind":       "CustomResourceDefinition",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": name,
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"group": "crd.projectcalico.org",
 			},
 		},
@@ -200,8 +197,9 @@ func testLogEntry() *logrus.Entry {
 	return logrus.WithField("test", true)
 }
 
+// TestReconcile_NoCR verifies that reconcile is a no-op when no DatastoreMigration CR exists.
 func TestReconcile_NoCR(t *testing.T) {
-	c, _ := testController(t)
+	c, _ := newTestController(t)
 
 	// No CR exists — reconcile should be a no-op.
 	if err := c.reconcile(); err != nil {
@@ -209,11 +207,12 @@ func TestReconcile_NoCR(t *testing.T) {
 	}
 }
 
+// TestReconcile_PendingToMigrating verifies the Pending-to-Migrating transition including finalizer addition and pre-validation.
 func TestReconcile_PendingToMigrating(t *testing.T) {
-	cr := createTestCR(t, defaultMigrationName, "")
-	v1CRD := createV1CRD("bgppeers.crd.projectcalico.org")
+	cr := newTestCR(t, defaultMigrationName, "")
+	v1CRD := newV1CRD("bgppeers.crd.projectcalico.org")
 
-	c, _ := testController(t, cr, v1CRD)
+	c, _ := newTestController(t, cr, v1CRD)
 
 	// First reconcile: adds finalizer.
 	if err := c.reconcile(); err != nil {
@@ -249,9 +248,10 @@ func TestReconcile_PendingToMigrating(t *testing.T) {
 	}
 }
 
+// TestReconcile_CompleteIsNoOp verifies that the Complete phase is a terminal no-op.
 func TestReconcile_CompleteIsNoOp(t *testing.T) {
-	cr := createTestCR(t, defaultMigrationName, DatastoreMigrationPhaseComplete)
-	c, _ := testController(t, cr)
+	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseComplete)
+	c, _ := newTestController(t, cr)
 
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("expected no error for Complete phase, got: %v", err)
@@ -266,9 +266,10 @@ func TestReconcile_CompleteIsNoOp(t *testing.T) {
 	}
 }
 
+// TestReconcile_FailedIsNoOp verifies that the Failed phase is a terminal no-op.
 func TestReconcile_FailedIsNoOp(t *testing.T) {
-	cr := createTestCR(t, defaultMigrationName, DatastoreMigrationPhaseFailed)
-	c, _ := testController(t, cr)
+	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseFailed)
+	c, _ := newTestController(t, cr)
 
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("expected no error for Failed phase, got: %v", err)
@@ -283,9 +284,10 @@ func TestReconcile_FailedIsNoOp(t *testing.T) {
 	}
 }
 
+// TestPreValidation_NoV1CRDs verifies that pre-validation fails when no v1 CRDs exist.
 func TestPreValidation_NoV1CRDs(t *testing.T) {
-	cr := createTestCR(t, defaultMigrationName, "")
-	c, _ := testController(t, cr)
+	cr := newTestCR(t, defaultMigrationName, "")
+	c, _ := newTestController(t, cr)
 
 	// First reconcile adds the finalizer.
 	if err := c.reconcile(); err != nil {
@@ -319,11 +321,12 @@ func TestPreValidation_NoV1CRDs(t *testing.T) {
 	}
 }
 
+// TestPreValidation_AutomanagedAPIService verifies that pre-validation fails when the APIService is CRD-backed (automanaged).
 func TestPreValidation_AutomanagedAPIService(t *testing.T) {
-	cr := createTestCR(t, defaultMigrationName, "")
-	v1CRD := createV1CRD("bgppeers.crd.projectcalico.org")
+	cr := newTestCR(t, defaultMigrationName, "")
+	v1CRD := newV1CRD("bgppeers.crd.projectcalico.org")
 
-	c, _ := testController(t, cr, v1CRD)
+	c, _ := newTestController(t, cr, v1CRD)
 
 	// Create an automanaged (CRD-backed) APIService.
 	apiSvc := &apiregv1.APIService{
@@ -364,8 +367,9 @@ func TestPreValidation_AutomanagedAPIService(t *testing.T) {
 	}
 }
 
+// TestLockDatastore verifies that lockDatastore sets DatastoreReady=false on both v1 and v3 ClusterInformation.
 func TestLockDatastore(t *testing.T) {
-	c, _ := testController(t)
+	c, _ := newTestController(t)
 
 	// Set up v1 ClusterInformation via backend client mock.
 	bc, ok := c.backendClient.(*mockBackendClient)
@@ -406,8 +410,9 @@ func TestLockDatastore(t *testing.T) {
 	}
 }
 
+// TestUnlockDatastore verifies that unlockV3CRDDatastore unlocks v3 while leaving v1 locked.
 func TestUnlockDatastore(t *testing.T) {
-	c, _ := testController(t)
+	c, _ := newTestController(t)
 
 	// Pre-create v3 ClusterInformation as locked.
 	ready := false
@@ -433,8 +438,8 @@ func TestUnlockDatastore(t *testing.T) {
 	}
 
 	logCtx := testLogEntry()
-	if err := c.unlockDatastore(logCtx); err != nil {
-		t.Fatalf("unlockDatastore failed: %v", err)
+	if err := c.unlockV3CRDDatastore(logCtx); err != nil {
+		t.Fatalf("unlockV3CRDDatastore failed: %v", err)
 	}
 
 	// Verify v3 was unlocked.
@@ -458,9 +463,10 @@ func TestUnlockDatastore(t *testing.T) {
 	}
 }
 
+// TestHandleDeletion_Complete verifies that the finalizer is removed when a Complete CR is deleted.
 func TestHandleDeletion_Complete(t *testing.T) {
-	cr := createTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseComplete)
-	c, _ := testController(t, cr)
+	cr := newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseComplete)
+	c, _ := newTestController(t, cr)
 
 	// Reconcile should run the completed cleanup path (delete v1 CRDs).
 	if err := c.reconcile(); err != nil {
@@ -477,9 +483,10 @@ func TestHandleDeletion_Complete(t *testing.T) {
 	}
 }
 
+// TestHandleDeletion_Abort verifies that aborting a non-Complete CR restores v1 ClusterInformation and removes the finalizer.
 func TestHandleDeletion_Abort(t *testing.T) {
-	cr := createTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	c, _ := testController(t, cr)
+	cr := newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
+	c, _ := newTestController(t, cr)
 
 	// Set up v1 backend mock as locked.
 	bc, ok := c.backendClient.(*mockBackendClient)
@@ -518,6 +525,7 @@ func TestHandleDeletion_Abort(t *testing.T) {
 	}
 }
 
+// TestMigrateResourceType_TransientError verifies that transient API errors are retried with backoff.
 func TestMigrateResourceType_TransientError(t *testing.T) {
 	ctx := context.Background()
 
@@ -526,7 +534,7 @@ func TestMigrateResourceType_TransientError(t *testing.T) {
 			apiv3.KindTier: {
 				{
 					Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
-					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+					Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](100)}},
 				},
 			},
 		},
@@ -576,11 +584,12 @@ func TestMigrateResourceType_TransientError(t *testing.T) {
 	}
 }
 
+// TestMigrateResourceType_ContentMatch verifies that migrated resources preserve spec, labels, and annotations.
 func TestMigrateResourceType_ContentMatch(t *testing.T) {
 	ctx := context.Background()
 
 	action := apiv3.Action("Deny")
-	originalSpec := apiv3.TierSpec{Order: floatPtr(42), DefaultAction: &action}
+	originalSpec := apiv3.TierSpec{Order: ptr.To[float64](42), DefaultAction: &action}
 	bc := &mockBackendClient{
 		resources: map[string][]*model.KVPair{
 			apiv3.KindTier: {
@@ -652,6 +661,7 @@ func TestMigrateResourceType_ContentMatch(t *testing.T) {
 	}
 }
 
+// TestMigrateResourceType_ConvertError verifies that a conversion error propagates as a migration failure.
 func TestMigrateResourceType_ConvertError(t *testing.T) {
 	ctx := context.Background()
 
@@ -699,8 +709,8 @@ func TestMigrateResourceType_ConvertError(t *testing.T) {
 func TestConflictDetection_PhaseTransition(t *testing.T) {
 	withTestRegistry(t, []ResourceMigrator{tierMigrator(), gnpMigrator()})
 
-	cr := createTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	c, _ := testController(t, cr)
+	cr := newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
+	c, _ := newTestController(t, cr)
 
 	// Pre-create a conflicting GNP with a different spec than the v1 source.
 	if err := c.rtClient.Create(c.ctx, &apiv3.GlobalNetworkPolicy{
@@ -717,7 +727,7 @@ func TestConflictDetection_PhaseTransition(t *testing.T) {
 		apiv3.KindTier: {
 			{
 				Key:   model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
-				Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: floatPtr(100)}},
+				Value: &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}, Spec: apiv3.TierSpec{Order: ptr.To[float64](100)}},
 			},
 		},
 		apiv3.KindGlobalNetworkPolicy: {
@@ -787,12 +797,28 @@ func TestAbortRollback_CleansUpMigratedResources(t *testing.T) {
 
 	// Simulate mid-migration: CR is being deleted while in Migrating phase.
 	// The saved APIService annotation allows restore.
-	apiSvcJSON := `{"metadata":{"name":"v3.projectcalico.org"},"spec":{"group":"projectcalico.org","version":"v3","service":{"namespace":"calico-apiserver","name":"calico-api"},"groupPriorityMinimum":1500,"versionPriority":200}}`
-	cr := createTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
-	cr.Object["metadata"].(map[string]interface{})["annotations"] = map[string]interface{}{
-		savedAPIServiceAnnotation: apiSvcJSON,
+	savedAPIService := &apiregv1.APIService{
+		ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
+		Spec: apiregv1.APIServiceSpec{
+			Group:                "projectcalico.org",
+			Version:              "v3",
+			GroupPriorityMinimum: 1500,
+			VersionPriority:      200,
+			Service: &apiregv1.ServiceReference{
+				Namespace: "calico-apiserver",
+				Name:      "calico-api",
+			},
+		},
 	}
-	c, _ := testController(t, cr)
+	apiSvcJSON, err := json.Marshal(savedAPIService)
+	if err != nil {
+		t.Fatalf("marshaling APIService: %v", err)
+	}
+	cr := newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating)
+	cr.Object["metadata"].(map[string]any)["annotations"] = map[string]any{
+		savedAPIServiceAnnotation: string(apiSvcJSON),
+	}
+	c, _ := newTestController(t, cr)
 
 	// Simulate partial v3 resources that were created by migration.
 	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{
@@ -800,7 +826,7 @@ func TestAbortRollback_CleansUpMigratedResources(t *testing.T) {
 			Name:        "default",
 			Annotations: map[string]string{migratedByAnnotation: "v1-to-v3"},
 		},
-		Spec: apiv3.TierSpec{Order: floatPtr(100)},
+		Spec: apiv3.TierSpec{Order: ptr.To[float64](100)},
 	}); err != nil {
 		t.Fatalf("creating tier: %v", err)
 	}
@@ -816,7 +842,7 @@ func TestAbortRollback_CleansUpMigratedResources(t *testing.T) {
 	// A pre-existing v3 resource (no migration annotation) should be preserved.
 	if err := c.rtClient.Create(c.ctx, &apiv3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "preexisting"},
-		Spec:       apiv3.TierSpec{Order: floatPtr(50)},
+		Spec:       apiv3.TierSpec{Order: ptr.To[float64](50)},
 	}); err != nil {
 		t.Fatalf("creating preexisting tier: %v", err)
 	}
@@ -881,6 +907,7 @@ func TestAbortRollback_CleansUpMigratedResources(t *testing.T) {
 	}
 }
 
+// TestMigrateResourceType_EmptyList verifies that an empty v1 list produces an empty migration result.
 func TestMigrateResourceType_EmptyList(t *testing.T) {
 	ctx := context.Background()
 

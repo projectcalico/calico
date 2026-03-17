@@ -34,6 +34,16 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
+const (
+	// migratedByAnnotation is set on v3 resources created during migration so
+	// the abort path can distinguish them from pre-existing v3 resources.
+	migratedByAnnotation = "migration.projectcalico.org/migrated-by"
+
+	// defaultWorkerCount is the number of concurrent workers for creating v3
+	// resources within a single resource type.
+	defaultWorkerCount = 10
+)
+
 // ResourceMigrator defines how to migrate a single resource type from v1 to v3 CRDs.
 type ResourceMigrator struct {
 	// Kind is the Calico resource kind (e.g., "GlobalNetworkPolicy").
@@ -113,16 +123,6 @@ func migratedPolicyName(name, tier string) string {
 	}
 	return name
 }
-
-// migratedByAnnotation is set on v3 resources created during migration so
-// the abort path can distinguish them from pre-existing v3 resources.
-const migratedByAnnotation = "migration.projectcalico.org/migrated-by"
-
-// defaultWorkerCount is the number of concurrent workers for creating v3
-// resources within a single resource type. The design doc suggests 10 as a
-// conservative default; on clusters with a healthy API server, higher values
-// (20-50) would be safe.
-const defaultWorkerCount = 10
 
 // retryBackoff defines the backoff parameters for retrying transient API errors
 // during resource migration (e.g., server timeouts, throttling, connection resets).
