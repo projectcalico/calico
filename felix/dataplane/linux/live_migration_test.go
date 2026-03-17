@@ -50,7 +50,7 @@ func (f *fakeLiveMigrationListener) drain() []liveMigrationStateUpdate {
 // newTestMonitor creates a liveMigrationMonitor with a no-op GARP handle factory
 // and a fake listener, preventing tests from opening real AF_PACKET sockets.
 func newTestMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
-	m := newLiveMigrationMonitor(convergenceTime)
+	m := newLiveMigrationMonitor(convergenceTime, nil, nil)
 	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
 		return newFakeGARPHandle(), nil
 	}
