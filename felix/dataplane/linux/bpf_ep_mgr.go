@@ -1705,8 +1705,6 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		logrus.Info("BPF counters synced.")
 	})
 
-	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
-
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
 		// Update all existing IPs of dirty services
 		for svc := range m.dirtyServices.All() {
@@ -1730,6 +1728,8 @@ func (m *bpfEndpointManager) ApplyBPFPrograms() error {
 	if m.bpfPolicyDebugEnabled {
 		m.removeDirtyPolicies()
 	}
+
+	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 
 	// Copy data from old conntrack map to the new map.  Must happen after
 	// programs are applied above so that old programs are no longer writing
