@@ -40,6 +40,9 @@ if [ -n "$DEV_IMAGE_PATH" ] && [ -n "$DEV_IMAGE_TAG" ]; then
   build/_output/bin/gen-versions -os-versions="$VERSIONS_FILE" > pkg/components/calico.go
   rm -f "$VERSIONS_FILE"
 
+  # Set pull policy to Always so clusters pull fresh images on each deploy.
+  find . -name '*.go' | xargs sed -i 's/PullIfNotPresent/PullAlways/g'
+
   # Build operator image and tag for the dev registry.
   make image
   docker tag tigera/operator:latest "${DEV_IMAGE_PATH}/operator:${DEV_IMAGE_TAG}"
