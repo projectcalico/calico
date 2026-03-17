@@ -82,11 +82,11 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Types",type=string,JSONPath=`.status.progress.typeProgress`
-// +kubebuilder:printcolumn:name="Current Type",type=string,JSONPath=`.status.progress.currentType`,priority=1
-// +kubebuilder:printcolumn:name="Migrated",type=integer,JSONPath=`.status.progress.migrated`
-// +kubebuilder:printcolumn:name="Skipped",type=integer,JSONPath=`.status.progress.skipped`,priority=1
-// +kubebuilder:printcolumn:name="Conflicts",type=integer,JSONPath=`.status.progress.conflicts`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Current Type",type=string,JSONPath=`.status.progress.currentType`,priority=1
+// +kubebuilder:printcolumn:name="Migrated",type=integer,JSONPath=`.status.progress.migrated`,priority=1
+// +kubebuilder:printcolumn:name="Skipped",type=integer,JSONPath=`.status.progress.skipped`,priority=1
+// +kubebuilder:printcolumn:name="Conflicts",type=integer,JSONPath=`.status.progress.conflicts`,priority=1
 type DatastoreMigration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

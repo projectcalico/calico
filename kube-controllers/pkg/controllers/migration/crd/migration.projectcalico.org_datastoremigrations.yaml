@@ -21,12 +21,16 @@ spec:
     - jsonPath: .status.progress.typeProgress
       name: Types
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     - jsonPath: .status.progress.currentType
       name: Current Type
       priority: 1
       type: string
     - jsonPath: .status.progress.migrated
       name: Migrated
+      priority: 1
       type: integer
     - jsonPath: .status.progress.skipped
       name: Skipped
@@ -34,10 +38,8 @@ spec:
       type: integer
     - jsonPath: .status.progress.conflicts
       name: Conflicts
+      priority: 1
       type: integer
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
     name: v1beta1
     schema:
       openAPIV3Schema:
