@@ -81,8 +81,7 @@ const (
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Types Done",type=integer,JSONPath=`.status.progress.completedTypes`
-// +kubebuilder:printcolumn:name="Types Total",type=integer,JSONPath=`.status.progress.totalTypes`
+// +kubebuilder:printcolumn:name="Types",type=string,JSONPath=`.status.progress.typeProgress`
 // +kubebuilder:printcolumn:name="Current Type",type=string,JSONPath=`.status.progress.currentType`,priority=1
 // +kubebuilder:printcolumn:name="Migrated",type=integer,JSONPath=`.status.progress.migrated`
 // +kubebuilder:printcolumn:name="Skipped",type=integer,JSONPath=`.status.progress.skipped`,priority=1
@@ -134,6 +133,8 @@ type DatastoreMigrationProgress struct {
 	TotalTypes int `json:"totalTypes,omitempty"`
 	// CompletedTypes is the number of resource types that have been fully processed.
 	CompletedTypes int `json:"completedTypes,omitempty"`
+	// TypeProgress is a human-readable summary like "5 / 21" for printer columns.
+	TypeProgress string `json:"typeProgress,omitempty"`
 	// CurrentType is the resource kind currently being migrated, or empty if done.
 	CurrentType string `json:"currentType,omitempty"`
 

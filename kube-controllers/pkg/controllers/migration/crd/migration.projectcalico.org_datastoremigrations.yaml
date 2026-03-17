@@ -18,12 +18,9 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.progress.completedTypes
-      name: Types Done
-      type: integer
-    - jsonPath: .status.progress.totalTypes
-      name: Types Total
-      type: integer
+    - jsonPath: .status.progress.typeProgress
+      name: Types
+      type: string
     - jsonPath: .status.progress.currentType
       name: Current Type
       priority: 1
@@ -153,6 +150,8 @@ spec:
                     type: integer
                   totalTypes:
                     type: integer
+                  typeProgress:
+                    type: string
                   typeDetails:
                     items:
                       description: TypeMigrationProgress tracks the result for a single

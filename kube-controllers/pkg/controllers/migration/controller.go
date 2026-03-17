@@ -375,14 +375,16 @@ func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 
 	// Initialize progress tracking.
 	dm.Status.Progress = DatastoreMigrationProgress{
-		TotalTypes:  len(migrators),
-		TypeDetails: make([]TypeMigrationProgress, 0, len(migrators)),
+		TotalTypes:   len(migrators),
+		TypeProgress: fmt.Sprintf("0 / %d", len(migrators)),
+		TypeDetails:  make([]TypeMigrationProgress, 0, len(migrators)),
 	}
 
 	for i, migrator := range migrators {
 		// Update current-type progress before starting each type.
 		dm.Status.Progress.CurrentType = migrator.Kind
 		dm.Status.Progress.CompletedTypes = i
+		dm.Status.Progress.TypeProgress = fmt.Sprintf("%d / %d", i, len(migrators))
 		if err := m.updateStatus(dm); err != nil {
 			logCtx.WithError(err).Warn("Failed to update progress status")
 		}
@@ -419,6 +421,7 @@ func (m *migrationController) handleMigrating(logCtx *log.Entry, dm *DatastoreMi
 
 	// Mark all types complete.
 	dm.Status.Progress.CompletedTypes = len(migrators)
+	dm.Status.Progress.TypeProgress = fmt.Sprintf("%d / %d", len(migrators), len(migrators))
 	dm.Status.Progress.CurrentType = ""
 
 	// Second pass: remap OwnerReference UIDs that point to Calico resources.
