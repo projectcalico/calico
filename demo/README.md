@@ -226,17 +226,21 @@ the VM, then `exit` to return. It does not support inline commands like
 ## Quick Start
 
 ```bash
-# 1. Set BZ_ROOT_DIR (cluster dir with .local/ and Taskvars.yml — provided by cluster owner)
+# 1. Provision the cluster (creates GCP VMs, installs KubeVirt, deploys Calico, creates VMs)
+#    This is a one-time step — skip if the cluster is already running.
+./demo/provision-cluster.sh
+
+# 2. Set BZ_ROOT_DIR (cluster dir with .local/ and Taskvars.yml — provided by cluster owner)
 export BZ_ROOT_DIR=/path/to/cluster-dir
 
-# 2. Run setup (validates cluster, creates BGPPeer)
+# 3. Run setup (validates cluster, creates BGPPeer)
 #    KUBECONFIG is read from Taskvars.yml automatically.
 ./demo/setup.sh
 
-# 3. Launch the 3-pane tmux layout (sets $VM1_IP, $TOR_INSTANCE, $TOR_ZONE in all panes)
+# 4. Launch the 3-pane tmux layout (sets $VM1_IP, $TOR_INSTANCE, $TOR_ZONE in all panes)
 ./demo/tmux-layout.sh
 
-# 4. Follow the commands in the detailed walkthrough below.
+# 5. Follow the commands in the detailed walkthrough below.
 #    All commands use env vars that are already set — just copy and paste.
 #    The ONLY exception: the `nc` command on the TOR node needs the real IP.
 #    Run `echo $VM1_IP` before SSH-ing to TOR, then use that IP for `nc`.
@@ -603,6 +607,7 @@ kubectl delete vmim migration-vm1
 | File | Purpose |
 |------|---------|
 | `README.md` | This file — full demo guide |
+| `provision-cluster.sh` | Provisions the GCP cluster, installs KubeVirt, deploys Calico, and creates VMs |
 | `setup.sh` | Validates cluster, creates BGPPeer for TOR node |
 | `tmux-layout.sh` | Launches 3-pane tmux layout, sets `$VM1_IP`, `$TOR_INSTANCE`, `$TOR_ZONE` in all panes |
 | `cheatsheet.txt` | Template cheatsheet with env var references |
