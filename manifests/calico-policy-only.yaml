@@ -943,7 +943,7 @@ spec:
                   reason: FieldValueForbidden
                   rule:
                     (!has(self.peerSelector) || size(self.peerSelector) == 0) || !has(self.asNumber)
-                    || self.asNumber == 0
+                    || self.asNumber == uint(0)
                 - message: peerIP must be empty when localWorkloadSelector is set
                   reason: FieldValueForbidden
                   rule:
@@ -958,7 +958,7 @@ spec:
                   reason: FieldValueInvalid
                   rule:
                     (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
-                    == 0) || (has(self.asNumber) && self.asNumber != 0)
+                    == 0) || (has(self.asNumber) && self.asNumber != uint(0))
           type: object
       served: true
       storage: true
