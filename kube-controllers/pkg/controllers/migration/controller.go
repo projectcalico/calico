@@ -810,8 +810,14 @@ func (m *migrationController) lockDatastore(logCtx *log.Entry) error {
 	return nil
 }
 
-// unlockDatastore sets DatastoreReady=true on both v3 and v1 ClusterInformation,
-// signaling components to resume normal operation.
+// unlockDatastore sets DatastoreReady=true on the v3 ClusterInformation,
+// signaling components that have switched to v3 to resume normal operation.
+//
+// The v1 ClusterInformation is intentionally left locked. Components still
+// reading v1 (before their rolling update to v3 mode) will see the lock and
+// block CNI ADD/DEL operations. This prevents IPAM leaks during the rollout
+// window — CNI operations retry until the component restarts with v3 mode,
+// at which point they read the unlocked v3 ClusterInformation.
 func (m *migrationController) unlockDatastore(logCtx *log.Entry) error {
 	existing, err := m.v3Client.ClusterInformations().Get(m.ctx, clusterInfoName, metav1.GetOptions{})
 	if err != nil {
@@ -824,12 +830,7 @@ func (m *migrationController) unlockDatastore(logCtx *log.Entry) error {
 	if err != nil {
 		return fmt.Errorf("unlocking v3 datastore: %w", err)
 	}
-	logCtx.Info("Set DatastoreReady=true on v3 ClusterInformation")
-
-	// Unlock v1 ClusterInformation via the backend client.
-	if err := m.setV1ClusterInfoReady(logCtx, true); err != nil {
-		logCtx.WithError(err).Warn("Failed to unlock v1 ClusterInformation (may not exist)")
-	}
+	logCtx.Info("Set DatastoreReady=true on v3 ClusterInformation (v1 remains locked)")
 
 	return nil
 }

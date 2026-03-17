@@ -392,10 +392,12 @@ func TestUnlockDatastore(t *testing.T) {
 		t.Error("expected v3 ClusterInformation DatastoreReady=true after unlock")
 	}
 
-	// Verify v1 was unlocked.
+	// Verify v1 remains locked — v1 stays locked intentionally so that
+	// components still reading v1 block CNI operations until they roll
+	// out with v3 mode.
 	ci := bc.clusterInfo.Value.(*apiv3.ClusterInformation)
-	if ci.Spec.DatastoreReady == nil || !*ci.Spec.DatastoreReady {
-		t.Error("expected v1 ClusterInformation DatastoreReady=true after unlock")
+	if ci.Spec.DatastoreReady == nil || *ci.Spec.DatastoreReady {
+		t.Error("expected v1 ClusterInformation DatastoreReady=false (should stay locked)")
 	}
 }
 
