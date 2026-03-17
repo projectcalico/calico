@@ -6,7 +6,7 @@ Calico now supports **IP address persistence for KubeVirt VMs** across live migr
 When a VM live-migrates from one node to another, Calico ensures:
 
 - The VM keeps the **exact same IP address** on the new node
-- **Active network connections are not dropped** during migration
+- **Network connectivity is preserved** — clients automatically reconnect after a brief interruption (~10-15s)
 - **No manual intervention** is needed — Calico handles IPAM and routing automatically
 
 This is critical for production VM workloads that expect stable IP addresses
@@ -70,8 +70,8 @@ Two VMs are pre-created, each running inside a virt-launcher pod:
 
 Run `kubectl get vmi -o wide` to see the actual IPs and node placements.
 
-The **TOR node** (external to the cluster) is used as the TCP stream client to prove
-that connections from outside the cluster survive migration via BGP route updates.
+The **TOR node** (external to the cluster) is used as a TCP client to prove
+that connectivity from outside the cluster is restored after migration via BGP route convergence.
 
 **Bridge mode networking**: Each VM uses `bridge: {}` interface mode, which means
 the VM gets the **exact same IP as its virt-launcher pod**. There is no NAT layer
@@ -106,7 +106,7 @@ When enabled, Calico changes how IP addresses are tracked for KubeVirt VMs:
 
 Run this command (it resolves vm1's IP automatically):
 ```bash
-calicoctl ipam show --ip=$(kubectl get vmi vm1 -o jsonpath='{.status.interfaces[0].ipAddress}')
+calicoctl ipam show --allow-version-mismatch --ip=$(kubectl get vmi vm1 -o jsonpath='{.status.interfaces[0].ipAddress}')
 ```
 
 You'll see:
@@ -176,8 +176,8 @@ Active/Alternate owner mechanism, ensuring no IP conflicts.
   │          ┃                                     │       │                                ┃               │
   └──────────╋─────────────────────────────────────┘       └────────────────────────────────╋───────────────┘
              ┃                                                                              ┃
-             ┃  TCP STREAM TO VM1 (VIA BGP)                             SAME TCP CONNECTION,┃
-             ┃                                                          NEVER DROPPED       ┃
+             ┃  TCP STREAM TO VM1 (VIA BGP)                              TCP CLIENT AUTO-     ┃
+             ┃                                                          RECONNECTS VIA BGP  ┃
              ┃                                                                              ┃
   ┌──────────┃───────────┐   ┌─────────────────┐       ┌─────────────────┐   ┌────────-─────┃───────┐
   │  TOR (EXTERNAL)      │   │     SERVER      │       │     SERVER      │   │  TOR (EXTERNAL)      │
@@ -189,8 +189,8 @@ Active/Alternate owner mechanism, ensuring no IP conflicts.
 ```
 
 The key point: VM1 migrates from Worker 0 to Worker 2, keeps the same IP. The
-persistent TCP connection from the TOR node (outside the cluster, via BGP) is never
-dropped — BGP routes converge and traffic flows to the new node automatically.
+TCP client on the TOR node (outside the cluster, via BGP) automatically reconnects
+after a brief interruption (~10-15s) while BGP routes converge to the new node.
 
 ---
 
@@ -258,17 +258,17 @@ export BZ_ROOT_DIR=/path/to/cluster-dir
 |                                    |  - Virt-launcher pods + nodes     |
 +------------------------------------+------------------------------------+
 |  Pane 2 (bottom)                                                       |
-|  TCP STREAM (persistent connection from TOR node, outside the cluster) |
+|  TCP STREAM (auto-reconnecting client from TOR node, outside cluster)  |
 |                                                                        |
-|  A SINGLE TCP connection from the external TOR node to vm1 via BGP.    |
-|  The counter keeps incrementing through migration — proof it survived. |
+|  Reconnecting TCP client from the external TOR node to vm1 via BGP.    |
+|  Counter increments, brief pause during migration, then resumes.       |
 +------------------------------------------------------------------------+
 ```
 
-- **Pane 2 (TCP stream)**: Proves a **single persistent TCP connection from outside the
-  cluster** survives the migration. The TOR node connects to vm1 via BGP routing. This is
-  the proof, an external client that established a connection BEFORE migration
-  continues to receive data AFTER migration without reconnecting.
+- **Pane 2 (TCP stream)**: Proves that **external connectivity via BGP is preserved**
+  after migration. The TOR node runs a reconnecting TCP client that connects to vm1's
+  streaming server. During migration, the connection drops briefly (~10-15s) while BGP
+  routes converge, then the client automatically reconnects to the same IP on the new node.
 
 ### Act 1: Show Bridge Mode, Network Config & Current State (~3 minutes)
 
@@ -299,7 +299,7 @@ no NAT between the VM and the pod network. The VM is a first-class network citiz
 
 ```bash
 # 3. Show Calico's IPAM state for vm1's IP
-calicoctl ipam show --ip=$VM1_IP
+calicoctl ipam show --allow-version-mismatch --ip=$VM1_IP
 ```
 
 **Narrate**: "Here's where it gets interesting. Look at the Handle ID:
@@ -309,7 +309,7 @@ The Active Owner shows which pod currently owns this IP."
 
 ```bash
 # 4. Show the Calico WorkloadEndpoint for vm1 — this IS the network configuration
-calicoctl get workloadendpoint -o wide | grep vm1
+calicoctl get workloadendpoint --allow-version-mismatch -o wide | grep vm1
 ```
 
 Expected output:
@@ -325,7 +325,8 @@ compare this after migration."
 
 ### Act 2: Start Connection Persistence Monitor (~2 minutes)
 
-**Goal**: Set up a persistent TCP connection that proves connections survive migration.
+**Goal**: Set up a TCP streaming server on vm1 and an auto-reconnecting client on the
+TOR node to demonstrate that external connectivity is preserved after migration.
 
 #### Step 2a: Start the TCP streaming server on vm1
 
@@ -335,61 +336,83 @@ compare this after migration."
 gkm connect vm1
 ```
 
-Inside the vm1 SSH session, copy the server script and start it:
+Inside the vm1 SSH session, create the server script and start it:
 ```bash
 cat > /tmp/stream.py << 'PYEOF'
 import socket, time, threading
-def handle(c):
-    seq = 1
+seq = [0]
+def handle(c, addr):
+    print(f"Connected: {addr}", flush=True)
     try:
         while True:
-            c.sendall(f"[seq={seq:04d}] [time={time.strftime('%H:%M:%S')}] Connection alive - VM1 streaming...\n".encode())
-            seq += 1; time.sleep(1)
-    except: pass
-    finally: c.close()
-s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(("0.0.0.0", 9999)); s.listen(5)
-print(f"Streaming server on port 9999...")
+            seq[0] += 1
+            c.sendall(f"[seq={seq[0]:04d}] [time={time.strftime('%H:%M:%S')}] alive\n".encode())
+            time.sleep(1)
+    except Exception as e:
+        print(f"Lost {addr}: {e}", flush=True)
+    finally:
+        c.close()
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("0.0.0.0", 9999))
+s.listen(5)
+print("Streaming server on port 9999", flush=True)
 while True:
-    c, a = s.accept(); print(f"Client: {a}"); threading.Thread(target=handle, args=(c,), daemon=True).start()
+    c, a = s.accept()
+    threading.Thread(target=handle, args=(c, a), daemon=True).start()
 PYEOF
-nohup python3 /tmp/stream.py > /dev/null 2>&1 & exit
+PYTHONUNBUFFERED=1 nohup python3 /tmp/stream.py > /tmp/stream.log 2>&1 &
+echo "Server started on port 9999"
+exit
 ```
 
-**Narrate**: "I'm starting a TCP streaming server on vm1. It sends a counter every
-second to any connected client. We'll connect from the TOR node — that's a machine
-outside the cluster that reaches vm1 via BGP. If the connection survives migration,
-it proves BGP routes converge correctly."
+The server uses a **global sequence counter** shared across all connections. When a
+client reconnects, the counter continues from where it left off — making it easy to
+see the brief gap during migration.
 
-#### Step 2b: Connect the TCP stream client from the TOR node
+**Narrate**: "I'm starting a TCP streaming server on vm1. It sends a counter every
+second. We'll connect from the TOR node — that's a machine outside the cluster that
+reaches vm1 via BGP routing."
+
+#### Step 2b: Start the auto-reconnecting client on the TOR node
 
 **In Pane 2 (bottom)** — `$TOR_INSTANCE`, `$TOR_ZONE`, and `$VM1_IP` are already
-set by `tmux-layout.sh`. SSH into the TOR node and connect to vm1's TCP stream:
+set by `tmux-layout.sh`. SSH into the TOR node and start the reconnecting client:
 ```bash
 echo $VM1_IP
 gcloud compute ssh ubuntu@$TOR_INSTANCE --zone=$TOR_ZONE
 ```
 Then on the TOR node (use the IP printed above):
 ```bash
-nc <vm1-ip> 9999
+while true; do nc -w 5 <vm1-ip> 9999; echo "[$(date +%H:%M:%S)] reconnecting..."; sleep 1; done
 ```
 
 You'll see a streaming counter:
 ```
-[seq=0001] [time=19:30:01] Connection alive - VM1 streaming...
-[seq=0002] [time=19:30:02] Connection alive - VM1 streaming...
-[seq=0003] [time=19:30:03] Connection alive - VM1 streaming...
+[seq=0001] [time=19:30:01] alive
+[seq=0002] [time=19:30:02] alive
+[seq=0003] [time=19:30:03] alive
 ```
 
-**This is a SINGLE persistent TCP connection.** If it survives migration, the sequence
-number will keep incrementing without gap. If the connection drops, the output stops.
+The client runs in a loop: if `nc` exits (connection lost), it prints a reconnecting
+message and tries again after 1 second. During migration you'll see:
+```
+[seq=0030] [time=19:31:10] alive          <-- last message before migration
+[19:31:15] reconnecting...                <-- connection dropped
+[19:31:16] reconnecting...                <-- BGP route not yet converged
+[19:31:17] reconnecting...
+[19:31:24] reconnecting...
+[seq=0044] [time=19:31:24] alive          <-- reconnected on new node!
+[seq=0045] [time=19:31:25] alive          <-- counter resumes
+```
 
 Leave this running — don't Ctrl+C.
 
-**Narrate**: "Now we have a persistent TCP connection from an external node to vm1,
-routed via BGP. If this connection survives the migration, it proves that not only
-does the IP persist, but BGP routes update correctly so external clients never lose
-connectivity. Let's migrate vm1."
+**Narrate**: "Now we have a TCP client on an external node connecting to vm1 via BGP.
+The client auto-reconnects if the connection drops. During migration, we'll see a
+brief pause while BGP routes converge to the new node, then the stream resumes
+automatically. The same IP, same port, new node — the client doesn't need to know
+anything changed."
 
 ---
 
@@ -430,8 +453,7 @@ kubectl get vmim -w
 
 **Narrate while watching**: "KubeVirt is now creating a new virt-launcher pod on a
 different node. Watch the top-right pane — you'll see a second virt-launcher-vm1 pod
-appear. Both pods are running simultaneously while the VM's memory is being copied.
-And look at the bottom pane — the TCP stream counter keeps incrementing."
+appear. Both pods are running simultaneously while the VM's memory is being copied."
 
 The migration status will progress through phases:
 - `Scheduling` → `Scheduled` → `PreparingTarget` → `TargetReady` → `Running` → `Succeeded`
@@ -440,12 +462,14 @@ Press **Ctrl+C** once you see `Succeeded`.
 
 **What to point out during migration**:
 - **Pane 1 (watch)**: A new `virt-launcher-vm1-XXXXX` pod appears on a different node
-- **Pane 2 (TCP stream)**: The counter keeps incrementing — the persistent connection is ALIVE
+- **Pane 2 (TCP stream)**: The counter pauses briefly, you see "reconnecting..." messages,
+  then the stream resumes — the client auto-reconnected to the same IP on the new node
 - **Pane 0**: Migration status progressing
 
-**Narrate**: "Look at the bottom pane — the TCP stream counter is still incrementing.
-That's a single persistent connection that was established before the migration,
-and it's still alive. The connection was never dropped."
+**Narrate**: "Look at the bottom pane — the TCP stream paused briefly during the
+migration while BGP routes converged to the new node, then the client automatically
+reconnected. Same IP, same port — the external client didn't need any reconfiguration.
+Calico updated the BGP routes so the TOR node now reaches vm1 on its new node."
 
 ---
 
@@ -474,7 +498,7 @@ but the IP is identical."
 
 ```bash
 # 3. Show IPAM state — this is the key proof
-calicoctl ipam show --ip=$VM1_IP
+calicoctl ipam show --allow-version-mismatch --ip=$VM1_IP
 ```
 
 **Narrate**: "Now look at the Calico IPAM state. The Handle ID is still
@@ -484,7 +508,7 @@ transferred IP ownership to the new pod. No manual intervention required."
 
 ```bash
 # 4. Show the WorkloadEndpoint AFTER migration — compare with Act 1
-calicoctl get workloadendpoint -o wide | grep vm1
+calicoctl get workloadendpoint --allow-version-mismatch -o wide | grep vm1
 ```
 
 **Narrate**: "The WorkloadEndpoint has been recreated on the new node. Notice the
@@ -492,9 +516,10 @@ IP is the same (<VM1_IP>/32), the profiles are the same (kns.default,
 ksa.default.default), and the labels are the same — but the node and interface have
 changed to reflect the new location. All the network configuration migrated with the VM."
 
-**Narrate**: "And look at the bottom pane — the TCP stream counter from the
-external TOR node kept incrementing through the migration. An external client,
-routing via BGP, never lost its connection."
+**Narrate**: "And look at the bottom pane — the TCP stream from the external TOR
+node resumed automatically after the migration. The client reconnected to the same
+IP:port on the new node via BGP. The brief interruption (~10-15s) is the time it
+takes for BGP routes to converge — but no manual intervention was needed."
 
 ---
 
@@ -535,13 +560,13 @@ Detected KubeVirt virt-launcher pod, using VM-based handle ID ... isMigrationTar
 This shows the CNI plugin detected the new pod is a **migration target** (not a fresh VM).
 
 ```
-Reusing existing IPs for VM handle ... HandleID="k8s-pod-network.vmi.default.vm1"
+Found existing IPs for VM handle, reusing them ... HandleID="k8s-pod-network.vmi.default.vm1"
 ```
 This shows the CNI plugin **reused the same IP** from the existing VM handle instead of
 allocating a new one.
 
 ```
-Calico CNI IPAM assigned addresses IPv4=[<VM1_IP>/26]
+Calico CNI using IPs: [<VM1_IP>/32]
 ```
 The same IP was assigned to the target pod.
 
@@ -553,11 +578,9 @@ kubectl logs -n calico-system $FELIX_POD -c calico-node --tail=200 | \
 
 Key log lines:
 ```
-Received *proto.WorkloadEndpointUpdate update from calculation graph
-  ... workload_id:"default/virt-launcher-vm1-XXXXX" ... ipv4_nets:"<VM1_IP>/32"
 Updating per-endpoint chains   id=...virt-launcher-vm1-XXXXX...
 Updating endpoint routes       id=...virt-launcher-vm1-XXXXX...
-Endpoint up ... status="up"    workload=...virt-launcher-vm1-XXXXX...
+Reporting combined status.     id=...virt-launcher-vm1-XXXXX... status="up"
 ```
 
 **Narrate**: "Looking at the Calico logs on the destination node, we can see exactly

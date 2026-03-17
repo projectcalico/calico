@@ -95,7 +95,7 @@ validate_cluster() {
     VM2_IP=$(kubectl get vmi vm2 -o jsonpath='{.status.interfaces[0].ipAddress}')
     VM1_NODE=$(kubectl get vmi vm1 -o jsonpath='{.status.nodeName}')
     VM2_NODE=$(kubectl get vmi vm2 -o jsonpath='{.status.nodeName}')
-    VM1_POD=$(kubectl get pods -l kubevirt.io=virt-launcher -l vmi.kubevirt.io/id=vm1 --no-headers -o custom-columns=':metadata.name')
+    VM1_POD=$(kubectl get pods -l kubevirt.io=virt-launcher -l vmi.kubevirt.io/id=vm1 --field-selector status.phase=Running --no-headers -o custom-columns=':metadata.name')
     VM1_POD_IP=$(kubectl get pod "$VM1_POD" -o jsonpath='{.status.podIP}')
 
     echo
@@ -163,13 +163,30 @@ validate_cluster() {
 # ============================================================
 
 create_bgp_peer() {
-    phase "PHASE 2: BGPPeer Setup"
+    phase "PHASE 2: BGPPeer & BGPFilter Setup"
 
-    info "Ensuring Calico BGPPeer exists for TOR node..."
-    if calicoctl get bgppeer tor-bgp-peer --allow-version-mismatch >/dev/null 2>&1; then
-        pass "BGPPeer 'tor-bgp-peer' already exists"
-    else
-        calicoctl apply --allow-version-mismatch -f - <<EOF
+    # Create BGPFilter so each Calico node only exports its own local pod
+    # routes to the TOR, not routes learned via iBGP from other nodes.
+    # Without this filter every node re-advertises every /26 block with
+    # 'next hop self', and BIRD on the TOR picks the lowest router-ID
+    # (master) as preferred next-hop for ALL routes — creating asymmetric
+    # routing that triggers kube-proxy's 'ct state invalid drop' rule.
+    info "Ensuring BGPFilter 'export-local-only' exists..."
+    calicoctl apply --allow-version-mismatch -f - <<'FILTER_EOF'
+apiVersion: projectcalico.org/v3
+kind: BGPFilter
+metadata:
+  name: export-local-only
+spec:
+  exportV4:
+    - action: Reject
+      source: RemotePeers
+    - action: Accept
+FILTER_EOF
+    pass "BGPFilter 'export-local-only' applied"
+
+    info "Ensuring BGPPeer 'tor-bgp-peer' exists with filter..."
+    calicoctl apply --allow-version-mismatch -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
@@ -177,9 +194,10 @@ metadata:
 spec:
   peerIP: $TOR_L2TP_IP
   asNumber: 63000
+  filters:
+    - export-local-only
 EOF
-        pass "Created BGPPeer 'tor-bgp-peer' (TOR L2TP IP: $TOR_L2TP_IP, ASN: 63000)"
-    fi
+    pass "BGPPeer 'tor-bgp-peer' applied (TOR L2TP IP: $TOR_L2TP_IP, ASN: 63000, filter: export-local-only)"
     echo
 }
 

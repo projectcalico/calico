@@ -160,11 +160,7 @@ info "Running gkm setup-tor..."
 gkm run setup-tor || fail "gkm setup-tor failed"
 pass "TOR node setup complete"
 
-# Fix BIRD kernel route export (gkm setup-tor sets 'export none' in kernel protocol — bug)
-# IMPORTANT: Only change 'export none' in the 'protocol kernel' block, NOT in 'template bgp'.
-# Changing the BGP template causes the TOR to advertise routes back to the cluster,
-# which triggers martian source floods and kills all nodes.
-info "Fixing BIRD kernel route export on TOR node..."
+# Read cluster vars needed for TOR configuration
 CLUSTER_NAME=$(grep '^CLUSTER_NAME:' "$TASKVARS" | awk '{print $2}')
 GOOGLE_ZONE=$(grep '^GOOGLE_ZONE:' "$TASKVARS" | awk '{print $2}')
 GOOGLE_PROJECT=$(grep '^GOOGLE_PROJECT:' "$TASKVARS" | awk '{print $2}')
@@ -173,18 +169,103 @@ TOR_PUBLIC_IP=$(gcloud compute instances describe "$TOR_INSTANCE" \
     --project="$GOOGLE_PROJECT" --zone="$GOOGLE_ZONE" \
     --format='value(networkInterfaces[0].accessConfigs[0].natIP)' 2>/dev/null)
 EXTERNAL_KEY="$BZ_ROOT_DIR/.local/external_key"
-if [ -n "$TOR_PUBLIC_IP" ] && [ -f "$EXTERNAL_KEY" ]; then
-    SSH_CMD="ssh -i $EXTERNAL_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@$TOR_PUBLIC_IP"
-    $SSH_CMD "sudo docker exec bird sed -i '/protocol kernel/,/}/ s/export none;/export all;/' /etc/bird.conf && sudo docker exec bird birdcl configure" 2>/dev/null
-    sleep 5
-    ROUTE_COUNT=$($SSH_CMD "ip route | grep -c '192.168'" 2>/dev/null || echo "0")
-    if [ "$ROUTE_COUNT" -gt 0 ]; then
-        pass "BIRD kernel export fixed — $ROUTE_COUNT pod routes in kernel"
-    else
-        info "BIRD config updated but no routes yet — BGP may still be converging"
-    fi
-else
+
+[ -n "$TOR_PUBLIC_IP" ] && [ -f "$EXTERNAL_KEY" ] || \
     fail "Could not reach TOR node (IP: $TOR_PUBLIC_IP, key: $EXTERNAL_KEY)"
+SSH_CMD="ssh -i $EXTERNAL_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@$TOR_PUBLIC_IP"
+
+# Fix BIRD kernel route export.
+# gkm setup-tor sets 'export none' in the kernel protocol block, which prevents
+# BGP-learned routes from being installed in the Linux kernel routing table.
+# We must NOT use a blanket 'export all' — that installs every BIRD route
+# (including GCP internal prefixes) into the kernel, which triggers reverse-path
+# filtering (rp_filter) martian source errors and floods the serial console,
+# eventually making the node unresponsive.
+# Instead, define a filter that only exports pod CIDR routes (192.168.0.0/16)
+# to the kernel and rejects everything else.
+info "Fixing BIRD kernel route export on TOR node..."
+# Write a patch script to the TOR, then execute it inside the BIRD container.
+# This avoids fragile nested quoting in SSH + docker exec.
+$SSH_CMD "cat > /tmp/fix-bird-export.sh" <<'BIRD_SCRIPT'
+#!/bin/sh
+CONF=/etc/bird.conf
+# Add the pod-route filter if not already present
+if ! grep -q export_pod_routes "$CONF"; then
+    sed -i '/^protocol kernel/i \
+# Only install pod CIDR routes into the kernel — reject everything else\
+# to avoid martian source errors from GCP internal prefixes.\
+filter export_pod_routes {\
+    if net ~ 192.168.0.0/16 then accept;\
+    reject;\
+}\
+' "$CONF"
+fi
+# In the kernel protocol block, replace any export directive with our filter
+sed -i '/protocol kernel/,/}/ s/export none;/export filter export_pod_routes;/' "$CONF"
+sed -i '/protocol kernel/,/}/ s/export all;/export filter export_pod_routes;/' "$CONF"
+birdcl configure
+BIRD_SCRIPT
+$SSH_CMD "sudo docker cp /tmp/fix-bird-export.sh bird:/tmp/fix-bird-export.sh && sudo docker exec bird sh /tmp/fix-bird-export.sh" 2>/dev/null
+sleep 5
+ROUTE_COUNT=$($SSH_CMD "ip route | grep -c '192.168'" 2>/dev/null || echo "0")
+if [ "$ROUTE_COUNT" -gt 0 ]; then
+    pass "BIRD kernel export fixed — $ROUTE_COUNT pod routes in kernel"
+else
+    info "BIRD config updated but no routes yet — BGP may still be converging"
+fi
+
+# Create BGPFilter so each Calico node only exports its own local pod routes
+# to the TOR peer, not routes learned via iBGP from other nodes.
+# Without this filter every node re-advertises every /26 block with
+# 'next hop self', and BIRD on the TOR picks the node with the lowest
+# router-ID (the master) as the preferred next-hop for ALL routes.  This
+# creates asymmetric routing: forward path goes through master, return path
+# goes direct — master's conntrack never sees the full flow and kube-proxy's
+# nftables 'ct state invalid drop' rule kills forwarded packets.
+KUBECONFIG_PATH=$(grep '^KUBECONFIG:' "$TASKVARS" | awk '{print $2}')
+export KUBECONFIG="$KUBECONFIG_PATH"
+
+info "Creating BGPFilter to export only local routes to TOR..."
+calicoctl apply --allow-version-mismatch -f - <<'FILTER_EOF'
+apiVersion: projectcalico.org/v3
+kind: BGPFilter
+metadata:
+  name: export-local-only
+spec:
+  exportV4:
+    - action: Reject
+      source: RemotePeers
+    - action: Accept
+FILTER_EOF
+pass "BGPFilter 'export-local-only' created"
+
+# Create BGPPeer for TOR with the filter attached
+MASTER_NODES=$(grep '^CLUSTER_MASTER_NODES:' "$TASKVARS" | awk '{print $2}')
+WORKER_NODES=$(grep '^CLUSTER_NODES:' "$TASKVARS" | awk '{print $2}')
+TOR_L2TP_IP="172.16.8.$(( MASTER_NODES + WORKER_NODES + 1 ))"
+
+info "Creating BGPPeer for TOR node..."
+calicoctl apply --allow-version-mismatch -f - <<PEER_EOF
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: tor-bgp-peer
+spec:
+  peerIP: $TOR_L2TP_IP
+  asNumber: 63000
+  filters:
+    - export-local-only
+PEER_EOF
+pass "BGPPeer 'tor-bgp-peer' created (TOR L2TP IP: $TOR_L2TP_IP, ASN: 63000, filter: export-local-only)"
+
+# Wait for BGP to reconverge and verify TOR received routes
+info "Waiting for BGP to reconverge..."
+sleep 10
+ROUTE_COUNT=$($SSH_CMD "ip route | grep -c '192.168'" 2>/dev/null || echo "0")
+if [ "$ROUTE_COUNT" -gt 0 ]; then
+    pass "TOR has $ROUTE_COUNT pod routes after BGP reconvergence"
+else
+    info "No pod routes on TOR yet — BGP may still be converging"
 fi
 
 # ============================================================
