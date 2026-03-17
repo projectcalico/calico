@@ -58,6 +58,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/dispatcher"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -455,6 +456,12 @@ configRetry:
 		log.Panic("Graceful shutdown took too long")
 	}
 
+	// Get the IPAM client for live migration owner attribute swaps.
+	var ipamClient ipam.Interface
+	if v3Client != nil {
+		ipamClient = v3Client.IPAM()
+	}
+
 	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		healthAggregator,
@@ -463,6 +470,7 @@ configRetry:
 		fatalErrorCallback,
 		k8sClientSet,
 		lookupsCache,
+		ipamClient,
 	)
 
 	// Defer reporting ready until we've started the dataplane driver.  This

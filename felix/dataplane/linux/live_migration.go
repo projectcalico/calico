@@ -16,8 +16,10 @@ package intdataplane
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,9 +27,13 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcapgo"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 )
 
 const etherTypeRARP = layers.EthernetType(0x8035)
@@ -61,9 +67,14 @@ type liveMigrationMonitor struct {
 	migrationUIDs   map[types.WorkloadEndpointID]string
 	newGARPHandle   func(string) (garpHandle, error)
 	convergenceTime time.Duration
+
+	// ipamClient is the Calico IPAM client used to swap owner attributes
+	// when live migration completes.  May be nil if not available.
+	ipamClient    ipam.Interface
+	kubeClientSet *kubernetes.Clientset
 }
 
-func newLiveMigrationMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
+func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Interface, kubeClientSet *kubernetes.Clientset) *liveMigrationMonitor {
 	return &liveMigrationMonitor{
 		roles:         make(map[types.WorkloadEndpointID]proto.LiveMigrationRole),
 		fsms:          make(map[types.WorkloadEndpointID]*liveMigrationFSM),
@@ -75,6 +86,8 @@ func newLiveMigrationMonitor(convergenceTime time.Duration) *liveMigrationMonito
 			return pcapgo.NewEthernetHandle(ifaceName)
 		},
 		convergenceTime: convergenceTime,
+		ipamClient:      ipamClient,
+		kubeClientSet:   kubeClientSet,
 	}
 }
 
@@ -286,6 +299,8 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 		switch next {
 		case liveMigrationStateTarget:
 			f.startGARPDetection()
+		case liveMigrationStateLive:
+			f.startIPAMOwnerSwap()
 		case liveMigrationStateTimeWait:
 			f.startElevatedRoutingTimer()
 		}
@@ -413,6 +428,61 @@ func isGARPOrRARP(packet gopacket.Packet) bool {
 	}
 
 	return false
+}
+
+// startIPAMOwnerSwap begins an asynchronous IPAM owner attribute swap when a
+// live migration completes (Target→Live transition).  It looks up the VMI name
+// from the target pod's labels via the Kubernetes API, then calls
+// vmipam.EnsureActiveVMOwnerAttrs to atomically promote the alternate (target)
+// owner attributes to active.  This runs in a goroutine to avoid blocking the
+// dataplane main loop.
+func (f *liveMigrationFSM) startIPAMOwnerSwap() {
+	if f.monitor.ipamClient == nil || f.monitor.kubeClientSet == nil {
+		f.logCtx.Debug("IPAM client or KubeClientSet not available, skipping owner swap")
+		return
+	}
+
+	// Parse namespace and pod name from the workload ID (format: "namespace/podName").
+	parts := strings.SplitN(f.id.WorkloadId, "/", 2)
+	if len(parts) != 2 {
+		f.logCtx.WithField("workloadID", f.id.WorkloadId).Warn(
+			"Cannot parse workload ID for IPAM owner swap")
+		return
+	}
+	namespace := parts[0]
+	podName := parts[1]
+
+	logCtx := f.logCtx.WithFields(logrus.Fields{
+		"namespace": namespace,
+		"pod":       podName,
+	})
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Look up the VMI name from the target pod's labels.
+		pod, err := f.monitor.kubeClientSet.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+		if err != nil {
+			logCtx.WithError(err).Warn("Failed to look up pod for IPAM owner swap")
+			return
+		}
+		vmiName := pod.Labels["vmi.kubevirt.io/id"]
+		if vmiName == "" {
+			logCtx.Debug("Pod has no vmi.kubevirt.io/id label, skipping IPAM owner swap")
+			return
+		}
+
+		logCtx = logCtx.WithField("vmiName", vmiName)
+		logCtx.Info("Starting IPAM owner attribute swap for live migration")
+
+		err = vmipam.EnsureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, "", namespace, vmiName, podName)
+		if err != nil {
+			logCtx.WithError(err).Warn("Failed to swap IPAM owner attributes")
+			return
+		}
+		logCtx.Info("Successfully swapped IPAM owner attributes")
+	}()
 }
 
 func (m *liveMigrationMonitor) CompleteDeferredWork() error {
