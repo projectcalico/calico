@@ -69,8 +69,16 @@ type liveMigrationMonitor struct {
 	convergenceTime time.Duration
 
 	// ipamClient is the Calico IPAM client used to swap owner attributes
-	// when live migration completes.  May be nil if IPAM support is not available.
-	ipamClient ipam.Interface
+	// when live migration completes.
+	ipamClient               ipam.Interface
+	ensureActiveVMOwnerAttrs func(
+		ctx context.Context,
+		ipamClient ipam.Interface,
+		networkName string,
+		namespace string,
+		vmiName string,
+		targetPodName string,
+	) error
 }
 
 func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Interface) *liveMigrationMonitor {
@@ -85,8 +93,9 @@ func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Inte
 		newGARPHandle: func(ifaceName string) (garpHandle, error) {
 			return pcapgo.NewEthernetHandle(ifaceName)
 		},
-		convergenceTime: convergenceTime,
-		ipamClient:      ipamClient,
+		convergenceTime:          convergenceTime,
+		ipamClient:               ipamClient,
+		ensureActiveVMOwnerAttrs: vmipam.EnsureActiveVMOwnerAttrs,
 	}
 }
 
@@ -440,11 +449,6 @@ func isGARPOrRARP(packet gopacket.Packet) bool {
 // alternate (target) owner attributes to active.  Transient errors are retried
 // with backoff.  This runs in a goroutine to avoid blocking the dataplane main loop.
 func (f *liveMigrationFSM) startIPAMOwnerSwap() {
-	if f.monitor.ipamClient == nil {
-		f.logCtx.Debug("IPAM client not available, skipping owner swap")
-		return
-	}
-
 	vmiName := f.monitor.vmiNames[f.id]
 	if vmiName == "" {
 		f.logCtx.Debug("No VMI name available, skipping IPAM owner swap")
@@ -475,7 +479,7 @@ func (f *liveMigrationFSM) startIPAMOwnerSwap() {
 		const maxRetries = 5
 		backoff := 100 * time.Millisecond
 		for attempt := 1; attempt <= maxRetries; attempt++ {
-			err := vmipam.EnsureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, "", namespace, vmiName, podName)
+			err := f.monitor.ensureActiveVMOwnerAttrs(ctx, f.monitor.ipamClient, "", namespace, vmiName, podName)
 			if err == nil {
 				logCtx.Info("Successfully swapped IPAM owner attributes")
 				return
