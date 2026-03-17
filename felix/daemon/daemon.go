@@ -58,7 +58,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/dispatcher"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -457,10 +456,7 @@ configRetry:
 	}
 
 	// Get the IPAM client for live migration owner attribute swaps.
-	var ipamClient ipam.Interface
-	if v3Client != nil {
-		ipamClient = v3Client.IPAM()
-	}
+	ipamClient := v3Client.IPAM()
 
 	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
 		configParams.Copy(), // Copy to avoid concurrent access.
