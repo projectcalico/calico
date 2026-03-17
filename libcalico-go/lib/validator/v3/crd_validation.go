@@ -171,8 +171,10 @@ func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runti
 		allErrs = append(allErrs, celErrs...)
 	}
 
-	// Convert the defaulted unstructured data back into the typed object
-	// so the caller sees the applied defaults.
+	// Convert the defaulted unstructured data back into the typed object so
+	// the caller sees the applied defaults. We use the converter here (rather
+	// than JSON) because the reverse direction doesn't have the numeric type
+	// mismatch problem that forces toUnstructured to use a JSON round-trip.
 	if m, ok := unstructuredObj.(map[string]any); ok {
 		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(m, obj); err != nil {
 			allErrs = append(allErrs, field.InternalError(nil, fmt.Errorf("failed to convert defaulted %s from unstructured: %w", kind, err)))
