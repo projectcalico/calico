@@ -106,21 +106,19 @@ func RemoveConnectTimeLoadBalancer(ipv4Enabled bool, cgroupv2 string) error {
 		os.Remove(ctlbProgsMap[index].Path())
 	}
 
-	if err := detachCtlbPrograms(ipv4Enabled, pinDir, cgroupv2); err != nil {
+	if err := detachCtlbPrograms(pinDir); err != nil {
 		return err
 	}
 	bpf.CleanUpCalicoPins(pinDir)
 	return nil
 }
 
-func detachCtlbPrograms(ipv4Enabled bool, pinDir, cgroupv2 string) error {
-	numLinksDetached := 0
+func detachCtlbPrograms(pinDir string) error {
 	err := filepath.Walk(pinDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if strings.HasPrefix(info.Name(), "cali_") || strings.HasPrefix(info.Name(), "calico_") {
-			numLinksDetached++
 			log.WithField("path", path).Debug("Detaching pinned link")
 			link, err := libbpf.OpenLink(path)
 			if err != nil {
@@ -152,7 +150,7 @@ func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bo
 	return obj, nil
 }
 
-func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Duration, excludeUDP bool, obj *libbpf.Obj) error {
+func attachProgram(name, ipver, bpfMount, cgroupPath string, obj *libbpf.Obj) error {
 	progName := "calico_" + name + "_v" + ipver
 	progPinPath := path.Join(bpfMount, progName)
 	if _, err := os.Stat(progPinPath); err == nil {
@@ -229,32 +227,32 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 			return err
 		}
 		defer v46Obj.Close()
-		err = attachProgram("connect", "4", pinDir, cgroupPath, udpNotSeen, excludeUDP, v4Obj)
+		err = attachProgram("connect", "4", pinDir, cgroupPath, v4Obj)
 		if err != nil {
 			return err
 		}
-		err = attachProgram("connect", "46", pinDir, cgroupPath, udpNotSeen, excludeUDP, v46Obj)
+		err = attachProgram("connect", "46", pinDir, cgroupPath, v46Obj)
 		if err != nil {
 			return err
 		}
 
 		if !excludeUDP {
-			err = attachProgram("sendmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj)
+			err = attachProgram("sendmsg", "4", pinDir, cgroupPath, v4Obj)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj)
+			err = attachProgram("recvmsg", "4", pinDir, cgroupPath, v4Obj)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("sendmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj)
+			err = attachProgram("sendmsg", "46", pinDir, cgroupPath, v46Obj)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj)
+			err = attachProgram("recvmsg", "46", pinDir, cgroupPath, v46Obj)
 			if err != nil {
 				return err
 			}
@@ -276,18 +274,18 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 				}
 			}
 		} else {
-			err = attachProgram("connect", "6", pinDir, cgroupPath, udpNotSeen, excludeUDP, v6Obj)
+			err = attachProgram("connect", "6", pinDir, cgroupPath, v6Obj)
 			if err != nil {
 				return err
 			}
 
 			if !excludeUDP {
-				err = attachProgram("sendmsg", "6", pinDir, cgroupPath, udpNotSeen, false, v6Obj)
+				err = attachProgram("sendmsg", "6", pinDir, cgroupPath, v6Obj)
 				if err != nil {
 					return err
 				}
 
-				err = attachProgram("recvmsg", "6", pinDir, cgroupPath, udpNotSeen, false, v6Obj)
+				err = attachProgram("recvmsg", "6", pinDir, cgroupPath, v6Obj)
 				if err != nil {
 					return err
 				}

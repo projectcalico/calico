@@ -41,9 +41,6 @@ import (
 
 var memLockOnce sync.Once
 
-// BTFEnabled is always true since we require kernel 5.10+ which supports CO-RE/BTF.
-const BTFEnabled = true
-
 func IncreaseLockedMemoryQuota() {
 	memLockOnce.Do(func() {
 		err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{Cur: unix.RLIM_INFINITY, Max: unix.RLIM_INFINITY})
