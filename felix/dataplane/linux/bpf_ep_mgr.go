@@ -402,6 +402,7 @@ type bpfEndpointManager struct {
 	v6 *bpfEndpointManagerDataplane
 
 	healthAggregator     *health.HealthAggregator
+	permanentBPFErr      error // set when BPF programs fail to load permanently; prevents retries
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 	istioDSCP            uint8
 
@@ -1710,10 +1711,19 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 		for _, hk := range []hook.Hook{hook.Ingress, hook.Egress} {
 			if err := m.dp.loadDefaultPolicies(hk); err != nil {
+				if hook.IsPermanentLoadFailure(err) {
+					m.permanentBPFErr = fmt.Errorf("%w: %w", hook.ErrPermanentLoadFailure, err)
+					logrus.WithError(err).Error(
+						"Failed to load default BPF policies (kernel BPF verifier rejected the program). " +
+							"Calico eBPF dataplane requires kernel 5.10+.")
+					break
+				}
 				logrus.WithError(err).Warn("Failed to load default policies, some programs may default to DENY.")
 			}
 		}
-		logrus.Info("Default BPF policy programs loaded.")
+		if m.permanentBPFErr == nil {
+			logrus.Info("Default BPF policy programs loaded.")
+		}
 
 		m.initUnknownIfaces = nil
 
@@ -1774,7 +1784,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 	})
 
-	if m.dirtyIfaceNames.Len() == 0 {
+	if m.permanentBPFErr != nil {
+		m.reportHealth(false,
+			"BPF program load failed: program rejected by kernel BPF verifier. "+
+				"Calico eBPF dataplane requires kernel 5.10+. See Felix logs for details.")
+	} else if m.dirtyIfaceNames.Len() == 0 {
 		if m.removeOldJumps {
 			oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
 			if err := os.RemoveAll(oldBase); err != nil && os.IsNotExist(err) {
@@ -2078,7 +2092,13 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			logrus.WithField("id", iface).Info("Applied program to host interface")
 			m.dirtyIfaceNames.Discard(iface)
 		} else {
-			if isLinkNotFoundError(err) {
+			if errors.Is(err, hook.ErrPermanentLoadFailure) {
+				logrus.WithField("iface", iface).WithError(err).Error(
+					"BPF program load failed permanently (kernel BPF verifier rejected the program). " +
+						"Calico eBPF dataplane requires kernel 5.10+. See logs above for verifier output.")
+				m.permanentBPFErr = err
+				m.dirtyIfaceNames.Discard(iface)
+			} else if isLinkNotFoundError(err) {
 				logrus.WithField("iface", iface).Debug(
 					"Tried to apply BPF program to interface but the interface wasn't present.  " +
 						"Will retry if it shows up.")
@@ -2162,7 +2182,13 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 				m.happyWEPsDirty = true
 			}
 
-			if isLinkNotFoundError(err) {
+			if errors.Is(err, hook.ErrPermanentLoadFailure) {
+				logrus.WithField("wep", wlID).WithError(err).Error(
+					"BPF program load failed permanently (kernel BPF verifier rejected the program). " +
+						"Calico eBPF dataplane requires kernel 5.10+. See logs above for verifier output.")
+				m.permanentBPFErr = err
+				m.dirtyIfaceNames.Discard(ifaceName)
+			} else if isLinkNotFoundError(err) {
 				logrus.WithField("wep", wlID).Debug(
 					"Tried to apply BPF program to interface but the interface wasn't present.  " +
 						"Will retry if it shows up.")
