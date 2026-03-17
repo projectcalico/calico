@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,36 +85,47 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 	if err != nil {
 		return nil, err
 	}
-	ec := &emitterClient{url: url, client: client}
+	return &emitterClient{
+		url:        url,
+		client:     client,
+		caCert:     caCert,
+		clientKey:  clientKey,
+		clientCert: clientCert,
+		serverName: serverName,
+	}, nil
+}
 
-	if caCert != "" || clientKey != "" || clientCert != "" {
-		// If any of the client certificates are provided, we need to watch the files for changes.
-		// If any changes, we'll update the underlying HTTP client with the new certificates.
-		updChan := make(chan struct{}, 1)
-
-		// Start a goroutine to read from the channel and update the client.
-		go func() {
-			for range updChan {
-				logrus.Info("Reloading client after certificate change")
-				client, err = newHTTPClient(caCert, clientKey, clientCert, serverName)
-				if err != nil {
-					logrus.WithError(err).Error("Failed to reload client after certificate change")
-					continue
-				}
-				ec.setClient(client)
-			}
-		}()
-
-		// Start a goroutine to watch for changes to the CA cert file and feed
-		// them into the update channel.
-		monitorFn, err := utils.WatchFilesFn(updChan, 30*time.Second, caCert, clientCert, clientKey)
-		if err != nil {
-			return nil, fmt.Errorf("error setting up CA cert file watcher: %s", err)
-		}
-		go monitorFn(context.Background())
+// watchCerts starts goroutines to watch for certificate file changes and reload the HTTP client
+// when they change. The goroutines exit when ctx is cancelled.
+func (e *emitterClient) watchCerts(ctx context.Context) error {
+	if e.caCert == "" && e.clientKey == "" && e.clientCert == "" {
+		return nil
 	}
 
-	return ec, nil
+	updChan := make(chan struct{}, 1)
+
+	// Start a goroutine to read from the channel and update the client.
+	go func() {
+		for range updChan {
+			logrus.Info("Reloading client after certificate change")
+			client, err := newHTTPClient(e.caCert, e.clientKey, e.clientCert, e.serverName)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to reload client after certificate change")
+				continue
+			}
+			e.setClient(client)
+		}
+	}()
+
+	// Start a goroutine to watch for changes to the CA cert file and feed
+	// them into the update channel. When ctx is cancelled, the watcher exits
+	// and closes updChan, which causes the reload goroutine above to exit.
+	monitorFn, err := utils.WatchFilesFn(updChan, 30*time.Second, e.caCert, e.clientCert, e.clientKey)
+	if err != nil {
+		return fmt.Errorf("error setting up CA cert file watcher: %w", err)
+	}
+	go monitorFn(ctx)
+	return nil
 }
 
 type emitterClient struct {
@@ -122,7 +133,11 @@ type emitterClient struct {
 	sync.Mutex
 	client *http.Client
 
-	url string
+	url        string
+	caCert     string
+	clientKey  string
+	clientCert string
+	serverName string
 }
 
 func (e *emitterClient) setClient(client *http.Client) {
