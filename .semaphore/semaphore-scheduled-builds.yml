@@ -576,6 +576,55 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "E2E tests on GCP kubeadm (local binary)"
+    run:
+      when: "true or change_in(['/e2e/**'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    dependencies:
+      - Prerequisites
+    execution_time_limit:
+      hours: 4
+    task:
+      secrets:
+        - name: marvin-github-ssh-private-key
+        - name: banzai-secrets
+      prologue:
+        commands_file: .semaphore/end-to-end/scripts/global_prologue.sh
+      epilogue:
+        always:
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+      env_vars:
+        - name: TEST_TYPE
+          value: k8s-e2e
+        - name: PRODUCT
+          value: calico
+        - name: FUNCTIONAL_AREA
+          value: "e2e-gcp.yml"
+        - name: RUN_LOCAL_TESTS
+          value: "true"
+        - name: USE_PRIVATE_REGISTRY
+          value: "true"
+        - name: PRIVATE_REGISTRY
+          value: "quay.io/"
+        - name: K8S_E2E_FLAGS
+          value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+        - name: USE_API_SERVER
+          value: "false"
+      jobs:
+        - name: gcp-kubeadm - e2e local binary
+          execution_time_limit:
+            hours: 3
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values: ["gcp-kubeadm"]
+            - env_var: K8S_VERSION
+              values: ["stable"]
+            - env_var: INSTALLER
+              values: ["operator"]
+            - env_var: DATAPLANE
+              values: ["CalicoBPF"]
   - name: E2E script & pipeline validations
     run:
       when: "true or change_in(['/.semaphore/end-to-end/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
