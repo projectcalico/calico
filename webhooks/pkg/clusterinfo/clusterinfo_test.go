@@ -24,6 +24,8 @@ import (
 )
 
 func TestAdmit(t *testing.T) {
+	namespace = "calico-system"
+
 	tests := []struct {
 		name        string
 		username    string
@@ -37,16 +39,16 @@ func TestAdmit(t *testing.T) {
 			expectAllow: true,
 		},
 		{
-			name:        "calico-node in kube-system can create",
-			username:    "system:serviceaccount:kube-system:calico-node",
-			operation:   v1.Create,
-			expectAllow: true,
-		},
-		{
 			name:        "calico-kube-controllers can update",
 			username:    "system:serviceaccount:calico-system:calico-kube-controllers",
 			operation:   v1.Update,
 			expectAllow: true,
+		},
+		{
+			name:        "calico-node in wrong namespace cannot create",
+			username:    "system:serviceaccount:default:calico-node",
+			operation:   v1.Create,
+			expectAllow: false,
 		},
 		{
 			name:        "regular user cannot create",
@@ -68,7 +70,7 @@ func TestAdmit(t *testing.T) {
 		},
 		{
 			name:        "other service account cannot create",
-			username:    "system:serviceaccount:default:my-app",
+			username:    "system:serviceaccount:calico-system:my-app",
 			operation:   v1.Create,
 			expectAllow: false,
 		},
@@ -107,15 +109,17 @@ func TestAdmit(t *testing.T) {
 }
 
 func TestIsAllowedUser(t *testing.T) {
+	namespace = "calico-system"
+
 	tests := []struct {
 		username string
 		allowed  bool
 	}{
 		{"system:serviceaccount:calico-system:calico-node", true},
-		{"system:serviceaccount:kube-system:calico-node", true},
 		{"system:serviceaccount:calico-system:calico-kube-controllers", true},
-		{"system:serviceaccount:default:calico-node", true},
-		{"system:serviceaccount:default:my-app", false},
+		{"system:serviceaccount:kube-system:calico-node", false},
+		{"system:serviceaccount:default:calico-node", false},
+		{"system:serviceaccount:calico-system:my-app", false},
 		{"admin", false},
 		{"system:admin", false},
 		{"system:serviceaccount:calico-node", false},

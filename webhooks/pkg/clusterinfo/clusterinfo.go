@@ -17,6 +17,7 @@ package clusterinfo
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -26,6 +27,8 @@ import (
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
 
+const saNamespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
 // allowedServiceAccounts is the set of service account names (not fully-qualified) that are
 // permitted to write ClusterInformation. These are the Calico system components that need
 // to create and update ClusterInformation during normal operation.
@@ -34,10 +37,20 @@ var allowedServiceAccounts = map[string]struct{}{
 	"calico-kube-controllers": {},
 }
 
+// namespace is the namespace the webhook pod is running in, used to validate
+// that allowed service accounts are in the expected namespace.
+var namespace string
+
 // RegisterHook registers the ClusterInformation write-protection webhook handler at the /cluster-info path.
 func RegisterHook(handleFn utils.HandleFn) {
+	ns, err := os.ReadFile(saNamespaceFile)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to read pod namespace")
+	}
+	namespace = strings.TrimSpace(string(ns))
 	logrus.WithFields(logrus.Fields{
-		"path": "/cluster-info",
+		"path":      "/cluster-info",
+		"namespace": namespace,
 	}).Info("Registering ClusterInformation write-protection webhook")
 
 	handler := utils.NewDelegateToV1AdmitHandler(admit)
@@ -75,13 +88,16 @@ func admit(ar v1.AdmissionReview) *v1.AdmissionResponse {
 
 // isAllowedUser returns true if the given username corresponds to a Calico system service account
 // that is permitted to write ClusterInformation. Service account usernames follow the format
-// "system:serviceaccount:<namespace>:<name>".
+// "system:serviceaccount:<namespace>:<name>". The service account must be in the same namespace
+// as the webhook pod.
 func isAllowedUser(username string) bool {
 	parts := strings.Split(username, ":")
 	if len(parts) != 4 || parts[0] != "system" || parts[1] != "serviceaccount" {
 		return false
 	}
-	saName := parts[3]
-	_, ok := allowedServiceAccounts[saName]
+	if parts[2] != namespace {
+		return false
+	}
+	_, ok := allowedServiceAccounts[parts[3]]
 	return ok
 }
