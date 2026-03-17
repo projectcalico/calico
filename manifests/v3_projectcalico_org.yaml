@@ -34151,7 +34151,7 @@ spec:
                   reason: FieldValueForbidden
                   rule:
                     (!has(self.peerSelector) || size(self.peerSelector) == 0) || !has(self.asNumber)
-                    || self.asNumber == 0
+                    || self.asNumber == uint(0)
                 - message: peerIP must be empty when localWorkloadSelector is set
                   reason: FieldValueForbidden
                   rule:
@@ -34166,7 +34166,7 @@ spec:
                   reason: FieldValueInvalid
                   rule:
                     (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
-                    == 0) || (has(self.asNumber) && self.asNumber != 0)
+                    == 0) || (has(self.asNumber) && self.asNumber != uint(0))
           required:
             - metadata
             - spec
@@ -38487,18 +38487,18 @@ spec:
             - message: The 'kube-admin' tier must have default action 'Pass'
               reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'kube-admin' ? self.spec.defaultAction ==
-                'Pass' : true"
+                "self.metadata.name == 'kube-admin' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'kube-baseline' tier must have default action 'Pass'
               reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'kube-baseline' ? self.spec.defaultAction
-                == 'Pass' : true"
+                "self.metadata.name == 'kube-baseline' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'default' tier must have default action 'Deny'
               reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny'
-                : true"
+                "self.metadata.name == 'default' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Deny') : true"
       served: true
       storage: true
       subresources:
