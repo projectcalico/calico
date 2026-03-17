@@ -42,37 +42,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
-// uidAssigningClient wraps a controller-runtime client and assigns a deterministic
-// UID on Create, since the simple ObjectTracker doesn't auto-assign UIDs.
-type uidAssigningClient struct {
-	rtclient.Client
-}
-
-func (u *uidAssigningClient) Create(ctx context.Context, obj rtclient.Object, opts ...rtclient.CreateOption) error {
-	if obj.GetUID() == "" {
-		key := obj.GetName()
-		if obj.GetNamespace() != "" {
-			key = obj.GetNamespace() + "/" + key
-		}
-		obj.SetUID(types.UID("v3-uid-" + key))
-	}
-	return u.Client.Create(ctx, obj, opts...)
-}
-
-// retryTestClient wraps a real client and returns a transient error on the first Create call.
-type retryTestClient struct {
-	rtclient.Client
-	createCalls *int
-}
-
-func (r *retryTestClient) Create(ctx context.Context, obj rtclient.Object, opts ...rtclient.CreateOption) error {
-	*r.createCalls++
-	if *r.createCalls == 1 {
-		return kerrors.NewServiceUnavailable("transient")
-	}
-	return r.Client.Create(ctx, obj, opts...)
-}
-
 // newTestController creates a migrationController with fake clients for unit testing.
 func newTestController(t *testing.T, objects ...runtime.Object) (*migrationController, *fakedynamic.FakeDynamicClient) {
 	t.Helper()

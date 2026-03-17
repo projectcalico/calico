@@ -16,7 +16,6 @@ package migration
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"reflect"
 	"testing"
@@ -100,45 +99,6 @@ func TestCopyLabelsAndAnnotations(t *testing.T) {
 	}
 }
 
-// mockBackendClient is a simple mock of the api.Client interface for testing.
-type mockBackendClient struct {
-	api.Client
-	resources   map[string][]*model.KVPair
-	ipamBlocks  []*model.KVPair
-	ipamHandles []*model.KVPair
-	clusterInfo *model.KVPair
-}
-
-func (m *mockBackendClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	switch list.(type) {
-	case model.BlockListOptions:
-		return &model.KVPairList{KVPairs: m.ipamBlocks}, nil
-	case model.IPAMHandleListOptions:
-		return &model.KVPairList{KVPairs: m.ipamHandles}, nil
-	default:
-		rlo := list.(model.ResourceListOptions)
-		kvps := m.resources[rlo.Kind]
-		return &model.KVPairList{KVPairs: kvps}, nil
-	}
-}
-
-func (m *mockBackendClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
-	rk, ok := key.(model.ResourceKey)
-	if ok && rk.Kind == apiv3.KindClusterInformation && m.clusterInfo != nil {
-		return m.clusterInfo, nil
-	}
-	return nil, fmt.Errorf("not found: %v", key)
-}
-
-func (m *mockBackendClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	rk, ok := kvp.Key.(model.ResourceKey)
-	if ok && rk.Kind == apiv3.KindClusterInformation {
-		m.clusterInfo = kvp
-		return kvp, nil
-	}
-	return nil, fmt.Errorf("not found: %v", kvp.Key)
-}
-
 func newTestRTClient(t *testing.T) rtclient.Client {
 	t.Helper()
 	s := runtime.NewScheme()
@@ -150,26 +110,6 @@ func newTestRTClient(t *testing.T) rtclient.Client {
 	codecs := serializer.NewCodecFactory(s)
 	tracker := k8stesting.NewObjectTracker(s, codecs.UniversalDecoder())
 	return fakertclient.NewClientBuilder().WithScheme(s).WithObjectTracker(tracker).Build()
-}
-
-func testTierMigrator() ResourceMigrator {
-	return ResourceMigrator{
-		Kind:         apiv3.KindTier,
-		Order:        OrderTiers,
-		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
-		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
-		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, c, apiv3.KindTier)
-		},
-		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
-			v1 := kvp.Value.(*apiv3.Tier)
-			return &apiv3.Tier{
-				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
-				Spec:       *v1.Spec.DeepCopy(),
-			}, nil
-		},
-	}
 }
 
 func TestMigrateResourceType_NewResources(t *testing.T) {

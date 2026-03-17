@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"sort"
 	"time"
 
@@ -334,7 +333,7 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 			if err != nil || existing == nil {
 				continue
 			}
-			if !reflect.DeepEqual(migrator.GetSpec(v3Obj), migrator.GetSpec(existing)) {
+			if !specsEqual(migrator, v3Obj, existing) {
 				preCheckConflicts++
 				logCtx.WithFields(logrus.Fields{
 					"kind": migrator.Kind,

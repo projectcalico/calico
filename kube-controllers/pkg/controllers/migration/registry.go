@@ -25,7 +25,9 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -299,7 +301,7 @@ func CheckConflicts(ctx context.Context, bc api.Client, rtClient client.Client, 
 			}
 			return nil, fmt.Errorf("getting v3 %s/%s: %w", m.Kind, v1Obj.GetName(), getErr)
 		}
-		if !reflect.DeepEqual(m.GetSpec(v1Obj), m.GetSpec(existing)) {
+		if !specsEqual(m, v1Obj, existing) {
 			conflicts = append(conflicts, ConflictInfo{Kind: m.Kind, Name: v1Obj.GetName()})
 		}
 	}
@@ -345,7 +347,7 @@ func migrateOneResource(ctx context.Context, rtClient client.Client, m ResourceM
 	}
 
 	if existing != nil {
-		if reflect.DeepEqual(m.GetSpec(v3Obj), m.GetSpec(existing)) {
+		if specsEqual(m, v3Obj, existing) {
 			item.logCtx.Debug("v3 resource already exists with matching spec, skipping")
 			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: existing.GetUID()}
 		}
@@ -488,25 +490,22 @@ func RemapOwnerReferences(ctx context.Context, rtClient client.Client, uidMap ma
 	return nil
 }
 
-// extractItems uses reflection to pull the Items slice from a typed list object
-// (e.g., apiv3.TierList) and return them as []client.Object.
+// extractItems pulls the Items slice from a typed list object (e.g., apiv3.TierList)
+// using the apimachinery meta helpers instead of manual reflection.
 func extractItems(list client.ObjectList) []client.Object {
-	v := reflect.ValueOf(list)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	itemsField := v.FieldByName("Items")
-	if !itemsField.IsValid() {
-		return nil
-	}
-	result := make([]client.Object, itemsField.Len())
-	for i := range itemsField.Len() {
-		item := itemsField.Index(i).Addr().Interface()
-		if obj, ok := item.(client.Object); ok {
-			result[i] = obj
+	var result []client.Object
+	_ = meta.EachListItem(list, func(obj runtime.Object) error {
+		if o, ok := obj.(client.Object); ok {
+			result = append(result, o)
 		}
-	}
+		return nil
+	})
 	return result
+}
+
+// specsEqual returns true if two v3 objects have the same spec according to the migrator's GetSpec function.
+func specsEqual(m ResourceMigrator, a, b client.Object) bool {
+	return reflect.DeepEqual(m.GetSpec(a), m.GetSpec(b))
 }
 
 // copyLabelsAndAnnotations copies labels and annotations from a v1 resource (read via libcalico-go)
