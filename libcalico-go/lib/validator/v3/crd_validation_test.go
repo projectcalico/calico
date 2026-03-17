@@ -230,6 +230,112 @@ func TestCRDValidation_IPPool(t *testing.T) {
 	})
 }
 
+// TestApplyCRDDefaults_Tier verifies that CRD schema defaults are applied to
+// Tier objects. The Tier CRD has a default of "Deny" for spec.defaultAction.
+func TestApplyCRDDefaults_Tier(t *testing.T) {
+	defaultOrder := apiv3.DefaultTierOrder
+
+	// Create a default tier without setting defaultAction.
+	tier := &apiv3.Tier{
+		TypeMeta:   metav1.TypeMeta{Kind: "Tier", APIVersion: "projectcalico.org/v3"},
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.TierSpec{Order: &defaultOrder},
+	}
+
+	if tier.Spec.DefaultAction != nil {
+		t.Fatalf("expected nil DefaultAction before defaulting, got %v", *tier.Spec.DefaultAction)
+	}
+
+	if err := ApplyCRDDefaults(tier); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if tier.Spec.DefaultAction == nil {
+		t.Fatal("expected DefaultAction to be set after defaulting, got nil")
+	}
+	if *tier.Spec.DefaultAction != apiv3.Deny {
+		t.Errorf("expected DefaultAction %q, got %q", apiv3.Deny, *tier.Spec.DefaultAction)
+	}
+}
+
+// TestApplyCRDDefaults_IPPool verifies CRD defaults for IPPool. The CRD
+// schema defaults spec.assignmentMode to "Automatic".
+func TestApplyCRDDefaults_IPPool(t *testing.T) {
+	pool := &apiv3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+		Spec: apiv3.IPPoolSpec{
+			CIDR: "10.0.0.0/24",
+		},
+	}
+
+	if pool.Spec.AssignmentMode != nil {
+		t.Fatalf("expected nil AssignmentMode before defaulting, got %v", *pool.Spec.AssignmentMode)
+	}
+
+	if err := ApplyCRDDefaults(pool); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if pool.Spec.AssignmentMode == nil {
+		t.Fatal("expected AssignmentMode to be set after defaulting, got nil")
+	}
+	if *pool.Spec.AssignmentMode != apiv3.Automatic {
+		t.Errorf("expected AssignmentMode %q, got %q", apiv3.Automatic, *pool.Spec.AssignmentMode)
+	}
+}
+
+// TestApplyCRDDefaults_DoesNotOverwrite verifies that defaults do not
+// overwrite explicitly set values.
+func TestApplyCRDDefaults_DoesNotOverwrite(t *testing.T) {
+	customOrder := float64(100)
+	allow := apiv3.Allow
+
+	tier := &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-tier"},
+		Spec:       apiv3.TierSpec{Order: &customOrder, DefaultAction: &allow},
+	}
+
+	if err := ApplyCRDDefaults(tier); err != nil {
+		t.Fatalf("ApplyCRDDefaults failed: %v", err)
+	}
+
+	if *tier.Spec.DefaultAction != apiv3.Allow {
+		t.Errorf("expected DefaultAction to remain %q, got %q", apiv3.Allow, *tier.Spec.DefaultAction)
+	}
+}
+
+// TestApplyCRDDefaults_TierValidationWithDefault verifies that a Tier with
+// no explicit defaultAction gets the CRD default ("Deny") applied before
+// validation, allowing the 'default' tier to pass CEL rules.
+func TestApplyCRDDefaults_TierValidationWithDefault(t *testing.T) {
+	defaultOrder := apiv3.DefaultTierOrder
+
+	// Without defaulting, this would fail CEL validation because the
+	// 'default' tier requires defaultAction == "Deny".
+	tier := &apiv3.Tier{
+		TypeMeta:   metav1.TypeMeta{Kind: "Tier", APIVersion: "projectcalico.org/v3"},
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.TierSpec{Order: &defaultOrder},
+	}
+
+	err := Validate(tier)
+	if err != nil {
+		t.Errorf("expected no error after defaulting + validation, got: %v", err)
+	}
+}
+
+// TestApplyCRDDefaults_UnknownKind verifies that defaulting is a no-op for
+// unknown kinds.
+func TestApplyCRDDefaults_UnknownKind(t *testing.T) {
+	obj := &apiv3.Tier{}
+	obj.APIVersion = "fake/v1"
+	obj.Kind = "FakeKind"
+
+	if err := ApplyCRDDefaults(obj); err != nil {
+		t.Errorf("expected no error for unknown kind, got: %v", err)
+	}
+}
+
 // TestCRDValidation_CombinedWithStructValidation verifies that both Go struct
 // validation errors and CRD validation errors are reported together.
 func TestCRDValidation_CombinedWithStructValidation(t *testing.T) {

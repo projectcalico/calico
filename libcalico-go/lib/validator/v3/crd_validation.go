@@ -26,6 +26,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	celvalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
+	schemadefaulting "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/defaulting"
 	schemavalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -164,6 +165,46 @@ func validateCRD(ctx context.Context, obj runtime.Object, oldObj runtime.Object)
 	}
 
 	return allErrs
+}
+
+// ApplyCRDDefaults applies CRD schema default values to the given object,
+// matching the defaulting behavior the Kubernetes API server performs on
+// admission. This is needed for etcd-mode clients where no API server is
+// present to apply defaults.
+//
+// The object is modified in-place. Returns an error only on conversion
+// failures; returns nil if the object's Kind has no CRD schema or no
+// defaults to apply.
+func ApplyCRDDefaults(obj runtime.Object) error {
+	if crdInitErr != nil {
+		return crdInitErr
+	}
+
+	kind := resolveKind(obj)
+	s, ok := schemas[kind]
+	if !ok {
+		return nil
+	}
+
+	// Convert to unstructured so we can apply defaults.
+	unstructuredObj, err := toUnstructured(obj)
+	if err != nil {
+		return fmt.Errorf("failed to convert %s to unstructured: %w", kind, err)
+	}
+
+	// Apply CRD schema defaults to the unstructured representation.
+	schemadefaulting.Default(unstructuredObj, s)
+
+	// Marshal the defaulted unstructured map back into the typed object.
+	raw, err := json.Marshal(unstructuredObj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal defaulted %s: %w", kind, err)
+	}
+	if err := json.Unmarshal(raw, obj); err != nil {
+		return fmt.Errorf("failed to unmarshal defaulted %s: %w", kind, err)
+	}
+
+	return nil
 }
 
 // resolveKind returns the Kind string for a runtime.Object, falling back to
