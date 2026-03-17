@@ -21,9 +21,9 @@ import (
 	"reflect"
 	"testing"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -488,7 +488,7 @@ func TestMigrateIPAMBlock_Full(t *testing.T) {
 		V3Object:     func() rtclient.Object { return &apiv3.IPAMBlock{} },
 		V3ObjectList: func() rtclient.ObjectList { return &apiv3.IPAMBlockList{} },
 		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.IPAMBlock).Spec },
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) { return listV1IPAMBlocks(ctx, c) },
+		ListV1:       func(ctx context.Context, c api.Client) (*model.KVPairList, error) { return listV1IPAMBlocks(ctx, c) },
 		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			v1 := kvp.Value.(*apiv3.IPAMBlock)
 			v3 := &apiv3.IPAMBlock{
@@ -585,7 +585,7 @@ func TestMigrateIPAMHandle_Full(t *testing.T) {
 		V3Object:     func() rtclient.Object { return &apiv3.IPAMHandle{} },
 		V3ObjectList: func() rtclient.ObjectList { return &apiv3.IPAMHandleList{} },
 		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.IPAMHandle).Spec },
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) { return listV1IPAMHandles(ctx, c) },
+		ListV1:       func(ctx context.Context, c api.Client) (*model.KVPairList, error) { return listV1IPAMHandles(ctx, c) },
 		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
 			v1 := kvp.Value.(*apiv3.IPAMHandle)
 			v3 := &apiv3.IPAMHandle{
