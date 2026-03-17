@@ -173,7 +173,6 @@ local:kube-controllers/pkg/converter
 local:kube-controllers/pkg/status
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
-local:libcalico-go/config
 local:libcalico-go/lib/apiconfig
 local:libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme
 local:libcalico-go/lib/apis/internalapi
