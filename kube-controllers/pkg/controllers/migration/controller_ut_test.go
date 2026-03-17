@@ -322,7 +322,10 @@ func TestLockDatastore(t *testing.T) {
 	c, _ := testController(t)
 
 	// Set up v1 ClusterInformation via backend client mock.
-	bc := c.backendClient.(*mockBackendClient)
+	bc, ok := c.backendClient.(*mockBackendClient)
+	if !ok {
+		t.Fatalf("expected backendClient to be *mockBackendClient, got %T", c.backendClient)
+	}
 	ready := true
 	bc.clusterInfo = &model.KVPair{
 		Key: model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName},
@@ -348,7 +351,10 @@ func TestLockDatastore(t *testing.T) {
 	}
 
 	// Verify v1 was locked.
-	ci := bc.clusterInfo.Value.(*apiv3.ClusterInformation)
+	ci, ok := bc.clusterInfo.Value.(*apiv3.ClusterInformation)
+	if !ok {
+		t.Fatalf("expected v1 ClusterInformation to be *apiv3.ClusterInformation, got %T", bc.clusterInfo.Value)
+	}
 	if ci.Spec.DatastoreReady == nil || *ci.Spec.DatastoreReady {
 		t.Error("expected v1 ClusterInformation DatastoreReady=false after lock")
 	}
@@ -368,7 +374,10 @@ func TestUnlockDatastore(t *testing.T) {
 	}
 
 	// Set up v1 as locked.
-	bc := c.backendClient.(*mockBackendClient)
+	bc, ok := c.backendClient.(*mockBackendClient)
+	if !ok {
+		t.Fatalf("expected backendClient to be *mockBackendClient, got %T", c.backendClient)
+	}
 	bc.clusterInfo = &model.KVPair{
 		Key: model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName},
 		Value: &apiv3.ClusterInformation{
@@ -395,7 +404,10 @@ func TestUnlockDatastore(t *testing.T) {
 	// Verify v1 remains locked — v1 stays locked intentionally so that
 	// components still reading v1 block CNI operations until they roll
 	// out with v3 mode.
-	ci := bc.clusterInfo.Value.(*apiv3.ClusterInformation)
+	ci, ok := bc.clusterInfo.Value.(*apiv3.ClusterInformation)
+	if !ok {
+		t.Fatalf("expected v1 ClusterInformation to be *apiv3.ClusterInformation, got %T", bc.clusterInfo.Value)
+	}
 	if ci.Spec.DatastoreReady == nil || *ci.Spec.DatastoreReady {
 		t.Error("expected v1 ClusterInformation DatastoreReady=false (should stay locked)")
 	}
@@ -425,7 +437,10 @@ func TestHandleDeletion_Abort(t *testing.T) {
 	c, _ := testController(t, cr)
 
 	// Set up v1 backend mock as locked.
-	bc := c.backendClient.(*mockBackendClient)
+	bc, ok := c.backendClient.(*mockBackendClient)
+	if !ok {
+		t.Fatalf("expected backendClient to be *mockBackendClient, got %T", c.backendClient)
+	}
 	ready := false
 	bc.clusterInfo = &model.KVPair{
 		Key: model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName},
@@ -449,7 +464,10 @@ func TestHandleDeletion_Abort(t *testing.T) {
 	}
 
 	// Verify v1 ClusterInformation was restored to ready.
-	ci := bc.clusterInfo.Value.(*apiv3.ClusterInformation)
+	ci, ok := bc.clusterInfo.Value.(*apiv3.ClusterInformation)
+	if !ok {
+		t.Fatalf("expected v1 ClusterInformation to be *apiv3.ClusterInformation, got %T", bc.clusterInfo.Value)
+	}
 	if ci.Spec.DatastoreReady == nil || !*ci.Spec.DatastoreReady {
 		t.Error("expected v1 ClusterInformation DatastoreReady=true after abort")
 	}
@@ -477,7 +495,10 @@ func TestMigrateResourceType_TransientError(t *testing.T) {
 			return listV1Resources(ctx, c, apiv3.KindTier)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.Tier)
+			v1, ok := kvp.Value.(*apiv3.Tier)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type: %T", kvp.Value)
+			}
 			return &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
 				Spec:       *v1.Spec.DeepCopy(),
@@ -542,7 +563,10 @@ func TestMigrateResourceType_ContentMatch(t *testing.T) {
 			return listV1Resources(ctx, c, apiv3.KindTier)
 		},
 		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
-			v1 := kvp.Value.(*apiv3.Tier)
+			v1, ok := kvp.Value.(*apiv3.Tier)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type: %T", kvp.Value)
+			}
 			v3 := &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
 				Spec:       *v1.Spec.DeepCopy(),
@@ -571,7 +595,10 @@ func TestMigrateResourceType_ContentMatch(t *testing.T) {
 	}
 
 	// Verify the created object matches the original.
-	tier := createdObj.(*apiv3.Tier)
+	tier, ok := createdObj.(*apiv3.Tier)
+	if !ok {
+		t.Fatalf("expected created object to be *apiv3.Tier, got %T", createdObj)
+	}
 	if tier.Name != "my-tier" {
 		t.Errorf("expected name my-tier, got %s", tier.Name)
 	}

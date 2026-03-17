@@ -331,7 +331,77 @@ func RegisterOSSResources(v3Client clientset.Interface) {
 		},
 	})
 
-	// 5. IPPool
+	// 5. ClusterInformation
+	Register(ResourceMigrator{
+		Kind:  apiv3.KindClusterInformation,
+		Order: OrderClusterInformation,
+		ListV1: func(ctx context.Context, bc api.Client) (*model.KVPairList, error) {
+			return listV1Resources(ctx, bc, apiv3.KindClusterInformation)
+		},
+		Convert: func(kvp *model.KVPair) (metav1.Object, error) {
+			v1, ok := kvp.Value.(*apiv3.ClusterInformation)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for ClusterInformation: %T", kvp.Value)
+			}
+			v3 := &apiv3.ClusterInformation{
+				TypeMeta:   newV3TypeMeta(apiv3.KindClusterInformation),
+				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
+				Spec:       *v1.Spec.DeepCopy(),
+			}
+			copyLabelsAndAnnotations(v1, v3)
+			return v3, nil
+		},
+		CreateV3: func(ctx context.Context, obj metav1.Object) error {
+			typed, ok := obj.(*apiv3.ClusterInformation)
+			if !ok {
+				return fmt.Errorf("unexpected type for ClusterInformation: %T", obj)
+			}
+			_, err := pc.ClusterInformations().Create(ctx, typed, metav1.CreateOptions{})
+			return err
+		},
+		GetV3: func(ctx context.Context, name, namespace string) (metav1.Object, error) {
+			obj, err := pc.ClusterInformations().Get(ctx, name, metav1.GetOptions{})
+			if kerrors.IsNotFound(err) {
+				return nil, nil
+			}
+			return obj, err
+		},
+		SpecsEqual: func(a, b metav1.Object) bool {
+			aTyped, ok := a.(*apiv3.ClusterInformation)
+			if !ok {
+				return false
+			}
+			bTyped, ok := b.(*apiv3.ClusterInformation)
+			if !ok {
+				return false
+			}
+			return reflect.DeepEqual(aTyped.Spec, bTyped.Spec)
+		},
+		ListV3: func(ctx context.Context) ([]metav1.Object, error) {
+			list, err := pc.ClusterInformations().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			result := make([]metav1.Object, len(list.Items))
+			for i := range list.Items {
+				result[i] = &list.Items[i]
+			}
+			return result, nil
+		},
+		UpdateV3: func(ctx context.Context, obj metav1.Object) error {
+			typed, ok := obj.(*apiv3.ClusterInformation)
+			if !ok {
+				return fmt.Errorf("unexpected type for ClusterInformation: %T", obj)
+			}
+			_, err := pc.ClusterInformations().Update(ctx, typed, metav1.UpdateOptions{})
+			return err
+		},
+		DeleteV3: func(ctx context.Context, name, namespace string) error {
+			return pc.ClusterInformations().Delete(ctx, name, metav1.DeleteOptions{})
+		},
+	})
+
+	// 6. IPPool
 	Register(ResourceMigrator{
 		Kind:  apiv3.KindIPPool,
 		Order: OrderNetworkInfra,

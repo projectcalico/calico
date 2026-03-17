@@ -779,14 +779,29 @@ func (m *migrationController) restoreAPIService(logCtx *log.Entry, dm *Datastore
 
 // lockDatastore creates or updates both v3 and v1 ClusterInformation with
 // DatastoreReady=false to signal components to pause and retain cached dataplane state.
+// When creating the v3 ClusterInformation, it copies the full spec from the v1
+// resource so that fields like ClusterGUID, ClusterType, and CalicoVersion are preserved.
 func (m *migrationController) lockDatastore(logCtx *log.Entry) error {
-	// Lock v3 ClusterInformation.
+	// Read the v1 ClusterInformation to use as the base for the v3 resource.
 	ready := false
+	v1Key := model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName}
+	v1KVP, err := m.backendClient.Get(m.ctx, v1Key, "")
+	if err != nil {
+		logCtx.WithError(err).Warn("Failed to read v1 ClusterInformation, will create minimal v3 resource")
+	}
+
+	// Build the v3 ClusterInformation, copying the full spec from v1 if available.
 	ci := &apiv3.ClusterInformation{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName},
 		Spec: apiv3.ClusterInformationSpec{
 			DatastoreReady: &ready,
 		},
+	}
+	if v1KVP != nil {
+		if v1CI, ok := v1KVP.Value.(*apiv3.ClusterInformation); ok {
+			ci.Spec = *v1CI.Spec.DeepCopy()
+			ci.Spec.DatastoreReady = &ready
+		}
 	}
 
 	existing, err := m.v3Client.ClusterInformations().Get(m.ctx, clusterInfoName, metav1.GetOptions{})

@@ -92,8 +92,10 @@ type DatastoreMigration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   DatastoreMigrationSpec   `json:"spec,omitempty"`
-	Status DatastoreMigrationStatus `json:"status,omitempty"`
+	// Spec defines the desired migration behavior.
+	Spec DatastoreMigrationSpec `json:"spec"`
+	// Status reports the observed state of the migration.
+	Status DatastoreMigrationStatus `json:"status"`
 }
 
 // DatastoreMigrationList contains a list of DatastoreMigration resources.
