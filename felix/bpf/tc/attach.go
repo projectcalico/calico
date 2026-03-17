@@ -528,6 +528,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		IstioDSCP:     ap.IstioDSCP,
 		MaglevLUTSize: ap.MaglevLUTSize,
 		IPFragTimeout: ap.IPFragTimeout,
+		HostIfindex:   uint32(ap.IfIndex),
 	}
 
 	if ap.Profiling == "Enabled" {

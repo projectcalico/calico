@@ -276,7 +276,8 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			short dscp,
 			short istio_dscp,
 			uint maglev_lut_size,
-			uint ipfrag_timeout)
+			uint ipfrag_timeout,
+			uint host_ifindex)
 {
 	struct cali_tc_global_data v4 = {
 		.tunnel_mtu = tmtu,
@@ -295,6 +296,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.istio_dscp = istio_dscp,
 		.maglev_lut_size = maglev_lut_size,
 		.ipfrag_timeout = ipfrag_timeout,
+		.host_ifindex = host_ifindex,
 	};
 
 	strncpy(v4.iface_name, iface_name, sizeof(v4.iface_name));
