@@ -235,13 +235,6 @@ func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
 	var err error
 	if pi.layout == nil {
 		la, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType)
-		if err != nil && strings.Contains(file, "_co-re") {
-			log.WithError(err).Warn("Failed to load CO-RE object, kernel too old? Falling back to non-CO-RE.")
-			file := strings.ReplaceAll(file, "_co-re", "")
-			// Skip trying the same file again, as it will fail with the same error.
-			SetObjectFile(at, file)
-			la, err = pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType)
-		}
 		if err == nil {
 			log.WithField("layout", la).Debugf("Loaded generic object file %s", file)
 			pi.layout = la
