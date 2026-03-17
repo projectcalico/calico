@@ -937,7 +937,7 @@ func TestRemapOwnerReferences_EmptyMap(t *testing.T) {
 	}
 }
 
-func TestCheckConflicts(t *testing.T) {
+func TestDetectConflicts(t *testing.T) {
 	ctx := context.Background()
 
 	bc := &mockBackendClient{
@@ -974,8 +974,7 @@ func TestCheckConflicts(t *testing.T) {
 		t.Fatalf("creating conflicting tier: %v", err)
 	}
 
-	migrator := testTierMigrator()
-	conflicts, err := CheckConflicts(ctx, bc, fakeRT, migrator)
+	conflicts, err := DetectConflicts(ctx, bc, fakeRT, []ResourceMigrator{testTierMigrator()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -277,35 +277,33 @@ func MigrateResourceType(ctx context.Context, bc api.Client, rtClient client.Cli
 	return result, nil
 }
 
-// CheckConflicts lists all v1 resources for a given migrator and checks each
-// one against the corresponding v3 resource. It returns a ConflictInfo for
-// each resource where the v3 spec differs from the converted v1 spec.
-func CheckConflicts(ctx context.Context, bc api.Client, rtClient client.Client, m ResourceMigrator) ([]ConflictInfo, error) {
-	v1List, err := m.ListV1(ctx, bc)
-	if err != nil {
-		return nil, fmt.Errorf("listing v1 %s: %w", m.Kind, err)
-	}
-
-	var conflicts []ConflictInfo
-	for _, kvp := range v1List.KVPairs {
-		v1Obj, err := m.Convert(kvp)
-		if err != nil {
-			return nil, fmt.Errorf("converting v1 %s: %w", m.Kind, err)
+// DetectConflicts checks all migrators for v1 resources that have a corresponding
+// v3 resource with a different spec. It returns a ConflictInfo for each mismatch.
+func DetectConflicts(ctx context.Context, bc api.Client, rtClient client.Client, migrators []ResourceMigrator) ([]ConflictInfo, error) {
+	var allConflicts []ConflictInfo
+	for _, m := range migrators {
+		if m.ListV1 == nil || m.Convert == nil || m.V3Object == nil || m.GetSpec == nil {
+			continue
 		}
-
-		existing := m.V3Object()
-		getErr := rtClient.Get(ctx, types.NamespacedName{Name: v1Obj.GetName(), Namespace: v1Obj.GetNamespace()}, existing)
-		if getErr != nil {
-			if kerrors.IsNotFound(getErr) {
+		v1List, err := m.ListV1(ctx, bc)
+		if err != nil {
+			return nil, fmt.Errorf("listing v1 %s: %w", m.Kind, err)
+		}
+		for _, kvp := range v1List.KVPairs {
+			v3Obj, err := m.Convert(kvp)
+			if err != nil {
+				return nil, fmt.Errorf("converting v1 %s: %w", m.Kind, err)
+			}
+			existing, err := getV3Object(ctx, rtClient, m, v3Obj.GetName(), v3Obj.GetNamespace())
+			if err != nil || existing == nil {
 				continue
 			}
-			return nil, fmt.Errorf("getting v3 %s/%s: %w", m.Kind, v1Obj.GetName(), getErr)
-		}
-		if !specsEqual(m, v1Obj, existing) {
-			conflicts = append(conflicts, ConflictInfo{Kind: m.Kind, Name: v1Obj.GetName()})
+			if !specsEqual(m, v3Obj, existing) {
+				allConflicts = append(allConflicts, ConflictInfo{Kind: m.Kind, Name: v3Obj.GetName()})
+			}
 		}
 	}
-	return conflicts, nil
+	return allConflicts, nil
 }
 
 // getV3Object fetches a v3 resource by name/namespace using the controller-runtime client.

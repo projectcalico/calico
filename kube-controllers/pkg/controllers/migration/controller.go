@@ -325,39 +325,29 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 		"installType":      installType,
 	}).Info("Detected installation details")
 
-	// Pre-check conflicts: for each registered migrator, list v1 resources, convert,
-	// and check if v3 equivalents exist with different specs. Log warnings only.
-	migrators = GetRegistry()
-	preCheckConflicts := 0
-	for _, migrator := range migrators {
-		if migrator.ListV1 == nil || migrator.Convert == nil || migrator.V3Object == nil || migrator.GetSpec == nil {
-			continue
-		}
-		v1List, err := migrator.ListV1(m.ctx, m.backendClient)
-		if err != nil {
-			logCtx.WithError(err).WithField("kind", migrator.Kind).Warn("Failed to list v1 resources for pre-check")
-			continue
-		}
-		for _, kvp := range v1List.KVPairs {
-			v3Obj, err := migrator.Convert(kvp)
-			if err != nil {
-				continue
-			}
-			existing, err := getV3Object(m.ctx, m.rtClient, migrator, v3Obj.GetName(), v3Obj.GetNamespace())
-			if err != nil || existing == nil {
-				continue
-			}
-			if !specsEqual(migrator, v3Obj, existing) {
-				preCheckConflicts++
-				logCtx.WithFields(logrus.Fields{
-					"kind": migrator.Kind,
-					"name": v3Obj.GetName(),
-				}).Warn("Pre-check: v3 resource exists with different spec (will be reported as conflict during migration)")
-			}
-		}
+	// Pre-check conflicts: detect v3 resources that differ from their v1 source
+	// before starting migration. This avoids locking the datastore only to
+	// discover conflicts mid-migration.
+	conflicts, err := DetectConflicts(m.ctx, m.backendClient, m.rtClient, migrators)
+	if err != nil {
+		return fmt.Errorf("pre-checking conflicts: %w", err)
 	}
-	if preCheckConflicts > 0 {
-		logCtx.WithField("preCheckConflicts", preCheckConflicts).Warn("Pre-check found potential conflicts — migration will proceed but conflicts will be reported")
+	if len(conflicts) > 0 {
+		logCtx.WithField("conflicts", len(conflicts)).Warn("Pre-check found conflicts, waiting for resolution before migrating")
+		dm.Status.Phase = DatastoreMigrationPhaseWaitingForConflictResolution
+		dm.Status.Message = fmt.Sprintf("%d resource conflicts need resolution before migration can begin", len(conflicts))
+		dm.Status.Conditions = nil
+		for _, ci := range conflicts {
+			dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
+				Type:               conditionTypeConflict,
+				Status:             metav1.ConditionTrue,
+				Reason:             conditionReasonResourceMismatch,
+				Message:            ci.String(),
+				LastTransitionTime: metav1.Now(),
+			})
+		}
+		setPhaseMetric(DatastoreMigrationPhaseWaitingForConflictResolution)
+		return m.updateStatus(dm)
 	}
 
 	// Transition to Migrating.
@@ -492,16 +482,9 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Re-checking conflicts")
 
-	migrators := GetRegistry()
-	var remaining []ConflictInfo
-	for _, migrator := range migrators {
-		conflicts, err := CheckConflicts(m.ctx, m.backendClient, m.rtClient, migrator)
-		if err != nil {
-			logCtx.WithError(err).WithField("kind", migrator.Kind).Warn("Failed to check conflicts")
-			remaining = append(remaining, ConflictInfo{Kind: migrator.Kind, Name: "unknown (check failed)"})
-			continue
-		}
-		remaining = append(remaining, conflicts...)
+	remaining, err := DetectConflicts(m.ctx, m.backendClient, m.rtClient, GetRegistry())
+	if err != nil {
+		return fmt.Errorf("re-checking conflicts: %w", err)
 	}
 
 	if len(remaining) > 0 {
@@ -509,10 +492,10 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreM
 		return nil
 	}
 
-	logCtx.Info("All conflicts resolved, transitioning back to Migrating")
+	logCtx.Info("All conflicts resolved, transitioning back to Pending for re-validation")
 	dm.Status.Conditions = nil
-	dm.Status.Phase = DatastoreMigrationPhaseMigrating
-	setPhaseMetric(DatastoreMigrationPhaseMigrating)
+	dm.Status.Phase = DatastoreMigrationPhasePending
+	setPhaseMetric(DatastoreMigrationPhasePending)
 	return m.updateStatus(dm)
 }
 

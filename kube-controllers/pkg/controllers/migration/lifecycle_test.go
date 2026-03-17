@@ -577,14 +577,14 @@ func TestLifecycle_MigrationWithConflicts(t *testing.T) {
 		t.Fatalf("updating tier: %v", updateErr)
 	}
 
-	// Reconcile should transition back to Migrating.
+	// Reconcile should transition back to Pending for re-validation.
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("reconcile (after resolution): %v", err)
 	}
 
 	dm = getMigrationCR(t, c, defaultMigrationName)
-	if dm.Status.Phase != DatastoreMigrationPhaseMigrating {
-		t.Errorf("expected Migrating after conflict resolution, got %s", dm.Status.Phase)
+	if dm.Status.Phase != DatastoreMigrationPhasePending {
+		t.Errorf("expected Pending after conflict resolution, got %s", dm.Status.Phase)
 	}
 }
 
