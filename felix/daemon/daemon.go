@@ -455,6 +455,9 @@ configRetry:
 		log.Panic("Graceful shutdown took too long")
 	}
 
+	// Get the IPAM client for live migration owner attribute swaps.
+	ipamClient := v3Client.IPAM()
+
 	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		healthAggregator,
@@ -463,6 +466,7 @@ configRetry:
 		fatalErrorCallback,
 		k8sClientSet,
 		lookupsCache,
+		ipamClient,
 	)
 
 	// Defer reporting ready until we've started the dataplane driver.  This
