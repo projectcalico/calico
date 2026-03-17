@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"reflect"
 
+	calicoapi "github.com/projectcalico/api"
 	"github.com/sirupsen/logrus"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -29,8 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	celconfig "k8s.io/apiserver/pkg/apis/cel"
-
-	"github.com/projectcalico/calico/libcalico-go/config"
 )
 
 var (
@@ -55,7 +54,7 @@ func init() {
 	schemaValidators = make(map[string]schemavalidation.SchemaCreateValidator)
 	schemas = make(map[string]*structuralschema.Structural)
 
-	crds, err := config.AllCRDs()
+	crds, err := calicoapi.AllCRDs()
 	if err != nil {
 		crdInitErr = fmt.Errorf("failed to load CRDs: %w", err)
 		return

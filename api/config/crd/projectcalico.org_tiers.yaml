@@ -99,16 +99,16 @@ spec:
           x-kubernetes-validations:
             - message: The 'kube-admin' tier must have default action 'Pass'
               rule:
-                "self.metadata.name == 'kube-admin' ? self.spec.defaultAction ==
-                'Pass' : true"
+                "self.metadata.name == 'kube-admin' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'kube-baseline' tier must have default action 'Pass'
               rule:
-                "self.metadata.name == 'kube-baseline' ? self.spec.defaultAction
-                == 'Pass' : true"
+                "self.metadata.name == 'kube-baseline' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'default' tier must have default action 'Deny'
               rule:
-                "self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny'
-                : true"
+                "self.metadata.name == 'default' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Deny') : true"
       served: true
       storage: true
       subresources:

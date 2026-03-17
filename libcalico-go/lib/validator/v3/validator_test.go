@@ -53,6 +53,8 @@ func init() {
 	adminTierOrder := api.KubeAdminTierOrder
 	baselineTierOrder := api.KubeBaselineTierOrder
 	defaultTierBadOrder := float64(10.0)
+	defaultActionDeny := api.Deny
+	defaultActionPass := api.Pass
 
 	// We need pointers to bools, so define the values here.
 	Vtrue := true
@@ -2700,37 +2702,64 @@ func init() {
 		Entry("Tier: disallow default tier with an invalid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
 			Spec: api.TierSpec{
-				Order: &defaultTierBadOrder,
+				Order:         &defaultTierBadOrder,
+				DefaultAction: &defaultActionDeny,
 			},
 		}, false),
-		Entry("Tier: allow default tier with the predefined order", &api.Tier{
+		Entry("Tier: disallow default tier with an invalid default action", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
 			Spec: api.TierSpec{
-				Order: &defaultTierOrder,
+				Order:         &defaultTierOrder,
+				DefaultAction: &defaultActionPass,
+			},
+		}, false),
+		Entry("Tier: allow default tier with the predefined order and default action", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
+			Spec: api.TierSpec{
+				Order:         &defaultTierOrder,
+				DefaultAction: &defaultActionDeny,
 			},
 		}, true),
 		Entry("Tier: disallow kube-admin tier with an invalid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
 			Spec: api.TierSpec{
-				Order: &defaultTierBadOrder,
+				Order:         &defaultTierBadOrder,
+				DefaultAction: &defaultActionPass,
 			},
 		}, false),
-		Entry("Tier: allow kube-admin tier with the predefined order", &api.Tier{
+		Entry("Tier: disallow kube-admin tier with an invalid default action", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
 			Spec: api.TierSpec{
-				Order: &adminTierOrder,
+				Order:         &adminTierOrder,
+				DefaultAction: &defaultActionDeny,
+			},
+		}, false),
+		Entry("Tier: allow kube-admin tier with the predefined order and default action", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeAdminTierName},
+			Spec: api.TierSpec{
+				Order:         &adminTierOrder,
+				DefaultAction: &defaultActionPass,
 			},
 		}, true),
 		Entry("Tier: disallow kube-baseline tier with an invalid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
 			Spec: api.TierSpec{
-				Order: &defaultTierBadOrder,
+				Order:         &defaultTierBadOrder,
+				DefaultAction: &defaultActionPass,
 			},
 		}, false),
-		Entry("Tier: allow kube-baseline tier with the predefined order", &api.Tier{
+		Entry("Tier: disallow kube-baseline tier with an invalid default action", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
 			Spec: api.TierSpec{
-				Order: &baselineTierOrder,
+				Order:         &baselineTierOrder,
+				DefaultAction: &defaultActionDeny,
+			},
+		}, false),
+		Entry("Tier: allow kube-baseline tier with the predefined order and default action", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.KubeBaselineTierName},
+			Spec: api.TierSpec{
+				Order:         &baselineTierOrder,
+				DefaultAction: &defaultActionPass,
 			},
 		}, true),
 		Entry("Tier: allow a tier with a valid order", &api.Tier{
