@@ -65,8 +65,8 @@ LIBBPF_VERSION=v1.6.2
 BPFTOOL_IMAGE=calico/bpftool:v7.5.0
 
 # The operator branch corresponding to this branch.
-OPERATOR_BRANCH ?= casey-migration-operator-support
-OPERATOR_ORGANIZATION ?= caseydavenport
+OPERATOR_BRANCH ?= master
+OPERATOR_ORGANIZATION ?= tigera
 OPERATOR_GIT_REPO     ?= operator
 
 # quay.io expiry time for hashrelease/dev images
