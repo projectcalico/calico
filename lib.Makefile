@@ -749,13 +749,18 @@ golangci-lint: $(GENERATED_FILES)
 
 REPO_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else echo '..'; fi )
 
+.PHONY: hack/bin/parent-branch
+hack/bin/parent-branch: $(REPO_DIR)/hack/bin/parent-branch
+$(REPO_DIR)/hack/bin/parent-branch:
+	$(MAKE) -C $(REPO_DIR)/hack parent-branch
+
 .PHONY: fix-changed go-fmt-changed goimports-changed
 # Format changed files only.
-fix-changed go-fmt-changed goimports-changed:
+fix-changed go-fmt-changed goimports-changed: $(REPO_DIR)/hack/bin/parent-branch
 	if [ "$(SKIP_FIX_CHANGED)" != "true" ]; then \
 	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
 	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$(shell $(REPO_DIR)/hack/find-parent-release-branch.sh) \
+	                -e parent_branch=$(shell $(REPO_DIR)/hack/bin/parent-branch) \
 	                $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh; \
 	fi
 
