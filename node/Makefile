@@ -158,6 +158,7 @@ clean: clean-windows
 	rm -rf $(BUILD_DEPS)
 	rm -rf filesystem/included-source
 	rm -rf $(REPO_ROOT)/hack/test/kind/infra/operator
+	mkdir $(REPO_ROOT)/hack/test/kind/infra/operator
 	rm -rf dist
 	rm -rf bin
 	# We build these as part of the node build, so clean them as part of the clean.
