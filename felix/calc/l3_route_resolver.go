@@ -751,6 +751,12 @@ func (c *L3RouteResolver) flush() {
 		var blockMatchesRoute bool
 		var hasTunnelRef bool
 		for _, entry := range buf {
+			logCxt.Infof("marva0 entry: %v\n buf:%#v", entry, buf)
+			if len(buf) > 1 && entry.CIDR.IsSingleAddress() {
+				logCxt.Infof("marva entry: %v\n buf:%#v", entry, buf)
+				//continue
+			}
+
 			ri := entry.Data.(RouteInfo)
 			if len(ri.Pools) > 0 {
 				// We only expect one Pool entry for any given CIDR. This constraint is upheld by the datastore.
@@ -767,6 +773,7 @@ func (c *L3RouteResolver) flush() {
 					poolAllowsCrossSubnet = true
 				}
 			}
+			logCxt.Infof("nina block %d", len(ri.Blocks))
 			if len(ri.Blocks) > 0 {
 				// We only expect one Block entry for any given CIDR. This constraint is upheld by the datastore.
 				if blockSeen && blockNodeName != ri.Blocks[0].NodeName {
@@ -796,6 +803,8 @@ func (c *L3RouteResolver) flush() {
 					logCxt.Debug("Remote workload route (from block).")
 					blockTypes |= proto.RouteType_REMOTE_WORKLOAD
 				}
+			} else {
+				logCxt.Info("nina no block")
 			}
 			if len(ri.Host.NodeNames) > 0 {
 				rt.DstNodeName = ri.Host.NodeNames[0]
