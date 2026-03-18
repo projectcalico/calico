@@ -5,6 +5,7 @@
     - Prerequisites
   task:
     secrets:
+      - name: marvin-github-ssh-private-key
       - name: banzai-secrets
     prologue:
       commands:
