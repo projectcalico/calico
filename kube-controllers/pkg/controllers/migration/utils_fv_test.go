@@ -16,25 +16,34 @@ package migration
 
 import (
 	"context"
+	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 )
 
-// fvHelper bundles the gomega instance and context for FV test assertions.
-// Methods use ExpectWithOffset so failures report the caller's line number.
+// fvHelper bundles the gomega instance, context, and testing.T for FV test
+// assertions. Methods use ExpectWithOffset so failures report the caller's
+// line number.
 type fvHelper struct {
+	t   *testing.T
 	g   Gomega
 	ctx context.Context
 }
 
 // newFVHelper creates an fvHelper for use in a test function.
-func newFVHelper(g Gomega, ctx context.Context) *fvHelper {
-	return &fvHelper{g: g, ctx: ctx}
+func newFVHelper(t *testing.T, g Gomega, ctx context.Context) *fvHelper {
+	t.Helper()
+	return &fvHelper{t: t, g: g, ctx: ctx}
 }
 
 // getMigration fetches the DatastoreMigration CR by the well-known name.
@@ -62,6 +71,11 @@ func (h *fvHelper) createReadyCalicoNodeDS() {
 	installNS := "calico-system"
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: installNS}}
 	h.g.ExpectWithOffset(1, rtclient.IgnoreAlreadyExists(fvRTClient.Create(h.ctx, ns))).To(Succeed())
+	h.t.Cleanup(func() {
+		if err := fvRTClient.Delete(h.ctx, &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "calico-node", Namespace: installNS}}); err != nil {
+			h.t.Logf("cleanup: deleting calico-node DaemonSet: %v", err)
+		}
+	})
 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -98,4 +112,89 @@ func (h *fvHelper) createReadyCalicoNodeDS() {
 		NumberReady:            1,
 	}
 	h.g.ExpectWithOffset(1, fvRTClient.Status().Update(h.ctx, ds)).To(Succeed())
+}
+
+// startController creates a migration controller with a fake APIService client
+// and the given phase gate wrapping the rtClient. It starts the controller in a
+// goroutine and registers cleanup to stop it when the test ends.
+func startController(
+	t *testing.T,
+	ctx context.Context,
+	bc *mockBackendClient,
+	gate *phaseGate,
+) controller.Controller {
+	t.Helper()
+	fakeAPIReg := fakeapiregclient.NewSimpleClientset(newAggregatedAPIServiceObj())
+
+	var rt rtclient.WithWatch = fvRTClient
+	if gate != nil {
+		rt = gate.wrapClient(fvRTClient)
+	}
+
+	ctrl := NewController(ControllerConfig{
+		Ctx:                 ctx,
+		K8sClient:           fvK8sClient,
+		BackendClient:       bc,
+		RTClient:            rt,
+		DynamicClient:       fvDynamicClient,
+		APIRegClient:        fakeAPIReg.ApiregistrationV1(),
+		CRDClient:           fvCRDClient,
+		Migrators:           NewMigrators(bc, fvRTClient),
+		WaitingPollInterval: 500 * time.Millisecond,
+	})
+
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	go ctrl.Run(stop)
+	return ctrl
+}
+
+// createMigrationCR creates the well-known DatastoreMigration CR and registers
+// a cleanup to delete it (and all migrated resources) when the test ends.
+func createMigrationCR(t *testing.T, ctx context.Context) {
+	t.Helper()
+	dm := &DatastoreMigration{
+		ObjectMeta: metav1.ObjectMeta{Name: defaultMigrationName},
+		Spec:       DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
+	}
+	if err := fvRTClient.Create(ctx, dm); err != nil {
+		t.Fatalf("creating DatastoreMigration CR: %v", err)
+	}
+	t.Cleanup(func() { cleanupMigrationResources(t, ctx) })
+}
+
+// cleanupMigrationResources removes the DatastoreMigration CR (stripping its
+// finalizer first so deletion isn't blocked) and all v3 Calico resources that
+// may have been created during migration.
+func cleanupMigrationResources(t *testing.T, ctx context.Context) {
+	t.Helper()
+
+	// Strip the finalizer so the CR can be deleted even if the controller
+	// is already stopped. Retry on conflict since the controller may still
+	// be writing to the CR.
+	for range 5 {
+		dm := &DatastoreMigration{}
+		if err := fvRTClient.Get(ctx, types.NamespacedName{Name: defaultMigrationName}, dm); err != nil {
+			break
+		}
+		dm.Finalizers = nil
+		if err := fvRTClient.Update(ctx, dm); err != nil {
+			t.Logf("cleanup: removing finalizer (will retry): %v", err)
+			continue
+		}
+		if err := fvRTClient.Delete(ctx, dm); err != nil {
+			t.Logf("cleanup: deleting DatastoreMigration: %v", err)
+		}
+		break
+	}
+
+	for _, err := range []error{
+		fvRTClient.DeleteAllOf(ctx, &apiv3.Tier{}),
+		fvRTClient.DeleteAllOf(ctx, &apiv3.GlobalNetworkPolicy{}),
+		fvRTClient.DeleteAllOf(ctx, &apiv3.ClusterInformation{}),
+	} {
+		if err != nil {
+			t.Logf("cleanup: %v", err)
+		}
+	}
 }

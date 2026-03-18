@@ -17,6 +17,7 @@ package migration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -86,20 +87,29 @@ type ControllerConfig struct {
 	APIRegClient  apiregv1client.ApiregistrationV1Interface
 	CRDClient     apiextclient.Interface
 	Migrators     []migrators.ResourceMigrator
+
+	// WaitingPollInterval controls how frequently the controller re-checks
+	// conflicts during WaitingForConflictResolution. Defaults to 10s.
+	WaitingPollInterval time.Duration
 }
 
 // NewController creates a new migration controller. It watches for DatastoreMigration CRs
 // and drives the v1-to-v3 CRD migration state machine. The returned controller defers
 // startup until the DatastoreMigration CRD is installed and Established.
 func NewController(cfg ControllerConfig) controller.Controller {
+	pollInterval := cfg.WaitingPollInterval
+	if pollInterval == 0 {
+		pollInterval = defaultWaitingPollInterval
+	}
 	m := &migrationController{
-		ctx:           cfg.Ctx,
-		k8sClient:     cfg.K8sClient,
-		backendClient: cfg.BackendClient,
-		rtClient:      cfg.RTClient,
-		dynamicClient: cfg.DynamicClient,
-		apiregClient:  cfg.APIRegClient,
-		migrators:     cfg.Migrators,
+		ctx:                 cfg.Ctx,
+		k8sClient:           cfg.K8sClient,
+		backendClient:       cfg.BackendClient,
+		rtClient:            cfg.RTClient,
+		dynamicClient:       cfg.DynamicClient,
+		apiregClient:        cfg.APIRegClient,
+		migrators:           cfg.Migrators,
+		waitingPollInterval: pollInterval,
 	}
 	return controller.NewDeferredCRDController(
 		"datastoremigrations.migration.projectcalico.org",
@@ -111,15 +121,30 @@ func NewController(cfg ControllerConfig) controller.Controller {
 // resyncPeriod controls how frequently the informer re-lists all resources.
 const resyncPeriod = 60 * time.Second
 
+// defaultWaitingPollInterval is how frequently the controller re-checks
+// conflicts during WaitingForConflictResolution. Overridable via
+// ControllerConfig.WaitingPollInterval for tests.
+const defaultWaitingPollInterval = 10 * time.Second
+
+// requeueAfter is returned by reconcile handlers to request a delayed requeue
+// without logging an error. Used when the controller is polling external state
+// that isn't covered by an informer.
+type requeueAfter time.Duration
+
+func (r requeueAfter) Error() string {
+	return fmt.Sprintf("requeue after %s", time.Duration(r))
+}
+
 type migrationController struct {
-	ctx           context.Context
-	k8sClient     kubernetes.Interface
-	backendClient api.Client
-	rtClient      rtclient.WithWatch
-	dynamicClient dynamic.Interface
-	apiregClient  apiregv1client.ApiregistrationV1Interface
-	migrators     []migrators.ResourceMigrator
-	queue         workqueue.TypedRateLimitingInterface[string]
+	ctx                 context.Context
+	k8sClient           kubernetes.Interface
+	backendClient       api.Client
+	rtClient            rtclient.WithWatch
+	dynamicClient       dynamic.Interface
+	apiregClient        apiregv1client.ApiregistrationV1Interface
+	migrators           []migrators.ResourceMigrator
+	waitingPollInterval time.Duration
+	queue               workqueue.TypedRateLimitingInterface[string]
 }
 
 // RunWithContext is called by the DeferredCRDController once the DatastoreMigration
@@ -198,7 +223,11 @@ func (m *migrationController) processNextWorkItem() bool {
 	defer m.queue.Done(key)
 
 	if err := m.reconcile(); err != nil {
-		if isTerminal(err) {
+		var requeue requeueAfter
+		if errors.As(err, &requeue) {
+			m.queue.Forget(key)
+			m.queue.AddAfter(key, time.Duration(requeue))
+		} else if isTerminal(err) {
 			logrus.WithError(err).Error("Terminal migration error, setting Failed status")
 			m.handleTerminalError(err)
 			m.queue.Forget(key)
@@ -510,7 +539,7 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreM
 
 	if len(remaining) > 0 {
 		logCtx.WithField("conflicts", len(remaining)).Debug("Conflicts still present")
-		return nil
+		return requeueAfter(m.waitingPollInterval)
 	}
 
 	logCtx.Info("All conflicts resolved, transitioning back to Pending for re-validation")

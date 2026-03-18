@@ -122,7 +122,7 @@ func newAggregatedAPIServiceObj() *apiregv1.APIService {
 func TestLifecycle_Mainline(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
-	h := newFVHelper(g, ctx)
+	h := newFVHelper(t, g, ctx)
 
 	bc := &mockBackendClient{
 		resources:   mainlineV1Resources(),
@@ -161,12 +161,10 @@ func TestLifecycle_Mainline(t *testing.T) {
 		Spec:       DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
 	}
 	g.Expect(fvRTClient.Create(ctx, dm)).To(Succeed())
-	t.Cleanup(func() {
-		_ = fvRTClient.Delete(ctx, &DatastoreMigration{ObjectMeta: metav1.ObjectMeta{Name: defaultMigrationName}})
-	})
+	t.Cleanup(func() { cleanupMigrationResources(t, ctx) })
 
 	// Phase: Migrating
-	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseMigrating, 30*time.Second)).To(Succeed())
+	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseMigrating, 10*time.Second)).To(Succeed())
 
 	dm = h.expectPhase(DatastoreMigrationPhaseMigrating)
 	g.Expect(dm.Status.StartedAt).NotTo(BeNil())
@@ -175,7 +173,7 @@ func TestLifecycle_Mainline(t *testing.T) {
 	gate.release(DatastoreMigrationPhaseMigrating)
 
 	// Phase: Converged
-	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 30*time.Second)).To(Succeed())
+	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
 	dm = h.expectPhase(DatastoreMigrationPhaseConverged)
 
 	// Tiers should exist in v3 with the internal annotation stripped.
@@ -222,8 +220,84 @@ func TestLifecycle_Mainline(t *testing.T) {
 	h.createReadyCalicoNodeDS()
 
 	g.Eventually(func(g Gomega) {
-		fvh := newFVHelper(g, ctx)
+		fvh := newFVHelper(t, g, ctx)
 		dm := fvh.expectPhase(DatastoreMigrationPhaseComplete)
 		g.Expect(dm.Status.CompletedAt).NotTo(BeNil())
-	}, 30*time.Second, 200*time.Millisecond).Should(Succeed())
+	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
+}
+
+// TestLifecycle_ConflictResolution verifies that when a v3 resource exists with
+// a different spec than v1, the controller transitions to
+// WaitingForConflictResolution with a Conflict condition, then proceeds through
+// to Converged once the user fixes the conflict.
+func TestLifecycle_ConflictResolution(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	h := newFVHelper(t, g, ctx)
+
+	bc := &mockBackendClient{
+		resources:   conflictV1Resources(),
+		clusterInfo: mainlineV1ClusterInfo(),
+	}
+
+	// Pre-create a v3 Tier with a different spec than the v1 source.
+	// This triggers conflict detection in handlePending.
+	deny := apiv3.Deny
+	conflictingTier := &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		Spec:       apiv3.TierSpec{Order: ptr.To(float64(999)), DefaultAction: &deny},
+	}
+	g.Expect(fvRTClient.Create(ctx, conflictingTier)).To(Succeed())
+	t.Cleanup(func() {
+		if err := fvRTClient.Delete(ctx, &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}}); err != nil {
+			t.Logf("cleanup: deleting tier: %v", err)
+		}
+	})
+
+	// Gate at WaitingForConflictResolution and Converged.
+	gate := newPhaseGate(
+		DatastoreMigrationPhaseWaitingForConflictResolution,
+		DatastoreMigrationPhaseConverged,
+	)
+	startController(t, ctx, bc, gate)
+	createMigrationCR(t, ctx)
+
+	// Wait for the controller to detect the conflict.
+	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseWaitingForConflictResolution, 10*time.Second)).To(Succeed())
+
+	dm := h.expectPhase(DatastoreMigrationPhaseWaitingForConflictResolution)
+	g.Expect(dm.Status.Conditions).To(HaveLen(1))
+	g.Expect(dm.Status.Conditions[0].Type).To(Equal(conditionTypeConflict))
+	g.Expect(dm.Status.Conditions[0].Reason).To(Equal(conditionReasonResourceMismatch))
+	g.Expect(dm.Status.Conditions[0].Message).To(ContainSubstring("Tier/default"))
+
+	gate.release(DatastoreMigrationPhaseWaitingForConflictResolution)
+
+	// Fix the conflict by updating the v3 Tier to match the v1 spec.
+	tier := &apiv3.Tier{}
+	h.getV3Resource("default", tier)
+	tier.Spec.Order = ptr.To(float64(100))
+	g.Expect(fvRTClient.Update(ctx, tier)).To(Succeed())
+
+	// The controller should re-check, find no conflicts, transition through
+	// Pending → Migrating → Converged.
+	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
+	dm = h.expectPhase(DatastoreMigrationPhaseConverged)
+
+	// The previously-conflicting tier should now be skipped (specs match),
+	// so Migrated=0, Skipped=1 for that type.
+	g.Expect(dm.Status.Progress.Skipped).To(BeNumerically(">=", 1))
+
+	// Conflict conditions should be cleared.
+	g.Expect(dm.Status.Conditions).To(BeEmpty())
+
+	gate.release(DatastoreMigrationPhaseConverged)
+
+	// Complete the lifecycle.
+	h.createReadyCalicoNodeDS()
+
+	g.Eventually(func(g Gomega) {
+		fvh := newFVHelper(t, g, ctx)
+		fvh.expectPhase(DatastoreMigrationPhaseComplete)
+	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 }

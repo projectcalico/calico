@@ -50,7 +50,7 @@ func mainlineV1Resources() map[string][]*model.KVPair {
 						UID:         v1TierDefaultUID,
 						Annotations: v1InternalAnnotations,
 					},
-					Spec: apiv3.TierSpec{Order: ptr.To(float64(100))},
+					Spec: apiv3.TierSpec{Order: ptr.To(float64(100)), DefaultAction: actionPtr(apiv3.Deny)},
 				},
 			},
 			{
@@ -61,7 +61,7 @@ func mainlineV1Resources() map[string][]*model.KVPair {
 						UID:         v1TierSecurityUID,
 						Annotations: v1InternalAnnotations,
 					},
-					Spec: apiv3.TierSpec{Order: ptr.To(float64(200))},
+					Spec: apiv3.TierSpec{Order: ptr.To(float64(200)), DefaultAction: actionPtr(apiv3.Deny)},
 				},
 			},
 		},
@@ -93,6 +93,32 @@ func mainlineV1Resources() map[string][]*model.KVPair {
 		apiv3.KindClusterInformation: {},
 	}
 }
+
+// conflictV1Resources returns v1 backend data with a single Tier. Used with a
+// pre-existing v3 Tier that has a different spec to trigger conflict detection.
+func conflictV1Resources() map[string][]*model.KVPair {
+	return map[string][]*model.KVPair{
+		apiv3.KindTier: {
+			{
+				Key: model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
+				Value: &apiv3.Tier{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        "default",
+						UID:         v1TierDefaultUID,
+						Annotations: v1InternalAnnotations,
+					},
+					Spec: apiv3.TierSpec{
+						Order:         ptr.To(float64(100)),
+						DefaultAction: actionPtr(apiv3.Deny),
+					},
+				},
+			},
+		},
+		apiv3.KindClusterInformation: {},
+	}
+}
+
+func actionPtr(a apiv3.Action) *apiv3.Action { return &a }
 
 // mainlineV1ClusterInfo returns a v1 ClusterInformation KVPair with
 // DatastoreReady=true, as it would appear before migration begins.
