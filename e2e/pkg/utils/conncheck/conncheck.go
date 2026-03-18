@@ -71,6 +71,15 @@ type ConnectionTester interface {
 
 	// Methods for continuous execution.
 	ExpectContinuously(client *Client, targets ...Target) Checkpointer
+
+	// Connect executes a connection attempt from the client to the target and returns the output.
+	// This is useful for traffic generation where you don't need success/failure semantics.
+	Connect(client *Client, target Target) (string, error)
+
+	// Methods for encryption verification. The client must have NET_RAW and NET_ADMIN
+	// capabilities for tcpdump (use WithCapture() client option).
+	ExpectEncrypted(client *Client, target Target)
+	ExpectPlaintext(client *Client, target Target)
 }
 
 // Checkpointer provides a way to checkpoint continuous connection tests at specific points in time
