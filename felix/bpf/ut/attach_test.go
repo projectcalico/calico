@@ -173,7 +173,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
-			DSR:        false,
+			DSR:            false,
+			ProgAttachType: "TCX",
 		}))
 		Expect(atEg).To(HaveKey(hook.AttachType{
 			Hook:       hook.Egress,
@@ -181,7 +182,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
-			DSR:        false,
+			DSR:            false,
+			ProgAttachType: "TCX",
 		}))
 		Expect(atIng).NotTo(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
@@ -189,7 +191,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
-			DSR:        false,
+			DSR:            false,
+			ProgAttachType: "TCX",
 		}))
 		Expect(atEg).NotTo(HaveKey(hook.AttachType{
 			Hook:       hook.Egress,
@@ -197,7 +200,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
-			DSR:        false,
+			DSR:            false,
+			ProgAttachType: "TCX",
 		}))
 
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
@@ -232,7 +236,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
-				DSR:        false,
+				DSR:            false,
+				ProgAttachType: "TCX",
 			}))
 			Expect(atEg).To(HaveKey(hook.AttachType{
 				Hook:       hook.Egress,
@@ -240,7 +245,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
-				DSR:        false,
+				DSR:            false,
+				ProgAttachType: "TCX",
 			}))
 			Expect(atIng).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
@@ -248,7 +254,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
-				DSR:        false,
+				DSR:            false,
+				ProgAttachType: "TCX",
 			}))
 			Expect(atEg).To(HaveKey(hook.AttachType{
 				Hook:       hook.Egress,
@@ -256,7 +263,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				Type:       tcdefs.EpTypeHost,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
-				DSR:        false,
+				DSR:            false,
+				ProgAttachType: "TCX",
 			}))
 
 		}
@@ -402,7 +410,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Type:       tcdefs.EpTypeWorkload,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
-			DSR:        false,
+			DSR:            false,
+			ProgAttachType: "TCX",
 		}))
 		Expect(atEg).To(HaveKey(hook.AttachType{
 			Hook:       hook.Egress,
@@ -410,7 +419,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Type:       tcdefs.EpTypeWorkload,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
-			DSR:        false,
+			DSR:            false,
+			ProgAttachType: "TCX",
 		}))
 		if ipv6Enabled {
 			Expect(atIng).To(HaveKey(hook.AttachType{
@@ -419,7 +429,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				Type:       tcdefs.EpTypeWorkload,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
-				DSR:        false,
+				DSR:            false,
+				ProgAttachType: "TCX",
 			}))
 			Expect(atEg).To(HaveKey(hook.AttachType{
 				Hook:       hook.Egress,
@@ -427,7 +438,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				Type:       tcdefs.EpTypeWorkload,
 				LogLevel:   loglevel,
 				ToHostDrop: false,
-				DSR:        false,
+				DSR:            false,
+				ProgAttachType: "TCX",
 			}))
 		}
 
