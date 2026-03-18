@@ -903,6 +903,8 @@ func (r *CalicoManager) publishPrereqs() error {
 			errStack = errors.Join(errStack, fmt.Errorf("no S3 bucket specified for pushing helm index"))
 		}
 	}
+	status, _ := utils.GitStatus(r.repoRoot)
+	logrus.Infof("Git status:\n%v", status)
 	if dirty, err := utils.GitIsDirty(r.repoRoot); dirty || err != nil {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before publishing the release"))
 	}
