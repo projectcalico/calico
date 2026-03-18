@@ -399,6 +399,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	})
 
 	var allConflicts []ConflictInfo
+	var objectsNeedingRemap []rtclient.Object
 	uidMap := make(map[types.UID]types.UID)
 
 	// Initialize progress tracking.
@@ -441,6 +442,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 		})
 
 		allConflicts = append(allConflicts, result.Conflicts...)
+		objectsNeedingRemap = append(objectsNeedingRemap, result.ObjectsWithCalicoOwnerRefs...)
 		for oldUID, newUID := range result.UIDMapping {
 			uidMap[oldUID] = newUID
 		}
@@ -451,8 +453,8 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	dm.Status.Progress.TypeProgress = fmt.Sprintf("%d / %d", len(allMigrators), len(allMigrators))
 	dm.Status.Progress.CurrentType = ""
 
-	// Second pass: remap OwnerReference UIDs that point to Calico resources.
-	if err := RemapOwnerReferences(m.ctx, uidMap, allMigrators); err != nil {
+	// Second pass: remap OwnerReference UIDs on objects collected during migration.
+	if err := RemapOwnerReferences(m.ctx, uidMap, objectsNeedingRemap, m.rtClient.Update); err != nil {
 		return fmt.Errorf("remapping OwnerReferences: %w", err)
 	}
 

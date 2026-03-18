@@ -59,6 +59,11 @@ type MigrationResult struct {
 	// UIDMapping records v1 UID → v3 UID for resources that were created or
 	// already existed. Used by RemapOwnerReferences after all types are migrated.
 	UIDMapping map[types.UID]types.UID
+
+	// ObjectsWithCalicoOwnerRefs holds v3 objects that have OwnerReferences
+	// pointing to Calico API groups. Collected during migration so the
+	// remapping pass doesn't need to re-list from the API server.
+	ObjectsWithCalicoOwnerRefs []client.Object
 }
 
 // retryBackoff defines the backoff parameters for retrying transient API errors
@@ -96,6 +101,10 @@ type migrationWorkResult struct {
 	v1UID    types.UID
 	v3UID    types.UID
 	err      error
+
+	// v3Obj is set when the migrated/skipped object has Calico OwnerRefs
+	// that may need UID remapping.
+	v3Obj client.Object
 }
 
 // MigrateResourceType runs the migration for a single resource type using the
@@ -185,6 +194,9 @@ func MigrateResourceType(ctx context.Context, m migrators.ResourceMigrator) (*Mi
 		if r.v1UID != "" && r.v3UID != "" {
 			result.UIDMapping[r.v1UID] = r.v3UID
 		}
+		if r.v3Obj != nil {
+			result.ObjectsWithCalicoOwnerRefs = append(result.ObjectsWithCalicoOwnerRefs, r.v3Obj)
+		}
 	}
 
 	logCtx.WithFields(logrus.Fields{
@@ -245,7 +257,11 @@ func migrateOneResource(ctx context.Context, m migrators.ResourceMigrator, item 
 	if existing != nil {
 		if m.SpecsEqual(v3Obj, existing) {
 			item.logCtx.Debug("v3 resource already exists with matching spec, skipping")
-			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: existing.GetUID()}
+			r := migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: existing.GetUID()}
+			if hasCalicoOwnerRefs(existing) {
+				r.v3Obj = existing
+			}
+			return r
 		}
 		ci := &ConflictInfo{Kind: m.Kind(), Name: v3Obj.GetName()}
 		item.logCtx.Warn(ci.String())
@@ -261,7 +277,9 @@ func migrateOneResource(ctx context.Context, m migrators.ResourceMigrator, item 
 	annotations[migratedByAnnotation] = "v1-to-v3"
 	v3Obj.SetAnnotations(annotations)
 
-	// Create the v3 resource (with retry).
+	// Create the v3 resource (with retry). CreateV3 populates the object
+	// in-place with the server response (including UID), so no read-back
+	// is needed.
 	err = wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
 		createErr := m.CreateV3(ctx, v3Obj)
 		if createErr != nil {
@@ -284,11 +302,14 @@ func migrateOneResource(ctx context.Context, m migrators.ResourceMigrator, item 
 			if getErr != nil {
 				return migrationWorkResult{err: fmt.Errorf("reading back AlreadyExists v3 %s/%s: %w", m.Kind(), v3Obj.GetName(), getErr)}
 			}
-			var v3UID types.UID
+			r := migrationWorkResult{skipped: true, v1UID: item.v1UID}
 			if readBack != nil {
-				v3UID = readBack.GetUID()
+				r.v3UID = readBack.GetUID()
+				if hasCalicoOwnerRefs(readBack) {
+					r.v3Obj = readBack
+				}
 			}
-			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: v3UID}
+			return r
 		}
 		return migrationWorkResult{
 			err: fmt.Errorf("creating v3 %s/%s: %w", m.Kind(), v3Obj.GetName(), err),
@@ -296,28 +317,22 @@ func migrateOneResource(ctx context.Context, m migrators.ResourceMigrator, item 
 	}
 	item.logCtx.Debug("Successfully migrated resource")
 
-	// Read back the created resource to get the server-assigned UID (with retry).
-	var created client.Object
-	err = wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
-		var getErr error
-		created, getErr = m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
-		if getErr != nil && isRetryable(getErr) {
-			migrationRetries.WithLabelValues(m.Kind(), "get").Inc()
-			item.logCtx.WithError(getErr).Debug("Retrying read-back GetV3")
-			return false, nil
-		}
-		return true, getErr
-	})
-	if err != nil {
-		return migrationWorkResult{
-			err: fmt.Errorf("reading back created v3 %s/%s: %w", m.Kind(), v3Obj.GetName(), err),
+	r := migrationWorkResult{migrated: true, v1UID: item.v1UID, v3UID: v3Obj.GetUID()}
+	if hasCalicoOwnerRefs(v3Obj) {
+		r.v3Obj = v3Obj
+	}
+	return r
+}
+
+// hasCalicoOwnerRefs returns true if the object has any OwnerReferences
+// pointing to a Calico API group.
+func hasCalicoOwnerRefs(obj client.Object) bool {
+	for _, ref := range obj.GetOwnerReferences() {
+		if isCalicoAPIGroup(ref.APIVersion) {
+			return true
 		}
 	}
-	var v3UID types.UID
-	if created != nil {
-		v3UID = created.GetUID()
-	}
-	return migrationWorkResult{migrated: true, v1UID: item.v1UID, v3UID: v3UID}
+	return false
 }
 
 // isCalicoAPIGroup returns true if the given API group is a Calico group
@@ -331,48 +346,44 @@ func isCalicoAPIGroup(group string) bool {
 	return strings.HasPrefix(group, "projectcalico.org/") || strings.HasPrefix(group, "crd.projectcalico.org/")
 }
 
-// RemapOwnerReferences performs a second pass over all migrated v3 resources,
-// remapping OwnerReference UIDs that point to Calico resources. Non-Calico
-// OwnerReferences (e.g., to Namespaces or Pods) are left unchanged.
-func RemapOwnerReferences(ctx context.Context, uidMap map[types.UID]types.UID, ms []migrators.ResourceMigrator) error {
-	if len(uidMap) == 0 {
+// RemapOwnerReferences remaps Calico OwnerReference UIDs on the given objects
+// using the v1→v3 UID map. The objects are ones collected during the migration
+// pass that have Calico OwnerRefs, so no API server listing is needed.
+func RemapOwnerReferences(
+	ctx context.Context,
+	uidMap map[types.UID]types.UID,
+	objects []client.Object,
+	update func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error,
+) error {
+	if len(uidMap) == 0 || len(objects) == 0 {
 		return nil
 	}
 
-	logCtx := logrus.WithField("uidMappings", len(uidMap))
+	logCtx := logrus.WithFields(logrus.Fields{
+		"uidMappings": len(uidMap),
+		"candidates":  len(objects),
+	})
 	logCtx.Info("Remapping OwnerReference UIDs on migrated resources")
 
 	remapped := 0
-	for _, m := range ms {
-		items, err := m.ListV3(ctx)
-		if err != nil {
-			return fmt.Errorf("listing v3 %s for ownerref remapping: %w", m.Kind(), err)
-		}
-
-		for _, obj := range items {
-			ownerRefs := obj.GetOwnerReferences()
-			if len(ownerRefs) == 0 {
+	for _, obj := range objects {
+		ownerRefs := obj.GetOwnerReferences()
+		changed := false
+		for i, ref := range ownerRefs {
+			if !isCalicoAPIGroup(ref.APIVersion) {
 				continue
 			}
-
-			changed := false
-			for i, ref := range ownerRefs {
-				if !isCalicoAPIGroup(ref.APIVersion) {
-					continue
-				}
-				if newUID, ok := uidMap[ref.UID]; ok && newUID != ref.UID {
-					ownerRefs[i].UID = newUID
-					changed = true
-				}
+			if newUID, ok := uidMap[ref.UID]; ok && newUID != ref.UID {
+				ownerRefs[i].UID = newUID
+				changed = true
 			}
-
-			if changed {
-				obj.SetOwnerReferences(ownerRefs)
-				if err := m.UpdateV3(ctx, obj); err != nil {
-					return fmt.Errorf("updating ownerrefs on %s/%s: %w", m.Kind(), obj.GetName(), err)
-				}
-				remapped++
+		}
+		if changed {
+			obj.SetOwnerReferences(ownerRefs)
+			if err := update(ctx, obj); err != nil {
+				return fmt.Errorf("updating ownerrefs on %s/%s: %w", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), err)
 			}
+			remapped++
 		}
 	}
 
