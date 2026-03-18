@@ -747,13 +747,10 @@ func (c *L3RouteResolver) flush() {
 		poolAllowsCrossSubnet := false
 		var blockSeen bool
 		var blockNodeName string
+		var blockTypes proto.RouteType
+		var blockMatchesRoute bool
+		var hasTunnelRef bool
 		for _, entry := range buf {
-			logCxt.Infof("marva0 entry: %v\n buf:%#v", entry, buf)
-			if len(buf) > 1 && entry.CIDR.IsSingleAddress() {
-				logCxt.Infof("marva entry: %v\n buf:%#v", entry, buf)
-				//continue
-			}
-
 			ri := entry.Data.(RouteInfo)
 			if len(ri.Pools) > 0 {
 				// We only expect one Pool entry for any given CIDR. This constraint is upheld by the datastore.
@@ -770,7 +767,6 @@ func (c *L3RouteResolver) flush() {
 					poolAllowsCrossSubnet = true
 				}
 			}
-			logCxt.Infof("nina block %d", len(ri.Blocks))
 			if len(ri.Blocks) > 0 {
 				// We only expect one Block entry for any given CIDR. This constraint is upheld by the datastore.
 				if blockSeen && blockNodeName != ri.Blocks[0].NodeName {
@@ -781,15 +777,25 @@ func (c *L3RouteResolver) flush() {
 					blockNodeName = ri.Blocks[0].NodeName
 				}
 				rt.DstNodeName = ri.Blocks[0].NodeName
-				if rt.DstNodeName == c.myNodeName {
-					logCxt.Debug("Local workload route.")
-					rt.Types |= proto.RouteType_LOCAL_WORKLOAD
-				} else {
-					logCxt.Debug("Remote workload route.")
-					rt.Types |= proto.RouteType_REMOTE_WORKLOAD
+
+				// Track whether this block entry is at the same CIDR as the route we're
+				// resolving (e.g., a /32 block for a /32 tunnel IP from a dedicated tunnel
+				// pool) vs a parent block that merely contains it.
+				if entry.CIDR == cidr {
+					blockMatchesRoute = true
 				}
-			} else {
-				logCxt.Info("nina no block")
+
+				// Accumulate the workload type flags from block entries, but don't apply
+				// them to the route yet. A parent block entry (e.g., a /26 block containing
+				// a /32 tunnel IP) should not contribute REMOTE_WORKLOAD to a tunnel route.
+				// The flags are applied after the full trie walk; see below.
+				if ri.Blocks[0].NodeName == c.myNodeName {
+					logCxt.Debug("Local workload route (from block).")
+					blockTypes |= proto.RouteType_LOCAL_WORKLOAD
+				} else {
+					logCxt.Debug("Remote workload route (from block).")
+					blockTypes |= proto.RouteType_REMOTE_WORKLOAD
+				}
 			}
 			if len(ri.Host.NodeNames) > 0 {
 				rt.DstNodeName = ri.Host.NodeNames[0]
@@ -828,6 +834,7 @@ func (c *L3RouteResolver) flush() {
 				} else {
 					// This is a tunnel ref, set type and also store the tunnel type in the route. It is possible for
 					// multiple tunnels to have the same IP, so collate all tunnel types on the same node.
+					hasTunnelRef = true
 					if ri.Refs[0].NodeName == c.myNodeName {
 						rt.Types |= proto.RouteType_LOCAL_TUNNEL
 					} else {
@@ -852,6 +859,18 @@ func (c *L3RouteResolver) flush() {
 					}
 				}
 			}
+		}
+
+		// Apply the accumulated block workload type flags unless the route is a tunnel
+		// IP that merely falls within a parent block. A tunnel IP inside a larger block
+		// (e.g., a /32 inside a /26) should not get REMOTE_WORKLOAD — that causes
+		// isRemoteTunnelRoute() in the route manager to program a spurious /32 route.
+		//
+		// However, if the block is at the same CIDR as the route (e.g., a /32 block from
+		// a dedicated tunnel pool), the workload type is still needed so the route manager
+		// programs the correct directly-connected route.
+		if blockSeen && (!hasTunnelRef || blockMatchesRoute) {
+			rt.Types |= blockTypes
 		}
 
 		var ipFamily int
