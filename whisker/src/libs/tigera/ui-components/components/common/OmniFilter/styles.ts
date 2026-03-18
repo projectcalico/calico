@@ -23,9 +23,10 @@ export default {
             },
         },
         content: {
-            boxShadow: '0px 0px 8px #dcdde0 !important',
-            borderColor: 'tigeraGrey.300',
-            borderWidth: '1px',
+            boxShadow:
+                'var(--chakra-colors-experimental-token-elevation-overlay-shadow)!important',
+            borderColor: 'experimental-token-border-default',
+            borderWidth: '1px solid',
             borderRadius: 'md',
             fontSize: 'sm',
             width: '300px',
@@ -42,6 +43,9 @@ export default {
         },
         header: {
             borderColor: 'tigeraGrey.200',
+        },
+        body: {
+            px: 0,
         },
     },
 } as ComponentMultiStyleConfig;

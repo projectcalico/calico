@@ -12,6 +12,7 @@ jest.mock(
             onRequestSearch,
             filterId,
             onRequestMore,
+            onChange,
         }: any) => {
             return (
                 <div data-testid={filterLabel}>
@@ -30,6 +31,21 @@ jest.mock(
                     </button>
                     <button onClick={() => onRequestSearch(filterId, '')}>
                         on clear search
+                    </button>
+                    <button
+                        onClick={() =>
+                            onChange({
+                                filterId,
+                                filterLabel,
+                                operator: undefined,
+                                filters: [
+                                    { value: 'filter-1', label: 'filter-1' },
+                                    { value: 'filter-2', label: 'filter-2' },
+                                ],
+                            })
+                        }
+                    >
+                        on change
                     </button>
                 </div>
             );
@@ -53,10 +69,14 @@ jest.mock(
         },
 );
 
+const PolicyOmniFilterMock = {
+    onChange: jest.fn(),
+};
 jest.mock(
     '@/features/flowLogs/components/PolicyOmniFilter',
     () =>
-        ({ filterLabel }: any) => {
+        ({ filterLabel, onChange }: any) => {
+            PolicyOmniFilterMock.onChange = onChange;
             return <div>{filterLabel} filter</div>;
         },
 );
@@ -122,12 +142,42 @@ describe('<OmniFilters />', () => {
         const omniFilter = within(screen.getByTestId('Source'));
         fireEvent.click(omniFilter.getByText('on clear'));
 
-        expect(mockOnChange).toHaveBeenCalledWith({
-            filterId: 'source_name',
-            filterLabel: '',
-            filters: [],
-            operator: undefined,
+        expect(mockOnChange).toHaveBeenCalledWith('source_name', []);
+    });
+
+    it('should call onChange with filterId and mapped filter values', () => {
+        const mockOnChange = jest.fn();
+        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+
+        const omniFilter = within(screen.getByTestId('Source'));
+        fireEvent.click(omniFilter.getByText('on change'));
+
+        expect(mockOnChange).toHaveBeenCalledWith('source_name', [
+            'filter-1',
+            'filter-2',
+        ]);
+    });
+
+    it('should call onChange with value wrapped in an array when policy filter changes', () => {
+        const mockOnChange = jest.fn();
+        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+
+        act(() => {
+            PolicyOmniFilterMock.onChange('policy', 'my-policy');
         });
+
+        expect(mockOnChange).toHaveBeenCalledWith('policy', ['my-policy']);
+    });
+
+    it('should call onChange with null when policy filter value is empty', () => {
+        const mockOnChange = jest.fn();
+        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+
+        act(() => {
+            PolicyOmniFilterMock.onChange('policy', '');
+        });
+
+        expect(mockOnChange).toHaveBeenCalledWith('policy', null);
     });
 
     it('should call onReady', () => {

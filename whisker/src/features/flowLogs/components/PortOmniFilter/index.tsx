@@ -106,7 +106,7 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                             >
                                 <OmniFilterBody
                                     data-testid={`${testId}-popover-body`}
-                                    py={4}
+                                    p={4}
                                 >
                                     <Flex gap={4} alignItems='start'>
                                         <FormControl isInvalid={false}>

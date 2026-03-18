@@ -14,7 +14,7 @@ const FilterFooter: React.FC<OmniFilterFooterProps> = ({
 }) => (
     <OmniFilterFooter data-testid={`${testId}-popover-footer`}>
         {leftButtonProps && (
-            <Button variant='ghost' {...leftButtonProps}>
+            <Button variant='neutral' {...leftButtonProps}>
                 {leftButtonProps.children ?? 'Clear'}
             </Button>
         )}

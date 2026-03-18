@@ -1,0 +1,44 @@
+@theme {
+    /**
+   * On-background colours are contrast paired tokens for background colours
+   * to ensure an acceptable contrast ratio.
+   *
+   * Reference: https://designsystem.backbase.com/latest/design-tokens/semantic-colors/on-background-colors-aJ93P0Po
+   */
+
+    --color-tigera-token-on-bg-brand: var(--color-tigera-token-fg-inverted);
+    --color-tigera-token-on-bg-warning: var(--color-tigera-token-fg-inverted);
+    --color-tigera-token-on-bg-warning-subtle: var(
+        --color-tigera-color-medium-gold-1000
+    );
+    --color-tigera-token-on-bg-info: var(--color-tigera-token-fg-inverted);
+    --color-tigera-token-on-bg-info-subtle: var(
+        --color-tigera-token-fg-default
+    );
+    --color-tigera-token-on-bg-danger: var(--color-tigera-token-fg-inverted);
+    --color-tigera-token-on-bg-danger-subtle: var(
+        --color-tigera-color-red-1000
+    );
+    --color-tigera-token-on-bg-success: var(--color-tigera-color-neutral-1200);
+    --color-tigera-token-on-bg-success-subtle: var(
+        --color-tigera-color-green-1000
+    );
+}
+
+.dark {
+    --color-tigera-token-on-bg-brand: var(--color-tigera-token-fg-inverted);
+    --color-tigera-token-on-bg-warning: var(--color-tigera-token-fg-inverted);
+    --color-tigera-token-on-bg-warning-subtle: var(
+        --color-tigera-color-medium-gold-100
+    );
+    --color-tigera-token-on-bg-info: var(--color-tigera-token-fg-inverted);
+    --color-tigera-token-on-bg-info-subtle: var(
+        --color-tigera-color-medium-blue-100
+    );
+    --color-tigera-token-on-bg-danger: var(--color-tigera-token-fg-inverted);
+    --color-tigera-token-on-bg-danger-subtle: var(--color-tigera-color-red-200);
+    --color-tigera-token-on-bg-success: var(--color-tigera-color-neutral-1200);
+    --color-tigera-token-on-bg-success-subtle: var(
+        --color-tigera-color-green-200
+    );
+}

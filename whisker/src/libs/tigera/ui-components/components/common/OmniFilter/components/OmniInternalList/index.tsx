@@ -5,6 +5,7 @@ import { OmniFilterOption, OmniInternalListComponentProps } from '../../types';
 import { CheckboxListLoadingSkeleton } from '../CheckboxLoadingSkeleton';
 import OmniCheckboxList, { OmniCheckboxListProps } from '../OmniCheckboxList';
 import OmniRadioList from '../OmniRadioList';
+import OmniSelectList, { OmniSelectListProps } from '../OmniSelectList';
 
 export type OmniFilterChangeEvent = {
     filterId: string;
@@ -13,7 +14,7 @@ export type OmniFilterChangeEvent = {
     filters: OmniFilterOption[];
 };
 
-export type ListType = 'checkbox' | 'radio';
+export type ListType = 'checkbox' | 'radio' | 'select';
 
 type OmniInternalListProps = {
     options: OmniFilterOption[];
@@ -29,7 +30,7 @@ type OmniInternalListProps = {
     labelSelectedListHeader?: string;
     ref?: React.RefObject<HTMLInputElement>;
     listType: ListType;
-    internalListComponentProps?: OmniCheckboxListProps;
+    internalListComponentProps?: OmniCheckboxListProps | OmniSelectListProps;
     isCreatable: boolean;
     searchInput: string;
     filteredData: OmniFilterOption[];
@@ -85,6 +86,12 @@ const OmniInternalList: React.FC<OmniInternalListProps> = ({
                         {...internalListComponentProps}
                         isLoadingMore={isLoadingMore}
                     />
+                ) : listType === 'select' ? (
+                    <OmniSelectList
+                        {...listComponentProps}
+                        {...internalListComponentProps}
+                        isLoadingMore={isLoadingMore}
+                    />
                 ) : (
                     <OmniRadioList
                         {...listComponentProps}
@@ -103,12 +110,7 @@ const OmniInternalList: React.FC<OmniInternalListProps> = ({
                         <VStack py={4}>
                             <Text>We couldn't find any matches</Text>
                             <Button
-                                variant='ghost'
-                                _hover={{
-                                    _dark: {
-                                        bg: 'tigeraGrey.800',
-                                    },
-                                }}
+                                variant='neutral'
                                 leftIcon={<AddIcon fontSize='2xs' />}
                                 fontSize='sm'
                                 onClick={() => {

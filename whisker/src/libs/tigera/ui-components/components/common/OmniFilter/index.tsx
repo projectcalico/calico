@@ -14,6 +14,9 @@ import OmniFilterOperatorSelect from './components/OmniFilterOperatorSelect';
 import OmniInternalList from './components/OmniInternalList';
 import OmniRadioList from './components/OmniRadioList';
 import OmniRangeList from './components/OmniRangeList';
+import OmniSelectList, {
+    OmniSelectListProps,
+} from './components/OmniSelectList';
 import OmniSwitchList from './components/OmniSwitchList';
 import OmniTagListTrigger, {
     OmniTagListTriggerPartsProps,
@@ -33,6 +36,7 @@ import {
     OperatorType,
 } from './types';
 import PageCounter from './components/PageCounter';
+import { OmniFilterTriggerProps } from './parts/OmniFilterTrigger';
 
 // Handle calling onReady for lazy loaded content
 const LazyOnReady: React.FC<{ onReady?: () => void }> = ({ onReady }) => {
@@ -52,6 +56,10 @@ export type ListType = 'checkbox' | 'radio';
 
 const BUTTON_LABEL_WIDTH = '190px';
 const BUTTON_LABEL_WITH_COUNT_WIDTH = '160px';
+
+export type OmniFilterPartsProps = {
+    triggerProps?: OmniFilterTriggerProps;
+};
 
 export type OmniFilterProps = {
     filterId: string;
@@ -91,6 +99,7 @@ export type OmniFilterProps = {
     triggerType?: 'default' | 'taglist';
     tagListTriggerProps?: OmniTagListTriggerPartsProps;
     popoverContentProps?: PopoverContentProps;
+    partsProps?: OmniFilterPartsProps;
 } & Omit<BoxProps, 'onChange'> & { 'data-testid'?: string };
 
 type CheckboxOmniFilterProps = {
@@ -98,7 +107,14 @@ type CheckboxOmniFilterProps = {
     internalListComponentProps?: OmniCheckboxListProps;
 } & Omit<OmniFilterProps, 'listType' | 'internalListComponentProps'>;
 
-const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
+type SelectOmniFilterProps = {
+    listType: 'select';
+    internalListComponentProps?: OmniSelectListProps;
+} & Omit<OmniFilterProps, 'listType' | 'internalListComponentProps'>;
+
+const OmniFilter: React.FC<
+    OmniFilterProps | CheckboxOmniFilterProps | SelectOmniFilterProps
+> = ({
     filterId,
     filterLabel,
     labelClearSelection = 'Clear selection',
@@ -127,6 +143,7 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     triggerType = 'default',
     popoverContentProps,
     tagListTriggerProps,
+    partsProps,
     formatCreatableLabel,
     onChange,
     onReady,
@@ -175,8 +192,33 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
             operator: showOperatorSelect ? selectedOperator : undefined,
             filters,
         });
-        popoverContentRef?.current?.focus();
+
+        if (listType === 'select' && filters.length > 0) {
+            onClose();
+            setSearchInput('');
+            // Focus the trigger button after close so parent popover doesn't
+            // lose focus and close itself
+            requestAnimationFrame(() => {
+                const trigger = document.querySelector<HTMLElement>(
+                    `[data-testid="${testId}-button-trigger"]`,
+                );
+                trigger?.focus();
+            });
+        } else {
+            popoverContentRef?.current?.focus();
+        }
     };
+
+    const handleClear = React.useCallback(() => {
+        onClear();
+
+        // only way to guarantee focus post clear as dependant on rendering cycle
+        // of list inside omnifilter
+        setTimeout(() => {
+            initialFocusRef.current?.focus();
+            setTimeout(() => initialFocusRef.current?.focus(), 500);
+        }, 500);
+    }, [onClear]);
 
     const listComponentProps = {
         options: filteredData,
@@ -232,6 +274,8 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                         isDisabled={isDisabled}
                         testId={testId}
                         showButtonIcon={showButtonIcon}
+                        showClearButton={listType === 'select'}
+                        onClear={handleClear}
                         selectedValueLabel={
                             formatSelectedLabel
                                 ? formatSelectedLabel(selectedFilters)
@@ -262,6 +306,7 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                                               : BUTTON_LABEL_WIDTH,
                                   }
                         }
+                        {...partsProps?.triggerProps}
                     />
                 )}
 
@@ -336,9 +381,8 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                     )}
 
                     <OmniFilterBody
-                        px={3}
-                        pt={!showOperatorSelect && !showSearch ? 2 : 0}
-                        pb={hasFilters ? 2 : 0}
+                        px={hasFilters && !isLoading ? 0 : 3}
+                        py={hasFilters ? 2 : 0}
                         data-testid={`popover-body`}
                     >
                         <OmniInternalList
@@ -367,23 +411,11 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                     <OmniFilterFooter>
                         <Button
                             isDisabled={selectedFilters.length === 0}
-                            variant='ghost'
+                            variant='neutral'
                             fontWeight='semibold'
                             size='sm'
                             tabIndex={0}
-                            onClick={() => {
-                                onClear();
-
-                                // only way to guarantee focus post clear as dependant on rendering cycle
-                                // of list inside omnifilter
-                                setTimeout(() => {
-                                    initialFocusRef.current?.focus();
-                                    setTimeout(
-                                        () => initialFocusRef.current?.focus(),
-                                        500,
-                                    );
-                                }, 500);
-                            }}
+                            onClick={handleClear}
                         >
                             {labelClearSelection}
                         </Button>
@@ -412,6 +444,7 @@ export {
     OmniInternalList,
     OmniRadioList,
     OmniRangeList,
+    OmniSelectList,
     OmniSwitchList,
     LazyOnReady,
     useOmniFilterUrlState,

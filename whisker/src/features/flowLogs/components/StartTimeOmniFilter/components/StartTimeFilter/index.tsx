@@ -86,6 +86,7 @@ const StartTimeFilter: React.FC<StartTimeFilterProps> = ({
                                         position: 'relative',
                                         my: 0,
                                         borderRadius: 0,
+                                        border: 'none',
                                     }),
                                     menuList: (styles) => ({
                                         ...styles,
@@ -95,10 +96,6 @@ const StartTimeFilter: React.FC<StartTimeFilterProps> = ({
                                     option: (styles) => ({
                                         ...styles,
                                         ...SelectStyles.option,
-                                        _dark: {
-                                            ...SelectStyles.option._dark,
-                                            background: 'tigeraGrey.1000',
-                                        },
                                     }),
                                 }}
                             />

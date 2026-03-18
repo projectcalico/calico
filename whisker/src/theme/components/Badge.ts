@@ -1,9 +1,8 @@
-import { alpha } from '../utils';
-
 export default {
     variants: {
         solid: {
-            backgroundColor: alpha('tigeraGrey.400', 0.2),
+            backgroundColor: 'experimental-token-bg-neutral',
+            color: 'experimental-token-fg-default',
         },
         rounded: {
             color: 'tigeraWhite',

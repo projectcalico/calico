@@ -19,7 +19,7 @@ import {
 } from '@/utils/omniFilter';
 import React from 'react';
 import ActionOmniFilter from '../ActionOmniFilter';
-import PolicyOmniFilter from '../PolicyOmniFilter';
+import PolicyOmniFilter, { PolicyFilter } from '../PolicyOmniFilter';
 import StartTimeOmniFilter from '../StartTimeOmniFilter';
 
 const listOmniFilterIds = Object.values(ListOmniFilterKeys);
@@ -30,7 +30,7 @@ const omniFilterIds = [
 ];
 
 type OmniFiltersProps = {
-    onChange: (event: OmniFilterChangeEvent) => void;
+    onChange: (filterId: string, filters: string[] | null) => void;
     onMultiChange: (change: Partial<Record<FilterKey, string[]>>) => void;
     onReset: () => void;
     omniFilterData: ListOmniFiltersData;
@@ -52,13 +52,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
     onRequestNextPage,
     startTime,
 }) => {
-    const handleClear = (filterId: string) =>
-        onChange({
-            filterId: filterId,
-            filterLabel: '',
-            filters: [],
-            operator: undefined,
-        });
+    const handleClear = (filterId: string) => onChange(filterId, []);
 
     const debounce = useDebouncedCallback();
     const [isLoading, setIsLoading] = React.useState(false);
@@ -81,6 +75,17 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
         ],
     );
 
+    const handleChange = (omniFilterChangeEvent: OmniFilterChangeEvent) => {
+        onChange(
+            omniFilterChangeEvent.filterId,
+            omniFilterChangeEvent.filters.map((filter) => filter.value),
+        );
+    };
+
+    const handlePolicyFilterChange = (filterId: string, value: string) => {
+        onChange(filterId, value ? [value] : null);
+    };
+
     return (
         <>
             <OmniFilterList
@@ -92,19 +97,10 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
             >
                 <PolicyOmniFilter
                     key='policy-omni-filter'
-                    onChange={onMultiChange}
+                    onChange={handlePolicyFilterChange}
                     filterId={CustomOmniFilterKeys.policy}
-                    filterLabel={
-                        OmniFilterProperties[OmniFilterKeys.policy].label
-                    }
-                    selectedValues={{
-                        policy: selectedValues.policy,
-                        policyNamespace: selectedValues.policyNamespace,
-                        policyTier: selectedValues.policyTier,
-                        policyKind: selectedValues.policyKind,
-                    }}
-                    selectedFilters={policyFilters}
-                    filterQuery={selectedValues}
+                    selectedFilters={policyFilters as PolicyFilter[]}
+                    onClear={() => handleClear(FilterKey.policy)}
                 />
 
                 {listOmniFilterIds.map((id) => {
@@ -116,7 +112,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                             filterLabel={OmniFilterProperties[filterId].label}
                             filters={omniFilterData[filterId]?.filters ?? []}
                             selectedFilters={selectedListOmniFilters[filterId]}
-                            onChange={onChange}
+                            onChange={handleChange}
                             onClear={() => handleClear(filterId)}
                             showOperatorSelect={false}
                             listType='checkbox'
@@ -220,7 +216,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     }
                     selectedFilters={selectedValues.start_time ?? null}
                     value={startTime.toString()}
-                    onChange={onChange}
+                    onChange={handleChange}
                     onReset={() => handleClear(CustomOmniFilterKeys.start_time)}
                 />
             </OmniFilterList>

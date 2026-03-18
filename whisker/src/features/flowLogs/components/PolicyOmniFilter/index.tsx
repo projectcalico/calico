@@ -1,4 +1,3 @@
-import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import Badge from '@/libs/tigera/ui-components/components/common/OmniFilter/components/Badge';
 import {
     OmniFilterBody,
@@ -6,72 +5,70 @@ import {
     OmniFilterContent,
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
-import {
-    CustomOmniFilterParam,
-    FilterHintKey,
-    FilterKey,
-    OmniFilterProperties,
-    SelectedOmniFilters,
-} from '@/utils/omniFilter';
+import { FilterKey, OmniFilterProperties } from '@/utils/omniFilter';
 import { Flex, Text } from '@chakra-ui/react';
 import React from 'react';
 import OmniFilterFooter from '../OmniFilterFooter';
-import FilterTabs, { PolicyFilters } from './FilterTabs';
+import QueryList, { PolicyFilterKey, PolicyQuery } from './QueryList';
+import NoPolicyCheckbox from './NoPolicyCheckbox';
+import { transformToFilterOptions, transformToQueries } from './utils';
+
+export type PolicyFilter = Partial<Record<PolicyFilterKey, string>>;
+
+const NO_POLICY_KIND = 'Profile';
+const NO_POLICY_VALUE = `[{"kind": "${NO_POLICY_KIND}"}]`;
+
+const checkIsNoPolicy = (selectedValues: PolicyFilter[]) =>
+    selectedValues.length === 1 &&
+    Object.keys(selectedValues[0]).length === 1 &&
+    selectedValues[0].kind === NO_POLICY_KIND;
 
 type PolicyOmniFilterProps = {
-    onChange: (change: Partial<Record<FilterKey, string[]>>) => void;
-    selectedValues: Record<PolicyFilters, string[] | undefined>;
-    filterLabel: string;
-    filterId: CustomOmniFilterParam;
-    filterQuery: SelectedOmniFilters;
-    selectedFilters: string[];
+    onChange: (filterId: FilterKey, value: string) => void;
+    onClear: () => void;
+    selectedFilters: PolicyFilter[];
+    filterId: FilterKey;
 };
 
-const testId = 'policy-omni-filter-v2';
+const testId = 'policy-omni-filter';
 const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
     onChange,
-    selectedValues,
-    filterQuery,
+    onClear,
+    selectedFilters,
 }) => {
-    const [values, setValues] =
-        React.useState<Record<PolicyFilters, string[] | undefined>>(
-            selectedValues,
-        );
+    const isNoPolicy = checkIsNoPolicy(selectedFilters);
+    const [noPolicyChecked, setNoPolicyChecked] = React.useState(isNoPolicy);
+    const [queryState, setQueryState] = React.useState<PolicyQuery[]>(
+        isNoPolicy ? [] : transformToQueries(selectedFilters),
+    );
+    const filterCount = selectedFilters.length;
+    const isActive = filterCount > 0;
 
-    const handleChange = (event: OmniFilterChangeEvent) => {
-        setValues((prev) => ({
-            ...prev,
-            [event.filterId]: event.filters.map((filter) => filter.value),
-        }));
-    };
+    const handleChange = () => {
+        const filterOptions = transformToFilterOptions(queryState);
 
-    const handleClear = (filterId: FilterHintKey) =>
-        handleChange({
-            filterId,
-            filterLabel: '',
-            filters: [],
-            operator: undefined,
-        });
-
-    const onSubmitFilter = (onClose: () => void) => {
-        onClose();
-        onChange(values);
+        if (noPolicyChecked) {
+            onChange(FilterKey.policy, NO_POLICY_VALUE);
+        } else {
+            onChange(
+                FilterKey.policy,
+                filterOptions.length ? JSON.stringify(filterOptions) : '',
+            );
+        }
     };
 
     const onClearFilter = (onClose: () => void) => {
-        onChange({
-            policy: [],
-            policyNamespace: [],
-            policyTier: [],
-            policyKind: [],
-        });
         onClose();
+        onClear();
     };
 
-    const filterCount = Object.values(selectedValues)
-        .flat()
-        .filter(Boolean).length;
-    const isActive = filterCount > 0;
+    const handleTriggerClick = React.useCallback(() => {
+        if (isNoPolicy) {
+            setNoPolicyChecked(true);
+        } else {
+            setQueryState(transformToQueries(selectedFilters));
+        }
+    }, [isNoPolicy, selectedFilters]);
 
     return (
         <OmniFilterContainer>
@@ -79,32 +76,41 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                 <>
                     <OmniFilterTrigger
                         label={OmniFilterProperties[FilterKey.policy].label}
-                        isDisabled={false}
                         testId={testId}
-                        onClick={() => setValues(selectedValues)}
+                        onClick={handleTriggerClick}
                         isActive={isActive}
                         customContent={
                             <Flex>
-                                <Text>
-                                    {
-                                        OmniFilterProperties[FilterKey.policy]
-                                            .label
-                                    }
-                                </Text>
+                                <Text>Policy</Text>
                                 {isActive && (
                                     <Badge ml={2}>{filterCount}</Badge>
                                 )}
                             </Flex>
                         }
                     />
-                    <OmniFilterContent width='600px'>
-                        <OmniFilterBody p={0}>
-                            <FilterTabs
-                                filterId={FilterKey.policy}
-                                values={values}
-                                filterQuery={filterQuery}
-                                onChange={handleChange}
-                                onClear={handleClear}
+                    <OmniFilterContent
+                        width={noPolicyChecked ? '300px' : '800px'}
+                    >
+                        <OmniFilterBody
+                            p={4}
+                            display='flex'
+                            flexDirection='column'
+                            gap={4}
+                        >
+                            {!noPolicyChecked && (
+                                <>
+                                    <QueryList
+                                        queries={queryState}
+                                        onChange={setQueryState}
+                                    />
+
+                                    <hr />
+                                </>
+                            )}
+
+                            <NoPolicyCheckbox
+                                value={noPolicyChecked}
+                                onChange={setNoPolicyChecked}
                             />
                         </OmniFilterBody>
 
@@ -115,7 +121,10 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                                 children: 'Clear all',
                             }}
                             rightButtonProps={{
-                                onClick: () => onSubmitFilter(onClose),
+                                onClick: () => {
+                                    onClose();
+                                    handleChange();
+                                },
                             }}
                         />
                     </OmniFilterContent>

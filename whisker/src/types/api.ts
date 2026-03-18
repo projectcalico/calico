@@ -110,9 +110,6 @@ export type FlowsFilter = Partial<{
     protocols: FlowsFilterQuery[];
     dest_ports: FlowsFilterQuery[];
     policies: FlowsFilterQuery[];
-    policy_namespaces: FlowsFilterQuery[];
-    policy_tiers: FlowsFilterQuery[];
-    policy_kinds: FlowsFilterQuery[];
     reporters: FlowsFilterQuery[];
     actions: FlowsFilterQuery[];
     staged_actions: FlowsFilterQuery[];

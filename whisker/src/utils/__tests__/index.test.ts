@@ -1,5 +1,9 @@
 import { createEventSource } from '..';
-import { ListOmniFilterKeys, transformToFlowsFilterQuery } from '../omniFilter';
+import {
+    ListOmniFilterKeys,
+    transformToFlowsFilterQuery,
+    transformToPolicyFilterToRequest,
+} from '../omniFilter';
 
 describe('transformToFilterHintsQuery', () => {
     it('should transform the data', () => {
@@ -17,6 +21,7 @@ describe('transformToFilterHintsQuery', () => {
                     policyNamespace: [],
                     policyTier: [],
                     policyKind: [],
+                    policyName: [],
                 },
                 ListOmniFilterKeys.dest_namespace,
                 searchText,
@@ -30,22 +35,36 @@ describe('transformToFilterHintsQuery', () => {
     });
 
     it('should transform policy filters', () => {
-        const policy = 'policy-1';
+        const policy = {
+            name: 'policy-1',
+            namespace: 'namespace-1',
+            tier: 'tier-1',
+            kind: 'kind-1',
+        };
+
         expect(
             transformToFlowsFilterQuery({
                 dest_name: [],
                 dest_namespace: [],
                 source_name: [],
                 source_namespace: [],
-                policy: [policy],
+                policy: [policy as any],
                 policyNamespace: [],
                 policyTier: [],
                 policyKind: [],
                 reporter: [],
+                policyName: [],
             }),
         ).toEqual(
             JSON.stringify({
-                policies: [{ type: 'Exact', value: policy }],
+                policies: [
+                    {
+                        name: { type: 'Exact', value: 'policy-1' },
+                        namespace: { type: 'Exact', value: 'namespace-1' },
+                        tier: { type: 'Exact', value: 'tier-1' },
+                        kind: 'kind-1',
+                    },
+                ],
             }),
         );
     });
@@ -65,6 +84,7 @@ describe('transformToFilterHintsQuery', () => {
                     policyTier: [],
                     policyKind: [],
                     reporter: [],
+                    policyName: [],
                 },
                 ListOmniFilterKeys.dest_name,
                 searchText,
@@ -74,6 +94,36 @@ describe('transformToFilterHintsQuery', () => {
                 dest_names: [{ type: 'Fuzzy', value: searchText }],
             }),
         );
+    });
+});
+
+describe('transformToPolicyFilterToRequest', () => {
+    it('returns an empty array when given no values', () => {
+        expect(transformToPolicyFilterToRequest([])).toEqual([]);
+    });
+
+    it('only includes fields that are present', () => {
+        expect(
+            transformToPolicyFilterToRequest([{ kind: 'GlobalNetworkPolicy' }]),
+        ).toEqual([{ kind: 'GlobalNetworkPolicy' }]);
+    });
+
+    it('transforms multiple filters', () => {
+        const result = transformToPolicyFilterToRequest([
+            { tier: 'security', kind: 'NetworkPolicy' },
+            { name: 'deny-all', namespace: 'default' },
+        ]);
+
+        expect(result).toEqual([
+            {
+                tier: { type: 'Exact', value: 'security' },
+                kind: 'NetworkPolicy',
+            },
+            {
+                name: { type: 'Exact', value: 'deny-all' },
+                namespace: { type: 'Exact', value: 'default' },
+            },
+        ]);
     });
 });
 

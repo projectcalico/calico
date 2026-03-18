@@ -1,36 +1,27 @@
-import { ChakraStylesConfig } from 'chakra-react-select';
-
 export const SelectStyles = {
     option: {
-        fontWeight: 400,
+        fontWeight: 'normal',
         px: 2.5,
         py: 2,
         fontSize: 'sm',
         minWidth: 'fit-content',
-
-        _dark: {
-            background: 'tigeraGreyDark.200',
-            _selected: {
-                background: 'tigeraBlueMediumDark',
-                color: 'tigeraBlueMedium40',
-            },
-            _focus: {
-                backgroundColor: 'tigeraGrey.800',
-                _selected: {
-                    background: 'tigeraBlueMediumDark',
-                    color: 'tigeraBlueMedium40',
-                },
-            },
+        transition: 'background-color 0.1s ease-in-out',
+        backgroundColor: 'experimental-token-bg-neutral-subtle',
+        color: 'experimental-token-fg-default',
+        _focus: {
+            backgroundColor: 'experimental-token-bg-neutral-subtle:hovered',
+        },
+        _active: {
+            backgroundColor: 'experimental-token-bg-neutral-subtle:pressed',
         },
     },
     menu: {
         mt: 1,
-        boxShadow: '0px 0px 8px #dcdde0 !important',
-        borderColor: 'tigeraGrey.300',
+        boxShadow:
+            'var(--chakra-colors-experimental-token-elevation-overlay-shadow)!important',
+        borderColor: 'experimental-token-border-default',
         borderRadius: 'md',
-        _dark: {
-            boxShadow: 'none !important',
-        },
+        borderWidth: '1px',
     },
     menuList: {
         pt: 0,
@@ -48,6 +39,8 @@ export default {
         height: '42px',
         boxShadow: 'none',
         '&[data-invalid="true"]': { boxShadow: 'none' },
+        bg: 'experimental-token-bg-input!important',
+        border: 'experimental-token-border-default',
         fontSize: 'sm',
     }),
     container: (provided: any) => ({
@@ -58,13 +51,14 @@ export default {
     clearIndicator: (provided: any) => ({
         ...provided,
         fontSize: '0.60rem',
-        color: 'tigeraGrey.700',
+        color: 'experimental-token-fg-subtle',
         '--close-button-size': '10px',
         ':hover': {
             bg: 'unset',
-            color: 'tigeraGrey.900',
+            color: 'experimental-token-fg-support',
         },
     }),
+
     indicatorsContainer: (provided: any) => ({
         ...provided,
         fontSize: 'xl',
@@ -96,6 +90,7 @@ export default {
         fontSize: 'xl',
         px: 2,
         cursor: 'inherit',
+        color: 'experimental-token-fg-support',
     }),
     indicatorSeparator: (provided: any) => ({
         ...provided,
@@ -104,12 +99,22 @@ export default {
     singleValue: (provided: any) => ({
         ...provided,
     }),
+    placeholder: (provided: any) => ({
+        ...provided,
+        color: 'experimental-token-fg-subtle',
+        fontSize: 'sm',
+    }),
     multiValue: (provided: any) => ({
         ...provided,
+        color: 'experimental-token-fg-default',
         py: 4,
-        borderRadius: 0,
+        borderRadius: 2,
         borderWidth: 0,
-        bg: '#ebf5ff', // TODO THIS COLOR IS NOT IN THE DESIGN THEME! NEEDS FEEDBACK FROM DESIGNERS
+        bg: 'experimental-color-blue.100',
+        _dark: {
+            bg: 'experimental-color-medium-gold.200',
+            color: 'experimental-token-fg-inverted',
+        },
         svg: {
             color: 'white',
         },
@@ -123,11 +128,31 @@ export default {
             px: '5px',
         },
         '>div': {
-            bg: 'tigeraBlueDark',
-            opacity: 1,
-            borderRadius: 0,
+            opacity: '1!important',
+            borderRadius: '0 2px 2px 0',
             height: 6,
             width: 6,
+            bg: 'experimental-token-bg-brand',
+            _hover: {
+                bg: 'experimental-token-bg-brand:hovered',
+            },
+            _active: {
+                bg: 'experimental-token-bg-brand:pressed',
+            },
+            _dark: {
+                _hover: {
+                    bg: 'experimental-token-bg-brand:hovered',
+                },
+                _active: {
+                    bg: 'experimental-color-medium-gold.500',
+                },
+            },
+            '>svg': {
+                color: 'white',
+                _dark: {
+                    color: 'experimental-token-fg-inverted',
+                },
+            },
         },
     }),
-} satisfies ChakraStylesConfig;
+};

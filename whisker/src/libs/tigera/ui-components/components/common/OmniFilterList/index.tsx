@@ -125,7 +125,7 @@ const OmniFilterList: React.FC<
                 <Button
                     data-testid='omnifilterlist-reset'
                     aria-label={labelResetAria}
-                    variant='ghost'
+                    variant='neutral'
                     onClick={() => onResetVisible()}
                 >
                     {labelReset}

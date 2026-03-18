@@ -1,28 +1,23 @@
 export default {
     baseStyle: {
         list: {
-            boxShadow: '0px 0px 8px #DCDDE0', // tigeraGrey[300] - can't make work from theme for boxshadow
-            borderColor: 'tigeraGrey.300',
-            bg: 'tigera-color-surface',
-            color: 'tigera-color-on-surface',
-            _dark: {
-                boxShadow: 'unset',
-                borderColor: 'tigeraBlack',
-            },
+            boxShadow:
+                'var(--chakra-colors-experimental-token-elevation-overlay-shadow)!important',
+            borderColor: 'experimental-token-border-default',
+            bg: 'experimental-token-elevation-overlay',
         },
         item: {
-            color: 'tigera-color-on-surface',
-            bg: 'tigera-color-surface',
+            color: 'experimental-token-fg-default',
+            bg: 'experimental-token-bg-neutral-subtle',
             fontSize: 'xs',
             '&[aria-checked="true"]': {
                 fontWeight: 'bold',
             },
-            _focus: { bg: 'tigeraBlueMedium', color: 'tigeraWhite' },
-            _dark: {
-                _focus: {
-                    bg: 'tigeraGoldMedium40',
-                    color: 'tigeraBlack',
-                },
+            _focus: {
+                bg: 'experimental-token-bg-neutral-subtle:hovered',
+            },
+            _active: {
+                bg: 'experimental-token-bg-neutral-subtle:pressed',
             },
         },
         groupTitle: {

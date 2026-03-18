@@ -4,19 +4,14 @@ import OmniFilters from '@/features/flowLogs/components/OmniFilters';
 import { useMaxStartTime } from '@/features/flowLogs/hooks';
 import { useSelectedListOmniFilters } from '@/hooks';
 import { useOmniFilterData } from '@/hooks/omniFilters';
+import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
 import PauseIcon from '@/icons/PauseIcon';
 import PlayIcon from '@/icons/PlayIcon';
 import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/DataTable';
-import {
-    OmniFilterChangeEvent,
-    useOmniFilterUrlState,
-} from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import { FilterHintValues } from '@/types/render';
 import { parseStartTime } from '@/utils';
 import {
-    FilterKey,
-    OmniFilterKeys,
-    OmniFilterProperties,
+    OmniFilterParam,
     transformToFlowsFilterQuery,
 } from '@/utils/omniFilter';
 import {
@@ -40,35 +35,28 @@ const toastProps = {
 };
 
 const FlowLogsPage: React.FC = () => {
-    const [urlFilterParams, , setFilterParam, clearFilterParams, , ,] =
-        useOmniFilterUrlState<typeof OmniFilterKeys>(
-            OmniFilterKeys,
-            OmniFilterProperties,
-        );
+    const { filters, setFilter, setMultiFilter, clearFilters } =
+        useFlowLogsUrlFilters();
 
-    const onChange = (event: OmniFilterChangeEvent) => {
-        setFilterParam(
-            event.filterId,
-            event.filters.map((filter) => filter.value),
-            undefined,
-        );
+    const onChange = (filterId: string, filters: string[] | null) => {
+        setFilter(filterId, filters);
     };
 
     const onReset = () => {
-        clearFilterParams();
+        clearFilters();
     };
 
     const [omniFilterData, fetchFilter] = useOmniFilterData();
     const selectedOmniFilterData = {};
     const selectedFilters = useSelectedListOmniFilters(
-        urlFilterParams,
+        filters as Record<OmniFilterParam, string[]>,
         omniFilterData,
         selectedOmniFilterData,
     );
 
-    const startTime = parseStartTime(urlFilterParams.start_time?.[0]);
+    const startTime = parseStartTime(filters.start_time?.[0]);
     const filterHintValues = {
-        ...urlFilterParams,
+        ...filters,
         start_time: undefined,
     } as Partial<FilterHintValues>;
 
@@ -137,14 +125,6 @@ const FlowLogsPage: React.FC = () => {
         selectedRowRef.current = null;
     }, [data.length]);
 
-    const handleMultiChange = (
-        values: Partial<Record<FilterKey, string[]>>,
-    ) => {
-        Object.entries(values).forEach(([key, value]) => {
-            setFilterParam(key, value, undefined);
-        });
-    };
-
     return (
         <Box pt={1}>
             <Flex justifyContent='space-between' alignItems='center' p={2}>
@@ -152,6 +132,7 @@ const FlowLogsPage: React.FC = () => {
                     <OmniFilters
                         onReset={onReset}
                         onChange={onChange}
+                        onMultiChange={setMultiFilter}
                         selectedListOmniFilters={selectedFilters}
                         omniFilterData={omniFilterData}
                         onRequestFilterData={({ filterParam, searchOption }) =>
@@ -167,7 +148,6 @@ const FlowLogsPage: React.FC = () => {
                         onRequestNextPage={(filterParam) =>
                             fetchFilter(filterParam, null)
                         }
-                        onMultiChange={handleMultiChange}
                         selectedValues={filterHintValues}
                         startTime={startTime}
                     />

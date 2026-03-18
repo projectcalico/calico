@@ -108,7 +108,7 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
             />
 
             <OmniFilterContent data-testid='action-omni-filter-content'>
-                <OmniFilterBody py={4}>
+                <OmniFilterBody p={4}>
                     <FormControl>
                         <FormLabel
                             showClearButton={!!actions.action}
@@ -161,7 +161,7 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                         reduceMotion={reduceMotion}
                     >
                         <AccordionItem border='none'>
-                            <AccordionButton px={0}>
+                            <AccordionButton px={1}>
                                 <Box
                                     as='span'
                                     flex='1'
@@ -174,7 +174,7 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                                 <AccordionIcon />
                             </AccordionButton>
 
-                            <AccordionPanel p={0}>
+                            <AccordionPanel py={0} px={1}>
                                 <FormControl>
                                     <FormLabel
                                         showClearButton={

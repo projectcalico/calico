@@ -205,4 +205,200 @@ describe('ActionOmniFilter', () => {
         expect(stagedActionToggle).toBeInTheDocument();
         expect(pendingActionToggle).toBeInTheDocument();
     });
+
+    it('should not show filter count badge when no filters are active', () => {
+        render(<ActionOmniFilter {...defaultProps} />);
+
+        expect(
+            screen.getByRole('button', { name: 'Action' }),
+        ).toBeInTheDocument();
+        expect(screen.queryByText('+0')).not.toBeInTheDocument();
+    });
+
+    it('should clear individual action filter via the clear button', async () => {
+        const user = userEvent.setup();
+        const onChange = jest.fn();
+
+        const propsWithValues = {
+            ...defaultProps,
+            onChange,
+            value: {
+                action: 'Allow',
+                staged_action: undefined,
+                pending_action: undefined,
+            },
+        };
+
+        render(<ActionOmniFilter {...propsWithValues} />);
+
+        await openPopover(user);
+
+        await user.click(
+            screen.getByRole('button', { name: 'Clear Action' }),
+        );
+        await user.click(screen.getByRole('button', { name: 'Update' }));
+
+        expect(onChange).toHaveBeenCalledWith({
+            action: '',
+            staged_action: '',
+            pending_action: '',
+        });
+    });
+
+    it('should clear individual staged action filter via the clear button', async () => {
+        const user = userEvent.setup();
+        const onChange = jest.fn();
+
+        const propsWithValues = {
+            ...defaultProps,
+            onChange,
+            value: {
+                action: undefined,
+                staged_action: 'Deny',
+                pending_action: undefined,
+            },
+        };
+
+        render(<ActionOmniFilter {...propsWithValues} />);
+
+        await openPopover(user);
+
+        await user.click(
+            screen.getByRole('button', { name: 'Clear Staged Action' }),
+        );
+        await user.click(screen.getByRole('button', { name: 'Update' }));
+
+        expect(onChange).toHaveBeenCalledWith({
+            action: '',
+            staged_action: '',
+            pending_action: '',
+        });
+    });
+
+    it('should clear individual pending action filter via the clear button', async () => {
+        const user = userEvent.setup();
+        const onChange = jest.fn();
+
+        const propsWithValues = {
+            ...defaultProps,
+            onChange,
+            value: {
+                action: undefined,
+                staged_action: undefined,
+                pending_action: 'Allow',
+            },
+        };
+
+        render(<ActionOmniFilter {...propsWithValues} />);
+
+        await openPopover(user);
+
+        await user.click(
+            screen.getByRole('button', { name: 'Clear Pending Action' }),
+        );
+        await user.click(screen.getByRole('button', { name: 'Update' }));
+
+        expect(onChange).toHaveBeenCalledWith({
+            action: '',
+            staged_action: '',
+            pending_action: '',
+        });
+    });
+
+    it('should handle staged action toggle changes', async () => {
+        const user = userEvent.setup();
+        const onChange = jest.fn();
+
+        render(<ActionOmniFilter {...defaultProps} onChange={onChange} />);
+
+        await openPopover(user);
+
+        const stagedToggle = within(
+            screen.getByTestId('radio-toggle-staged_action'),
+        );
+        await user.click(stagedToggle.getByTestId('option-Deny'));
+
+        await user.click(screen.getByRole('button', { name: 'Update' }));
+
+        expect(onChange).toHaveBeenCalledWith({
+            action: '',
+            staged_action: 'Deny',
+            pending_action: '',
+        });
+    });
+
+    it('should handle pending action toggle changes', async () => {
+        const user = userEvent.setup();
+        const onChange = jest.fn();
+
+        render(<ActionOmniFilter {...defaultProps} onChange={onChange} />);
+
+        await openPopover(user);
+
+        window.scrollTo = jest.fn();
+        await user.click(screen.getByRole('button', { name: 'More filters' }));
+
+        await waitFor(() => {
+            expect(screen.queryByText('Pending Action')).toBeVisible();
+        });
+
+        const pendingToggle = within(
+            screen.getByTestId('radio-toggle-pending_action'),
+        );
+        await user.click(pendingToggle.getByTestId('option-Allow'));
+
+        await user.click(screen.getByRole('button', { name: 'Update' }));
+
+        expect(onChange).toHaveBeenCalledWith({
+            action: '',
+            staged_action: '',
+            pending_action: 'Allow',
+        });
+    });
+
+    it('should close the popover after submitting', async () => {
+        const user = userEvent.setup();
+        const onChange = jest.fn();
+
+        render(<ActionOmniFilter {...defaultProps} onChange={onChange} />);
+
+        await openPopover(user);
+        expect(
+            screen.getByTestId('action-omni-filter-content'),
+        ).toBeVisible();
+
+        await user.click(screen.getByRole('button', { name: 'Update' }));
+
+        await waitFor(() => {
+            expect(
+                screen.getByTestId('action-omni-filter-content'),
+            ).not.toBeVisible();
+        });
+    });
+
+    it('should close the popover after clearing all filters', async () => {
+        const user = userEvent.setup();
+        const onChange = jest.fn();
+
+        const propsWithValues = {
+            ...defaultProps,
+            onChange,
+            value: {
+                action: 'Allow',
+                staged_action: undefined,
+                pending_action: undefined,
+            },
+        };
+
+        render(<ActionOmniFilter {...propsWithValues} />);
+
+        await openPopover(user);
+        await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+        await waitFor(() => {
+            expect(
+                screen.getByTestId('action-omni-filter-content'),
+            ).not.toBeVisible();
+        });
+    });
 });

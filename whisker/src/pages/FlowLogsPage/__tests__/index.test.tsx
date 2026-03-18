@@ -1,9 +1,9 @@
 import { useFlowLogsStream } from '@/features/flowLogs/api';
-import { useOmniFilterUrlState } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import { fireEvent, render, screen } from '@/test-utils/helper';
 import FlowLogsPage from '..';
 
 import { useOmniFilterData } from '@/hooks/omniFilters';
+import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
 import { ListOmniFilterKeys, OmniFilterKeys } from '@/utils/omniFilter';
 import { act } from 'react';
 
@@ -29,7 +29,10 @@ jest.mock('@/libs/tigera/ui-components/components/common/OmniFilter', () => ({
     ...jest.requireActual(
         '@/libs/tigera/ui-components/components/common/OmniFilter',
     ),
-    useOmniFilterUrlState: jest.fn().mockReturnValue([]),
+}));
+
+jest.mock('@/hooks/useFlowLogsUrlFilters', () => ({
+    useFlowLogsUrlFilters: jest.fn(),
 }));
 
 jest.mock('@/hooks/omniFilters', () => ({ useOmniFilterData: jest.fn() }));
@@ -115,13 +118,12 @@ describe('FlowLogsPage', () => {
             omniFilterData,
             jest.fn(),
         ]);
-        jest.mocked(useOmniFilterUrlState).mockReturnValue([
-            {},
-            {},
-            jest.fn(),
-            jest.fn(),
-            jest.fn(),
-        ] as any);
+        jest.mocked(useFlowLogsUrlFilters).mockReturnValue({
+            filters: {},
+            setFilter: jest.fn(),
+            clearFilters: jest.fn(),
+            setMultiFilter: jest.fn(),
+        });
     });
 
     it('should click play and call startStream', () => {
@@ -169,40 +171,33 @@ describe('FlowLogsPage', () => {
     });
 
     it('should test <OmniFilters /> clears filter params', () => {
-        const mockClearFilterParams = jest.fn();
-        jest.mocked(useOmniFilterUrlState).mockReturnValue([
-            {},
-            {},
-            jest.fn(),
-            mockClearFilterParams,
-            jest.fn(),
-        ] as any);
+        const mockClearFilters = jest.fn();
+        jest.mocked(useFlowLogsUrlFilters).mockReturnValue({
+            filters: {},
+            setFilter: jest.fn(),
+            clearFilters: mockClearFilters,
+            setMultiFilter: jest.fn(),
+        });
         render(<FlowLogsPage />);
 
         MockOmniFilters.onReset();
 
-        expect(mockClearFilterParams).toHaveBeenCalledTimes(1);
+        expect(mockClearFilters).toHaveBeenCalledTimes(1);
     });
 
     it('should test <OmniFilters /> sets a new filter param on change', () => {
-        const changeEvent = { filterId: 'mock-filter', filters: [] };
-        const mockSetFilterParam = jest.fn();
-        jest.mocked(useOmniFilterUrlState).mockReturnValue([
-            {},
-            {},
-            mockSetFilterParam,
-            jest.fn(),
-            jest.fn(),
-        ] as any);
+        const mockSetFilter = jest.fn();
+        jest.mocked(useFlowLogsUrlFilters).mockReturnValue({
+            filters: {},
+            setFilter: mockSetFilter,
+            clearFilters: jest.fn(),
+            setMultiFilter: jest.fn(),
+        });
         render(<FlowLogsPage />);
 
-        MockOmniFilters.onChange(changeEvent);
+        MockOmniFilters.onChange('mock-filter', []);
 
-        expect(mockSetFilterParam).toHaveBeenCalledWith(
-            changeEvent.filterId,
-            changeEvent.filters,
-            undefined,
-        );
+        expect(mockSetFilter).toHaveBeenCalledWith('mock-filter', []);
     });
 
     it('should request data for <OmniFilters />', () => {

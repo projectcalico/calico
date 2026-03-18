@@ -1,20 +1,15 @@
+import { Box, Checkbox, Text, forwardRef } from '@chakra-ui/react';
 import React, { ComponentType } from 'react';
-import {
-    Box,
-    Button,
-    Checkbox,
-    Flex,
-    Text,
-    forwardRef,
-} from '@chakra-ui/react';
+import { FixedSizeList, FixedSizeListProps } from 'react-window';
+import { OmniFilterOption, OmniInternalListComponentProps } from '../../types';
+import ListEmptyMessage from '../ListEmptyMessage';
+import ShowMoreButton from '../ShowMoreButton';
 import {
     checkboxStyles,
     listItemStyles,
-    selectedOptionsListStyles,
     selectedOptionsHeadingStyles,
+    selectedOptionsListStyles,
 } from './styles';
-import { FixedSizeList, FixedSizeListProps } from 'react-window';
-import { OmniFilterOption, OmniInternalListComponentProps } from '../../types';
 
 const List = FixedSizeList as unknown as ComponentType<FixedSizeListProps>;
 
@@ -209,21 +204,12 @@ const OmniCheckboxList: React.FC<OmniCheckboxListProps> = forwardRef(
                                     />
                                     {showMoreButton &&
                                     index === optionsForRender.length - 1 ? (
-                                        <Box>
-                                            <Button
-                                                mb={3}
-                                                mt={1}
-                                                variant='ghost'
-                                                fontWeight='semibold'
-                                                size='sm'
-                                                data-testid='show-more-button'
-                                                isLoading={isLoadingMore}
-                                                isDisabled={isLoadingMore}
-                                                onClick={onRequestMore}
-                                            >
-                                                {labelShowMore}
-                                            </Button>
-                                        </Box>
+                                        <ShowMoreButton
+                                            isLoadingMore={isLoadingMore}
+                                            onRequestMore={onRequestMore}
+                                        >
+                                            {labelShowMore}
+                                        </ShowMoreButton>
                                     ) : null}
                                 </Box>
                             )}
@@ -233,14 +219,9 @@ const OmniCheckboxList: React.FC<OmniCheckboxListProps> = forwardRef(
 
                 {optionsForRender.length === 0 &&
                     filteredSelectedOptions.length === 0 && (
-                        <Flex
-                            height={`${LIST_ITEM_HEIGHT}px`}
-                            alignItems='center'
-                        >
-                            <Text color='tigeraGrey.600' px={3}>
-                                {emptyMessage}
-                            </Text>
-                        </Flex>
+                        <ListEmptyMessage height={LIST_ITEM_HEIGHT}>
+                            {emptyMessage}
+                        </ListEmptyMessage>
                     )}
             </>
         );
