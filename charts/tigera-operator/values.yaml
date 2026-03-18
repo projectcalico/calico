@@ -80,11 +80,11 @@ dnsConfig: {}
 # Image and registry configuration for the tigera/operator pod.
 tigeraOperator:
   image: tigera/operator
-  version: v1.38.11
+  version: v1.38.13
   registry: quay.io
 calicoctl:
   image: docker.io/calico/ctl
-  tag: v3.30.6
+  tag: v3.30.7
 
 kubeletVolumePluginPath: /var/lib/kubelet
 
