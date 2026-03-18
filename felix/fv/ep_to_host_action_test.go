@@ -51,6 +51,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		options.IPIPMode = api.IPIPModeNever
 		options.DelayFelixStart = true
 		options.FelixLogSeverity = "Debug"
+		// Add the health port to failsafe inbound so that WaitForReady()
+		// works even when a wildcard HEP with deny policy is configured.
+		options.ExtraEnvVars["FELIX_FAILSAFEINBOUNDHOSTPORTS"] = "tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667,tcp:9099"
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 
 		infra.AddDefaultAllow()
@@ -165,10 +168,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 			for _, f := range tc.Felixes {
 				f.TriggerDelayedStart()
 			}
-
-			// Now add the default allow profile, which should give us WEP-to-WEP connectivity.
-			// When we get WEp-to-WEP, we know that Felix has finished programming so the
-			// WEP-to-host test is valid.
+			// Wait for Felix to finish its first apply cycle before testing
+			// connectivity.  In BPF mode, without this the CTLB may allow
+			// connect() but the tc hooks aren't attached yet, causing "no
+			// route to host".
+			for _, f := range tc.Felixes {
+				f.WaitForReady()
+			}
 
 			By("Checking connectivity")
 			cc.Expect(expectedConn, w[0], hostW[0])
