@@ -57,19 +57,19 @@ type IPMaps struct {
 }
 
 type CommonMaps struct {
-	StateMap             maps.Map
-	IfStateMap           maps.Map
-	RuleCountersMap      maps.Map
-	CountersMap          maps.Map
-	ProgramsMaps         []maps.Map
-	JumpMaps             []maps.MapWithDeleteIfExists
-	NetkitProgramsMaps   []maps.Map
-	NetkitJumpMaps       []maps.MapWithDeleteIfExists
-	XDPProgramsMap       maps.Map
-	XDPJumpMap           maps.MapWithDeleteIfExists
-	ProfilingMap         maps.Map
-	CTLBProgramsMaps     []maps.Map
-	QoSMap               maps.MapWithUpdateWithFlags
+	StateMap           maps.Map
+	IfStateMap         maps.Map
+	RuleCountersMap    maps.Map
+	CountersMap        maps.Map
+	ProgramsMaps       []maps.Map
+	JumpMaps           []maps.MapWithDeleteIfExists
+	NetkitProgramsMaps []maps.Map
+	NetkitJumpMaps     []maps.MapWithDeleteIfExists
+	XDPProgramsMap     maps.Map
+	XDPJumpMap         maps.MapWithDeleteIfExists
+	ProfilingMap       maps.Map
+	CTLBProgramsMaps   []maps.Map
+	QoSMap             maps.MapWithUpdateWithFlags
 }
 
 type Maps struct {
