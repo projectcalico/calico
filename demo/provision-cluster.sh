@@ -6,8 +6,7 @@
 #   2. Initialize profile with bz init (Song's branch)
 #   3. Provision GCP VMs with bz provision
 #   4. Install Calico and deploy KubeVirt with gkm
-#   5. Setup TOR node BGP
-#   6. Verify everything is running
+#   5. Verify everything is running
 #
 # Prerequisites:
 #   - bz CLI on PATH
@@ -150,124 +149,6 @@ gkm run install-calico-parent && \
     gkm run setup-vms || fail "gkm tasks failed"
 pass "Calico and KubeVirt deployed"
 
-## ============================================================
-##  Step 6: Setup TOR node
-## ============================================================
-
-phase "Step 6: Setup TOR Node"
-
-info "Running gkm setup-tor..."
-gkm run setup-tor || fail "gkm setup-tor failed"
-pass "TOR node setup complete"
-
-# Read cluster vars needed for TOR configuration
-CLUSTER_NAME=$(grep '^CLUSTER_NAME:' "$TASKVARS" | awk '{print $2}')
-GOOGLE_ZONE=$(grep '^GOOGLE_ZONE:' "$TASKVARS" | awk '{print $2}')
-GOOGLE_PROJECT=$(grep '^GOOGLE_PROJECT:' "$TASKVARS" | awk '{print $2}')
-TOR_INSTANCE="${CLUSTER_NAME}nch-ubuntu1"
-TOR_PUBLIC_IP=$(gcloud compute instances describe "$TOR_INSTANCE" \
-    --project="$GOOGLE_PROJECT" --zone="$GOOGLE_ZONE" \
-    --format='value(networkInterfaces[0].accessConfigs[0].natIP)' 2>/dev/null)
-EXTERNAL_KEY="$BZ_ROOT_DIR/.local/external_key"
-
-[ -n "$TOR_PUBLIC_IP" ] && [ -f "$EXTERNAL_KEY" ] || \
-    fail "Could not reach TOR node (IP: $TOR_PUBLIC_IP, key: $EXTERNAL_KEY)"
-SSH_CMD="ssh -i $EXTERNAL_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@$TOR_PUBLIC_IP"
-
-# Fix BIRD kernel route export.
-# gkm setup-tor sets 'export none' in the kernel protocol block, which prevents
-# BGP-learned routes from being installed in the Linux kernel routing table.
-# We must NOT use a blanket 'export all' — that installs every BIRD route
-# (including GCP internal prefixes) into the kernel, which triggers reverse-path
-# filtering (rp_filter) martian source errors and floods the serial console,
-# eventually making the node unresponsive.
-# Instead, define a filter that only exports pod CIDR routes (192.168.0.0/16)
-# to the kernel and rejects everything else.
-info "Fixing BIRD kernel route export on TOR node..."
-# Write a patch script to the TOR, then execute it inside the BIRD container.
-# This avoids fragile nested quoting in SSH + docker exec.
-$SSH_CMD "cat > /tmp/fix-bird-export.sh" <<'BIRD_SCRIPT'
-#!/bin/sh
-CONF=/etc/bird.conf
-# Add the pod-route filter if not already present
-if ! grep -q export_pod_routes "$CONF"; then
-    sed -i '/^protocol kernel/i \
-# Only install pod CIDR routes into the kernel — reject everything else\
-# to avoid martian source errors from GCP internal prefixes.\
-filter export_pod_routes {\
-    if net ~ 192.168.0.0/16 then accept;\
-    reject;\
-}\
-' "$CONF"
-fi
-# In the kernel protocol block, replace any export directive with our filter
-sed -i '/protocol kernel/,/}/ s/export none;/export filter export_pod_routes;/' "$CONF"
-sed -i '/protocol kernel/,/}/ s/export all;/export filter export_pod_routes;/' "$CONF"
-birdcl configure
-BIRD_SCRIPT
-$SSH_CMD "sudo docker cp /tmp/fix-bird-export.sh bird:/tmp/fix-bird-export.sh && sudo docker exec bird sh /tmp/fix-bird-export.sh" 2>/dev/null
-sleep 5
-ROUTE_COUNT=$($SSH_CMD "ip route | grep -c '192.168'" 2>/dev/null || echo "0")
-if [ "$ROUTE_COUNT" -gt 0 ]; then
-    pass "BIRD kernel export fixed — $ROUTE_COUNT pod routes in kernel"
-else
-    info "BIRD config updated but no routes yet — BGP may still be converging"
-fi
-
-# Create BGPFilter so each Calico node only exports its own local pod routes
-# to the TOR peer, not routes learned via iBGP from other nodes.
-# Without this filter every node re-advertises every /26 block with
-# 'next hop self', and BIRD on the TOR picks the node with the lowest
-# router-ID (the master) as the preferred next-hop for ALL routes.  This
-# creates asymmetric routing: forward path goes through master, return path
-# goes direct — master's conntrack never sees the full flow and kube-proxy's
-# nftables 'ct state invalid drop' rule kills forwarded packets.
-KUBECONFIG_PATH=$(grep '^KUBECONFIG:' "$TASKVARS" | awk '{print $2}')
-export KUBECONFIG="$KUBECONFIG_PATH"
-
-info "Creating BGPFilter to export only local routes to TOR..."
-calicoctl apply --allow-version-mismatch -f - <<'FILTER_EOF'
-apiVersion: projectcalico.org/v3
-kind: BGPFilter
-metadata:
-  name: export-local-only
-spec:
-  exportV4:
-    - action: Reject
-      source: RemotePeers
-    - action: Accept
-FILTER_EOF
-pass "BGPFilter 'export-local-only' created"
-
-# Create BGPPeer for TOR with the filter attached
-MASTER_NODES=$(grep '^CLUSTER_MASTER_NODES:' "$TASKVARS" | awk '{print $2}')
-WORKER_NODES=$(grep '^CLUSTER_NODES:' "$TASKVARS" | awk '{print $2}')
-TOR_L2TP_IP="172.16.8.$(( MASTER_NODES + WORKER_NODES + 1 ))"
-
-info "Creating BGPPeer for TOR node..."
-calicoctl apply --allow-version-mismatch -f - <<PEER_EOF
-apiVersion: projectcalico.org/v3
-kind: BGPPeer
-metadata:
-  name: tor-bgp-peer
-spec:
-  peerIP: $TOR_L2TP_IP
-  asNumber: 63000
-  filters:
-    - export-local-only
-PEER_EOF
-pass "BGPPeer 'tor-bgp-peer' created (TOR L2TP IP: $TOR_L2TP_IP, ASN: 63000, filter: export-local-only)"
-
-# Wait for BGP to reconverge and verify TOR received routes
-info "Waiting for BGP to reconverge..."
-sleep 10
-ROUTE_COUNT=$($SSH_CMD "ip route | grep -c '192.168'" 2>/dev/null || echo "0")
-if [ "$ROUTE_COUNT" -gt 0 ]; then
-    pass "TOR has $ROUTE_COUNT pod routes after BGP reconvergence"
-else
-    info "No pod routes on TOR yet — BGP may still be converging"
-fi
-
 # ============================================================
 #  Step 7: Verify
 # ============================================================
@@ -277,12 +158,94 @@ phase "Step 7: Verify"
 KUBECONFIG_PATH=$(grep '^KUBECONFIG:' "$TASKVARS" | awk '{print $2}')
 export KUBECONFIG="$KUBECONFIG_PATH"
 
-info "Checking cluster..."
+info "Checking cluster connectivity..."
 kubectl get nodes --request-timeout=5s || fail "Cannot connect to cluster"
+NODE_COUNT=$(kubectl get nodes --no-headers | wc -l)
+pass "Connected to cluster with $NODE_COUNT nodes"
 echo
-kubectl get vmi -o wide --request-timeout=5s || fail "Cannot list VMIs"
+
+# Build and install calicoctl from source
+info "Building calicoctl from source..."
+CALICOCTL_BIN="${SCRIPT_DIR}/../calicoctl/bin/calicoctl-linux-amd64"
+if [ -x "$CALICOCTL_BIN" ] && which calicoctl >/dev/null 2>&1; then
+    pass "calicoctl already built and available"
+else
+    (cd "$SCRIPT_DIR/.." && go build -o "$CALICOCTL_BIN" ./calicoctl/calicoctl/) || fail "Failed to build calicoctl"
+    sudo cp "$CALICOCTL_BIN" /usr/local/bin/calicoctl || fail "Failed to install calicoctl to /usr/local/bin"
+    pass "calicoctl built and installed to /usr/local/bin/calicoctl"
+fi
 echo
-gkm run status || info "gkm status had warnings"
+
+# Check KubeVirt
+info "Checking KubeVirt..."
+KUBEVIRT_PHASE=$(kubectl get kubevirt -n kubevirt kubevirt -o jsonpath='{.status.phase}' 2>/dev/null)
+[ "$KUBEVIRT_PHASE" = "Deployed" ] || fail "KubeVirt not deployed (phase: $KUBEVIRT_PHASE)"
+pass "KubeVirt is deployed"
+echo
+
+# Check VMs
+info "Checking VMs..."
+VM1_STATUS=$(kubectl get vmi vm1 -o jsonpath='{.status.phase}' 2>/dev/null)
+VM2_STATUS=$(kubectl get vmi vm2 -o jsonpath='{.status.phase}' 2>/dev/null)
+[ "$VM1_STATUS" = "Running" ] || fail "vm1 is not running (status: $VM1_STATUS)"
+[ "$VM2_STATUS" = "Running" ] || fail "vm2 is not running (status: $VM2_STATUS)"
+pass "vm1 is running"
+pass "vm2 is running"
+
+VM1_IP=$(kubectl get vmi vm1 -o jsonpath='{.status.interfaces[0].ipAddress}')
+VM2_IP=$(kubectl get vmi vm2 -o jsonpath='{.status.interfaces[0].ipAddress}')
+VM1_NODE=$(kubectl get vmi vm1 -o jsonpath='{.status.nodeName}')
+VM2_NODE=$(kubectl get vmi vm2 -o jsonpath='{.status.nodeName}')
+VM1_POD=$(kubectl get pods -l kubevirt.io=virt-launcher -l vmi.kubevirt.io/id=vm1 --field-selector status.phase=Running --no-headers -o custom-columns=':metadata.name')
+VM1_POD_IP=$(kubectl get pod "$VM1_POD" -o jsonpath='{.status.podIP}')
+echo
+
+# Verify bridge mode (VM IP == Pod IP)
+info "Checking bridge mode (VM IP == Pod IP)..."
+if [ "$VM1_IP" = "$VM1_POD_IP" ]; then
+    pass "Bridge mode confirmed: VM1 IP ($VM1_IP) == Pod IP ($VM1_POD_IP)"
+else
+    fail "Bridge mode mismatch: VM1 IP ($VM1_IP) != Pod IP ($VM1_POD_IP)"
+fi
+echo
+
+# Check IPAM persistence
+info "Checking IPAM persistence configuration..."
+PERSISTENCE=$(kubectl get ipamconfig default -o jsonpath='{.spec.kubeVirtVMAddressPersistence}' 2>/dev/null)
+[ "$PERSISTENCE" = "Enabled" ] || fail "KubeVirt VM address persistence is not enabled (value: $PERSISTENCE)"
+pass "KubeVirt VM address persistence is Enabled"
+echo
+
+# Check IPAM state
+info "Checking IPAM allocation for vm1..."
+HANDLE=$(calicoctl ipam show --ip="$VM1_IP" --allow-version-mismatch 2>/dev/null | grep "Handle ID:" | awk '{print $3}')
+if echo "$HANDLE" | grep -q "vmi.default.vm1"; then
+    pass "VM-based handle ID: $HANDLE"
+else
+    fail "Unexpected handle ID: $HANDLE"
+fi
+echo
+
+# Check cross-VM connectivity
+info "Testing cross-VM connectivity (ping vm1 from a test pod)..."
+if kubectl run --rm -i --restart=Never --image=busybox demo-ping-test -- ping -c 3 -W 2 "$VM1_IP" >/dev/null 2>&1; then
+    pass "Cross-VM connectivity works"
+else
+    fail "Cannot ping vm1 ($VM1_IP) from cluster"
+fi
+echo
+
+# Clean up leftover migration objects
+info "Checking for leftover migration objects..."
+VMIM_COUNT=$(kubectl get vmim --no-headers 2>/dev/null | wc -l)
+if [ "$VMIM_COUNT" -gt 0 ]; then
+    info "Found $VMIM_COUNT existing migration object(s). Cleaning up..."
+    kubectl delete vmim --all
+    pass "Cleaned up migration objects"
+else
+    pass "No leftover migration objects"
+fi
+echo
 
 # ============================================================
 #  Done
@@ -291,13 +254,15 @@ gkm run status || info "gkm status had warnings"
 phase "Cluster Ready!"
 
 echo "============================================"
-echo "  Cluster Details"
+echo "  Environment Summary"
 echo "============================================"
-echo "  BZ_ROOT_DIR: $PROFILE_DIR"
-echo "  KUBECONFIG:  $KUBECONFIG_PATH"
+echo "  BZ_ROOT_DIR:  $PROFILE_DIR"
+echo "  KUBECONFIG:   $KUBECONFIG_PATH"
+echo "  VM1: IP=$VM1_IP  Node=$VM1_NODE  Pod=$VM1_POD"
+echo "  VM2: IP=$VM2_IP  Node=$VM2_NODE"
 echo "============================================"
 echo
 echo "Next steps:"
-echo "  1. export BZ_ROOT_DIR=$PROFILE_DIR"
-echo "  2. Run: $SCRIPT_DIR/setup.sh    (validate + create BGPPeer)"
+echo "  1. export BZ_ROOT_DIR=\$PWD/gcp-kubevirt"
+echo "  2. export KUBECONFIG=$KUBECONFIG_PATH"
 echo "  3. Run: $SCRIPT_DIR/tmux-layout.sh  (launch demo tmux)"
