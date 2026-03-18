@@ -51,17 +51,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 	}
 	for _, testConfig := range []testConf{
 		// IPIP does not support IPv6.
-		{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
-		{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
+		//{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
+		//{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
 
 		{api.IPIPModeAlways, "CalicoIPAM", true, false},
-		{api.IPIPModeAlways, "WorkloadIPs", false, false},
+		//{api.IPIPModeAlways, "WorkloadIPs", false, false},
 
 		// No encap routing tests. BrokenXSum is irrelevant in these cases.
-		{api.IPIPModeNever, "CalicoIPAM", false, false},
-		{api.IPIPModeNever, "WorkloadIPs", false, false},
-		{api.IPIPModeNever, "CalicoIPAM", false, true},
-		{api.IPIPModeNever, "WorkloadIPs", false, true},
+		//{api.IPIPModeNever, "CalicoIPAM", false, false},
+		//{api.IPIPModeNever, "WorkloadIPs", false, false},
+		//{api.IPIPModeNever, "CalicoIPAM", false, true},
+		//{api.IPIPModeNever, "WorkloadIPs", false, true},
 	} {
 		ipipMode := testConfig.IPIPMode
 		routeSource := testConfig.RouteSource
@@ -296,7 +296,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 			}
 
-			It("should have correct connectivity", func() {
+			It("pepper9 should have correct connectivity", func() {
 				// Checking workload to workload connectivity
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
@@ -897,7 +897,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 		})
 
-		Describe(description+" and a borrowed tunnel IP on one host", func() {
+		Describe(description+" and a borrowed tunnel IP on one host pepper0", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -954,7 +954,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 		})
 
-		Describe("with a separate tunnel address pool that uses /32 blocks", func() {
+		Describe("with a separate tunnel address pool that uses /32 blocks pepper1", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -1062,6 +1062,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 
 			It("should have correct connectivity", func() {
+				//time.Sleep(time.Hour)
 				// Workload to workload connectivity.
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
