@@ -122,7 +122,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	BeforeEach(func() {
 		// Create a fake clientset with nothing in it.
-		cs = fake.NewSimpleClientset()
+		cs = fake.NewClientset()
 
 		// Create a fake Calico client.
 		cli = NewFakeCalicoClient()
