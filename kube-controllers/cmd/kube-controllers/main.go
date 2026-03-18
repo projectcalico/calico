@@ -572,7 +572,7 @@ func (cc *controllerControl) InitControllers(
 		if err := dsmigration.AddToScheme(migrationScheme); err != nil {
 			log.WithError(err).Fatal("Failed to add migration types to scheme for migration controller")
 		}
-		rtClient, err := rtclient.New(k8sconfig, rtclient.Options{Scheme: migrationScheme})
+		rtClient, err := rtclient.NewWithWatch(k8sconfig, rtclient.Options{Scheme: migrationScheme})
 		if err != nil {
 			log.WithError(err).Fatal("Failed to create controller-runtime client for migration controller")
 		}
@@ -581,7 +581,6 @@ func (cc *controllerControl) InitControllers(
 			log.WithError(err).Fatal("Failed to create apiextensions client for migration controller")
 		}
 
-		dsmigration.RegisterOSSResources(bc, rtClient)
 		migrationController := dsmigration.NewController(dsmigration.ControllerConfig{
 			Ctx:           ctx,
 			K8sClient:     k8sClientset,
@@ -590,6 +589,7 @@ func (cc *controllerControl) InitControllers(
 			DynamicClient: dynClient,
 			APIRegClient:  apiregCS.ApiregistrationV1(),
 			CRDClient:     crdClient,
+			Migrators:     dsmigration.NewMigrators(bc, rtClient),
 		})
 		cc.controllers["DatastoreMigration"] = migrationController
 	}

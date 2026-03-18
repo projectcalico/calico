@@ -46,55 +46,52 @@ const (
 	OrderCalicoNodeStatus   = 110
 )
 
-// RegisterOSSResources registers all OSS resource migrators.
-func RegisterOSSResources(bc api.Client, rt client.Client) {
-	Register(migrators.New[apiv3.Tier, apiv3.TierList](apiv3.KindTier, OrderTiers, bc, rt))
-	Register(migrators.New[apiv3.FelixConfiguration, apiv3.FelixConfigurationList](apiv3.KindFelixConfiguration, OrderConfigSingletons, bc, rt))
-	Register(migrators.New[apiv3.BGPConfiguration, apiv3.BGPConfigurationList](apiv3.KindBGPConfiguration, OrderConfigSingletons, bc, rt))
-	Register(migrators.New[apiv3.KubeControllersConfiguration, apiv3.KubeControllersConfigurationList](apiv3.KindKubeControllersConfiguration, OrderConfigSingletons, bc, rt))
-	Register(migrators.New[apiv3.ClusterInformation, apiv3.ClusterInformationList](apiv3.KindClusterInformation, OrderClusterInformation, bc, rt))
-	Register(migrators.New[apiv3.IPPool, apiv3.IPPoolList](apiv3.KindIPPool, OrderNetworkInfra, bc, rt))
-	Register(migrators.New[apiv3.IPReservation, apiv3.IPReservationList](apiv3.KindIPReservation, OrderNetworkInfra, bc, rt))
-	Register(migrators.New[apiv3.BGPPeer, apiv3.BGPPeerList](apiv3.KindBGPPeer, OrderNetworkInfra, bc, rt))
-	Register(migrators.New[apiv3.BGPFilter, apiv3.BGPFilterList](apiv3.KindBGPFilter, OrderNetworkInfra, bc, rt))
-
-	Register(migrators.New[apiv3.GlobalNetworkPolicy, apiv3.GlobalNetworkPolicyList](
-		apiv3.KindGlobalNetworkPolicy, OrderPolicy, bc, rt,
-		migrators.WithConvert(convertGlobalNetworkPolicy),
-	))
-	Register(migrators.New[apiv3.NetworkPolicy, apiv3.NetworkPolicyList](
-		apiv3.KindNetworkPolicy, OrderPolicy, bc, rt,
-		migrators.WithConvert(convertNetworkPolicy),
-	))
-	Register(migrators.New[apiv3.StagedGlobalNetworkPolicy, apiv3.StagedGlobalNetworkPolicyList](
-		apiv3.KindStagedGlobalNetworkPolicy, OrderPolicy, bc, rt,
-		migrators.WithConvert(convertStagedGlobalNetworkPolicy),
-	))
-	Register(migrators.New[apiv3.StagedNetworkPolicy, apiv3.StagedNetworkPolicyList](
-		apiv3.KindStagedNetworkPolicy, OrderPolicy, bc, rt,
-		migrators.WithConvert(convertStagedNetworkPolicy),
-	))
-	Register(migrators.New[apiv3.StagedKubernetesNetworkPolicy, apiv3.StagedKubernetesNetworkPolicyList](apiv3.KindStagedKubernetesNetworkPolicy, OrderPolicy, bc, rt))
-
-	Register(migrators.New[apiv3.HostEndpoint, apiv3.HostEndpointList](apiv3.KindHostEndpoint, OrderEndpointsAndSets, bc, rt))
-	Register(migrators.New[apiv3.GlobalNetworkSet, apiv3.GlobalNetworkSetList](apiv3.KindGlobalNetworkSet, OrderEndpointsAndSets, bc, rt))
-	Register(migrators.New[apiv3.NetworkSet, apiv3.NetworkSetList](apiv3.KindNetworkSet, OrderEndpointsAndSets, bc, rt))
-
-	Register(migrators.New[apiv3.IPAMConfiguration, apiv3.IPAMConfigurationList](apiv3.KindIPAMConfiguration, OrderIPAM, bc, rt))
-	Register(migrators.New[apiv3.BlockAffinity, apiv3.BlockAffinityList](apiv3.KindBlockAffinity, OrderIPAM, bc, rt))
-
-	Register(migrators.New[apiv3.IPAMBlock, apiv3.IPAMBlockList](
-		KindIPAMBlock, OrderIPAM, bc, rt,
-		migrators.WithConvert(convertIPAMBlock),
-		migrators.WithListOptions(model.BlockListOptions{}),
-	))
-	Register(migrators.New[apiv3.IPAMHandle, apiv3.IPAMHandleList](
-		KindIPAMHandle, OrderIPAM, bc, rt,
-		migrators.WithConvert(convertIPAMHandle),
-		migrators.WithListOptions(model.IPAMHandleListOptions{}),
-	))
-
-	Register(migrators.New[apiv3.CalicoNodeStatus, apiv3.CalicoNodeStatusList](apiv3.KindCalicoNodeStatus, OrderCalicoNodeStatus, bc, rt))
+// NewMigrators returns migrators for all OSS Calico resource types.
+func NewMigrators(bc api.Client, rt client.Client) []migrators.ResourceMigrator {
+	return []migrators.ResourceMigrator{
+		migrators.New[apiv3.Tier, apiv3.TierList](apiv3.KindTier, OrderTiers, bc, rt),
+		migrators.New[apiv3.FelixConfiguration, apiv3.FelixConfigurationList](apiv3.KindFelixConfiguration, OrderConfigSingletons, bc, rt),
+		migrators.New[apiv3.BGPConfiguration, apiv3.BGPConfigurationList](apiv3.KindBGPConfiguration, OrderConfigSingletons, bc, rt),
+		migrators.New[apiv3.KubeControllersConfiguration, apiv3.KubeControllersConfigurationList](apiv3.KindKubeControllersConfiguration, OrderConfigSingletons, bc, rt),
+		migrators.New[apiv3.ClusterInformation, apiv3.ClusterInformationList](apiv3.KindClusterInformation, OrderClusterInformation, bc, rt),
+		migrators.New[apiv3.IPPool, apiv3.IPPoolList](apiv3.KindIPPool, OrderNetworkInfra, bc, rt),
+		migrators.New[apiv3.IPReservation, apiv3.IPReservationList](apiv3.KindIPReservation, OrderNetworkInfra, bc, rt),
+		migrators.New[apiv3.BGPPeer, apiv3.BGPPeerList](apiv3.KindBGPPeer, OrderNetworkInfra, bc, rt),
+		migrators.New[apiv3.BGPFilter, apiv3.BGPFilterList](apiv3.KindBGPFilter, OrderNetworkInfra, bc, rt),
+		migrators.New[apiv3.GlobalNetworkPolicy, apiv3.GlobalNetworkPolicyList](
+			apiv3.KindGlobalNetworkPolicy, OrderPolicy, bc, rt,
+			migrators.WithConvert(convertGlobalNetworkPolicy),
+		),
+		migrators.New[apiv3.NetworkPolicy, apiv3.NetworkPolicyList](
+			apiv3.KindNetworkPolicy, OrderPolicy, bc, rt,
+			migrators.WithConvert(convertNetworkPolicy),
+		),
+		migrators.New[apiv3.StagedGlobalNetworkPolicy, apiv3.StagedGlobalNetworkPolicyList](
+			apiv3.KindStagedGlobalNetworkPolicy, OrderPolicy, bc, rt,
+			migrators.WithConvert(convertStagedGlobalNetworkPolicy),
+		),
+		migrators.New[apiv3.StagedNetworkPolicy, apiv3.StagedNetworkPolicyList](
+			apiv3.KindStagedNetworkPolicy, OrderPolicy, bc, rt,
+			migrators.WithConvert(convertStagedNetworkPolicy),
+		),
+		migrators.New[apiv3.StagedKubernetesNetworkPolicy, apiv3.StagedKubernetesNetworkPolicyList](apiv3.KindStagedKubernetesNetworkPolicy, OrderPolicy, bc, rt),
+		migrators.New[apiv3.HostEndpoint, apiv3.HostEndpointList](apiv3.KindHostEndpoint, OrderEndpointsAndSets, bc, rt),
+		migrators.New[apiv3.GlobalNetworkSet, apiv3.GlobalNetworkSetList](apiv3.KindGlobalNetworkSet, OrderEndpointsAndSets, bc, rt),
+		migrators.New[apiv3.NetworkSet, apiv3.NetworkSetList](apiv3.KindNetworkSet, OrderEndpointsAndSets, bc, rt),
+		migrators.New[apiv3.IPAMConfiguration, apiv3.IPAMConfigurationList](apiv3.KindIPAMConfiguration, OrderIPAM, bc, rt),
+		migrators.New[apiv3.BlockAffinity, apiv3.BlockAffinityList](apiv3.KindBlockAffinity, OrderIPAM, bc, rt),
+		migrators.New[apiv3.IPAMBlock, apiv3.IPAMBlockList](
+			KindIPAMBlock, OrderIPAM, bc, rt,
+			migrators.WithConvert(convertIPAMBlock),
+			migrators.WithListOptions(model.BlockListOptions{}),
+		),
+		migrators.New[apiv3.IPAMHandle, apiv3.IPAMHandleList](
+			KindIPAMHandle, OrderIPAM, bc, rt,
+			migrators.WithConvert(convertIPAMHandle),
+			migrators.WithListOptions(model.IPAMHandleListOptions{}),
+		),
+		migrators.New[apiv3.CalicoNodeStatus, apiv3.CalicoNodeStatusList](apiv3.KindCalicoNodeStatus, OrderCalicoNodeStatus, bc, rt),
+	}
 }
 
 // migratedPolicyName handles the default. prefix removal for default-tier policies.
