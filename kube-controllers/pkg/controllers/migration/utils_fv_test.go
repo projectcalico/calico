@@ -27,8 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 )
 
 // fvHelper bundles the gomega instance, context, and testing.T for FV test
@@ -116,13 +114,14 @@ func (h *fvHelper) createReadyCalicoNodeDS() {
 
 // startController creates a migration controller with a fake APIService client
 // and the given phase gate wrapping the rtClient. It starts the controller in a
-// goroutine and registers cleanup to stop it when the test ends.
+// goroutine and registers cleanup to stop it when the test ends. Returns the
+// fake apiregistration client for assertions on APIService state.
 func startController(
 	t *testing.T,
 	ctx context.Context,
 	bc *mockBackendClient,
 	gate *phaseGate,
-) controller.Controller {
+) *fakeapiregclient.Clientset {
 	t.Helper()
 	fakeAPIReg := fakeapiregclient.NewSimpleClientset(newAggregatedAPIServiceObj())
 
@@ -146,7 +145,7 @@ func startController(
 	stop := make(chan struct{})
 	t.Cleanup(func() { close(stop) })
 	go ctrl.Run(stop)
-	return ctrl
+	return fakeAPIReg
 }
 
 // createMigrationCR creates the well-known DatastoreMigration CR and registers

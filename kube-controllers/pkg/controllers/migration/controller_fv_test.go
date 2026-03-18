@@ -25,8 +25,10 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -47,6 +49,9 @@ var (
 
 // repoRoot is the path from this package to the monorepo root.
 const repoRoot = "../../../.."
+
+// dmKey is the NamespacedName for the well-known DatastoreMigration CR.
+var dmKey = types.NamespacedName{Name: defaultMigrationName}
 
 // expectNoError fatally exits if err is non-nil. Used in TestMain where there
 // is no *testing.T available.
@@ -300,4 +305,78 @@ func TestLifecycle_ConflictResolution(t *testing.T) {
 		fvh := newFVHelper(t, g, ctx)
 		fvh.expectPhase(DatastoreMigrationPhaseComplete)
 	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
+}
+
+// TestLifecycle_Rollback verifies that deleting the DatastoreMigration CR while
+// in the Migrating phase aborts the migration: the APIService is restored from
+// the saved annotation, v1 ClusterInformation is unlocked, migrated v3
+// resources are cleaned up, and the finalizer is removed so the CR is deleted.
+func TestLifecycle_Rollback(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+
+	bc := &mockBackendClient{
+		resources:   mainlineV1Resources(),
+		clusterInfo: mainlineV1ClusterInfo(),
+	}
+
+	// Gate at Converged — migration has run (v3 resources created, APIService
+	// saved/deleted) but the controller hasn't transitioned yet. We'll delete
+	// the CR after verifying the post-migration state, then release the gate
+	// to let the controller see the DeletionTimestamp and run the abort path.
+	gate := newPhaseGate(DatastoreMigrationPhaseConverged)
+	fakeAPIReg := startController(t, ctx, bc, gate)
+	createMigrationCR(t, ctx)
+
+	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
+
+	// At this point migration completed: v3 resources exist, APIService was
+	// deleted from the fake client, and the annotation was saved.
+	_, err := fakeAPIReg.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
+	g.Expect(err).To(HaveOccurred(), "APIService should be deleted after migration")
+
+	// Delete the CR to trigger abort. The controller is blocked on the
+	// Converged gate, so it can't process the deletion yet. We need the CR
+	// in Migrating (not Converged) for abort to run. Rewrite the phase back
+	// to Migrating before releasing the gate — this simulates a crash/restart
+	// where the phase hadn't been persisted as Converged yet.
+	dm := &DatastoreMigration{}
+	g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
+	dm.Status.Phase = DatastoreMigrationPhaseMigrating
+	g.Expect(fvRTClient.Status().Update(ctx, dm)).To(Succeed())
+
+	// Now delete the CR. The finalizer prevents immediate garbage collection.
+	g.Expect(fvRTClient.Delete(ctx, dm)).To(Succeed())
+
+	// Release the gate. The controller will re-read the CR, see
+	// DeletionTimestamp + phase=Migrating, and run handleAbort.
+	gate.release(DatastoreMigrationPhaseConverged)
+
+	// The CR should be fully deleted once the finalizer is removed.
+	// The abort path lists all v3 types for cleanup (slow with 22 types
+	// against envtest), so allow extra time.
+	g.Eventually(func(g Gomega) {
+		err := fvRTClient.Get(ctx, dmKey, &DatastoreMigration{})
+		g.Expect(kerrors.IsNotFound(err)).To(BeTrue(), "CR should be deleted after abort, got: %v", err)
+	}, 30*time.Second, 200*time.Millisecond).Should(Succeed())
+
+	// Verify abort restored the APIService.
+	apiSvc, err := fakeAPIReg.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred(), "APIService should be restored after abort")
+	g.Expect(apiSvc.Spec.Service).NotTo(BeNil(), "restored APIService should be aggregated (have a Service ref)")
+
+	// Verify v1 ClusterInformation was unlocked.
+	g.Expect(bc.clusterInfo).NotTo(BeNil())
+	v1CI, ok := bc.clusterInfo.Value.(*apiv3.ClusterInformation)
+	g.Expect(ok).To(BeTrue())
+	g.Expect(v1CI.Spec.DatastoreReady).To(Equal(ptr.To(true)), "v1 ClusterInformation should be unlocked after abort")
+
+	// Verify migrated v3 resources were cleaned up. The "default" and
+	// "security" tiers were created by migration (with the migrated-by
+	// annotation), so they should be deleted during abort.
+	tierList := &apiv3.TierList{}
+	g.Expect(fvRTClient.List(ctx, tierList)).To(Succeed())
+	for _, tier := range tierList.Items {
+		g.Expect(tier.Annotations).NotTo(HaveKey(migratedByAnnotation), "tier %s should have been cleaned up", tier.Name)
+	}
 }
