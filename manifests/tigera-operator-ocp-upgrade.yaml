@@ -713,6 +713,16 @@ rules:
       - update
     resourceNames:
       - istiod
+  # The operator checks DatastoreMigration CRs at startup and during reconciliation
+  # to determine whether a v1-to-v3 CRD migration is in progress or complete.
+  - apiGroups:
+      - migration.projectcalico.org
+    resources:
+      - datastoremigrations
+    verbs:
+      - get
+      - list
+      - watch
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
