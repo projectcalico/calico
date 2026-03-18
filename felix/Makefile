@@ -275,7 +275,9 @@ $(FELIX_CONTAINER_CREATED): $(IMAGE_DEPS) \
                             ../metadata.mk \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild) \
                             | register
-	$(DOCKER_BUILD) --network=host -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
+	$(DOCKER_BUILD) \
+		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		--network=host -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
 
