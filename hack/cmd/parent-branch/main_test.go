@@ -390,6 +390,239 @@ func TestTryVersionStrategy_UpstreamError(t *testing.T) {
 	}
 }
 
+func TestFixCIRemotes(t *testing.T) {
+	tests := []struct {
+		name       string
+		wantErr    bool
+		wantErrMsg string
+	}{
+		{
+			name: "already configured remotes are left alone",
+		},
+		{
+			name: "fixes remote missing wildcard fetch",
+		},
+		{
+			name: "multiple remotes mixed",
+		},
+		{
+			name:       "git remote fails",
+			wantErr:    true,
+			wantErrMsg: "git remote failed",
+		},
+		{
+			name:       "git config set fails",
+			wantErr:    true,
+			wantErrMsg: "failed to update fetch config",
+		},
+		{
+			name: "empty remote output",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var configSetCalls []string
+			orig := runGit
+			t.Cleanup(func() { runGit = orig })
+
+			switch tc.name {
+			case "already configured remotes are left alone":
+				runGit = func(args ...string) (string, error) {
+					key := strings.Join(args, " ")
+					switch key {
+					case "remote":
+						return "origin", nil
+					case "config get remote.origin.fetch":
+						return "+refs/heads/*:refs/remotes/origin/*", nil
+					}
+					return "", fmt.Errorf("unexpected: %s", key)
+				}
+			case "fixes remote missing wildcard fetch":
+				runGit = func(args ...string) (string, error) {
+					key := strings.Join(args, " ")
+					switch key {
+					case "remote":
+						return "origin", nil
+					case "config get remote.origin.fetch":
+						return "", fmt.Errorf("no config")
+					case "config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*":
+						configSetCalls = append(configSetCalls, "origin")
+						return "", nil
+					}
+					return "", fmt.Errorf("unexpected: %s", key)
+				}
+			case "multiple remotes mixed":
+				runGit = func(args ...string) (string, error) {
+					key := strings.Join(args, " ")
+					switch key {
+					case "remote":
+						return "origin\nupstream", nil
+					case "config get remote.origin.fetch":
+						return "+refs/heads/*:refs/remotes/origin/*", nil
+					case "config get remote.upstream.fetch":
+						// Returns a refspec without wildcard.
+						return "+refs/heads/main:refs/remotes/upstream/main", nil
+					case "config remote.upstream.fetch +refs/heads/*:refs/remotes/upstream/*":
+						configSetCalls = append(configSetCalls, "upstream")
+						return "", nil
+					}
+					return "", fmt.Errorf("unexpected: %s", key)
+				}
+			case "git remote fails":
+				runGit = func(args ...string) (string, error) {
+					return "", fmt.Errorf("git error")
+				}
+			case "git config set fails":
+				runGit = func(args ...string) (string, error) {
+					key := strings.Join(args, " ")
+					switch key {
+					case "remote":
+						return "origin", nil
+					case "config get remote.origin.fetch":
+						return "", fmt.Errorf("no config")
+					case "config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*":
+						return "", fmt.Errorf("permission denied")
+					}
+					return "", fmt.Errorf("unexpected: %s", key)
+				}
+			case "empty remote output":
+				runGit = func(args ...string) (string, error) {
+					key := strings.Join(args, " ")
+					if key == "remote" {
+						return "", nil
+					}
+					return "", fmt.Errorf("unexpected: %s", key)
+				}
+			}
+
+			err := fixCIRemotes()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if !strings.Contains(err.Error(), tc.wantErrMsg) {
+					t.Errorf("error %q does not contain %q", err.Error(), tc.wantErrMsg)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			switch tc.name {
+			case "already configured remotes are left alone":
+				if len(configSetCalls) != 0 {
+					t.Errorf("expected no config set calls, got %v", configSetCalls)
+				}
+			case "fixes remote missing wildcard fetch":
+				if len(configSetCalls) != 1 || configSetCalls[0] != "origin" {
+					t.Errorf("expected config set for origin, got %v", configSetCalls)
+				}
+			case "multiple remotes mixed":
+				if len(configSetCalls) != 1 || configSetCalls[0] != "upstream" {
+					t.Errorf("expected config set for upstream only, got %v", configSetCalls)
+				}
+			}
+		})
+	}
+}
+
+func TestTryGitTagStrategy(t *testing.T) {
+	origPrefix := releasePrefix
+	t.Cleanup(func() { releasePrefix = origPrefix })
+	releasePrefix = "release-v"
+
+	tests := []struct {
+		name      string
+		remote    string
+		gitMock   map[string]string
+		wantRes   string
+		wantFound bool
+		wantErr   bool
+	}{
+		{
+			name:   "tag found and remote branch exists",
+			remote: "origin",
+			gitMock: map[string]string{
+				"describe --tags --abbrev=0":                            "v3.22.1",
+				"branch --show-current":                                 "my-feature",
+				"rev-parse --verify --quiet release-v3.22":              "abc123",
+				"rev-parse --abbrev-ref release-v3.22@{upstream}":       "origin/release-v3.22",
+				"rev-parse --abbrev-ref --quiet origin/release-v3.22":   "origin/release-v3.22",
+			},
+			wantRes:   "origin/release-v3.22",
+			wantFound: true,
+		},
+		{
+			name:      "git describe fails returns not found",
+			remote:    "origin",
+			wantFound: false,
+		},
+		{
+			name:   "tag without minor version",
+			remote: "origin",
+			gitMock: map[string]string{
+				"describe --tags --abbrev=0": "v3",
+				"branch --show-current":      "my-feature",
+			},
+			wantFound: false,
+		},
+		{
+			name:   "tag found but no matching branch",
+			remote: "origin",
+			wantFound: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			switch tc.name {
+			case "git describe fails returns not found":
+				orig := runGit
+				runGit = func(args ...string) (string, error) {
+					return "", fmt.Errorf("no tags found")
+				}
+				t.Cleanup(func() { runGit = orig })
+			case "tag found but no matching branch":
+				orig := runGit
+				runGit = func(args ...string) (string, error) {
+					key := strings.Join(args, " ")
+					switch key {
+					case "describe --tags --abbrev=0":
+						return "v3.22.1", nil
+					case "branch --show-current":
+						return "my-feature", nil
+					}
+					return "", fmt.Errorf("not found")
+				}
+				t.Cleanup(func() { runGit = orig })
+			default:
+				if tc.gitMock != nil {
+					withMockGit(t, tc.gitMock)
+				}
+			}
+
+			result, found, err := tryGitTagStrategy(tc.remote)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if found != tc.wantFound {
+				t.Errorf("found = %v, want %v", found, tc.wantFound)
+			}
+			if result != tc.wantRes {
+				t.Errorf("result = %q, want %q", result, tc.wantRes)
+			}
+		})
+	}
+}
+
 func TestMergeBaseStrategy(t *testing.T) {
 	origPrefix := releasePrefix
 	t.Cleanup(func() { releasePrefix = origPrefix })
