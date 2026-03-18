@@ -776,6 +776,7 @@ func (c *L3RouteResolver) flush() {
 					blockSeen = true
 					blockNodeName = ri.Blocks[0].NodeName
 				}
+				rt.DstNodeName = ri.Blocks[0].NodeName
 
 				// Track whether this block entry is at the same CIDR as the route we're
 				// resolving (e.g., a /32 block for a /32 tunnel IP from a dedicated tunnel
@@ -796,8 +797,6 @@ func (c *L3RouteResolver) flush() {
 					blockTypes |= proto.RouteType_REMOTE_WORKLOAD
 				}
 			}
-
-			rt.DstNodeName = ri.Blocks[0].NodeName
 			if len(ri.Host.NodeNames) > 0 {
 				rt.DstNodeName = ri.Host.NodeNames[0]
 
