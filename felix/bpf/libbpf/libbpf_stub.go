@@ -208,6 +208,8 @@ const (
 	AttachTypeTcxIngress                 uint32 = 12345
 	AttachTypeTcxEgress                  uint32 = 12345
 	AttachTypeXDP                        uint32 = 12345
+	AttachTypeNetkitPrimary              uint32 = 12345
+	AttachTypeNetkitPeer                 uint32 = 12345
 )
 
 func (m *Map) SetSize(size int) error {
