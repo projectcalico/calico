@@ -112,7 +112,7 @@ kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6
 sigs.k8s.io/controller-runtime v0.22.3
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
 sigs.k8s.io/kind v0.30.0
-sigs.k8s.io/network-policy-api v0.1.8-0.20260212153203-412bf65729a5
+sigs.k8s.io/network-policy-api v0.1.8-0.20260217173220-6bb86defe1a7
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 sigs.k8s.io/yaml v1.6.0
