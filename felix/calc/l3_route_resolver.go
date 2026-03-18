@@ -747,6 +747,8 @@ func (c *L3RouteResolver) flush() {
 		poolAllowsCrossSubnet := false
 		var blockSeen bool
 		var blockNodeName string
+		var blockTypes proto.RouteType
+		var hasTunnelRef bool
 		for _, entry := range buf {
 			ri := entry.Data.(RouteInfo)
 			if len(ri.Pools) > 0 {
@@ -774,12 +776,17 @@ func (c *L3RouteResolver) flush() {
 					blockNodeName = ri.Blocks[0].NodeName
 				}
 				rt.DstNodeName = ri.Blocks[0].NodeName
-				if rt.DstNodeName == c.myNodeName {
-					logCxt.Debug("Local workload route.")
-					rt.Types |= proto.RouteType_LOCAL_WORKLOAD
+
+				// Accumulate the workload type flags from block entries, but don't apply
+				// them to the route yet. A block entry may be a parent of the CIDR we're
+				// resolving (e.g., a /26 block containing a /32 tunnel IP). The workload
+				// type is only correct if the route isn't a tunnel ref; see below.
+				if ri.Blocks[0].NodeName == c.myNodeName {
+					logCxt.Debug("Local workload route (from block).")
+					blockTypes |= proto.RouteType_LOCAL_WORKLOAD
 				} else {
-					logCxt.Debug("Remote workload route.")
-					rt.Types |= proto.RouteType_REMOTE_WORKLOAD
+					logCxt.Debug("Remote workload route (from block).")
+					blockTypes |= proto.RouteType_REMOTE_WORKLOAD
 				}
 			}
 			if len(ri.Host.NodeNames) > 0 {
@@ -819,6 +826,7 @@ func (c *L3RouteResolver) flush() {
 				} else {
 					// This is a tunnel ref, set type and also store the tunnel type in the route. It is possible for
 					// multiple tunnels to have the same IP, so collate all tunnel types on the same node.
+					hasTunnelRef = true
 					if ri.Refs[0].NodeName == c.myNodeName {
 						rt.Types |= proto.RouteType_LOCAL_TUNNEL
 					} else {
@@ -843,6 +851,14 @@ func (c *L3RouteResolver) flush() {
 					}
 				}
 			}
+		}
+
+		// Apply the accumulated block workload type flags unless the route is a tunnel
+		// IP. A tunnel IP that happens to fall within an IPAM block should not get
+		// REMOTE_WORKLOAD — that causes isRemoteTunnelRoute() in the route manager to
+		// program a spurious /32 directly-connected route on the tunnel device.
+		if blockSeen && !hasTunnelRef {
+			rt.Types |= blockTypes
 		}
 
 		var ipFamily int
