@@ -125,6 +125,7 @@ k8s.io/component-helpers v0.35.2
 k8s.io/controller-manager v0.35.2
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
+k8s.io/kube-aggregator v0.35.2
 k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
 k8s.io/kubernetes v1.35.2
 k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
@@ -163,6 +164,8 @@ local:kube-controllers/pkg/controllers/controller
 local:kube-controllers/pkg/controllers/flannelmigration
 local:kube-controllers/pkg/controllers/ippool
 local:kube-controllers/pkg/controllers/loadbalancer
+local:kube-controllers/pkg/controllers/migration
+local:kube-controllers/pkg/controllers/migration/migrators
 local:kube-controllers/pkg/controllers/namespace
 local:kube-controllers/pkg/controllers/networkpolicy
 local:kube-controllers/pkg/controllers/node
@@ -171,7 +174,10 @@ local:kube-controllers/pkg/controllers/serviceaccount
 local:kube-controllers/pkg/controllers/tier
 local:kube-controllers/pkg/controllers/utils
 local:kube-controllers/pkg/converter
+local:kube-controllers/pkg/discovery
 local:kube-controllers/pkg/status
+local:lib/std/chanutil
+local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/lib/apiconfig
