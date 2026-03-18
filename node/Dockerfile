@@ -103,31 +103,39 @@ COPY --from=almalinux /lib64/libip6tc.so.2 /lib64/libip6tc.so.2
 
 # Set symbolic links for iptables-legacy binaries
 RUN set -eux; \
-    for bin in iptables-legacy iptables-legacy-restore iptables-legacy-save ip6tables-legacy ip6tables-legacy-restore ip6tables-legacy-save; do \
-        ln -sf xtables-legacy-multi /usr/sbin/${bin} || true; \
+    for link in \
+        ip6tables-legacy \
+        ip6tables-legacy-restore \
+        ip6tables-legacy-save \
+        iptables-legacy \
+        iptables-legacy-restore \
+        iptables-legacy-save; \
+    do \
+        ln -sf xtables-legacy-multi /usr/sbin/${link} || true; \
     done
 
 # Copy our bird binaries in
 COPY --from=bird /bird /bin/bird
-COPY --from=bird /birdcl /bin/birdcl
 COPY --from=bird /bird6 /bin/bird6
+COPY --from=bird /birdcl /bin/birdcl
 COPY --from=bird /birdcl6 /bin/birdcl6
 
 # Copy in the filesystem - this contains licenses, etc...
 COPY filesystem/etc/ /etc
 COPY filesystem/included-source/ /included-source
+COPY filesystem/sbin/ /usr/sbin/
 COPY filesystem/usr/ /usr
-COPY filesystem/sbin/* /usr/sbin/
 
 COPY --from=bpftool /bpftool /bin/bpftool
 
 ARG BIN_DIR
+ARG TARGETARCH
 
 # Copy in the calico-node binary
-COPY ${BIN_DIR}/calico-node-amd64 /bin/calico-node
+COPY ${BIN_DIR}/calico-node-${TARGETARCH} /bin/calico-node
 
 # Copy in the mountns binary
-COPY ${BIN_DIR}/mountns-amd64 /bin/mountns
+COPY ${BIN_DIR}/mountns-${TARGETARCH} /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
