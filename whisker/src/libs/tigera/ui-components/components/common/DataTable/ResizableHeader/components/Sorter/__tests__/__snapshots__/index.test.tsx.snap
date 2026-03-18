@@ -3,9 +3,8 @@
 exports[`<Sorter/> it renders ascending 1`] = `
 <DocumentFragment>
   <svg
-    class="chakra-icon css-1a3akiy"
+    class="chakra-icon css-ib4rse"
     focusable="false"
-    style="margin-left: 4px;"
     viewBox="0 0 30 24"
   >
     <path
@@ -22,9 +21,8 @@ exports[`<Sorter/> it renders ascending 1`] = `
 exports[`<Sorter/> it renders descending 1`] = `
 <DocumentFragment>
   <svg
-    class="chakra-icon css-1a3akiy"
+    class="chakra-icon css-ib4rse"
     focusable="false"
-    style="margin-left: 4px;"
     viewBox="0 0 12 11"
   >
     <path
@@ -41,9 +39,8 @@ exports[`<Sorter/> it renders descending 1`] = `
 exports[`<Sorter/> it renders inactive 1`] = `
 <DocumentFragment>
   <svg
-    class="chakra-icon css-162s3ve"
+    class="chakra-icon css-hm6bcl"
     focusable="false"
-    style="margin-left: 4px; transform: scaleY(1);"
     viewBox="0 0 12 11"
   >
     <path
