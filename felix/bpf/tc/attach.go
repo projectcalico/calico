@@ -526,7 +526,14 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		DSCP:          ap.DSCP,
 		IstioDSCP:     ap.IstioDSCP,
 		MaglevLUTSize: ap.MaglevLUTSize,
-		HostIfindex:   uint32(ap.IfIndex),
+	}
+
+	// Only set HostIfindex for netkit interfaces. For netkit, skb->ifindex
+	// is the peer's ifindex which differs from the primary that maps are
+	// keyed by. For TC/TCX, skb->ifindex already matches the host-side
+	// interface, so we leave HostIfindex as 0 to use the skb->ifindex fallback.
+	if string(ap.AttachType) == AttachOptionNetkit {
+		globalData.HostIfindex = uint32(ap.IfIndex)
 	}
 
 	if ap.Profiling == "Enabled" {
