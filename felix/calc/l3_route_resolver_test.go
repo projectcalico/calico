@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -142,6 +142,99 @@ var _ = Describe("L3RouteResolver", func() {
 			Expect(rt.SameSubnet).NotTo(BeTrue())
 		})
 	})
+	Describe("tunnel IP within IPAM block", func() {
+		var l3RR *L3RouteResolver
+		var eventBuf rtEventsMock
+
+		BeforeEach(func() {
+			eventBuf = make(rtEventsMock, 100)
+			l3RR = NewL3RouteResolver("local-host", eventBuf, true, "CalicoIPAM")
+			l3RR.OnAlive = func() {}
+		})
+
+		drainEvents := func() []*proto.RouteUpdate {
+			var routes []*proto.RouteUpdate
+			for {
+				select {
+				case ev := <-eventBuf:
+					if rt, ok := ev.(*proto.RouteUpdate); ok {
+						routes = append(routes, rt)
+					}
+				default:
+					return routes
+				}
+			}
+		}
+
+		findRoute := func(routes []*proto.RouteUpdate, dst string) *proto.RouteUpdate {
+			for _, rt := range routes {
+				if rt.Dst == dst {
+					return rt
+				}
+			}
+			return nil
+		}
+
+		// Set up a remote host with a VXLAN tunnel IP that falls within an IPAM block.
+		// The tunnel IP 10.0.1.0 is the first address of the /29 block 10.0.1.0/29.
+		// In production (KIND clusters), this causes the tunnel route to get REMOTE_WORKLOAD
+		// OR'd in alongside REMOTE_TUNNEL, which triggers spurious /32 route programming.
+		It("should not add REMOTE_WORKLOAD to a tunnel IP just because it falls within a block", func() {
+			// Add the IP pool.
+			poolCIDR, _ := ip.CIDRFromString("10.0.0.0/16")
+			pool := model.IPPool{
+				CIDR:      net.IPNet{IPNet: poolCIDR.ToIPNet()},
+				VXLANMode: encap.Always,
+			}
+			l3RR.OnPoolUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key:   model.IPPoolKey{CIDR: pool.CIDR},
+					Value: &pool,
+				},
+			})
+			drainEvents()
+
+			// Add the IPAM block (10.0.1.0/29) with affinity to remote-host.
+			remoteAffinity := "host:remote-host"
+			blockCIDR := net.MustParseCIDR("10.0.1.0/29")
+			l3RR.OnBlockUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.BlockKey{CIDR: blockCIDR},
+					Value: &model.AllocationBlock{
+						CIDR:        blockCIDR,
+						Affinity:    &remoteAffinity,
+						Allocations: make([]*int, 8),
+						Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
+					},
+				},
+			})
+			drainEvents()
+
+			// Add the remote host IP and VXLAN tunnel address via OnHostIPUpdate +
+			// a direct tunnel address update. The tunnel IP 10.0.1.0 falls within
+			// the block 10.0.1.0/29.
+			l3RR.onNodeUpdate("remote-host", &l3rrNodeInfo{
+				V4Addr:    ip.FromString("192.168.0.2").(ip.V4Addr),
+				VXLANAddr: ip.FromString("10.0.1.0"),
+			})
+			l3RR.flush()
+
+			routes := drainEvents()
+
+			// Find the tunnel route for 10.0.1.0/32.
+			tunnelRoute := findRoute(routes, "10.0.1.0/32")
+			Expect(tunnelRoute).NotTo(BeNil(), "expected a route for the tunnel IP 10.0.1.0/32")
+
+			// The tunnel route should only have REMOTE_TUNNEL, not REMOTE_WORKLOAD.
+			// If REMOTE_WORKLOAD is present, the route manager will incorrectly program
+			// an extra /32 directly-connected route on the tunnel device.
+			Expect(tunnelRoute.Types&proto.RouteType_REMOTE_TUNNEL).NotTo(BeZero(),
+				"tunnel route should have REMOTE_TUNNEL type")
+			Expect(tunnelRoute.Types&proto.RouteType_REMOTE_WORKLOAD).To(BeZero(),
+				"tunnel route should NOT have REMOTE_WORKLOAD just because it falls within a block")
+		})
+	})
+
 	Describe("l3rrNodeInfo UTs", func() {
 		It("should not return empty IP addresses in AddressesAsCIDRs()", func() {
 			var (
