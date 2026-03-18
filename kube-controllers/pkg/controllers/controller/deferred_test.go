@@ -82,7 +82,9 @@ func newEstablishedCRD(name string) *apiextv1.CustomResourceDefinition {
 // controller starts when the watched CRD becomes Established.
 func TestDeferredCRDController_StartsWhenCRDEstablished(t *testing.T) {
 	inner := newMockContextController()
-	fakeClient := fakeapiext.NewClientset()
+	// NewClientset() in k8s 1.35 has a broken SMD schema for CRD types, so Create() fails with
+	// "no type found matching". Use the deprecated NewSimpleClientset() until upstream is fixed.
+	fakeClient := fakeapiext.NewSimpleClientset() //nolint:staticcheck
 
 	ctrl := NewDeferredCRDController(testCRDName, fakeClient, inner)
 	stop := make(chan struct{})
@@ -106,7 +108,7 @@ func TestDeferredCRDController_StartsWhenCRDEstablished(t *testing.T) {
 func TestDeferredCRDController_StopsWhenCRDDeleted(t *testing.T) {
 	inner := newMockContextController()
 	crd := newEstablishedCRD(testCRDName)
-	fakeClient := fakeapiext.NewClientset(crd)
+	fakeClient := fakeapiext.NewSimpleClientset(crd) //nolint:staticcheck
 
 	ctrl := NewDeferredCRDController(testCRDName, fakeClient, inner)
 	stop := make(chan struct{})
@@ -133,7 +135,7 @@ func TestDeferredCRDController_StopsWhenCRDDeleted(t *testing.T) {
 func TestDeferredCRDController_RestartsWhenCRDRecreated(t *testing.T) {
 	inner := newMockContextController()
 	crd := newEstablishedCRD(testCRDName)
-	fakeClient := fakeapiext.NewClientset(crd)
+	fakeClient := fakeapiext.NewSimpleClientset(crd) //nolint:staticcheck
 
 	ctrl := NewDeferredCRDController(testCRDName, fakeClient, inner)
 	stop := make(chan struct{})
@@ -167,7 +169,7 @@ func TestDeferredCRDController_RestartsWhenCRDRecreated(t *testing.T) {
 // names don't trigger the inner controller.
 func TestDeferredCRDController_IgnoresOtherCRDs(t *testing.T) {
 	inner := newMockContextController()
-	fakeClient := fakeapiext.NewClientset()
+	fakeClient := fakeapiext.NewSimpleClientset() //nolint:staticcheck
 
 	ctrl := NewDeferredCRDController(testCRDName, fakeClient, inner)
 	stop := make(chan struct{})
