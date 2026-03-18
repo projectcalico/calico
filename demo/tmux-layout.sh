@@ -2,12 +2,12 @@
 # Launch tmux demo layout for KubeVirt Live Migration recording
 #
 # Layout:
-#   +---------------------------+---------------------------+
-#   |  Pane 0: Commands         |  Pane 1: Watch            |
-#   |  (type/paste commands)    |  (live VM & pod status)   |
-#   +---------------------------+---------------------------+
-#   |  Pane 2: TCP Stream from TOR node (external BGP)      |
-#   +-------------------------------------------------------+
+#   +---------------------------+------------------------------------------------+
+#   |  Pane 0: Commands         |  Pane 1: Live Watch                            |
+#   |  (type/paste commands)    |  (VMIs, virt-launcher pods, active VMIM, WEP)  |
+#   +---------------------------+------------------------------------------------+
+#   |  Pane 2: TOR node shell / TCP stream (external BGP)                        |
+#   +----------------------------------------------------------------------------+
 
 SESSION=kubecon-demo
 
@@ -20,16 +20,6 @@ fi
 # Kill existing session if any
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
-# Create session with large window
-tmux new-session -d -s "$SESSION" -x 220 -y 55
-
-# Split top/bottom (60/40)
-tmux split-window -v -p 40 -t "$SESSION"
-
-# Split top into left/right (50/50)
-tmux select-pane -t 0
-tmux split-window -h -p 50 -t "$SESSION"
-
 # Resolve dynamic values from Taskvars.yml
 TASKVARS="$BZ_ROOT_DIR/Taskvars.yml"
 KUBECONFIG=$(grep '^KUBECONFIG:' "$TASKVARS" | awk '{print $2}')
@@ -40,20 +30,75 @@ TOR_INSTANCE="${CLUSTER_NAME}nch-ubuntu1"
 export KUBECONFIG
 VM1_IP=$(kubectl get vmi vm1 -o jsonpath='{.status.interfaces[0].ipAddress}' 2>/dev/null || echo '<VM1_IP>')
 
-# Set env vars in all panes
-for pane in 0 1 2; do
-    tmux send-keys -t "$SESSION:0.$pane" "export KUBECONFIG=$KUBECONFIG BZ_ROOT_DIR=$BZ_ROOT_DIR VM1_IP=$VM1_IP TOR_INSTANCE=$TOR_INSTANCE TOR_ZONE=$GOOGLE_ZONE" Enter
+# Create session with large window
+tmux new-session -d -s "$SESSION" -x 220 -y 55
+
+# Split top/bottom (60/40)
+tmux split-window -v -p 40 -t "$SESSION"
+
+# Split top into left/right (50/50)
+tmux select-pane -t 0
+tmux split-window -h -p 50 -t "$SESSION"
+
+# Make pane borders more visible for light terminal themes
+tmux set-option -t "$SESSION" pane-border-style 'fg=black'
+tmux set-option -t "$SESSION" pane-active-border-style 'fg=red'
+tmux set-option -t "$SESSION" pane-border-status top
+tmux set-option -t "$SESSION" pane-border-format ' #[fg=black,bold]#{pane_index} "#{pane_title}" '
+
+# Optional: make status line cleaner for recording
+tmux set-option -t "$SESSION" status-style 'bg=black,fg=white'
+tmux set-option -t "$SESSION" message-style 'bg=black,fg=red'
+
+# Set pane titles
+tmux select-pane -t "$SESSION:0.0" -T "Commands"
+tmux select-pane -t "$SESSION:0.1" -T "Live Watch"
+tmux select-pane -t "$SESSION:0.2" -T "TOR Node"
+
+# Set env vars in panes 0 and 1
+for pane in 0 1; do
+    tmux send-keys -t "$SESSION:0.$pane" \
+      "export KUBECONFIG=$KUBECONFIG BZ_ROOT_DIR=$BZ_ROOT_DIR VM1_IP=$VM1_IP TOR_INSTANCE=$TOR_INSTANCE TOR_ZONE=$GOOGLE_ZONE" Enter
 done
 
-# Pane 1 (top-right): start the watch
-tmux send-keys -t "$SESSION:0.1" "watch -n 1 'echo \"=== VirtualMachineInstances ===\" && kubectl get vmi -o custom-columns=NAME:.metadata.name,IP:.status.interfaces[0].ipAddress,NODE:.status.nodeName,PHASE:.status.phase 2>/dev/null && echo && echo \"=== Virt-Launcher Pods ===\" && kubectl get pods -l kubevirt.io=virt-launcher -o custom-columns=NAME:.metadata.name,IP:.status.podIP,NODE:.spec.nodeName,STATUS:.status.phase 2>/dev/null'" Enter
+# Pane 1 (top-right): start the live watch
+tmux send-keys -t "$SESSION:0.1" "watch -n 1 '
+echo \"=== VirtualMachineInstances ===\" &&
+kubectl get vmi -o custom-columns=NAME:.metadata.name,IP:.status.interfaces[0].ipAddress,NODE:.status.nodeName,PHASE:.status.phase 2>/dev/null &&
+echo &&
+echo \"=== Virt-Launcher Pods ===\" &&
+kubectl get pods -l kubevirt.io=virt-launcher -o custom-columns=NAME:.metadata.name,IP:.status.podIP,NODE:.spec.nodeName,STATUS:.status.phase 2>/dev/null &&
+echo &&
+echo \"=== VirtualMachineInstanceMigrations ===\" &&
+VMIM_OUT=\$(kubectl get vmim -o custom-columns=NAME:.metadata.name,VMI:.spec.vmiName,PHASE:.status.phase --no-headers 2>/dev/null | awk '\''\$3 != \"Succeeded\" && \$3 != \"Failed\"'\'') &&
+if [ -n \"\$VMIM_OUT\" ]; then
+  echo \"NAME VMI PHASE\"
+  echo \"\$VMIM_OUT\"
+else
+  echo \"No migration running\"
+fi &&
+echo &&
+echo \"=== Calico WorkloadEndpoint (vm1 IP) ===\" &&
+WEP_OUT=\$(calicoctl get workloadendpoint --allow-version-mismatch -o wide 2>/dev/null | grep \"$VM1_IP\") &&
+if [ -n \"\$WEP_OUT\" ]; then
+  echo \"\$WEP_OUT\"
+else
+  echo \"No WorkloadEndpoint found for IP $VM1_IP\"
+fi
+'" Enter
 
-# Pane 2 (bottom): show TCP stream instructions
-tmux send-keys -t "$SESSION:0.2" "echo \">> SSH: gcloud compute ssh ubuntu@\$TOR_INSTANCE --zone=\$TOR_ZONE  |  Then run: nc $VM1_IP 9999\"" Enter
+# Pane 2 (bottom): auto-connect to TOR node
+tmux send-keys -t "$SESSION:0.2" \
+  "gcloud compute ssh ubuntu@$TOR_INSTANCE --zone=$GOOGLE_ZONE" Enter
 
 # Pane 0 (top-left): mark ready
 tmux select-pane -t "$SESSION:0.0"
-tmux send-keys -t "$SESSION:0.0" "echo \"VM1_IP=\$VM1_IP  TOR_INSTANCE=\$TOR_INSTANCE  TOR_ZONE=\$TOR_ZONE  — Ready!\"" Enter
+tmux send-keys -t "$SESSION:0.0" \
+  "echo \"VM1_IP=$VM1_IP  TOR_INSTANCE=$TOR_INSTANCE  TOR_ZONE=$GOOGLE_ZONE  — Ready!\"" Enter
+tmux send-keys -t "$SESSION:0.0" \
+  "echo \"Optional cleanup before recording: kubectl delete vmim --all --ignore-not-found\"" Enter
+tmux send-keys -t "$SESSION:0.0" \
+  "echo \"Bottom pane auto-connects to TOR node. Then run there: while true; do nc -w 5 \$VM1_IP 9999; echo \\\"[\$(date +%H:%M:%S)] reconnecting...\\\"; sleep 1; done\"" Enter
 
 # Attach
 tmux attach -t "$SESSION"
