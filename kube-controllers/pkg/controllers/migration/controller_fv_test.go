@@ -135,7 +135,7 @@ func TestLifecycle_Mainline(t *testing.T) {
 	}
 
 	// Fake APIService client (avoids envtest auto-recreating automanaged APIServices)
-	fakeAPIReg := fakeapiregclient.NewSimpleClientset(newAggregatedAPIServiceObj())
+	fakeAPIReg := fakeapiregclient.NewSimpleClientset(newAggregatedAPIServiceObj()) //nolint:staticcheck // NewClientset not available for kube-aggregator
 
 	// Set up phase gate to observe intermediate states.
 	gate := newPhaseGate(

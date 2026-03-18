@@ -82,7 +82,7 @@ func newEstablishedCRD(name string) *apiextv1.CustomResourceDefinition {
 // controller starts when the watched CRD becomes Established.
 func TestDeferredCRDController_StartsWhenCRDEstablished(t *testing.T) {
 	inner := newMockContextController()
-	fakeClient := fakeapiext.NewSimpleClientset()
+	fakeClient := fakeapiext.NewClientset()
 
 	ctrl := NewDeferredCRDController(testCRDName, fakeClient, inner)
 	stop := make(chan struct{})
@@ -106,7 +106,7 @@ func TestDeferredCRDController_StartsWhenCRDEstablished(t *testing.T) {
 func TestDeferredCRDController_StopsWhenCRDDeleted(t *testing.T) {
 	inner := newMockContextController()
 	crd := newEstablishedCRD(testCRDName)
-	fakeClient := fakeapiext.NewSimpleClientset(crd)
+	fakeClient := fakeapiext.NewClientset(crd)
 
 	ctrl := NewDeferredCRDController(testCRDName, fakeClient, inner)
 	stop := make(chan struct{})
@@ -133,7 +133,7 @@ func TestDeferredCRDController_StopsWhenCRDDeleted(t *testing.T) {
 func TestDeferredCRDController_RestartsWhenCRDRecreated(t *testing.T) {
 	inner := newMockContextController()
 	crd := newEstablishedCRD(testCRDName)
-	fakeClient := fakeapiext.NewSimpleClientset(crd)
+	fakeClient := fakeapiext.NewClientset(crd)
 
 	ctrl := NewDeferredCRDController(testCRDName, fakeClient, inner)
 	stop := make(chan struct{})
@@ -167,7 +167,7 @@ func TestDeferredCRDController_RestartsWhenCRDRecreated(t *testing.T) {
 // names don't trigger the inner controller.
 func TestDeferredCRDController_IgnoresOtherCRDs(t *testing.T) {
 	inner := newMockContextController()
-	fakeClient := fakeapiext.NewSimpleClientset()
+	fakeClient := fakeapiext.NewClientset()
 
 	ctrl := NewDeferredCRDController(testCRDName, fakeClient, inner)
 	stop := make(chan struct{})
