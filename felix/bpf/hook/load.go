@@ -68,12 +68,13 @@ const (
 var All = []Hook{Ingress, Egress, XDP}
 
 type AttachType struct {
-	Hook       Hook
-	Family     int
-	Type       tcdefs.EndpointType
-	LogLevel   string
-	ToHostDrop bool
-	DSR        bool
+	Hook           Hook
+	Family         int
+	Type           tcdefs.EndpointType
+	LogLevel       string
+	ToHostDrop     bool
+	DSR            bool
+	ProgAttachType string // "TC", "TCX", or "Netkit" — used as cache key to separate programs with different expected_attach_type
 }
 
 func (at AttachType) ObjectFile() string {
@@ -135,6 +136,9 @@ func ObjectFile(at AttachType) string {
 	objectFilesLock.Lock()
 	defer objectFilesLock.Unlock()
 
+	// ProgAttachType is not part of the object file selection — the same
+	// BPF object is used for TC, TCX, and Netkit. Zero it out for lookup.
+	at.ProgAttachType = ""
 	return objectFiles[at]
 }
 
