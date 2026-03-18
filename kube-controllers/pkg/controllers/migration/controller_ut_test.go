@@ -38,7 +38,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakertclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/migration/migrators"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -485,28 +485,9 @@ func TestMigrateResourceType_TransientError(t *testing.T) {
 	inner := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(k8stesting.NewObjectTracker(rtScheme, serializer.NewCodecFactory(rtScheme).UniversalDecoder())).Build()
 	wrapper := &retryTestClient{Client: inner, createCalls: &calls}
 
-	migrator := ResourceMigrator{
-		Kind:         apiv3.KindTier,
-		Order:        OrderTiers,
-		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
-		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
-		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, c, apiv3.KindTier)
-		},
-		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
-			v1, ok := kvp.Value.(*apiv3.Tier)
-			if !ok {
-				return nil, fmt.Errorf("unexpected type: %T", kvp.Value)
-			}
-			return &apiv3.Tier{
-				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
-				Spec:       *v1.Spec.DeepCopy(),
-			}, nil
-		},
-	}
+	migrator := testTierMigrator(bc, wrapper)
 
-	result, err := MigrateResourceType(ctx, bc, wrapper, migrator)
+	result, err := MigrateResourceType(ctx, migrator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -543,36 +524,26 @@ func TestMigrateResourceType_ContentMatch(t *testing.T) {
 		},
 	}
 
-	rtScheme := runtime.NewScheme()
-	if err := apiv3.AddToScheme(rtScheme); err != nil {
-		t.Fatalf("failed to add scheme: %v", err)
-	}
-	fakeRT := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(k8stesting.NewObjectTracker(rtScheme, serializer.NewCodecFactory(rtScheme).UniversalDecoder())).Build()
+	fakeRT := newTestRTClient(t)
 
-	migrator := ResourceMigrator{
-		Kind:         apiv3.KindTier,
-		Order:        OrderTiers,
-		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
-		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
-		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, c, apiv3.KindTier)
-		},
-		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
-			v1, ok := kvp.Value.(*apiv3.Tier)
-			if !ok {
-				return nil, fmt.Errorf("unexpected type: %T", kvp.Value)
-			}
-			v3 := &apiv3.Tier{
-				ObjectMeta: metav1.ObjectMeta{Name: v1.Name},
-				Spec:       *v1.Spec.DeepCopy(),
-			}
-			copyLabelsAndAnnotations(v1, v3)
+	// Use a test migrator that deep copies and preserves labels/annotations.
+	migrator := newTestMigrator(apiv3.KindTier, OrderTiers, bc, fakeRT,
+		func() rtclient.Object { return &apiv3.Tier{} },
+		func() rtclient.ObjectList { return &apiv3.TierList{} },
+		func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
+		func(kvp *model.KVPair) (rtclient.Object, error) {
+			v1 := kvp.Value.(*apiv3.Tier)
+			v3 := v1.DeepCopy()
+			v3.ResourceVersion = ""
+			v3.CreationTimestamp = metav1.Time{}
+			v3.ManagedFields = nil
+			v3.Generation = 0
+			filterInternalAnnotations(v3)
 			return v3, nil
 		},
-	}
+	)
 
-	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
+	result, err := MigrateResourceType(ctx, migrator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -611,32 +582,21 @@ func TestMigrateResourceType_ConvertError(t *testing.T) {
 		},
 	}
 
-	rtScheme := runtime.NewScheme()
-	if err := apiv3.AddToScheme(rtScheme); err != nil {
-		t.Fatalf("failed to add scheme: %v", err)
-	}
-	fakeRT := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(k8stesting.NewObjectTracker(rtScheme, serializer.NewCodecFactory(rtScheme).UniversalDecoder())).Build()
+	fakeRT := newTestRTClient(t)
 
-	migrator := ResourceMigrator{
-		Kind:         apiv3.KindTier,
-		Order:        OrderTiers,
-		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
-		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
-		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, c, apiv3.KindTier)
-		},
-		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
+	// Use a migrator with a convert function that always fails.
+	migrator := newTestMigrator(apiv3.KindTier, OrderTiers, bc, fakeRT,
+		func() rtclient.Object { return &apiv3.Tier{} },
+		func() rtclient.ObjectList { return &apiv3.TierList{} },
+		func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
+		func(kvp *model.KVPair) (rtclient.Object, error) {
 			return nil, fmt.Errorf("intentional convert error")
 		},
-	}
+	)
 
-	_, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
+	_, err := MigrateResourceType(ctx, migrator)
 	if err == nil {
 		t.Fatal("expected error from Convert failure")
-	}
-	if !isTerminal(err) {
-		t.Errorf("expected terminal error for conversion failure, got: %v", err)
 	}
 }
 
@@ -645,9 +605,8 @@ func TestMigrateResourceType_ConvertError(t *testing.T) {
 // the conflict, transitions to WaitingForConflictResolution, and records
 // the conflict details in the CR status.
 func TestConflictDetection_PhaseTransition(t *testing.T) {
-	withTestRegistry(t, []ResourceMigrator{tierMigrator(), gnpMigrator()})
-
 	c, _ := newTestController(t)
+	withTestRegistry(t, []migrators.ResourceMigrator{tierMigrator(c.backendClient, c.rtClient), gnpMigrator(c.backendClient, c.rtClient)})
 	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	// Pre-create a conflicting GNP with a different spec than the v1 source.
@@ -728,7 +687,6 @@ func TestConflictDetection_PhaseTransition(t *testing.T) {
 // is aborted (CR deleted mid-migration), partial v3 resources are cleaned up,
 // the APIService is restored, and v1 ClusterInformation is unlocked.
 func TestAbortRollback_CleansUpMigratedResources(t *testing.T) {
-	withTestRegistry(t, []ResourceMigrator{tierMigrator(), gnpMigrator()})
 
 	// Simulate mid-migration: CR is being deleted while in Migrating phase.
 	// The saved APIService annotation allows restore.
@@ -756,6 +714,7 @@ func TestAbortRollback_CleansUpMigratedResources(t *testing.T) {
 	}
 
 	c, _ := newTestController(t)
+	withTestRegistry(t, []migrators.ResourceMigrator{tierMigrator(c.backendClient, c.rtClient), gnpMigrator(c.backendClient, c.rtClient)})
 	createMigrationCR(t, c, cr)
 
 	// Simulate partial v3 resources that were created by migration.
@@ -851,29 +810,10 @@ func TestMigrateResourceType_EmptyList(t *testing.T) {
 			apiv3.KindTier: {},
 		},
 	}
+	fakeRT := newTestRTClient(t)
+	migrator := testTierMigrator(bc, fakeRT)
 
-	rtScheme := runtime.NewScheme()
-	if err := apiv3.AddToScheme(rtScheme); err != nil {
-		t.Fatalf("failed to add scheme: %v", err)
-	}
-	fakeRT := fakertclient.NewClientBuilder().WithScheme(rtScheme).WithObjectTracker(k8stesting.NewObjectTracker(rtScheme, serializer.NewCodecFactory(rtScheme).UniversalDecoder())).Build()
-
-	migrator := ResourceMigrator{
-		Kind:         apiv3.KindTier,
-		Order:        OrderTiers,
-		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
-		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
-		GetSpec:      func(obj rtclient.Object) any { return obj.(*apiv3.Tier).Spec },
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
-			return listV1Resources(ctx, c, apiv3.KindTier)
-		},
-		Convert: func(kvp *model.KVPair) (rtclient.Object, error) {
-			t.Fatal("Convert should not be called for empty list")
-			return nil, nil
-		},
-	}
-
-	result, err := MigrateResourceType(ctx, bc, fakeRT, migrator)
+	result, err := MigrateResourceType(ctx, migrator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

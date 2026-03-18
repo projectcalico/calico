@@ -268,12 +268,12 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 	// Pre-validation: verify we have the RBAC permissions needed for migration.
 	// The operator creates the migration ClusterRole asynchronously when it sees
 	// this CR, so we may need to wait a reconcile or two for it.
-	migrators := GetRegistry()
+	allMigrators := GetRegistry()
 	var forbidden []string
-	for _, migrator := range migrators {
-		_, err := migrator.ListV1(m.ctx, m.backendClient)
+	for _, migrator := range allMigrators {
+		_, err := migrator.ListV1(m.ctx)
 		if err != nil && kerrors.IsForbidden(err) {
-			forbidden = append(forbidden, migrator.Kind)
+			forbidden = append(forbidden, migrator.Kind())
 		}
 	}
 	if len(forbidden) > 0 {
@@ -328,7 +328,7 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 	// Pre-check conflicts: detect v3 resources that differ from their v1 source
 	// before starting migration. This avoids locking the datastore only to
 	// discover conflicts mid-migration.
-	conflicts, err := DetectConflicts(m.ctx, m.backendClient, m.rtClient, migrators)
+	conflicts, err := DetectConflicts(m.ctx, allMigrators)
 	if err != nil {
 		return fmt.Errorf("pre-checking conflicts: %w", err)
 	}
@@ -374,9 +374,9 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	}
 
 	// Step 3: Migrate all resources in order.
-	migrators := GetRegistry()
-	sort.Slice(migrators, func(i, j int) bool {
-		return migrators[i].Order < migrators[j].Order
+	allMigrators := GetRegistry()
+	sort.Slice(allMigrators, func(i, j int) bool {
+		return allMigrators[i].Order() < allMigrators[j].Order()
 	})
 
 	var allConflicts []ConflictInfo
@@ -384,38 +384,38 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 
 	// Initialize progress tracking.
 	dm.Status.Progress = DatastoreMigrationProgress{
-		TotalTypes:   len(migrators),
-		TypeProgress: fmt.Sprintf("0 / %d", len(migrators)),
-		TypeDetails:  make([]TypeMigrationProgress, 0, len(migrators)),
+		TotalTypes:   len(allMigrators),
+		TypeProgress: fmt.Sprintf("0 / %d", len(allMigrators)),
+		TypeDetails:  make([]TypeMigrationProgress, 0, len(allMigrators)),
 	}
 
-	for i, migrator := range migrators {
+	for i, migrator := range allMigrators {
 		// Update current-type progress before starting each type.
-		dm.Status.Progress.CurrentType = migrator.Kind
+		dm.Status.Progress.CurrentType = migrator.Kind()
 		dm.Status.Progress.CompletedTypes = i
-		dm.Status.Progress.TypeProgress = fmt.Sprintf("%d / %d", i, len(migrators))
+		dm.Status.Progress.TypeProgress = fmt.Sprintf("%d / %d", i, len(allMigrators))
 		if err := m.updateStatus(dm); err != nil {
 			logCtx.WithError(err).Warn("Failed to update progress status")
 		}
 
 		typeStart := time.Now()
-		result, err := MigrateResourceType(m.ctx, m.backendClient, m.rtClient, migrator)
-		migrationTypeDuration.WithLabelValues(migrator.Kind).Observe(time.Since(typeStart).Seconds())
+		result, err := MigrateResourceType(m.ctx, migrator)
+		migrationTypeDuration.WithLabelValues(migrator.Kind()).Observe(time.Since(typeStart).Seconds())
 		if err != nil {
-			migrationResourceErrors.WithLabelValues(migrator.Kind).Inc()
-			return fmt.Errorf("migrating %s: %w", migrator.Kind, err)
+			migrationResourceErrors.WithLabelValues(migrator.Kind()).Inc()
+			return fmt.Errorf("migrating %s: %w", migrator.Kind(), err)
 		}
 
-		migrationResourcesTotal.WithLabelValues(migrator.Kind, "migrated").Add(float64(result.Migrated))
-		migrationResourcesTotal.WithLabelValues(migrator.Kind, "skipped").Add(float64(result.Skipped))
-		migrationResourcesTotal.WithLabelValues(migrator.Kind, "conflict").Add(float64(len(result.Conflicts)))
+		migrationResourcesTotal.WithLabelValues(migrator.Kind(), "migrated").Add(float64(result.Migrated))
+		migrationResourcesTotal.WithLabelValues(migrator.Kind(), "skipped").Add(float64(result.Skipped))
+		migrationResourcesTotal.WithLabelValues(migrator.Kind(), "conflict").Add(float64(len(result.Conflicts)))
 
 		dm.Status.Progress.Migrated += result.Migrated
 		dm.Status.Progress.Skipped += result.Skipped
 		dm.Status.Progress.Total += result.Migrated + result.Skipped + len(result.Conflicts)
 		dm.Status.Progress.Conflicts += len(result.Conflicts)
 		dm.Status.Progress.TypeDetails = append(dm.Status.Progress.TypeDetails, TypeMigrationProgress{
-			Kind:      migrator.Kind,
+			Kind:      migrator.Kind(),
 			Migrated:  result.Migrated,
 			Skipped:   result.Skipped,
 			Conflicts: len(result.Conflicts),
@@ -428,12 +428,12 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	}
 
 	// Mark all types complete.
-	dm.Status.Progress.CompletedTypes = len(migrators)
-	dm.Status.Progress.TypeProgress = fmt.Sprintf("%d / %d", len(migrators), len(migrators))
+	dm.Status.Progress.CompletedTypes = len(allMigrators)
+	dm.Status.Progress.TypeProgress = fmt.Sprintf("%d / %d", len(allMigrators), len(allMigrators))
 	dm.Status.Progress.CurrentType = ""
 
 	// Second pass: remap OwnerReference UIDs that point to Calico resources.
-	if err := RemapOwnerReferences(m.ctx, m.rtClient, uidMap, migrators); err != nil {
+	if err := RemapOwnerReferences(m.ctx, uidMap, allMigrators); err != nil {
 		return fmt.Errorf("remapping OwnerReferences: %w", err)
 	}
 
@@ -482,7 +482,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Re-checking conflicts")
 
-	remaining, err := DetectConflicts(m.ctx, m.backendClient, m.rtClient, GetRegistry())
+	remaining, err := DetectConflicts(m.ctx, GetRegistry())
 	if err != nil {
 		return fmt.Errorf("re-checking conflicts: %w", err)
 	}
@@ -649,36 +649,31 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *DatastoreMig
 // cleanupPartialV3Resources deletes v3 resources that were created during
 // migration. This is best-effort: failures are logged but don't block the abort.
 func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry) {
-	migrators := GetRegistry()
-	for _, migrator := range migrators {
-		if migrator.V3ObjectList == nil {
+	for _, migrator := range GetRegistry() {
+		items, err := migrator.ListV3(m.ctx)
+		if err != nil {
+			logCtx.WithError(err).WithField("kind", migrator.Kind()).Warn("Failed to list v3 resources for cleanup")
 			continue
 		}
-		list := migrator.V3ObjectList()
-		if err := m.rtClient.List(m.ctx, list); err != nil {
-			logCtx.WithError(err).WithField("kind", migrator.Kind).Warn("Failed to list v3 resources for cleanup")
-			continue
-		}
-		items := extractItems(list)
 		deleted := 0
 		for _, obj := range items {
 			// Only delete resources that were created by migration, not
 			// pre-existing v3 resources.
 			annotations := obj.GetAnnotations()
 			if annotations == nil || annotations[migratedByAnnotation] == "" {
-				logCtx.WithFields(logrus.Fields{"kind": migrator.Kind, "name": obj.GetName()}).Debug("Skipping non-migrated v3 resource during cleanup")
+				logCtx.WithFields(logrus.Fields{"kind": migrator.Kind(), "name": obj.GetName()}).Debug("Skipping non-migrated v3 resource during cleanup")
 				continue
 			}
-			if err := m.rtClient.Delete(m.ctx, obj); err != nil {
+			if err := migrator.DeleteV3(m.ctx, obj); err != nil {
 				if !kerrors.IsNotFound(err) {
-					logCtx.WithError(err).WithFields(logrus.Fields{"kind": migrator.Kind, "name": obj.GetName(), "namespace": obj.GetNamespace()}).Warn("Failed to delete v3 resource during abort")
+					logCtx.WithError(err).WithFields(logrus.Fields{"kind": migrator.Kind(), "name": obj.GetName(), "namespace": obj.GetNamespace()}).Warn("Failed to delete v3 resource during abort")
 				}
 				continue
 			}
 			deleted++
 		}
 		if deleted > 0 {
-			logCtx.WithFields(logrus.Fields{"kind": migrator.Kind, "deleted": deleted}).Info("Deleted partial v3 resources")
+			logCtx.WithFields(logrus.Fields{"kind": migrator.Kind(), "deleted": deleted}).Info("Deleted partial v3 resources")
 		}
 	}
 }

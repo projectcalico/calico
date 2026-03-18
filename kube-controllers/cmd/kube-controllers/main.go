@@ -581,7 +581,7 @@ func (cc *controllerControl) InitControllers(
 			log.WithError(err).Fatal("Failed to create apiextensions client for migration controller")
 		}
 
-		dsmigration.RegisterOSSResources()
+		dsmigration.RegisterOSSResources(bc, rtClient)
 		migrationController := dsmigration.NewController(dsmigration.ControllerConfig{
 			Ctx:           ctx,
 			K8sClient:     k8sClientset,

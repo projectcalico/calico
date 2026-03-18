@@ -17,23 +17,17 @@ package migration
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/migration/migrators"
 )
 
 const (
@@ -45,35 +39,6 @@ const (
 	// resources within a single resource type.
 	defaultWorkerCount = 10
 )
-
-// ResourceMigrator defines how to migrate a single resource type from v1 to v3 CRDs.
-type ResourceMigrator struct {
-	// Kind is the Calico resource kind (e.g., "GlobalNetworkPolicy").
-	Kind string
-
-	// Namespaced indicates whether this resource type is namespaced.
-	Namespaced bool
-
-	// Order controls migration ordering. Lower numbers are migrated first.
-	Order int
-
-	// ListV1 lists all v1 resources of this type using the libcalico-go backend client.
-	ListV1 func(ctx context.Context, client api.Client) (*model.KVPairList, error)
-
-	// Convert transforms a v1 KVPair into a v3 object suitable for creation.
-	// The returned object should have Name, Namespace, Labels, Annotations, and Spec set.
-	// It should NOT have ResourceVersion, UID, or CreationTimestamp set.
-	Convert func(kvp *model.KVPair) (client.Object, error)
-
-	// V3Object returns a new empty instance of the v3 type (e.g., &apiv3.Tier{}).
-	V3Object func() client.Object
-
-	// V3ObjectList returns a new empty list instance (e.g., &apiv3.TierList{}).
-	V3ObjectList func() client.ObjectList
-
-	// GetSpec extracts the Spec field from a typed v3 object for comparison.
-	GetSpec func(obj client.Object) any
-}
 
 // ConflictInfo identifies a resource that exists in v3 with a different spec than v1.
 type ConflictInfo struct {
@@ -99,31 +64,23 @@ type MigrationResult struct {
 // registry holds all registered resource migrators, ordered by migration priority.
 var (
 	registryMu sync.Mutex
-	registry   []ResourceMigrator
+	registry   []migrators.ResourceMigrator
 )
 
 // Register adds a ResourceMigrator to the global registry.
-func Register(m ResourceMigrator) {
+func Register(m migrators.ResourceMigrator) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	registry = append(registry, m)
 }
 
 // GetRegistry returns a copy of all registered migrators.
-func GetRegistry() []ResourceMigrator {
+func GetRegistry() []migrators.ResourceMigrator {
 	registryMu.Lock()
 	defer registryMu.Unlock()
-	result := make([]ResourceMigrator, len(registry))
+	result := make([]migrators.ResourceMigrator, len(registry))
 	copy(result, registry)
 	return result
-}
-
-// migratedPolicyName handles the default. prefix removal for default-tier policies.
-func migratedPolicyName(name, tier string) string {
-	if (tier == "default" || tier == "") && strings.HasPrefix(name, "default.") {
-		return strings.TrimPrefix(name, "default.")
-	}
-	return name
 }
 
 // retryBackoff defines the backoff parameters for retrying transient API errors
@@ -166,55 +123,39 @@ type migrationWorkResult struct {
 // MigrateResourceType runs the migration for a single resource type using the
 // given migrator. It lists and converts resources sequentially, then fans out
 // create/check operations to a bounded worker pool for concurrency.
-func MigrateResourceType(ctx context.Context, bc api.Client, rtClient client.Client, m ResourceMigrator) (*MigrationResult, error) {
-	logCtx := logrus.WithField("kind", m.Kind)
+func MigrateResourceType(ctx context.Context, m migrators.ResourceMigrator) (*MigrationResult, error) {
+	logCtx := logrus.WithField("kind", m.Kind())
 	logCtx.Info("Starting migration for resource type")
 
 	result := &MigrationResult{
 		UIDMapping: make(map[types.UID]types.UID),
 	}
 
-	// Phase 1: List all v1 resources and convert to v3 objects sequentially.
-	v1List, err := m.ListV1(ctx, bc)
+	// Phase 1: List all v1 resources (already converted to v3 objects).
+	v1Objects, err := m.ListV1(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("listing v1 %s resources: %w", m.Kind, err)
+		return nil, fmt.Errorf("listing v1 %s resources: %w", m.Kind(), err)
 	}
-	logCtx.WithField("count", len(v1List.KVPairs)).Info("Listed v1 resources")
+	logCtx.WithField("count", len(v1Objects)).Info("Listed v1 resources")
 
-	workItems := make([]migrationWorkItem, 0, len(v1List.KVPairs))
-	for _, kvp := range v1List.KVPairs {
-		key, ok := kvp.Key.(model.ResourceKey)
-		if !ok {
-			return nil, asTerminal(fmt.Errorf("unexpected key type for %s: %T", m.Kind, kvp.Key))
-		}
-		v1Src, ok := kvp.Value.(metav1.Object)
-		if !ok {
-			return nil, asTerminal(fmt.Errorf("unexpected value type for %s/%s: %T", m.Kind, key.Name, kvp.Value))
-		}
-		v1UID := v1Src.GetUID()
+	workItems := make([]migrationWorkItem, 0, len(v1Objects))
+	for _, obj := range v1Objects {
+		// The converted object retains the v1 UID for mapping purposes.
+		v1UID := obj.GetUID()
 
-		v3Obj, err := m.Convert(kvp)
-		if err != nil {
-			return nil, asTerminal(fmt.Errorf("converting %s/%s: %w", m.Kind, key.Name, err))
-		}
-
-		// Copy OwnerReferences from the v1 source. UIDs referencing Calico
-		// resources will be stale at this point — they get remapped in a
-		// second pass after all types are migrated.
-		if ownerRefs := v1Src.GetOwnerReferences(); len(ownerRefs) > 0 {
-			v3Obj.SetOwnerReferences(ownerRefs)
-		}
+		// Clear UID before creation — the API server assigns a new one.
+		obj.SetUID("")
 
 		entryLog := logCtx.WithFields(logrus.Fields{
 			"v1UID":     v1UID,
-			"ownerRefs": len(v1Src.GetOwnerReferences()),
-			"name":      key.Name,
-			"namespace": key.Namespace,
+			"ownerRefs": len(obj.GetOwnerReferences()),
+			"name":      obj.GetName(),
+			"namespace": obj.GetNamespace(),
 		})
 
 		workItems = append(workItems, migrationWorkItem{
 			v1UID:  v1UID,
-			v3Obj:  v3Obj,
+			v3Obj:  obj,
 			logCtx: entryLog,
 		})
 	}
@@ -242,7 +183,7 @@ func MigrateResourceType(ctx context.Context, bc api.Client, rtClient client.Cli
 		go func() {
 			defer wg.Done()
 			for item := range workCh {
-				resultCh <- migrateOneResource(ctx, rtClient, m, item)
+				resultCh <- migrateOneResource(ctx, m, item)
 			}
 		}()
 	}
@@ -279,60 +220,39 @@ func MigrateResourceType(ctx context.Context, bc api.Client, rtClient client.Cli
 
 // DetectConflicts checks all migrators for v1 resources that have a corresponding
 // v3 resource with a different spec. It returns a ConflictInfo for each mismatch.
-func DetectConflicts(ctx context.Context, bc api.Client, rtClient client.Client, migrators []ResourceMigrator) ([]ConflictInfo, error) {
+func DetectConflicts(ctx context.Context, ms []migrators.ResourceMigrator) ([]ConflictInfo, error) {
 	var allConflicts []ConflictInfo
-	for _, m := range migrators {
-		if m.ListV1 == nil || m.Convert == nil || m.V3Object == nil || m.GetSpec == nil {
-			continue
-		}
-		v1List, err := m.ListV1(ctx, bc)
+	for _, m := range ms {
+		v1Objects, err := m.ListV1(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("listing v1 %s: %w", m.Kind, err)
+			return nil, fmt.Errorf("listing v1 %s: %w", m.Kind(), err)
 		}
-		for _, kvp := range v1List.KVPairs {
-			v3Obj, err := m.Convert(kvp)
-			if err != nil {
-				return nil, fmt.Errorf("converting v1 %s: %w", m.Kind, err)
-			}
-			existing, err := getV3Object(ctx, rtClient, m, v3Obj.GetName(), v3Obj.GetNamespace())
+		for _, obj := range v1Objects {
+			existing, err := m.GetV3(ctx, obj.GetName(), obj.GetNamespace())
 			if err != nil || existing == nil {
 				continue
 			}
-			if !specsEqual(m, v3Obj, existing) {
-				allConflicts = append(allConflicts, ConflictInfo{Kind: m.Kind, Name: v3Obj.GetName()})
+			if !m.SpecsEqual(obj, existing) {
+				allConflicts = append(allConflicts, ConflictInfo{Kind: m.Kind(), Name: obj.GetName()})
 			}
 		}
 	}
 	return allConflicts, nil
 }
 
-// getV3Object fetches a v3 resource by name/namespace using the controller-runtime client.
-// Returns nil, nil if the resource does not exist.
-func getV3Object(ctx context.Context, rtClient client.Client, m ResourceMigrator, name, namespace string) (client.Object, error) {
-	obj := m.V3Object()
-	err := rtClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, obj)
-	if err != nil {
-		if kerrors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return obj, nil
-}
-
 // migrateOneResource handles the create/check/conflict logic for a single
 // resource. It is called concurrently from the worker pool. Transient API
 // errors are retried with exponential backoff.
-func migrateOneResource(ctx context.Context, rtClient client.Client, m ResourceMigrator, item migrationWorkItem) migrationWorkResult {
+func migrateOneResource(ctx context.Context, m migrators.ResourceMigrator, item migrationWorkItem) migrationWorkResult {
 	v3Obj := item.v3Obj
 
 	// Check if a v3 resource already exists (with retry).
 	var existing client.Object
 	err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
 		var getErr error
-		existing, getErr = getV3Object(ctx, rtClient, m, v3Obj.GetName(), v3Obj.GetNamespace())
+		existing, getErr = m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
 		if getErr != nil && isRetryable(getErr) {
-			migrationRetries.WithLabelValues(m.Kind, "get").Inc()
+			migrationRetries.WithLabelValues(m.Kind(), "get").Inc()
 			item.logCtx.WithError(getErr).Debug("Retrying GetV3")
 			return false, nil
 		}
@@ -340,16 +260,16 @@ func migrateOneResource(ctx context.Context, rtClient client.Client, m ResourceM
 	})
 	if err != nil {
 		return migrationWorkResult{
-			err: fmt.Errorf("checking existing v3 %s/%s: %w", m.Kind, v3Obj.GetName(), err),
+			err: fmt.Errorf("checking existing v3 %s/%s: %w", m.Kind(), v3Obj.GetName(), err),
 		}
 	}
 
 	if existing != nil {
-		if specsEqual(m, v3Obj, existing) {
+		if m.SpecsEqual(v3Obj, existing) {
 			item.logCtx.Debug("v3 resource already exists with matching spec, skipping")
 			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: existing.GetUID()}
 		}
-		ci := &ConflictInfo{Kind: m.Kind, Name: v3Obj.GetName()}
+		ci := &ConflictInfo{Kind: m.Kind(), Name: v3Obj.GetName()}
 		item.logCtx.Warn(ci.String())
 		return migrationWorkResult{conflict: ci}
 	}
@@ -365,13 +285,13 @@ func migrateOneResource(ctx context.Context, rtClient client.Client, m ResourceM
 
 	// Create the v3 resource (with retry).
 	err = wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
-		createErr := rtClient.Create(ctx, v3Obj)
+		createErr := m.CreateV3(ctx, v3Obj)
 		if createErr != nil {
 			if kerrors.IsAlreadyExists(createErr) {
 				return true, createErr
 			}
 			if isRetryable(createErr) {
-				migrationRetries.WithLabelValues(m.Kind, "create").Inc()
+				migrationRetries.WithLabelValues(m.Kind(), "create").Inc()
 				item.logCtx.WithError(createErr).Debug("Retrying CreateV3")
 				return false, nil
 			}
@@ -382,9 +302,9 @@ func migrateOneResource(ctx context.Context, rtClient client.Client, m ResourceM
 	if err != nil {
 		if kerrors.IsAlreadyExists(err) {
 			item.logCtx.Debug("v3 resource was created concurrently, reading back for UID mapping")
-			readBack, getErr := getV3Object(ctx, rtClient, m, v3Obj.GetName(), v3Obj.GetNamespace())
+			readBack, getErr := m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
 			if getErr != nil {
-				return migrationWorkResult{err: fmt.Errorf("reading back AlreadyExists v3 %s/%s: %w", m.Kind, v3Obj.GetName(), getErr)}
+				return migrationWorkResult{err: fmt.Errorf("reading back AlreadyExists v3 %s/%s: %w", m.Kind(), v3Obj.GetName(), getErr)}
 			}
 			var v3UID types.UID
 			if readBack != nil {
@@ -393,7 +313,7 @@ func migrateOneResource(ctx context.Context, rtClient client.Client, m ResourceM
 			return migrationWorkResult{skipped: true, v1UID: item.v1UID, v3UID: v3UID}
 		}
 		return migrationWorkResult{
-			err: fmt.Errorf("creating v3 %s/%s: %w", m.Kind, v3Obj.GetName(), err),
+			err: fmt.Errorf("creating v3 %s/%s: %w", m.Kind(), v3Obj.GetName(), err),
 		}
 	}
 	item.logCtx.Debug("Successfully migrated resource")
@@ -402,9 +322,9 @@ func migrateOneResource(ctx context.Context, rtClient client.Client, m ResourceM
 	var created client.Object
 	err = wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
 		var getErr error
-		created, getErr = getV3Object(ctx, rtClient, m, v3Obj.GetName(), v3Obj.GetNamespace())
+		created, getErr = m.GetV3(ctx, v3Obj.GetName(), v3Obj.GetNamespace())
 		if getErr != nil && isRetryable(getErr) {
-			migrationRetries.WithLabelValues(m.Kind, "get").Inc()
+			migrationRetries.WithLabelValues(m.Kind(), "get").Inc()
 			item.logCtx.WithError(getErr).Debug("Retrying read-back GetV3")
 			return false, nil
 		}
@@ -412,7 +332,7 @@ func migrateOneResource(ctx context.Context, rtClient client.Client, m ResourceM
 	})
 	if err != nil {
 		return migrationWorkResult{
-			err: fmt.Errorf("reading back created v3 %s/%s: %w", m.Kind, v3Obj.GetName(), err),
+			err: fmt.Errorf("reading back created v3 %s/%s: %w", m.Kind(), v3Obj.GetName(), err),
 		}
 	}
 	var v3UID types.UID
@@ -436,7 +356,7 @@ func isCalicoAPIGroup(group string) bool {
 // RemapOwnerReferences performs a second pass over all migrated v3 resources,
 // remapping OwnerReference UIDs that point to Calico resources. Non-Calico
 // OwnerReferences (e.g., to Namespaces or Pods) are left unchanged.
-func RemapOwnerReferences(ctx context.Context, rtClient client.Client, uidMap map[types.UID]types.UID, migrators []ResourceMigrator) error {
+func RemapOwnerReferences(ctx context.Context, uidMap map[types.UID]types.UID, ms []migrators.ResourceMigrator) error {
 	if len(uidMap) == 0 {
 		return nil
 	}
@@ -445,18 +365,12 @@ func RemapOwnerReferences(ctx context.Context, rtClient client.Client, uidMap ma
 	logCtx.Info("Remapping OwnerReference UIDs on migrated resources")
 
 	remapped := 0
-	for _, m := range migrators {
-		if m.V3ObjectList == nil {
-			continue
+	for _, m := range ms {
+		items, err := m.ListV3(ctx)
+		if err != nil {
+			return fmt.Errorf("listing v3 %s for ownerref remapping: %w", m.Kind(), err)
 		}
 
-		list := m.V3ObjectList()
-		if err := rtClient.List(ctx, list); err != nil {
-			return fmt.Errorf("listing v3 %s for ownerref remapping: %w", m.Kind, err)
-		}
-
-		// Extract items from the list using reflection.
-		items := extractItems(list)
 		for _, obj := range items {
 			ownerRefs := obj.GetOwnerReferences()
 			if len(ownerRefs) == 0 {
@@ -476,8 +390,8 @@ func RemapOwnerReferences(ctx context.Context, rtClient client.Client, uidMap ma
 
 			if changed {
 				obj.SetOwnerReferences(ownerRefs)
-				if err := rtClient.Update(ctx, obj); err != nil {
-					return fmt.Errorf("updating ownerrefs on %s/%s: %w", m.Kind, obj.GetName(), err)
+				if err := m.UpdateV3(ctx, obj); err != nil {
+					return fmt.Errorf("updating ownerrefs on %s/%s: %w", m.Kind(), obj.GetName(), err)
 				}
 				remapped++
 			}
@@ -486,66 +400,4 @@ func RemapOwnerReferences(ctx context.Context, rtClient client.Client, uidMap ma
 
 	logCtx.WithField("remapped", remapped).Info("Completed OwnerReference remapping")
 	return nil
-}
-
-// extractItems pulls the Items slice from a typed list object (e.g., apiv3.TierList)
-// using the apimachinery meta helpers instead of manual reflection.
-func extractItems(list client.ObjectList) []client.Object {
-	var result []client.Object
-	_ = meta.EachListItem(list, func(obj runtime.Object) error {
-		if o, ok := obj.(client.Object); ok {
-			result = append(result, o)
-		}
-		return nil
-	})
-	return result
-}
-
-// specsEqual returns true if two v3 objects have the same spec according to the migrator's GetSpec function.
-func specsEqual(m ResourceMigrator, a, b client.Object) bool {
-	return reflect.DeepEqual(m.GetSpec(a), m.GetSpec(b))
-}
-
-// copyLabelsAndAnnotations copies labels and annotations from a v1 resource (read via libcalico-go)
-// to a new v3 object, filtering out internal metadata annotations.
-func copyLabelsAndAnnotations(src, dst metav1.Object) {
-	if labels := src.GetLabels(); len(labels) > 0 {
-		cleaned := make(map[string]string, len(labels))
-		for k, v := range labels {
-			cleaned[k] = v
-		}
-		dst.SetLabels(cleaned)
-	}
-
-	if annotations := src.GetAnnotations(); len(annotations) > 0 {
-		cleaned := make(map[string]string)
-		for k, v := range annotations {
-			// Skip the internal metadata annotation used by the v1 backend.
-			if k == "projectcalico.org/metadata" {
-				continue
-			}
-			cleaned[k] = v
-		}
-		if len(cleaned) > 0 {
-			dst.SetAnnotations(cleaned)
-		}
-	}
-}
-
-// listV1Resources is a helper to list v1 resources via the libcalico-go backend client.
-func listV1Resources(ctx context.Context, bc api.Client, kind string) (*model.KVPairList, error) {
-	return bc.List(ctx, model.ResourceListOptions{Kind: kind}, "")
-}
-
-// listV1NamespacedResources lists v1 resources across all namespaces.
-func listV1NamespacedResources(ctx context.Context, bc api.Client, kind string) (*model.KVPairList, error) {
-	return bc.List(ctx, model.ResourceListOptions{Kind: kind, Namespace: ""}, "")
-}
-
-// newV3TypeMeta returns a TypeMeta for the given kind.
-func newV3TypeMeta(kind string) metav1.TypeMeta {
-	return metav1.TypeMeta{
-		APIVersion: apiv3.GroupVersionCurrent,
-		Kind:       kind,
-	}
 }

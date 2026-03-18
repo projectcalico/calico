@@ -32,7 +32,7 @@ import (
 	"k8s.io/utils/ptr"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/migration/migrators"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -59,18 +59,28 @@ func newAggregatedAPIService(t *testing.T, c *testController) {
 	}
 }
 
+// failingListMigrator wraps a testMigrator but always returns an error from ListV1.
+type failingListMigrator struct {
+	*testMigrator
+}
+
+func (m *failingListMigrator) ListV1(ctx context.Context) ([]rtclient.Object, error) {
+	return nil, fmt.Errorf("simulated list failure")
+}
+
 // TestLifecycle_FullMigration exercises the complete happy-path lifecycle:
 // Pending -> (add finalizer) -> (pre-validate) -> Migrating -> Converged -> Complete,
 // with actual resource types registered and migrated.
 func TestLifecycle_FullMigration(t *testing.T) {
-	withTestRegistry(t, []ResourceMigrator{
-		tierMigrator(),
-		gnpMigrator(),
-	})
-
 	tierUID := types.UID("v1-tier-security-uid")
 	v1CRD := newV1CRD("tiers.crd.projectcalico.org")
 	c, _ := newTestController(t, v1CRD)
+
+	withTestRegistry(t, []migrators.ResourceMigrator{
+		tierMigrator(c.backendClient, c.rtClient),
+		gnpMigrator(c.backendClient, c.rtClient),
+	})
+
 	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, ""))
 
 	// Set up v1 resources in the mock backend.
@@ -251,10 +261,10 @@ func TestLifecycle_FullMigration(t *testing.T) {
 // TestLifecycle_APIServiceSaveRestore verifies that the APIService is saved to
 // an annotation during migration and can be restored on abort.
 func TestLifecycle_APIServiceSaveRestore(t *testing.T) {
-	withTestRegistry(t, nil)
-
 	v1CRD := newV1CRD("tiers.crd.projectcalico.org")
 	c, _ := newTestController(t, v1CRD)
+	withTestRegistry(t, nil)
+
 	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	bc := c.backendClient.(*mockBackendClient)
@@ -348,9 +358,9 @@ func TestLifecycle_APIServiceSaveRestore(t *testing.T) {
 // TestLifecycle_AbortCleansUpPartialV3Resources verifies that aborting a
 // migration deletes any v3 resources that were partially created.
 func TestLifecycle_AbortCleansUpPartialV3Resources(t *testing.T) {
-	withTestRegistry(t, []ResourceMigrator{tierMigrator()})
-
 	c, _ := newTestController(t)
+	withTestRegistry(t, []migrators.ResourceMigrator{tierMigrator(c.backendClient, c.rtClient)})
+
 	createMigrationCR(t, c, newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	// Pre-populate the v3 store as if migration created some tiers
@@ -403,14 +413,14 @@ func TestLifecycle_AbortCleansUpPartialV3Resources(t *testing.T) {
 // TestLifecycle_V1CRDCleanupOnDelete verifies that deleting the CR after
 // migration completes triggers deletion of v1 CRDs.
 func TestLifecycle_V1CRDCleanupOnDelete(t *testing.T) {
-	withTestRegistry(t, nil)
-
 	v1CRD1 := newV1CRD("tiers.crd.projectcalico.org")
 	v1CRD2 := newV1CRD("globalnetworkpolicies.crd.projectcalico.org")
 	// A non-v1 CRD that should not be deleted.
 	v3CRD := newV3CRD("tiers.projectcalico.org")
 
 	c, _ := newTestController(t, v1CRD1, v1CRD2, v3CRD)
+	withTestRegistry(t, nil)
+
 	createMigrationCR(t, c, newTestCRWithDeletion(t, defaultMigrationName, DatastoreMigrationPhaseComplete))
 
 	if err := c.reconcile(); err != nil {
@@ -453,10 +463,10 @@ func TestLifecycle_V1CRDCleanupOnDelete(t *testing.T) {
 // while in the Migrating phase, re-reconciling picks up where it left off
 // (idempotent: resources already migrated are skipped).
 func TestLifecycle_ResumeMidMigration(t *testing.T) {
-	withTestRegistry(t, []ResourceMigrator{tierMigrator()})
-
 	v1CRD := newV1CRD("tiers.crd.projectcalico.org")
 	c, _ := newTestController(t, v1CRD)
+	withTestRegistry(t, []migrators.ResourceMigrator{tierMigrator(c.backendClient, c.rtClient)})
+
 	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	// Simulate restart: one tier was already migrated.
@@ -521,9 +531,9 @@ func TestLifecycle_ResumeMidMigration(t *testing.T) {
 // lifecycle: conflicts transition to WaitingForConflictResolution, and
 // resolving them transitions back to Migrating.
 func TestLifecycle_MigrationWithConflicts(t *testing.T) {
-	withTestRegistry(t, []ResourceMigrator{tierMigrator()})
-
 	c, _ := newTestController(t)
+	withTestRegistry(t, []migrators.ResourceMigrator{tierMigrator(c.backendClient, c.rtClient)})
+
 	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	// Pre-populate a conflicting v3 tier with a different spec.
@@ -592,10 +602,10 @@ func TestLifecycle_MigrationWithConflicts(t *testing.T) {
 // pointing to native K8s resources (e.g., Namespace) are preserved as-is
 // during migration — only Calico OwnerRefs get remapped.
 func TestLifecycle_OwnerRefRemapping_NativeOwner(t *testing.T) {
-	withTestRegistry(t, []ResourceMigrator{gnpMigrator()})
-
 	nsUID := types.UID("namespace-uid-12345")
 	c, _ := newTestController(t)
+	withTestRegistry(t, []migrators.ResourceMigrator{gnpMigrator(c.backendClient, c.rtClient)})
+
 	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	bc := c.backendClient.(*mockBackendClient)
@@ -655,19 +665,17 @@ func TestLifecycle_OwnerRefRemapping_NativeOwner(t *testing.T) {
 // TestLifecycle_MigrationError_Retryable verifies that a retryable error during
 // resource migration is returned (so the workqueue retries) rather than going terminal.
 func TestLifecycle_MigrationError_Retryable(t *testing.T) {
-	failingMigrator := ResourceMigrator{
-		Kind:         "FailType",
-		Order:        OrderTiers,
-		V3Object:     func() rtclient.Object { return &apiv3.Tier{} },
-		V3ObjectList: func() rtclient.ObjectList { return &apiv3.TierList{} },
-		GetSpec:      func(obj rtclient.Object) any { return nil },
-		ListV1: func(ctx context.Context, c api.Client) (*model.KVPairList, error) {
-			return nil, fmt.Errorf("simulated list failure")
-		},
-	}
-	withTestRegistry(t, []ResourceMigrator{failingMigrator})
-
 	c, _ := newTestController(t)
+
+	fm := newTestMigrator(
+		"FailType", OrderTiers, c.backendClient, c.rtClient,
+		func() rtclient.Object { return &apiv3.Tier{} },
+		func() rtclient.ObjectList { return &apiv3.TierList{} },
+		func(obj rtclient.Object) any { return nil },
+		func(kvp *model.KVPair) (rtclient.Object, error) { return nil, nil },
+	)
+	withTestRegistry(t, []migrators.ResourceMigrator{&failingListMigrator{fm}})
+
 	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, DatastoreMigrationPhaseMigrating))
 
 	bc := c.backendClient.(*mockBackendClient)
@@ -711,15 +719,16 @@ func newV3CRD(name string) *unstructured.Unstructured {
 // with multiple diverse resource types and verifies that spec fields are
 // faithfully preserved in the v3 resources.
 func TestLifecycle_FullMigrationWithContentVerification(t *testing.T) {
-	withTestRegistry(t, []ResourceMigrator{
-		tierMigrator(),
-		felixConfigMigrator(),
-		ipPoolMigrator(),
-		bgpPeerMigrator(),
-	})
-
 	v1CRD := newV1CRD("tiers.crd.projectcalico.org")
 	c, _ := newTestController(t, v1CRD)
+
+	withTestRegistry(t, []migrators.ResourceMigrator{
+		tierMigrator(c.backendClient, c.rtClient),
+		felixConfigMigrator(c.backendClient, c.rtClient),
+		ipPoolMigrator(c.backendClient, c.rtClient),
+		bgpPeerMigrator(c.backendClient, c.rtClient),
+	})
+
 	createMigrationCR(t, c, newTestCR(t, defaultMigrationName, ""))
 
 	bc := c.backendClient.(*mockBackendClient)
