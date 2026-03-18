@@ -61,28 +61,6 @@ type MigrationResult struct {
 	UIDMapping map[types.UID]types.UID
 }
 
-// registry holds all registered resource migrators, ordered by migration priority.
-var (
-	registryMu sync.Mutex
-	registry   []migrators.ResourceMigrator
-)
-
-// Register adds a ResourceMigrator to the global registry.
-func Register(m migrators.ResourceMigrator) {
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	registry = append(registry, m)
-}
-
-// GetRegistry returns a copy of all registered migrators.
-func GetRegistry() []migrators.ResourceMigrator {
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	result := make([]migrators.ResourceMigrator, len(registry))
-	copy(result, registry)
-	return result
-}
-
 // retryBackoff defines the backoff parameters for retrying transient API errors
 // during resource migration (e.g., server timeouts, throttling, connection resets).
 var retryBackoff = wait.Backoff{

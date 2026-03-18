@@ -27,6 +27,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -39,6 +40,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/migration/migrators"
 	"github.com/projectcalico/calico/kube-controllers/pkg/discovery"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -79,10 +81,11 @@ type ControllerConfig struct {
 	Ctx           context.Context
 	K8sClient     kubernetes.Interface
 	BackendClient api.Client
-	RTClient      rtclient.Client
+	RTClient      rtclient.WithWatch
 	DynamicClient dynamic.Interface
 	APIRegClient  apiregv1client.ApiregistrationV1Interface
 	CRDClient     apiextclient.Interface
+	Migrators     []migrators.ResourceMigrator
 }
 
 // NewController creates a new migration controller. It watches for DatastoreMigration CRs
@@ -96,6 +99,7 @@ func NewController(cfg ControllerConfig) controller.Controller {
 		rtClient:      cfg.RTClient,
 		dynamicClient: cfg.DynamicClient,
 		apiregClient:  cfg.APIRegClient,
+		migrators:     cfg.Migrators,
 	}
 	return controller.NewDeferredCRDController(
 		"datastoremigrations.migration.projectcalico.org",
@@ -105,17 +109,16 @@ func NewController(cfg ControllerConfig) controller.Controller {
 }
 
 // resyncPeriod controls how frequently the informer re-lists all resources.
-// This ensures the Converged phase gets periodic re-checks for component
-// API group switchover detection.
 const resyncPeriod = 60 * time.Second
 
 type migrationController struct {
 	ctx           context.Context
 	k8sClient     kubernetes.Interface
 	backendClient api.Client
-	rtClient      rtclient.Client
+	rtClient      rtclient.WithWatch
 	dynamicClient dynamic.Interface
 	apiregClient  apiregv1client.ApiregistrationV1Interface
+	migrators     []migrators.ResourceMigrator
 	queue         workqueue.TypedRateLimitingInterface[string]
 }
 
@@ -150,13 +153,29 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 		return
 	}
 
-	go informer.Run(ctx.Done())
-
-	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
-		logrus.Error("Failed to sync informer cache")
+	// Watch DaemonSets in the install namespace so changes to calico-node
+	// (e.g., the operator setting CALICO_API_GROUP or completing a rollout)
+	// trigger a reconcile during the Converged phase.
+	dsGVR := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}
+	dsFactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(m.dynamicClient, resyncPeriod, names.OwnNamespace(), nil)
+	dsInformer := dsFactory.ForResource(dsGVR).Informer()
+	dsHandler := cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(_ any) { m.queue.Add(defaultMigrationName) },
+		UpdateFunc: func(_, _ any) { m.queue.Add(defaultMigrationName) },
+	}
+	if _, err = dsInformer.AddEventHandler(dsHandler); err != nil {
+		logrus.WithError(err).Fatal("Failed to add DaemonSet event handler")
 		return
 	}
-	logrus.Info("Migration informer cache synced")
+
+	go informer.Run(ctx.Done())
+	go dsInformer.Run(ctx.Done())
+
+	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced, dsInformer.HasSynced) {
+		logrus.Error("Failed to sync informer caches")
+		return
+	}
+	logrus.Info("Migration informer caches synced")
 
 	for m.processNextWorkItem() {
 	}
@@ -268,7 +287,7 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 	// Pre-validation: verify we have the RBAC permissions needed for migration.
 	// The operator creates the migration ClusterRole asynchronously when it sees
 	// this CR, so we may need to wait a reconcile or two for it.
-	allMigrators := GetRegistry()
+	allMigrators := m.migrators
 	var forbidden []string
 	for _, migrator := range allMigrators {
 		_, err := migrator.ListV1(m.ctx)
@@ -374,7 +393,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	}
 
 	// Step 3: Migrate all resources in order.
-	allMigrators := GetRegistry()
+	allMigrators := m.migrators
 	sort.Slice(allMigrators, func(i, j int) bool {
 		return allMigrators[i].Order() < allMigrators[j].Order()
 	})
@@ -482,7 +501,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Re-checking conflicts")
 
-	remaining, err := DetectConflicts(m.ctx, GetRegistry())
+	remaining, err := DetectConflicts(m.ctx, m.migrators)
 	if err != nil {
 		return fmt.Errorf("re-checking conflicts: %w", err)
 	}
@@ -649,7 +668,7 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *DatastoreMig
 // cleanupPartialV3Resources deletes v3 resources that were created during
 // migration. This is best-effort: failures are logged but don't block the abort.
 func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry) {
-	for _, migrator := range GetRegistry() {
+	for _, migrator := range m.migrators {
 		items, err := migrator.ListV3(m.ctx)
 		if err != nil {
 			logCtx.WithError(err).WithField("kind", migrator.Kind()).Warn("Failed to list v3 resources for cleanup")
