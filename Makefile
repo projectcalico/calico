@@ -193,6 +193,13 @@ kind-up: kind-build-images
 	$(MAKE) kind-cluster-create CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	$(MAKE) kind-deploy
 
+## Build images, create a kind cluster with v1 CRDs, deploy Calico, and run the
+## v1-to-v3 migration test.
+.PHONY: kind-migration-test
+kind-migration-test:
+	KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 $(MAKE) kind-up
+	$(REPO_ROOT)/hack/test/kind/migration/run_test.sh
+
 ## Create a kind cluster and run all e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
