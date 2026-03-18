@@ -16,7 +16,6 @@ package migration
 
 import (
 	"fmt"
-	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,22 +57,10 @@ func NewMigrators(bc api.Client, rt client.Client) []migrators.ResourceMigrator 
 		migrators.New[apiv3.IPReservation, apiv3.IPReservationList](apiv3.KindIPReservation, OrderNetworkInfra, bc, rt),
 		migrators.New[apiv3.BGPPeer, apiv3.BGPPeerList](apiv3.KindBGPPeer, OrderNetworkInfra, bc, rt),
 		migrators.New[apiv3.BGPFilter, apiv3.BGPFilterList](apiv3.KindBGPFilter, OrderNetworkInfra, bc, rt),
-		migrators.New[apiv3.GlobalNetworkPolicy, apiv3.GlobalNetworkPolicyList](
-			apiv3.KindGlobalNetworkPolicy, OrderPolicy, bc, rt,
-			migrators.WithConvert(convertGlobalNetworkPolicy),
-		),
-		migrators.New[apiv3.NetworkPolicy, apiv3.NetworkPolicyList](
-			apiv3.KindNetworkPolicy, OrderPolicy, bc, rt,
-			migrators.WithConvert(convertNetworkPolicy),
-		),
-		migrators.New[apiv3.StagedGlobalNetworkPolicy, apiv3.StagedGlobalNetworkPolicyList](
-			apiv3.KindStagedGlobalNetworkPolicy, OrderPolicy, bc, rt,
-			migrators.WithConvert(convertStagedGlobalNetworkPolicy),
-		),
-		migrators.New[apiv3.StagedNetworkPolicy, apiv3.StagedNetworkPolicyList](
-			apiv3.KindStagedNetworkPolicy, OrderPolicy, bc, rt,
-			migrators.WithConvert(convertStagedNetworkPolicy),
-		),
+		migrators.New[apiv3.GlobalNetworkPolicy, apiv3.GlobalNetworkPolicyList](apiv3.KindGlobalNetworkPolicy, OrderPolicy, bc, rt),
+		migrators.New[apiv3.NetworkPolicy, apiv3.NetworkPolicyList](apiv3.KindNetworkPolicy, OrderPolicy, bc, rt),
+		migrators.New[apiv3.StagedGlobalNetworkPolicy, apiv3.StagedGlobalNetworkPolicyList](apiv3.KindStagedGlobalNetworkPolicy, OrderPolicy, bc, rt),
+		migrators.New[apiv3.StagedNetworkPolicy, apiv3.StagedNetworkPolicyList](apiv3.KindStagedNetworkPolicy, OrderPolicy, bc, rt),
 		migrators.New[apiv3.StagedKubernetesNetworkPolicy, apiv3.StagedKubernetesNetworkPolicyList](apiv3.KindStagedKubernetesNetworkPolicy, OrderPolicy, bc, rt),
 		migrators.New[apiv3.HostEndpoint, apiv3.HostEndpointList](apiv3.KindHostEndpoint, OrderEndpointsAndSets, bc, rt),
 		migrators.New[apiv3.GlobalNetworkSet, apiv3.GlobalNetworkSetList](apiv3.KindGlobalNetworkSet, OrderEndpointsAndSets, bc, rt),
@@ -91,102 +78,6 @@ func NewMigrators(bc api.Client, rt client.Client) []migrators.ResourceMigrator 
 			migrators.WithListOptions(model.IPAMHandleListOptions{}),
 		),
 		migrators.New[apiv3.CalicoNodeStatus, apiv3.CalicoNodeStatusList](apiv3.KindCalicoNodeStatus, OrderCalicoNodeStatus, bc, rt),
-	}
-}
-
-// migratedPolicyName handles the default. prefix removal for default-tier policies.
-func migratedPolicyName(name, tier string) string {
-	if (tier == "default" || tier == "") && strings.HasPrefix(name, "default.") {
-		return strings.TrimPrefix(name, "default.")
-	}
-	return name
-}
-
-func convertGlobalNetworkPolicy(kvp *model.KVPair) (*apiv3.GlobalNetworkPolicy, error) {
-	v1, ok := kvp.Value.(*apiv3.GlobalNetworkPolicy)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for GlobalNetworkPolicy: %T", kvp.Value)
-	}
-	name := migratedPolicyName(v1.Name, v1.Spec.Tier)
-	v3 := v1.DeepCopy()
-	v3.Name = name
-	v3.ResourceVersion = ""
-	v3.CreationTimestamp = metav1.Time{}
-	v3.ManagedFields = nil
-	v3.Generation = 0
-	filterInternalAnnotations(v3)
-	return v3, nil
-}
-
-func convertNetworkPolicy(kvp *model.KVPair) (*apiv3.NetworkPolicy, error) {
-	v1, ok := kvp.Value.(*apiv3.NetworkPolicy)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for NetworkPolicy: %T", kvp.Value)
-	}
-	name := migratedPolicyName(v1.Name, v1.Spec.Tier)
-	v3 := v1.DeepCopy()
-	v3.Name = name
-	v3.ResourceVersion = ""
-	v3.CreationTimestamp = metav1.Time{}
-	v3.ManagedFields = nil
-	v3.Generation = 0
-	filterInternalAnnotations(v3)
-	return v3, nil
-}
-
-func convertStagedGlobalNetworkPolicy(kvp *model.KVPair) (*apiv3.StagedGlobalNetworkPolicy, error) {
-	v1, ok := kvp.Value.(*apiv3.StagedGlobalNetworkPolicy)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for StagedGlobalNetworkPolicy: %T", kvp.Value)
-	}
-	name := migratedPolicyName(v1.Name, v1.Spec.Tier)
-	v3 := v1.DeepCopy()
-	v3.Name = name
-	v3.ResourceVersion = ""
-	v3.CreationTimestamp = metav1.Time{}
-	v3.ManagedFields = nil
-	v3.Generation = 0
-	filterInternalAnnotations(v3)
-	return v3, nil
-}
-
-func convertStagedNetworkPolicy(kvp *model.KVPair) (*apiv3.StagedNetworkPolicy, error) {
-	v1, ok := kvp.Value.(*apiv3.StagedNetworkPolicy)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for StagedNetworkPolicy: %T", kvp.Value)
-	}
-	name := migratedPolicyName(v1.Name, v1.Spec.Tier)
-	v3 := v1.DeepCopy()
-	v3.Name = name
-	v3.ResourceVersion = ""
-	v3.CreationTimestamp = metav1.Time{}
-	v3.ManagedFields = nil
-	v3.Generation = 0
-	filterInternalAnnotations(v3)
-	return v3, nil
-}
-
-// filterInternalAnnotations removes the projectcalico.org/metadata annotation
-// used by the v1 backend.
-func filterInternalAnnotations(obj metav1.Object) {
-	annotations := obj.GetAnnotations()
-	if len(annotations) == 0 {
-		return
-	}
-	if _, ok := annotations["projectcalico.org/metadata"]; !ok {
-		return
-	}
-	cleaned := make(map[string]string, len(annotations)-1)
-	for k, v := range annotations {
-		if k == "projectcalico.org/metadata" {
-			continue
-		}
-		cleaned[k] = v
-	}
-	if len(cleaned) > 0 {
-		obj.SetAnnotations(cleaned)
-	} else {
-		obj.SetAnnotations(nil)
 	}
 }
 

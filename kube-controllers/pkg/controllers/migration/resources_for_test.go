@@ -67,10 +67,10 @@ func mainlineV1Resources() map[string][]*model.KVPair {
 		},
 		apiv3.KindGlobalNetworkPolicy: {
 			{
-				Key: model.ResourceKey{Kind: apiv3.KindGlobalNetworkPolicy, Name: "default.deny-all"},
+				Key: model.ResourceKey{Kind: apiv3.KindGlobalNetworkPolicy, Name: "deny-all"},
 				Value: &apiv3.GlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:        "default.deny-all",
+						Name:        "deny-all",
 						UID:         v1GNPDenyAllUID,
 						Annotations: v1InternalAnnotations,
 						OwnerReferences: []metav1.OwnerReference{
