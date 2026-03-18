@@ -361,7 +361,7 @@ class TestCalicoctlCommands(TestBase):
         Test that creating a single invalid resource returns an appropriate error
         """
         rc = calicoctl("create", data=bgppeer_invalid, format="json")
-        rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
+        rc.assert_error(text="PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
         rc.assert_output_contains("failed to create 'BGPPeer' resource")
 
@@ -370,7 +370,7 @@ class TestCalicoctlCommands(TestBase):
         Test that creating multiple invalid resources returns an appropriate error
         """
         rc = calicoctl("create", data=bgppeer_multiple_invalid, format="json")
-        rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
+        rc.assert_error(text="PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
         rc.assert_output_contains("failed to create any 'BGPPeer' resources")
 
@@ -379,7 +379,7 @@ class TestCalicoctlCommands(TestBase):
         Test that applying a single invalid resource returns an appropriate error
         """
         rc = calicoctl("apply", data=bgppeer_invalid)
-        rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
+        rc.assert_error(text="PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
         rc.assert_output_contains("failed to apply 'BGPPeer' resource")
 
@@ -388,7 +388,7 @@ class TestCalicoctlCommands(TestBase):
         Test that applying multiple invalid resources returns an appropriate error
         """
         rc = calicoctl("apply", data=bgppeer_multiple_invalid)
-        rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
+        rc.assert_error(text="PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
         rc.assert_output_contains("failed to apply any 'BGPPeer' resources")
 
@@ -2405,7 +2405,7 @@ class InvalidData(TestBase):
                                 'node': 'node1',
                                 'peerIP': '192.168.0.256',
                                 }
-                   }, "error with field PeerIP = '192.168.0.256'"),
+                   }, "PeerIP = '192.168.0.256'"),
                    ("bgpPeer-apiversion", {
                        'apiVersion': 'v7',
                        'kind': 'BGPPeer',
@@ -2423,7 +2423,7 @@ class InvalidData(TestBase):
                                 'node': 'node2',
                                 'peerIP': 'fd5f::6::ee',
                                 }
-                   }, "error with field PeerIP = 'fd5f::6::ee'"),
+                   }, "PeerIP = 'fd5f::6::ee'"),
                    ("bgpPeer-invalidnodename", {
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',
@@ -2432,7 +2432,7 @@ class InvalidData(TestBase):
                                 'node': 'node 2',
                                 'peerIP': 'fd5f::6:ee',
                                 }
-                   }, "error with field Node = 'node 2'"),
+                   }, "Node = 'node 2'"),
                    # See issue https://github.com/projectcalico/libcalico-go/issues/248
                    ("bgpPeer-unrecognisedfield", {
                        'apiVersion': API_VERSION,
@@ -2475,7 +2475,7 @@ class InvalidData(TestBase):
                                              'prof2'],
                                 'node': 'host1',
                                 }
-                   }, "error with field InterfaceName = 'wibblywobblyeth0'"),
+                   }, "InterfaceName = 'wibblywobblyeth0'"),
                    # https://github.com/projectcalico/libcalico-go/pull/236/files
                    ("policy-invalidHighPortinList", {
                        'apiVersion': API_VERSION,
@@ -2531,7 +2531,7 @@ class InvalidData(TestBase):
                                              'source': {}}],
                                 'order': 100000,
                                 'selector': ""}
-                   }, "error with field Port = '0' (port range invalid, port number must be between 1 and 65535)"),
+                   }, "Port = '0' (port range invalid, port number must be between 1 and 65535)"),
                    ("policy-invalidLowPortinList", {
                        'apiVersion': API_VERSION,
                        'kind': 'NetworkPolicy',
@@ -2549,7 +2549,7 @@ class InvalidData(TestBase):
                                              'source': {}}],
                                 'order': 100000,
                                 'selector': ""}
-                   }, "error with field Port = '0' (port range invalid, port number must be between 1 and 65535)"),
+                   }, "Port = '0' (port range invalid, port number must be between 1 and 65535)"),
                    ("policy-invalidReversedRange", {
                        'apiVersion': API_VERSION,
                        'kind': 'NetworkPolicy',
@@ -2583,7 +2583,7 @@ class InvalidData(TestBase):
                                              'source': {}}],
                                 'order': 100000,
                                 'selector': ""}
-                   }, "error with field Action = 'jumpupanddown'"),
+                   }, "Action = 'jumpupanddown'"),
                    ("policy-NetworkPolicyNameRejected", {
                        'apiVersion': API_VERSION,
                        'kind': 'NetworkPolicy',
@@ -2624,7 +2624,7 @@ class InvalidData(TestBase):
                        'spec': {
                            'ipipMode': 'Always',
                            'cidr': "10.0.250.0/32"}  # no mask
-                   }, "error with field IPPool.Spec.CIDR = '10.0.250.0/32' "
+                   }, "IPPool.Spec.CIDR = '10.0.250.0/32' "
                       "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet4", {
                        'apiVersion': API_VERSION,
@@ -2653,7 +2653,7 @@ class InvalidData(TestBase):
                            'cidr': "::/128",
                        }
                        # nothing
-                   }, "error with field IPPool.Spec.CIDR = '::/128' "
+                   }, "IPPool.Spec.CIDR = '::/128' "
                       "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet7", {
                        'apiVersion': API_VERSION,
@@ -2661,7 +2661,7 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'invalid-net-7'},
                        'spec': {
                            'cidr': "192.168.0.0/27"}  # invalid mask
-                   }, "error with field IPPool.Spec.CIDR = '192.168.0.0/27' "
+                   }, "IPPool.Spec.CIDR = '192.168.0.0/27' "
                       "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet8", {
                        'apiVersion': API_VERSION,
@@ -2705,7 +2705,7 @@ class InvalidData(TestBase):
                                         'destination': {},
                                         'source': {}}],
                        }
-                   }, "error with field Type = '256'"),
+                   }, "Type = '256'"),
                    ("profile-ICMPcode", {
                        'apiVersion': API_VERSION,
                        'kind': 'Profile',
@@ -2724,7 +2724,7 @@ class InvalidData(TestBase):
                                         'destination': {},
                                         'source': {}}],
                        }
-                   }, "error with field Code = '256'"),
+                   }, "Code = '256'"),
                ]
 
     compound_test_data = [("compound-config", [{
@@ -2757,7 +2757,7 @@ class InvalidData(TestBase):
                              'destination': {},
                              'source': {}}],
             },
-        }],{"profile2": "error with field Type = '256'"})]
+        }],{"profile2": "Type = '256'"})]
 
     def check_no_data_in_store(self, testdata):
         out = calicoctl("get %s --output=yaml" % testdata['kind'])
