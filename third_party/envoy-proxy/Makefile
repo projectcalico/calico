@@ -7,9 +7,9 @@ BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-# TODO: Update with actual envoybinary v1.37.0 image tag once built.
+# TODO: Update with actual envoybinary v1.37.1 image tag once built.
 # See https://gateway.envoyproxy.io/news/releases/matrix/ for version compatibility.
-ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.37.0-TODO
+ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.37.1-TODO
 
 EXCLUDEARCH ?= ppc64le s390x
 
