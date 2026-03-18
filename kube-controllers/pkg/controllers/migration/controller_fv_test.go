@@ -380,3 +380,51 @@ func TestLifecycle_Rollback(t *testing.T) {
 		g.Expect(tier.Annotations).NotTo(HaveKey(migratedByAnnotation), "tier %s should have been cleaned up", tier.Name)
 	}
 }
+
+// TestLifecycle_DeletionBlockedThenCompleted verifies that deleting the CR
+// while Converged blocks (the migration can't be rolled back at that point),
+// and that once the migration reaches Complete, the finalizer runs cleanup
+// of v1 CRDs and removes itself so the CR is garbage collected.
+func TestLifecycle_DeletionBlockedThenCompleted(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	h := newFVHelper(t, g, ctx)
+
+	bc := &mockBackendClient{
+		resources:   mainlineV1Resources(),
+		clusterInfo: mainlineV1ClusterInfo(),
+	}
+
+	gate := newPhaseGate(DatastoreMigrationPhaseConverged)
+	startController(t, ctx, bc, gate)
+	createMigrationCR(t, ctx)
+
+	// Wait for Converged.
+	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
+	h.expectPhase(DatastoreMigrationPhaseConverged)
+
+	// Delete the CR while Converged. The finalizer prevents garbage
+	// collection, and the controller should report that rollback is blocked.
+	dm := &DatastoreMigration{}
+	g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
+	g.Expect(fvRTClient.Delete(ctx, dm)).To(Succeed())
+
+	gate.release(DatastoreMigrationPhaseConverged)
+
+	g.Eventually(func(g Gomega) {
+		dm := &DatastoreMigration{}
+		g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
+		g.Expect(dm.Status.Message).To(ContainSubstring("cannot be rolled back"))
+		g.Expect(dm.DeletionTimestamp).NotTo(BeNil())
+	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
+
+	// Now create the calico-node DaemonSet to let the migration reach
+	// Complete. Once Complete, the deletion finalizer should clean up v1
+	// CRDs and remove itself.
+	h.createReadyCalicoNodeDS()
+
+	g.Eventually(func(g Gomega) {
+		err := fvRTClient.Get(ctx, dmKey, &DatastoreMigration{})
+		g.Expect(kerrors.IsNotFound(err)).To(BeTrue(), "CR should be deleted after completed cleanup, got: %v", err)
+	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
+}

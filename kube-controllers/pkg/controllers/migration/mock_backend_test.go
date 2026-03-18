@@ -33,6 +33,15 @@ type mockBackendClient struct {
 	bapi.Client
 	resources   map[string][]*model.KVPair
 	clusterInfo *model.KVPair
+
+	// listErrors maps a Kind to an error that List should return for that
+	// kind. Used to simulate backend failures during migration. The error
+	// is only returned after the kind has been listed successfully
+	// listErrorAfter times (to allow RBAC pre-checks and conflict detection
+	// to pass first).
+	listErrors     map[string]error
+	listErrorAfter int
+	listCounts     map[string]int
 }
 
 func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ string) (*model.KVPairList, error) {
@@ -43,6 +52,17 @@ func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ 
 		return &model.KVPairList{}, nil
 	default:
 		rlo := list.(model.ResourceListOptions)
+		if m.listErrors != nil {
+			if err, ok := m.listErrors[rlo.Kind]; ok {
+				if m.listCounts == nil {
+					m.listCounts = make(map[string]int)
+				}
+				m.listCounts[rlo.Kind]++
+				if m.listCounts[rlo.Kind] > m.listErrorAfter {
+					return nil, err
+				}
+			}
+		}
 		return &model.KVPairList{KVPairs: m.resources[rlo.Kind]}, nil
 	}
 }

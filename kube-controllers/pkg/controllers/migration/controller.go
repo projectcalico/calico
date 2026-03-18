@@ -615,11 +615,14 @@ func (m *migrationController) handleDeletion(logCtx *logrus.Entry, dm *Datastore
 		return m.handleCompletedCleanup(logCtx, dm)
 	case DatastoreMigrationPhaseConverged:
 		// Once converged, the operator may have started rolling out pods with
-		// v3 mode. Aborting is unsafe — the migration must complete from this
-		// point. The finalizer blocks deletion until the phase reaches Complete.
-		logCtx.Warn("Cannot abort from Converged phase — migration must complete. Waiting for Complete phase.")
-		dm.Status.Message = "Deletion blocked: migration is Converged and cannot be rolled back. Wait for migration to complete."
-		return m.updateStatus(dm)
+		// v3 mode. Aborting is unsafe — continue driving toward Complete so
+		// the finalizer can run the completed cleanup path.
+		logCtx.Warn("Cannot abort from Converged phase — continuing toward Complete")
+		dm.Status.Message = "Deletion pending: migration is Converged and cannot be rolled back. Waiting for completion."
+		if err := m.updateStatus(dm); err != nil {
+			return err
+		}
+		return m.handleConverged(logCtx, dm)
 	default:
 		return m.handleAbort(logCtx, dm)
 	}
