@@ -3,17 +3,17 @@
 exports[`<NoResults/> it renders 1`] = `
 <DocumentFragment>
   <div
-    class="css-19o7uyf"
+    class="css-15v84s1"
   >
     <div
-      class="css-12h06wr"
+      class="css-9lo4gq"
       colspan="2"
     >
       Some Cell Value
     </div>
   </div>
   <table
-    class="chakra-table css-1e8m6zn"
+    class="chakra-table css-g4mtfn"
   />
   <span
     hidden=""
