@@ -109,6 +109,13 @@ check-copyright:
 	./check-copyrights.sh
 
 ###############################################################################
+# Code generation
+###############################################################################
+.PHONY: gen-files
+gen-files:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'controller-gen crd paths=./pkg/controllers/migration/... output:crd:dir=pkg/controllers/migration/crd/'
+
+###############################################################################
 # Tests
 ###############################################################################
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
