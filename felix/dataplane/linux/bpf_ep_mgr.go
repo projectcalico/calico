@@ -321,13 +321,13 @@ type bpfEndpointManager struct {
 	legacyCleanUp           bool
 	hostIfaceTrees          bpfIfaceTrees
 
-	jumpMapAllocs          map[hook.Hook]*jumpMapAlloc
-	netkitJumpMapAllocs    map[hook.Hook]*jumpMapAlloc
-	policyTcAllowFDs       [2]bpf.ProgFD
-	policyTcDenyFDs        [2]bpf.ProgFD
-	policyNetkitAllowFDs   [2]bpf.ProgFD
-	policyNetkitDenyFDs    [2]bpf.ProgFD
-	netkitPoliciesLoaded   sync.Once
+	jumpMapAllocs        map[hook.Hook]*jumpMapAlloc
+	netkitJumpMapAllocs  map[hook.Hook]*jumpMapAlloc
+	policyTcAllowFDs     [2]bpf.ProgFD
+	policyTcDenyFDs      [2]bpf.ProgFD
+	policyNetkitAllowFDs [2]bpf.ProgFD
+	policyNetkitDenyFDs  [2]bpf.ProgFD
+	netkitPoliciesLoaded sync.Once
 
 	ruleRenderer bpfAllowChainRenderer
 
