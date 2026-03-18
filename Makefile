@@ -121,7 +121,8 @@ gen-semaphore-yaml:
 	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
 	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
 
-GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --perl '^./\K[^/]+' | sort -u)
+GO_DIRS_EXCLUDE=./lib/ ./pkg/ ./istio/ ./third_party/
+GO_DIRS=$(shell find -name '*.go' | grep -v $(addprefix -e ,$(GO_DIRS_EXCLUDE)) | grep -o --perl '^./\K[^/]+' | sort -u)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
 gen-deps-files:
