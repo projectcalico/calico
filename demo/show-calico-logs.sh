@@ -15,48 +15,31 @@ header() { echo -e "\n${CYAN}━━━ $1 ━━━${NC}\n"; }
 DEST_NODE=${1:-$(kubectl get vmi vm1 -o jsonpath='{.status.nodeName}')}
 echo -e "${GREEN}vm1 is on node: ${DEST_NODE}${NC}"
 
-# --- Felix logs on destination node ---
-header "Felix logs (destination node: $DEST_NODE)"
-echo -e "${YELLOW}These show Felix receiving the new WorkloadEndpoint and programming iptables/routes:${NC}\n"
-
 FELIX_POD=$(kubectl get pods -n calico-system -l k8s-app=calico-node \
   --field-selector spec.nodeName=$DEST_NODE -o jsonpath='{.items[0].metadata.name}')
 
-kubectl logs -n calico-system "$FELIX_POD" -c calico-node --tail=200 | \
-  grep -E "WorkloadEndpoint.*virt-launcher-vm1|endpoint_mgr.*virt-launcher-vm1|status_combiner.*virt-launcher-vm1" | \
-  tail -15
+# --- Felix logs: live migration FSM and route programming ---
+header "Felix live migration logs (destination node: $DEST_NODE)"
+echo -e "${YELLOW}Shows GARP detection, FSM transitions, IPAM swap, and route programming:${NC}\n"
 
-# --- CNI logs on destination node ---
+kubectl logs -n calico-system "$FELIX_POD" -c calico-node --tail=1000 | \
+  grep -E "virt-launcher-vm1" | \
+  grep -E "GARP|RARP|Live migration state|Successfully swapped" | \
+  sed 's/types.WorkloadEndpointID{[^}]*}/vm1/g' | \
+  sed 's/migrationUID="[^"]*"//g' | \
+  sed 's/  */ /g' | \
+  tail -10
+
+# --- CNI IPAM logs: migration detection and IP reuse ---
 header "CNI IPAM logs (destination node: $DEST_NODE)"
-echo -e "${YELLOW}These show the CNI plugin detecting the migration target and reusing the VM's IP:${NC}\n"
+echo -e "${YELLOW}Shows migration target detection, VM-based handle ID, and IP reuse:${NC}\n"
 
 kubectl exec -n calico-system "$FELIX_POD" -c calico-node -- \
-  grep -E "virt-launcher-vm1" /var/log/calico/cni/cni.log 2>/dev/null | \
-  grep -iE "migrat|handle|owner|reusing|assigned|virt-launcher" | \
-  tail -15
+  grep "virt-launcher-vm1" /var/log/calico/cni/cni.log 2>/dev/null | \
+  grep -E "Detected KubeVirt|using IPs|Skipping host-side route" | \
+  sed 's/ContainerID="[^"]*"//' | \
+  sed 's/Workload="[^"]*"//' | \
+  sed 's/WorkloadEndpoint="[^"]*"//' | \
+  sed 's/  */ /g' | \
+  tail -6
 
-# --- Source node logs (if there's a different node) ---
-# Find all nodes that have had vm1 pods
-ALL_NODES=$(kubectl get pods -A -l vmi.kubevirt.io/id=vm1 -o jsonpath='{.items[*].spec.nodeName}' 2>/dev/null)
-for NODE in $ALL_NODES; do
-    if [ "$NODE" != "$DEST_NODE" ]; then
-        header "CNI IPAM logs (source node: $NODE)"
-        echo -e "${YELLOW}These show CNI DEL handling for the source pod:${NC}\n"
-
-        SRC_FELIX=$(kubectl get pods -n calico-system -l k8s-app=calico-node \
-          --field-selector spec.nodeName=$NODE -o jsonpath='{.items[0].metadata.name}')
-
-        kubectl exec -n calico-system "$SRC_FELIX" -c calico-node -- \
-          grep -E "virt-launcher-vm1" /var/log/calico/cni/cni.log 2>/dev/null | \
-          grep -iE "release|del|clear|owner|handle" | \
-          tail -10
-    fi
-done
-
-echo
-echo -e "${GREEN}Key things to notice:${NC}"
-echo "  1. CNI detected 'isMigrationTarget=true' on the new pod"
-echo "  2. The same HandleID (k8s-pod-network.vmi.default.vm1) was reused"
-echo "  3. The SAME IP was assigned to the target pod (not a new one)"
-echo "  4. Felix programmed the new WorkloadEndpoint with iptables chains and routes"
-echo "  5. The source pod's owner attributes were cleared without releasing the IP"

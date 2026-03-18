@@ -74,14 +74,6 @@ if [ -n \"\$VMIM_OUT\" ]; then
   echo \"\$VMIM_OUT\"
 else
   echo \"No migration running\"
-fi &&
-echo &&
-echo \"=== Calico WorkloadEndpoint (vm1 IP) ===\" &&
-WEP_OUT=\$(calicoctl get workloadendpoint --allow-version-mismatch -o wide 2>/dev/null | grep \"$VM1_IP\") &&
-if [ -n \"\$WEP_OUT\" ]; then
-  echo \"\$WEP_OUT\"
-else
-  echo \"No WorkloadEndpoint found for IP $VM1_IP\"
 fi
 '" Enter
 

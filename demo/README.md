@@ -173,6 +173,20 @@ vm2 doesn't notice that vm1 moved to a different node.
 | `calicoctl` | Calico CLI — inspect IPAM state | `/usr/local/bin/calicoctl` |
 | `kubectl` | Kubernetes CLI — manage resources | Standard |
 
+### Installing calicoctl
+
+The KubeVirt live migration feature added new IPAM commands to calicoctl
+(e.g., showing Active/Alternate Owner attributes). 
+
+These changes are not yet in a released version, so we need to build calicoctl from latest calico master and install it locally:
+```bash
+cd /path/to/calico   # path to the calico repo (e.g., ~/GolandProjects/calico)
+git checkout master && git pull origin master
+make clean
+go build -o bin/calicoctl ./calicoctl/calicoctl/
+sudo mv bin/calicoctl /usr/local/bin/calicoctl
+```
+
 ### Installing virtctl
 
 Install the version matching the cluster's KubeVirt:
@@ -293,15 +307,6 @@ calicoctl ipam show --allow-version-mismatch --ip=$VM1_IP
 This is what allows the IP to persist when the pod changes during live migration.
 The Active Owner shows which pod currently owns this IP."
 
-```bash
-# 4. Show the Calico WorkloadEndpoint for vm1 — this IS the network configuration
-calicoctl get workloadendpoint --allow-version-mismatch -o wide | grep vm1
-```
-
-**Narrate**: "This is vm1's WorkloadEndpoint — Calico's representation of the VM's
-network config. It shows the IP, interface, profiles, and the node it's on. We'll
-compare this after migration."
-
 ---
 
 ### Act 2: Start Connection Persistence Test (~2 minutes)
@@ -314,6 +319,7 @@ that intra-cluster connectivity is seamlessly preserved during migration.
 **In Pane 0 (top-left)**, SSH into vm1 and start the server:
 
 ```bash
+export VM_SSH_KEY=$BZ_ROOT_DIR/.local/crc/kubeadm/1.6/master_ssh_key
 virtctl ssh ubuntu@vmi/vm1 -i $VM_SSH_KEY -t "-o StrictHostKeyChecking=no" -t "-o UserKnownHostsFile=/dev/null"
 ```
 
@@ -356,14 +362,17 @@ every second. We'll connect from vm2 — another VM in the cluster on a differen
 
 #### Step 2b: Start the client on vm2
 
-**In Pane 2 (bottom)** — this pane auto-connects to vm2 via `virtctl ssh`.
-Once inside vm2, start the TCP client:
-
+**In Pane 0**, note the vm1 IP:
 ```bash
-nc 192.168.196.67 9999
+echo $VM1_IP
 ```
 
-(Replace with the actual vm1 IP shown by `echo $VM1_IP` in Pane 0.)
+**In Pane 2 (bottom)** — this pane auto-connects to vm2 via `virtctl ssh`.
+Once inside vm2, start the TCP client using the IP from above:
+
+```bash
+nc <VM1_IP> 9999
+```
 
 You'll see a streaming counter:
 ```
@@ -411,53 +420,17 @@ kubectl get vmi vm1 -o jsonpath='vm1 is on node: {.status.nodeName}{"\n"}'
 virtctl migrate vm1
 ```
 
-```bash
-# 4. Watch migration progress
-kubectl get vmim -w
-```
+Watch **Pane 1 (top-right)** for real-time progress — you'll see a second
+`virt-launcher-vm1` pod appear on a different node, and the active migration status.
+
+Also keep an eye on **Pane 2 (bottom)** — the TCP stream should continue without
+any interruption throughout the entire migration.
 
 **Narrate while watching**: "KubeVirt is now creating a new virt-launcher pod on a
-different node. Watch the top-right pane — you'll see a second virt-launcher-vm1 pod
-appear. Both pods are running simultaneously while the VM's memory is being copied."
-
-The migration status will progress through phases:
-- `Scheduling` -> `Scheduled` -> `PreparingTarget` -> `TargetReady` -> `Running` -> `Succeeded`
-
-Press **Ctrl+C** once you see `Succeeded`.
-
-**What to point out during migration**:
-- **Pane 1 (watch)**: A new `virt-launcher-vm1-XXXXX` pod appears on a different node
-- **Pane 2 (TCP stream)**: The counter continues without any interruption — seamless!
-- **Pane 0**: Migration status progressing
-
-#### Step 3b: Show IPAM dual-owner state during migration (optional, timing-sensitive)
-
-If the migration is still in `Running` phase (before `Succeeded`), quickly check the
-IPAM state to show both owners:
-
-```bash
-calicoctl ipam show --allow-version-mismatch --ip=$VM1_IP
-```
-
-During migration you'll see **both Active Owner and Alternate Owner**:
-```
-IP <VM1_IP> is in use
-Handle ID: k8s-pod-network.vmi.default.vm1
-Active Owner Attributes:
-  node: <source-node>                      <-- source pod still owns the IP
-  pod: virt-launcher-vm1-<old-hash>
-  vmi-name: vm1
-Alternate Owner Attributes:
-  node: <destination-node>                 <-- target pod is tracked as alternate
-  pod: virt-launcher-vm1-<new-hash>
-  vmi-name: vm1
-```
-
-**Narrate**: "Look — Calico is tracking **two owners** for the same IP simultaneously.
-The Active Owner is the source pod on the original node. The Alternate Owner is the
-migration target pod on the new node. This is how Calico allows both pods to share
-the same IP during migration without conflicts. The source pod keeps serving traffic
-while the VM's memory is being copied to the target."
+different node. Both pods are running simultaneously while the VM's memory is being
+copied. The migration will progress through phases: Scheduling, TargetReady, Running,
+and finally Succeeded. And look at the bottom pane — the TCP stream keeps going,
+no drops, no pauses. The connection is alive throughout the migration."
 
 **Narrate**: "Look at the bottom pane — the TCP stream continued without any interruption
 during the entire migration. No drops, no reconnections. The connection from vm2 to vm1
@@ -466,54 +439,92 @@ migration powered by Calico's GARP detection and elevated-priority BGP route adv
 
 ---
 
-### Act 4: Verify IP Preservation and IPAM Ownership Swap (~3 minutes)
+### Act 4 (OPTIONAL): Show IPAM Ownership Swap (~3 minutes)
 
-**Goal**: Prove the IP was preserved, show that the IPAM Active/Alternate owners
-were swapped after migration, and explain how this mechanism keeps connectivity alive.
+**Goal**: Show IPAM state before and after a second migration to demonstrate how
+Active/Alternate owner attributes are swapped, and explain how this mechanism
+keeps connectivity alive.
 
 **In Pane 0 (top-left)**:
 
 ```bash
-# 1. Show VMs — vm1 is now on a different node but SAME IP
-kubectl get vmi -o wide
+# 1. Clean up completed pods from previous migration
+kubectl delete pod -l kubevirt.io=virt-launcher --field-selector=status.phase=Succeeded 2>/dev/null
 ```
 
-**Narrate**: "vm1 has moved to a different node, but look — the IP address is still
-the same. It didn't change."
-
 ```bash
-# 2. Show pods — new pod name, new node, same IP
-kubectl get pods -o wide | grep virt-launcher
-```
-
-**Narrate**: "The virt-launcher pod has a new name and is running on a new node,
-but the IP is identical."
-
-```bash
-# 3. Show IPAM state — the key proof of ownership swap
+# 2. Show current IPAM state — note which node is Active Owner
 calicoctl ipam show --allow-version-mismatch --ip=$VM1_IP
 ```
 
-After migration, the owners have been **swapped**:
+You'll see:
+```
+IP <VM1_IP> is in use
+Handle ID: k8s-pod-network.vmi.default.vm1
+Active Owner Attributes:
+  node: <current-node>
+  pod: virt-launcher-vm1-<hash>
+  vmi-name: vm1
+```
+
+**Narrate**: "This is the IPAM state after our first migration. The Active Owner
+points to the current pod on the current node. There is no Alternate Owner.
+Let's migrate again and see how the ownership changes."
+
+```bash
+# 3. Migrate again
+virtctl migrate vm1
+```
+
+Wait for migration to complete (watch Pane 1 and Pane 2 — the TCP stream should
+again continue without interruption).
+
+```bash
+# 4. Show IPAM state — the owners have been swapped
+calicoctl ipam show --allow-version-mismatch --ip=$VM1_IP
+```
+
+Immediately after migration, the owners have been **swapped**:
 ```
 IP <VM1_IP> is in use
 Handle ID: k8s-pod-network.vmi.default.vm1       <-- same stable handle
 Active Owner Attributes:
-  node: <destination-node>                        <-- NEW pod is now Active Owner
+  node: <new-node>                                <-- NEW pod is now Active Owner
   pod: virt-launcher-vm1-<new-hash>
   vmi-name: vm1
   vmim-uid: <migration-uid>
 Alternate Owner Attributes:
-  node: <source-node>                             <-- OLD pod demoted to Alternate
+  node: <previous-node>                           <-- OLD pod demoted to Alternate
   pod: virt-launcher-vm1-<old-hash>
   vmi-name: vm1
 ```
 
-**Narrate**: "This is the critical piece. Compare this with what we saw during migration:
-the Active and Alternate owners have been **swapped**. The new pod on the destination
-node is now the Active Owner, and the old source pod has been demoted to Alternate.
+**Narrate**: "Compare the before and after. The Active Owner has changed — it now
+points to the new pod on the new node. The previous pod has been demoted to
+Alternate Owner."
 
-Here's why this matters for connectivity:
+```bash
+# 5. Wait ~10 seconds for source pod cleanup, then check again
+sleep 10
+calicoctl ipam show --allow-version-mismatch --ip=$VM1_IP
+```
+
+After the source pod is deleted, the Alternate Owner is cleared:
+```
+IP <VM1_IP> is in use
+Handle ID: k8s-pod-network.vmi.default.vm1
+Active Owner Attributes:
+  node: <new-node>
+  pod: virt-launcher-vm1-<new-hash>
+  vmi-name: vm1
+Alternate Owner Attributes:
+  <empty>                                         <-- old pod cleaned up
+```
+
+**Narrate**: "Now the Alternate Owner is empty — the old source pod has been fully
+cleaned up. Only the new Active Owner remains.
+
+Here's how this mechanism keeps connectivity alive:
 - **Before migration**: The Active Owner points to the source node. Calico routes
   traffic to that node — this is where the VM is running.
 - **During migration**: The target pod is added as Alternate Owner. Both pods share
@@ -528,21 +539,13 @@ Here's why this matters for connectivity:
 The swap is atomic — there's never a moment where the IP has no owner. That's why
 the TCP connection in the bottom pane survived without a single dropped packet."
 
-```bash
-# 4. Show the WorkloadEndpoint AFTER migration — compare with Act 1
-calicoctl get workloadendpoint --allow-version-mismatch -o wide | grep vm1
-```
-
-**Narrate**: "The WorkloadEndpoint has been recreated on the new node. The IP is the same,
-the profiles are the same — but the node and interface reflect the new location."
-
 **Narrate**: "And look at the bottom pane — the TCP stream from vm2 is still going
-strong. The connection was never broken. vm2 didn't notice anything changed. That's
-seamless live migration."
+strong through two migrations. The connection was never broken. That's seamless
+live migration."
 
 ---
 
-### Act 5: Show Calico Logs (~2 minutes)
+### Act 5 (OPTIONAL): Show Calico Logs (~2 minutes)
 
 **Goal**: Show what Calico did behind the scenes — both the CNI IPAM allocation
 and Felix's dataplane programming.
@@ -552,50 +555,33 @@ There are two relevant log sources:
    and migration target detection
 2. **Felix logs** (calico-node container logs) — show the workload endpoint programming
 
-Use the helper script:
 ```bash
 ./demo/show-calico-logs.sh
 ```
 
-Or run the commands manually:
-
-```bash
-# Find Felix pod on destination node
-DEST_NODE=$(kubectl get vmi vm1 -o jsonpath='{.status.nodeName}')
-FELIX_POD=$(kubectl get pods -n calico-system -l k8s-app=calico-node \
-  --field-selector spec.nodeName=$DEST_NODE -o jsonpath='{.items[0].metadata.name}')
-```
-
-**CNI IPAM logs** (the most interesting — shows migration detection and IP reuse):
-```bash
-kubectl exec -n calico-system $FELIX_POD -c calico-node -- \
-  grep "virt-launcher-vm1" /var/log/calico/cni/cni.log | tail -15
-```
+This script auto-detects vm1's current node, then shows two sets of logs from
+that node's calico-node pod: Felix logs (live migration FSM transitions, GARP
+detection, IPAM ownership swap) and CNI IPAM logs (migration target detection,
+IP reuse, route skipping). Long fields like container IDs are trimmed for
+readability.
 
 Key log lines to look for:
+
+**Felix FSM** — shows the full live migration state machine:
+```
+Base → Target                          (migration started)
+Detected GARP/RARP packet              (VM became active on destination)
+Target → Live (GARPDetected)           (elevated-priority route programmed)
+Successfully swapped IPAM owner attrs  (ownership transferred)
+Live → TimeWait                        (migration complete)
+TimeWait → Base                        (30s convergence timer expired)
+```
+
+**CNI IPAM** — shows migration detection and IP reuse:
 ```
 Detected KubeVirt virt-launcher pod, using VM-based handle ID ... isMigrationTarget=true
-```
-This shows the CNI plugin detected the new pod is a **migration target** (not a fresh VM).
-
-```
-Found existing IPs for VM handle, reusing them ... HandleID="k8s-pod-network.vmi.default.vm1"
-```
-This shows the CNI plugin **reused the same IP** from the existing VM handle instead of
-allocating a new one.
-
-**Felix logs** (shows live migration FSM and route programming):
-```bash
-kubectl logs -n calico-system $FELIX_POD -c calico-node --tail=200 | \
-  grep -E "virt-launcher-vm1|live_migration|Live migration"
-```
-
-Key log lines:
-```
-Live migration state transition from=Target ... input=GARPDetected ... to=Live
-Successfully swapped IPAM owner attributes ... vmiName="vm1"
-Live migration state transition from=Live ... input=NoRole ... to=TimeWait
-Live migration state transition from=TimeWait ... input=TimerPop ... to=Base
+Calico CNI using IPs: [<VM1_IP>/32]
+Skipping host-side route setup (skipHostSideRoutes=true)
 ```
 
 **Narrate**: "Looking at the Calico logs on the destination node, we can see exactly
@@ -606,13 +592,6 @@ The whole handover happened in milliseconds — that's why the TCP connection su
 
 ---
 
-## Cleanup After Recording
-
-```bash
-kubectl delete vmim --all
-```
-
----
 
 ## Files in This Directory
 
@@ -623,4 +602,4 @@ kubectl delete vmim --all
 | `tmux-layout.sh` | Launches 3-pane tmux layout, sets `$VM1_IP` in all panes |
 
 
-| `show-calico-logs.sh` | Shows CNI IPAM + Felix logs from the migration |
+| `show-calico-logs.sh` | Auto-detects vm1's node, shows Felix FSM transitions (GARP detection, IPAM swap) and CNI IPAM logs (migration target detection, IP reuse) with trimmed output |
