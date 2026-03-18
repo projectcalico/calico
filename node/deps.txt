@@ -221,11 +221,11 @@ local:felix/bpf/legacy
 local:felix/bpf/libbpf
 local:felix/bpf/maps
 local:felix/bpf/nat
-local:felix/bpf/perf
 local:felix/bpf/polprog
 local:felix/bpf/profiling
 local:felix/bpf/proxy
 local:felix/bpf/qos
+local:felix/bpf/ringbuf
 local:felix/bpf/routes
 local:felix/bpf/state
 local:felix/bpf/tc

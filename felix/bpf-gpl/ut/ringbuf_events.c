@@ -1,17 +1,17 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include "ut.h"
 #include "bpf.h"
-#include "perf.h"
+#include "ringbuf.h"
 #include "skb.h"
 
 #include <linux/ip.h>
 #include <linux/udp.h>
 
 struct tuple {
-	struct perf_event_header hdr;
+	struct event_header hdr;
 	__u32 ip_src;
 	__u32 ip_dst;
 	__u16 port_src;
@@ -26,7 +26,7 @@ struct {
 	__type(value, struct tuple);
 	__uint(max_entries, 1);
 	__uint(map_flags, 0);
-}cali_perf_scratch SEC(".maps");
+}cali_event_scratch SEC(".maps");
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
@@ -44,7 +44,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 	struct iphdr *ip = ctx->ip_header;
 
 	int scratch_zero = 0;
-	struct tuple *tp = bpf_map_lookup_elem(&cali_perf_scratch, &scratch_zero);
+	struct tuple *tp = bpf_map_lookup_elem(&cali_event_scratch, &scratch_zero);
 
 	if (!tp) {
 		return -1;
@@ -72,14 +72,8 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		break;
 	}
 
-	if (ip->protocol == IPPROTO_ICMP) {
-		tp->hdr.type++;
-		tp->hdr.len += skb->len;
-		err = perf_commit_event_ctx(skb, skb->len, tp, sizeof(struct tuple));
-	} else {
-		err = perf_commit_event(skb, tp, sizeof(struct tuple));
-	}
-	CALI_DEBUG("perf_commit_event returns %d\n", err);
+	err = ringbuf_submit_event(tp, sizeof(struct tuple));
+	CALI_DEBUG("ringbuf_submit_event returns %d\n", err);
 
 	return err == 0 ? TC_ACT_UNSPEC : TC_ACT_SHOT;
 }
