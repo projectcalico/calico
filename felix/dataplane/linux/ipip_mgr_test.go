@@ -390,7 +390,7 @@ var _ = Describe("IPIPManager", func() {
 		err := ipipMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// Expect no route.
+		// Expect one exact route.
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName][0]).To(Equal(
 			routetable.Target{
