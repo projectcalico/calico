@@ -210,7 +210,7 @@ var _ = Describe("L3RouteResolver", func() {
 			})
 			drainEvents()
 
-			// Add the remote host IP and VXLAN tunnel address via OnHostIPUpdate +
+			// Add the remote host IP and VXLAN tunnel address via OnNodeUpdate +
 			// a direct tunnel address update. The tunnel IP 10.0.1.0 falls within
 			// the block 10.0.1.0/29.
 			l3RR.onNodeUpdate("remote-host", &l3rrNodeInfo{
