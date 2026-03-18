@@ -501,11 +501,12 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
 	}
 
-	globalData.HostTunnelIPv4 = globalData.HostIPv4
-	globalData.HostTunnelIPv6 = globalData.HostIPv6
-
-	copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
-	copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
+	if ap.HostTunnelIPv4 != nil {
+		copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
+	}
+	if ap.HostTunnelIPv6 != nil {
+		copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
+	}
 
 	for i := range len(globalData.Jumps) {
 		globalData.Jumps[i] = 0xffffffff   /* uint32(-1) */

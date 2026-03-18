@@ -545,10 +545,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				BeforeEach(func() {
 					for _, f := range felixes {
 						if BPFMode() {
+							// Each remote node contributes 2 "host" routes (remote host + remote host tunneled).
+							// The local node contributes 1 "host" route (its node IP; no tunnel device IP in BPF mode).
+							expectedRoutes := 1 + (len(felixes)-1)*2
 							Eventually(func() int {
 								return strings.Count(f.BPFRoutes(), "host")
-							}).Should(Equal(len(felixes)*2),
-								"Expected one host and one host tunneled route per node")
+							}).Should(Equal(expectedRoutes),
+								"Expected one local host route + two host routes per remote node")
 						} else if NFTMode() {
 							Eventually(f.NFTSetSizeFn("cali40all-vxlan-net"), "10s", "200ms").Should(Equal(len(felixes) - 1))
 						} else {
@@ -574,10 +577,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
 					if BPFMode() {
+						// After removing the third node: 1 local host route + 2 routes per remaining remote node.
+						expectedRoutes := 1 + (len(felixes)-2)*2
 						Eventually(func() int {
 							return strings.Count(felixes[0].BPFRoutes(), "host")
-						}).Should(Equal((len(felixes)-1)*2),
-							"Expected one host and one host tunneled route per node, not: "+felixes[0].BPFRoutes())
+						}).Should(Equal(expectedRoutes),
+							"Expected one local host route + two host routes per remaining remote node, not: "+felixes[0].BPFRoutes())
 					} else if NFTMode() {
 						Eventually(felixes[0].NFTSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 2))
 					} else {
