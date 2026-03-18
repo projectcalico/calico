@@ -79,7 +79,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/tchap/go-patricia/v2 v2.3.3
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
-	github.com/tigera/operator/api v0.0.0-20250807130954-d4353da6554e
+	github.com/tigera/operator/api v0.0.0-20260313201632-bb0fdd128e6b
 	github.com/urfave/cli/v3 v3.3.8
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/etcd/api/v3 v3.6.5
@@ -127,6 +127,7 @@ require (
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/tigera/api v0.0.0-20260227222130-df0b9e289a34 // indirect
 	kubevirt.io/containerized-data-importer-api v1.63.1 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 )
