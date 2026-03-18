@@ -159,13 +159,6 @@ func (m *ipipManager) CompleteDeferredWork() error {
 }
 
 func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	logrus.Infof("sina %v\n%v", cidr, r)
-	// Ignore remote tunnel endpoint routes since they are not applicable to IPIP encapsulation, but we also need
-	// to program routes for borrowed addresses.
-	/*if isRemoteTunnelRoute(r, proto.IPPoolType_IPIP) && !isBorrowedRoute(r, proto.IPPoolType_IPIP) {
-		return nil
-	}*/
-
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {

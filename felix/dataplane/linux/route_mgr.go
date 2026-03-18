@@ -130,11 +130,9 @@ func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
 }
 
 // isRemoteTunnelRoute returns true if the route update signifies a need to program
-// a directly connected route on the VXLAN device for a remote tunnel endpoint. This is needed
+// a directly connected route on the VXLAN/IPIP device for a remote tunnel endpoint. This is needed
 // in a few cases in order to ensure host <-> pod connectivity over the tunnel.
 // This happens when tunnel addresses are selected from an IP pool with blocks of a single address.
-// These also need routes of the form "<IP> dev vxlan.calico" rather than "<block> via <TunnelEndpoint>".
-// This is only applicable to VXLAN encapsulation.
 func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
 	return msg.IpPoolType == ippoolType && // Ignore irrelevant messages.
 		isType(msg, proto.RouteType_REMOTE_TUNNEL) && isType(msg, proto.RouteType_REMOTE_WORKLOAD)
@@ -150,7 +148,6 @@ func isBorrowedRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
 func (m *routeManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
-		m.logCtx.Infof("tofu %#v", msg)
 		// Check to make sure that we are dealing with messages of the correct IP version.
 		cidr, err := ip.CIDRFromString(msg.Dst)
 		if err != nil {
