@@ -15,7 +15,6 @@
 package ringbuf
 
 import (
-	"encoding/binary"
 	stderrors "errors"
 	"fmt"
 	"os"
@@ -44,9 +43,8 @@ const (
 	// MapName is the versioned name of the ring buffer map.
 	MapName = "cali_rb_evnt"
 
-	// DropsMapName is the name of the per-CPU array that counts events dropped
-	// by BPF programs when the ring buffer is full (bpf_ringbuf_output returns
-	// -ENOBUFS).
+	// DropsMapName is the name of the shared array that tracks dropped events.
+	// The BPF side emits drops as TYPE_LOST_EVENTS events through the ring buffer.
 	DropsMapName = "cali_rb_drops"
 )
 
@@ -105,34 +103,16 @@ func SetMapSize(size int) {
 	maps.SetSize(MapName, size)
 }
 
-// DropsMap returns a per-CPU array map used to count dropped ring buffer events.
+// DropsMap returns the shared array map used by the BPF side to track dropped events.
 func DropsMap() maps.Map {
 	return maps.NewPinnedMap(maps.MapParameters{
-		Type:       "percpu_array",
+		Type:       "array",
 		KeySize:    4,
 		ValueSize:  8,
-		MaxEntries: 1,
+		MaxEntries: 2,
 		Name:       DropsMapName,
 		Version:    1,
 	})
-}
-
-// ReadDrops reads the per-CPU drop counter and returns the total number of
-// events dropped across all CPUs since the map was created.
-func ReadDrops(m maps.Map) (uint64, error) {
-	key := make([]byte, 4) // key = 0
-	values, err := m.Get(key)
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to read ring buffer drops map")
-	}
-
-	var total uint64
-	cpus := maps.NumPossibleCPUs()
-	for cpu := 0; cpu < cpus; cpu++ {
-		offset := cpu * 8
-		total += binary.LittleEndian.Uint64(values[offset : offset+8])
-	}
-	return total, nil
 }
 
 // New creates a new RingBuffer reader for the given BPF ring buffer map.

@@ -13,6 +13,7 @@
 #define EVENT_DNS_L3            6
 
 #define EVENT_POLICY_VERDICT_V6    7
+#define EVENT_LOST_EVENTS          8
 
 /* We need the header to be 64bit of size so that any 64bit fields in the
  * message structures that embed this header are also aligned.

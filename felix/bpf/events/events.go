@@ -47,6 +47,8 @@ const (
 	TypeDNSEventL3 Type = 6
 	// TypePolicyVerdictV6 is emitted when a v6 policy program reaches a verdict
 	TypePolicyVerdictV6 Type = 7
+	// TypeLostEvents is emitted by the BPF side when accumulated drop count is flushed through the ring buffer.
+	TypeLostEvents Type = 8
 )
 
 func (t Type) String() string {
@@ -99,10 +101,8 @@ func New(src Source, size int) (Events, error) {
 }
 
 type ringBufferEventsReader struct {
-	rb       *ringbuf.RingBuffer
-	bpfMap   maps.Map
-	dropsMap maps.Map
-	lastDrop uint64
+	rb     *ringbuf.RingBuffer
+	bpfMap maps.Map
 }
 
 func newRingBufferEvents(size int) (Events, error) {
@@ -121,46 +121,35 @@ func newRingBufferEvents(size int) (Events, error) {
 		return nil, errors.Wrap(err, "failed to create ring buffer reader")
 	}
 
-	// Read the initial drop count so we only report deltas.
-	initialDrops, err := ringbuf.ReadDrops(dropsMap)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to read initial ring buffer drop count")
-	}
-
 	return &ringBufferEventsReader{
-		rb:       rb,
-		bpfMap:   rbMap,
-		dropsMap: dropsMap,
-		lastDrop: initialDrops,
+		rb:     rb,
+		bpfMap: rbMap,
 	}, nil
 }
 
 func (r *ringBufferEventsReader) Next() (Event, error) {
-	// Check for newly dropped events before reading the next event.
-	if lost := r.checkDrops(); lost > 0 {
-		return Event{}, ErrLostEvents(lost)
-	}
-
 	e, err := r.rb.Next()
 	if err != nil {
 		return Event{}, errors.WithMessage(err, "failed to get next event")
 	}
 
-	return parseEventData(e.Data())
-}
-
-// checkDrops reads the BPF-side per-CPU drop counter and returns the number
-// of newly dropped events since the last check.
-func (r *ringBufferEventsReader) checkDrops() int {
-	total, err := ringbuf.ReadDrops(r.dropsMap)
+	evt, err := parseEventData(e.Data())
 	if err != nil {
-		return 0
+		return Event{}, err
 	}
-	delta := total - r.lastDrop
-	if delta > 0 {
-		r.lastDrop = total
+
+	// The BPF side emits TYPE_LOST_EVENTS with a u64 count payload when
+	// accumulated drops are flushed. Convert to ErrLostEvents so callers
+	// (bpfEventPoller) handle it the same way as the old perf lost records.
+	if evt.typ == TypeLostEvents {
+		count := uint64(0)
+		if len(evt.data) >= 8 {
+			count = binary.LittleEndian.Uint64(evt.data[:8])
+		}
+		return Event{}, ErrLostEvents(count)
 	}
-	return int(delta)
+
+	return evt, nil
 }
 
 func (r *ringBufferEventsReader) Close() error {
