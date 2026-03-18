@@ -195,11 +195,8 @@ echo "Calico is running."
 echo
 
 if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
-  echo "Patching FelixConfiguration to configure Felix program cluster routes"
-  ${kubectl} patch felixconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Enabled"}}'
-
-  echo "Patching BGPConfiguration to configure BIRD to not program cluster routes"
-  ${kubectl} patch bgpconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Disabled"}}'
+  echo "Patching installation resource to Felix cluster routing mode"
+  ${kubectl} patch installation default --type='merge' -p '{"spec": {"calicoNetwork": {"clusterRoutingMode":"Felix"}}}'
 fi
 
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
