@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -170,6 +171,7 @@ func (m *resourceMigrator[T, TList]) SpecsEqual(a, b client.Object) bool {
 	specA := reflect.ValueOf(a).Elem().FieldByName("Spec")
 	specB := reflect.ValueOf(b).Elem().FieldByName("Spec")
 	if !specA.IsValid() || !specB.IsValid() {
+		logrus.WithField("kind", m.kind).Warn("Spec field not found on object, falling back to full DeepEqual")
 		return reflect.DeepEqual(a, b)
 	}
 	return reflect.DeepEqual(specA.Interface(), specB.Interface())

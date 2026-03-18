@@ -46,13 +46,15 @@ const (
 )
 
 // NewMigrators returns migrators for all OSS Calico resource types.
+// ClusterInformation is intentionally excluded — the controller manages it
+// directly via lockDatastore/unlockV3CRDDatastore with special DatastoreReady
+// handling.
 func NewMigrators(bc api.Client, rt client.Client) []migrators.ResourceMigrator {
 	return []migrators.ResourceMigrator{
 		migrators.New[apiv3.Tier, apiv3.TierList](apiv3.KindTier, OrderTiers, bc, rt),
 		migrators.New[apiv3.FelixConfiguration, apiv3.FelixConfigurationList](apiv3.KindFelixConfiguration, OrderConfigSingletons, bc, rt),
 		migrators.New[apiv3.BGPConfiguration, apiv3.BGPConfigurationList](apiv3.KindBGPConfiguration, OrderConfigSingletons, bc, rt),
 		migrators.New[apiv3.KubeControllersConfiguration, apiv3.KubeControllersConfigurationList](apiv3.KindKubeControllersConfiguration, OrderConfigSingletons, bc, rt),
-		migrators.New[apiv3.ClusterInformation, apiv3.ClusterInformationList](apiv3.KindClusterInformation, OrderClusterInformation, bc, rt),
 		migrators.New[apiv3.IPPool, apiv3.IPPoolList](apiv3.KindIPPool, OrderNetworkInfra, bc, rt),
 		migrators.New[apiv3.IPReservation, apiv3.IPReservationList](apiv3.KindIPReservation, OrderNetworkInfra, bc, rt),
 		migrators.New[apiv3.BGPPeer, apiv3.BGPPeerList](apiv3.KindBGPPeer, OrderNetworkInfra, bc, rt),

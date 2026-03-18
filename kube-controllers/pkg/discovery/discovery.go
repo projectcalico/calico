@@ -14,11 +14,20 @@
 
 package discovery
 
-import "k8s.io/client-go/discovery"
+import (
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/discovery"
+)
 
 // IsOperatorManaged returns true if the cluster is managed by the Tigera operator,
 // detected by checking whether the operator.tigera.io API group is registered.
-func IsOperatorManaged(client discovery.DiscoveryInterface) bool {
+func IsOperatorManaged(client discovery.DiscoveryInterface) (bool, error) {
 	_, err := client.ServerResourcesForGroupVersion("operator.tigera.io/v1")
-	return err == nil
+	if err == nil {
+		return true, nil
+	}
+	if kerrors.IsNotFound(err) {
+		return false, nil
+	}
+	return false, err
 }

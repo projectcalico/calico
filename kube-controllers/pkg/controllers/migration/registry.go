@@ -42,11 +42,15 @@ const (
 
 // ConflictInfo identifies a resource that exists in v3 with a different spec than v1.
 type ConflictInfo struct {
-	Kind string
-	Name string
+	Kind      string
+	Name      string
+	Namespace string
 }
 
 func (c ConflictInfo) String() string {
+	if c.Namespace != "" {
+		return fmt.Sprintf("%s/%s/%s: v3 resource exists with different spec", c.Kind, c.Namespace, c.Name)
+	}
 	return fmt.Sprintf("%s/%s: v3 resource exists with different spec", c.Kind, c.Name)
 }
 
@@ -223,7 +227,7 @@ func DetectConflicts(ctx context.Context, ms []migrators.ResourceMigrator) ([]Co
 				continue
 			}
 			if !m.SpecsEqual(obj, existing) {
-				allConflicts = append(allConflicts, ConflictInfo{Kind: m.Kind(), Name: obj.GetName()})
+				allConflicts = append(allConflicts, ConflictInfo{Kind: m.Kind(), Name: obj.GetName(), Namespace: obj.GetNamespace()})
 			}
 		}
 	}
@@ -263,7 +267,7 @@ func migrateOneResource(ctx context.Context, m migrators.ResourceMigrator, item 
 			}
 			return r
 		}
-		ci := &ConflictInfo{Kind: m.Kind(), Name: v3Obj.GetName()}
+		ci := &ConflictInfo{Kind: m.Kind(), Name: v3Obj.GetName(), Namespace: v3Obj.GetNamespace()}
 		item.logCtx.Warn(ci.String())
 		return migrationWorkResult{conflict: ci}
 	}

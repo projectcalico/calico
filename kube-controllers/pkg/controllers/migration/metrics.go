@@ -75,7 +75,7 @@ func init() {
 
 // setPhaseMetric sets the migration phase gauge, clearing all other phases.
 func setPhaseMetric(phase DatastoreMigrationPhase) {
-	for _, p := range []string{"pending", "migrating", "converged", "complete", "failed"} {
+	for _, p := range []string{"pending", "migrating", "waiting_for_conflict_resolution", "converged", "complete", "failed"} {
 		migrationPhase.WithLabelValues(p).Set(0)
 	}
 	var label string
@@ -84,6 +84,8 @@ func setPhaseMetric(phase DatastoreMigrationPhase) {
 		label = "pending"
 	case DatastoreMigrationPhaseMigrating:
 		label = "migrating"
+	case DatastoreMigrationPhaseWaitingForConflictResolution:
+		label = "waiting_for_conflict_resolution"
 	case DatastoreMigrationPhaseConverged:
 		label = "converged"
 	case DatastoreMigrationPhaseComplete:

@@ -61,6 +61,7 @@ func defaultConvert[T any](kvp *model.KVPair) (*T, error) {
 	metaObj.SetCreationTimestamp(metav1.Time{})
 	metaObj.SetManagedFields(nil)
 	metaObj.SetGeneration(0)
+	metaObj.SetSelfLink("")
 
 	// Filter internal annotations.
 	if annotations := metaObj.GetAnnotations(); len(annotations) > 0 {

@@ -364,8 +364,12 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 	installNamespace := names.OwnNamespace()
 
 	// Detect install type by checking whether the operator API group is registered.
+	operatorManaged, err := discovery.IsOperatorManaged(m.k8sClient.Discovery())
+	if err != nil {
+		return fmt.Errorf("checking install type: %w", err)
+	}
 	installType := "manifest"
-	if discovery.IsOperatorManaged(m.k8sClient.Discovery()) {
+	if operatorManaged {
 		installType = "operator"
 	}
 	logCtx.WithFields(logrus.Fields{
@@ -539,6 +543,20 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreM
 
 	if len(remaining) > 0 {
 		logCtx.WithField("conflicts", len(remaining)).Debug("Conflicts still present")
+		dm.Status.Message = fmt.Sprintf("%d resource conflicts need resolution before migration can begin", len(remaining))
+		dm.Status.Conditions = nil
+		for _, ci := range remaining {
+			dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
+				Type:               conditionTypeConflict,
+				Status:             metav1.ConditionTrue,
+				Reason:             conditionReasonResourceMismatch,
+				Message:            ci.String(),
+				LastTransitionTime: metav1.Now(),
+			})
+		}
+		if err := m.updateStatus(dm); err != nil {
+			logCtx.WithError(err).Warn("Failed to update conflict status")
+		}
 		return requeueAfter(m.waitingPollInterval)
 	}
 
@@ -556,7 +574,7 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 	ds, err := m.k8sClient.AppsV1().DaemonSets(names.OwnNamespace()).Get(m.ctx, "calico-node", metav1.GetOptions{})
 	if err != nil {
 		logCtx.WithError(err).Info("Failed to get calico-node DaemonSet, will retry")
-		return nil
+		return requeueAfter(m.waitingPollInterval)
 	}
 
 	// Check if calico-node has been configured with the v3 API group.

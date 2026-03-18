@@ -22,6 +22,8 @@ import (
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apiextinformers "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/projectcalico/calico/lib/std/chanutil"
 )
 
 // DeferredCRDController implements Controller by watching for a CRD to become
@@ -70,10 +72,15 @@ func (d *deferredCRDController) Run(stop chan struct{}) {
 	factory := apiextinformers.NewSharedInformerFactory(d.crdClient, 0)
 	informer := factory.Apiextensions().V1().CustomResourceDefinitions().Informer()
 
-	// readyCh is signalled when the CRD becomes Established.
+	// readyCh is signalled (from informer goroutines) when the CRD becomes
+	// Established. deletedCh is signalled when the CRD is removed. stoppedCh
+	// is signalled when the inner controller's RunWithContext returns. All
+	// three feed into the select loop below, which is the only place that
+	// touches innerCancel — avoiding data races.
 	readyCh := make(chan struct{}, 1)
+	deletedCh := make(chan struct{}, 1)
+	stoppedCh := make(chan struct{}, 1)
 
-	// innerCancel cancels the inner controller when the CRD is removed.
 	var innerCancel context.CancelFunc
 
 	handler := cache.ResourceEventHandlerFuncs{
@@ -84,10 +91,7 @@ func (d *deferredCRDController) Run(stop chan struct{}) {
 			}
 			if isCRDEstablished(crd) {
 				logCtx.Info("CRD is established")
-				select {
-				case readyCh <- struct{}{}:
-				default:
-				}
+				chanutil.WriteNonBlocking(readyCh, struct{}{})
 			}
 		},
 		UpdateFunc: func(_, newObj any) {
@@ -96,10 +100,7 @@ func (d *deferredCRDController) Run(stop chan struct{}) {
 				return
 			}
 			if isCRDEstablished(crd) {
-				select {
-				case readyCh <- struct{}{}:
-				default:
-				}
+				chanutil.WriteNonBlocking(readyCh, struct{}{})
 			}
 		},
 		DeleteFunc: func(obj any) {
@@ -118,10 +119,7 @@ func (d *deferredCRDController) Run(stop chan struct{}) {
 				return
 			}
 			logCtx.Info("CRD was deleted, stopping inner controller")
-			if innerCancel != nil {
-				innerCancel()
-				innerCancel = nil
-			}
+			chanutil.WriteNonBlocking(deletedCh, struct{}{})
 		},
 	}
 
@@ -143,8 +141,8 @@ func (d *deferredCRDController) Run(stop chan struct{}) {
 				innerCancel()
 			}
 			return
+
 		case <-readyCh:
-			// If an inner controller is already running, skip.
 			if innerCancel != nil {
 				continue
 			}
@@ -152,10 +150,17 @@ func (d *deferredCRDController) Run(stop chan struct{}) {
 			innerCtx, innerCancel = context.WithCancel(ctx)
 			go func() {
 				d.inner.RunWithContext(innerCtx)
-				// If RunWithContext returns (e.g., context cancelled), clear
-				// innerCancel so the CRD can trigger a restart.
-				innerCancel = nil
+				chanutil.WriteNonBlocking(stoppedCh, struct{}{})
 			}()
+
+		case <-deletedCh:
+			if innerCancel != nil {
+				innerCancel()
+				innerCancel = nil
+			}
+
+		case <-stoppedCh:
+			innerCancel = nil
 		}
 	}
 }
