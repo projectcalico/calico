@@ -233,6 +233,58 @@ var _ = Describe("L3RouteResolver", func() {
 			Expect(tunnelRoute.Types&proto.RouteType_REMOTE_WORKLOAD).To(BeZero(),
 				"tunnel route should NOT have REMOTE_WORKLOAD just because it falls within a block")
 		})
+
+		It("should add REMOTE_WORKLOAD to a tunnel IP in a /32 block", func() {
+			// A dedicated tunnel pool with blockSize=32 creates /32 blocks for each
+			// tunnel IP. In this case the block IS the tunnel IP, and the route manager
+			// needs REMOTE_WORKLOAD to program the directly-connected /32 route.
+			poolCIDR, _ := ip.CIDRFromString("10.0.0.0/16")
+			pool := model.IPPool{
+				CIDR:      net.IPNet{IPNet: poolCIDR.ToIPNet()},
+				VXLANMode: encap.Always,
+			}
+			l3RR.OnPoolUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key:   model.IPPoolKey{CIDR: pool.CIDR},
+					Value: &pool,
+				},
+			})
+			drainEvents()
+
+			// Add a /32 IPAM block at the same CIDR as the tunnel IP.
+			remoteAffinity := "host:remote-host"
+			blockCIDR := net.MustParseCIDR("10.0.1.0/32")
+			l3RR.OnBlockUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.BlockKey{CIDR: blockCIDR},
+					Value: &model.AllocationBlock{
+						CIDR:        blockCIDR,
+						Affinity:    &remoteAffinity,
+						Allocations: make([]*int, 1),
+						Unallocated: []int{0},
+					},
+				},
+			})
+			drainEvents()
+
+			l3RR.onNodeUpdate("remote-host", &l3rrNodeInfo{
+				V4Addr:    ip.FromString("192.168.0.2").(ip.V4Addr),
+				VXLANAddr: ip.FromString("10.0.1.0"),
+			})
+			l3RR.flush()
+
+			routes := drainEvents()
+
+			tunnelRoute := findRoute(routes, "10.0.1.0/32")
+			Expect(tunnelRoute).NotTo(BeNil(), "expected a route for the tunnel IP 10.0.1.0/32")
+
+			// With a /32 block, the tunnel route should have BOTH types so the route
+			// manager programs a directly-connected route.
+			Expect(tunnelRoute.Types&proto.RouteType_REMOTE_TUNNEL).NotTo(BeZero(),
+				"tunnel route should have REMOTE_TUNNEL type")
+			Expect(tunnelRoute.Types&proto.RouteType_REMOTE_WORKLOAD).NotTo(BeZero(),
+				"tunnel route in /32 block should have REMOTE_WORKLOAD")
+		})
 	})
 
 	Describe("l3rrNodeInfo UTs", func() {

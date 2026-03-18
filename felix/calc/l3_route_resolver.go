@@ -748,6 +748,7 @@ func (c *L3RouteResolver) flush() {
 		var blockSeen bool
 		var blockNodeName string
 		var blockTypes proto.RouteType
+		var blockMatchesRoute bool
 		var hasTunnelRef bool
 		for _, entry := range buf {
 			ri := entry.Data.(RouteInfo)
@@ -777,10 +778,17 @@ func (c *L3RouteResolver) flush() {
 				}
 				rt.DstNodeName = ri.Blocks[0].NodeName
 
+				// Track whether this block entry is at the same CIDR as the route we're
+				// resolving (e.g., a /32 block for a /32 tunnel IP from a dedicated tunnel
+				// pool) vs a parent block that merely contains it.
+				if entry.CIDR == cidr {
+					blockMatchesRoute = true
+				}
+
 				// Accumulate the workload type flags from block entries, but don't apply
-				// them to the route yet. A block entry may be a parent of the CIDR we're
-				// resolving (e.g., a /26 block containing a /32 tunnel IP). The workload
-				// type is only correct if the route isn't a tunnel ref; see below.
+				// them to the route yet. A parent block entry (e.g., a /26 block containing
+				// a /32 tunnel IP) should not contribute REMOTE_WORKLOAD to a tunnel route.
+				// The flags are applied after the full trie walk; see below.
 				if ri.Blocks[0].NodeName == c.myNodeName {
 					logCxt.Debug("Local workload route (from block).")
 					blockTypes |= proto.RouteType_LOCAL_WORKLOAD
@@ -854,10 +862,14 @@ func (c *L3RouteResolver) flush() {
 		}
 
 		// Apply the accumulated block workload type flags unless the route is a tunnel
-		// IP. A tunnel IP that happens to fall within an IPAM block should not get
-		// REMOTE_WORKLOAD — that causes isRemoteTunnelRoute() in the route manager to
-		// program a spurious /32 directly-connected route on the tunnel device.
-		if blockSeen && !hasTunnelRef {
+		// IP that merely falls within a parent block. A tunnel IP inside a larger block
+		// (e.g., a /32 inside a /26) should not get REMOTE_WORKLOAD — that causes
+		// isRemoteTunnelRoute() in the route manager to program a spurious /32 route.
+		//
+		// However, if the block is at the same CIDR as the route (e.g., a /32 block from
+		// a dedicated tunnel pool), the workload type is still needed so the route manager
+		// programs the correct directly-connected route.
+		if blockSeen && (!hasTunnelRef || blockMatchesRoute) {
 			rt.Types |= blockTypes
 		}
 
