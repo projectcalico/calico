@@ -35,6 +35,8 @@ global_job_config:
       value: "operator"
     - name: RUN_LOCAL_TESTS # run e2e tests from locally built binary
       value: "true"
+    - name: E2E_PROCS
+      value: "1"
 
 # Dimensions
 # Provisioners: azr-aso, azr-aks
