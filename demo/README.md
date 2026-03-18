@@ -169,24 +169,37 @@ vm2 doesn't notice that vm1 moved to a different node.
 
 | Tool | Purpose | Location |
 |------|---------|----------|
-| `gkm` | GCP KubeVirt Manager — SSH into nodes/VMs, manage cluster | `/usr/local/bin/gkm` |
+| `virtctl` | KubeVirt CLI — SSH into VMs, trigger migrations | [Install](https://kubevirt.io/user-guide/user_workloads/virtctl_client_tool/) |
 | `calicoctl` | Calico CLI — inspect IPAM state | `/usr/local/bin/calicoctl` |
 | `kubectl` | Kubernetes CLI — manage resources | Standard |
 
-### gkm Commands Used in Demo
+### Installing virtctl
 
+Install the version matching the cluster's KubeVirt:
 ```bash
-# REQUIRED: Set this before using gkm
-export BZ_ROOT_DIR=$PWD/gcp-kubevirt
-
-gkm connect vm1     # Interactive SSH session into vm1
-gkm connect vm2     # Interactive SSH session into vm2
-gkm connect node-0  # SSH into worker node 0
+VERSION=$(kubectl get kubevirt -n kubevirt kubevirt -o jsonpath='{.status.observedKubeVirtVersion}')
+curl -sL https://github.com/kubevirt/kubevirt/releases/download/$VERSION/virtctl-$VERSION-linux-amd64 -o /tmp/virtctl
+chmod +x /tmp/virtctl
+sudo mv /tmp/virtctl /usr/local/bin/virtctl
 ```
 
-`gkm connect <vm>` opens an **interactive** SSH session. You type commands inside
-the VM, then `exit` to return. It does not support inline commands like
-`gkm connect vm1 -- 'some command'`.
+### Connecting to VMs with virtctl
+
+```bash
+# Set the SSH key used by the cluster VMs
+export VM_SSH_KEY=$BZ_ROOT_DIR/.local/crc/kubeadm/1.6/master_ssh_key
+
+# SSH into a VM (uses KubeVirt API — no NodePort service needed)
+virtctl ssh ubuntu@vmi/vm1 -i $VM_SSH_KEY -t "-o StrictHostKeyChecking=no" -t "-o UserKnownHostsFile=/dev/null"
+virtctl ssh ubuntu@vmi/vm2 -i $VM_SSH_KEY -t "-o StrictHostKeyChecking=no" -t "-o UserKnownHostsFile=/dev/null"
+
+# Trigger a migration
+virtctl migrate vm1
+```
+
+`virtctl ssh` connects through the KubeVirt API (virt-handler), not through
+NodePort services. This means it always reaches the correct running VM, even
+after live migration — no stale pod issues.
 
 ---
 
@@ -221,13 +234,13 @@ export KUBECONFIG=$(grep '^KUBECONFIG:' $BZ_ROOT_DIR/Taskvars.yml | awk '{print 
 |  COMMAND PANE                      |  LIVE WATCH (auto-refreshing)     |
 |                                    |                                   |
 |  You type/paste commands here.     |  Refreshes every 1s showing:      |
-|  kubectl, calicoctl, gkm connect   |  - VirtualMachineInstances        |
+|  kubectl, calicoctl, virtctl       |  - VirtualMachineInstances        |
 |                                    |  - Running virt-launcher pods     |
 |                                    |  - Active migrations (VMIM)       |
 |                                    |  - Calico WorkloadEndpoint (vm1)  |
 +------------------------------------+------------------------------------+
 |  Pane 2 (bottom)                                                       |
-|  VM2 SHELL (already connected via gkm connect vm2)                     |
+|  VM2 SHELL (already connected via virtctl ssh)                         |
 |                                                                        |
 |  You are inside vm2. Run: nc <VM1_IP> 9999                             |
 |  This starts a single TCP connection to vm1's streaming server.        |
@@ -235,11 +248,11 @@ export KUBECONFIG=$(grep '^KUBECONFIG:' $BZ_ROOT_DIR/Taskvars.yml | awk '{print 
 +------------------------------------------------------------------------+
 ```
 
-- **Pane 0 (commands)**: Where you run `kubectl`, `calicoctl`, and `gkm connect` commands.
+- **Pane 0 (commands)**: Where you run `kubectl`, `calicoctl`, and `virtctl` commands.
   Env vars (`$VM1_IP`, `$KUBECONFIG`, `$BZ_ROOT_DIR`) are pre-set.
 - **Pane 1 (watch)**: Auto-refreshing view of VMIs, running pods, active migrations,
   and vm1's WorkloadEndpoint. Completed/succeeded pods are filtered out.
-- **Pane 2 (vm2 shell)**: Already SSH'd into vm2 via `gkm connect vm2`. You just need
+- **Pane 2 (vm2 shell)**: Already SSH'd into vm2 via `virtctl ssh`. You just need
   to run `nc <VM1_IP> 9999` to start the TCP stream. This proves that **intra-cluster
   VM-to-VM connectivity is seamlessly preserved** during live migration — the counter
   continues without interruption, no drops, no reconnections.
@@ -301,7 +314,7 @@ that intra-cluster connectivity is seamlessly preserved during migration.
 **In Pane 0 (top-left)**, SSH into vm1 and start the server:
 
 ```bash
-gkm connect vm1
+virtctl ssh ubuntu@vmi/vm1 -i $VM_SSH_KEY -t "-o StrictHostKeyChecking=no" -t "-o UserKnownHostsFile=/dev/null"
 ```
 
 Inside the vm1 SSH session, create the server script and start it:
@@ -343,7 +356,7 @@ every second. We'll connect from vm2 — another VM in the cluster on a differen
 
 #### Step 2b: Start the client on vm2
 
-**In Pane 2 (bottom)** — this pane auto-connects to vm2 via `gkm connect vm2`.
+**In Pane 2 (bottom)** — this pane auto-connects to vm2 via `virtctl ssh`.
 Once inside vm2, start the TCP client:
 
 ```bash
@@ -384,31 +397,22 @@ the stream stops. Let's see what happens when we migrate vm1 to a different node
 **In Pane 0 (top-left)**:
 
 ```bash
-# 1. Confirm which node vm1 is currently on
+# 1. Clean up completed pods from previous migrations (if any)
+kubectl delete pod -l kubevirt.io=virt-launcher --field-selector=status.phase=Succeeded 2>/dev/null
+
+# 2. Confirm which node vm1 is currently on
 kubectl get vmi vm1 -o jsonpath='vm1 is on node: {.status.nodeName}{"\n"}'
 ```
 
 **Narrate**: "vm1 is currently running on node-0. Let's migrate it."
 
 ```bash
-# 2. Create the migration resource
-kubectl create -f demo/migrate-vm1.yaml
-```
-
-This creates a `VirtualMachineInstanceMigration` that tells KubeVirt to move vm1
-to another node. The manifest is simple:
-
-```yaml
-apiVersion: kubevirt.io/v1
-kind: VirtualMachineInstanceMigration
-metadata:
-  name: migration-vm1
-spec:
-  vmiName: vm1
+# 3. Trigger the migration
+virtctl migrate vm1
 ```
 
 ```bash
-# 3. Watch migration progress
+# 4. Watch migration progress
 kubectl get vmim -w
 ```
 
@@ -605,7 +609,7 @@ The whole handover happened in milliseconds — that's why the TCP connection su
 ## Cleanup After Recording
 
 ```bash
-kubectl delete vmim migration-vm1
+kubectl delete vmim --all
 ```
 
 ---
@@ -617,6 +621,6 @@ kubectl delete vmim migration-vm1
 | `README.md` | This file — full demo guide |
 | `provision-cluster.sh` | Provisions the GCP cluster, installs KubeVirt, deploys Calico, creates VMs, and validates |
 | `tmux-layout.sh` | Launches 3-pane tmux layout, sets `$VM1_IP` in all panes |
-| `cheatsheet.txt` | Template cheatsheet with env var references |
-| `migrate-vm1.yaml` | VirtualMachineInstanceMigration manifest to trigger vm1 migration |
+
+
 | `show-calico-logs.sh` | Shows CNI IPAM + Felix logs from the migration |

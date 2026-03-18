@@ -55,7 +55,7 @@ tmux select-pane -t "$SESSION:0.2" -T "vm2 (TCP client)"
 # Set env vars silently in all panes
 for pane in 0 1 2; do
     tmux send-keys -t "$SESSION:0.$pane" \
-      "export KUBECONFIG=$KUBECONFIG BZ_ROOT_DIR=$BZ_ROOT_DIR VM1_IP=$VM1_IP" Enter
+      "export KUBECONFIG=$KUBECONFIG BZ_ROOT_DIR=$BZ_ROOT_DIR VM1_IP=$VM1_IP VM_SSH_KEY=$BZ_ROOT_DIR/.local/crc/kubeadm/1.6/master_ssh_key" Enter
     tmux send-keys -t "$SESSION:0.$pane" "clear" Enter
 done
 
@@ -85,8 +85,8 @@ else
 fi
 '" Enter
 
-# Pane 2 (bottom): connect to vm2
-tmux send-keys -t "$SESSION:0.2" "gkm connect vm2" Enter
+# Pane 2 (bottom): connect to vm2 via virtctl
+tmux send-keys -t "$SESSION:0.2" "virtctl ssh ubuntu@vmi/vm2 -i \$VM_SSH_KEY -t \"-o StrictHostKeyChecking=no\" -t \"-o UserKnownHostsFile=/dev/null\"" Enter
 
 # Pane 0 (top-left): ready with clean prompt
 tmux select-pane -t "$SESSION:0.0"
