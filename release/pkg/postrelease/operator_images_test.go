@@ -29,7 +29,7 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 
 	// Run the operator image with --print-images=list to get the list of images it uses.
 	t.Logf("Running operator image %s with --print-images=list", fqOperatorImage)
-	runCmd := exec.Command("docker", "run", "--rm", fqOperatorImage, "--print-images=list")
+	runCmd := exec.Command("docker", "run", "--rm", fqOperatorImage, "--print-images=listcalico")
 	out, err := runCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to run operator image %s with --print-images=list: %v\n%s", fqOperatorImage, err, string(out))
@@ -51,7 +51,7 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 		if line == "" {
 			continue
 		}
-		if !strings.HasPrefix(line, tigeraPrefix) {
+		if strings.Contains(line, operator.DefaultImage) {
 			continue
 		}
 		// Extract the image name from the fully qualified image reference.
