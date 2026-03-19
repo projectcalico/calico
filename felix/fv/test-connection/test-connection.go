@@ -488,6 +488,20 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout, sleep t
 			continue
 		} else {
 			fmt.Printf("err = %+v\n", err)
+			// If the initial exchange has completed and the loop file exists,
+			// we were asked to stop. The connection error is expected during
+			// shutdown, so exit cleanly. We only check after sentInitial so
+			// that startup failures still fail loudly (the loop file is
+			// expected to exist before the first successful exchange).
+			if ls.sentInitial && ls.loopFile != "" {
+				if _, statErr := os.Stat(ls.loopFile); statErr == nil {
+					log.WithError(err).Info("Connection error during shutdown, exiting cleanly")
+					if rmErr := os.Remove(ls.loopFile); rmErr != nil {
+						log.WithError(rmErr).Info("Failed to remove loop file during shutdown")
+					}
+					break
+				}
+			}
 			log.WithError(err).Fatal("Failed to receive")
 		}
 

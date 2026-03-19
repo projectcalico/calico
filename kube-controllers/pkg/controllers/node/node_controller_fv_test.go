@@ -356,8 +356,8 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 			// See https://github.com/projectcalico/libcalico-go/pull/1345
 			kvp := blocks.KVPairs[0]
 			b := kvp.Value.(*model.AllocationBlock)
-			malformedHandle := fmt.Sprintf("%s\r\neth0", *b.Attributes[0].AttrPrimary)
-			blocks.KVPairs[0].Value.(*model.AllocationBlock).Attributes[0].AttrPrimary = &malformedHandle
+			malformedHandle := fmt.Sprintf("%s\r\neth0", *b.Attributes[0].HandleID)
+			blocks.KVPairs[0].Value.(*model.AllocationBlock).Attributes[0].HandleID = &malformedHandle
 			_, err = bc.Update(context.Background(), blocks.KVPairs[0])
 			Expect(err).NotTo(HaveOccurred())
 

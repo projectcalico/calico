@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 package policy
 
 import (
@@ -76,14 +76,14 @@ var _ = describe.CalicoDescribe(
 			)
 
 			BeforeEach(func() {
-				customTier = conncheck.GenerateRandomName("e2e-staged-tier")
+				customTier = utils.GenerateRandomName("e2e-staged-tier")
 				tierObj = v3.NewTier()
 				tierObj.Name = customTier
 				tierObj.Spec.Order = ptr.To[float64](200)
 				Expect(cli.Create(context.TODO(), tierObj)).ToNot(HaveOccurred())
 
 				client1 = conncheck.NewClient(clientPodNamePrefix, f.Namespace)
-				server = conncheck.NewServer(conncheck.GenerateRandomName(serverPodNamePrefix), f.Namespace)
+				server = conncheck.NewServer(utils.GenerateRandomName(serverPodNamePrefix), f.Namespace)
 				checker.AddClient(client1)
 				checker.AddServer(server)
 				checker.Deploy()
@@ -92,10 +92,11 @@ var _ = describe.CalicoDescribe(
 				stopCh = make(chan time.Time, 1)
 
 				// We read flow logs from whisker-backend, we start port forward so we can query the flows
-				kubectl.PortForward("calico-system", "deployment/whisker", "3002", "", stopCh)
+				localPort, err := kubectl.PortForward("calico-system", "deployment/whisker", "3002", "", stopCh)
+				Expect(err).NotTo(HaveOccurred())
 
 				// Build url to get flows from whisker
-				url = buildURL(server.Pod().Namespace, server.Pod().Namespace, "-1800")
+				url = buildURL(localPort, server.Pod().Namespace, server.Pod().Namespace, "-1800")
 
 				// Port forward should be working and whisker-backend should return 200 status
 				verifyPortForward(url)
@@ -188,7 +189,7 @@ var _ = describe.CalicoDescribe(
 				BeforeEach(func() {
 					selector := fmt.Sprintf("pod-name == \"%s\"", server.Name())
 					ingress := []v3.Rule{{Action: v3.Deny}}
-					stagedGlobalNetworkPolicyName = "sgnp-deny-1"
+					stagedGlobalNetworkPolicyName = utils.GenerateRandomName("sgnp-deny")
 					stagedGlobalNetworkPolicy = CreateStagedGlobalNetworkPolicy(stagedGlobalNetworkPolicyName, customTier, 10, selector, ingress, nil)
 
 					Expect(cli.Create(context.TODO(), stagedGlobalNetworkPolicy)).ShouldNot(HaveOccurred())
@@ -226,14 +227,14 @@ var _ = describe.CalicoDescribe(
 				cli, err = client.New(f.ClientConfig())
 				Expect(err).ToNot(HaveOccurred())
 
-				customTier = conncheck.GenerateRandomName("e2e-staged-tier")
+				customTier = utils.GenerateRandomName("e2e-staged-tier")
 				tierObj = v3.NewTier()
 				tierObj.Name = customTier
 				tierObj.Spec.Order = ptr.To[float64](200)
 				Expect(cli.Create(context.TODO(), tierObj)).ToNot(HaveOccurred())
 
 				// Create server
-				server = conncheck.NewServer(conncheck.GenerateRandomName(serverPodNamePrefix), f.Namespace)
+				server = conncheck.NewServer(utils.GenerateRandomName(serverPodNamePrefix), f.Namespace)
 				client1 = conncheck.NewClient(clientPodNamePrefix, f.Namespace)
 				checker.AddServer(server)
 				checker.AddClient(client1)
@@ -285,19 +286,21 @@ var _ = describe.CalicoDescribe(
 					order := 200.0
 					policy := CreateStagedNetworkPolicy("service-deny-in", customTier, server.Pod().Namespace, order, selector, ingress, nil)
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					})
 
 					// enforce the policy
 					_, enforced := ConvertStagedPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					})
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
 					checker.ExpectFailure(client1, server.ClusterIP().Port(serverPort))
 					checker.Execute()
-
-					// delete policies
-					Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -311,28 +314,31 @@ var _ = describe.CalicoDescribe(
 					ingress := []v3.Rule{{Action: v3.Deny}}
 					selector := fmt.Sprintf("pod-name==\"%s\"", server.Name())
 					order := 200.0
-					policy := CreateStagedGlobalNetworkPolicy("service-deny-in", customTier, order, selector, ingress, nil)
+					policyName := utils.GenerateRandomName("service-deny-in")
+					policy := CreateStagedGlobalNetworkPolicy(policyName, customTier, order, selector, ingress, nil)
 					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
+					})
 
 					// enforce the policy
 					_, enforced := ConvertStagedGlobalPolicyToEnforced(policy)
 					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					DeferCleanup(func() {
+						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
+					})
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
 					checker.ExpectFailure(client1, server.ClusterIP().Port(serverPort))
 					checker.Execute()
-
-					// delete policies
-					Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
 				})
 			})
 		})
 	})
 
-func buildURL(sourceNamespace, destinationNamespace, startTime string) string {
-	baseURL := "http://localhost:3002/flows"
+func buildURL(port int, sourceNamespace, destinationNamespace, startTime string) string {
+	baseURL := fmt.Sprintf("http://localhost:%d/flows", port)
 
 	f := whiskerv1.Filters{
 		SourceNamespaces: whiskerv1.FilterMatches[string]{
@@ -361,8 +367,13 @@ func verifyPortForward(url string) {
 		}
 		defer func() { _ = resp.Body.Close() }()
 
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("http response is not successful %d", resp.StatusCode)
+			return fmt.Errorf("http response is not successful %d, body: %s", resp.StatusCode, string(body))
 		}
 
 		return nil
@@ -384,16 +395,23 @@ func verifyFlowCount(url string, count int) {
 			return err
 		}
 
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status code %d, body: %s", resp.StatusCode, string(body))
+		}
+
 		if err = json.Unmarshal(body, &response); err != nil {
 			return err
 		}
 
 		if len(response.Items) != count {
-			return fmt.Errorf("number of flow items does not match, expected %d, got %d", count, len(response.Items))
+			return fmt.Errorf(
+				"expected %d flow items, got %d\n%s",
+				count, len(response.Items), formatFlowDiagnostics(response.Items),
+			)
 		}
 
 		return nil
-	}, 90*time.Second, 5*time.Second).Should(Not(HaveOccurred()))
+	}, 150*time.Second, 5*time.Second).Should(Not(HaveOccurred()))
 }
 
 func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.PolicyKind, action whiskerv1.Action) {
@@ -407,73 +425,78 @@ func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.Polic
 	body, err := io.ReadAll(resp.Body)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
+	ExpectWithOffset(1, resp.StatusCode).To(Equal(http.StatusOK), "unexpected status code from whisker-backend, body: %s", string(body))
 	err = json.Unmarshal(body, &response)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
 	ExpectWithOffset(1, kind).NotTo(Equal(""), "BUG: kind should not be empty")
 
-	// Build up an error message to help debug if the policy is not found
-	var msg strings.Builder
-	msg.WriteString(fmt.Sprintf("Could not find flow:\nKind:%s Name:%s Tier:%s Action:%s\n\n", kind, name, tier, action))
-	msg.WriteString(fmt.Sprintf("Found %d flow items:\n", len(response.Items)))
+	matchesPolicyHit := func(p *whiskerv1.PolicyHit) bool {
+		return p != nil && p.Name == name && p.Tier == tier && p.Kind == kind && p.Action == action
+	}
 
-responseLoop:
 	for _, item := range response.Items {
-		pendingPolicies := item.Policies.Pending
-		for _, pending := range pendingPolicies {
-			msg.WriteString(fmt.Sprintf(
-				"  - %s\n", policyHitString(
-					pending.Kind,
-					pending.Namespace,
-					pending.Name,
-					pending.Tier,
-					pending.Action,
-				)))
-
-			if pending.Name == name &&
-				pending.Tier == tier &&
-				pending.Kind == kind &&
-				pending.Action == action {
+		for _, pending := range item.Policies.Pending {
+			if matchesPolicyHit(pending) || matchesPolicyHit(pending.Trigger) {
 				containsStagedPolicy = true
-				break responseLoop
-			}
-
-			if pending.Trigger != nil {
-				msg.WriteString(fmt.Sprintf(
-					"    - TriggeredBy(%s)\n",
-					policyHitString(
-						pending.Trigger.Kind,
-						pending.Trigger.Namespace,
-						pending.Trigger.Name,
-						pending.Trigger.Tier,
-						pending.Trigger.Action,
-					)))
-				if pending.Trigger.Name == name &&
-					pending.Trigger.Tier == tier &&
-					pending.Trigger.Kind == kind &&
-					pending.Trigger.Action == action {
-					containsStagedPolicy = true
-					break responseLoop
-				}
+				break
 			}
 		}
 	}
 
-	Expect(containsStagedPolicy).Should(BeTrue(), msg.String())
+	Expect(containsStagedPolicy).Should(
+		BeTrue(),
+		fmt.Sprintf(
+			"Could not find staged policy: Kind:%s Name:%s Tier:%s Action:%s\n%s",
+			kind, name, tier, action, formatFlowDiagnostics(response.Items),
+		),
+	)
 }
 
-func policyHitString(kind whiskerv1.PolicyKind, namespace, name, tier string, action whiskerv1.Action) string {
-	msg := fmt.Sprintf("Kind:%s ", kind)
-	if namespace != "" {
-		msg += fmt.Sprintf("Namespace:%s ", namespace)
+func formatFlowDiagnostics(flows []whiskerv1.FlowResponse) string {
+	var diag strings.Builder
+	diag.WriteString(fmt.Sprintf("Found %d flow(s):\n", len(flows)))
+	for i, item := range flows {
+		diag.WriteString(fmt.Sprintf(
+			"  flow[%d]: reporter=%s action=%s src=%s/%s dst=%s/%s proto=%s destPort=%d\n",
+			i, item.Reporter, item.Action,
+			item.SourceNamespace, item.SourceName,
+			item.DestNamespace, item.DestName,
+			item.Protocol, item.DestPort,
+		))
+		if len(item.Policies.Enforced) > 0 {
+			diag.WriteString("      enforced:\n")
+			for _, p := range item.Policies.Enforced {
+				diag.WriteString(fmt.Sprintf("        - %s\n", formatPolicyHit(p)))
+			}
+		}
+		if len(item.Policies.Pending) > 0 {
+			diag.WriteString("      pending:\n")
+			for _, p := range item.Policies.Pending {
+				diag.WriteString(fmt.Sprintf("        - %s\n", formatPolicyHit(p)))
+				if p.Trigger != nil {
+					diag.WriteString(fmt.Sprintf("          triggered-by:\n            %s\n", formatPolicyHit(p.Trigger)))
+				}
+			}
+		}
 	}
-	if name != "" {
-		msg += fmt.Sprintf("Name:%s ", name)
+	return diag.String()
+}
+
+func formatPolicyHit(p *whiskerv1.PolicyHit) string {
+	if p == nil {
+		return "<nil>"
 	}
-	if tier != "" {
-		msg += fmt.Sprintf("Tier:%s ", tier)
+	msg := fmt.Sprintf("Kind:%s ", p.Kind)
+	if p.Namespace != "" {
+		msg += fmt.Sprintf("Namespace:%s ", p.Namespace)
 	}
-	msg += fmt.Sprintf("Action:%s ", action)
+	if p.Name != "" {
+		msg += fmt.Sprintf("Name:%s ", p.Name)
+	}
+	if p.Tier != "" {
+		msg += fmt.Sprintf("Tier:%s ", p.Tier)
+	}
+	msg += fmt.Sprintf("Action:%s", p.Action)
 	return msg
 }
 

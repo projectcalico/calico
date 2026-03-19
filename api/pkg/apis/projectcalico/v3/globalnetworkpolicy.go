@@ -25,7 +25,6 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:resource:scope=Cluster
 
 // GlobalNetworkPolicyList is a list of Policy objects.
@@ -40,6 +39,7 @@ type GlobalNetworkPolicyList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster,shortName={gnp,cgnp}
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
@@ -51,6 +51,10 @@ type GlobalNetworkPolicy struct {
 	Spec GlobalNetworkPolicySpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT) && self.preDNAT))",message="preDNAT and doNotTrack cannot both be true",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) || size(self.egress) == 0",message="preDNAT policy cannot have any egress rules",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t, t == 'Egress')",message="preDNAT policy cannot have 'Egress' type",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="(has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack) || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))",message="applyOnForward must be true if either preDNAT or doNotTrack is true",reason=FieldValueInvalid
 type GlobalNetworkPolicySpec struct {
 	// The name of the tier that this policy belongs to.  If this is omitted, the default
 	// tier (name is "default") is assumed.  The specified tier must exist in order to create

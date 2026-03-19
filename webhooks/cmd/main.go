@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/admission/v1"
@@ -35,6 +36,8 @@ import (
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/pkg/buildinfo"
+	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
@@ -54,6 +57,15 @@ var WebhookCommand = &cobra.Command{
 	Run:   serveWebhookTLS,
 }
 
+var VersionCommand = &cobra.Command{
+	Use:   "version",
+	Short: "Prints version information about the webhook server.",
+	Long:  `Prints version information about the webhook server.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		buildinfo.PrintVersion()
+	},
+}
+
 func init() {
 	WebhookCommand.Flags().StringVar(&certFile, "tls-cert-file", "", "File containing the default x509 Certificate for HTTPS. (CA cert, if any, concatenated after server cert).")
 	WebhookCommand.Flags().StringVar(&keyFile, "tls-private-key-file", "", "File containing the default x509 private key matching --tls-cert-file.")
@@ -65,6 +77,7 @@ func main() {
 	// Create the root command and add the webhook command to it.
 	rootCmd := &cobra.Command{Use: "webhook"}
 	rootCmd.AddCommand(WebhookCommand)
+	rootCmd.AddCommand(VersionCommand)
 	os.Exit(cli.Run(rootCmd))
 }
 
@@ -91,11 +104,15 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	}
 	cs, err := kubernetes.NewForConfig(rc)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create clientset")
+		logrus.WithError(err).Fatal("Failed to create Kubernetes clientset")
+	}
+	calicoCS, err := calicoclient.NewForConfig(rc)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create Calico clientset")
 	}
 
 	// Register webhook handlers.
-	registerHooks(cs)
+	registerHooks(cs, calicoCS)
 
 	// Create and run the server.
 	cfg, err := tls.NewTLSConfig()
@@ -114,8 +131,9 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	}
 }
 
-func registerHooks(cs kubernetes.Interface) {
-	rbac.RegisterHook(cs, utils.HandleFn(handleFn))
+func registerHooks(cs kubernetes.Interface, calicoCS calicoclient.Interface) {
+	rbac.RegisterHook(cs, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handleFn))
+	clusterinfo.RegisterHook(utils.HandleFn(handleFn))
 
 	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
 	http.HandleFunc("/readyz", readyFn())

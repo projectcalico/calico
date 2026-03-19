@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -28,12 +27,14 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 
+	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/e2e/pkg/utils/remotecluster"
@@ -41,10 +42,6 @@ import (
 )
 
 const (
-	maxNameLength          = 63
-	randomLength           = 5
-	maxGeneratedNameLength = maxNameLength - randomLength
-
 	roleLabel  = "e2e.projectcalico.org/role"
 	roleClient = "client"
 	roleServer = "server"
@@ -64,6 +61,7 @@ type ConnectionTester interface {
 	AddServer(server *Server)
 	Deploy()
 	Stop()
+	StopClient(client *Client)
 
 	// Methods for one-shot execution.
 	ExpectSuccess(client *Client, targets ...Target)
@@ -73,6 +71,15 @@ type ConnectionTester interface {
 
 	// Methods for continuous execution.
 	ExpectContinuously(client *Client, targets ...Target) Checkpointer
+
+	// Connect executes a connection attempt from the client to the target and returns the output.
+	// This is useful for traffic generation where you don't need success/failure semantics.
+	Connect(client *Client, target Target) (string, error)
+
+	// Methods for encryption verification. The client must have NET_RAW and NET_ADMIN
+	// capabilities for tcpdump (use WithCapture() client option).
+	ExpectEncrypted(client *Client, target Target)
+	ExpectPlaintext(client *Client, target Target)
 }
 
 // Checkpointer provides a way to checkpoint continuous connection tests at specific points in time
@@ -113,7 +120,7 @@ func (c *connectionTester) deploy() error {
 			continue
 		}
 		By(fmt.Sprintf("Deploying client pod %s/%s", client.namespace.Name, client.name))
-		pod, err := createClientPod(c.f, client.namespace, client.name, client.labels, client.customizer)
+		pod, err := createClientPod(c.f, client.namespace, client.name, client.labels, client.composedCustomizer())
 		if err != nil {
 			return err
 		}
@@ -131,8 +138,8 @@ func (c *connectionTester) deploy() error {
 			server.name,
 			server.ports,
 			server.labels,
-			server.podCustomizer,
-			server.svcCustomizer,
+			server.composedPodCustomizer(),
+			server.composedSvcCustomizer(),
 			server.autoCreateSvc,
 		)
 		server.pod = pod
@@ -141,10 +148,16 @@ func (c *connectionTester) deploy() error {
 
 	// Wait for all pods to be running.
 	By("Waiting for all pods in the connection checker to be running")
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	timeout := 1 * time.Minute
+	if windows.ClusterIsWindows() {
+		// Windows images are very large (sometimes 2GB+), so this needs a considerably
+		// longer timeout in order to allow them to be pulled
+		timeout = 15 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	for _, client := range c.clients {
-		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, 1*time.Minute)
+		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, timeout)
 		if err != nil {
 			return err
 		}
@@ -156,7 +169,7 @@ func (c *connectionTester) deploy() error {
 		client.pod = p
 	}
 	for _, server := range c.servers {
-		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, server.pod.Name, server.pod.Namespace, 1*time.Minute)
+		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, server.pod.Name, server.pod.Namespace, timeout)
 		if err != nil {
 			return err
 		}
@@ -185,7 +198,7 @@ func (c *connectionTester) stop() error {
 	for _, client := range c.clients {
 		By(fmt.Sprintf("Deleting client pod %s", client.pod.Name))
 		err := c.f.ClientSet.CoreV1().Pods(client.namespace.Name).Delete(ctx, client.pod.Name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -193,13 +206,13 @@ func (c *connectionTester) stop() error {
 	for _, server := range c.servers {
 		By(fmt.Sprintf("Deleting server pod %s", server.pod.Name))
 		err := c.f.ClientSet.CoreV1().Pods(server.namespace.Name).Delete(ctx, server.pod.Name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 		if server.service != nil {
 			By(fmt.Sprintf("Deleting server service %s", server.service.Name))
 			err = c.f.ClientSet.CoreV1().Services(server.namespace.Name).Delete(ctx, server.service.Name, metav1.DeleteOptions{})
-			if err != nil {
+			if err != nil && !apierrors.IsNotFound(err) {
 				return err
 			}
 		}
@@ -239,6 +252,33 @@ func (c *connectionTester) AddClient(client *Client) {
 		framework.Failf("Client with ID %s already exists", client.ID())
 	}
 	c.clients[client.ID()] = client
+}
+
+func (c *connectionTester) StopClient(client *Client) {
+	framework.ExpectNoErrorWithOffset(1, c.stopClient(client))
+}
+
+func (c *connectionTester) stopClient(client *Client) error {
+	id := client.ID()
+	if _, ok := c.clients[id]; !ok {
+		return fmt.Errorf("client %s not found", id)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	if client.pod != nil {
+		By(fmt.Sprintf("Stopping client pod %s", client.pod.Name))
+		err := c.f.ClientSet.CoreV1().Pods(client.namespace.Name).Delete(ctx, client.pod.Name, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		if err := e2epod.WaitForPodNotFoundInNamespace(
+			ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, 1*time.Minute,
+		); err != nil {
+			return err
+		}
+	}
+	delete(c.clients, id)
+	return nil
 }
 
 func (c *connectionTester) AddServer(server *Server) {
@@ -359,7 +399,7 @@ func (c *connectionTester) Execute() {
 	// Context to control overall timeout for all connections. After it times out, we'll forcefully
 	// terminate any remaining connections. This avoids deadlocking the test waiting for results if
 	// something goes wrong.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Launch all of the connections in parallel. We'll wait for them all to finish at the end and report on success / failure.
@@ -494,9 +534,7 @@ func (c *connectionTester) command(t Target) string {
 		// Windows.
 		switch t.GetProtocol() {
 		case TCP:
-			cmd = fmt.Sprintf("$sb={Invoke-WebRequest %s -UseBasicParsing -TimeoutSec 3 -DisableKeepAlive}; "+
-				"For ($i=0; $i -lt 5; $i++) { sleep 5; "+
-				"try {& $sb} catch { echo failed loop $i ; continue }; exit 0 ; }; exit 1", t.Destination())
+			cmd = fmt.Sprintf("Invoke-WebRequest %s -UseBasicParsing -TimeoutSec 5 -DisableKeepAlive -ErrorAction Stop | Out-Null", t.Destination())
 		case ICMP:
 			cmd = fmt.Sprintf("Test-Connection -Count 5 -ComputerName %s", t.Destination())
 		default:
@@ -591,12 +629,12 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	nodeselector := map[string]string{}
 
 	// Randomize pod names to avoid clashes with previous tests.
-	podName := GenerateRandomName(baseName)
+	podName := utils.GenerateRandomName(baseName)
 
 	if windows.ClusterIsWindows() {
 		image = images.WindowsClientImage()
 		command = []string{"powershell.exe"}
-		args = []string{"Start-Sleep", "600"}
+		args = []string{"Start-Sleep", "3600"}
 		nodeselector["kubernetes.io/os"] = "windows"
 	} else {
 		image = images.Alpine
@@ -745,28 +783,11 @@ func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
 	e2eoutput.DumpDebugInfo(context.Background(), f.ClientSet, f.Namespace.Name)
 }
 
-func GenerateRandomName(base string) string {
-	if len(base) > maxGeneratedNameLength {
-		base = base[:maxGeneratedNameLength]
-	}
-	return fmt.Sprintf("%s-%s", base, randomString(randomLength))
-}
-
-func randomString(length int) string {
-	// Generate a random string of the specified length.
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(b)
-}
-
 // ExecInPod executes a kubectl command in a pod. Returns the response as a string, or an error upon failure.
 func ExecInPod(pod *v1.Pod, sh, opt, cmd string) (string, error) {
 	args := []string{"exec", pod.Name, "--", sh, opt, cmd}
 	return kubectl.NewKubectlCommand(pod.Namespace, args...).
-		WithTimeout(time.After(5 * time.Second)).
+		WithTimeout(time.After(10 * time.Second)).
 		Exec()
 }
 

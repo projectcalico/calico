@@ -22,11 +22,14 @@ LOCAL_CHECKS = LIBBPF_FILE_CREATED
 LIBBPF_A=../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 
-# Complete list of files from other directories that we need to build calico/node.
-REMOTE_DEPS = $(LIBBPF_A) \
-	      filesystem/usr/lib/calico/bpf \
-	      filesystem/etc/calico/confd/conf.d \
-	      filesystem/etc/calico/confd/templates
+## BUILD_DEPS are intermediate build artifacts needed by the image (also used by clean).
+BUILD_DEPS = $(LIBBPF_A) \
+	     filesystem/usr/lib/calico/bpf \
+	     filesystem/etc/calico/confd/conf.d \
+	     filesystem/etc/calico/confd/templates
+
+## IMAGE_DEPS lists non-Go files the calico/node image depends on.
+IMAGE_DEPS = ./Dockerfile.$(ARCH) $(BUILD_DEPS)
 
 # Run these tests against the projectcalico.org/v3 API group by default.
 CALICO_API_GROUP ?= projectcalico.org/v3
@@ -141,16 +144,9 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-# Source golang files on which compiling the calico-node binary depends.
-SRC_FILES=$(shell find ./pkg -name '*.go') \
-	  $(shell find ./cmd -name '*.go') \
-	  $(shell find ../felix -name '*.go') \
-	  $(shell find ../app-policy -name '*.go') \
-	  $(shell find ../typha -name '*.go') \
-	  $(shell find ../felix -name '*.[ch]') \
-	  $(shell find ../libcalico-go -name '*.go') \
-	  $(shell find ../goldmane -name '*.go') \
-	  $(shell find ../confd -name '*.go')
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
+## Append non-Go sources that also affect the build.
+SRC_FILES += $(shell find ../felix -name '*.[ch]')
 
 ## Clean enough that a new release build will be clean
 clean: clean-windows
@@ -159,9 +155,9 @@ clean: clean-windows
 	find . -name '.*.published*' -type f -delete
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
-	rm -rf $(REMOTE_DEPS)
+	rm -rf $(BUILD_DEPS)
 	rm -rf filesystem/included-source
-	rm -rf tests/k8st/infra/operator
+	rm -rf $(REPO_ROOT)/hack/test/kind/infra/operator
 	rm -rf dist
 	rm -rf bin
 	# We build these as part of the node build, so clean them as part of the clean.
@@ -201,6 +197,10 @@ $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
+	# Clean stale build artifacts that may reference headers from a previous
+	# build environment (e.g., Docker container with different clang version).
+	make -C ../felix/bpf-gpl clean
+	make -C ../felix/bpf-apache clean
 	make -C ../felix build-bpf ARCH=$(ARCH)
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
@@ -262,13 +262,14 @@ dist/LICENSE: ../LICENSE.md
 	mkdir -p dist
 	cp ../LICENSE.md $@
 
-image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
-$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
+image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER) | register
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
 	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
 	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
@@ -283,30 +284,19 @@ $(BIRD_SOURCE): .bird-source.created
 
 # include GPL felix code in the image.
 $(FELIX_GPL_SOURCE): .felix-gpl-source.created
-.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f)
+.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d' -not -path '*/libbpf/*')
 	rm -rf filesystem/included-source/felix*
 	mkdir -p filesystem/included-source/
-	tar cf $(FELIX_GPL_SOURCE) ../felix/bpf-gpl --use-compress-program="xz -T0"
+	tar cf $(FELIX_GPL_SOURCE) \
+		--exclude='*.ll' --exclude='*.o' --exclude='*.d' \
+		--exclude='libbpf' \
+		--use-compress-program="xz -T0" \
+		../felix/bpf-gpl
 	touch $@
 
 ###############################################################################
 # FV Tests
 ###############################################################################
-K8ST_IMAGE_TARS=calico-node.tar \
-	calico-typha.tar \
-	calico-apiserver.tar \
-	calico-cni.tar \
-	pod2daemon.tar \
-	csi.tar \
-	node-driver-registrar.tar \
-	calicoctl.tar \
-	kube-controllers.tar \
-	operator.tar \
-	webhook.tar \
-	whisker.tar \
-	whisker-backend.tar \
-	goldmane.tar
-
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
 WHAT=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir node/')
@@ -317,13 +307,13 @@ endif
 
 ## Run the ginkgo tests.
 ut fv: $(LIBBPF_A) run-k8s-apiserver
+	mkdir -p report
 	$(DOCKER_RUN) \
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	-e GINKGO_ARGS="$(GINKGO_ARGS)" \
-	$(CALICO_BUILD) ./run-uts $(WHAT)
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
@@ -368,101 +358,12 @@ chart: $(CHARTS)
 ../bin/projectcalico.org.v3-$(GIT_VERSION).tgz:
 	make -C ../ bin/projectcalico.org.v3-$(GIT_VERSION).tgz
 
-# Tag to use for images built for e2e testing. This must match the image tag used in
-# tests/k8st/infra/calico_versions.yml
-TEST_BUILD_TAG=test-build
-
-operator.tar: $(K8ST_IMAGE_TARS) tests/k8st/infra/calico_versions.yml
-	cd tests/k8st/infra/ && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
-	docker save --output $@ docker.io/tigera/operator:$(TEST_BUILD_TAG)
-
-calico-node.tar: $(NODE_CONTAINER_CREATED)
-	docker tag $(NODE_IMAGE):latest-$(ARCH) calico/node:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/node:$(TEST_BUILD_TAG)
-
-calico-typha.tar: ../go.mod $(shell find ../typha -name '*.go') $(shell find ../libcalico-go -name '*.go')
-	make -C ../typha image
-	docker tag calico/typha:latest-$(ARCH) calico/typha:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/typha:$(TEST_BUILD_TAG)
-
-calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go') $(shell find ../libcalico-go -name '*.go')
-	make -C ../apiserver image
-	docker tag calico/apiserver:latest-$(ARCH) calico/apiserver:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/apiserver:$(TEST_BUILD_TAG)
-
-calico-cni.tar: ../go.mod $(shell find ../cni-plugin -name '*.go') $(shell find ../libcalico-go -name '*.go')
-	make -C ../cni-plugin image
-	docker tag calico/cni:latest-$(ARCH) calico/cni:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/cni:$(TEST_BUILD_TAG)
-
-csi.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
-	make -C ../pod2daemon image
-	docker tag calico/csi:latest-$(ARCH) calico/csi:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/csi:$(TEST_BUILD_TAG)
-
-node-driver-registrar.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
-	make -C ../pod2daemon image
-	docker tag calico/node-driver-registrar:latest-$(ARCH) calico/node-driver-registrar:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/node-driver-registrar:$(TEST_BUILD_TAG)
-
-pod2daemon.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
-	make -C ../pod2daemon image
-	docker tag calico/pod2daemon-flexvol:latest-$(ARCH) calico/pod2daemon-flexvol:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/pod2daemon-flexvol:$(TEST_BUILD_TAG)
-
-calicoctl.tar: ../go.mod $(shell find ../calicoctl -name '*.go') $(shell find ../libcalico-go -name '*.go')
-	make -C ../calicoctl image
-	docker tag calico/ctl:latest-$(ARCH) calico/ctl:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/ctl:$(TEST_BUILD_TAG)
-
-kube-controllers.tar: ../go.mod $(shell find ../kube-controllers -name '*.go') $(shell find ../libcalico-go -name '*.go')
-	make -C ../kube-controllers image
-	docker tag calico/kube-controllers:latest-$(ARCH) calico/kube-controllers:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/kube-controllers:$(TEST_BUILD_TAG)
-
-goldmane.tar: ../go.mod $(shell find ../goldmane -name '*.go')
-	make -C ../goldmane image
-	docker tag calico/goldmane:latest-$(ARCH) calico/goldmane:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/goldmane:$(TEST_BUILD_TAG)
-
-webhook.tar: ../go.mod $(shell find ../webhooks -name '*.go') $(shell find ../libcalico-go -name '*.go')
-	make -C ../webhooks image
-	docker tag calico/webhooks:latest-$(ARCH) calico/webhooks:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/webhooks:$(TEST_BUILD_TAG)
-
-whisker.tar: ../go.mod $(shell find ../whisker)
-	make -C ../whisker image
-	docker tag calico/whisker:latest-$(ARCH) calico/whisker:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/whisker:$(TEST_BUILD_TAG)
-
-whisker-backend.tar: ../go.mod $(shell find ../whisker-backend -name '*.go')
-	make -C ../whisker-backend image
-	docker tag calico/whisker-backend:latest-$(ARCH) calico/whisker-backend:$(TEST_BUILD_TAG)
-	docker save --output $@ calico/whisker-backend:$(TEST_BUILD_TAG)
-
-load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
-	# Load the latest tar files onto the currently running kind cluster.
-	KUBECONFIG=$(KIND_KUBECONFIG) KIND=$(KIND) ./tests/k8st/load_images_on_kind_cluster.sh
-	# Restart the Calico containers so they launch with the newly loaded code.
-	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
-	# calicoctl is deployed as a pod on the cluster and needs to be recreated.
-	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f tests/k8st/infra/calicoctl.yaml
-
 .PHONY: k8s-test
 ## Run the k8s tests
 k8s-test:
-	$(MAKE) kind-k8st-setup
+	$(MAKE) -C $(REPO_ROOT) kind-up
 	$(MAKE) kind-k8st-run-test
-	$(MAKE) kind-k8st-cleanup
-
-.PHONY: kind-k8st-setup
-kind-k8st-setup: $(K8ST_IMAGE_TARS) $(CHARTS) kind-cluster-create
-	KUBECONFIG=$(KIND_KUBECONFIG) \
-	KIND=$(KIND) \
-	ARCH=$(ARCH) \
-	GIT_VERSION=$(GIT_VERSION) \
-	CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	./tests/k8st/deploy_resources_on_kind_cluster.sh
+	$(MAKE) -C $(REPO_ROOT) kind-down
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
@@ -477,9 +378,6 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
 	     cd /code/tests/k8st && pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
-
-.PHONY: kind-k8st-cleanup
-kind-k8st-cleanup: kind-cluster-destroy
 
 ###############################################################################
 # CI/CD

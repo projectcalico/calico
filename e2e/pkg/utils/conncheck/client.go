@@ -42,11 +42,24 @@ func NewClient(id string, ns *v1.Namespace, opts ...ClientOption) *Client {
 }
 
 type Client struct {
-	name       string
-	namespace  *v1.Namespace
-	labels     map[string]string
-	pod        *v1.Pod
-	customizer func(pod *v1.Pod)
+	name        string
+	namespace   *v1.Namespace
+	labels      map[string]string
+	pod         *v1.Pod
+	customizers []func(pod *v1.Pod)
+}
+
+// composedCustomizer returns a single customizer function that applies all
+// registered customizers in order, or nil if none are registered.
+func (c *Client) composedCustomizer() func(*v1.Pod) {
+	if len(c.customizers) == 0 {
+		return nil
+	}
+	return func(pod *v1.Pod) {
+		for _, fn := range c.customizers {
+			fn(pod)
+		}
+	}
 }
 
 func (c *Client) ID() string {
@@ -76,7 +89,35 @@ func WithClientLabels(labels map[string]string) ClientOption {
 
 func WithClientCustomizer(customizer func(pod *v1.Pod)) ClientOption {
 	return func(c *Client) error {
-		c.customizer = customizer
+		c.customizers = append(c.customizers, customizer)
 		return nil
 	}
 }
+
+// WithCapture configures the client pod with NET_RAW and NET_ADMIN capabilities required
+// for packet capture with tcpdump. Use this when calling ExpectEncrypted/ExpectPlaintext.
+// The client image must include tcpdump (e.g., netshoot or a custom image).
+func WithCapture() ClientOption {
+	return WithClientCustomizer(func(pod *v1.Pod) {
+		if pod.Spec.SecurityContext == nil {
+			pod.Spec.SecurityContext = &v1.PodSecurityContext{}
+		}
+		pod.Spec.SecurityContext.RunAsUser = ptrInt64(0)
+		if len(pod.Spec.Containers) > 0 {
+			c := &pod.Spec.Containers[0]
+			if c.SecurityContext == nil {
+				c.SecurityContext = &v1.SecurityContext{}
+			}
+			c.SecurityContext.RunAsUser = ptrInt64(0)
+			if c.SecurityContext.Capabilities == nil {
+				c.SecurityContext.Capabilities = &v1.Capabilities{}
+			}
+			c.SecurityContext.Capabilities.Add = append(
+				c.SecurityContext.Capabilities.Add,
+				"NET_RAW", "NET_ADMIN",
+			)
+		}
+	})
+}
+
+func ptrInt64(v int64) *int64 { return &v }

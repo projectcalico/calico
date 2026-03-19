@@ -722,7 +722,7 @@ func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName s
 	t.currentRoutes[ifaceName] = targets
 }
 
-func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, cidr ip.CIDR) {
+func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, routeKey routetable.RouteKey) {
 }
 
 func (t *mockRouteTable) RouteUpdate(routeClass routetable.RouteClass, ifaceName string, target routetable.Target) {
@@ -866,6 +866,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			epMgr = newEndpointManagerWithShims(
+				&endpointManagerConfig{
+					kubeIPVSSupportEnabled: rrConfigNormal.KubeIPVSSupportEnabled,
+					wlInterfacePrefixes:    []string{"cali"},
+					bpfEnabled:             false,
+					bpfAttachType:          v3.BPFAttachOptionTCX,
+					nft:                    false,
+					floatingIPsEnabled:     true,
+				},
 				rawTable,
 				mangleTable,
 				filterTable,
@@ -873,20 +881,16 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				routeTable,
 				ipVersion,
 				rules.NewEndpointMarkMapper(rrConfigNormal.MarkEndpoint, rrConfigNormal.MarkNonCaliEndpoint),
-				rrConfigNormal.KubeIPVSSupportEnabled,
-				[]string{"cali"},
 				statusReportRec.endpointStatusUpdateCallback,
 				mockProcSys.write,
 				mockProcSys.stat,
 				"1",
 				nil,
-				false,
-				v3.BPFAttachOptionTCX,
 				hepListener,
 				common.NewCallbacks(),
-				true,
-				false,
 				linkAddrsMgr,
+				nil, // arpTable
+				nil, // arpMaps
 			)
 		})
 
@@ -1870,12 +1874,16 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				It("should set routes", func() {
 					if ipVersion == 6 {
 						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
-							CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+							RouteKey: routetable.RouteKey{
+								CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+							},
 							DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 						}})
 					} else {
 						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
-							CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
+							RouteKey: routetable.RouteKey{
+								CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
+							},
 							DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 						}})
 					}
@@ -1976,30 +1984,42 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							if ipVersion == 6 {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDROrIP("2001:db8:3::2/128"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("2001:db8:3::2/128"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDROrIP("2001:db8:4::2/128"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("2001:db8:4::2/128"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
 							} else {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDROrIP("172.16.1.3/32"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("172.16.1.3/32"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDROrIP("172.18.1.4/32"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("172.18.1.4/32"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
@@ -2012,7 +2032,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					// programmed.
 					Context("with floating IPs disabled, but added to the endpoint", func() {
 						JustBeforeEach(func() {
-							epMgr.floatingIPsEnabled = false
+							epMgr.cfg.floatingIPsEnabled = false
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 								Id: &wlEPID1,
 								Endpoint: &proto.WorkloadEndpoint{
@@ -2045,14 +2065,18 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							if ipVersion == 6 {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
 							} else {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
@@ -2117,12 +2141,16 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						It("should have set routes for new iface", func() {
 							if ipVersion == 6 {
 								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
-									CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+									RouteKey: routetable.RouteKey{
+										CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+									},
 									DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 								}})
 							} else {
 								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
-									CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
+									RouteKey: routetable.RouteKey{
+										CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
+									},
 									DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 								}})
 							}
@@ -2295,6 +2323,151 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should remove routes", func() {
+					routeTable.checkRoutes("cali12345-ab", nil)
+				})
+			})
+		})
+
+		Describe("live migration route priority", func() {
+			const (
+				normalPriority   = 100
+				elevatedPriority = 50
+			)
+
+			wlEPUpdate := &proto.WorkloadEndpointUpdate{
+				Id: &wlEPID1,
+				Endpoint: &proto.WorkloadEndpoint{
+					State:      "active",
+					Mac:        "01:02:03:04:05:06",
+					Name:       "cali12345-ab",
+					ProfileIds: []string{},
+					Tiers:      []*proto.TierInfo{},
+					Ipv4Nets:   []string{"10.0.240.2/24"},
+					Ipv6Nets:   []string{"2001:db8:2::2/128"},
+				},
+			}
+
+			expectedRouteTarget := func(priority int) []routetable.Target {
+				var cidr string
+				if ipVersion == 6 {
+					cidr = "2001:db8:2::2/128"
+				} else {
+					cidr = "10.0.240.0/24"
+				}
+				return []routetable.Target{{
+					RouteKey: routetable.RouteKey{
+						CIDR:     ip.MustParseCIDROrIP(cidr),
+						Priority: priority,
+					},
+					DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+				}}
+			}
+
+			JustBeforeEach(func() {
+				// Override config with explicit route priorities.
+				epMgr.cfg.normalRoutePriority = normalPriority
+				epMgr.cfg.elevatedRoutePriority = elevatedPriority
+			})
+
+			Context("with endpoint already active", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(wlEPUpdate)
+					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					applyUpdates(epMgr)
+				})
+
+				It("should set routes at normal priority", func() {
+					routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+				})
+
+				Context("when live migration state becomes Target", func() {
+					JustBeforeEach(func() {
+						epMgr.OnLiveMigrationStateUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							liveMigrationStateTarget,
+						)
+						applyUpdates(epMgr)
+					})
+
+					It("should suppress routes", func() {
+						routeTable.checkRoutes("cali12345-ab", nil)
+					})
+
+					Context("when live migration state becomes Live", func() {
+						JustBeforeEach(func() {
+							epMgr.OnLiveMigrationStateUpdate(
+								types.ProtoToWorkloadEndpointID(&wlEPID1),
+								liveMigrationStateLive,
+							)
+							applyUpdates(epMgr)
+						})
+
+						It("should set routes at elevated priority", func() {
+							routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+						})
+
+						Context("when live migration state becomes TimeWait", func() {
+							JustBeforeEach(func() {
+								epMgr.OnLiveMigrationStateUpdate(
+									types.ProtoToWorkloadEndpointID(&wlEPID1),
+									liveMigrationStateTimeWait,
+								)
+								applyUpdates(epMgr)
+							})
+
+							It("should still set routes at elevated priority", func() {
+								routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+							})
+
+							Context("when live migration state becomes Base", func() {
+								JustBeforeEach(func() {
+									epMgr.OnLiveMigrationStateUpdate(
+										types.ProtoToWorkloadEndpointID(&wlEPID1),
+										liveMigrationStateBase,
+									)
+									applyUpdates(epMgr)
+								})
+
+								It("should revert to normal priority", func() {
+									routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+								})
+							})
+						})
+					})
+				})
+
+				Context("when endpoint is removed while in live migration", func() {
+					JustBeforeEach(func() {
+						epMgr.OnLiveMigrationStateUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							liveMigrationStateLive,
+						)
+						applyUpdates(epMgr)
+						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &wlEPID1})
+						applyUpdates(epMgr)
+					})
+
+					It("should remove routes and clean up live migration state", func() {
+						routeTable.checkRoutes("cali12345-ab", nil)
+						Expect(epMgr.pendingLiveMigrationStates).To(BeEmpty())
+					})
+				})
+			})
+
+			Context("when live migration state arrives before endpoint", func() {
+				JustBeforeEach(func() {
+					// Live migration state update arrives but WEP isn't active yet.
+					epMgr.OnLiveMigrationStateUpdate(
+						types.ProtoToWorkloadEndpointID(&wlEPID1),
+						liveMigrationStateTarget,
+					)
+					// Now the WEP arrives.
+					epMgr.OnUpdate(wlEPUpdate)
+					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					applyUpdates(epMgr)
+				})
+
+				It("should suppress routes for the target", func() {
 					routeTable.checkRoutes("cali12345-ab", nil)
 				})
 			})

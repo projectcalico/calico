@@ -14,10 +14,9 @@ import (
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 func newFuncMap() map[string]any {
@@ -41,7 +40,6 @@ func newFuncMap() map[string]any {
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
 	m["bgpFilterBIRDFuncs"] = BGPFilterBIRDFuncs
-	m["ippoolsFilterBIRDFunc"] = IPPoolsFilterBIRDFunc
 	return m
 }
 
@@ -68,6 +66,10 @@ func addCalicoFuncs(funcMap map[string]any) {
 // filterStatement produces a single comparison expression to be used within a multi-statement BIRD filter
 // function.
 // e.g input of ("In", "77.0.0.1/16", "accept") produces output of "if ((net ~ 77.0.0.1/16)) then { accept; }"
+//
+// When operations are present (only valid with Accept action), the output becomes a block:
+//
+//	if (<conditions>) then { <op1>; <op2>; accept; }
 func filterStatement(fields filterArgs) (string, error) {
 	actionStatement, err := filterAction(fields.action)
 	if err != nil {
@@ -89,7 +91,7 @@ func filterStatement(fields filterArgs) (string, error) {
 	if fields.source != "" {
 		sourceCondition, err := filterMatchSource(fields.source)
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 		conditions = append(conditions, sourceCondition)
 	}
@@ -97,16 +99,52 @@ func filterStatement(fields filterArgs) (string, error) {
 	if fields.iface != "" {
 		ifaceCondition, err := filterMatchInterface(fields.iface)
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 		conditions = append(conditions, ifaceCondition)
 	}
 
+	if fields.communities != nil {
+		communityCondition, err := filterMatchCommunity(fields.communities)
+		if err != nil {
+			return "", err
+		}
+		conditions = append(conditions, communityCondition)
+	}
+
+	if len(fields.asPathPrefix) > 0 {
+		aspCondition, err := filterMatchASPathPrefix(fields.asPathPrefix)
+		if err != nil {
+			return "", err
+		}
+		conditions = append(conditions, aspCondition)
+	}
+
+	if fields.priority != nil {
+		priorityCondition, err := filterMatchPriority(fields.priority)
+		if err != nil {
+			return "", err
+		}
+		conditions = append(conditions, priorityCondition)
+	}
+
+	// Build the body: operations (if any) followed by the action.
+	var bodyParts []string
+	if len(fields.operations) > 0 {
+		opStmts, err := filterOperationStatements(fields.operations)
+		if err != nil {
+			return "", err
+		}
+		bodyParts = append(bodyParts, opStmts...)
+	}
+	bodyParts = append(bodyParts, actionStatement)
+	body := strings.Join(bodyParts, " ")
+
 	conditionExpr := strings.Join(conditions, "&&")
 	if conditionExpr != "" {
-		return fmt.Sprintf("if (%s) then { %s }", conditionExpr, actionStatement), nil
+		return fmt.Sprintf("if (%s) then { %s }", conditionExpr, body), nil
 	}
-	return actionStatement, nil
+	return body, nil
 }
 
 func filterAction(action v3.BGPFilterAction) (string, error) {
@@ -118,10 +156,10 @@ func filterAction(action v3.BGPFilterAction) (string, error) {
 
 var (
 	operatorLUT = map[v3.BGPFilterMatchOperator]string{
-		v3.Equal:    "=",
-		v3.NotEqual: "!=",
-		v3.In:       "~",
-		v3.NotIn:    "!~",
+		v3.MatchOperatorEqual:    "=",
+		v3.MatchOperatorNotEqual: "!=",
+		v3.MatchOperatorIn:       "~",
+		v3.MatchOperatorNotIn:    "!~",
 	}
 )
 
@@ -187,6 +225,84 @@ func filterMatchInterface(iface string) (string, error) {
 	return fmt.Sprintf("((defined(ifname))&&(ifname ~ \"%s\"))", iface), nil
 }
 
+// filterMatchCommunity generates a BIRD condition that checks if a route has the specified community.
+// Standard communities (aa:nn) use bgp_community, large communities (aa:nn:mm) use bgp_large_community.
+func filterMatchCommunity(communities *v3.BGPFilterCommunityMatch) (string, error) {
+	if communities == nil || len(communities.Values) == 0 {
+		return "", fmt.Errorf("empty communities in BGPFilter")
+	}
+	// Currently MaxItems=1, so we only handle one value.
+	value := string(communities.Values[0])
+	parts := strings.Split(value, ":")
+	switch len(parts) {
+	case 2:
+		// Standard community: (aa, nn) ~ bgp_community
+		return fmt.Sprintf("((%s, %s) ~ bgp_community)", parts[0], parts[1]), nil
+	case 3:
+		// Large community: (aa, nn, mm) ~ bgp_large_community
+		return fmt.Sprintf("((%s, %s, %s) ~ bgp_large_community)", parts[0], parts[1], parts[2]), nil
+	default:
+		return "", fmt.Errorf("invalid community value format in BGPFilter: %s", value)
+	}
+}
+
+// filterMatchASPathPrefix generates a BIRD condition that checks if a route's AS path begins
+// with the specified sequence of AS numbers.
+func filterMatchASPathPrefix(asPathPrefix []numorstring.ASNumber) (string, error) {
+	if len(asPathPrefix) == 0 {
+		return "", fmt.Errorf("empty AS path prefix in BGPFilter")
+	}
+	var asns []string
+	for _, asn := range asPathPrefix {
+		asns = append(asns, asn.String())
+	}
+	return fmt.Sprintf("(bgp_path ~ [= %s * =])", strings.Join(asns, " ")), nil
+}
+
+// filterMatchPriority generates a BIRD condition that checks if a route has the specified
+// priority (krt_metric).
+func filterMatchPriority(priority *int) (string, error) {
+	if priority == nil {
+		return "", fmt.Errorf("nil priority in BGPFilter")
+	}
+	return fmt.Sprintf("(krt_metric = %d)", *priority), nil
+}
+
+// filterOperationStatements generates BIRD statements for the operations in a filter rule.
+func filterOperationStatements(operations []v3.BGPFilterOperation) ([]string, error) {
+	var stmts []string
+	for _, op := range operations {
+		if op.AddCommunity != nil {
+			if op.AddCommunity.Value == nil {
+				return nil, fmt.Errorf("BGPFilter AddCommunity operation has nil value")
+			}
+			parts := strings.Split(string(*op.AddCommunity.Value), ":")
+			switch len(parts) {
+			case 2:
+				stmts = append(stmts, fmt.Sprintf("bgp_community.add((%s, %s));", parts[0], parts[1]))
+			case 3:
+				stmts = append(stmts, fmt.Sprintf("bgp_large_community.add((%s, %s, %s));", parts[0], parts[1], parts[2]))
+			default:
+				return nil, fmt.Errorf("invalid community value format in BGPFilter operation: %s", *op.AddCommunity.Value)
+			}
+		} else if op.PrependASPath != nil {
+			// BIRD prepends one ASN at a time. The last prepend ends up first in the path,
+			// so we iterate in reverse to get the desired order.
+			for i := len(op.PrependASPath.Prefix) - 1; i >= 0; i-- {
+				stmts = append(stmts, fmt.Sprintf("bgp_path.prepend(%s);", op.PrependASPath.Prefix[i].String()))
+			}
+		} else if op.SetPriority != nil {
+			if op.SetPriority.Value == nil {
+				return nil, fmt.Errorf("BGPFilter SetPriority operation has nil value")
+			}
+			stmts = append(stmts, fmt.Sprintf("krt_metric = %d;", *op.SetPriority.Value))
+		} else {
+			return nil, fmt.Errorf("BGPFilter operation has no field set")
+		}
+	}
+	return stmts, nil
+}
+
 // BGPFilterFunctionName returns a formatted name for use as a BIRD function, truncating and hashing if the provided
 // name would result in a function name longer than the max allowable length of 64 chars.
 // e.g. input of ("my-bgp-filter", "import", "4") would result in output of "'bgp_my-bpg-filter_importFilterV4'"
@@ -213,51 +329,90 @@ type filterArgs struct {
 	prefixLengthV6 *v3.BGPFilterPrefixLengthV6
 	source         v3.BGPFilterMatchSource
 	iface          string
+	peerType       v3.BGPFilterPeerType
+	communities    *v3.BGPFilterCommunityMatch
+	asPathPrefix   []numorstring.ASNumber
+	priority       *int
 	action         v3.BGPFilterAction
+	operations     []v3.BGPFilterOperation
+}
+
+// filterArgsFromRuleV4 converts a BGPFilterRuleV4 to filterArgs.
+func filterArgsFromRuleV4(rule v3.BGPFilterRuleV4) filterArgs {
+	return filterArgs{
+		operator:       rule.MatchOperator,
+		cidr:           rule.CIDR,
+		prefixLengthV4: rule.PrefixLength,
+		source:         rule.Source,
+		iface:          rule.Interface,
+		peerType:       rule.PeerType,
+		communities:    rule.Communities,
+		asPathPrefix:   rule.ASPathPrefix,
+		priority:       rule.Priority,
+		action:         rule.Action,
+		operations:     rule.Operations,
+	}
+}
+
+// filterArgsFromRuleV6 converts a BGPFilterRuleV6 to filterArgs.
+func filterArgsFromRuleV6(rule v3.BGPFilterRuleV6) filterArgs {
+	return filterArgs{
+		operator:       rule.MatchOperator,
+		cidr:           rule.CIDR,
+		prefixLengthV6: rule.PrefixLength,
+		source:         rule.Source,
+		iface:          rule.Interface,
+		peerType:       rule.PeerType,
+		communities:    rule.Communities,
+		asPathPrefix:   rule.ASPathPrefix,
+		priority:       rule.Priority,
+		action:         rule.Action,
+		operations:     rule.Operations,
+	}
+}
+
+// hasPeerTypeRules returns true if any of the given filterArgs have a PeerType set.
+func hasPeerTypeRules(rules []filterArgs) bool {
+	for _, r := range rules {
+		if r.peerType != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// emitFilterRules generates the BIRD filter function body lines for the given rules.
+// Rules with PeerType are wrapped in if (is_same_as) / if (!is_same_as) guards.
+func emitFilterRules(ruleFields []filterArgs) ([]string, error) {
+	var lines []string
+	for _, fields := range ruleFields {
+		filterRule, err := filterStatement(fields)
+		if err != nil {
+			return nil, err
+		}
+
+		// Wrap the rule in a PeerType guard if the rule specifies a PeerType.
+		switch fields.peerType {
+		case v3.BGPFilterPeerTypeIBGP:
+			filterRule = fmt.Sprintf("if (is_same_as) then { %s }", filterRule)
+		case v3.BGPFilterPeerTypeEBGP:
+			filterRule = fmt.Sprintf("if (!is_same_as) then { %s }", filterRule)
+		}
+
+		lines = append(lines, fmt.Sprintf("  %s", filterRule))
+	}
+	return lines, nil
 }
 
 // BGPFilterBIRDFuncs generates a set of BIRD functions for BGPFilter resources that have been packaged into KVPairs.
 // By doing the formatting inside of this function we eliminate the need to copy and paste repeated blocks of golang
-// template code into our BIRD config templates that is both difficult to read and prone to errors
+// template code into our BIRD config templates that is both difficult to read and prone to errors.
 //
-// e.g. for a BGPFilter resource specified as follows:
+// When any rule within a filter uses PeerType, the generated function takes a bool parameter:
 //
-// kind: BGPFilter
-// apiVersion: projectcalico.org/v3
-// metadata:
+//	function 'bgp_myfilter_importFilterV4'(bool is_same_as) { ... }
 //
-//	name: test-bgpfilter
-//
-// spec:
-//
-//	exportV4:
-//	  - action: Accept
-//	    matchOperator: In
-//	    cidr: 77.0.0.0/16
-//	  - action: Reject
-//	    matchOperator: In
-//	    cidr: 77.1.0.0/16
-//	importV4:
-//	  - action: Accept
-//	    matchOperator: In
-//	    cidr: 44.0.0.0/16
-//	  - action: Reject
-//	    matchOperator: In
-//	    cidr: 44.1.0.0/16
-//
-// Would produce the following string array that can be easily output via BIRD config template:
-//
-//	[]string{
-//	  "# v4 BGPFilter test-bgpfilter",
-//	  "function 'bgp_test-bgpfilter_importFilterV4'() {",
-//	  "  if ((net ~ 44.0.0.0/16)) then { accept; }",
-//	  "  if ((net ~ 44.1.0.0/16)) then { reject; }",
-//	  "}",
-//	  "function 'bgp_test-bgpfilter_exportFilterV4'() {",
-//	  "  if ((net ~ 77.0.0.0/16)) then { accept; }",
-//	  "  if ((net ~ 77.1.0.0/16)) then { reject; }",
-//	  "}",
-//	 }
+// Rules with PeerType are then wrapped in if (is_same_as) / if (!is_same_as) guards.
 func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 	lines := []string{}
 	var line string
@@ -276,22 +431,17 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
 		}
 
-		importFiltersV4 := filter.Spec.ImportV4
-		exportFiltersV4 := filter.Spec.ExportV4
-		importFiltersV6 := filter.Spec.ImportV6
-		exportFiltersV6 := filter.Spec.ExportV6
-
 		var filterName string
 		var emitImports bool
 		var emitExports bool
 		v4Selected := version == 4
 
 		if v4Selected {
-			emitImports = len(importFiltersV4) > 0
-			emitExports = len(exportFiltersV4) > 0
+			emitImports = len(filter.Spec.ImportV4) > 0
+			emitExports = len(filter.Spec.ExportV4) > 0
 		} else {
-			emitImports = len(importFiltersV6) > 0
-			emitExports = len(exportFiltersV6) > 0
+			emitImports = len(filter.Spec.ImportV6) > 0
+			emitExports = len(filter.Spec.ExportV6) > 0
 		}
 
 		if emitImports || emitExports {
@@ -301,52 +451,37 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 		}
 
 		var filterFuncName string
-		var filterRule string
 		if emitImports {
 			filterFuncName, err = BGPFilterFunctionName(filterName, "import", versionStr)
 			if err != nil {
 				return []string{}, err
 			}
-			line = fmt.Sprintf("function %s() {", filterFuncName)
-			lines = append(lines, line)
 
 			var ruleFields []filterArgs
-
 			if v4Selected {
-				for _, importV4 := range importFiltersV4 {
-					ruleFields = append(ruleFields, filterArgs{
-						operator:       importV4.MatchOperator,
-						cidr:           importV4.CIDR,
-						prefixLengthV4: importV4.PrefixLength,
-						source:         importV4.Source,
-						iface:          importV4.Interface,
-						action:         importV4.Action,
-					})
+				for _, rule := range filter.Spec.ImportV4 {
+					ruleFields = append(ruleFields, filterArgsFromRuleV4(rule))
 				}
 			} else {
-				for _, importV6 := range importFiltersV6 {
-					ruleFields = append(ruleFields, filterArgs{
-						operator:       importV6.MatchOperator,
-						cidr:           importV6.CIDR,
-						prefixLengthV6: importV6.PrefixLength,
-						source:         importV6.Source,
-						iface:          importV6.Interface,
-						action:         importV6.Action,
-					})
+				for _, rule := range filter.Spec.ImportV6 {
+					ruleFields = append(ruleFields, filterArgsFromRuleV6(rule))
 				}
 			}
 
-			for _, fields := range ruleFields {
-				filterRule, err = filterStatement(fields)
-				if err != nil {
-					return []string{}, err
-				}
-				line = fmt.Sprintf("  %s", filterRule)
-				lines = append(lines, line)
+			if hasPeerTypeRules(ruleFields) {
+				line = fmt.Sprintf("function %s(bool is_same_as) {", filterFuncName)
+			} else {
+				line = fmt.Sprintf("function %s() {", filterFuncName)
 			}
-
-			line = "}"
 			lines = append(lines, line)
+
+			ruleLines, err := emitFilterRules(ruleFields)
+			if err != nil {
+				return []string{}, err
+			}
+			lines = append(lines, ruleLines...)
+
+			lines = append(lines, "}")
 		}
 
 		if emitExports {
@@ -354,46 +489,32 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 			if err != nil {
 				return []string{}, err
 			}
-			line = fmt.Sprintf("function %s() {", filterFuncName)
-			lines = append(lines, line)
 
 			var ruleFields []filterArgs
-
 			if v4Selected {
-				for _, exportV4 := range exportFiltersV4 {
-					ruleFields = append(ruleFields, filterArgs{
-						operator:       exportV4.MatchOperator,
-						cidr:           exportV4.CIDR,
-						prefixLengthV4: exportV4.PrefixLength,
-						source:         exportV4.Source,
-						iface:          exportV4.Interface,
-						action:         exportV4.Action,
-					})
+				for _, rule := range filter.Spec.ExportV4 {
+					ruleFields = append(ruleFields, filterArgsFromRuleV4(rule))
 				}
 			} else {
-				for _, exportV6 := range exportFiltersV6 {
-					ruleFields = append(ruleFields, filterArgs{
-						operator:       exportV6.MatchOperator,
-						cidr:           exportV6.CIDR,
-						prefixLengthV6: exportV6.PrefixLength,
-						source:         exportV6.Source,
-						iface:          exportV6.Interface,
-						action:         exportV6.Action,
-					})
+				for _, rule := range filter.Spec.ExportV6 {
+					ruleFields = append(ruleFields, filterArgsFromRuleV6(rule))
 				}
 			}
 
-			for _, fields := range ruleFields {
-				filterRule, err = filterStatement(fields)
-				if err != nil {
-					return []string{}, err
-				}
-				line = fmt.Sprintf("  %s", filterRule)
-				lines = append(lines, line)
+			if hasPeerTypeRules(ruleFields) {
+				line = fmt.Sprintf("function %s(bool is_same_as) {", filterFuncName)
+			} else {
+				line = fmt.Sprintf("function %s() {", filterFuncName)
 			}
-
-			line = "}"
 			lines = append(lines, line)
+
+			ruleLines, err := emitFilterRules(ruleFields)
+			if err != nil {
+				return []string{}, err
+			}
+			lines = append(lines, ruleLines...)
+
+			lines = append(lines, "}")
 		}
 	}
 	if len(lines) == 0 {
@@ -401,128 +522,6 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 		lines = append(lines, line)
 	}
 	return lines, nil
-}
-
-// This function generates BIRD statements for IPPool resources to be used as BIRD filters based on the following input:
-//   - pairs: IPPool resources packaged into KVPairs.
-//   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
-//     first reject disabled ippools, and then accept the rest at the end after all other filters. Allowed values are
-//     "accept", "reject", and "" (to not filter).
-//   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
-//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
-//   - localSubnet: the subnet of local node, which is needed by IPv4 IPIP pool in cross subnet mode.
-//   - version: the statement ip family.
-//
-// As an example, For the following sample IPPool resource:
-//
-// apiVersion: projectcalico.org/v3
-// kind: IPPool
-// metadata:
-//
-//	name: my.ippool-1
-//
-// spec:
-//
-//	cidr: 10.1.0.0/16
-//	ipipMode: Always
-//
-// this function generates the following statement for programming routes to kernel:
-//
-//	if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }
-//
-// and the following statement for exporting to BGP peers:
-//
-//	if (net ~ 10.10.0.0/16) then { accept; }
-func IPPoolsFilterBIRDFunc(
-	pairs memkv.KVPairs,
-	filterAction string,
-	forProgrammingKernel bool,
-	localSubnet string,
-	version int,
-) ([]string, error) {
-	if version != 4 && version != 6 {
-		return []string{}, fmt.Errorf("version must be either 4 or 6")
-	}
-
-	lines := []string{}
-	for _, kvp := range pairs {
-		var ippool model.IPPool
-		err := json.Unmarshal([]byte(kvp.Value), &ippool)
-		if err != nil {
-			return []string{}, fmt.Errorf("error unmarshalling JSON: %s", err)
-		}
-
-		cidr := ippool.CIDR.String()
-		var action, comment, extraStatement string
-		switch {
-		case ippool.DisableBGPExport && !forProgrammingKernel:
-			// IPPool's BGP export is disabled, and filter is for exporting to other peers.
-			action = "reject"
-			comment = "BGP export is disabled."
-		case ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet:
-			// VXLAN encapsulation is always handled by Felix.
-			if forProgrammingKernel {
-				// Felix always handles programming VXLAN IPPools.
-				action = "reject"
-				comment = "VXLAN routes are handled by Felix."
-			} else {
-				action = "accept"
-			}
-		case ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet, // IPIP Encapsulation.
-			ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never: // No-encapsulation.
-			// IPIP encapsulation or No-Encap.
-			if forProgrammingKernel && version == 4 && len(localSubnet) != 0 {
-				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
-				// our fork of BIRD.
-				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
-			}
-			action = "accept"
-		default:
-			return nil, fmt.Errorf("invalid %s ippool", kvp.Key)
-		}
-
-		// Filter statements based on provided filterAction.
-		if len(filterAction) != 0 && filterAction != action {
-			continue
-		}
-		lines = append(lines, emitFilterStatementForIPPools(cidr, extraStatement, action, comment))
-	}
-	return lines, nil
-}
-
-func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSubnet string) string {
-	switch v3.EncapMode(ipipMode) {
-	case v3.Always:
-		return `krt_tunnel="tunl0";`
-	case v3.CrossSubnet:
-		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
-		return fmt.Sprintf(format, localSubnet)
-	case v3.Never:
-		// No-encap case.
-		return `krt_tunnel="";`
-	default:
-		return ``
-	}
-}
-
-func emitFilterStatementForIPPools(cidr, extraStatement, action, comment string) (statement string) {
-	// Check mandatory inputs.
-	if len(cidr) == 0 || len(action) == 0 {
-		return
-	}
-	if len(extraStatement) != 0 {
-		statement = fmt.Sprintf("  if (net ~ %s) then { %s %s; }", cidr, extraStatement, action)
-	} else {
-		statement = fmt.Sprintf("  if (net ~ %s) then { %s; }", cidr, action)
-	}
-	if len(comment) != 0 {
-		statement = fmt.Sprintf("%s %s", statement, formatComment(comment))
-	}
-	return
-}
-
-func formatComment(comment string) string {
-	return fmt.Sprintf("# %s", comment)
 }
 
 // CreateMap creates a key-value map of string -> interface{}

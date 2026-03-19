@@ -2,18 +2,22 @@ package template
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/kelseyhightower/memkv"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 )
+
+func communityVal(s string) *v3.BGPCommunityValue {
+	v := v3.BGPCommunityValue(s)
+	return &v
+}
+
+func intPtr(i int) *int {
+	return &i
+}
 
 func Test_hashToIPv4_invalid_range(t *testing.T) {
 	expectedRouterId := "207.94.5.27"
@@ -219,178 +223,581 @@ func Test_ValidateHashToIpv4Method(t *testing.T) {
 	}
 }
 
-func int32Helper(i int32) *int32 {
-	return &i
-}
-
-type ippoolTestCase struct {
-	cidr           string
-	exportDisabled bool
-	ipipMode       encap.Mode
-	vxlanMode      encap.Mode
-}
-
-var (
-	poolsTestsV4 []ippoolTestCase = []ippoolTestCase{
-		// IPv4 IPIP Encapsulation cases.
-		{cidr: "10.10.0.0/16", exportDisabled: false, ipipMode: encap.Always},
-		{cidr: "10.11.0.0/16", exportDisabled: true, ipipMode: encap.Always},
-		{cidr: "10.12.0.0/16", exportDisabled: false, ipipMode: encap.CrossSubnet},
-		{cidr: "10.13.0.0/16", exportDisabled: true, ipipMode: encap.CrossSubnet},
-		// IPv4 No-Encapsulation case.
-		{cidr: "10.14.0.0/16", exportDisabled: false},
-		{cidr: "10.15.0.0/16", exportDisabled: true},
-		// IPv4 VXLAN Encapsulation cases.
-		{cidr: "10.16.0.0/16", exportDisabled: false, vxlanMode: encap.Always},
-		{cidr: "10.17.0.0/16", exportDisabled: true, vxlanMode: encap.Always},
-		{cidr: "10.18.0.0/16", exportDisabled: false, vxlanMode: encap.CrossSubnet},
-		{cidr: "10.19.0.0/16", exportDisabled: true, vxlanMode: encap.CrossSubnet},
+func Test_filterMatchCommunity(t *testing.T) {
+	tests := []struct {
+		name     string
+		comm     *v3.BGPFilterCommunityMatch
+		expected string
+		wantErr  bool
+	}{
+		{
+			name:     "standard community",
+			comm:     &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100"}},
+			expected: "((65000, 100) ~ bgp_community)",
+		},
+		{
+			name:     "large community",
+			comm:     &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:10:20"}},
+			expected: "((65000, 10, 20) ~ bgp_large_community)",
+		},
+		{
+			name:    "nil communities",
+			comm:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "empty values",
+			comm:    &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{}},
+			wantErr: true,
+		},
 	}
-
-	poolsTestsV6 []ippoolTestCase = []ippoolTestCase{
-		// IPv6 IPIP Encapsulation cases.
-		{cidr: "dead:beef:1::/64", exportDisabled: false, ipipMode: encap.Always},
-		{cidr: "dead:beef:2::/64", exportDisabled: true, ipipMode: encap.Always},
-		{cidr: "dead:beef:3::/64", exportDisabled: false, ipipMode: encap.CrossSubnet},
-		{cidr: "dead:beef:4::/64", exportDisabled: true, ipipMode: encap.CrossSubnet},
-		// IPv6 No-Encapsulation case.
-		{cidr: "dead:beef:5::/64", exportDisabled: false},
-		{cidr: "dead:beef:6::/64", exportDisabled: true},
-		// IPv6 VXLAN Encapsulation cases.
-		{cidr: "dead:beef:7::/64", exportDisabled: false, vxlanMode: encap.Always},
-		{cidr: "dead:beef:8::/64", exportDisabled: true, vxlanMode: encap.Always},
-		{cidr: "dead:beef:9::/64", exportDisabled: false, vxlanMode: encap.CrossSubnet},
-		{cidr: "dead:beef:10::/64", exportDisabled: true, vxlanMode: encap.CrossSubnet},
-	}
-)
-
-func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV4(t *testing.T) {
-	expectedStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
-		`  if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
-		`  if (net ~ 10.11.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
-		`  if (net ~ 10.12.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
-		`  if (net ~ 10.13.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
-		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { krt_tunnel=""; accept; }`,
-		`  if (net ~ 10.15.0.0/16) then { krt_tunnel=""; accept; }`,
-		// IPv4 VXLAN Encapsulation cases.
-		`  if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-	}
-	testExpectedIPPoolStatments(t, poolsTestsV4, expectedStatements, true, "1.1.1.0/24", 4)
-}
-
-func Test_IPPoolsFilterBIRDFunc_KernelProgrammingV6(t *testing.T) {
-	expectedStatements := []string{
-		// IPv6 IPIP Encapsulation cases.
-		`  if (net ~ dead:beef:1::/64) then { accept; }`,
-		`  if (net ~ dead:beef:2::/64) then { accept; }`,
-		`  if (net ~ dead:beef:3::/64) then { accept; }`,
-		`  if (net ~ dead:beef:4::/64) then { accept; }`,
-		// IPv6 No-Encapsulation case.
-		`  if (net ~ dead:beef:5::/64) then { accept; }`,
-		`  if (net ~ dead:beef:6::/64) then { accept; }`,
-		// IPv6 VXLAN Encapsulation cases.
-		`  if (net ~ dead:beef:7::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:8::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:9::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:10::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-	}
-	testExpectedIPPoolStatments(t, poolsTestsV6, expectedStatements, true, "", 6)
-}
-
-func Test_IPPoolsFilterBIRDFunc_BGPPeeringV4(t *testing.T) {
-	expectedStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
-		`  if (net ~ 10.10.0.0/16) then { accept; }`,
-		`  if (net ~ 10.11.0.0/16) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ 10.12.0.0/16) then { accept; }`,
-		`  if (net ~ 10.13.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { accept; }`,
-		`  if (net ~ 10.15.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 VXLAN Encapsulation cases.
-		`  if (net ~ 10.16.0.0/16) then { accept; }`,
-		`  if (net ~ 10.17.0.0/16) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ 10.18.0.0/16) then { accept; }`,
-		`  if (net ~ 10.19.0.0/16) then { reject; } # BGP export is disabled.`,
-	}
-	testExpectedIPPoolStatments(t, poolsTestsV4, expectedStatements, false, "", 4)
-}
-
-func Test_IPPoolsFilterBIRDFunc_BGPPeeringV6(t *testing.T) {
-	expectedStatements := []string{
-		// IPv6 IPIP Encapsulation cases.
-		`  if (net ~ dead:beef:1::/64) then { accept; }`,
-		`  if (net ~ dead:beef:2::/64) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ dead:beef:3::/64) then { accept; }`,
-		`  if (net ~ dead:beef:4::/64) then { reject; } # BGP export is disabled.`,
-		// IPv6 No-Encapsulation case.
-		`  if (net ~ dead:beef:5::/64) then { accept; }`,
-		`  if (net ~ dead:beef:6::/64) then { reject; } # BGP export is disabled.`,
-		// IPv6 VXLAN Encapsulation cases.
-		`  if (net ~ dead:beef:7::/64) then { accept; }`,
-		`  if (net ~ dead:beef:8::/64) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ dead:beef:9::/64) then { accept; }`,
-		`  if (net ~ dead:beef:10::/64) then { reject; } # BGP export is disabled.`,
-	}
-	testExpectedIPPoolStatments(t, poolsTestsV6, expectedStatements, false, "", 6)
-}
-
-func testExpectedIPPoolStatments(
-	t *testing.T,
-	tcs []ippoolTestCase,
-	expectedStatements []string,
-	forProgrammingKernel bool,
-	localSubnet string,
-	ipVersion int,
-) {
-	kvps := ippoolTestCasesToKVPairs(t, tcs)
-	for _, filterAction := range []string{"", "accept", "reject"} {
-		expected := filterExpectedStatements(expectedStatements, filterAction)
-		generated, err := IPPoolsFilterBIRDFunc(kvps, filterAction, forProgrammingKernel, localSubnet, ipVersion)
-		if err != nil {
-			t.Errorf("Unexpected error while generating BIRD IPPool filter: %s", err)
-		}
-		if !reflect.DeepEqual(generated, expected) {
-			t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-				generated, expected)
-		}
-	}
-}
-
-func ippoolTestCasesToKVPairs(t *testing.T, tcs []ippoolTestCase) memkv.KVPairs {
-	kvps := []memkv.KVPair{}
-	for _, tc := range tcs {
-		ippool := model.IPPool{}
-		ippool.CIDR = net.MustParseCIDR(tc.cidr)
-		ippool.IPIPMode = tc.ipipMode
-		ippool.VXLANMode = tc.vxlanMode
-		ippool.DisableBGPExport = tc.exportDisabled
-
-		jsonIPPool, err := json.Marshal(ippool)
-		if err != nil {
-			t.Errorf("Error formatting IPPool into JSON: %s", err)
-		}
-		kvps = append(kvps, memkv.KVPair{
-			Key:   fmt.Sprintf("ippool-%s", tc.cidr),
-			Value: string(jsonIPPool),
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := filterMatchCommunity(tt.comm)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
+			}
 		})
 	}
-	return kvps
 }
 
-func filterExpectedStatements(statements []string, filterAction string) (filtered []string) {
-	if len(filterAction) == 0 {
-		return statements
+func Test_filterMatchASPathPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefix   []numorstring.ASNumber
+		expected string
+	}{
+		{
+			name:     "single ASN",
+			prefix:   []numorstring.ASNumber{65000},
+			expected: "(bgp_path ~ [= 65000 * =])",
+		},
+		{
+			name:     "multiple ASNs",
+			prefix:   []numorstring.ASNumber{65000, 65001},
+			expected: "(bgp_path ~ [= 65000 65001 * =])",
+		},
+		{
+			name:     "three ASNs",
+			prefix:   []numorstring.ASNumber{65000, 65001, 65002},
+			expected: "(bgp_path ~ [= 65000 65001 65002 * =])",
+		},
 	}
-	for _, s := range statements {
-		if strings.Contains(s, fmt.Sprintf("%s; }", filterAction)) {
-			filtered = append(filtered, s)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := filterMatchASPathPrefix(tt.prefix)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func Test_filterMatchPriority(t *testing.T) {
+	prio := 512
+	result, err := filterMatchPriority(&prio)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	expected := "(krt_metric = 512)"
+	if result != expected {
+		t.Errorf("got %q, want %q", result, expected)
+	}
+}
+
+func Test_filterOperationStatements(t *testing.T) {
+	tests := []struct {
+		name     string
+		ops      []v3.BGPFilterOperation
+		expected []string
+	}{
+		{
+			name: "add standard community",
+			ops: []v3.BGPFilterOperation{
+				{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:100")}},
+			},
+			expected: []string{"bgp_community.add((65000, 100));"},
+		},
+		{
+			name: "add large community",
+			ops: []v3.BGPFilterOperation{
+				{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:10:20")}},
+			},
+			expected: []string{"bgp_large_community.add((65000, 10, 20));"},
+		},
+		{
+			name: "prepend single ASN",
+			ops: []v3.BGPFilterOperation{
+				{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
+			},
+			expected: []string{"bgp_path.prepend(65000);"},
+		},
+		{
+			name: "prepend multiple ASNs - reversed for correct order",
+			ops: []v3.BGPFilterOperation{
+				{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000, 65001}}},
+			},
+			expected: []string{"bgp_path.prepend(65001);", "bgp_path.prepend(65000);"},
+		},
+		{
+			name: "set priority",
+			ops: []v3.BGPFilterOperation{
+				{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(512)}},
+			},
+			expected: []string{"krt_metric = 512;"},
+		},
+		{
+			name: "multiple operations",
+			ops: []v3.BGPFilterOperation{
+				{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65001:200")}},
+				{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
+				{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(100)}},
+			},
+			expected: []string{
+				"bgp_community.add((65001, 200));",
+				"bgp_path.prepend(65000);",
+				"krt_metric = 100;",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := filterOperationStatements(tt.ops)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("got %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func Test_filterStatementWithOperations(t *testing.T) {
+	prio := 512
+	args := filterArgs{
+		operator: v3.MatchOperatorIn,
+		cidr:     "10.0.0.0/8",
+		priority: &prio,
+		action:   v3.Accept,
+		operations: []v3.BGPFilterOperation{
+			{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65001:200")}},
+			{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
+		},
+	}
+	result, err := filterStatement(args)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	expected := "if ((net ~ 10.0.0.0/8)&&(krt_metric = 512)) then { bgp_community.add((65001, 200)); bgp_path.prepend(65000); accept; }"
+	if result != expected {
+		t.Errorf("got:\n  %s\nwant:\n  %s", result, expected)
+	}
+}
+
+func Test_BGPFilterBIRDFuncs_WithCommunitiesASPathPriorityAndOperations(t *testing.T) {
+	prio := 512
+	testFilter := v3.BGPFilter{}
+	testFilter.Name = "kubevirt-filter"
+	testFilter.Spec = v3.BGPFilterSpec{
+		ImportV4: []v3.BGPFilterRuleV4{
+			// Import rule: match community and set priority
+			{
+				Action:      v3.Accept,
+				Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100"}},
+				Operations: []v3.BGPFilterOperation{
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(100)}},
+				},
+			},
+			// Import rule: match AS path prefix and set priority
+			{
+				Action:       v3.Accept,
+				ASPathPrefix: []numorstring.ASNumber{65000, 65001},
+				Operations: []v3.BGPFilterOperation{
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(200)}},
+				},
+			},
+		},
+		ExportV4: []v3.BGPFilterRuleV4{
+			// Export rule: match priority and add community
+			{
+				Action:   v3.Accept,
+				Priority: &prio,
+				Operations: []v3.BGPFilterOperation{
+					{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65001:200")}},
+				},
+			},
+			// Export rule: match priority and prepend AS path
+			{
+				Action:   v3.Accept,
+				Priority: &prio,
+				Operations: []v3.BGPFilterOperation{
+					{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
+				},
+			},
+		},
+	}
+
+	expectedV4 := []string{
+		"# v4 BGPFilter kubevirt-filter",
+		"function 'bgp_kubevirt-filter_importFilterV4'() {",
+		"  if (((65000, 100) ~ bgp_community)) then { krt_metric = 100; accept; }",
+		"  if ((bgp_path ~ [= 65000 65001 * =])) then { krt_metric = 200; accept; }",
+		"}",
+		"function 'bgp_kubevirt-filter_exportFilterV4'() {",
+		"  if ((krt_metric = 512)) then { bgp_community.add((65001, 200)); accept; }",
+		"  if ((krt_metric = 512)) then { bgp_path.prepend(65000); accept; }",
+		"}",
+	}
+
+	jsonFilter, err := json.Marshal(testFilter)
+	if err != nil {
+		t.Fatalf("Error marshalling BGPFilter: %v", err)
+	}
+	kvps := []memkv.KVPair{
+		{Key: "kubevirt-filter", Value: string(jsonFilter)},
+	}
+
+	result, err := BGPFilterBIRDFuncs(kvps, 4)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(result, expectedV4) {
+		t.Errorf("Generated BIRD config differs:\n  Got:    %v\n  Expect: %v", result, expectedV4)
+	}
+}
+
+func Test_BGPFilterBIRDFuncs_WithPeerType(t *testing.T) {
+	testFilter := v3.BGPFilter{}
+	testFilter.Name = "peertype-filter"
+	testFilter.Spec = v3.BGPFilterSpec{
+		ExportV4: []v3.BGPFilterRuleV4{
+			// eBGP-only rule
+			{
+				Action:        v3.Accept,
+				PeerType:      v3.BGPFilterPeerTypeEBGP,
+				MatchOperator: v3.MatchOperatorIn,
+				CIDR:          "10.0.0.0/8",
+			},
+			// iBGP-only rule
+			{
+				Action:        v3.Reject,
+				PeerType:      v3.BGPFilterPeerTypeIBGP,
+				MatchOperator: v3.MatchOperatorIn,
+				CIDR:          "10.0.0.0/8",
+			},
+			// No PeerType - applies to all
+			{
+				Action: v3.Reject,
+			},
+		},
+	}
+
+	expectedV4 := []string{
+		"# v4 BGPFilter peertype-filter",
+		"function 'bgp_peertype-filter_exportFilterV4'(bool is_same_as) {",
+		"  if (!is_same_as) then { if ((net ~ 10.0.0.0/8)) then { accept; } }",
+		"  if (is_same_as) then { if ((net ~ 10.0.0.0/8)) then { reject; } }",
+		"  reject;",
+		"}",
+	}
+
+	jsonFilter, err := json.Marshal(testFilter)
+	if err != nil {
+		t.Fatalf("Error marshalling BGPFilter: %v", err)
+	}
+	kvps := []memkv.KVPair{
+		{Key: "peertype-filter", Value: string(jsonFilter)},
+	}
+
+	result, err := BGPFilterBIRDFuncs(kvps, 4)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(result, expectedV4) {
+		t.Errorf("Generated BIRD config differs:\n  Got:    %v\n  Expect: %v", result, expectedV4)
+	}
+}
+
+// Test_BGPFilterBIRDFuncs_FullExample covers Example A from bgpfilter-bird-config-examples.md:
+// a filter using ALL match criteria (CIDR+PrefixLength, Interface, Communities, ASPathPrefix,
+// Priority, PeerType, Source) and ALL operations (SetPriority, AddCommunity, PrependASPath)
+// on both import and export, for both iBGP and eBGP peer types.
+func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
+	prio512 := 512
+	prio100 := 100
+
+	testFilter := v3.BGPFilter{}
+	testFilter.Name = "full-example"
+	testFilter.Spec = v3.BGPFilterSpec{
+		ImportV4: []v3.BGPFilterRuleV4{
+			{
+				CIDR:          "10.244.0.0/16",
+				MatchOperator: v3.MatchOperatorIn,
+				PrefixLength:  &v3.BGPFilterPrefixLengthV4{Min: int32Helper(24), Max: int32Helper(28)},
+				PeerType:      v3.BGPFilterPeerTypeIBGP,
+				Communities:   &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100"}},
+				ASPathPrefix:  []numorstring.ASNumber{65000},
+				Priority:      &prio512,
+				Interface:     "eth0",
+				Action:        v3.Accept,
+				Operations: []v3.BGPFilterOperation{
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(256)}},
+					{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:200")}},
+					{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65001, 65002}}},
+				},
+			},
+			{
+				CIDR:          "10.244.0.0/16",
+				MatchOperator: v3.MatchOperatorIn,
+				PeerType:      v3.BGPFilterPeerTypeEBGP,
+				Communities:   &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:100:999"}},
+				ASPathPrefix:  []numorstring.ASNumber{65000, 65001},
+				Priority:      &prio100,
+				Action:        v3.Accept,
+				Operations: []v3.BGPFilterOperation{
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(1024)}},
+				},
+			},
+			{
+				Action: v3.Reject,
+			},
+		},
+		ExportV4: []v3.BGPFilterRuleV4{
+			{
+				CIDR:          "192.168.0.0/16",
+				MatchOperator: v3.MatchOperatorIn,
+				Source:        v3.BGPFilterSourceRemotePeers,
+				Interface:     "eth1",
+				PeerType:      v3.BGPFilterPeerTypeEBGP,
+				Communities:   &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:42"}},
+				ASPathPrefix:  []numorstring.ASNumber{65000, 65001},
+				Priority:      &prio100,
+				Action:        v3.Accept,
+				Operations: []v3.BGPFilterOperation{
+					{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65000:300:400")}},
+					{PrependASPath: &v3.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{64999}}},
+				},
+			},
+			{
+				CIDR:          "10.0.0.0/8",
+				MatchOperator: v3.MatchOperatorEqual,
+				PeerType:      v3.BGPFilterPeerTypeIBGP,
+				Action:        v3.Accept,
+			},
+		},
+	}
+
+	expectedV4 := []string{
+		"# v4 BGPFilter full-example",
+		"function 'bgp_full-example_importFilterV4'(bool is_same_as) {",
+		`  if (is_same_as) then { if ((net ~ [ 10.244.0.0/16{24,28} ])&&((defined(ifname))&&(ifname ~ "eth0"))&&((65000, 100) ~ bgp_community)&&(bgp_path ~ [= 65000 * =])&&(krt_metric = 512)) then { krt_metric = 256; bgp_community.add((65000, 200)); bgp_path.prepend(65002); bgp_path.prepend(65001); accept; } }`,
+		"  if (!is_same_as) then { if ((net ~ 10.244.0.0/16)&&((65000, 100, 999) ~ bgp_large_community)&&(bgp_path ~ [= 65000 65001 * =])&&(krt_metric = 100)) then { krt_metric = 1024; accept; } }",
+		"  reject;",
+		"}",
+		"function 'bgp_full-example_exportFilterV4'(bool is_same_as) {",
+		`  if (!is_same_as) then { if ((net ~ 192.168.0.0/16)&&((defined(source))&&(source ~ [ RTS_BGP ]))&&((defined(ifname))&&(ifname ~ "eth1"))&&((65000, 42) ~ bgp_community)&&(bgp_path ~ [= 65000 65001 * =])&&(krt_metric = 100)) then { bgp_large_community.add((65000, 300, 400)); bgp_path.prepend(64999); accept; } }`,
+		"  if (is_same_as) then { if ((net = 10.0.0.0/8)) then { accept; } }",
+		"}",
+	}
+
+	jsonFilter, err := json.Marshal(testFilter)
+	if err != nil {
+		t.Fatalf("Error marshalling BGPFilter: %v", err)
+	}
+	kvps := []memkv.KVPair{
+		{Key: "full-example", Value: string(jsonFilter)},
+	}
+
+	result, err := BGPFilterBIRDFuncs(kvps, 4)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(result, expectedV4) {
+		t.Errorf("Generated BIRD config differs from Example A in bgpfilter-bird-config-examples.md")
+		for i := 0; i < len(expectedV4) || i < len(result); i++ {
+			got := "<missing>"
+			want := "<missing>"
+			if i < len(result) {
+				got = result[i]
+			}
+			if i < len(expectedV4) {
+				want = expectedV4[i]
+			}
+			if got != want {
+				t.Errorf("  line %d:\n    got:  %s\n    want: %s", i, got, want)
+			}
 		}
 	}
-	return
+}
+
+// Test_BGPFilterBIRDFuncs_SimpleExample covers Example B from bgpfilter-bird-config-examples.md:
+// a minimal filter with no PeerType, verifying backward-compatible function signatures.
+func Test_BGPFilterBIRDFuncs_SimpleExample(t *testing.T) {
+	testFilter := v3.BGPFilter{}
+	testFilter.Name = "simple-filter"
+	testFilter.Spec = v3.BGPFilterSpec{
+		ImportV4: []v3.BGPFilterRuleV4{
+			{
+				CIDR:          "10.0.0.0/8",
+				MatchOperator: v3.MatchOperatorIn,
+				Action:        v3.Reject,
+			},
+		},
+		ExportV4: []v3.BGPFilterRuleV4{
+			{
+				CIDR:          "192.168.0.0/16",
+				MatchOperator: v3.MatchOperatorEqual,
+				Action:        v3.Accept,
+			},
+		},
+	}
+
+	expectedV4 := []string{
+		"# v4 BGPFilter simple-filter",
+		"function 'bgp_simple-filter_importFilterV4'() {",
+		"  if ((net ~ 10.0.0.0/8)) then { reject; }",
+		"}",
+		"function 'bgp_simple-filter_exportFilterV4'() {",
+		"  if ((net = 192.168.0.0/16)) then { accept; }",
+		"}",
+	}
+
+	jsonFilter, err := json.Marshal(testFilter)
+	if err != nil {
+		t.Fatalf("Error marshalling BGPFilter: %v", err)
+	}
+	kvps := []memkv.KVPair{
+		{Key: "simple-filter", Value: string(jsonFilter)},
+	}
+
+	result, err := BGPFilterBIRDFuncs(kvps, 4)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(result, expectedV4) {
+		t.Errorf("Generated BIRD config differs from Example B in bgpfilter-bird-config-examples.md:\n  Got:    %v\n  Expect: %v", result, expectedV4)
+	}
+}
+
+// Test_BGPFilterBIRDFuncs_CommunityMatchOnExport verifies that community matching
+// works on export rules (communities are no longer cleared for export).
+func Test_BGPFilterBIRDFuncs_CommunityMatchOnExport(t *testing.T) {
+	testFilter := v3.BGPFilter{}
+	testFilter.Name = "export-comm"
+	testFilter.Spec = v3.BGPFilterSpec{
+		ExportV4: []v3.BGPFilterRuleV4{
+			{
+				Action:      v3.Accept,
+				Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:42"}},
+				Operations: []v3.BGPFilterOperation{
+					{AddCommunity: &v3.BGPFilterAddCommunity{Value: communityVal("65001:100")}},
+				},
+			},
+			{
+				Action:      v3.Reject,
+				Communities: &v3.BGPFilterCommunityMatch{Values: []v3.BGPCommunityValue{"65000:10:20"}},
+			},
+		},
+	}
+
+	expectedV4 := []string{
+		"# v4 BGPFilter export-comm",
+		"function 'bgp_export-comm_exportFilterV4'() {",
+		"  if (((65000, 42) ~ bgp_community)) then { bgp_community.add((65001, 100)); accept; }",
+		"  if (((65000, 10, 20) ~ bgp_large_community)) then { reject; }",
+		"}",
+	}
+
+	jsonFilter, err := json.Marshal(testFilter)
+	if err != nil {
+		t.Fatalf("Error marshalling BGPFilter: %v", err)
+	}
+	kvps := []memkv.KVPair{
+		{Key: "export-comm", Value: string(jsonFilter)},
+	}
+
+	result, err := BGPFilterBIRDFuncs(kvps, 4)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(result, expectedV4) {
+		t.Errorf("Community matching on export should be rendered.\n  Got:    %v\n  Expect: %v", result, expectedV4)
+	}
+}
+
+// Test_BGPFilterBIRDFuncs_MixedPeerTypeAndNonPeerTypeRules verifies that when some rules
+// have PeerType and others don't, the function gets the bool parameter and only the
+// PeerType rules are wrapped in is_same_as guards.
+func Test_BGPFilterBIRDFuncs_MixedPeerTypeAndNonPeerTypeRules(t *testing.T) {
+	testFilter := v3.BGPFilter{}
+	testFilter.Name = "mixed-peertype"
+	testFilter.Spec = v3.BGPFilterSpec{
+		ImportV4: []v3.BGPFilterRuleV4{
+			{
+				Action:        v3.Accept,
+				PeerType:      v3.BGPFilterPeerTypeIBGP,
+				CIDR:          "10.0.0.0/8",
+				MatchOperator: v3.MatchOperatorIn,
+				Operations: []v3.BGPFilterOperation{
+					{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(100)}},
+				},
+			},
+			{
+				Action:        v3.Reject,
+				CIDR:          "172.16.0.0/12",
+				MatchOperator: v3.MatchOperatorIn,
+			},
+			{
+				Action:   v3.Accept,
+				PeerType: v3.BGPFilterPeerTypeEBGP,
+			},
+		},
+	}
+
+	expectedV4 := []string{
+		"# v4 BGPFilter mixed-peertype",
+		"function 'bgp_mixed-peertype_importFilterV4'(bool is_same_as) {",
+		"  if (is_same_as) then { if ((net ~ 10.0.0.0/8)) then { krt_metric = 100; accept; } }",
+		"  if ((net ~ 172.16.0.0/12)) then { reject; }",
+		"  if (!is_same_as) then { accept; }",
+		"}",
+	}
+
+	jsonFilter, err := json.Marshal(testFilter)
+	if err != nil {
+		t.Fatalf("Error marshalling BGPFilter: %v", err)
+	}
+	kvps := []memkv.KVPair{
+		{Key: "mixed-peertype", Value: string(jsonFilter)},
+	}
+
+	result, err := BGPFilterBIRDFuncs(kvps, 4)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(result, expectedV4) {
+		t.Errorf("Mixed PeerType rules should render correctly.\n  Got:    %v\n  Expect: %v", result, expectedV4)
+	}
+}
+
+func int32Helper(i int32) *int32 {
+	return &i
 }

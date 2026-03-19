@@ -1528,6 +1528,1237 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoWebhooksDeployment:
+                  description:
+                    CalicoWebhooksDeployment configures the calico-webhooks
+                    Deployment.
+                  properties:
+                    metadata:
+                      description:
+                        Metadata is a subset of a Kubernetes object's metadata
+                        that is added to the Deployment.
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Annotations is a map of arbitrary non-identifying metadata. Each of these
+                            key/value pairs are added to the object's annotations provided the key does not
+                            already exist in the object's annotations.
+                          type: object
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Labels is a map of string keys and values that may match replicaset and
+                            service selectors. Each of these key/value pairs are added to the
+                            object's labels provided the key does not already exist in the object's labels.
+                          type: object
+                      type: object
+                    spec:
+                      description:
+                        Spec is the specification of the calico-webhooks
+                        Deployment.
+                      properties:
+                        minReadySeconds:
+                          description: |-
+                            MinReadySeconds is the minimum number of seconds for which a newly created Deployment pod should
+                            be ready without any of its container crashing, for it to be considered available.
+                            If specified, this overrides any minReadySeconds value that may be set on the calico-webhooks Deployment.
+                            If omitted, the calico-webhooks Deployment will use its default value for minReadySeconds.
+                          format: int32
+                          maximum: 2147483647
+                          minimum: 0
+                          type: integer
+                        template:
+                          description:
+                            Template describes the calico-webhooks Deployment
+                            pod that will be created.
+                          properties:
+                            metadata:
+                              description: |-
+                                Metadata is a subset of a Kubernetes object's metadata that is added to
+                                the pod's metadata.
+                              properties:
+                                annotations:
+                                  additionalProperties:
+                                    type: string
+                                  description: |-
+                                    Annotations is a map of arbitrary non-identifying metadata. Each of these
+                                    key/value pairs are added to the object's annotations provided the key does not
+                                    already exist in the object's annotations.
+                                  type: object
+                                labels:
+                                  additionalProperties:
+                                    type: string
+                                  description: |-
+                                    Labels is a map of string keys and values that may match replicaset and
+                                    service selectors. Each of these key/value pairs are added to the
+                                    object's labels provided the key does not already exist in the object's labels.
+                                  type: object
+                              type: object
+                            spec:
+                              description:
+                                Spec is the calico-webhooks Deployment's
+                                PodSpec.
+                              properties:
+                                affinity:
+                                  description: |-
+                                    Affinity is a group of affinity scheduling rules for the calico-webhooks pods.
+                                    If specified, this overrides any affinity that may be set on the calico-webhooks Deployment.
+                                    If omitted, the calico-webhooks Deployment will use its default value for affinity.
+                                    WARNING: Please note that this field will override the default calico-webhooks Deployment affinity.
+                                  properties:
+                                    nodeAffinity:
+                                      description:
+                                        Describes node affinity scheduling
+                                        rules for the pod.
+                                      properties:
+                                        preferredDuringSchedulingIgnoredDuringExecution:
+                                          description: |-
+                                            The scheduler will prefer to schedule pods to nodes that satisfy
+                                            the affinity expressions specified by this field, but it may choose
+                                            a node that violates one or more of the expressions. The node that is
+                                            most preferred is the one with the greatest sum of weights, i.e.
+                                            for each node that meets all of the scheduling requirements (resource
+                                            request, requiredDuringScheduling affinity expressions, etc.),
+                                            compute a sum by iterating through the elements of this field and adding
+                                            "weight" to the sum if the node matches the corresponding matchExpressions; the
+                                            node(s) with the highest sum are the most preferred.
+                                          items:
+                                            description: |-
+                                              An empty preferred scheduling term matches all objects with implicit weight 0
+                                              (i.e. it's a no-op). A null preferred scheduling term matches no objects (i.e. is also a no-op).
+                                            properties:
+                                              preference:
+                                                description:
+                                                  A node selector term, associated
+                                                  with the corresponding weight.
+                                                properties:
+                                                  matchExpressions:
+                                                    description:
+                                                      A list of node selector
+                                                      requirements by node's labels.
+                                                    items:
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
+                                                      properties:
+                                                        key:
+                                                          description:
+                                                            The label key
+                                                            that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+                                                          type: string
+                                                        values:
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      required:
+                                                        - key
+                                                        - operator
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  matchFields:
+                                                    description:
+                                                      A list of node selector
+                                                      requirements by node's fields.
+                                                    items:
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
+                                                      properties:
+                                                        key:
+                                                          description:
+                                                            The label key
+                                                            that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+                                                          type: string
+                                                        values:
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      required:
+                                                        - key
+                                                        - operator
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                type: object
+                                                x-kubernetes-map-type: atomic
+                                              weight:
+                                                description:
+                                                  Weight associated with
+                                                  matching the corresponding nodeSelectorTerm,
+                                                  in the range 1-100.
+                                                format: int32
+                                                type: integer
+                                            required:
+                                              - preference
+                                              - weight
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                        requiredDuringSchedulingIgnoredDuringExecution:
+                                          description: |-
+                                            If the affinity requirements specified by this field are not met at
+                                            scheduling time, the pod will not be scheduled onto the node.
+                                            If the affinity requirements specified by this field cease to be met
+                                            at some point during pod execution (e.g. due to an update), the system
+                                            may or may not try to eventually evict the pod from its node.
+                                          properties:
+                                            nodeSelectorTerms:
+                                              description:
+                                                Required. A list of node
+                                                selector terms. The terms are ORed.
+                                              items:
+                                                description: |-
+                                                  A null or empty node selector term matches no objects. The requirements of
+                                                  them are ANDed.
+                                                  The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
+                                                properties:
+                                                  matchExpressions:
+                                                    description:
+                                                      A list of node selector
+                                                      requirements by node's labels.
+                                                    items:
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
+                                                      properties:
+                                                        key:
+                                                          description:
+                                                            The label key
+                                                            that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+                                                          type: string
+                                                        values:
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      required:
+                                                        - key
+                                                        - operator
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  matchFields:
+                                                    description:
+                                                      A list of node selector
+                                                      requirements by node's fields.
+                                                    items:
+                                                      description: |-
+                                                        A node selector requirement is a selector that contains values, a key, and an operator
+                                                        that relates the key and values.
+                                                      properties:
+                                                        key:
+                                                          description:
+                                                            The label key
+                                                            that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: |-
+                                                            Represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+                                                          type: string
+                                                        values:
+                                                          description: |-
+                                                            An array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. If the operator is Gt or Lt, the values
+                                                            array must have a single element, which will be interpreted as an integer.
+                                                            This array is replaced during a strategic merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      required:
+                                                        - key
+                                                        - operator
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                type: object
+                                                x-kubernetes-map-type: atomic
+                                              type: array
+                                              x-kubernetes-list-type: atomic
+                                          required:
+                                            - nodeSelectorTerms
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                      type: object
+                                    podAffinity:
+                                      description:
+                                        Describes pod affinity scheduling
+                                        rules (e.g. co-locate this pod in the same node,
+                                        zone, etc. as some other pod(s)).
+                                      properties:
+                                        preferredDuringSchedulingIgnoredDuringExecution:
+                                          description: |-
+                                            The scheduler will prefer to schedule pods to nodes that satisfy
+                                            the affinity expressions specified by this field, but it may choose
+                                            a node that violates one or more of the expressions. The node that is
+                                            most preferred is the one with the greatest sum of weights, i.e.
+                                            for each node that meets all of the scheduling requirements (resource
+                                            request, requiredDuringScheduling affinity expressions, etc.),
+                                            compute a sum by iterating through the elements of this field and adding
+                                            "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            node(s) with the highest sum are the most preferred.
+                                          items:
+                                            description:
+                                              The weights of all of the matched
+                                              WeightedPodAffinityTerm fields are added
+                                              per-node to find the most preferred node(s)
+                                            properties:
+                                              podAffinityTerm:
+                                                description:
+                                                  Required. A pod affinity
+                                                  term, associated with the corresponding
+                                                  weight.
+                                                properties:
+                                                  labelSelector:
+                                                    description: |-
+                                                      A label query over a set of resources, in this case pods.
+                                                      If it's null, this PodAffinityTerm matches with no Pods.
+                                                    properties:
+                                                      matchExpressions:
+                                                        description:
+                                                          matchExpressions
+                                                          is a list of label selector
+                                                          requirements. The requirements
+                                                          are ANDed.
+                                                        items:
+                                                          description: |-
+                                                            A label selector requirement is a selector that contains values, a key, and an operator that
+                                                            relates the key and values.
+                                                          properties:
+                                                            key:
+                                                              description:
+                                                                key is the
+                                                                label key that the selector
+                                                                applies to.
+                                                              type: string
+                                                            operator:
+                                                              description: |-
+                                                                operator represents a key's relationship to a set of values.
+                                                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                              type: string
+                                                            values:
+                                                              description: |-
+                                                                values is an array of string values. If the operator is In or NotIn,
+                                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                                the values array must be empty. This array is replaced during a strategic
+                                                                merge patch.
+                                                              items:
+                                                                type: string
+                                                              type: array
+                                                              x-kubernetes-list-type: atomic
+                                                          required:
+                                                            - key
+                                                            - operator
+                                                          type: object
+                                                        type: array
+                                                        x-kubernetes-list-type: atomic
+                                                      matchLabels:
+                                                        additionalProperties:
+                                                          type: string
+                                                        description: |-
+                                                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                                        type: object
+                                                    type: object
+                                                    x-kubernetes-map-type: atomic
+                                                  matchLabelKeys:
+                                                    description: |-
+                                                      MatchLabelKeys is a set of pod label keys to select which pods will
+                                                      be taken into consideration. The keys are used to lookup values from the
+                                                      incoming pod labels, those key-value labels are merged with `labelSelector` as `key in (value)`
+                                                      to select the group of existing pods which pods will be taken into consideration
+                                                      for the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming
+                                                      pod labels will be ignored. The default value is empty.
+                                                      The same key is forbidden to exist in both matchLabelKeys and labelSelector.
+                                                      Also, matchLabelKeys cannot be set when labelSelector isn't set.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  mismatchLabelKeys:
+                                                    description: |-
+                                                      MismatchLabelKeys is a set of pod label keys to select which pods will
+                                                      be taken into consideration. The keys are used to lookup values from the
+                                                      incoming pod labels, those key-value labels are merged with `labelSelector` as `key notin (value)`
+                                                      to select the group of existing pods which pods will be taken into consideration
+                                                      for the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming
+                                                      pod labels will be ignored. The default value is empty.
+                                                      The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
+                                                      Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  namespaceSelector:
+                                                    description: |-
+                                                      A label query over the set of namespaces that the term applies to.
+                                                      The term is applied to the union of the namespaces selected by this field
+                                                      and the ones listed in the namespaces field.
+                                                      null selector and null or empty namespaces list means "this pod's namespace".
+                                                      An empty selector ({}) matches all namespaces.
+                                                    properties:
+                                                      matchExpressions:
+                                                        description:
+                                                          matchExpressions
+                                                          is a list of label selector
+                                                          requirements. The requirements
+                                                          are ANDed.
+                                                        items:
+                                                          description: |-
+                                                            A label selector requirement is a selector that contains values, a key, and an operator that
+                                                            relates the key and values.
+                                                          properties:
+                                                            key:
+                                                              description:
+                                                                key is the
+                                                                label key that the selector
+                                                                applies to.
+                                                              type: string
+                                                            operator:
+                                                              description: |-
+                                                                operator represents a key's relationship to a set of values.
+                                                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                              type: string
+                                                            values:
+                                                              description: |-
+                                                                values is an array of string values. If the operator is In or NotIn,
+                                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                                the values array must be empty. This array is replaced during a strategic
+                                                                merge patch.
+                                                              items:
+                                                                type: string
+                                                              type: array
+                                                              x-kubernetes-list-type: atomic
+                                                          required:
+                                                            - key
+                                                            - operator
+                                                          type: object
+                                                        type: array
+                                                        x-kubernetes-list-type: atomic
+                                                      matchLabels:
+                                                        additionalProperties:
+                                                          type: string
+                                                        description: |-
+                                                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                                        type: object
+                                                    type: object
+                                                    x-kubernetes-map-type: atomic
+                                                  namespaces:
+                                                    description: |-
+                                                      namespaces specifies a static list of namespace names that the term applies to.
+                                                      The term is applied to the union of the namespaces listed in this field
+                                                      and the ones selected by namespaceSelector.
+                                                      null or empty namespaces list and null namespaceSelector means "this pod's namespace".
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  topologyKey:
+                                                    description: |-
+                                                      This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching
+                                                      the labelSelector in the specified namespaces, where co-located is defined as running on a node
+                                                      whose value of the label with key topologyKey matches that of any node on which any of the
+                                                      selected pods is running.
+                                                      Empty topologyKey is not allowed.
+                                                    type: string
+                                                required:
+                                                  - topologyKey
+                                                type: object
+                                              weight:
+                                                description: |-
+                                                  weight associated with matching the corresponding podAffinityTerm,
+                                                  in the range 1-100.
+                                                format: int32
+                                                type: integer
+                                            required:
+                                              - podAffinityTerm
+                                              - weight
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                        requiredDuringSchedulingIgnoredDuringExecution:
+                                          description: |-
+                                            If the affinity requirements specified by this field are not met at
+                                            scheduling time, the pod will not be scheduled onto the node.
+                                            If the affinity requirements specified by this field cease to be met
+                                            at some point during pod execution (e.g. due to a pod label update), the
+                                            system may or may not try to eventually evict the pod from its node.
+                                            When there are multiple elements, the lists of nodes corresponding to each
+                                            podAffinityTerm are intersected, i.e. all terms must be satisfied.
+                                          items:
+                                            description: |-
+                                              Defines a set of pods (namely those matching the labelSelector
+                                              relative to the given namespace(s)) that this pod should be
+                                              co-located (affinity) or not co-located (anti-affinity) with,
+                                              where co-located is defined as running on a node whose value of
+                                              the label with key <topologyKey> matches that of any node on which
+                                              a pod of the set of pods is running
+                                            properties:
+                                              labelSelector:
+                                                description: |-
+                                                  A label query over a set of resources, in this case pods.
+                                                  If it's null, this PodAffinityTerm matches with no Pods.
+                                                properties:
+                                                  matchExpressions:
+                                                    description:
+                                                      matchExpressions is
+                                                      a list of label selector requirements.
+                                                      The requirements are ANDed.
+                                                    items:
+                                                      description: |-
+                                                        A label selector requirement is a selector that contains values, a key, and an operator that
+                                                        relates the key and values.
+                                                      properties:
+                                                        key:
+                                                          description:
+                                                            key is the label
+                                                            key that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: |-
+                                                            operator represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                          type: string
+                                                        values:
+                                                          description: |-
+                                                            values is an array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. This array is replaced during a strategic
+                                                            merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      required:
+                                                        - key
+                                                        - operator
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  matchLabels:
+                                                    additionalProperties:
+                                                      type: string
+                                                    description: |-
+                                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                                    type: object
+                                                type: object
+                                                x-kubernetes-map-type: atomic
+                                              matchLabelKeys:
+                                                description: |-
+                                                  MatchLabelKeys is a set of pod label keys to select which pods will
+                                                  be taken into consideration. The keys are used to lookup values from the
+                                                  incoming pod labels, those key-value labels are merged with `labelSelector` as `key in (value)`
+                                                  to select the group of existing pods which pods will be taken into consideration
+                                                  for the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming
+                                                  pod labels will be ignored. The default value is empty.
+                                                  The same key is forbidden to exist in both matchLabelKeys and labelSelector.
+                                                  Also, matchLabelKeys cannot be set when labelSelector isn't set.
+                                                items:
+                                                  type: string
+                                                type: array
+                                                x-kubernetes-list-type: atomic
+                                              mismatchLabelKeys:
+                                                description: |-
+                                                  MismatchLabelKeys is a set of pod label keys to select which pods will
+                                                  be taken into consideration. The keys are used to lookup values from the
+                                                  incoming pod labels, those key-value labels are merged with `labelSelector` as `key notin (value)`
+                                                  to select the group of existing pods which pods will be taken into consideration
+                                                  for the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming
+                                                  pod labels will be ignored. The default value is empty.
+                                                  The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
+                                                  Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
+                                                items:
+                                                  type: string
+                                                type: array
+                                                x-kubernetes-list-type: atomic
+                                              namespaceSelector:
+                                                description: |-
+                                                  A label query over the set of namespaces that the term applies to.
+                                                  The term is applied to the union of the namespaces selected by this field
+                                                  and the ones listed in the namespaces field.
+                                                  null selector and null or empty namespaces list means "this pod's namespace".
+                                                  An empty selector ({}) matches all namespaces.
+                                                properties:
+                                                  matchExpressions:
+                                                    description:
+                                                      matchExpressions is
+                                                      a list of label selector requirements.
+                                                      The requirements are ANDed.
+                                                    items:
+                                                      description: |-
+                                                        A label selector requirement is a selector that contains values, a key, and an operator that
+                                                        relates the key and values.
+                                                      properties:
+                                                        key:
+                                                          description:
+                                                            key is the label
+                                                            key that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: |-
+                                                            operator represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                          type: string
+                                                        values:
+                                                          description: |-
+                                                            values is an array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. This array is replaced during a strategic
+                                                            merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      required:
+                                                        - key
+                                                        - operator
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  matchLabels:
+                                                    additionalProperties:
+                                                      type: string
+                                                    description: |-
+                                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                                    type: object
+                                                type: object
+                                                x-kubernetes-map-type: atomic
+                                              namespaces:
+                                                description: |-
+                                                  namespaces specifies a static list of namespace names that the term applies to.
+                                                  The term is applied to the union of the namespaces listed in this field
+                                                  and the ones selected by namespaceSelector.
+                                                  null or empty namespaces list and null namespaceSelector means "this pod's namespace".
+                                                items:
+                                                  type: string
+                                                type: array
+                                                x-kubernetes-list-type: atomic
+                                              topologyKey:
+                                                description: |-
+                                                  This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching
+                                                  the labelSelector in the specified namespaces, where co-located is defined as running on a node
+                                                  whose value of the label with key topologyKey matches that of any node on which any of the
+                                                  selected pods is running.
+                                                  Empty topologyKey is not allowed.
+                                                type: string
+                                            required:
+                                              - topologyKey
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                      type: object
+                                    podAntiAffinity:
+                                      description:
+                                        Describes pod anti-affinity scheduling
+                                        rules (e.g. avoid putting this pod in the same
+                                        node, zone, etc. as some other pod(s)).
+                                      properties:
+                                        preferredDuringSchedulingIgnoredDuringExecution:
+                                          description: |-
+                                            The scheduler will prefer to schedule pods to nodes that satisfy
+                                            the anti-affinity expressions specified by this field, but it may choose
+                                            a node that violates one or more of the expressions. The node that is
+                                            most preferred is the one with the greatest sum of weights, i.e.
+                                            for each node that meets all of the scheduling requirements (resource
+                                            request, requiredDuringScheduling anti-affinity expressions, etc.),
+                                            compute a sum by iterating through the elements of this field and subtracting
+                                            "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                            node(s) with the highest sum are the most preferred.
+                                          items:
+                                            description:
+                                              The weights of all of the matched
+                                              WeightedPodAffinityTerm fields are added
+                                              per-node to find the most preferred node(s)
+                                            properties:
+                                              podAffinityTerm:
+                                                description:
+                                                  Required. A pod affinity
+                                                  term, associated with the corresponding
+                                                  weight.
+                                                properties:
+                                                  labelSelector:
+                                                    description: |-
+                                                      A label query over a set of resources, in this case pods.
+                                                      If it's null, this PodAffinityTerm matches with no Pods.
+                                                    properties:
+                                                      matchExpressions:
+                                                        description:
+                                                          matchExpressions
+                                                          is a list of label selector
+                                                          requirements. The requirements
+                                                          are ANDed.
+                                                        items:
+                                                          description: |-
+                                                            A label selector requirement is a selector that contains values, a key, and an operator that
+                                                            relates the key and values.
+                                                          properties:
+                                                            key:
+                                                              description:
+                                                                key is the
+                                                                label key that the selector
+                                                                applies to.
+                                                              type: string
+                                                            operator:
+                                                              description: |-
+                                                                operator represents a key's relationship to a set of values.
+                                                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                              type: string
+                                                            values:
+                                                              description: |-
+                                                                values is an array of string values. If the operator is In or NotIn,
+                                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                                the values array must be empty. This array is replaced during a strategic
+                                                                merge patch.
+                                                              items:
+                                                                type: string
+                                                              type: array
+                                                              x-kubernetes-list-type: atomic
+                                                          required:
+                                                            - key
+                                                            - operator
+                                                          type: object
+                                                        type: array
+                                                        x-kubernetes-list-type: atomic
+                                                      matchLabels:
+                                                        additionalProperties:
+                                                          type: string
+                                                        description: |-
+                                                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                                        type: object
+                                                    type: object
+                                                    x-kubernetes-map-type: atomic
+                                                  matchLabelKeys:
+                                                    description: |-
+                                                      MatchLabelKeys is a set of pod label keys to select which pods will
+                                                      be taken into consideration. The keys are used to lookup values from the
+                                                      incoming pod labels, those key-value labels are merged with `labelSelector` as `key in (value)`
+                                                      to select the group of existing pods which pods will be taken into consideration
+                                                      for the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming
+                                                      pod labels will be ignored. The default value is empty.
+                                                      The same key is forbidden to exist in both matchLabelKeys and labelSelector.
+                                                      Also, matchLabelKeys cannot be set when labelSelector isn't set.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  mismatchLabelKeys:
+                                                    description: |-
+                                                      MismatchLabelKeys is a set of pod label keys to select which pods will
+                                                      be taken into consideration. The keys are used to lookup values from the
+                                                      incoming pod labels, those key-value labels are merged with `labelSelector` as `key notin (value)`
+                                                      to select the group of existing pods which pods will be taken into consideration
+                                                      for the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming
+                                                      pod labels will be ignored. The default value is empty.
+                                                      The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
+                                                      Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  namespaceSelector:
+                                                    description: |-
+                                                      A label query over the set of namespaces that the term applies to.
+                                                      The term is applied to the union of the namespaces selected by this field
+                                                      and the ones listed in the namespaces field.
+                                                      null selector and null or empty namespaces list means "this pod's namespace".
+                                                      An empty selector ({}) matches all namespaces.
+                                                    properties:
+                                                      matchExpressions:
+                                                        description:
+                                                          matchExpressions
+                                                          is a list of label selector
+                                                          requirements. The requirements
+                                                          are ANDed.
+                                                        items:
+                                                          description: |-
+                                                            A label selector requirement is a selector that contains values, a key, and an operator that
+                                                            relates the key and values.
+                                                          properties:
+                                                            key:
+                                                              description:
+                                                                key is the
+                                                                label key that the selector
+                                                                applies to.
+                                                              type: string
+                                                            operator:
+                                                              description: |-
+                                                                operator represents a key's relationship to a set of values.
+                                                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                              type: string
+                                                            values:
+                                                              description: |-
+                                                                values is an array of string values. If the operator is In or NotIn,
+                                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                                the values array must be empty. This array is replaced during a strategic
+                                                                merge patch.
+                                                              items:
+                                                                type: string
+                                                              type: array
+                                                              x-kubernetes-list-type: atomic
+                                                          required:
+                                                            - key
+                                                            - operator
+                                                          type: object
+                                                        type: array
+                                                        x-kubernetes-list-type: atomic
+                                                      matchLabels:
+                                                        additionalProperties:
+                                                          type: string
+                                                        description: |-
+                                                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                                        type: object
+                                                    type: object
+                                                    x-kubernetes-map-type: atomic
+                                                  namespaces:
+                                                    description: |-
+                                                      namespaces specifies a static list of namespace names that the term applies to.
+                                                      The term is applied to the union of the namespaces listed in this field
+                                                      and the ones selected by namespaceSelector.
+                                                      null or empty namespaces list and null namespaceSelector means "this pod's namespace".
+                                                    items:
+                                                      type: string
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  topologyKey:
+                                                    description: |-
+                                                      This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching
+                                                      the labelSelector in the specified namespaces, where co-located is defined as running on a node
+                                                      whose value of the label with key topologyKey matches that of any node on which any of the
+                                                      selected pods is running.
+                                                      Empty topologyKey is not allowed.
+                                                    type: string
+                                                required:
+                                                  - topologyKey
+                                                type: object
+                                              weight:
+                                                description: |-
+                                                  weight associated with matching the corresponding podAffinityTerm,
+                                                  in the range 1-100.
+                                                format: int32
+                                                type: integer
+                                            required:
+                                              - podAffinityTerm
+                                              - weight
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                        requiredDuringSchedulingIgnoredDuringExecution:
+                                          description: |-
+                                            If the anti-affinity requirements specified by this field are not met at
+                                            scheduling time, the pod will not be scheduled onto the node.
+                                            If the anti-affinity requirements specified by this field cease to be met
+                                            at some point during pod execution (e.g. due to a pod label update), the
+                                            system may or may not try to eventually evict the pod from its node.
+                                            When there are multiple elements, the lists of nodes corresponding to each
+                                            podAffinityTerm are intersected, i.e. all terms must be satisfied.
+                                          items:
+                                            description: |-
+                                              Defines a set of pods (namely those matching the labelSelector
+                                              relative to the given namespace(s)) that this pod should be
+                                              co-located (affinity) or not co-located (anti-affinity) with,
+                                              where co-located is defined as running on a node whose value of
+                                              the label with key <topologyKey> matches that of any node on which
+                                              a pod of the set of pods is running
+                                            properties:
+                                              labelSelector:
+                                                description: |-
+                                                  A label query over a set of resources, in this case pods.
+                                                  If it's null, this PodAffinityTerm matches with no Pods.
+                                                properties:
+                                                  matchExpressions:
+                                                    description:
+                                                      matchExpressions is
+                                                      a list of label selector requirements.
+                                                      The requirements are ANDed.
+                                                    items:
+                                                      description: |-
+                                                        A label selector requirement is a selector that contains values, a key, and an operator that
+                                                        relates the key and values.
+                                                      properties:
+                                                        key:
+                                                          description:
+                                                            key is the label
+                                                            key that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: |-
+                                                            operator represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                          type: string
+                                                        values:
+                                                          description: |-
+                                                            values is an array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. This array is replaced during a strategic
+                                                            merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      required:
+                                                        - key
+                                                        - operator
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  matchLabels:
+                                                    additionalProperties:
+                                                      type: string
+                                                    description: |-
+                                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                                    type: object
+                                                type: object
+                                                x-kubernetes-map-type: atomic
+                                              matchLabelKeys:
+                                                description: |-
+                                                  MatchLabelKeys is a set of pod label keys to select which pods will
+                                                  be taken into consideration. The keys are used to lookup values from the
+                                                  incoming pod labels, those key-value labels are merged with `labelSelector` as `key in (value)`
+                                                  to select the group of existing pods which pods will be taken into consideration
+                                                  for the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming
+                                                  pod labels will be ignored. The default value is empty.
+                                                  The same key is forbidden to exist in both matchLabelKeys and labelSelector.
+                                                  Also, matchLabelKeys cannot be set when labelSelector isn't set.
+                                                items:
+                                                  type: string
+                                                type: array
+                                                x-kubernetes-list-type: atomic
+                                              mismatchLabelKeys:
+                                                description: |-
+                                                  MismatchLabelKeys is a set of pod label keys to select which pods will
+                                                  be taken into consideration. The keys are used to lookup values from the
+                                                  incoming pod labels, those key-value labels are merged with `labelSelector` as `key notin (value)`
+                                                  to select the group of existing pods which pods will be taken into consideration
+                                                  for the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming
+                                                  pod labels will be ignored. The default value is empty.
+                                                  The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
+                                                  Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
+                                                items:
+                                                  type: string
+                                                type: array
+                                                x-kubernetes-list-type: atomic
+                                              namespaceSelector:
+                                                description: |-
+                                                  A label query over the set of namespaces that the term applies to.
+                                                  The term is applied to the union of the namespaces selected by this field
+                                                  and the ones listed in the namespaces field.
+                                                  null selector and null or empty namespaces list means "this pod's namespace".
+                                                  An empty selector ({}) matches all namespaces.
+                                                properties:
+                                                  matchExpressions:
+                                                    description:
+                                                      matchExpressions is
+                                                      a list of label selector requirements.
+                                                      The requirements are ANDed.
+                                                    items:
+                                                      description: |-
+                                                        A label selector requirement is a selector that contains values, a key, and an operator that
+                                                        relates the key and values.
+                                                      properties:
+                                                        key:
+                                                          description:
+                                                            key is the label
+                                                            key that the selector applies
+                                                            to.
+                                                          type: string
+                                                        operator:
+                                                          description: |-
+                                                            operator represents a key's relationship to a set of values.
+                                                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                                                          type: string
+                                                        values:
+                                                          description: |-
+                                                            values is an array of string values. If the operator is In or NotIn,
+                                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                            the values array must be empty. This array is replaced during a strategic
+                                                            merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                          x-kubernetes-list-type: atomic
+                                                      required:
+                                                        - key
+                                                        - operator
+                                                      type: object
+                                                    type: array
+                                                    x-kubernetes-list-type: atomic
+                                                  matchLabels:
+                                                    additionalProperties:
+                                                      type: string
+                                                    description: |-
+                                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                                    type: object
+                                                type: object
+                                                x-kubernetes-map-type: atomic
+                                              namespaces:
+                                                description: |-
+                                                  namespaces specifies a static list of namespace names that the term applies to.
+                                                  The term is applied to the union of the namespaces listed in this field
+                                                  and the ones selected by namespaceSelector.
+                                                  null or empty namespaces list and null namespaceSelector means "this pod's namespace".
+                                                items:
+                                                  type: string
+                                                type: array
+                                                x-kubernetes-list-type: atomic
+                                              topologyKey:
+                                                description: |-
+                                                  This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching
+                                                  the labelSelector in the specified namespaces, where co-located is defined as running on a node
+                                                  whose value of the label with key topologyKey matches that of any node on which any of the
+                                                  selected pods is running.
+                                                  Empty topologyKey is not allowed.
+                                                type: string
+                                            required:
+                                              - topologyKey
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                      type: object
+                                  type: object
+                                containers:
+                                  description: |-
+                                    Containers is a list of calico-webhooks containers.
+                                    If specified, this overrides the specified calico-webhooks Deployment containers.
+                                    If omitted, the calico-webhooks Deployment will use its default values for its containers.
+                                  items:
+                                    description:
+                                      CalicoWebhooksDeploymentContainer is
+                                      a calico-webhooks Deployment container.
+                                    properties:
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the calico-webhooks Deployment container by name.
+                                          Supported values are: calico-webhooks
+                                        enum:
+                                          - calico-webhooks
+                                        type: string
+                                      ports:
+                                        description: |-
+                                          Ports allows customization of the calico-webhooks container's ports.
+                                          If specified, this overrides the default container port configuration.
+                                          If omitted, the calico-webhooks Deployment will use its default port (6443).
+                                        items:
+                                          description:
+                                            CalicoWebhooksDeploymentContainerPort
+                                            defines a port override for a calico-webhooks
+                                            container.
+                                          properties:
+                                            containerPort:
+                                              description: |-
+                                                Number of port to expose on the pod's IP address.
+                                                This must be a valid port number, 0 < x < 65536.
+                                              format: int32
+                                              maximum: 65535
+                                              minimum: 1
+                                              type: integer
+                                            name:
+                                              description: |-
+                                                Name is an enum which identifies the calico-webhooks Deployment container port by name.
+                                                Supported values are: calico-webhooks
+                                              enum:
+                                                - calico-webhooks
+                                              type: string
+                                          required:
+                                            - containerPort
+                                            - name
+                                          type: object
+                                        type: array
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named calico-webhooks Deployment container's resources.
+                                          If omitted, the calico-webhooks Deployment will use its default value for this container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                                hostNetwork:
+                                  description: |-
+                                    HostNetwork forces the webhook pod to use the host's network namespace.
+                                    When true, the webhook pod will run with hostNetwork=true and DNSPolicy=ClusterFirstWithHostNet.
+                                    When nil or omitted, the operator auto-detects whether host networking is required
+                                    (e.g., for EKS/TKG with Calico CNI).
+                                  type: boolean
+                                nodeSelector:
+                                  additionalProperties:
+                                    type: string
+                                  description: |-
+                                    NodeSelector is the calico-webhooks pod's scheduling constraints.
+                                    If specified, each of the key/value pairs are added to the calico-webhooks Deployment nodeSelector provided
+                                    the key does not already exist in the object's nodeSelector.
+                                    If used in conjunction with ControlPlaneNodeSelector, that nodeSelector is set on the calico-webhooks Deployment
+                                    and each of this field's key/value pairs are added to the calico-webhooks Deployment nodeSelector provided
+                                    the key does not already exist in the object's nodeSelector.
+                                    If omitted, the calico-webhooks Deployment will use its default value for nodeSelector.
+                                    WARNING: Please note that this field will modify the default calico-webhooks Deployment nodeSelector.
+                                  type: object
+                                tolerations:
+                                  description: |-
+                                    Tolerations is the calico-webhooks pod's tolerations.
+                                    If specified, this overrides any tolerations that may be set on the calico-webhooks Deployment.
+                                    If omitted, the calico-webhooks Deployment will use its default value for tolerations.
+                                    WARNING: Please note that this field will override the default calico-webhooks Deployment tolerations.
+                                  items:
+                                    description: |-
+                                      The pod this Toleration is attached to tolerates any taint that matches
+                                      the triple <key,value,effect> using the matching operator <operator>.
+                                    properties:
+                                      effect:
+                                        description: |-
+                                          Effect indicates the taint effect to match. Empty means match all taint effects.
+                                          When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
+                                        type: string
+                                      key:
+                                        description: |-
+                                          Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                                          If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+                                        type: string
+                                      operator:
+                                        description: |-
+                                          Operator represents a key's relationship to the value.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
+                                          Exists is equivalent to wildcard for value, so that a pod can
+                                          tolerate all taints of a particular category.
+                                        type: string
+                                      tolerationSeconds:
+                                        description: |-
+                                          TolerationSeconds represents the period of time the toleration (which must be
+                                          of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                                          it is not set, which means tolerate the taint forever (do not evict). Zero and
+                                          negative values will be treated as 0 (evict immediately) by the system.
+                                        format: int64
+                                        type: integer
+                                      value:
+                                        description: |-
+                                          Value is the taint value the toleration matches to.
+                                          If the operator is Exists, the value should be empty, otherwise just a regular string.
+                                        type: string
+                                    type: object
+                                  type: array
+                              type: object
+                          type: object
+                      type: object
+                  type: object
                 logging:
                   properties:
                     apiServer:
@@ -8553,6 +9784,13 @@ spec:
                           type: object
                       type: object
                   type: object
+                metricsPort:
+                  description: |-
+                    MetricsPort configures the port that Goldmane uses to serve Prometheus metrics.
+                    When set to a non-zero value, Goldmane will expose a /metrics endpoint on the given port.
+                    Set to zero to disable metrics. If omitted, metrics are disabled.
+                  format: int32
+                  type: integer
               type: object
             status:
               description: GoldmaneStatus defines the observed state of Goldmane
@@ -9990,6 +11228,16 @@ spec:
                       enum:
                         - Disabled
                         - Enabled
+                      type: string
+                    clusterRoutingMode:
+                      description: |-
+                        ClusterRoutingMode controls how nodes get a route to a workload on another node,
+                        when that workload's IP comes from an IP Pool with vxlanMode: Never. When ClusterRoutingMode is BIRD,
+                        confd and BIRD program that route. When ClusterRoutingMode is Felix, it is expected that Felix will program that route.
+                        Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: BIRD]
+                      enum:
+                        - BIRD
+                        - Felix
                       type: string
                     containerIPForwarding:
                       description: |-
@@ -15679,9 +16927,10 @@ spec:
                       type: string
                   type: object
                 nonPrivileged:
-                  description:
-                    NonPrivileged configures Calico to be run in non-privileged
-                    containers as non-root users where possible.
+                  description: |-
+                    Deprecated. NonPrivileged is deprecated and will be removed from the API in a future release.
+                    Enabling this field is not supported and will cause errors.
+                    NonPrivileged configures Calico to be run in non-privileged containers as non-root users where possible.
                   type: string
                 proxy:
                   description: |-
@@ -18802,6 +20051,16 @@ spec:
                           enum:
                             - Disabled
                             - Enabled
+                          type: string
+                        clusterRoutingMode:
+                          description: |-
+                            ClusterRoutingMode controls how nodes get a route to a workload on another node,
+                            when that workload's IP comes from an IP Pool with vxlanMode: Never. When ClusterRoutingMode is BIRD,
+                            confd and BIRD program that route. When ClusterRoutingMode is Felix, it is expected that Felix will program that route.
+                            Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: BIRD]
+                          enum:
+                            - BIRD
+                            - Felix
                           type: string
                         containerIPForwarding:
                           description: |-
@@ -24596,9 +25855,10 @@ spec:
                           type: string
                       type: object
                     nonPrivileged:
-                      description:
-                        NonPrivileged configures Calico to be run in non-privileged
-                        containers as non-root users where possible.
+                      description: |-
+                        Deprecated. NonPrivileged is deprecated and will be removed from the API in a future release.
+                        Enabling this field is not supported and will cause errors.
+                        NonPrivileged configures Calico to be run in non-privileged containers as non-root users where possible.
                       type: string
                     proxy:
                       description: |-
@@ -30391,6 +31651,10 @@ spec:
           jsonPath: .status.conditions[?(@.type=='Available')].lastTransitionTime
           name: Since
           type: date
+        - description: Error message when the component is degraded.
+          jsonPath: .status.conditions[?(@.type=='Degraded')].message
+          name: Message
+          type: string
       name: v1
       schema:
         openAPIV3Schema:
@@ -32062,6 +33326,14 @@ spec:
                     type: string
                   type: array
                   x-kubernetes-list-type: set
+                ipv4NormalRoutePriority:
+                  maximum: 2147483646
+                  minimum: 1
+                  type: integer
+                ipv6NormalRoutePriority:
+                  maximum: 2147483646
+                  minimum: 1
+                  type: integer
                 listenPort:
                   maximum: 65535
                   minimum: 1
@@ -32108,6 +33380,11 @@ spec:
                     x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
+                programClusterRoutes:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 serviceClusterIPs:
                   items:
                     properties:
@@ -32145,6 +33422,21 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message:
+                    nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is
+                    false
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.nodeMeshPassword) || !has(self.nodeToNodeMeshEnabled)
+                    || self.nodeToNodeMeshEnabled == true"
+                - message:
+                    nodeMeshMaxRestartTime cannot be set when nodeToNodeMeshEnabled
+                    is false
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.nodeMeshMaxRestartTime) || !has(self.nodeToNodeMeshEnabled)
+                    || self.nodeToNodeMeshEnabled == true"
           required:
             - metadata
             - spec
@@ -32189,9 +33481,29 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              maxLength: 32
+                              pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -32200,6 +33512,54 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          maxProperties: 1
+                          minProperties: 1
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  maxLength: 32
+                                  pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -32215,6 +33575,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -32223,6 +33587,21 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
                 exportV6:
                   items:
@@ -32232,9 +33611,29 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              maxLength: 32
+                              pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -32243,6 +33642,54 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          maxProperties: 1
+                          minProperties: 1
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  maxLength: 32
+                                  pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -32258,6 +33705,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -32266,6 +33717,21 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
                 importV4:
                   items:
@@ -32275,9 +33741,29 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              maxLength: 32
+                              pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -32286,6 +33772,54 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          maxProperties: 1
+                          minProperties: 1
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  maxLength: 32
+                                  pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -32301,6 +33835,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -32309,6 +33847,21 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
                 importV6:
                   items:
@@ -32318,9 +33871,29 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              maxLength: 32
+                              pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -32329,6 +33902,54 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          maxProperties: 1
+                          minProperties: 1
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  maxLength: 32
+                                  pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -32344,6 +33965,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -32352,6 +33977,21 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
               type: object
           required:
@@ -32436,6 +34076,7 @@ spec:
                   format: int32
                   type: integer
                 localWorkloadSelector:
+                  maxLength: 4096
                   type: string
                 maxRestartTime:
                   type: string
@@ -32446,8 +34087,10 @@ spec:
                     - Keep
                   type: string
                 node:
+                  maxLength: 253
                   type: string
                 nodeSelector:
+                  maxLength: 4096
                   type: string
                 numAllowedLocalASNumbers:
                   format: int32
@@ -32469,8 +34112,10 @@ spec:
                       x-kubernetes-map-type: atomic
                   type: object
                 peerIP:
+                  maxLength: 64
                   type: string
                 peerSelector:
+                  maxLength: 4096
                   type: string
                 reachableBy:
                   type: string
@@ -32491,6 +34136,37 @@ spec:
                 ttlSecurity:
                   type: integer
               type: object
+              x-kubernetes-validations:
+                - message: node and nodeSelector cannot both be set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.node) || size(self.node) == 0) || (!has(self.nodeSelector)
+                    || size(self.nodeSelector) == 0)
+                - message: peerIP and peerSelector cannot both be set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.peerIP) || size(self.peerIP) == 0) || (!has(self.peerSelector)
+                    || size(self.peerSelector) == 0)
+                - message: asNumber must be empty when peerSelector is set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.peerSelector) || size(self.peerSelector) == 0) || !has(self.asNumber)
+                    || self.asNumber == 0
+                - message: peerIP must be empty when localWorkloadSelector is set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (!has(self.peerIP) || size(self.peerIP) == 0)
+                - message: peerSelector must be empty when localWorkloadSelector is set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (!has(self.peerSelector) || size(self.peerSelector) == 0)
+                - message: asNumber is required when localWorkloadSelector is set
+                  reason: FieldValueInvalid
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (has(self.asNumber) && self.asNumber != 0)
           required:
             - metadata
             - spec
@@ -33243,8 +34919,25 @@ spec:
                 iptablesRefreshInterval:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                ipv4ElevatedRoutePriority:
+                  type: integer
+                ipv4NormalRoutePriority:
+                  type: integer
+                ipv6ElevatedRoutePriority:
+                  type: integer
+                ipv6NormalRoutePriority:
+                  type: integer
                 ipv6Support:
                   type: boolean
+                istioAmbientMode:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                istioDSCPMark:
+                  pattern: ^.*
+                  type: integer
+                  x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   items:
                     anyOf:
@@ -33253,6 +34946,9 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                liveMigrationRouteConvergenceTime:
+                  pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
                 logActionRateLimit:
                   pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
                   type: string
@@ -33454,6 +35150,10 @@ spec:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
               type: object
+              x-kubernetes-validations:
+                - message: routeTableRange and routeTableRanges cannot both be set
+                  reason: FieldValueForbidden
+                  rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           required:
             - metadata
             - spec
@@ -33573,15 +35273,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -33591,10 +35295,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -33614,10 +35322,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -33684,6 +35396,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -33751,15 +35479,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -33769,10 +35501,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -33792,10 +35528,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -33862,6 +35602,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 namespaceSelector:
                   type: string
@@ -33893,10 +35649,35 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: preDNAT and doNotTrack cannot both be true
+                  reason: FieldValueForbidden
+                  rule:
+                    "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
+                    && self.preDNAT))"
+                - message: preDNAT policy cannot have any egress rules
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
+                    size(self.egress) == 0
+                - message: preDNAT policy cannot have 'Egress' type
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
+                    t == 'Egress')
+                - message:
+                    applyOnForward must be true if either preDNAT or doNotTrack
+                    is true
+                  reason: FieldValueInvalid
+                  rule:
+                    (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
+                    || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
           required:
             - metadata
             - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
       subresources: {}
@@ -33999,8 +35780,10 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 interfaceName:
+                  maxLength: 15
                   type: string
                 node:
+                  maxLength: 253
                   type: string
                 ports:
                   items:
@@ -34009,7 +35792,7 @@ spec:
                         type: string
                       port:
                         maximum: 65535
-                        minimum: 0
+                        minimum: 1
                         type: integer
                       protocol:
                         anyOf:
@@ -34029,6 +35812,15 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: at least one of interfaceName or expectedIPs must be specified
+                  reason: FieldValueInvalid
+                  rule:
+                    (has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs)
+                    && size(self.expectedIPs) > 0)
+                - message: node must be specified
+                  reason: FieldValueInvalid
+                  rule: has(self.node) && size(self.node) > 0
           required:
             - metadata
             - spec
@@ -34095,6 +35887,10 @@ spec:
                 attributes:
                   items:
                     properties:
+                      alternate:
+                        additionalProperties:
+                          type: string
+                        type: object
                       handle_id:
                         type: string
                       secondary:
@@ -34186,6 +35982,11 @@ spec:
                 autoAllocateBlocks:
                   default: true
                   type: boolean
+                kubeVirtVMAddressPersistence:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 maxBlocksPerHost:
                   default: 0
                   format: int32
@@ -34322,6 +36123,7 @@ spec:
                       - Tunnel
                       - LoadBalancer
                     type: string
+                  maxItems: 10
                   type: array
                   x-kubernetes-list-type: set
                 assignmentMode:
@@ -34334,9 +36136,22 @@ spec:
                   maximum: 128
                   minimum: 0
                   type: integer
+                  x-kubernetes-validations:
+                    - message:
+                        Block size cannot be changed; follow IP pool migration
+                        guide to avoid corruption.
+                      reason: FieldValueInvalid
+                      rule: self == oldSelf
                 cidr:
                   format: cidr
+                  maxLength: 48
                   type: string
+                  x-kubernetes-validations:
+                    - message:
+                        CIDR cannot be changed; follow IP pool migration guide
+                        to avoid corruption.
+                      reason: FieldValueInvalid
+                      rule: self == oldSelf
                 disableBGPExport:
                   type: boolean
                 disabled:
@@ -34362,6 +36177,32 @@ spec:
               required:
                 - cidr
               type: object
+              x-kubernetes-validations:
+                - message: ipipMode and vxlanMode cannot both be enabled
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode
+                    == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode)
+                    == 0 || size(self.vxlanMode) == 0"
+                - message: LoadBalancer IP pool cannot have IPIP or VXLAN enabled
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode
+                    == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) ==
+                    0 || self.vxlanMode == 'Never')"
+                - message:
+                    LoadBalancer cannot be combined with Workload or Tunnel allowed
+                    uses
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')"
+                - message: IPIP is not supported on IPv6 pools
+                  reason: FieldValueForbidden
+                  rule:
+                    "!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode
+                    == 'Never' || size(self.ipipMode) == 0"
             status:
               properties:
                 conditions:
@@ -34728,6 +36569,8 @@ spec:
           type: object
       served: true
       storage: true
+      subresources:
+        status: {}
 ---
 # Source: projectcalico.org.v3/templates/calico/projectcalico.org_networkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -34834,15 +36677,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -34852,10 +36699,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -34875,10 +36726,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -34945,6 +36800,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -35012,15 +36883,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -35030,10 +36905,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -35053,10 +36932,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -35123,6 +37006,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 order:
                   type: number
@@ -35310,15 +37209,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -35328,10 +37231,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -35351,10 +37258,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -35421,6 +37332,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -35488,15 +37415,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -35506,10 +37437,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -35529,10 +37464,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -35599,6 +37538,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 namespaceSelector:
                   type: string
@@ -35617,6 +37572,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete
@@ -35637,6 +37593,29 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: preDNAT and doNotTrack cannot both be true
+                  reason: FieldValueForbidden
+                  rule:
+                    "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
+                    && self.preDNAT))"
+                - message: preDNAT policy cannot have any egress rules
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
+                    size(self.egress) == 0
+                - message: preDNAT policy cannot have 'Egress' type
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
+                    t == 'Egress')
+                - message:
+                    applyOnForward must be true if either preDNAT or doNotTrack
+                    is true
+                  reason: FieldValueInvalid
+                  rule:
+                    (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
+                    || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
           required:
             - metadata
             - spec
@@ -35894,6 +37873,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete
@@ -36013,15 +37993,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -36031,10 +38015,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -36054,10 +38042,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -36124,6 +38116,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -36191,15 +38199,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -36209,10 +38221,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -36232,10 +38248,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -36302,6 +38322,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 order:
                   type: number
@@ -36316,6 +38352,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete
@@ -36372,6 +38409,10 @@ spec:
           jsonPath: .spec.defaultAction
           name: DefaultAction
           type: string
+        - description: Current status of the tier
+          jsonPath: .status.conditions[?(@.type=='Ready')].reason
+          name: Status
+          type: string
       name: v3
       schema:
         openAPIV3Schema:
@@ -36394,9 +38435,49 @@ spec:
                     - enum:
                         - Pass
                         - Deny
+                  default: Deny
                   type: string
                 order:
                   type: number
+              type: object
+            status:
+              properties:
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
               type: object
           required:
             - metadata
@@ -36404,17 +38485,21 @@ spec:
           type: object
           x-kubernetes-validations:
             - message: The 'kube-admin' tier must have default action 'Pass'
+              reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'kube-admin' ? self.spec.defaultAction ==
-                'Pass' : true"
+                "self.metadata.name == 'kube-admin' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'kube-baseline' tier must have default action 'Pass'
+              reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'kube-baseline' ? self.spec.defaultAction
-                == 'Pass' : true"
+                "self.metadata.name == 'kube-baseline' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'default' tier must have default action 'Deny'
+              reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny'
-                : true"
+                "self.metadata.name == 'default' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Deny') : true"
       served: true
       storage: true
-      subresources: {}
+      subresources:
+        status: {}

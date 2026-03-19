@@ -242,6 +242,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete

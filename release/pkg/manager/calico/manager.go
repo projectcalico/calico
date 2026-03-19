@@ -866,6 +866,15 @@ func (r *CalicoManager) assertImageVersions() error {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
+		case "webhooks":
+			for _, reg := range r.imageRegistries {
+				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "version"}, nil)
+				if err != nil {
+					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
+				} else if !strings.Contains(out, r.calicoVersion) {
+					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
+				}
+			}
 		default:
 			return fmt.Errorf("unknown image: %s, update assertion to include validating image", img)
 		}

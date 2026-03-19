@@ -163,6 +163,7 @@ const (
 )
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
+// +kubebuilder:validation:XValidation:rule="!has(self.routeTableRange) || !has(self.routeTableRanges)",message="routeTableRange and routeTableRanges cannot both be set",reason=FieldValueForbidden
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
@@ -568,8 +569,10 @@ type FelixConfigurationSpec struct {
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
 
-	// ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
-	// Felix always programs VXLAN routes. [Default: Disabled]
+	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
+	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
+	// it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
+	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
@@ -793,8 +796,9 @@ type FelixConfigurationSpec struct {
 	BPFKubeProxyMinSyncPeriod *metav1.Duration `json:"bpfKubeProxyMinSyncPeriod,omitempty" validate:"omitempty" configv1timescale:"seconds"`
 
 	// BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
-	// The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
-	BPFKubeProxyHealthzPort *int `json:"bpfKubeProxyHealthzPort,omitempty" validate:"omitempty,gte=1,lte=65535" confignamev1:"BPFKubeProxyHealthzPort"`
+	// The health check server is used by external load balancers to determine if this node should receive traffic.
+	// Set to 0 to disable the health check server.  [Default: 10256]
+	BPFKubeProxyHealthzPort *int `json:"bpfKubeProxyHealthzPort,omitempty" validate:"omitempty,gte=0,lte=65535" confignamev1:"BPFKubeProxyHealthzPort"`
 
 	// BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
 	// collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and
@@ -888,6 +892,17 @@ type FelixConfigurationSpec struct {
 	// [Default: 1]
 	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty,cidrs"`
 
+	// IstioAmbientMode configures Felix to work together with Tigera's Istio distribution.
+	// [Default: Disabled]
+	// +optional
+	IstioAmbientMode *IstioAmbientMode `json:"istioAmbientMode,omitempty"`
+
+	// IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
+	// SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
+	// with other Istio installation. [Default: 23]
+	// +optional
+	IstioDSCPMark *numorstring.DSCP `json:"istioDSCPMark,omitempty"`
+
 	// CgroupV2Path overrides the default location where to find the cgroup hierarchy.
 	CgroupV2Path string `json:"cgroupV2Path,omitempty"`
 
@@ -952,6 +967,29 @@ type FelixConfigurationSpec struct {
 	// RouteSyncDisabled will disable all operations performed on the route table. Set to true to
 	// run in network-policy mode only.
 	RouteSyncDisabled *bool `json:"routeSyncDisabled,omitempty"`
+
+	// Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
+	// values mean lower priority. [Default: 1024]
+	IPv4NormalRoutePriority *int `json:"ipv4NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+	// Route Priority value for an elevated priority Calico-programmed IPv4 route.  Note, higher
+	// values mean lower priority.  Elevated priority is used during VM live migration, and for
+	// optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
+	// [Default: 512]
+	IPv4ElevatedRoutePriority *int `json:"ipv4ElevatedRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+	// Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
+	// values mean lower priority. [Default: 1024]
+	IPv6NormalRoutePriority *int `json:"ipv6NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+	// Route Priority value for an elevated priority Calico-programmed IPv6 route.  Note, higher
+	// values mean lower priority.  Elevated priority is used during VM live migration, and for
+	// optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
+	// [Default: 512]
+	IPv6ElevatedRoutePriority *int `json:"ipv6ElevatedRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+	// LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
+	// VM live migration completes.  This allows routes to converge across the cluster before
+	// reverting to normal priority. [Default: 30s]
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$`
+	LiveMigrationRouteConvergenceTime *metav1.Duration `json:"liveMigrationRouteConvergenceTime,omitempty" configv1timescale:"seconds"`
 
 	// WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]
 	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`
@@ -1166,6 +1204,15 @@ type BPFConntrackTimeouts struct {
 	// +optional
 	ICMPTimeout *BPFConntrackTimeout `json:"icmpTimeout,omitempty"`
 }
+
+// IstioAmbientMode is the enum used to enable/disable Tigera Istio mode.
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type IstioAmbientMode string
+
+const (
+	IstioAmbientModeEnabled  IstioAmbientMode = "Enabled"
+	IstioAmbientModeDisabled IstioAmbientMode = "Disabled"
+)
 
 // New FelixConfiguration creates a new (zeroed) FelixConfiguration struct with the TypeMetadata
 // initialized to the current version.

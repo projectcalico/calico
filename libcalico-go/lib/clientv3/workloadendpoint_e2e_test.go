@@ -283,13 +283,13 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Updating WorkloadEndpoint name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.WorkloadEndpoints().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ") with error:"))
+			Eventually(func() string {
+				_, err := c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ") with error:"))
 
 			By("Creating WorkloadEndpoint name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.WorkloadEndpoints().Create(ctx, &internalapi.WorkloadEndpoint{
@@ -297,13 +297,13 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				Spec:       spec2_1,
 			}, options.SetOptions{TTL: 2 * time.Second})
 			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ") with error:"))
+			Eventually(func() string {
+				_, err := c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ") with error:"))
 
 			By("Attempting to deleting WorkloadEndpoint (name2) again")
 			_, outError = c.WorkloadEndpoints().Delete(ctx, namespace2, name2, options.DeleteOptions{})

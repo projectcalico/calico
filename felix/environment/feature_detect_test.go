@@ -671,6 +671,24 @@ func TestBPFFeatureDetection(t *testing.T) {
 				"IPIPDeviceIsL3": "false",
 			},
 		},
+		{
+			"Linux version 6.15.0",
+			Features{
+				NFLogSize:          true,
+				IPIPDeviceIsL3:     true,
+				KernelHasUDPGSOFix: false,
+			},
+			map[string]string{},
+		},
+		{
+			"Linux version 6.16.0",
+			Features{
+				NFLogSize:          true,
+				IPIPDeviceIsL3:     true,
+				KernelHasUDPGSOFix: true,
+			},
+			map[string]string{},
+		},
 	} {
 		t.Run("kernel "+tst.kernelVersion, func(t *testing.T) {
 			RegisterTestingT(t)

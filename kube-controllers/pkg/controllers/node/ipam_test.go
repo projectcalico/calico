@@ -25,10 +25,12 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
@@ -37,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -110,16 +113,23 @@ var _ = Describe("IPAM controller UTs", func() {
 	var c *IPAMController
 	var cli client.Interface
 	var cs kubernetes.Interface
+	var deferredInformers *kubevirt.DeferredInformers
+	var vmIndexer cache.Indexer
+	var vmiIndexer cache.Indexer
 	var stopChan chan struct{}
 	var pods chan *v1.Pod
 	var nodes chan *v1.Node
 
 	BeforeEach(func() {
 		// Create a fake clientset with nothing in it.
-		cs = fake.NewSimpleClientset()
+		cs = fake.NewClientset()
 
 		// Create a fake Calico client.
 		cli = NewFakeCalicoClient()
+
+		vmIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		vmiIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		deferredInformers = kubevirt.NewDeferredInformersWithIndexers(vmIndexer, vmiIndexer)
 
 		// Create a node indexer with the fake clientset
 		factory := informers.NewSharedInformerFactory(cs, 0)
@@ -165,7 +175,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer())
+		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers)
 
 		// For testing, speed up update batching.
 		c.consolidationWindow = 1 * time.Millisecond
@@ -177,6 +187,277 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Stop the controller.
 		close(stopChan)
+	})
+
+	Describe("VMI allocation validation", func() {
+		makeVMIAllocation := func(ns, vmName string) *allocation {
+			return &allocation{
+				ip:     "10.0.0.1",
+				handle: "vmi-handle",
+				attrs: map[string]string{
+					ipam.AttributeNamespace: ns,
+					ipam.AttributeVMIName:   vmName,
+				},
+			}
+		}
+
+		It("should treat matching VM allocation as valid", func() {
+			c.Start(stopChan)
+			resume := c.pause()
+			defer resume()
+
+			namespace := "default"
+			vmName := "test-vm"
+			vmUID := "vm-uid"
+			runStrategy := kubevirtv1.RunStrategyAlways
+			vm := &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      vmName,
+					Namespace: namespace,
+					UID:       types.UID(vmUID),
+				},
+				Spec: kubevirtv1.VirtualMachineSpec{
+					RunStrategy: &runStrategy,
+				},
+			}
+
+			Expect(vmIndexer.Add(vm)).NotTo(HaveOccurred())
+
+			allocation := makeVMIAllocation(namespace, vmName)
+			Expect(c.isVMAllocationValid(allocation)).To(BeTrue())
+		})
+
+		It("should treat allocation as invalid if VM not found", func() {
+			c.Start(stopChan)
+			namespace := "default"
+
+			allocation := makeVMIAllocation(namespace, "invalid-vm-name")
+			Expect(c.isVMAllocationValid(allocation)).To(BeFalse())
+		})
+
+		It("should treat allocation as valid if VM not found but Standalone VMI exist", func() {
+			c.Start(stopChan)
+			namespace := "default"
+			vmiName := "test-vm"
+			vmiUID := "vmi-uid"
+
+			vmi := &kubevirtv1.VirtualMachineInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      vmiName,
+					Namespace: namespace,
+					UID:       types.UID(vmiUID),
+				},
+			}
+			Expect(vmiIndexer.Add(vmi)).NotTo(HaveOccurred())
+
+			allocation := makeVMIAllocation(namespace, vmiName)
+			Expect(c.isVMAllocationValid(allocation)).To(BeTrue())
+		})
+
+		It("should treat allocation as invalid if VMI exists but is owned by a deleted VM", func() {
+			c.Start(stopChan)
+			namespace := "default"
+			vmiName := "test-vm"
+			vmiUID := "vmi-uid"
+			isController := true
+
+			// VMI with a VM ownerReference — but the VM is not in the cache.
+			vmi := &kubevirtv1.VirtualMachineInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      vmiName,
+					Namespace: namespace,
+					UID:       types.UID(vmiUID),
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "kubevirt.io/v1",
+							Kind:       "VirtualMachine",
+							Name:       vmiName,
+							Controller: &isController,
+						},
+					},
+				},
+			}
+			Expect(vmiIndexer.Add(vmi)).NotTo(HaveOccurred())
+
+			allocation := makeVMIAllocation(namespace, vmiName)
+			Expect(c.isVMAllocationValid(allocation)).To(BeFalse())
+		})
+
+		It("should treat allocation as valid if namespace or vmName attributes are missing", func() {
+			c.Start(stopChan)
+
+			allocation := makeVMIAllocation("", "")
+			Expect(c.isVMAllocationValid(allocation)).To(BeTrue())
+		})
+
+		It("should treat allocation as valid if KubeVirt indexers are nil (KubeVirt not installed)", func() {
+			// Create a DeferredInformers with no indexers set (KubeVirt not installed).
+			c.deferredInformers = &kubevirt.DeferredInformers{}
+			c.Start(stopChan)
+
+			allocation := makeVMIAllocation("default", "some-vm")
+			Expect(c.isVMAllocationValid(allocation)).To(BeTrue())
+		})
+	})
+
+	Describe("VM allocation GC through checkAllocations", func() {
+		var handle string
+		var blockCIDR string
+
+		// setupVMAllocation creates a Calico node, Kubernetes node, and a VM-type
+		// IPAM allocation block. The allocation has both Pod and VMIName attributes
+		// to match real KubeVirt allocations.
+		setupVMAllocation := func() {
+			n := internalapi.Node{}
+			n.Name = "cnode"
+			n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+			_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			kn := v1.Node{}
+			kn.Name = "kname"
+			_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			var node *v1.Node
+			Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+			handle = "vmi-handle"
+			idx := 0
+			cidr := net.MustParseCIDR("10.0.0.0/30")
+			aff := "host:cnode"
+			key := model.BlockKey{CIDR: cidr}
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{&idx, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes: []model.AllocationAttribute{
+					{
+						HandleID: &handle,
+						ActiveOwnerAttrs: map[string]string{
+							ipam.AttributeNode:      "cnode",
+							ipam.AttributePod:       "virt-launcher-test-vm-xxxxx",
+							ipam.AttributeNamespace: "default",
+							ipam.AttributeVMIName:   "test-vm",
+						},
+					},
+				},
+			}
+			kvp := model.KVPair{Key: key, Value: &b}
+			blockCIDR = kvp.Key.(model.BlockKey).CIDR.String()
+			update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+			c.onUpdate(update)
+		}
+
+		It("should GC VM allocation after grace period when VM is missing", func() {
+			// Use a short grace period for testing.
+			c.vmRecreationGracePeriod = gracePeriod
+
+			c.Start(stopChan)
+			setupVMAllocation()
+
+			// Wait for internal caches to update.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[blockCIDR]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			c.onStatusUpdate(bapi.InSync)
+
+			// VM does not exist in virtClient, so the allocation should eventually be GC'd
+			// after the grace period.
+			fakeClient := cli.IPAM().(*fakeIPAMClient)
+			Eventually(func() bool {
+				return fakeClient.handlesReleased[handle]
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+		})
+
+		It("should not GC VM allocation within grace period", func() {
+			// Use a very long grace period so it never expires during the test.
+			c.vmRecreationGracePeriod = 1 * time.Hour
+
+			c.Start(stopChan)
+			setupVMAllocation()
+
+			// Wait for internal caches to update.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[blockCIDR]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			c.onStatusUpdate(bapi.InSync)
+
+			// VM does not exist, but grace period is long.
+			// The allocation should be a candidate leak but NOT confirmed.
+			fakeClient := cli.IPAM().(*fakeIPAMClient)
+
+			// Wait for at least one GC cycle to run so the allocation is marked as a candidate.
+			allocID := fmt.Sprintf("%s/%s", handle, "10.0.0.0")
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode["cnode"][allocID]
+				return a != nil && a.leakedAt != nil
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be a candidate leak")
+
+			// The handle should NOT be released (grace period not expired).
+			Consistently(func() bool {
+				return fakeClient.handlesReleased[handle]
+			}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+		})
+
+		It("should stop GC when VM reappears during grace period", func() {
+			// Use a very long grace period so it never expires during the test.
+			c.vmRecreationGracePeriod = 1 * time.Hour
+
+			c.Start(stopChan)
+			setupVMAllocation()
+
+			// Wait for internal caches to update.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[blockCIDR]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			c.onStatusUpdate(bapi.InSync)
+
+			// Wait for the allocation to become a candidate leak.
+			allocID := fmt.Sprintf("%s/%s", handle, "10.0.0.0")
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode["cnode"][allocID]
+				return a != nil && a.leakedAt != nil
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be a candidate leak")
+
+			// Now create the VM so it exists.
+			runStrategy := kubevirtv1.RunStrategyAlways
+			vm := &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-vm",
+					Namespace: "default",
+					UID:       "vm-uid",
+				},
+				Spec: kubevirtv1.VirtualMachineSpec{
+					RunStrategy: &runStrategy,
+				},
+			}
+			Expect(vmIndexer.Add(vm)).NotTo(HaveOccurred())
+
+			// The allocation should be marked valid and leakedAt cleared.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode["cnode"][allocID]
+				return a != nil && a.leakedAt == nil && !a.confirmedLeak
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "allocation should be marked valid after VM reappears")
+		})
 	})
 
 	It("should handle node updates and maintain its node cache", func() {
@@ -302,8 +583,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		b.Allocations[0] = &idx
 		b.Unallocated = []int{1, 2, 3}
 		b.Attributes = append(b.Attributes, model.AllocationAttribute{
-			AttrPrimary: &handle,
-			AttrSecondary: map[string]string{
+			HandleID: &handle,
+			ActiveOwnerAttrs: map[string]string{
 				ipam.AttributeNode:      "cnode",
 				ipam.AttributePod:       "test-pod",
 				ipam.AttributeNamespace: "test-namespace",
@@ -314,7 +595,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		expectedAllocation := &allocation{
 			ip:     "10.0.0.0",
 			handle: handle,
-			attrs:  b.Attributes[0].AttrSecondary,
+			attrs:  b.Attributes[0].ActiveOwnerAttrs,
 			block:  "10.0.0.0/30",
 		}
 
@@ -602,8 +883,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       "test-pod",
 						ipam.AttributeNamespace: "test-namespace",
@@ -721,8 +1002,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       "test-pod",
 						ipam.AttributeNamespace: "test-namespace",
@@ -802,8 +1083,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -844,8 +1125,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -969,8 +1250,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -995,8 +1276,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -1133,8 +1414,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       "test-pod",
 						ipam.AttributeNamespace: "test-namespace",
@@ -1214,8 +1495,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{1, 2, 3},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -1324,8 +1605,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			Unallocated: []int{},
 			Attributes: []model.AllocationAttribute{
 				{
-					AttrPrimary: &handle,
-					AttrSecondary: map[string]string{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
 						ipam.AttributeNode:      "cnode",
 						ipam.AttributePod:       pod.Name,
 						ipam.AttributeNamespace: pod.Namespace,
@@ -1851,6 +2132,262 @@ var _ = Describe("IPAM controller UTs", func() {
 			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "IP was not marked as leaked")
 		})
 	})
+
+	It("should clean up node with tunnel IPs in a single sync pass", func() {
+		// Start the controller.
+		c.Start(stopChan)
+
+		// Create a block with a tunnel address allocation for a node that doesn't exist.
+		tunnelHandle := "vxlan-tunnel-addr-dead-node"
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:dead-node"
+		idx := 0
+		key := model.BlockKey{CIDR: cidr}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					HandleID: &tunnelHandle,
+					ActiveOwnerAttrs: map[string]string{
+						ipam.AttributeNode: "dead-node",
+						ipam.AttributeType: ipam.AttributeTypeVXLAN,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{Key: key, Value: &b}
+		update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update)
+
+		// Wait for internal caches to update.
+		blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allBlocks[blockCIDR]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Mark the syncer as InSync and trigger a full scan.
+		c.fullScanNextSync("forced by test")
+		c.onStatusUpdate(bapi.InSync)
+
+		// Both the tunnel IP GC and the node affinity release should eventually complete.
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		Eventually(func() bool {
+			return fakeClient.handlesReleased[tunnelHandle]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "Tunnel IP handle should be released via GC")
+
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("dead-node")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "Node affinity should be released")
+	})
+
+	// Regression test for https://github.com/projectcalico/calico/issues/8643
+	//
+	// Scenario: When nodes are rapidly scaled down, the IPAM GC controller can get
+	// stuck in an infinite retry loop. The root cause is that if
+	// ReleaseHostAffinities(mustBeEmpty=true) fails (e.g., because blocks still have
+	// allocations due to a race between IP release and block update propagation),
+	// dirty nodes accumulated and each subsequent sync processed more and more
+	// nodes, increasing contention and making recovery impossible.
+	//
+	// The fix uses incremental dirty-node tracking: each node is individually marked
+	// clean as it is successfully processed or released. Failed nodes simply remain
+	// dirty and are retried on the next pass.
+	//
+	// This test creates three deleted nodes, injects cleanup errors for two of them,
+	// and verifies that:
+	//   - The healthy node is cleaned up immediately
+	//   - The failing nodes are retained and retried
+	//   - As errors are cleared, each node is eventually cleaned up
+	It("should not get stuck when node cleanup fails (issue #8643)", func() {
+		// Start the controller.
+		c.Start(stopChan)
+
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		fc := cli.(*FakeCalicoClient)
+
+		// Inject errors for node-b and node-c to simulate "block not empty" failures.
+		// node-a will succeed immediately.
+		fc.SetReleaseHostAffinityError("node-b", fmt.Errorf("block is not empty"))
+		fc.SetReleaseHostAffinityError("node-c", fmt.Errorf("block is not empty"))
+
+		// Create blocks with tunnel address allocations for three nodes that don't
+		// exist in Kubernetes (simulating node deletion during scale-down).
+		type testNode struct {
+			name   string
+			cidr   string
+			handle string
+		}
+		nodes := []testNode{
+			{"node-a", "10.0.0.0/30", "vxlan-tunnel-addr-node-a"},
+			{"node-b", "10.0.1.0/30", "vxlan-tunnel-addr-node-b"},
+			{"node-c", "10.0.2.0/30", "vxlan-tunnel-addr-node-c"},
+		}
+		for _, n := range nodes {
+			cidr := net.MustParseCIDR(n.cidr)
+			aff := fmt.Sprintf("host:%s", n.name)
+			handle := n.handle
+			idx := 0
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{&idx, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes: []model.AllocationAttribute{
+					{
+						HandleID: &handle,
+						ActiveOwnerAttrs: map[string]string{
+							ipam.AttributeNode: n.name,
+							ipam.AttributeType: ipam.AttributeTypeVXLAN,
+						},
+					},
+				},
+			}
+			kvp := model.KVPair{Key: model.BlockKey{CIDR: cidr}, Value: &b}
+			c.onUpdate(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+		}
+
+		// Wait for all blocks to be cached.
+		for _, n := range nodes {
+			cidr := n.cidr
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[cidr]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Block %s should be cached", cidr)
+		}
+
+		// Trigger a full sync.
+		c.fullScanNextSync("forced by test")
+		c.onStatusUpdate(bapi.InSync)
+
+		// node-a should be cleaned up (no error injected).
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("node-a")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "node-a affinity should be released")
+
+		// node-b and node-c should NOT be released — their cleanup is failing.
+		Consistently(func() bool {
+			return fakeClient.affinityReleased("node-b") || fakeClient.affinityReleased("node-c")
+		}, 2*time.Second, 100*time.Millisecond).Should(BeFalse(), "node-b and node-c should not be released while errors persist")
+
+		// Verify that the dirty node count is bounded — it should only contain the two failing
+		// nodes, not grow unbounded across syncs.
+		done := c.pause()
+		Expect(len(c.allocationState.dirtyNodes)).To(BeNumerically("<=", 2),
+			"dirty node count should not grow unbounded")
+		done()
+
+		// Clear the error for node-b. The retry controller will eventually schedule
+		// another sync and node-b should be cleaned up.
+		fc.SetReleaseHostAffinityError("node-b", nil)
+
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("node-b")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "node-b affinity should be released after error is cleared")
+
+		// node-c should still be failing.
+		Expect(fakeClient.affinityReleased("node-c")).To(BeFalse(), "node-c should still be stuck")
+
+		// Clear the error for node-c.
+		fc.SetReleaseHostAffinityError("node-c", nil)
+
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("node-c")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "node-c affinity should be released after error is cleared")
+	})
+
+	// Regression test: verifies the controller makes progress even when ALL nodes fail
+	// cleanup simultaneously (zero progress in a pass). The dirty node set should stay
+	// bounded across syncs, and nodes should recover once errors clear.
+	It("should handle all nodes failing cleanup without growing dirty set", func() {
+		c.Start(stopChan)
+
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		fc := cli.(*FakeCalicoClient)
+
+		// Inject errors for ALL nodes.
+		fc.SetReleaseHostAffinityError("node-x", fmt.Errorf("block is not empty"))
+		fc.SetReleaseHostAffinityError("node-y", fmt.Errorf("block is not empty"))
+
+		type testNode struct {
+			name   string
+			cidr   string
+			handle string
+		}
+		nodes := []testNode{
+			{"node-x", "10.0.10.0/30", "vxlan-tunnel-addr-node-x"},
+			{"node-y", "10.0.11.0/30", "vxlan-tunnel-addr-node-y"},
+		}
+		for _, n := range nodes {
+			cidr := net.MustParseCIDR(n.cidr)
+			aff := fmt.Sprintf("host:%s", n.name)
+			handle := n.handle
+			idx := 0
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{&idx, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes: []model.AllocationAttribute{
+					{
+						HandleID: &handle,
+						ActiveOwnerAttrs: map[string]string{
+							ipam.AttributeNode: n.name,
+							ipam.AttributeType: ipam.AttributeTypeVXLAN,
+						},
+					},
+				},
+			}
+			kvp := model.KVPair{Key: model.BlockKey{CIDR: cidr}, Value: &b}
+			c.onUpdate(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+		}
+
+		// Wait for blocks to be cached.
+		for _, n := range nodes {
+			cidr := n.cidr
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[cidr]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Block %s should be cached", cidr)
+		}
+
+		// Trigger a full sync.
+		c.fullScanNextSync("forced by test")
+		c.onStatusUpdate(bapi.InSync)
+
+		// Neither node should be released since all are failing.
+		Consistently(func() bool {
+			return fakeClient.affinityReleased("node-x") || fakeClient.affinityReleased("node-y")
+		}, 2*time.Second, 100*time.Millisecond).Should(BeFalse(), "no nodes should be released while all errors persist")
+
+		// Dirty node count should stay bounded at the number of failing nodes (2),
+		// not grow across repeated sync attempts.
+		done := c.pause()
+		Expect(len(c.allocationState.dirtyNodes)).To(BeNumerically("<=", 2),
+			"dirty node count should not grow unbounded when all nodes fail")
+		done()
+
+		// Clear errors — both nodes should recover.
+		fc.SetReleaseHostAffinityError("node-x", nil)
+		fc.SetReleaseHostAffinityError("node-y", nil)
+
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("node-x")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "node-x should be released after error is cleared")
+
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("node-y")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "node-y should be released after error is cleared")
+	})
 })
 
 // createBlock creates a block based on the given pods and CIDR, and sends it as an update to the controller.
@@ -1869,8 +2406,8 @@ func createBlock(pods []v1.Pod, host, cidrStr string) bapi.Update {
 	attrs := []model.AllocationAttribute{}
 	for i, pod := range pods {
 		attrs = append(attrs, model.AllocationAttribute{
-			AttrPrimary: &pod.Name,
-			AttrSecondary: map[string]string{
+			HandleID: &pod.Name,
+			ActiveOwnerAttrs: map[string]string{
 				ipam.AttributeNode:      host,
 				ipam.AttributePod:       pod.Name,
 				ipam.AttributeNamespace: pod.Namespace,

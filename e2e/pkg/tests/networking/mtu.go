@@ -20,11 +20,9 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
-	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
 
@@ -37,18 +35,10 @@ var _ = describe.CalicoDescribe(
 		// Determine platform and thus expected MTU.
 		f := utils.NewDefaultFramework("calico-mtu")
 
-		var cli ctrlclient.Client
 		var checker conncheck.ConnectionTester
 		var clientPod *conncheck.Client
 
 		ginkgo.BeforeEach(func() {
-			var err error
-			cli, err = client.New(f.ClientConfig())
-			Expect(err).NotTo(HaveOccurred())
-
-			// Ensure a clean starting environment before each test.
-			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred())
-
 			// Run the test pod as root and with NET_RAW capabiltiies to allow access to network interfaces.
 			customizer := func(pod *v1.Pod) {
 				pod.Spec.SecurityContext = &v1.PodSecurityContext{RunAsUser: ptr.To[int64](0)}

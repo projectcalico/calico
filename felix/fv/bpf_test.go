@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1962,8 +1962,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Starting permanent connection")
 						pc := w[0][0].StartPersistentConnection(w[1][0].IP, 8055, workload.PersistentConnectionOpts{
 							MonitorConnectivity: true,
+							Timeout:             60 * time.Second,
 						})
-						defer pc.Stop()
 
 						expectPongs := func() {
 							EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
@@ -2000,12 +2000,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Should no longer get pongs when using the spoof interface")
 						expectNoPongs()
 
-						// Move WEP to spoof interface
+						// Switch back to eth0 and stop the persistent connection
+						// cleanly before the WEP move.  RemoveFromInfra triggers
+						// WorkloadRemoveScannerTCP which marks the CT entry with
+						// FlagSendRST, causing BPF to RST the connection and the
+						// test-connection tool to exit with Fatal.
+						w[0][0].UseSpoofInterface(false)
+						expectPongs()
+						pc.Stop()
+
+						// Move WEP to spoof interface.  This simulates a pod being
+						// removed and a new pod being created on the spoof interface.
+						// Verify that new connections work on the new interface.
+						w[0][0].UseSpoofInterface(true)
 						w[0][0].RemoveFromInfra(infra)
 						w[0][0].RemoveSpoofWEPFromInfra(infra)
 						w[0][0].ConfigureInInfraAsSpoofInterface(infra)
-						By("Should get pongs again after switching WEP to spoof iface")
-						expectPongs()
+						By("Should have connectivity via new connections after WEP move to spoof iface")
+						cc.Expect(Some, w[0][0], w[1][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
 					})
 				}
 
@@ -2387,8 +2401,23 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						err := k8sClient.CoreV1().Services(testSvc.Namespace).Delete(context.Background(), testSvcName, metav1.DeleteOptions{})
 						Expect(err).NotTo(HaveOccurred())
 
-						By("Sleeping")
-						time.Sleep(20 * time.Second)
+						By("Waiting for first service's NAT key to be removed from the dataplane")
+						familyInt := 4
+						if testOpts.ipv6 {
+							familyInt = 6
+						}
+						var deletedSvcNATKey nat.FrontendKeyInterface
+						if testOpts.ipv6 {
+							deletedSvcNATKey = nat.NewNATKeyV6(net.ParseIP(clusterIP), port, numericProto)
+						} else {
+							deletedSvcNATKey = nat.NewNATKey(net.ParseIP(clusterIP), port, numericProto)
+						}
+						Eventually(func() bool {
+							natmaps, _, _ := dumpNATMapsAny(familyInt, tc.Felixes[0])
+							_, ok := natmaps[deletedSvcNATKey]
+							return ok
+						}, "30s", "1s").Should(BeFalse(), "first service's NAT key should have been removed")
+
 						By("And still having connectivity...")
 						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
 						cc.CheckConnectivity()
@@ -3375,41 +3404,47 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									Expect(err.Error()).To(ContainSubstring("No such file or directory"))
 								}
 
+								// Verify the map is empty after delete; retry if not.
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(0))
-
-									cc.CheckConnectivity()
-
-									aff = dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(1))
-									Expect(aff).To(HaveKey(mkey.(nat.AffinityKeyV6)))
-
-									return aff[mkey.(nat.AffinityKeyV6)].Backend()
-								}
-
-								if testOpts.ipv6 {
-									aff := dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(0))
+									if len(aff) != 0 {
+										return nil
+									}
 								} else {
 									aff := dumpAffMap(tc.Felixes[0])
-									Expect(aff).To(HaveLen(0))
+									if len(aff) != 0 {
+										return nil
+									}
 								}
 
 								cc.CheckConnectivity()
 
+								// The BPF datapath should have written exactly one
+								// affinity entry for the connection we just made.
+								// Retry if it hasn't shown up yet.
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
-									Expect(aff).To(HaveLen(1))
-									Expect(aff).To(HaveKey(mkey.(nat.AffinityKeyV6)))
+									if len(aff) != 1 {
+										return nil
+									}
+									if _, ok := aff[mkey.(nat.AffinityKeyV6)]; !ok {
+										return nil
+									}
 									return aff[mkey.(nat.AffinityKeyV6)].Backend()
 								}
 
 								aff := dumpAffMap(tc.Felixes[0])
-								Expect(aff).To(HaveLen(1))
-								Expect(aff).To(HaveKey(mkey.(nat.AffinityKey)))
+								if len(aff) != 1 {
+									return nil
+								}
+								if _, ok := aff[mkey.(nat.AffinityKey)]; !ok {
+									return nil
+								}
 								return aff[mkey.(nat.AffinityKey)].Backend()
-							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
+							}, 60*time.Second, time.Second).Should(SatisfyAll(
+								Not(BeNil()),
+								Not(Equal(mVal.Backend())),
+							))
 						})
 					}
 
@@ -3559,19 +3594,23 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								natFtKey = nat.NewNATKey(net.ParseIP(ip), port, numericProto)
 								family = 4
 							}
-							Eventually(func() bool {
-								m, be, _ := dumpNATMapsAny(family, tc.Felixes[1])
+							// Check all felixes. In the shared-cgroup FV environment,
+							// felix-0's CTLB program intercepts connects from all
+							// containers, so its NAT maps must be synced too.
+							for _, f := range tc.Felixes {
+								Eventually(func() bool {
+									m, be, _ := dumpNATMapsAny(family, f)
 
-								v, ok := m[natFtKey]
-								if !ok || v.Count() == 0 {
-									return false
-								}
+									v, ok := m[natFtKey]
+									if !ok || v.Count() == 0 {
+										return false
+									}
 
-								beKey := nat.NewNATBackendKey(v.ID(), 0)
-
-								_, ok = be[beKey]
-								return ok
-							}, 5*time.Second).Should(BeTrue())
+									beKey := nat.NewNATBackendKey(v.ID(), 0)
+									_, ok = be[beKey]
+									return ok
+								}, 5*time.Second).Should(BeTrue())
+							}
 						})
 
 						By("Making sure that backend is ready")
@@ -3640,7 +3679,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if testOpts.protocol == "tcp" {
 							Eventually(func() int { return tcpd.MatchCount("tcp-rst") }, "25s").ShouldNot(BeZero(),
 								"Expected to see TCP RSTs on the connection after backend change")
-							Expect(pc.IsConnectionReset()).To(BeTrue())
+							Eventually(pc.IsConnectionReset, "5s").Should(BeTrue(),
+								"Expected the persistent connection to detect the reset after RST seen in tcpdump")
 						} else {
 							prevCount = pc.PongCount()
 							Eventually(pc.PongCount, "15s").Should(BeNumerically(">", prevCount),
@@ -6467,6 +6507,21 @@ func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
 	)
 
 	if felix.TopologyOptions.EnableIPv6 {
+		out, err = felix.ExecOutput("calico-bpf", "-6", "policy", "dump", iface, hook)
+	} else {
+		out, err = felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook)
+	}
+	Expect(err).NotTo(HaveOccurred())
+	return out
+}
+
+func bpfDumpPolicyAsm(felix *infrastructure.Felix, iface, hook string) string {
+	var (
+		out string
+		err error
+	)
+
+	if felix.TopologyOptions.EnableIPv6 {
 		out, err = felix.ExecOutput("calico-bpf", "-6", "policy", "dump", iface, hook, "--asm")
 	} else {
 		out, err = felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook, "--asm")
@@ -6477,13 +6532,13 @@ func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
 
 // bpfWaitForGlobalNetworkPolicy waits for the given global network policy to appear in BPF policy.
 func bpfWaitForGlobalNetworkPolicy(felix *infrastructure.Felix, iface, hook, policyName string) string {
-	search := fmt.Sprintf("Start of GlobalNetworkPolicy %s", policyName)
+	search := fmt.Sprintf("Policy: GlobalNetworkPolicy %s", policyName)
 	return bpfWaitForPolicy(felix, iface, hook, search)
 }
 
 // bpfWaitForNetworkPolicy waits for the given network policy in the given namespace to appear in BPF policy.
 func bpfWaitForNetworkPolicy(felix *infrastructure.Felix, iface, hook, ns, policyName string) string {
-	search := fmt.Sprintf("Start of NetworkPolicy %s/%s", ns, policyName)
+	search := fmt.Sprintf("Policy: NetworkPolicy %s/%s", ns, policyName)
 	return bpfWaitForPolicy(felix, iface, hook, search)
 }
 

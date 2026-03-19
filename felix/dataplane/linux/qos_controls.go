@@ -27,7 +27,7 @@ import (
 
 // Bandwidth QoS controls are supported on iptables and nftables modes, and on BPF mode if 'tcx' attach mode is used.
 func (m *endpointManager) isQoSBandwidthSupported() bool {
-	return !m.bpfEnabled || (m.bpfEnabled && m.bpfAttachType == apiv3.BPFAttachOptionTCX && tc.IsTcxSupported())
+	return !m.cfg.bpfEnabled || (m.cfg.bpfEnabled && m.cfg.bpfAttachType == apiv3.BPFAttachOptionTCX && tc.IsTcxSupported())
 }
 
 func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoint) error {
@@ -92,7 +92,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 
 		if currentIngress == nil && desiredIngress != nil {
 			// Add.
-			err := qos.CreateIngressQdisc(desiredIngress, newName)
+			err := qos.CreateOrUpdateIngressQdisc(desiredIngress, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error adding ingress qdisc to workload %s: %w", newName, err))
 			}
@@ -104,7 +104,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 			}
 		} else if !currentIngress.Equals(desiredIngress) {
 			// Update.
-			err := qos.UpdateIngressQdisc(desiredIngress, newName)
+			err := qos.CreateOrUpdateIngressQdisc(desiredIngress, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error changing ingress qdisc on workload %s: %w", newName, err))
 			}

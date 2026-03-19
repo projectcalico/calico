@@ -15,9 +15,14 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -55,6 +60,56 @@ func CopyFile(src, dst string) error {
 	if err != nil {
 		fmt.Println("Error creating", dst)
 		return err
+	}
+	return nil
+}
+
+func pathInfo(path string) (os.FileInfo, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path for %s: %w", path, err)
+	}
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get info for path %s: %w", absPath, err)
+	}
+	return info, nil
+}
+
+// DirExists validates if a given (relative or absolute) path exists and
+// is a directory (or as symlink to one)
+func DirExists(path string) (bool, error) {
+	info, err := pathInfo(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	return info.IsDir(), nil
+}
+
+// FileExists validates if a given (relative or absolute) path exists
+// and is a regular file
+func FileExists(path string) (bool, error) {
+	info, err := pathInfo(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	return info.Mode().IsRegular(), nil
+}
+
+// CheckBinary searches the current PATH for a binary and returns an error if it's not found
+func CheckBinary(binaryName, neededFor string) error {
+	if path, err := exec.LookPath(binaryName); err != nil {
+		logrus.WithError(err).Errorf("Error trying to find %s in PATH (needed for %s)", binaryName, neededFor)
+		return fmt.Errorf("unable to find %s in PATH (needed for %s)", binaryName, neededFor)
+	} else if path == "" {
+		logrus.Errorf("%s not found in PATH (needed for %s)", binaryName, neededFor)
+		return fmt.Errorf("%s not found in PATH (needed for %s)", binaryName, neededFor)
 	}
 	return nil
 }

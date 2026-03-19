@@ -129,6 +129,7 @@ rules:
     resources:
       - ippools
       - felixconfigurations
+      - bgpconfigurations
       - clusterinformations
     verbs:
       - create
@@ -191,6 +192,14 @@ rules:
     verbs:
       - get
 {{- end }}
+  # For monitoring KubeVirt live migration.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
 {{- end }}
 
 ---

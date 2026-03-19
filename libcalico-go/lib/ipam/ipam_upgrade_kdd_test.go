@@ -47,7 +47,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		bc, err = backend.NewClient(config)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(bc.Clean()).NotTo(HaveOccurred())
-		ic = NewIPAMClient(bc, ipPools, &fakeReservations{})
+		ic = NewIPAMClient(bc, ipPools, &ipamtestutils.FakeReservations{})
 
 		// Build a raw CRD REST client using the same kubeconfig as the backend client.
 		cfg, _, err := k8s.CreateKubernetesClientset(&config.Spec)
