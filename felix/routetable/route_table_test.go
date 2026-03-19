@@ -430,6 +430,109 @@ var _ = Describe("RouteTable", func() {
 				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey("254-10.0.0.6/32"))
 				dataplane.ExpectNeighs(unix.AF_INET)
 			})
+			It("should clean up ifacesToARP when all ARP entries removed via RouteRemove", func() {
+				// Set up a workload with an ARP entry and sync it.
+				link := dataplane.AddIface(6, "cali6", true, true)
+				cidr := ip.MustParseCIDROrIP("10.0.0.6")
+				rt.SetRoutes(RouteClassLocalWorkload, link.LinkAttrs.Name, []Target{{
+					RouteKey: RouteKey{
+						CIDR:     cidr,
+						Priority: routePriorityForTest,
+					},
+					DestMAC: mac1,
+				}})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Simulate a resync or interface state change re-adding the
+				// iface to ifacesToARP (as would happen in production between
+				// Apply cycles).
+				rt.IfacesToARPAdd(link.LinkAttrs.Name)
+				Expect(rt.IfacesToARPLen()).To(Equal(1))
+
+				// Remove the route (and its ARP entry).
+				rt.RouteRemove(RouteClassLocalWorkload, link.LinkAttrs.Name, RouteKey{CIDR: cidr, Priority: routePriorityForTest})
+
+				// ifacesToARP should not retain the removed interface.
+				Expect(rt.IfacesToARPLen()).To(Equal(0))
+			})
+			It("should clean up ifacesToARP when routes removed via SetRoutes(nil)", func() {
+				// Set up a workload with an ARP entry and sync it.
+				link := dataplane.AddIface(6, "cali6", true, true)
+				rt.SetRoutes(RouteClassLocalWorkload, link.LinkAttrs.Name, []Target{{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP("10.0.0.6"),
+						Priority: routePriorityForTest,
+					},
+					DestMAC: mac1,
+				}})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Simulate a resync re-adding the iface to ifacesToARP.
+				rt.IfacesToARPAdd(link.LinkAttrs.Name)
+				Expect(rt.IfacesToARPLen()).To(Equal(1))
+
+				// Remove all routes for the interface.
+				rt.SetRoutes(RouteClassLocalWorkload, link.LinkAttrs.Name, nil)
+
+				// ifacesToARP should not retain the removed interface.
+				Expect(rt.IfacesToARPLen()).To(Equal(0))
+			})
+			It("should not leak ifacesToARP entries after interface churn and resync", func() {
+				// Simulate interface churn: add many workloads.
+				for i := 0; i < 10; i++ {
+					ifName := fmt.Sprintf("cali%d", 10+i)
+					dataplane.AddIface(10+i, ifName, true, true)
+					rt.SetRoutes(RouteClassLocalWorkload, ifName, []Target{{
+						RouteKey: RouteKey{
+							CIDR:     ip.MustParseCIDROrIP(fmt.Sprintf("10.0.%d.1", i)),
+							Priority: routePriorityForTest,
+						},
+						DestMAC: mac1,
+					}})
+				}
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Remove all churned workloads.
+				for i := 0; i < 10; i++ {
+					ifName := fmt.Sprintf("cali%d", 10+i)
+					rt.SetRoutes(RouteClassLocalWorkload, ifName, nil)
+				}
+
+				// Full resync should rebuild ifacesToARP from permanentARPs
+				// without retaining stale entries.
+				rt.QueueResync()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rt.IfacesToARPLen()).To(Equal(0))
+			})
+			It("should not accumulate stale ifacesToARP entries across resyncs", func() {
+				// Add a workload and sync.
+				link := dataplane.AddIface(6, "cali6", true, true)
+				_ = link
+				rt.SetRoutes(RouteClassLocalWorkload, "cali6", []Target{{
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP("10.0.0.6"),
+						Priority: routePriorityForTest,
+					},
+					DestMAC: mac1,
+				}})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Remove the workload and sync.
+				rt.SetRoutes(RouteClassLocalWorkload, "cali6", nil)
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Full resync should not re-add "cali6" to ifacesToARP.
+				rt.QueueResync()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rt.IfacesToARPLen()).To(Equal(0))
+			})
 			It("Should not remove routes with a source address", func() {
 				// Route that should be left alone
 				noopLink := dataplane.AddIface(6, "cali4", true, true)
