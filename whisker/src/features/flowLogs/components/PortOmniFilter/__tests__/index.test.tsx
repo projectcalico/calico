@@ -189,13 +189,7 @@ describe('<PortOmniFilter />', () => {
     });
 
     it('should display both protocol and port in the trigger label', () => {
-        render(
-            <PortOmniFilter
-                {...defaultProps}
-                port='8081'
-                protocol='tcp'
-            />,
-        );
+        render(<PortOmniFilter {...defaultProps} port='8081' protocol='tcp' />);
 
         expect(
             screen.getByRole('button', { name: 'Port = TCP:8081' }),
