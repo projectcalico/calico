@@ -1,5 +1,4 @@
-#!/usr/bin/env bash
-# Copyright (c) 2023 Tigera, Inc. All rights reserved.
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,14 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# No set -e so that we continue to collect artifacts even if some fail.
-set -x
-
-# set nullglob so that '*' is not used literally if the artifacts dir is empty
-shopt -s nullglob
-
-cd "artifacts" || exit 1
-
-for file in *; do
-  artifact push job "$file"
-done
+SSH_OPTIONS=(
+  -o ServerAliveInterval=10
+  -o StrictHostKeyChecking=yes
+  -o BatchMode=yes
+  -o UpdateHostKeys=no
+)
+export SSH_OPTIONS
