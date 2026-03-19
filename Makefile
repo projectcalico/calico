@@ -62,9 +62,6 @@ ci-preflight-checks:
 	$(MAKE) go-vet
 	$(MAKE) -C networking-calico flake8
 
-check-ginkgo-v2:
-	./hack/check-ginkgo-v2.sh
-
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
 
