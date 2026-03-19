@@ -38,7 +38,7 @@ run_non_hcp_reports_and_diags() {
     echo "[INFO] global_epilogue: capturing diags"
     bz diags $VERBOSE |& tee ${BZ_LOGS_DIR}/diagnostic.log || true
     artifact push job ${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME} --destination semaphore/diags.tgz || true
-    upload_to_gcs "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "diags.tgz"
+    upload_to_gcs "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "${DIAGS_ARCHIVE_FILENAME}"
   fi
 
   delete_artifacts; delete_calicoctl
@@ -46,6 +46,7 @@ run_non_hcp_reports_and_diags() {
   REPORT_DIR=${REPORT_DIR:-"${BZ_LOCAL_DIR}/report/${TEST_TYPE}"}
   echo "[INFO] global_epilogue: pushing report artifacts"
   artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+  upload_to_gcs "${REPORT_DIR}/junit.xml" "junit.xml"
   cp ${REPORT_DIR}/junit.xml . || true
 
   echo "[INFO] publish new semaphore test results"
@@ -146,6 +147,7 @@ if [[ "${HCP_ENABLED}" == "true" ]]; then
 
   echo "[INFO] global_epilogue: hcp: pushing report artifacts"
   artifact push job ${BZ_PROFILES_PATH}/.report --destination semaphore/test-results || true
+  upload_to_gcs "${BZ_PROFILES_PATH}/.report/junit.xml" "junit.xml"
 
   echo "[INFO] publish new semaphore test results"
   test-results publish semaphore/test-results/junit.xml || true
