@@ -19,13 +19,13 @@ import {
     Box,
     Button,
     Flex,
-    SkeletonCircle,
     Text,
     ToastPosition,
     useToast,
 } from '@chakra-ui/react';
 import React from 'react';
 import { streamButtonStyles } from './styles';
+import Pulse from '@/components/common/Pulse';
 
 const toastProps = {
     duration: 7500,
@@ -55,10 +55,10 @@ const FlowLogsPage: React.FC = () => {
     );
 
     const startTime = parseStartTime(filters.start_time?.[0]);
-    const filterHintValues = {
-        ...filters,
-        start_time: undefined,
-    } as Partial<FilterHintValues>;
+    const filterHintValues = React.useMemo(() => {
+        const { start_time: _startTimeFilter, ...rest } = filters;
+        return rest;
+    }, [filters]);
 
     const {
         stopStream,
@@ -155,12 +155,7 @@ const FlowLogsPage: React.FC = () => {
                 <Flex>
                     {isWaiting && (
                         <Flex gap={2} alignItems='center'>
-                            <SkeletonCircle
-                                size='10px'
-                                startColor='tigeraGoldMedium'
-                                endColor='tigeraBlack'
-                                speed={1}
-                            />
+                            <Pulse size='10px' />
                             <Text fontSize='sm' fontWeight='medium'>
                                 Waiting for flows
                             </Text>
@@ -203,6 +198,7 @@ const FlowLogsPage: React.FC = () => {
                 isFetching={isFetching}
                 maxStartTime={maxStartTime.current}
                 totalItems={totalItems}
+                hasActiveFilters={Object.keys(filterHintValues).length > 0}
             />
         </Box>
     );

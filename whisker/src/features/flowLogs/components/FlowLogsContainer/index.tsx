@@ -14,6 +14,7 @@ export type FlowLogsContainerProps = {
     isFetching: boolean;
     maxStartTime: number;
     totalItems: number;
+    hasActiveFilters: boolean;
 };
 
 const FlowLogsContainer: React.FC<FlowLogsContainerProps> = ({
@@ -24,6 +25,7 @@ const FlowLogsContainer: React.FC<FlowLogsContainerProps> = ({
     isFetching,
     maxStartTime,
     totalItems,
+    hasActiveFilters,
 }) => {
     const heightOffset = useFlowLogsHeightOffset();
 
@@ -42,6 +44,7 @@ const FlowLogsContainer: React.FC<FlowLogsContainerProps> = ({
             maxStartTime={maxStartTime}
             heightOffset={heightOffset}
             totalItems={totalItems}
+            hasActiveFilters={hasActiveFilters}
         />
     );
 };

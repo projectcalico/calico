@@ -19,6 +19,7 @@ const defaultProps = {
     isFetching: false,
     maxStartTime: 0,
     totalItems: 0,
+    hasActiveFilters: false,
 };
 
 describe('FlowLogsContainer', () => {
