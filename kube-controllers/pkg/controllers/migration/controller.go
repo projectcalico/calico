@@ -223,6 +223,9 @@ func (m *migrationController) processNextWorkItem() bool {
 	defer m.queue.Done(key)
 
 	if err := m.reconcile(); err != nil {
+		if m.ctx.Err() != nil {
+			return false
+		}
 		var requeue requeueAfter
 		if errors.As(err, &requeue) {
 			m.queue.Forget(key)
