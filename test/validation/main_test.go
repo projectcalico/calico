@@ -15,7 +15,6 @@
 package validation_test
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +25,8 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 var (
@@ -34,29 +35,11 @@ var (
 )
 
 // crdDir returns the path to api/config/crd/ containing Calico CRD YAML files.
-// It walks up from the current working directory to find the calico monorepo root.
 func crdDir() string {
 	if dir := os.Getenv("CALICO_CRD_DIR"); dir != "" {
 		return dir
 	}
-	dir, err := os.Getwd()
-	if err != nil {
-		panic(fmt.Sprintf("cannot get working directory: %v", err))
-	}
-	for {
-		gomod := filepath.Join(dir, "go.mod")
-		if data, err := os.ReadFile(gomod); err == nil {
-			if bytes.Contains(data, []byte("module github.com/projectcalico/calico\n")) ||
-				bytes.Contains(data, []byte("module github.com/projectcalico/calico\r\n")) {
-				return filepath.Join(dir, "api", "config", "crd")
-			}
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			panic("cannot find calico monorepo root (go.mod with module github.com/projectcalico/calico)")
-		}
-		dir = parent
-	}
+	return filepath.Join(testutils.FindRepoRoot(), "api", "config", "crd")
 }
 
 // TestMain spins up a real kube-apiserver process (via controller-runtime's

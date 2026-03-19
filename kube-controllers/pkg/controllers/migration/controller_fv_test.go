@@ -37,6 +37,8 @@ import (
 	"k8s.io/utils/ptr"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 var (
@@ -46,9 +48,6 @@ var (
 	fvRTClient      rtclient.WithWatch
 	fvTestEnv       *envtest.Environment
 )
-
-// repoRoot is the path from this package to the monorepo root.
-const repoRoot = "../../../.."
 
 // dmKey is the NamespacedName for the well-known DatastoreMigration CR.
 var dmKey = types.NamespacedName{Name: defaultMigrationName}
@@ -68,6 +67,7 @@ func expectNoError(err error) {
 // (status subresources, finalizer/deletion, informers) without needing a
 // full cluster.
 func TestMain(m *testing.M) {
+	repoRoot := testutils.FindRepoRoot()
 	fvTestEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join(repoRoot, "api", "config", "crd"),
@@ -228,6 +228,55 @@ func TestLifecycle_Mainline(t *testing.T) {
 		fvh := newFVHelper(t, g, ctx)
 		dm := fvh.expectPhase(DatastoreMigrationPhaseComplete)
 		g.Expect(dm.Status.CompletedAt).NotTo(BeNil())
+	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
+}
+
+// TestLifecycle_BackendListError verifies that the controller retries when the
+// v1 backend returns a transient error during migration. The error is injected
+// for Tier resources after the RBAC pre-check and conflict detection pass,
+// causing the migration phase to fail. Once the error is cleared, the controller
+// retries and completes the migration normally.
+func TestLifecycle_BackendListError(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	h := newFVHelper(t, g, ctx)
+
+	bc := &mockBackendClient{
+		resources:      mainlineV1Resources(),
+		clusterInfo:    mainlineV1ClusterInfo(),
+		listErrors:     map[string]error{apiv3.KindTier: fmt.Errorf("simulated backend unavailable")},
+		listErrorAfter: 2,
+	}
+
+	gate := newPhaseGate(DatastoreMigrationPhaseConverged)
+	startController(t, ctx, bc, gate)
+	createMigrationCR(t, ctx)
+
+	// Wait for the controller to have hit the error at least once.
+	g.Eventually(func() bool {
+		bc.mu.Lock()
+		defer bc.mu.Unlock()
+		if bc.listCounts == nil {
+			return false
+		}
+		return bc.listCounts[apiv3.KindTier] > bc.listErrorAfter
+	}, 10*time.Second, 100*time.Millisecond).Should(BeTrue(), "controller should have hit the backend error")
+
+	// Clear the error so the next retry succeeds.
+	bc.mu.Lock()
+	bc.listErrors = nil
+	bc.mu.Unlock()
+
+	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 30*time.Second)).To(Succeed())
+	dm := h.expectPhase(DatastoreMigrationPhaseConverged)
+	g.Expect(dm.Status.Progress.Migrated).To(BeNumerically(">", 0), "should have migrated resources after error cleared")
+
+	gate.release(DatastoreMigrationPhaseConverged)
+
+	h.createReadyCalicoNodeDS()
+	g.Eventually(func(g Gomega) {
+		fvh := newFVHelper(t, g, ctx)
+		fvh.expectPhase(DatastoreMigrationPhaseComplete)
 	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 }
 
