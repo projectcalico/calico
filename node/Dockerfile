@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG GIT_VERSION=unknown
-ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
 ARG BPFTOOL_IMAGE
+ARG UBI_IMAGE
+
+ARG RUNIT_VER=2.1.2
 
 FROM ${BPFTOOL_IMAGE} AS bpftool
 
@@ -50,9 +51,8 @@ RUN curl -sSfL --retry 5 -o /tmp/runit.tar.gz https://ftp.debian.org/debian/pool
     patch -p1 < /svlogd_use_0644_permission_instead_of_0744.patch && \
     package/compile
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS ubi
+FROM ${UBI_IMAGE} AS ubi
 
-ARG GIT_VERSION
 ARG RUNIT_VER
 
 # Update base packages to pick up security updates - must do this before adding the AlmaLinux repo,
@@ -82,7 +82,9 @@ RUN microdnf install -y \
 
 # Since the ubi repos do not contain all the packages we need (e.g. they're missing conntrack-tools),
 # we're using AlmaLinux repos for missing packages.
-COPY almalinux.repo /etc/yum.repos.d/almalinux.repo
+COPY --from=almalinux  /etc/yum.repos.d/almalinux-appstream.repo /etc/yum.repos.d/almalinux-appstream.repo
+COPY --from=almalinux  /etc/yum.repos.d/almalinux-baseos.repo /etc/yum.repos.d/almalinux-baseos.repo
+COPY --from=almalinux  /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9 /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9
 
 RUN microdnf --enablerepo=appstream --enablerepo=baseos install -y \
     # From appstream - needed for conntrack
@@ -103,31 +105,39 @@ COPY --from=almalinux /lib64/libip6tc.so.2 /lib64/libip6tc.so.2
 
 # Set symbolic links for iptables-legacy binaries
 RUN set -eux; \
-    for bin in iptables-legacy iptables-legacy-restore iptables-legacy-save ip6tables-legacy ip6tables-legacy-restore ip6tables-legacy-save; do \
-        ln -sf xtables-legacy-multi /usr/sbin/${bin} || true; \
+    for link in \
+        ip6tables-legacy \
+        ip6tables-legacy-restore \
+        ip6tables-legacy-save \
+        iptables-legacy \
+        iptables-legacy-restore \
+        iptables-legacy-save; \
+    do \
+        ln -sf xtables-legacy-multi /usr/sbin/${link} || true; \
     done
 
 # Copy our bird binaries in
 COPY --from=bird /bird /bin/bird
-COPY --from=bird /birdcl /bin/birdcl
 COPY --from=bird /bird6 /bin/bird6
+COPY --from=bird /birdcl /bin/birdcl
 COPY --from=bird /birdcl6 /bin/birdcl6
 
 # Copy in the filesystem - this contains licenses, etc...
 COPY filesystem/etc/ /etc
 COPY filesystem/included-source/ /included-source
+COPY filesystem/sbin/ /usr/sbin/
 COPY filesystem/usr/ /usr
-COPY filesystem/sbin/* /usr/sbin/
 
 COPY --from=bpftool /bpftool /bin/bpftool
 
 ARG BIN_DIR
+ARG TARGETARCH
 
 # Copy in the calico-node binary
-COPY ${BIN_DIR}/calico-node-amd64 /bin/calico-node
+COPY ${BIN_DIR}/calico-node-${TARGETARCH} /bin/calico-node
 
 # Copy in the mountns binary
-COPY ${BIN_DIR}/mountns-amd64 /bin/mountns
+COPY ${BIN_DIR}/mountns-${TARGETARCH} /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
@@ -141,7 +151,7 @@ COPY dist/LICENSE /licenses/LICENSE
 # that have been removed in our later layers.
 FROM scratch
 
-ARG GIT_VERSION
+ARG GIT_VERSION=unknown
 
 # Tell sv where to find the services.
 ENV SVDIR=/etc/service/enabled
