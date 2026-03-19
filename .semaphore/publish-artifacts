@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,8 +22,9 @@ shopt -s nullglob
 
 my_dir=$(dirname "$0")
 repo_dir=$my_dir/..
+artifacts_dir="$repo_dir/artifacts"
 
-cd "$repo_dir/artifacts" || exit 1
+cd "$artifacts_dir" || exit 1
 
 for file in *; do
   artifact push job "$file"

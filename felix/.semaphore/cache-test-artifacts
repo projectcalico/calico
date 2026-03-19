@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script is run locally to push artifacts to our sub-directory in GCS.
+# The counterpart to this script is load-test-artifacts, which runs on the test
+# VM.  It can assume that the artifacts have been downloaded to /tmp.
+
+set -e
+set -x
+
+artifact push job bin &
+docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
+docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
+cd ../..
+
+# Future work: Split UT and FV artifacts so we can be even more selective.
+# Excluding Typha binaries because we only need the image.
+tar -czf /tmp/working-copy.tgz \
+  --exclude=.go-pkg-cache \
+  --exclude=calico/typha/bin \
+  --exclude=calico/typha/docker-image/bin \
+  --exclude=artifacts \
+  ${CALICO_DIR_NAME}
+gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
+wait
