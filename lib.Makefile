@@ -15,19 +15,7 @@ test: ut fv st
 # The target architecture is select by setting the ARCH variable.
 # When ARCH is undefined it is set to the detected host architecture.
 # When ARCH differs from the host architecture a crossbuild will be performed.
-# This variable is only set if ARCHES is not set
-ARCHES ?= $(patsubst docker-image/Dockerfile.%,%,$(wildcard docker-image/Dockerfile.*))
-
-# Some repositories keep their Dockerfile(s) in the root directory instead of in
-# the 'docker-image' subdir. Make sure ARCHES gets filled in either way.
-ifeq ($(ARCHES),)
-	ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
-endif
-
-# If architectures cannot infer from Dockerfiles, set default supported architecture.
-ifeq ($(ARCHES),)
-	ARCHES=amd64 arm64 ppc64le s390x
-endif
+ARCHES ?= amd64 arm64 ppc64le s390x
 
 # list of arches *not* to build when doing *-all
 EXCLUDEARCH?=
@@ -344,11 +332,10 @@ DOCKER_PULL =
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
-	--build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	--build-arg GIT_VERSION=$(GIT_VERSION) \
+DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) \
 	--build-arg CALICO_BASE=$(CALICO_BASE) \
-	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+	--build-arg GIT_VERSION=$(GIT_VERSION) \
+	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
 DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
