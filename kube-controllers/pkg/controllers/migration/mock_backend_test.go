@@ -17,6 +17,7 @@ package migration
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -33,6 +34,10 @@ type mockBackendClient struct {
 	bapi.Client
 	resources   map[string][]*model.KVPair
 	clusterInfo *model.KVPair
+
+	// mu guards listErrors, listErrorAfter, and listCounts for concurrent
+	// access from the controller goroutine and test assertions.
+	mu sync.Mutex
 
 	// listErrors maps a Kind to an error that List should return for that
 	// kind. Used to simulate backend failures during migration. The error
@@ -52,6 +57,7 @@ func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ 
 		return &model.KVPairList{}, nil
 	default:
 		rlo := list.(model.ResourceListOptions)
+		m.mu.Lock()
 		if m.listErrors != nil {
 			if err, ok := m.listErrors[rlo.Kind]; ok {
 				if m.listCounts == nil {
@@ -59,10 +65,12 @@ func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ 
 				}
 				m.listCounts[rlo.Kind]++
 				if m.listCounts[rlo.Kind] > m.listErrorAfter {
+					m.mu.Unlock()
 					return nil, err
 				}
 			}
 		}
+		m.mu.Unlock()
 		return &model.KVPairList{KVPairs: m.resources[rlo.Kind]}, nil
 	}
 }
