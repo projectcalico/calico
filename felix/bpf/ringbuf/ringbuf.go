@@ -256,6 +256,19 @@ func roundupLen(dataLen uint32) uint32 {
 	return (dataLen + ringbufHdrSize + 7) &^ 7
 }
 
+// Drain reads and discards all available events from the ring buffer without
+// blocking. Returns the number of events drained.
+func (rb *RingBuffer) Drain() int {
+	count := 0
+	for {
+		_, ok, _ := rb.readOne()
+		if !ok {
+			return count
+		}
+		count++
+	}
+}
+
 // Close releases all resources and unblocks any waiting Next() calls.
 func (rb *RingBuffer) Close() error {
 	rb.closed.Store(true)
