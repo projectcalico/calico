@@ -28,6 +28,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
@@ -302,6 +303,11 @@ func startBPFLogging() *exec.Cmd {
 	cmd := exec.Command("/usr/bin/bpftool", "prog", "tracelog")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	// Pdeathsig ensures the kernel sends SIGKILL to bpftool when the test
+	// binary exits for any reason (including panic/crash/signal).  Without
+	// this, bpftool inherits the pipe FDs and keeps them open, causing
+	// gotestsum to block forever when the test binary runs in a pipeline.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	err := cmd.Start()
 	if err != nil {
 		log.WithError(err).Warn("Failed to start bpf log collection")
@@ -319,9 +325,19 @@ func stopBPFLogging(cmd *exec.Cmd) {
 		log.WithError(err).Warn("Failed to send SIGTERM to bpftool")
 		return
 	}
-	err = cmd.Wait()
-	if err != nil {
-		log.WithError(err).Warn("Failed to wait for bpftool")
+	// Wait with a timeout; bpftool may be blocked in ring_buffer_wait
+	// and not respond to SIGTERM promptly.
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err = <-done:
+		if err != nil {
+			log.WithError(err).Warn("bpftool exited with error")
+		}
+	case <-time.After(3 * time.Second):
+		log.Warn("bpftool did not exit after SIGTERM, sending SIGKILL")
+		_ = cmd.Process.Kill()
+		<-done
 	}
 }
 
