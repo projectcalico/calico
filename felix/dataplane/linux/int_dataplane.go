@@ -277,7 +277,6 @@ type Config struct {
 	hostMTU         int
 	MTUIfacePattern *regexp.Regexp
 	RequireMTUFile  bool
-	NFTablesSupport string
 
 	RouteSource string
 
@@ -1116,12 +1115,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 	}
 
-	// If nftables support is enabled, create nftables ARP table for proxy ARP suppression.
-	// Note that nftables _support_ is different from nftables _mode_.  The latter configures if
-	// we use nftables for policy programming; the former configures if we can use nftables for
-	// other purposes.
+	// If the NFTablesProxyARPFilter feature is enabled, create nftables ARP table for proxy ARP
+	// suppression.  Note that that feature is different from nftables _mode_.  The latter
+	// configures if we use nftables for policy programming; the former configures if we can use
+	// nftables for proxy ARP filtering.
 	var arpRootTable *nftables.NftablesTable
-	if config.NFTablesSupport == string(apiv3.NFTablesSupportEnabled) {
+	if featureDetector.GetFeatures().NFTablesProxyARPFilter {
 		arpTableOptions := nftables.TableOptions{
 			RefreshInterval:  config.TableRefreshInterval,
 			LookPathOverride: config.LookPathOverride,

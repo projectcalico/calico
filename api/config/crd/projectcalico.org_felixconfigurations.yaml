@@ -470,13 +470,6 @@ spec:
                   type: string
                 nftablesRefreshInterval:
                   type: string
-                nftablesSupport:
-                  default: Enabled
-                  enum:
-                    - Disabled
-                    - Enabled
-                    - Auto
-                  type: string
                 openstackRegion:
                   type: string
                 policySyncPathPrefix:

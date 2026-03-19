@@ -439,8 +439,7 @@ func StartDataplaneDriver(
 			LookupsCache:       lc,
 			FlowLogsEnabled:    configParams.FlowLogsEnabled(),
 
-			RequireMTUFile:  configParams.RequireMTUFile,
-			NFTablesSupport: configParams.NFTablesSupport,
+			RequireMTUFile: configParams.RequireMTUFile,
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {
