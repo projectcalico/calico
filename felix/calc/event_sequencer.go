@@ -19,6 +19,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/ip"
@@ -480,6 +481,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, computedData []End
 		LocalBgpPeer:               localBGPPeer,
 		SkipRedir:                  skipRedir,
 		QosPolicies:                qosPolicies,
+		LiveMigrationVmiName:       vmiNameFromLabels(ep.Labels),
 	}
 
 	for _, cd := range computedData {
@@ -1319,4 +1321,18 @@ func isVMWorkload(labels uniquelabels.Map) bool {
 		}
 	}
 	return false
+}
+
+// vmiNameFromLabels extracts the KubeVirt VMI name from a pod's labels.
+// Prefers "vmi.kubevirt.io/id" (KubeVirt >= 1.7, reliable) and falls back
+// to "vm.kubevirt.io/name" (all versions, less reliable: uses hostname,
+// truncates without hashing).
+func vmiNameFromLabels(labels uniquelabels.Map) string {
+	if val, ok := labels.GetString(kubevirtv1.VirtualMachineInstanceIDLabel); ok {
+		return val
+	}
+	if val, ok := labels.GetString(kubevirtv1.DeprecatedVirtualMachineNameLabel); ok {
+		return val
+	}
+	return ""
 }

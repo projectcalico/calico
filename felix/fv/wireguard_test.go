@@ -684,9 +684,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						tcpdump := felix.AttachTCPDump("eth0")
 
 						if wireguardEnabledV4 {
-							inTunnelPacketsPattern := fmt.Sprintf("IP %s\\.51820 > \\d+\\.\\d+\\.\\d+\\.\\d+\\.51820: UDP", felix.IP)
+							// Match WireGuard tunnel data packets but exclude keepalive packets.
+							// WireGuard keepalives are 32-byte UDP payloads; real data packets
+							// carrying encapsulated IP traffic are >= 72 bytes. Require length >= 50
+							// to avoid flakes from keepalive packets tripping the "zero tunnel
+							// packets after deny" assertion.
+							wgLenFilter := `, length ([5-9]\d|[1-9]\d{2,})`
+							inTunnelPacketsPattern := fmt.Sprintf("IP %s\\.51820 > \\d+\\.\\d+\\.\\d+\\.\\d+\\.51820: UDP"+wgLenFilter, felix.IP)
 							tcpdump.AddMatcher("numInTunnelPackets", regexp.MustCompile(inTunnelPacketsPattern))
-							outTunnelPacketsPattern := fmt.Sprintf("IP \\d+\\.\\d+\\.\\d+\\.\\d+\\.51820 > %s\\.51820: UDP", felix.IP)
+							outTunnelPacketsPattern := fmt.Sprintf("IP \\d+\\.\\d+\\.\\d+\\.\\d+\\.51820 > %s\\.51820: UDP"+wgLenFilter, felix.IP)
 							tcpdump.AddMatcher("numOutTunnelPackets", regexp.MustCompile(outTunnelPacketsPattern))
 							workload01PacketsPattern := fmt.Sprintf("IP %s\\.\\d+ > %s\\.\\d+: ", wlsV4[0].IP, wlsV4[1].IP)
 							tcpdump.AddMatcher("numWorkload0to1Packets", regexp.MustCompile(workload01PacketsPattern))
@@ -694,9 +700,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 							tcpdump.AddMatcher("numWorkload1to0Packets", regexp.MustCompile(workload10PacketsPattern))
 						}
 						if wireguardEnabledV6 {
-							inTunnelPacketsPatternV6 := fmt.Sprintf("IP6 %s\\.51821 > ([a-f0-9:]+:+)+[a-f0-9]+\\.51821: UDP", felix.IPv6)
+							wgV6LenFilter := `, length ([5-9]\d|[1-9]\d{2,})`
+							inTunnelPacketsPatternV6 := fmt.Sprintf("IP6 %s\\.51821 > ([a-f0-9:]+:+)+[a-f0-9]+\\.51821: UDP"+wgV6LenFilter, felix.IPv6)
 							tcpdump.AddMatcher("numInTunnelPacketsV6", regexp.MustCompile(inTunnelPacketsPatternV6))
-							outTunnelPacketsPatternV6 := fmt.Sprintf("IP6 ([a-f0-9:]+:+)+[a-f0-9]+\\.51821 > %s\\.51821: UDP", felix.IPv6)
+							outTunnelPacketsPatternV6 := fmt.Sprintf("IP6 ([a-f0-9:]+:+)+[a-f0-9]+\\.51821 > %s\\.51821: UDP"+wgV6LenFilter, felix.IPv6)
 							tcpdump.AddMatcher("numOutTunnelPacketsV6", regexp.MustCompile(outTunnelPacketsPatternV6))
 							workload01PacketsPatternV6 := fmt.Sprintf("IP6 %s\\.\\d+ > %s\\.\\d+: ", wlsV6[0].IP, wlsV6[1].IP)
 							tcpdump.AddMatcher("numWorkload0to1PacketsV6", regexp.MustCompile(workload01PacketsPatternV6))

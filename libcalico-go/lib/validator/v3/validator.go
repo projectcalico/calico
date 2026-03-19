@@ -15,6 +15,7 @@
 package v3
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -29,6 +30,7 @@ import (
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"gopkg.in/go-playground/validator.v9"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -142,13 +144,41 @@ var (
 		"|" + string(api.StagedActionLearn) + "|" + string(api.StagedActionIgnore) + ")$")
 )
 
-// Validate is used to validate the supplied structure according to the
-// registered field and structure validators.
+// Validate validates the supplied structure according to registered field and
+// structure validators, plus CRD schema constraints (OpenAPI + CEL). For
+// runtime.Object values, CRD schema defaults are applied in-place before
+// validation so that omitted fields with CRD defaults are populated the same
+// way the Kubernetes API server would on admission.
 func Validate(current any) error {
+	var verr errors.ErrorValidation
+
 	// Perform field-only validation first, that way the struct validators can assume
 	// individual fields are valid format.
 	if err := validate.Struct(current); err != nil {
-		return convertError(err)
+		verr = convertError(err)
+	}
+
+	// Apply CRD schema defaults and then run CRD validation rules (OpenAPI
+	// schema constraints + CEL x-kubernetes-validations). In Kubernetes
+	// datastore mode, the API server handles both defaulting and validation
+	// on admission. In etcd mode there is no API server, so we do both here.
+	if rObj, ok := current.(runtime.Object); ok {
+		if crdErrs := defaultAndValidateCRD(context.Background(), rObj, nil); len(crdErrs) > 0 {
+			for _, e := range crdErrs {
+				name := e.Field
+				if name == "" || name == "<nil>" {
+					name = resolveKind(rObj)
+				}
+				verr.ErroredFields = append(verr.ErroredFields, errors.ErroredField{
+					Name:   name,
+					Reason: e.Detail,
+				})
+			}
+		}
+	}
+
+	if len(verr.ErroredFields) > 0 {
+		return verr
 	}
 	return nil
 }
