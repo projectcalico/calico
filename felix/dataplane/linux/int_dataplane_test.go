@@ -137,7 +137,7 @@ var _ = Describe("Constructor test", func() {
 		})
 	})
 
-	Context("when NFTablesSupport is Disabled", func() {
+	Context("when NFTablesProxyARPFilter feature is disabled", func() {
 		var requestedFamilies []knftables.Family
 
 		BeforeEach(func() {
@@ -149,7 +149,9 @@ var _ = Describe("Constructor test", func() {
 		})
 
 		It("should not attempt to create an ARP family nftables table", func() {
-			dpConfig.NFTablesSupport = "Disabled"
+			dpConfig.FeatureDetectOverrides = map[string]string{
+				"NFTablesProxyARPFilter": "false",
+			}
 			dp := intdataplane.NewIntDataplaneDriver(dpConfig)
 			Expect(dp).ToNot(BeNil())
 			Expect(requestedFamilies).NotTo(ContainElement(knftables.ARPFamily))
