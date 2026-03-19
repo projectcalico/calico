@@ -1515,19 +1515,18 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	// our PERMANENT static ARP programming needs to be reinstated; otherwise
 	// we lose connectivity to VMs with arp_ignore=2.
 	arpErrs := map[string]error{}
-	for ifaceName := range r.ifacesToARP.All() {
+	r.ifacesToARP.Iter(func(ifaceName string) error {
 		addrToMAC := r.permanentARPs[ifaceName]
 		if len(addrToMAC) == 0 {
 			// Defensive: no ARP entries for this interface, nothing to do.
-			r.ifacesToARP.Discard(ifaceName)
-			continue
+			return set.RemoveItem
 		}
 		ifaceIdx, ok := r.ifaceIndexForName(ifaceName)
 		if !ok {
 			// Asked to add ARP entries but the interface isn't known (yet).
 			// Leave them pending.  We'll clean up the pending set if the
 			// datastore stops asking us to add ARP entries for this interface.
-			continue
+			return nil
 		}
 		ifaceARPDone := true
 		for addr, mac := range addrToMAC {
@@ -1560,9 +1559,10 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 		if ifaceARPDone {
 			// Don't need to program ARP again for this interface until its state
 			// changes or we're asked to do a full resync.
-			r.ifacesToARP.Discard(ifaceName)
+			return set.RemoveItem
 		}
-	}
+		return nil
+	})
 
 	err = nil
 	if len(deletionErrs) > 0 {

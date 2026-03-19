@@ -435,10 +435,7 @@ var _ = Describe("RouteTable", func() {
 				link := dataplane.AddIface(6, "cali6", true, true)
 				cidr := ip.MustParseCIDROrIP("10.0.0.6")
 				rt.SetRoutes(RouteClassLocalWorkload, link.LinkAttrs.Name, []Target{{
-					RouteKey: RouteKey{
-						CIDR:     cidr,
-						Priority: routePriorityForTest,
-					},
+					CIDR:    cidr,
 					DestMAC: mac1,
 				}})
 				err := rt.Apply()
@@ -451,7 +448,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(rt.IfacesToARPLen()).To(Equal(1))
 
 				// Remove the route (and its ARP entry).
-				rt.RouteRemove(RouteClassLocalWorkload, link.LinkAttrs.Name, RouteKey{CIDR: cidr, Priority: routePriorityForTest})
+				rt.RouteRemove(RouteClassLocalWorkload, link.LinkAttrs.Name, cidr)
 
 				// ifacesToARP should not retain the removed interface.
 				Expect(rt.IfacesToARPLen()).To(Equal(0))
@@ -460,10 +457,7 @@ var _ = Describe("RouteTable", func() {
 				// Set up a workload with an ARP entry and sync it.
 				link := dataplane.AddIface(6, "cali6", true, true)
 				rt.SetRoutes(RouteClassLocalWorkload, link.LinkAttrs.Name, []Target{{
-					RouteKey: RouteKey{
-						CIDR:     ip.MustParseCIDROrIP("10.0.0.6"),
-						Priority: routePriorityForTest,
-					},
+					CIDR:    ip.MustParseCIDROrIP("10.0.0.6"),
 					DestMAC: mac1,
 				}})
 				err := rt.Apply()
@@ -485,10 +479,7 @@ var _ = Describe("RouteTable", func() {
 					ifName := fmt.Sprintf("cali%d", 10+i)
 					dataplane.AddIface(10+i, ifName, true, true)
 					rt.SetRoutes(RouteClassLocalWorkload, ifName, []Target{{
-						RouteKey: RouteKey{
-							CIDR:     ip.MustParseCIDROrIP(fmt.Sprintf("10.0.%d.1", i)),
-							Priority: routePriorityForTest,
-						},
+						CIDR:    ip.MustParseCIDROrIP(fmt.Sprintf("10.0.%d.1", i)),
 						DestMAC: mac1,
 					}})
 				}
@@ -513,10 +504,7 @@ var _ = Describe("RouteTable", func() {
 				link := dataplane.AddIface(6, "cali6", true, true)
 				_ = link
 				rt.SetRoutes(RouteClassLocalWorkload, "cali6", []Target{{
-					RouteKey: RouteKey{
-						CIDR:     ip.MustParseCIDROrIP("10.0.0.6"),
-						Priority: routePriorityForTest,
-					},
+					CIDR:    ip.MustParseCIDROrIP("10.0.0.6"),
 					DestMAC: mac1,
 				}})
 				err := rt.Apply()
