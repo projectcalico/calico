@@ -1115,15 +1115,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 	}
 
-	// Create nftables ARP table for proxy ARP suppression (always enabled, regardless of dataplane mode).
-	arpTableOptions := nftables.TableOptions{
-		RefreshInterval:  config.TableRefreshInterval,
-		LookPathOverride: config.LookPathOverride,
-		OnStillAlive:     dp.reportHealth,
-		OpRecorder:       dp.loopSummarizer,
-		NewDataplane:     config.NewNftablesDataplane,
+	// If the NFTablesProxyARPFilter feature is enabled, create nftables ARP table for proxy ARP
+	// suppression.  Note that that feature is different from nftables _mode_.  The latter
+	// configures if we use nftables for policy programming; the former configures if we can use
+	// nftables for proxy ARP filtering.
+	var arpRootTable *nftables.NftablesTable
+	if featureDetector.GetFeatures().NFTablesProxyARPFilter {
+		arpTableOptions := nftables.TableOptions{
+			RefreshInterval:  config.TableRefreshInterval,
+			LookPathOverride: config.LookPathOverride,
+			OnStillAlive:     dp.reportHealth,
+			OpRecorder:       dp.loopSummarizer,
+			NewDataplane:     config.NewNftablesDataplane,
+		}
+		arpRootTable = nftables.NewARPTable("calico-arp", rules.RuleHashPrefix, featureDetector, arpTableOptions, false)
 	}
-	arpRootTable := nftables.NewARPTable("calico-arp", rules.RuleHashPrefix, featureDetector, arpTableOptions, false)
 	var arpFilterTable generictables.Table
 	var arpMaps nftables.MapsDataplane
 	if arpRootTable != nil {
