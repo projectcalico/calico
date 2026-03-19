@@ -15,12 +15,21 @@ jest.mock('@/features/flowLogs/api', () => ({
 
 const urlFilterParams: Record<OmniFilterParam, string[]> = {
     dest_namespace: ['foo'],
-    policy: [],
     source_name: [],
     dest_name: [],
     source_namespace: [],
     dest_port: [],
     protocol: [],
+    policy: [],
+    policyNamespace: [],
+    policyTier: [],
+    policyKind: [],
+    reporter: [],
+    start_time: [],
+    action: [],
+    staged_action: [],
+    pending_action: [],
+    policyName: [],
 };
 const omniFilterData: ListOmniFiltersData = {
     dest_namespace: {
@@ -28,10 +37,6 @@ const omniFilterData: ListOmniFiltersData = {
             { label: 'Foo', value: 'foo' },
             { label: 'Bar', value: 'bar' },
         ],
-        isLoading: false,
-    },
-    policy: {
-        filters: [],
         isLoading: false,
     },
     dest_name: {
@@ -67,10 +72,10 @@ describe('useSelectedListOmniFilters', () => {
 
         expect(result.current).toEqual({
             dest_namespace: [{ label: 'Foo', value: 'foo' }],
-            policy: [],
             dest_name: [],
             source_name: [],
             source_namespace: [],
+            reporter: [],
         });
     });
 
@@ -93,10 +98,10 @@ describe('useSelectedListOmniFilters', () => {
 
         expect(result.current).toEqual({
             dest_namespace: [{ label: 'Foo', value: 'foo' }],
-            policy: [],
             dest_name: [],
             source_name: [],
             source_namespace: [],
+            reporter: [],
         });
     });
 
@@ -107,10 +112,6 @@ describe('useSelectedListOmniFilters', () => {
                 isLoading: false,
             },
             dest_namespace: {
-                filters: [],
-                isLoading: false,
-            },
-            policy: {
                 filters: [],
                 isLoading: false,
             },
@@ -141,10 +142,10 @@ describe('useSelectedListOmniFilters', () => {
 
         expect(result.current).toEqual({
             dest_namespace: [{ label: 'foo', value: 'foo' }],
-            policy: [],
             dest_name: [],
             source_name: [],
             source_namespace: [],
+            reporter: [],
         });
     });
 });
@@ -161,40 +162,11 @@ describe('useOmniFilterData', () => {
             isLoading: false,
             isFetchingNextPage: false,
         } as any;
-        jest.mocked(useInfiniteFilterQuery).mockImplementation(
-            (filterParam) => {
-                if (filterParam === 'policy') {
-                    return {
-                        ...hookResponse,
-                        data: {
-                            pageParams: [],
-                            pages: [
-                                {
-                                    items: [{ label: 'page 1', value: 'pg-1' }],
-                                },
-                                {
-                                    items: [{ label: 'page 2', value: 'pg-2' }],
-                                },
-                            ],
-                        },
-                    } as any;
-                }
-
-                return hookResponse;
-            },
-        );
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue(hookResponse);
 
         const { result } = renderHook(() => useOmniFilterData());
 
         expect(result.current[0]).toEqual({
-            policy: {
-                filters: [
-                    { label: 'page 1', value: 'pg-1' },
-                    { label: 'page 2', value: 'pg-2' },
-                ],
-                isLoading: false,
-                total: 0,
-            },
             source_namespace: {
                 filters: [],
                 isLoading: false,
