@@ -233,9 +233,7 @@ describe('ActionOmniFilter', () => {
 
         await openPopover(user);
 
-        await user.click(
-            screen.getByRole('button', { name: 'Clear Action' }),
-        );
+        await user.click(screen.getByRole('button', { name: 'Clear Action' }));
         await user.click(screen.getByRole('button', { name: 'Update' }));
 
         expect(onChange).toHaveBeenCalledWith({
@@ -363,9 +361,7 @@ describe('ActionOmniFilter', () => {
         render(<ActionOmniFilter {...defaultProps} onChange={onChange} />);
 
         await openPopover(user);
-        expect(
-            screen.getByTestId('action-omni-filter-content'),
-        ).toBeVisible();
+        expect(screen.getByTestId('action-omni-filter-content')).toBeVisible();
 
         await user.click(screen.getByRole('button', { name: 'Update' }));
 
