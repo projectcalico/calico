@@ -1,0 +1,27 @@
+#!/bin/bash
+
+while true; do
+  if [ -f test.rc ]; then
+    # Test finished, output its return code and exit.
+    cat test.rc
+    break
+  fi
+
+  # Avoid tight loop.
+  sleep 1
+
+  # Check if the process is still running.
+  if [ -e "/proc/$(cat test.pid)" ]; then
+    # It is, so keep waiting.
+    continue
+  fi
+  # Make sure we didn't race with it finishing...
+  sleep 1
+  if [ -f test.rc ]; then
+    continue
+  fi
+
+  # Not still running and no return code file, something went wrong.
+  echo "66"
+  break
+done
