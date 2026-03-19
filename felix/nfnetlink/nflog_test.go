@@ -118,4 +118,3 @@ var _ = Describe("parseAndAggregateFlowLogs", func() {
 		Eventually(ch, "1s").Should(BeClosed())
 	})
 })
-
