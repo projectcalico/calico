@@ -26,12 +26,6 @@ BINDIR=${REPO_ROOT}/bin
 APPLY_CONFIG_PKG="github.com/projectcalico/api/pkg/client/applyconfiguration_generated"
 APPLY_CONFIG_DIR="${REPO_ROOT}/pkg/client/applyconfiguration_generated"
 
-# Install applyconfiguration-gen if not already present in the build image.
-if ! command -v applyconfiguration-gen &> /dev/null; then
-	echo "Installing applyconfiguration-gen..."
-	go install k8s.io/code-generator/cmd/applyconfiguration-gen@v0.35.2
-fi
-
 # Generate OpenAPI schema JSON for applyconfiguration-gen.
 # This populates the structured-merge-diff type information in internal/internal.go,
 # which is required for fake.NewClientset() to work correctly.
