@@ -67,6 +67,7 @@ import (
 	"github.com/projectcalico/calico/pod2daemon/binder"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
+	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
 
 const (
@@ -561,13 +562,14 @@ configRetry:
 				buildinfo.GitRevision, buildinfo.BuildDate),
 			syncerToValidator,
 			&syncclient.Options{
-				ReadTimeout:  configParams.TyphaReadTimeout,
-				WriteTimeout: configParams.TyphaWriteTimeout,
-				KeyFile:      configParams.TyphaKeyFile,
-				CertFile:     configParams.TyphaCertFile,
-				CAFile:       configParams.TyphaCAFile,
-				ServerCN:     configParams.TyphaCN,
-				ServerURISAN: configParams.TyphaURISAN,
+				ReadTimeout:                        configParams.TyphaReadTimeout,
+				WriteTimeout:                       configParams.TyphaWriteTimeout,
+				KeyFile:                            configParams.TyphaKeyFile,
+				CertFile:                           configParams.TyphaCertFile,
+				CAFile:                             configParams.TyphaCAFile,
+				ServerCN:                           configParams.TyphaCN,
+				ServerURISAN:                       configParams.TyphaURISAN,
+				PreferredCompressionAlgorithmOrder: syncproto.ParseCompressionAlgorithms(configParams.TyphaCompressionAlgorithmOrder),
 			},
 		)
 	} else {
