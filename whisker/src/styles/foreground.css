@@ -1,0 +1,41 @@
+@theme {
+    /**
+   * Foregrounds for text and icons
+   *
+   * Reference: https://designsystem.backbase.com/latest/design-tokens/semantic-colors/foreground-colors-jo60gSXd
+   */
+
+    --color-tigera-token-fg-default: var(--color-tigera-color-neutral-1200);
+    --color-tigera-token-fg-inverted: var(--color-tigera-color-neutral-0);
+    --color-tigera-token-fg-support: var(--color-tigera-color-neutral-800);
+    --color-tigera-token-fg-subtle: var(--color-tigera-color-neutral-600);
+
+    --color-tigera-token-fg-brand: var(--color-tigera-color-blue-900);
+    --color-tigera-token-fg-brand-hovered: var(--color-tigera-color-blue-800);
+    --color-tigera-token-fg-brand-pressed: var(--color-tigera-color-blue-700);
+
+    --color-tigera-token-fg-warning: var(--color-tigera-color-medium-gold-500);
+    --color-tigera-token-fg-info: var(--color-tigera-color-medium-blue-600);
+    --color-tigera-token-fg-danger: var(--color-tigera-color-red-600);
+    --color-tigera-token-fg-success: var(--color-tigera-color-green-600);
+}
+
+.dark {
+    --color-tigera-token-fg-default: var(--color-tigera-color-neutral-50);
+    --color-tigera-token-fg-inverted: var(--color-tigera-color-neutral-1200);
+    --color-tigera-token-fg-support: var(--color-tigera-color-neutral-200);
+    --color-tigera-token-fg-subtle: var(--color-tigera-color-neutral-300);
+
+    --color-tigera-token-fg-brand: var(--color-tigera-color-medium-gold-500);
+    --color-tigera-token-fg-brand-hovered: var(
+        --color-tigera-color-medium-gold-300
+    );
+    --color-tigera-token-fg-brand-pressed: var(
+        --color-tigera-color-medium-gold-200
+    );
+
+    --color-tigera-token-fg-warning: var(--color-tigera-color-medium-gold-400);
+    --color-tigera-token-fg-info: var(--color-tigera-color-medium-blue-300);
+    --color-tigera-token-fg-danger: var(--color-tigera-color-red-400);
+    --color-tigera-token-fg-success: var(--color-tigera-color-green-400);
+}

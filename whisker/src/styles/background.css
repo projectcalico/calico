@@ -1,0 +1,262 @@
+@theme {
+    /**
+   * Backgrounds for buttons, containers etc.
+   * Brand is the most important colour and should be used sparingly to highlight the most important actions.
+   * Contextual backgrounds are used to express informational context - Success, Danger etc.
+   * Neutrals are generally used for everything else.
+   *
+   * Reference: https://designsystem.backbase.com/latest/design-tokens/semantic-colors/background-colors-mLRqePLh
+   */
+
+    /* Brand backgrounds */
+    --color-tigera-token-bg-brand: var(--color-tigera-color-blue-900);
+    --color-tigera-token-bg-brand-hovered: var(--color-tigera-color-blue-800);
+    --color-tigera-token-bg-brand-pressed: var(--color-tigera-color-blue-700);
+
+    --color-tigera-token-bg-brand-subtle: var(--color-tigera-color-blue-50);
+    --color-tigera-token-bg-brand-subtle-hovered: var(
+        --color-tigera-color-blue-100
+    );
+    --color-tigera-token-bg-brand-subtle-pressed: var(
+        --color-tigera-color-blue-200
+    );
+
+    --color-tigera-token-bg-brand-accent: var(--color-tigera-color-blue-400);
+
+    --color-tigera-token-bg-on-brand: var(--color-tigera-color-medium-gold-500);
+    --color-tigera-token-bg-on-brand-hovered: var(
+        --color-tigera-color-medium-gold-600
+    );
+    --color-tigera-token-bg-on-brand-pressed: var(
+        --color-tigera-color-medium-gold-700
+    );
+
+    --color-tigera-token-bg-brand-light: var(--color-tigera-color-blue-100);
+    --color-tigera-token-on-brand-light: var(--color-tigera-token-fg-default);
+
+    /* Contextual backgrounds */
+    --color-tigera-token-bg-warning: var(--color-tigera-color-medium-gold-500);
+    --color-tigera-token-bg-warning-hovered: var(
+        --color-tigera-color-medium-gold-400
+    );
+    --color-tigera-token-bg-warning-pressed: var(
+        --color-tigera-color-medium-gold-600
+    );
+    --color-tigera-token-bg-warning-subtle: var(
+        --color-tigera-color-medium-gold-100
+    );
+
+    --color-tigera-token-bg-info: var(--color-tigera-color-medium-blue-600);
+    --color-tigera-token-bg-info-hovered: var(
+        --color-tigera-color-medium-blue-700
+    );
+    --color-tigera-token-bg-info-pressed: var(
+        --color-tigera-color-medium-blue-800
+    );
+    --color-tigera-token-bg-info-subtle: var(
+        --color-tigera-color-medium-blue-100
+    );
+
+    --color-tigera-token-bg-danger: var(--color-tigera-color-red-600);
+    --color-tigera-token-bg-danger-hovered: var(--color-tigera-color-red-700);
+    --color-tigera-token-bg-danger-pressed: var(--color-tigera-color-red-800);
+    --color-tigera-token-bg-danger-subtle: var(--color-tigera-color-red-100);
+
+    --color-tigera-token-bg-success: var(--color-tigera-color-green-600);
+    --color-tigera-token-bg-success-hovered: var(
+        --color-tigera-color-green-700
+    );
+    --color-tigera-token-bg-success-pressed: var(
+        --color-tigera-color-green-800
+    );
+    --color-tigera-token-bg-success-subtle: var(--color-tigera-color-green-100);
+
+    /* Selected backgrounds */
+    /* These were empty strings in Chakra; using transparent as a safe default placeholder */
+    --color-tigera-token-bg-selected: transparent;
+    --color-tigera-token-bg-selected-hovered: transparent;
+    --color-tigera-token-bg-selected-pressed: transparent;
+
+    /* Neutral backgrounds */
+    --color-tigera-token-bg-empty: transparent;
+
+    --color-tigera-token-bg-neutral-base: var(--color-tigera-color-neutral-0);
+
+    --color-tigera-token-bg-neutral-subtle: var(--color-tigera-token-bg-empty);
+    --color-tigera-token-bg-neutral-subtle-hovered: var(
+        --color-tigera-color-light-alpha-100
+    );
+    --color-tigera-token-bg-neutral-subtle-pressed: var(
+        --color-tigera-color-light-alpha-200
+    );
+
+    --color-tigera-token-bg-neutral: var(--color-tigera-color-light-alpha-100);
+    --color-tigera-token-bg-neutral-hovered: var(
+        --color-tigera-color-light-alpha-200
+    );
+    --color-tigera-token-bg-neutral-pressed: var(
+        --color-tigera-color-light-alpha-300
+    );
+
+    --color-tigera-token-bg-neutral-solid: var(
+        --color-tigera-color-neutral-200
+    );
+    --color-tigera-token-bg-neutral-solid-hovered: var(
+        --color-tigera-color-neutral-300
+    );
+    --color-tigera-token-bg-neutral-solid-pressed: var(
+        --color-tigera-color-neutral-400
+    );
+
+    --color-tigera-token-bg-input: var(--color-tigera-color-neutral-0);
+
+    /* Gradients */
+    --color-tigera-token-bg-gradient-promo: linear-gradient(
+            93.36deg,
+            var(--color-tigera-color-medium-blue-600) 20.03%,
+            transparent 107.66%
+        )
+        var(--color-tigera-color-zest-400);
+
+    --color-tigera-token-bg-gradient-promo-hovered: var(
+        --color-tigera-color-zest-500
+    );
+    --color-tigera-token-bg-gradient-promo-pressed: var(
+        --color-tigera-color-zest-600
+    );
+}
+
+.dark {
+    /* Brand backgrounds */
+    --color-tigera-token-bg-brand: var(--color-tigera-color-medium-gold-400);
+    --color-tigera-token-bg-brand-hovered: var(
+        --color-tigera-color-medium-gold-300
+    );
+    --color-tigera-token-bg-brand-pressed: var(
+        --color-tigera-color-medium-gold-200
+    );
+
+    --color-tigera-token-bg-brand-subtle: color-mix(
+        in srgb,
+        var(--color-tigera-color-medium-gold-400) 17%,
+        transparent
+    );
+    --color-tigera-token-bg-brand-subtle-hovered: color-mix(
+        in srgb,
+        var(--color-tigera-color-medium-gold-300) 17%,
+        transparent
+    );
+    --color-tigera-token-bg-brand-subtle-pressed: color-mix(
+        in srgb,
+        var(--color-tigera-color-medium-gold-200) 17%,
+        transparent
+    );
+
+    --color-tigera-token-bg-brand-accent: var(
+        --color-tigera-color-medium-gold-200
+    );
+
+    --color-tigera-token-bg-on-brand: var(
+        --color-tigera-token-bg-neutral-solid
+    );
+    --color-tigera-token-bg-on-brand-hovered: var(
+        --color-tigera-token-bg-neutral-solid-hovered
+    );
+    --color-tigera-token-bg-on-brand-pressed: var(
+        --color-tigera-token-bg-neutral-solid-pressed
+    );
+
+    --color-tigera-token-bg-brand-light: var(
+        --color-tigera-color-medium-gold-200
+    );
+    --color-tigera-token-on-brand-light: var(--color-tigera-token-fg-inverted);
+
+    /* Contextual backgrounds */
+    --color-tigera-token-bg-warning: var(--color-tigera-color-medium-gold-400);
+    --color-tigera-token-bg-warning-hovered: var(
+        --color-tigera-color-medium-gold-300
+    );
+    --color-tigera-token-bg-warning-pressed: var(
+        --color-tigera-color-medium-gold-500
+    );
+    --color-tigera-token-bg-warning-subtle: color-mix(
+        in srgb,
+        var(--color-tigera-color-medium-gold-500) 20%,
+        transparent
+    );
+
+    --color-tigera-token-bg-info: var(--color-tigera-color-medium-blue-300);
+    --color-tigera-token-bg-info-hovered: var(
+        --color-tigera-color-medium-blue-200
+    );
+    --color-tigera-token-bg-info-pressed: var(
+        --color-tigera-color-medium-blue-100
+    );
+    --color-tigera-token-bg-info-subtle: color-mix(
+        in srgb,
+        var(--color-tigera-color-medium-blue-400) 20%,
+        transparent
+    );
+
+    --color-tigera-token-bg-danger: var(--color-tigera-color-red-400);
+    --color-tigera-token-bg-danger-hovered: var(--color-tigera-color-red-300);
+    --color-tigera-token-bg-danger-pressed: var(--color-tigera-color-red-200);
+    --color-tigera-token-bg-danger-subtle: color-mix(
+        in srgb,
+        var(--color-tigera-color-red-500) 20%,
+        transparent
+    );
+
+    --color-tigera-token-bg-success: var(--color-tigera-color-green-400);
+    --color-tigera-token-bg-success-hovered: var(
+        --color-tigera-color-green-300
+    );
+    --color-tigera-token-bg-success-pressed: var(
+        --color-tigera-color-green-200
+    );
+    --color-tigera-token-bg-success-subtle: color-mix(
+        in srgb,
+        var(--color-tigera-color-green-600) 20%,
+        transparent
+    );
+
+    /* Selected backgrounds */
+    --color-tigera-token-bg-selected: transparent;
+    --color-tigera-token-bg-selected-hovered: transparent;
+    --color-tigera-token-bg-selected-pressed: transparent;
+
+    /* Neutral backgrounds */
+    --color-tigera-token-bg-empty: transparent;
+
+    --color-tigera-token-bg-neutral-base: var(
+        --color-tigera-color-neutral-1200
+    );
+
+    --color-tigera-token-bg-neutral-subtle: var(--color-tigera-token-bg-empty);
+    --color-tigera-token-bg-neutral-subtle-hovered: var(
+        --color-tigera-color-dark-alpha-100
+    );
+    --color-tigera-token-bg-neutral-subtle-pressed: var(
+        --color-tigera-color-dark-alpha-200
+    );
+
+    --color-tigera-token-bg-neutral: var(--color-tigera-color-dark-alpha-100);
+    --color-tigera-token-bg-neutral-hovered: var(
+        --color-tigera-color-dark-alpha-200
+    );
+    --color-tigera-token-bg-neutral-pressed: var(
+        --color-tigera-color-dark-alpha-300
+    );
+
+    --color-tigera-token-bg-neutral-solid: var(
+        --color-tigera-color-neutral-500
+    );
+    --color-tigera-token-bg-neutral-solid-hovered: var(
+        --color-tigera-color-neutral-600
+    );
+    --color-tigera-token-bg-neutral-solid-pressed: var(
+        --color-tigera-color-neutral-700
+    );
+
+    --color-tigera-token-bg-input: var(--color-tigera-color-neutral-1200);
+}
