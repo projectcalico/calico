@@ -556,6 +556,9 @@ ut-bpf-prereqs: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 
 .PHONY: ut-bpf
 ut-bpf: ut-bpf-prereqs
+	$(MAKE) ut-bpf-no-prereqs
+
+ut-bpf-no-prereqs:
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
