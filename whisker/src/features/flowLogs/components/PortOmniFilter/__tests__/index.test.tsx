@@ -48,7 +48,7 @@ describe('<PortOmniFilter />', () => {
 
         await typePort(port);
 
-        userEvent.click(screen.getByRole('button', { name: 'Apply filter' }));
+        userEvent.click(screen.getByRole('button', { name: 'Update' }));
 
         await waitFor(() => {
             expect(mockOnChange).toHaveBeenCalledWith({
@@ -67,7 +67,7 @@ describe('<PortOmniFilter />', () => {
 
         await typePort(port);
 
-        userEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
+        userEvent.click(screen.getByRole('button', { name: 'Clear' }));
 
         await waitFor(() => {
             expect(mockOnChange).toHaveBeenCalledWith({
@@ -86,7 +86,7 @@ describe('<PortOmniFilter />', () => {
 
         await typePort(port);
 
-        userEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
+        userEvent.click(screen.getByRole('button', { name: 'Clear' }));
 
         await waitFor(() => {
             expect(mockOnChange).toHaveBeenCalledWith({
@@ -108,7 +108,7 @@ describe('<PortOmniFilter />', () => {
         screen.getByRole('button', { name: 'Port = UDP:2020' });
     });
 
-    it.only('should change the protocol to Any', async () => {
+    it('should change the protocol to Any', async () => {
         const mockOnChange = jest.fn();
         render(
             <PortOmniFilter
@@ -150,5 +150,74 @@ describe('<PortOmniFilter />', () => {
         expect(
             screen.getByRole('button', { name: 'Port' }),
         ).toBeInTheDocument();
+    });
+
+    it('should disable the trigger when isDisabled is true', () => {
+        render(<PortOmniFilter {...defaultProps} isDisabled={true} />);
+
+        expect(screen.getByRole('button', { name: 'Port' })).toBeDisabled();
+    });
+
+    it('should show a min validation error for port below 1', async () => {
+        render(<PortOmniFilter {...defaultProps} />);
+
+        await openFilter();
+
+        const input = screen.getByLabelText('Port');
+        await userEvent.type(input, '0');
+
+        await waitFor(() => {
+            expect(
+                screen.getByTestId('port-filter-error-message'),
+            ).toHaveTextContent('Min: 1');
+        });
+    });
+
+    it('should show a max validation error for port above 65535', async () => {
+        render(<PortOmniFilter {...defaultProps} />);
+
+        await openFilter();
+
+        const input = screen.getByLabelText('Port');
+        await userEvent.type(input, '99999');
+
+        await waitFor(() => {
+            expect(
+                screen.getByTestId('port-filter-error-message'),
+            ).toHaveTextContent('Max: 65536');
+        });
+    });
+
+    it('should display both protocol and port in the trigger label', () => {
+        render(
+            <PortOmniFilter
+                {...defaultProps}
+                port='8081'
+                protocol='tcp'
+            />,
+        );
+
+        expect(
+            screen.getByRole('button', { name: 'Port = TCP:8081' }),
+        ).toBeInTheDocument();
+    });
+
+    it('should submit with only a port and no protocol', async () => {
+        const mockOnChange = jest.fn();
+        render(<PortOmniFilter {...defaultProps} onChange={mockOnChange} />);
+
+        await openFilter();
+
+        const input = screen.getByLabelText('Port');
+        await userEvent.type(input, '443');
+
+        userEvent.click(screen.getByRole('button', { name: 'Update' }));
+
+        await waitFor(() => {
+            expect(mockOnChange).toHaveBeenCalledWith({
+                port: '443',
+                protocol: null,
+            });
+        });
     });
 });
