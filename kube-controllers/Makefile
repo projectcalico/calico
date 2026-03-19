@@ -138,7 +138,7 @@ TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 
 ## Run the unit tests in a container.
 test: ut
-ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED)
+ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED) setup-envtest
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
@@ -146,6 +146,7 @@ ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED)
 		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		   CRDS=$(REPO_ROOT)/$(CALICO_CRD_PATH) \
 		   CERTS_PATH=$(CERTS_PATH) \
+		   KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
 		   ./run-uts $(WHAT)
 
 # Produce test binaries for each package that needs them.
