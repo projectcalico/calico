@@ -379,7 +379,7 @@ spec:
   egress:
   - action: Deny
     destination:
-      nets: ["10.0.0.0/8"]
+      nets: ["0.0.0.0/0"]
       notNets: ["10.0.0.0/8"]
   - action: Pass
 ---
@@ -804,7 +804,9 @@ Wait ~30 seconds for flow logs to populate, then verify diversity:
 
 ```bash
 # Check all pods are running
-kubectl get pods -n frontend -n backend -n database -n monitoring
+for ns in frontend backend database monitoring; do
+  kubectl get pods -n "$ns"
+done
 
 # Check flow logs are streaming with diverse data
 curl -s "http://localhost:8081/whisker-backend/flows?watch=true&startTimeGte=-60" --max-time 8 2>&1 | grep -o '"action":"[^"]*"' | sort | uniq -c | sort -rn

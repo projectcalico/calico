@@ -72,15 +72,15 @@ pkg/
 
 ### Configuration
 
-| Env Var         | Default                           | Description                   |
-| --------------- | --------------------------------- | ----------------------------- |
-| `GOLDMANE_HOST` | `goldmane.calico-system.svc:7443` | Goldmane gRPC address         |
-| `HOST`          | `0.0.0.0`                         | HTTP listen address           |
-| `PORT`          | `8080`                            | HTTP listen port              |
-| `LOG_LEVEL`     | `info`                            | Log level                     |
-| `CA_CERT_PATH`  | `/etc/pki/tls/certs/ca.crt`       | CA cert for Goldmane mTLS     |
-| `TLS_CERT_PATH` | —                                 | Client cert for Goldmane mTLS |
-| `TLS_KEY_PATH`  | —                                 | Client key for Goldmane mTLS  |
+| Env Var         | Default                           | Description                                               |
+| --------------- | --------------------------------- | --------------------------------------------------------- |
+| `GOLDMANE_HOST` | `goldmane.calico-system.svc:7443` | Goldmane gRPC address                                     |
+| `HOST`          | `0.0.0.0`                         | HTTP listen address                                       |
+| `PORT`          | `8080`                            | HTTP listen port (in-cluster deployment sets `PORT=3002`) |
+| `LOG_LEVEL`     | `info`                            | Log level                                                 |
+| `CA_CERT_PATH`  | `/etc/pki/tls/certs/ca.crt`       | CA cert for Goldmane mTLS                                 |
+| `TLS_CERT_PATH` | —                                 | Client cert for Goldmane mTLS                             |
+| `TLS_KEY_PATH`  | —                                 | Client key for Goldmane mTLS                              |
 
 ## HTTP API
 
@@ -91,11 +91,10 @@ Query or stream flow logs.
 **Parameters:**
 | Param | Type | Description |
 |---|---|---|
-| `watch` | bool | `true` = SSE stream, `false` = paginated list |
+| `watch` | bool | `true` = SSE stream, `false` = list response (no server-side pagination) |
 | `startTimeGte` | int64 | Relative seconds (e.g., `-60` = last minute) |
 | `startTimeLt` | int64 | Upper bound (relative seconds) |
-| `page`, `pageSize` | int | Pagination |
-| `sortBy[]` | string | Sort fields |
+| `sortBy` | string | Sort fields; repeatable (e.g., `?sortBy=startTime&sortBy=sourceName`) |
 | `filters` | JSON | URL-encoded filter object (see below) |
 
 ### GET /flows-filter-hints
