@@ -1,0 +1,6 @@
+#!/bin/bash
+
+felix/.semaphore/analyze-test-failures || true
+
+.semaphore/vms/publish-reports "${TEST_REPORT_NAME}"
+.semaphore/vms/clean-up-vms ${VM_PREFIX}
