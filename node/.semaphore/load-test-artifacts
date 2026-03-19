@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# No set -e so that we continue to collect artifacts even if some fail.
-set -x
+# This script is run on the test VM, to load the component-specific test
+# artifacts, which have already been downloaded to /tmp.
 
-# set nullglob so that '*' is not used literally if the artifacts dir is empty
-shopt -s nullglob
+set -ex
 
-my_dir=$(dirname "$0")
-repo_dir=$my_dir/..
-
-cd "$repo_dir/artifacts" || exit 1
-
-for file in *; do
-  artifact push job "$file"
-done
+echo "No component-specific test artifacts to load."
