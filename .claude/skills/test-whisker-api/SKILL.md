@@ -22,7 +22,7 @@ Runs a comprehensive suite of API tests against the Whisker backend to verify fl
 | `GET /whisker-backend/flows?watch=true&startTimeGte=-60` | Stream flow logs (SSE) |
 | `GET /whisker-backend/flows-filter-hints?type=<TYPE>&pageSize=20` | Get filter hint values |
 
-Both endpoints accept a `filters` query parameter as URL-encoded JSON.
+Both endpoints accept a `filters` query parameter as JSON. When using curl, pass the JSON inline with shell quoting (single quotes around the full URL). The backend accepts raw JSON in the query string.
 
 ### Filter JSON Structure
 
