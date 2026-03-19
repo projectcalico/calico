@@ -121,8 +121,20 @@ done
 monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
 
 test_pid=()
+watchdog_pids=()
 monitor_pids=()
 log_files=()
+
+# Calculate watchdog timeout before starting batches.
+# JOB_TIMEOUT_MINUTES can be set to match the Semaphore execution_time_limit;
+# the watchdog fires 5 minutes before that to leave time for cleanup.
+: "${JOB_TIMEOUT_MINUTES:=60}"
+if [ "$JOB_TIMEOUT_MINUTES" -le 5 ] 2>/dev/null; then
+  echo "WARNING: JOB_TIMEOUT_MINUTES ($JOB_TIMEOUT_MINUTES) is too low for watchdog, disabling."
+  watchdog_seconds=0
+else
+  watchdog_seconds=$(( (JOB_TIMEOUT_MINUTES - 5) * 60 ))
+fi
 
 # Format batch name for log files: zero-pad numeric values to 3 digits
 format_batch_for_log() {
@@ -201,54 +213,28 @@ for batch in "${batches[@]}"; do
   log_files+=( "$log_file" )
   test_pid+=( "$pid" )
 
+  # Start a per-batch watchdog that kills this batch before the Semaphore job
+  # timeout.  Each batch kills its own watchdog when it finishes (in the wait
+  # loop below), so there is no PID-reuse race.
+  if [ "$watchdog_seconds" -gt 0 ]; then
   (
-    # Redirect tail's stdin from /dev/null to prevent waiting
-    # forever on reads in semaphore CI
-    tail -f --retry "$log_file" < /dev/null | \
-      grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
-      sed 's/.*/'"${prefix}"' &/' | \
-      grep --perl --line-buffered -v '^\[batch=[^\]]+\]\s+$';
-  ) &
-  mon_pid=$!
-  monitor_pids+=( "$mon_pid" )
-done
+    sleep "$watchdog_seconds"
+    echo
+    echo "===== WATCHDOG: batch $batch approaching job timeout (${JOB_TIMEOUT_MINUTES}m) ====="
+    echo "  Killing hung batch $batch (pid $pid)"
+    kill -TERM "-$pid" 2>/dev/null || true
 
-final_result=0
-
-# Start a watchdog that kills hung batches before the Semaphore job timeout.
-# This ensures the script can exit cleanly, run the epilogue, and upload artifacts.
-# JOB_TIMEOUT_MINUTES can be set to match the Semaphore execution_time_limit;
-# the watchdog fires 5 minutes before that to leave time for cleanup.
-: "${JOB_TIMEOUT_MINUTES:=60}"
-if [ "$JOB_TIMEOUT_MINUTES" -le 5 ] 2>/dev/null; then
-  echo "WARNING: JOB_TIMEOUT_MINUTES ($JOB_TIMEOUT_MINUTES) is too low for watchdog, disabling."
-  watchdog_seconds=0
-else
-  watchdog_seconds=$(( (JOB_TIMEOUT_MINUTES - 5) * 60 ))
-fi
-if [ "$watchdog_seconds" -gt 0 ]; then
-(
-  sleep "$watchdog_seconds"
-  echo
-  echo "===== WATCHDOG: approaching job timeout (${JOB_TIMEOUT_MINUTES}m), killing hung batches ====="
-  for i in "${!batches[@]}"; do
-    batch=${batches[$i]}
-    pid=${test_pid[$i]}
-    if kill -0 "$pid" 2>/dev/null; then
-      echo "  Killing hung batch $batch (pid $pid)"
-      kill -TERM "-$pid" 2>/dev/null || true
-
-      # Generate a JUnit XML report for the timed-out batch so it shows up
-      # in Semaphore test results as a clear failure.
-      batch_formatted="$(format_batch_for_log "$batch")"
-      if [ "$batch" = "ut" ]; then
-        report_type="ut"
-      else
-        report_type="fv"
-      fi
-      report_dir="$artifacts_dir/$batch/report"
-      mkdir -p "$report_dir"
-      cat > "$report_dir/felix_${report_type}_timeout_${batch_formatted}.xml" <<JUNIT_EOF
+    # Generate a JUnit XML report for the timed-out batch so it shows up
+    # in Semaphore test results as a clear failure.
+    batch_formatted="$(format_batch_for_log "$batch")"
+    if [ "$batch" = "ut" ]; then
+      report_type="ut"
+    else
+      report_type="fv"
+    fi
+    report_dir="$artifacts_dir/$batch/report"
+    mkdir -p "$report_dir"
+    cat > "$report_dir/felix_${report_type}_timeout_${batch_formatted}.xml" <<JUNIT_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
   <testsuite name="batch-${batch}" tests="1" failures="1" errors="0" time="$watchdog_seconds">
@@ -262,12 +248,26 @@ for details on which test was hung.
   </testsuite>
 </testsuites>
 JUNIT_EOF
-    fi
-  done
-  echo "==============================================================="
-) &
-watchdog_pid=$!
-fi
+    echo "==============================================================="
+  ) &
+  watchdog_pids+=( "$!" )
+  else
+    watchdog_pids+=( "" )
+  fi
+
+  (
+    # Redirect tail's stdin from /dev/null to prevent waiting
+    # forever on reads in semaphore CI
+    tail -f --retry "$log_file" < /dev/null | \
+      grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
+      sed 's/.*/'"${prefix}"' &/' | \
+      grep --perl --line-buffered -v '^\[batch=[^\]]+\]\s+$';
+  ) &
+  mon_pid=$!
+  monitor_pids+=( "$mon_pid" )
+done
+
+final_result=0
 
 # Give the batches time to emit their start-up logs.
 sleep 5
@@ -290,13 +290,14 @@ for i in "${!batches[@]}"; do
     summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact $failed_summary_log" )
     final_result=1
   fi
+  # Cancel this batch's watchdog now that it has finished, preventing
+  # the PID-reuse race that a single global watchdog would have.
+  wd_pid=${watchdog_pids[$i]}
+  if [ -n "$wd_pid" ]; then
+    kill "$wd_pid" 2>/dev/null || true
+    wait "$wd_pid" 2>/dev/null || true
+  fi
 done
-
-# Cancel the watchdog if all batches finished in time.
-if [ -n "${watchdog_pid:-}" ]; then
-  kill "$watchdog_pid" 2>/dev/null || true
-  wait "$watchdog_pid" 2>/dev/null || true
-fi
 
 echo
 echo "===== Shutting down test monitors ====="
