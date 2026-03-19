@@ -15,14 +15,14 @@ Browser → nginx (:8081) → React SPA
 
 ### Tech Stack
 
-| Layer | Tech |
-|---|---|
-| Frontend | React, TypeScript, TailwindCSS, Chakra UI, Radix UI |
-| Build | Rsbuild (Rspack-based) |
-| State | Zustand, TanStack React Query |
-| Testing | Jest, React Testing Library |
-| Backend | Go, net/http, lib/httpmachinery |
-| Protocol | HTTP/JSON ↔ gRPC/protobuf (via whisker-backend) |
+| Layer     | Tech                                                             |
+| --------- | ---------------------------------------------------------------- |
+| Frontend  | React, TypeScript, TailwindCSS, Chakra UI, Radix UI              |
+| Build     | Rsbuild (Rspack-based)                                           |
+| State     | Zustand, TanStack React Query                                    |
+| Testing   | Jest, React Testing Library                                      |
+| Backend   | Go, net/http, lib/httpmachinery                                  |
+| Protocol  | HTTP/JSON ↔ gRPC/protobuf (via whisker-backend)                 |
 | Streaming | EventSource (SSE) in browser → HTTP chunked → gRPC server stream |
 
 ## Frontend Structure (`whisker/`)
@@ -72,15 +72,15 @@ pkg/
 
 ### Configuration
 
-| Env Var | Default | Description |
-|---|---|---|
-| `GOLDMANE_HOST` | `goldmane.calico-system.svc:7443` | Goldmane gRPC address |
-| `HOST` | `0.0.0.0` | HTTP listen address |
-| `PORT` | `8080` | HTTP listen port |
-| `LOG_LEVEL` | `info` | Log level |
-| `CA_CERT_PATH` | `/etc/pki/tls/certs/ca.crt` | CA cert for Goldmane mTLS |
-| `TLS_CERT_PATH` | — | Client cert for Goldmane mTLS |
-| `TLS_KEY_PATH` | — | Client key for Goldmane mTLS |
+| Env Var         | Default                           | Description                   |
+| --------------- | --------------------------------- | ----------------------------- |
+| `GOLDMANE_HOST` | `goldmane.calico-system.svc:7443` | Goldmane gRPC address         |
+| `HOST`          | `0.0.0.0`                         | HTTP listen address           |
+| `PORT`          | `8080`                            | HTTP listen port              |
+| `LOG_LEVEL`     | `info`                            | Log level                     |
+| `CA_CERT_PATH`  | `/etc/pki/tls/certs/ca.crt`       | CA cert for Goldmane mTLS     |
+| `TLS_CERT_PATH` | —                                 | Client cert for Goldmane mTLS |
+| `TLS_KEY_PATH`  | —                                 | Client key for Goldmane mTLS  |
 
 ## HTTP API
 
@@ -113,27 +113,28 @@ Returns available values for a filter field (autocomplete).
 
 ```json
 {
-  "source_names": [{"type": "Exact", "value": "pod-*"}],
-  "source_namespaces": [{"type": "Exact", "value": "frontend"}],
-  "dest_names": [{"type": "Exact", "value": "api-*"}],
-  "dest_namespaces": [{"type": "Exact", "value": "backend"}],
-  "protocols": [{"type": "Exact", "value": "tcp"}],
-  "dest_ports": [{"type": "Exact", "value": 53}],
-  "actions": ["Allow", "Deny", "Pass"],
-  "pending_actions": ["Allow", "Deny"],
-  "reporter": "Src",
-  "policies": [
-    {
-      "kind": "CalicoNetworkPolicy",
-      "tier": {"type": "Exact", "value": "security"},
-      "name": {"type": "Exact", "value": "my-policy"},
-      "namespace": {"type": "Exact", "value": "default"}
-    }
-  ]
+    "source_names": [{ "type": "Exact", "value": "pod-*" }],
+    "source_namespaces": [{ "type": "Exact", "value": "frontend" }],
+    "dest_names": [{ "type": "Exact", "value": "api-*" }],
+    "dest_namespaces": [{ "type": "Exact", "value": "backend" }],
+    "protocols": [{ "type": "Exact", "value": "tcp" }],
+    "dest_ports": [{ "type": "Exact", "value": 53 }],
+    "actions": ["Allow", "Deny", "Pass"],
+    "pending_actions": ["Allow", "Deny"],
+    "reporter": "Src",
+    "policies": [
+        {
+            "kind": "CalicoNetworkPolicy",
+            "tier": { "type": "Exact", "value": "security" },
+            "name": { "type": "Exact", "value": "my-policy" },
+            "namespace": { "type": "Exact", "value": "default" }
+        }
+    ]
 }
 ```
 
 **Key rules:**
+
 - `reporter` is a single string (`"Src"` or `"Dst"`), NOT an array
 - `kind` in policy filters is a bare string, NOT a FilterMatch
 - All other fields use FilterMatch: `{"type": "Exact"|"Fuzzy", "value": ...}`
@@ -144,35 +145,59 @@ Returns available values for a filter field (autocomplete).
 
 ```json
 {
-  "start_time": "2026-03-19T14:30:00Z",
-  "end_time": "2026-03-19T14:31:00Z",
-  "action": "Allow",
-  "source_name": "traffic-gen-*",
-  "source_namespace": "frontend",
-  "source_labels": "app=traffic-gen | role=client",
-  "dest_name": "api-*",
-  "dest_namespace": "backend",
-  "dest_labels": "app=api | role=backend",
-  "protocol": "tcp",
-  "dest_port": 8080,
-  "reporter": "Src",
-  "policies": {
-    "enforced": [{"kind": "...", "name": "...", "namespace": "...", "tier": "...", "action": "...", "policy_index": 0, "rule_index": 0, "trigger": null}],
-    "pending": [{"kind": "...", "name": "...", "namespace": "...", "tier": "...", "action": "...", "policy_index": 0, "rule_index": 0, "trigger": null}]
-  },
-  "packets_in": 100, "packets_out": 50,
-  "bytes_in": 5000, "bytes_out": 2500
+    "start_time": "2026-03-19T14:30:00Z",
+    "end_time": "2026-03-19T14:31:00Z",
+    "action": "Allow",
+    "source_name": "traffic-gen-*",
+    "source_namespace": "frontend",
+    "source_labels": "app=traffic-gen | role=client",
+    "dest_name": "api-*",
+    "dest_namespace": "backend",
+    "dest_labels": "app=api | role=backend",
+    "protocol": "tcp",
+    "dest_port": 8080,
+    "reporter": "Src",
+    "policies": {
+        "enforced": [
+            {
+                "kind": "...",
+                "name": "...",
+                "namespace": "...",
+                "tier": "...",
+                "action": "...",
+                "policy_index": 0,
+                "rule_index": 0,
+                "trigger": null
+            }
+        ],
+        "pending": [
+            {
+                "kind": "...",
+                "name": "...",
+                "namespace": "...",
+                "tier": "...",
+                "action": "...",
+                "policy_index": 0,
+                "rule_index": 0,
+                "trigger": null
+            }
+        ]
+    },
+    "packets_in": 100,
+    "packets_out": 50,
+    "bytes_in": 5000,
+    "bytes_out": 2500
 }
 ```
 
 ### Valid Enum Values
 
-| Field | Values |
-|---|---|
-| Action | `Allow`, `Deny`, `Pass` |
-| Reporter | `Src`, `Dst` |
-| PolicyKind | `CalicoNetworkPolicy`, `GlobalNetworkPolicy`, `NetworkPolicy`, `StagedNetworkPolicy`, `StagedGlobalNetworkPolicy`, `StagedKubernetesNetworkPolicy`, `Profile`, `EndOfTier`, `ClusterNetworkPolicy` |
-| FilterMatch type | `Exact`, `Fuzzy` |
+| Field            | Values                                                                                                                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Action           | `Allow`, `Deny`, `Pass`                                                                                                                                                                            |
+| Reporter         | `Src`, `Dst`                                                                                                                                                                                       |
+| PolicyKind       | `CalicoNetworkPolicy`, `GlobalNetworkPolicy`, `NetworkPolicy`, `StagedNetworkPolicy`, `StagedGlobalNetworkPolicy`, `StagedKubernetesNetworkPolicy`, `Profile`, `EndOfTier`, `ClusterNetworkPolicy` |
+| FilterMatch type | `Exact`, `Fuzzy`                                                                                                                                                                                   |
 
 ### Special Display Transformations
 
@@ -209,10 +234,10 @@ Direct: `cd whisker-backend && go test ./...`
 
 Both components run in a single Kubernetes pod:
 
-| Container | Port | Serves |
-|---|---|---|
+| Container       | Port | Serves                                                         |
+| --------------- | ---- | -------------------------------------------------------------- |
 | whisker (nginx) | 8081 | React SPA + reverse proxy `/whisker-backend/` → localhost:3002 |
-| whisker-backend | 3002 | HTTP API, connects to goldmane:7443 via mTLS |
+| whisker-backend | 3002 | HTTP API, connects to goldmane:7443 via mTLS                   |
 
 Nginx config: `whisker/docker-image/default.conf`
 
@@ -237,12 +262,12 @@ curl -s "http://localhost:8081/whisker-backend/flows-filter-hints?type=SourceNam
 
 ## Key Source Files
 
-| File | Purpose |
-|---|---|
-| `whisker/src/api/index.ts` | API client + SSE streaming |
-| `whisker/src/features/flowLogs/` | Main flow log feature |
-| `whisker/docker-image/default.conf` | Nginx reverse proxy config |
-| `whisker-backend/pkg/handlers/v1/flows.go` | HTTP handlers |
-| `whisker-backend/pkg/handlers/v1/protoconvert.go` | JSON ↔ protobuf conversion |
-| `whisker-backend/pkg/apis/v1/flows.go` | Go types (Filters, FlowResponse) |
-| `goldmane/proto/api.proto` | Source of truth for all data types |
+| File                                              | Purpose                            |
+| ------------------------------------------------- | ---------------------------------- |
+| `whisker/src/api/index.ts`                        | API client + SSE streaming         |
+| `whisker/src/features/flowLogs/`                  | Main flow log feature              |
+| `whisker/docker-image/default.conf`               | Nginx reverse proxy config         |
+| `whisker-backend/pkg/handlers/v1/flows.go`        | HTTP handlers                      |
+| `whisker-backend/pkg/handlers/v1/protoconvert.go` | JSON ↔ protobuf conversion        |
+| `whisker-backend/pkg/apis/v1/flows.go`            | Go types (Filters, FlowResponse)   |
+| `goldmane/proto/api.proto`                        | Source of truth for all data types |
