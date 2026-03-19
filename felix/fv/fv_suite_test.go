@@ -147,8 +147,6 @@ func configureManualSharding() error {
 		assignedBatch := (hash % uint32(totalBatches)) + 1
 		if int(assignedBatch) != currentBatch {
 			Skip(fmt.Sprintf("️[SHARD-SKIP] Test assigned to batch %d (Current: %d)", assignedBatch, currentBatch))
-		} else {
-			fmt.Printf("️[SHARD-RUN] Batch %d executing: %s\n", currentBatch, specReport.LeafNodeText)
 		}
 	})
 
