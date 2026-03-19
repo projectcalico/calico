@@ -188,21 +188,16 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     value={{
                         action: selectedValues.action?.[0],
                         staged_action: selectedValues.staged_action?.[0],
-                        pending_action: selectedValues.pending_action?.[0],
                     }}
                     selectedFilters={[
                         ...(selectedValues.action ?? []),
                         ...(selectedValues.staged_action ?? []),
-                        ...(selectedValues.pending_action ?? []),
                     ]}
-                    onChange={({ action, staged_action, pending_action }) =>
+                    onChange={({ action, staged_action }) =>
                         onMultiChange({
                             [OmniFilterKeys.action]: action ? [action] : [],
                             [OmniFilterKeys.staged_action]: staged_action
                                 ? [staged_action]
-                                : [],
-                            [OmniFilterKeys.pending_action]: pending_action
-                                ? [pending_action]
                                 : [],
                         })
                     }

@@ -13,7 +13,7 @@
         "lint": "eslint .",
         "format": "prettier . --check",
         "format:fix": "prettier . --write",
-        "test": "jest",
+        "test": "jest --silent",
         "test:update": "jest -u",
         "test:cov": "jest --coverage",
         "verify": "yarn format && yarn lint --quiet && yarn test:cov --silent && yarn build",
