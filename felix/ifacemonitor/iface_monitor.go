@@ -389,11 +389,12 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	} else {
 		delete(m.ifaceIdxToInfo, ifIndex)
 		ids.Discard(ifIndex)
-		if ids.Len() == 0 {
-			delete(m.ifaceNameToIdx, ifaceName)
-		}
 	}
-	m.ifaceNameToIdx[ifaceName] = ids
+	if ids.Len() == 0 {
+		delete(m.ifaceNameToIdx, ifaceName)
+	} else {
+		m.ifaceNameToIdx[ifaceName] = ids
+	}
 
 	// In some cases, we can receive a notification for a new link of the same name before
 	// receiving the deletion notification for the old link.  In that case, we want to avoid
