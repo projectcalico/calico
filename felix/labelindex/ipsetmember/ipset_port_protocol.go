@@ -37,6 +37,8 @@ func (p Protocol) MatchesModelProtocol(protocol numorstring.Protocol) bool {
 		return strings.ToLower(protocol.StrVal) == "udp"
 	case ProtocolSCTP:
 		return strings.ToLower(protocol.StrVal) == "sctp"
+	case ProtocolAny:
+		return true
 	}
 	logrus.WithField("protocol", p).Panic("Unknown protocol")
 	return false

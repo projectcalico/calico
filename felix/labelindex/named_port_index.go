@@ -98,18 +98,11 @@ func (d *endpointData) HasParent(parent *npParentData) bool {
 func (d *endpointData) LookupNamedPorts(name string, proto ipsetmember.Protocol) []namedPortContribution {
 	var matchingPorts []namedPortContribution
 	for _, p := range d.ports {
-		if p.Name == name {
-			if proto == ipsetmember.ProtocolAny {
-				matchingPorts = append(matchingPorts, namedPortContribution{
-					protocol: ipsetmember.ProtocolFrom(p.Protocol),
-					port:     p.Port,
-				})
-			} else if proto.MatchesModelProtocol(p.Protocol) {
-				matchingPorts = append(matchingPorts, namedPortContribution{
-					protocol: proto,
-					port:     p.Port,
-				})
-			}
+		if p.Name == name && proto.MatchesModelProtocol(p.Protocol) {
+			matchingPorts = append(matchingPorts, namedPortContribution{
+				protocol: ipsetmember.ProtocolFrom(p.Protocol),
+				port:     p.Port,
+			})
 		}
 	}
 	return matchingPorts
