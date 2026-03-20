@@ -93,7 +93,28 @@ else
       echo "[INFO] starting e2e testing from local binary..."
       pushd ${HOME}/calico
       make -C e2e build |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
-      KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig PRODUCT=calico go run github.com/onsi/ginkgo/v2/ginkgo -procs=${E2E_PROCS:-4} ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} |& tee -a >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
+      GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+      docker run --rm --init --net=host \
+        -e LOCAL_USER_ID=$(id -u) \
+        -e GOCACHE=/go-cache \
+        -e GOPATH=/go \
+        -e KUBECONFIG=/kubeconfig \
+        -e PRODUCT=calico \
+        -e CREATE_WINDOWS_NODES \
+        -e FUNCTIONAL_AREA \
+        -e INSTALLER \
+        -e PROVISIONER \
+        -e K8S_VERSION \
+        -e DATAPLANE \
+        -e ENCAPSULATION_TYPE \
+        -e WINDOWS_OS \
+        -e USE_VENDORED_CNI \
+        -v $(pwd):/go/src/github.com/projectcalico/calico:rw \
+        -v $(pwd)/.go-pkg-cache:/go-cache:rw \
+        -v ${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro \
+        -w /go/src/github.com/projectcalico/calico \
+        calico/go-build:${GO_BUILD_VER} \
+        go run github.com/onsi/ginkgo/v2/ginkgo -procs=${E2E_PROCS:-4} ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} |& tee -a >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
       popd
     else
       echo "[INFO] starting bz testing..."
