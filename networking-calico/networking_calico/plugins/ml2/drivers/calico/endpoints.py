@@ -120,33 +120,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 dest_wep_name = endpoint_name(dest_port)
                 expected_lm_names.add(dest_wep_name)
 
-                # Ensure destination WEP exists.
+                # Ensure LiveMigration and destination WEP exist.
+                self.write_live_migration(port, dest_port)
                 self.write_endpoint(dest_port, context, reread=False)
-
-                # Ensure LiveMigration resource exists.
-                datamodel_v3.put(
-                    "LiveMigration",
-                    namespace,
-                    dest_wep_name,
-                    {
-                        "source": {
-                            "workloadEndpoint": {
-                                "hostname": port["binding:host_id"],
-                                "orchestratorID": "openstack",
-                                "workloadID": namespace + "/" + port["device_id"],
-                                "endpointID": port["id"],
-                            },
-                        },
-                        "target": {
-                            "workloadEndpoint": {
-                                "hostname": dest_host,
-                                "orchestratorID": "openstack",
-                                "workloadID": namespace + "/" + port["device_id"],
-                                "endpointID": port["id"],
-                            },
-                        },
-                    },
-                )
                 LOG.info(
                     "LiveMigration resync: ensured LM and dest WEP for %s",
                     dest_wep_name,
@@ -160,9 +136,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 LOG.warning(
                     "LiveMigration resync: deleting orphaned LM %s", name
                 )
-                datamodel_v3.delete(
-                    "LiveMigration", namespace, name, mod_revision=mod_revision
-                )
+                self.delete_live_migration(name, mod_revision=mod_revision)
 
         LOG.info("LiveMigration resync done")
 
@@ -266,6 +240,45 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def delete_endpoint(self, port):
         return datamodel_v3.delete(
             "WorkloadEndpoint", self.namespace, endpoint_name(port)
+        )
+
+    def write_live_migration(self, source_port, dest_port):
+        """Write a LiveMigration resource for a migrating port.
+
+        The LiveMigration name is derived from the destination WEP name.
+        Returns the UID assigned by etcd (or the existing UID if already
+        present).
+        """
+        namespace = self.namespace
+        wep_id_fields = {
+            "orchestratorID": "openstack",
+            "workloadID": namespace + "/" + source_port["device_id"],
+            "endpointID": source_port["id"],
+        }
+        return datamodel_v3.put(
+            "LiveMigration",
+            namespace,
+            endpoint_name(dest_port),
+            {
+                "source": {
+                    "workloadEndpoint": dict(
+                        hostname=source_port["binding:host_id"],
+                        **wep_id_fields,
+                    ),
+                },
+                "target": {
+                    "workloadEndpoint": dict(
+                        hostname=dest_port["binding:host_id"],
+                        **wep_id_fields,
+                    ),
+                },
+            },
+        )
+
+    def delete_live_migration(self, name, mod_revision=None):
+        """Delete a LiveMigration resource by name."""
+        return datamodel_v3.delete(
+            "LiveMigration", self.namespace, name, mod_revision=mod_revision
         )
 
     def add_port_interface_name(self, port, port_extra):

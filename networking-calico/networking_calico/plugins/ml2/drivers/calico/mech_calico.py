@@ -1079,30 +1079,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # WEP, so that Felix has the migration context before it
                 # sees the new endpoint.  (In etcd, write ordering is
                 # preserved per-client.)
-                namespace = self.endpoint_syncer.namespace
-                dest_wep_name = endpoint_name(dest_port)
-                migration_uid = datamodel_v3.put(
-                    "LiveMigration",
-                    namespace,
-                    dest_wep_name,
-                    {
-                        "source": {
-                            "workloadEndpoint": {
-                                "hostname": port["binding:host_id"],
-                                "orchestratorID": "openstack",
-                                "workloadID": namespace + "/" + port["device_id"],
-                                "endpointID": port["id"],
-                            },
-                        },
-                        "target": {
-                            "workloadEndpoint": {
-                                "hostname": dest_host,
-                                "orchestratorID": "openstack",
-                                "workloadID": namespace + "/" + port["device_id"],
-                                "endpointID": port["id"],
-                            },
-                        },
-                    },
+                migration_uid = self.endpoint_syncer.write_live_migration(
+                    port, dest_port
                 )
 
                 # Create destination WEP after the LiveMigration resource.
