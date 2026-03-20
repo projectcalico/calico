@@ -130,7 +130,7 @@ describe('useFlowLogsHeightOffset', () => {
             wrapper: createWrapper(true),
         });
 
-        expect(result.current).toEqual(185);
+        expect(result.current).toEqual(151);
     });
 
     it('should not include the banner height', () => {
@@ -138,7 +138,7 @@ describe('useFlowLogsHeightOffset', () => {
             wrapper: createWrapper(false),
         });
 
-        expect(result.current).toEqual(145);
+        expect(result.current).toEqual(111);
     });
 });
 

@@ -8,7 +8,11 @@ import { ApiError } from '@/types/api';
 import { FlowLog } from '@/types/render';
 import React from 'react';
 import { CellProps } from 'react-table';
-import { useShouldAnimate, useStoredColumns } from '../../hooks';
+import {
+    useFlowLogSort,
+    useShouldAnimate,
+    useStoredColumns,
+} from '../../hooks';
 import FlowLogDetails from '../FlowLogDetails';
 import FlowLogsTableEmptyMessage from '../FlowLogsTableEmptyMessage';
 import {
@@ -85,6 +89,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
         [storedColumns],
     );
 
+    const { handleSort, defaultSortState } = useFlowLogSort();
     const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] =
         React.useState(false);
     const shouldAnimate = useShouldAnimate(maxStartTime, totalItems);
@@ -169,9 +174,10 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                     shouldAnimate,
                 }}
                 onSortClicked={onSortClicked}
+                onSort={handleSort}
                 keyProp='id'
                 initialState={{
-                    sortBy: [{ id: 'start_time', desc: true }],
+                    sortBy: defaultSortState,
                 }}
                 size='lg'
             />

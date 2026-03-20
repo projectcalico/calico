@@ -380,14 +380,17 @@ exports[`FlowLogDetails should render 1`] = `
           tabindex="0"
         >
           <div
+            aria-label="JSON view"
             class="containerStylesDark"
+            role="tree"
           >
             <div
+              aria-expanded="true"
               class="_2bkNM"
-              role="list"
+              role="treeitem"
             >
               <span
-                aria-controls=":jsnvw:1:"
+                aria-controls="_r_1_"
                 aria-expanded="true"
                 aria-label="collapse JSON"
                 class="_3QHg2 _f10Tu _1MFti _1LId0"
@@ -399,12 +402,14 @@ exports[`FlowLogDetails should render 1`] = `
               >
                 {
               </span>
-              <div
-                id=":jsnvw:1:"
+              <ul
+                class="_1BXBN"
+                id="_r_1_"
+                role="group"
               >
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -424,7 +429,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -444,7 +449,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -464,7 +469,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -484,7 +489,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -504,7 +509,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -524,7 +529,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -544,7 +549,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -564,7 +569,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -583,16 +588,17 @@ exports[`FlowLogDetails should render 1`] = `
                   </span>
                 </div>
                 <div
+                  aria-expanded="true"
                   class="_2bkNM"
-                  role="list"
+                  role="treeitem"
                 >
                   <span
-                    aria-controls=":jsnvw:2:"
+                    aria-controls="_r_2_"
                     aria-expanded="true"
                     aria-label="collapse JSON"
                     class="_3QHg2 _f10Tu _1MFti _1LId0"
                     role="button"
-                    tabindex="0"
+                    tabindex="-1"
                   />
                   <span
                     class="labelStylesDark"
@@ -604,20 +610,23 @@ exports[`FlowLogDetails should render 1`] = `
                   >
                     {
                   </span>
-                  <div
-                    id=":jsnvw:2:"
+                  <ul
+                    class="_1BXBN"
+                    id="_r_2_"
+                    role="group"
                   >
                     <div
+                      aria-expanded="true"
                       class="_2bkNM"
-                      role="list"
+                      role="treeitem"
                     >
                       <span
-                        aria-controls=":jsnvw:3:"
+                        aria-controls="_r_3_"
                         aria-expanded="true"
                         aria-label="collapse JSON"
                         class="_3QHg2 _f10Tu _1MFti _1LId0"
                         role="button"
-                        tabindex="0"
+                        tabindex="-1"
                       />
                       <span
                         class="labelStylesDark"
@@ -629,12 +638,14 @@ exports[`FlowLogDetails should render 1`] = `
                       >
                         [
                       </span>
-                      <div
-                        id=":jsnvw:3:"
+                      <ul
+                        class="_1BXBN"
+                        id="_r_3_"
+                        role="group"
                       >
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -649,7 +660,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -664,7 +675,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -679,7 +690,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -694,7 +705,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -709,7 +720,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -724,7 +735,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -739,7 +750,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -754,7 +765,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -762,14 +773,14 @@ exports[`FlowLogDetails should render 1`] = `
                             "operator.prometheus.io/name=calico-node-prometheus"
                           </span>
                         </div>
-                      </div>
+                      </ul>
                       <span
                         class="_gsbQL _3eOF8"
                       >
                         ]
                       </span>
                     </div>
-                  </div>
+                  </ul>
                   <span
                     class="_gsbQL _3eOF8"
                   >
@@ -783,7 +794,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -803,7 +814,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -823,7 +834,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -843,7 +854,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -863,7 +874,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -883,7 +894,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -902,16 +913,17 @@ exports[`FlowLogDetails should render 1`] = `
                   </span>
                 </div>
                 <div
+                  aria-expanded="true"
                   class="_2bkNM"
-                  role="list"
+                  role="treeitem"
                 >
                   <span
-                    aria-controls=":jsnvw:4:"
+                    aria-controls="_r_4_"
                     aria-expanded="true"
                     aria-label="collapse JSON"
                     class="_3QHg2 _f10Tu _1MFti _1LId0"
                     role="button"
-                    tabindex="0"
+                    tabindex="-1"
                   />
                   <span
                     class="labelStylesDark"
@@ -923,20 +935,23 @@ exports[`FlowLogDetails should render 1`] = `
                   >
                     {
                   </span>
-                  <div
-                    id=":jsnvw:4:"
+                  <ul
+                    class="_1BXBN"
+                    id="_r_4_"
+                    role="group"
                   >
                     <div
+                      aria-expanded="true"
                       class="_2bkNM"
-                      role="list"
+                      role="treeitem"
                     >
                       <span
-                        aria-controls=":jsnvw:5:"
+                        aria-controls="_r_5_"
                         aria-expanded="true"
                         aria-label="collapse JSON"
                         class="_3QHg2 _f10Tu _1MFti _1LId0"
                         role="button"
-                        tabindex="0"
+                        tabindex="-1"
                       />
                       <span
                         class="labelStylesDark"
@@ -948,12 +963,14 @@ exports[`FlowLogDetails should render 1`] = `
                       >
                         [
                       </span>
-                      <div
-                        id=":jsnvw:5:"
+                      <ul
+                        class="_1BXBN"
+                        id="_r_5_"
+                        role="group"
                       >
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -968,7 +985,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -983,7 +1000,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -998,7 +1015,7 @@ exports[`FlowLogDetails should render 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1006,14 +1023,14 @@ exports[`FlowLogDetails should render 1`] = `
                             "pod-template-generation=1"
                           </span>
                         </div>
-                      </div>
+                      </ul>
                       <span
                         class="_gsbQL _3eOF8"
                       >
                         ]
                       </span>
                     </div>
-                  </div>
+                  </ul>
                   <span
                     class="_gsbQL _3eOF8"
                   >
@@ -1027,7 +1044,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1047,7 +1064,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1067,7 +1084,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1087,7 +1104,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1107,7 +1124,7 @@ exports[`FlowLogDetails should render 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1120,7 +1137,7 @@ exports[`FlowLogDetails should render 1`] = `
                     null
                   </span>
                 </div>
-              </div>
+              </ul>
               <span
                 class="_gsbQL _3eOF8"
               >
@@ -1153,13 +1170,13 @@ exports[`FlowLogDetails should render json 1`] = `
         role="tablist"
       >
         <button
-          aria-controls="tabs-_r_1_--tabpanel-0"
+          aria-controls="tabs-_r_6_--tabpanel-0"
           aria-disabled="false"
           aria-selected="false"
           class="chakra-tabs__tab css-1mvhvrc"
           data-index="0"
           data-testid="tabs-tab"
-          id="tabs-_r_1_--tab-0"
+          id="tabs-_r_6_--tab-0"
           role="tab"
           tabindex="-1"
           type="button"
@@ -1167,13 +1184,13 @@ exports[`FlowLogDetails should render json 1`] = `
           Table
         </button>
         <button
-          aria-controls="tabs-_r_1_--tabpanel-1"
+          aria-controls="tabs-_r_6_--tabpanel-1"
           aria-disabled="false"
           aria-selected="true"
           class="chakra-tabs__tab css-1mvhvrc"
           data-index="1"
           data-testid="tabs-tab"
-          id="tabs-_r_1_--tab-1"
+          id="tabs-_r_6_--tab-1"
           role="tab"
           tabindex="0"
           type="button"
@@ -1185,11 +1202,11 @@ exports[`FlowLogDetails should render json 1`] = `
         class="chakra-tabs__tab-panels css-8atqhb"
       >
         <div
-          aria-labelledby="tabs-_r_1_--tab-0"
+          aria-labelledby="tabs-_r_6_--tab-0"
           class="chakra-tabs__tab-panel css-cbbbo5"
           data-testid="tabs-tab-panel"
           hidden=""
-          id="tabs-_r_1_--tabpanel-0"
+          id="tabs-_r_6_--tabpanel-0"
           role="tabpanel"
           tabindex="0"
         >
@@ -1511,22 +1528,25 @@ exports[`FlowLogDetails should render json 1`] = `
           </table>
         </div>
         <div
-          aria-labelledby="tabs-_r_1_--tab-1"
+          aria-labelledby="tabs-_r_6_--tab-1"
           class="chakra-tabs__tab-panel css-cbbbo5"
           data-testid="tabs-tab-panel"
-          id="tabs-_r_1_--tabpanel-1"
+          id="tabs-_r_6_--tabpanel-1"
           role="tabpanel"
           tabindex="0"
         >
           <div
+            aria-label="JSON view"
             class="containerStylesDark"
+            role="tree"
           >
             <div
+              aria-expanded="true"
               class="_2bkNM"
-              role="list"
+              role="treeitem"
             >
               <span
-                aria-controls=":jsnvw:6:"
+                aria-controls="_r_7_"
                 aria-expanded="true"
                 aria-label="collapse JSON"
                 class="_3QHg2 _f10Tu _1MFti _1LId0"
@@ -1538,12 +1558,14 @@ exports[`FlowLogDetails should render json 1`] = `
               >
                 {
               </span>
-              <div
-                id=":jsnvw:6:"
+              <ul
+                class="_1BXBN"
+                id="_r_7_"
+                role="group"
               >
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1563,7 +1585,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1583,7 +1605,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1603,7 +1625,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1623,7 +1645,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1643,7 +1665,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1663,7 +1685,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1683,7 +1705,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1703,7 +1725,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1722,16 +1744,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   </span>
                 </div>
                 <div
+                  aria-expanded="true"
                   class="_2bkNM"
-                  role="list"
+                  role="treeitem"
                 >
                   <span
-                    aria-controls=":jsnvw:7:"
+                    aria-controls="_r_8_"
                     aria-expanded="true"
                     aria-label="collapse JSON"
                     class="_3QHg2 _f10Tu _1MFti _1LId0"
                     role="button"
-                    tabindex="0"
+                    tabindex="-1"
                   />
                   <span
                     class="labelStylesDark"
@@ -1743,20 +1766,23 @@ exports[`FlowLogDetails should render json 1`] = `
                   >
                     {
                   </span>
-                  <div
-                    id=":jsnvw:7:"
+                  <ul
+                    class="_1BXBN"
+                    id="_r_8_"
+                    role="group"
                   >
                     <div
+                      aria-expanded="true"
                       class="_2bkNM"
-                      role="list"
+                      role="treeitem"
                     >
                       <span
-                        aria-controls=":jsnvw:8:"
+                        aria-controls="_r_9_"
                         aria-expanded="true"
                         aria-label="collapse JSON"
                         class="_3QHg2 _f10Tu _1MFti _1LId0"
                         role="button"
-                        tabindex="0"
+                        tabindex="-1"
                       />
                       <span
                         class="labelStylesDark"
@@ -1768,12 +1794,14 @@ exports[`FlowLogDetails should render json 1`] = `
                       >
                         [
                       </span>
-                      <div
-                        id=":jsnvw:8:"
+                      <ul
+                        class="_1BXBN"
+                        id="_r_9_"
+                        role="group"
                       >
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1788,7 +1816,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1803,7 +1831,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1818,7 +1846,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1833,7 +1861,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1848,7 +1876,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1863,7 +1891,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1878,7 +1906,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1893,7 +1921,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -1901,14 +1929,14 @@ exports[`FlowLogDetails should render json 1`] = `
                             "operator.prometheus.io/name=calico-node-prometheus"
                           </span>
                         </div>
-                      </div>
+                      </ul>
                       <span
                         class="_gsbQL _3eOF8"
                       >
                         ]
                       </span>
                     </div>
-                  </div>
+                  </ul>
                   <span
                     class="_gsbQL _3eOF8"
                   >
@@ -1922,7 +1950,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1942,7 +1970,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1962,7 +1990,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -1982,7 +2010,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -2002,7 +2030,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -2022,7 +2050,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -2041,16 +2069,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   </span>
                 </div>
                 <div
+                  aria-expanded="true"
                   class="_2bkNM"
-                  role="list"
+                  role="treeitem"
                 >
                   <span
-                    aria-controls=":jsnvw:9:"
+                    aria-controls="_r_a_"
                     aria-expanded="true"
                     aria-label="collapse JSON"
                     class="_3QHg2 _f10Tu _1MFti _1LId0"
                     role="button"
-                    tabindex="0"
+                    tabindex="-1"
                   />
                   <span
                     class="labelStylesDark"
@@ -2062,20 +2091,23 @@ exports[`FlowLogDetails should render json 1`] = `
                   >
                     {
                   </span>
-                  <div
-                    id=":jsnvw:9:"
+                  <ul
+                    class="_1BXBN"
+                    id="_r_a_"
+                    role="group"
                   >
                     <div
+                      aria-expanded="true"
                       class="_2bkNM"
-                      role="list"
+                      role="treeitem"
                     >
                       <span
-                        aria-controls=":jsnvw:10:"
+                        aria-controls="_r_b_"
                         aria-expanded="true"
                         aria-label="collapse JSON"
                         class="_3QHg2 _f10Tu _1MFti _1LId0"
                         role="button"
-                        tabindex="0"
+                        tabindex="-1"
                       />
                       <span
                         class="labelStylesDark"
@@ -2087,12 +2119,14 @@ exports[`FlowLogDetails should render json 1`] = `
                       >
                         [
                       </span>
-                      <div
-                        id=":jsnvw:10:"
+                      <ul
+                        class="_1BXBN"
+                        id="_r_b_"
+                        role="group"
                       >
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -2107,7 +2141,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -2122,7 +2156,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -2137,7 +2171,7 @@ exports[`FlowLogDetails should render json 1`] = `
                         </div>
                         <div
                           class="_2bkNM"
-                          role="listitem"
+                          role="treeitem"
                         >
                           <span
                             class="stringStylesDark"
@@ -2145,14 +2179,14 @@ exports[`FlowLogDetails should render json 1`] = `
                             "pod-template-generation=1"
                           </span>
                         </div>
-                      </div>
+                      </ul>
                       <span
                         class="_gsbQL _3eOF8"
                       >
                         ]
                       </span>
                     </div>
-                  </div>
+                  </ul>
                   <span
                     class="_gsbQL _3eOF8"
                   >
@@ -2166,7 +2200,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -2186,7 +2220,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -2206,7 +2240,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -2226,7 +2260,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -2246,7 +2280,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 </div>
                 <div
                   class="_2bkNM"
-                  role="listitem"
+                  role="treeitem"
                 >
                   <span
                     class="labelStylesDark"
@@ -2259,7 +2293,7 @@ exports[`FlowLogDetails should render json 1`] = `
                     null
                   </span>
                 </div>
-              </div>
+              </ul>
               <span
                 class="_gsbQL _3eOF8"
               >

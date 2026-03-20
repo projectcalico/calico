@@ -128,19 +128,23 @@ const ResizableHeader: React.FC<
                                 {...(onSortCustomHandler && {
                                     onClick: (e) => {
                                         onSortCustomHandler(column);
+                                        if (onSortClicked) {
+                                            onSortClicked();
+                                        }
                                         if (isCheckCell) {
                                             handleCheckboxClick(e);
                                         }
                                     },
                                 })}
-                                {...(onSortClicked && {
-                                    onClick: (e) => {
-                                        onSortClicked();
-                                        (column as ColumnInstance)
-                                            ?.getSortByToggleProps?.()
-                                            .onClick?.(e);
-                                    },
-                                })}
+                                {...(!onSortCustomHandler &&
+                                    onSortClicked && {
+                                        onClick: (e) => {
+                                            onSortClicked();
+                                            (column as ColumnInstance)
+                                                ?.getSortByToggleProps?.()
+                                                .onClick?.(e);
+                                        },
+                                    })}
                             >
                                 {isCheckCell ? (
                                     <Checkbox
