@@ -5,6 +5,8 @@
 #ifndef __CALI_EVENTS_TYPE_H__
 #define __CALI_EVENTS_TYPE_H__
 
+#define EVENT_LOST_EVENTS          0
+
 #define EVENT_PROTO_STATS       1
 #define EVENT_DNS               2
 #define EVENT_POLICY_VERDICT    3
@@ -13,7 +15,6 @@
 #define EVENT_DNS_L3            6
 
 #define EVENT_POLICY_VERDICT_V6    7
-#define EVENT_LOST_EVENTS          8
 
 /* We need the header to be 64bit of size so that any 64bit fields in the
  * message structures that embed this header are also aligned.

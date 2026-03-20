@@ -103,13 +103,16 @@ func SetMapSize(size int) {
 	maps.SetSize(MapName, size)
 }
 
-// DropsMap returns the shared array map used by the BPF side to track dropped events.
+// DropsMap returns the shared array map used by the BPF side to track dropped
+// events. The value is struct rb_drops_val { bpf_spin_lock(4) + pad(4) +
+// count(8) + last_flush_ts(8) } = 24 bytes. Go never reads this map; it
+// exists only for EnsureExists() to create/pin the map.
 func DropsMap() maps.Map {
 	return maps.NewPinnedMap(maps.MapParameters{
 		Type:       "array",
 		KeySize:    4,
-		ValueSize:  8,
-		MaxEntries: 2,
+		ValueSize:  24,
+		MaxEntries: 1,
 		Name:       DropsMapName,
 		Version:    1,
 	})
@@ -257,15 +260,23 @@ func roundupLen(dataLen uint32) uint32 {
 }
 
 // Drain reads and discards all available events from the ring buffer without
-// blocking. Returns the number of events drained.
+// blocking. Returns the number of events drained (discarded records are not
+// counted but are still consumed).
 func (rb *RingBuffer) Drain() int {
 	count := 0
 	for {
+		prevPos := atomic.LoadUint64(rb.consumerPos)
 		_, ok, _ := rb.readOne()
-		if !ok {
+		if ok {
+			count++
+			continue
+		}
+		// readOne returned ok=false. If consumer advanced, it was a
+		// discard/busy skip — keep draining. If it didn't advance, the
+		// ring is truly empty.
+		if atomic.LoadUint64(rb.consumerPos) == prevPos {
 			return count
 		}
-		count++
 	}
 }
 

@@ -32,6 +32,9 @@ import (
 type Type uint16
 
 const (
+	// TypeLostEvents is emitted by the BPF side when accumulated drop count
+	// is flushed through the ring buffer.
+	TypeLostEvents Type = 0
 	// TypeProtoStats protocol v4 stats
 	TypeProtoStats Type = 1
 	// TypeDNSEvent reports information on DNS packets
@@ -47,8 +50,6 @@ const (
 	TypeDNSEventL3 Type = 6
 	// TypePolicyVerdictV6 is emitted when a v6 policy program reaches a verdict
 	TypePolicyVerdictV6 Type = 7
-	// TypeLostEvents is emitted by the BPF side when accumulated drop count is flushed through the ring buffer.
-	TypeLostEvents Type = 8
 )
 
 func (t Type) String() string {

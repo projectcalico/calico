@@ -152,13 +152,11 @@ func TestRingBufFillup(t *testing.T) {
 	// Drain any leftover events from previous tests and reset the drops map
 	// so we start with a completely clean state.
 	rb.Drain()
-	zeroVal := make([]byte, 8)
-	for _, key := range []uint32{0, 1} {
-		k := make([]byte, 4)
-		binary.LittleEndian.PutUint32(k, key)
-		err := ringBufDropsMap.Update(k, zeroVal)
-		Expect(err).NotTo(HaveOccurred())
-	}
+	// Reset the single-entry drops map (struct rb_drops_val = 24 bytes).
+	k := make([]byte, 4) // key = 0
+	zeroVal := make([]byte, 24)
+	err = ringBufDropsMap.Update(k, zeroVal)
+	Expect(err).NotTo(HaveOccurred())
 
 	// Each event record in the ring buffer is: 8-byte ringbuf header + eventSize, rounded up to 8.
 	eventRecordSize := int(eventSize) + 8
@@ -221,7 +219,7 @@ func TestRingBufFillup(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	lostData := lostEvent.Data()
 	lostHdr := eventHdrFromBytes(lostData[0:8])
-	Expect(lostHdr.typ).To(Equal(uint32(8)), "Expected EVENT_LOST_EVENTS (type 8)")
+	Expect(lostHdr.typ).To(Equal(uint32(0)), "Expected EVENT_LOST_EVENTS (type 0)")
 	Expect(lostHdr.size).To(Equal(uint32(16)), "Expected event_header(8) + u64 count(8)")
 	droppedCount := binary.LittleEndian.Uint64(lostData[8:16])
 	Expect(droppedCount).To(Equal(uint64(1)),
