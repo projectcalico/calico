@@ -3,9 +3,9 @@
 #################################################################################################
 
 # The project Go version
-GO_VERSION=1.24.12
+GO_VERSION=1.24.13
 # Version of Kubernetes to use for dependencies, tests, rancher/kubectl, and kubectl binary release.
-K8S_VERSION=v1.32.11
+K8S_VERSION=v1.32.13
 # The version of LLVM to use for go-build and calico/base images.
 LLVM_VERSION=18.1.8
 # The version of calico/go-build and calico/base to use.

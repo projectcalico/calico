@@ -180,6 +180,7 @@ var _ = infrastructure.DatastoreDescribe(
 				Skip("Skipping QoS control tests on BPF mode.")
 			}
 			topt = infrastructure.DefaultTopologyOptions()
+			topt.FelixLogSeverity = "Debug"
 			tc, _ = infrastructure.StartNNodeTopology(2, topt, infra)
 
 			infra.AddDefaultAllow()
@@ -221,6 +222,14 @@ var _ = infrastructure.DatastoreDescribe(
 		}
 
 		Context("With bandwidth limits", func() {
+			BeforeEach(func() {
+				By("Removing all limits from workloads")
+				for i := range len(w) {
+					w[i].WorkloadEndpoint.Spec.QoSControls = nil
+					w[i].UpdateInInfra(infra)
+				}
+			})
+
 			getQdisc := func() string {
 				out, err := tc.Felixes[1].ExecOutput("tc", "qdisc")
 				logrus.Infof("tc qdisc output:\n%v", out)
@@ -308,6 +317,28 @@ var _ = infrastructure.DatastoreDescribe(
 				err = serverCmd.Process.Release()
 				Expect(err).NotTo(HaveOccurred())
 
+			})
+
+			It("should correctly apply bandwidth limits when a non-default qdisc exists (handle != 0)", func() {
+				By("Replacing the default noqueue qdisc with a non-default qdisc (handle 8001)")
+				out, err := tc.Felixes[1].ExecOutput("tc", "qdisc", "replace", "dev", w[1].InterfaceName, "root", "handle", "8001:", "noqueue")
+				logrus.Infof("tc qdisc replace output:\n%v", out)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Waiting for the config to appear in 'tc qdisc'")
+				Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc noqueue 8001: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+`))
+
+				By("Setting 10Mbps limit and 100Mbps peakrate for ingress on workload 1")
+				w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+					IngressBandwidth: 10000000,
+					IngressBurst:     300000000,
+					IngressPeakrate:  100000000,
+				}
+				w[1].UpdateInInfra(infra)
+
+				By("Waiting for the config to appear in 'tc qdisc'")
+				// ingress config should be present
+				Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc tbf \d+: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+ rate ` + regexp.QuoteMeta("10Mbit") + `.* peakrate ` + regexp.QuoteMeta("100Mbit")))
 			})
 		})
 

@@ -14,13 +14,13 @@ exports[`FlowLogDetails should render 1`] = `
         role="tablist"
       >
         <button
-          aria-controls="tabs-:r0:--tabpanel-0"
+          aria-controls="tabs-_r_0_--tabpanel-0"
           aria-disabled="false"
           aria-selected="true"
           class="chakra-tabs__tab css-1mvhvrc"
           data-index="0"
           data-testid="tabs-tab"
-          id="tabs-:r0:--tab-0"
+          id="tabs-_r_0_--tab-0"
           role="tab"
           tabindex="0"
           type="button"
@@ -28,13 +28,13 @@ exports[`FlowLogDetails should render 1`] = `
           Table
         </button>
         <button
-          aria-controls="tabs-:r0:--tabpanel-1"
+          aria-controls="tabs-_r_0_--tabpanel-1"
           aria-disabled="false"
           aria-selected="false"
           class="chakra-tabs__tab css-1mvhvrc"
           data-index="1"
           data-testid="tabs-tab"
-          id="tabs-:r0:--tab-1"
+          id="tabs-_r_0_--tab-1"
           role="tab"
           tabindex="-1"
           type="button"
@@ -46,10 +46,10 @@ exports[`FlowLogDetails should render 1`] = `
         class="chakra-tabs__tab-panels css-8atqhb"
       >
         <div
-          aria-labelledby="tabs-:r0:--tab-0"
+          aria-labelledby="tabs-_r_0_--tab-0"
           class="chakra-tabs__tab-panel css-18ruvq3"
           data-testid="tabs-tab-panel"
-          id="tabs-:r0:--tabpanel-0"
+          id="tabs-_r_0_--tabpanel-0"
           role="tabpanel"
           tabindex="0"
         >
@@ -371,11 +371,11 @@ exports[`FlowLogDetails should render 1`] = `
           </table>
         </div>
         <div
-          aria-labelledby="tabs-:r0:--tab-1"
+          aria-labelledby="tabs-_r_0_--tab-1"
           class="chakra-tabs__tab-panel css-18ruvq3"
           data-testid="tabs-tab-panel"
           hidden=""
-          id="tabs-:r0:--tabpanel-1"
+          id="tabs-_r_0_--tabpanel-1"
           role="tabpanel"
           tabindex="0"
         >
@@ -1153,13 +1153,13 @@ exports[`FlowLogDetails should render json 1`] = `
         role="tablist"
       >
         <button
-          aria-controls="tabs-:r1:--tabpanel-0"
+          aria-controls="tabs-_r_1_--tabpanel-0"
           aria-disabled="false"
           aria-selected="false"
           class="chakra-tabs__tab css-1mvhvrc"
           data-index="0"
           data-testid="tabs-tab"
-          id="tabs-:r1:--tab-0"
+          id="tabs-_r_1_--tab-0"
           role="tab"
           tabindex="-1"
           type="button"
@@ -1167,13 +1167,13 @@ exports[`FlowLogDetails should render json 1`] = `
           Table
         </button>
         <button
-          aria-controls="tabs-:r1:--tabpanel-1"
+          aria-controls="tabs-_r_1_--tabpanel-1"
           aria-disabled="false"
           aria-selected="true"
           class="chakra-tabs__tab css-1mvhvrc"
           data-index="1"
           data-testid="tabs-tab"
-          id="tabs-:r1:--tab-1"
+          id="tabs-_r_1_--tab-1"
           role="tab"
           tabindex="0"
           type="button"
@@ -1185,11 +1185,11 @@ exports[`FlowLogDetails should render json 1`] = `
         class="chakra-tabs__tab-panels css-8atqhb"
       >
         <div
-          aria-labelledby="tabs-:r1:--tab-0"
+          aria-labelledby="tabs-_r_1_--tab-0"
           class="chakra-tabs__tab-panel css-18ruvq3"
           data-testid="tabs-tab-panel"
           hidden=""
-          id="tabs-:r1:--tabpanel-0"
+          id="tabs-_r_1_--tabpanel-0"
           role="tabpanel"
           tabindex="0"
         >
@@ -1511,10 +1511,10 @@ exports[`FlowLogDetails should render json 1`] = `
           </table>
         </div>
         <div
-          aria-labelledby="tabs-:r1:--tab-1"
+          aria-labelledby="tabs-_r_1_--tab-1"
           class="chakra-tabs__tab-panel css-18ruvq3"
           data-testid="tabs-tab-panel"
-          id="tabs-:r1:--tabpanel-1"
+          id="tabs-_r_1_--tabpanel-1"
           role="tabpanel"
           tabindex="0"
         >
