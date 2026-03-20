@@ -192,19 +192,27 @@ echo "Wait for Calico to be ready on Windows nodes..."
 timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Windows nodes"
 
-# Create the kube-proxy-windows daemonset. Use 'crane ls' to use the latest patch release on the same minor version as KUBE_VERSION, in
-# case the kube-proxy-windows for the exact patch version hasn't been published yet
-KUBE_PROXY_WIN_TAG="$(${CRANE} ls sigwindowstools/kube-proxy | grep "^${KUBE_VERSION%.*}.*-calico.*" | sort -Vr | head -1 || true)"
-if [[ -n "${KUBE_PROXY_WIN_TAG}" ]]; then
-    KUBE_PROXY_WIN_VERSION="${KUBE_PROXY_WIN_TAG%%-calico*}"
-else
-    echo "WARNING: Unable to determine kube-proxy-windows tag for ${KUBE_VERSION}; falling back to ${KUBE_VERSION}" >&2
+# Create the kube-proxy-windows daemonset. First check if an exact match for KUBE_VERSION exists
+# in the kube-proxy image tags. If not, fall back to the latest patch release on the same minor
+# version, in case the kube-proxy-windows for the exact patch version hasn't been published yet.
+KUBE_PROXY_WIN_EXACT="$(${CRANE} ls sigwindowstools/kube-proxy | grep "^${KUBE_VERSION}-calico" | head -1 || true)"
+if [[ -n "${KUBE_PROXY_WIN_EXACT}" ]]; then
     KUBE_PROXY_WIN_VERSION="${KUBE_VERSION}"
+    echo "Found exact kube-proxy-windows tag for ${KUBE_VERSION}"
+else
+    echo "No exact kube-proxy-windows tag for ${KUBE_VERSION}; searching for latest patch on same minor version..."
+    KUBE_PROXY_WIN_TAG="$(${CRANE} ls sigwindowstools/kube-proxy | grep "^${KUBE_VERSION%.*}.*-calico.*" | sort -Vr | head -1 || true)"
+    if [[ -n "${KUBE_PROXY_WIN_TAG}" ]]; then
+        KUBE_PROXY_WIN_VERSION="${KUBE_PROXY_WIN_TAG%%-calico*}"
+    else
+        echo "WARNING: Unable to determine kube-proxy-windows tag for ${KUBE_VERSION}; falling back to ${KUBE_VERSION}" >&2
+        KUBE_PROXY_WIN_VERSION="${KUBE_VERSION}"
+    fi
 fi
 echo "Install kube-proxy-windows ${KUBE_PROXY_WIN_VERSION} (requested Kubernetes version ${KUBE_VERSION}) from sig-windows-tools"
-for iter in {1..5};do
-    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${KUBE_PROXY_WIN_VERSION}/g" | ${KUBECTL} apply -f - && break || echo "download error: retry $iter in 5s" && sleep 5;
-done;
+curl -sSf -L --retry 5 https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml -o kube-proxy-windows.yaml
+sed -i "s/KUBE_PROXY_VERSION/${KUBE_PROXY_WIN_VERSION}/g" kube-proxy-windows.yaml
+${KUBECTL} apply -f ./kube-proxy-windows.yaml
 
 echo "Wait for kube-proxy to be ready on Windows nodes..."
 timeout --foreground 1200 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"
