@@ -10,7 +10,7 @@ exports[`FlowLogDetails should render 1`] = `
     >
       <div
         aria-orientation="horizontal"
-        class="chakra-tabs__tablist css-3qqir2"
+        class="chakra-tabs__tablist css-8fgait"
         role="tablist"
       >
         <button
@@ -47,322 +47,322 @@ exports[`FlowLogDetails should render 1`] = `
       >
         <div
           aria-labelledby="tabs-_r_0_--tab-0"
-          class="chakra-tabs__tab-panel css-18ruvq3"
+          class="chakra-tabs__tab-panel css-cbbbo5"
           data-testid="tabs-tab-panel"
           id="tabs-_r_0_--tabpanel-0"
           role="tabpanel"
           tabindex="0"
         >
           <table
-            class="chakra-table css-akwolm"
+            class="chakra-table css-60vzui"
           >
             <tbody
               class="css-0"
             >
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   start_time
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   1698940029
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   end_time
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   1698940352
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_ip
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_namespace
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_name_aggr
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "prometheus-calico-node-prometheus-*"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_name
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "tigera-prometheus"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   nat_outgoing_ports
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_port
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_type
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "wep"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_labels
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   {"labels":["app.kubernetes.io/managed-by=prometheus-operator","app.kubernetes.io/version=2.45.0","app.kubernetes.io/instance=calico-node-prometheus","app.kubernetes.io/name=prometheus","statefulset.kubernetes.io/pod-name=prometheus-calico-node-prometheus-0","prometheus=calico-node-prometheus","controller-revision-hash=prometheus-calico-node-prometheus-858dcf7b65","operator.prometheus.io/shard=0","operator.prometheus.io/name=calico-node-prometheus"]}
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_ip
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_namespace
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_name_aggr
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "fluentd-node-*"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_name
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "tigera-fluentd"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_port
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   9081
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_type
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "wep"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_labels
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   {"labels":["app.kubernetes.io/name=fluentd-node","controller-revision-hash=7c887f95cb","k8s-app=fluentd-node","pod-template-generation=1"]}
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_service_namespace
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_service_name
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_service_port
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_service_port_num
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_domains
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
@@ -372,7 +372,7 @@ exports[`FlowLogDetails should render 1`] = `
         </div>
         <div
           aria-labelledby="tabs-_r_0_--tab-1"
-          class="chakra-tabs__tab-panel css-18ruvq3"
+          class="chakra-tabs__tab-panel css-cbbbo5"
           data-testid="tabs-tab-panel"
           hidden=""
           id="tabs-_r_0_--tabpanel-1"
@@ -1149,7 +1149,7 @@ exports[`FlowLogDetails should render json 1`] = `
     >
       <div
         aria-orientation="horizontal"
-        class="chakra-tabs__tablist css-3qqir2"
+        class="chakra-tabs__tablist css-8fgait"
         role="tablist"
       >
         <button
@@ -1186,7 +1186,7 @@ exports[`FlowLogDetails should render json 1`] = `
       >
         <div
           aria-labelledby="tabs-_r_1_--tab-0"
-          class="chakra-tabs__tab-panel css-18ruvq3"
+          class="chakra-tabs__tab-panel css-cbbbo5"
           data-testid="tabs-tab-panel"
           hidden=""
           id="tabs-_r_1_--tabpanel-0"
@@ -1194,315 +1194,315 @@ exports[`FlowLogDetails should render json 1`] = `
           tabindex="0"
         >
           <table
-            class="chakra-table css-akwolm"
+            class="chakra-table css-60vzui"
           >
             <tbody
               class="css-0"
             >
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   start_time
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   1698940029
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   end_time
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   1698940352
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_ip
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_namespace
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_name_aggr
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "prometheus-calico-node-prometheus-*"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_name
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "tigera-prometheus"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   nat_outgoing_ports
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_port
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_type
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "wep"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   source_labels
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   {"labels":["app.kubernetes.io/managed-by=prometheus-operator","app.kubernetes.io/version=2.45.0","app.kubernetes.io/instance=calico-node-prometheus","app.kubernetes.io/name=prometheus","statefulset.kubernetes.io/pod-name=prometheus-calico-node-prometheus-0","prometheus=calico-node-prometheus","controller-revision-hash=prometheus-calico-node-prometheus-858dcf7b65","operator.prometheus.io/shard=0","operator.prometheus.io/name=calico-node-prometheus"]}
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_ip
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_namespace
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_name_aggr
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "fluentd-node-*"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_name
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "tigera-fluentd"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_port
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   9081
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_type
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "wep"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_labels
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   {"labels":["app.kubernetes.io/name=fluentd-node","controller-revision-hash=7c887f95cb","k8s-app=fluentd-node","pod-template-generation=1"]}
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_service_namespace
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_service_name
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_service_port
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   "-"
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_service_port_num
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
               </tr>
               <tr
-                class="css-5kxthy"
+                class="css-x2z78s"
               >
                 <th
-                  class="css-1l1rd0u"
+                  class="css-hqr8ld"
                 >
                   dest_domains
                 </th>
                 <td
-                  class="css-12h06wr"
+                  class="css-9lo4gq"
                 >
                   null
                 </td>
@@ -1512,7 +1512,7 @@ exports[`FlowLogDetails should render json 1`] = `
         </div>
         <div
           aria-labelledby="tabs-_r_1_--tab-1"
-          class="chakra-tabs__tab-panel css-18ruvq3"
+          class="chakra-tabs__tab-panel css-cbbbo5"
           data-testid="tabs-tab-panel"
           id="tabs-_r_1_--tabpanel-1"
           role="tabpanel"

@@ -61,6 +61,7 @@ const defaultProps = {
     flowLogs: [],
     heightOffset: 0,
     totalItems: 0,
+    hasActiveFilters: false,
 };
 
 describe('FlowLogsList', () => {

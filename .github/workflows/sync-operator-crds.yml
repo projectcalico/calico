@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   sync:
+    if: github.repository == 'projectcalico/calico'
     runs-on: ubuntu-latest
     concurrency:
       group: sync-operator-crds-${{ matrix.branch }}
