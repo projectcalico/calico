@@ -138,7 +138,7 @@ export const useOmniFilterUrlState = <
         const key = `${urlParam}${paramPostfix}`;
 
         params.delete(key);
-        values.forEach((value) => {
+        values?.forEach((value) => {
             params.append(key, value);
         });
 
