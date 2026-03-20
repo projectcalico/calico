@@ -12,7 +12,14 @@ import {
     FilterKey,
     OmniFilterProperties,
 } from '@/utils/omniFilter';
-import { Flex, FormControl, Text, useDisclosure } from '@chakra-ui/react';
+import { InfoOutlineIcon } from '@chakra-ui/icons';
+import {
+    Flex,
+    FormControl,
+    Text,
+    Tooltip,
+    useDisclosure,
+} from '@chakra-ui/react';
 import React from 'react';
 import OmniFilterFooter from '../OmniFilterFooter';
 import { radioOptions } from './options';
@@ -93,7 +100,7 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                             clearButtonAriaLabel='Clear Action'
                             htmlFor={FilterKey.action}
                         >
-                            Action
+                            <Text lineHeight='1'>Action</Text>
                         </FormLabel>
                         <RadioToggle
                             name={FilterKey.action}
@@ -114,8 +121,14 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                             clearButtonAriaLabel='Clear Staged Action'
                             htmlFor={FilterKey.staged_action}
                         >
-                            Staged Action
+                            <Flex alignItems='center' gap={1}>
+                                <Text lineHeight='1'>Staged Action</Text>
+                                <Tooltip label='Filter by the action that would be applied if staged network policies were enforced now'>
+                                    <InfoOutlineIcon boxSize={3} />
+                                </Tooltip>
+                            </Flex>
                         </FormLabel>
+
                         <RadioToggle
                             value={actions.staged_action}
                             name={FilterKey.staged_action}

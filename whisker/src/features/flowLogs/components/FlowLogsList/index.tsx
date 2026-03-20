@@ -85,6 +85,9 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
         [storedColumns],
     );
 
+    const [sortState, setSortState] = React.useState([
+        { id: 'start_time', desc: true },
+    ]);
     const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] =
         React.useState(false);
     const shouldAnimate = useShouldAnimate(maxStartTime, totalItems);
@@ -169,6 +172,50 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                     shouldAnimate,
                 }}
                 onSortClicked={onSortClicked}
+                onSort={(column, setSortBy) => {
+                    const primarySort = sortState.find(
+                        (s) => s.id !== 'start_time' && s.id !== 'end_time',
+                    );
+
+                    if (column.id === 'start_time' && primarySort) {
+                        // toggle start_time direction as secondary sort
+                        const currentStartTime = sortState.find(
+                            (s) => s.id === 'start_time',
+                        );
+                        const newDesc = currentStartTime
+                            ? !currentStartTime.desc
+                            : false;
+                        const nextSort = [
+                            primarySort,
+                            { id: 'start_time', desc: newDesc },
+                        ];
+                        setSortState(nextSort);
+                        setSortBy(nextSort);
+                        return;
+                    }
+
+                    const nextSort = [];
+                    if (!column.isSorted) {
+                        nextSort.push({ id: column.id, desc: false });
+                    } else if (!column.isSortedDesc) {
+                        nextSort.push({ id: column.id, desc: true });
+                    }
+                    // preserve start_time as secondary sort
+                    if (
+                        column.id !== 'start_time' &&
+                        column.id !== 'end_time'
+                    ) {
+                        const currentStartTime = sortState.find(
+                            (s) => s.id === 'start_time',
+                        );
+                        nextSort.push({
+                            id: 'start_time',
+                            desc: currentStartTime?.desc ?? true,
+                        });
+                    }
+                    setSortState(nextSort);
+                    setSortBy(nextSort);
+                }}
                 keyProp='id'
                 initialState={{
                     sortBy: [{ id: 'start_time', desc: true }],

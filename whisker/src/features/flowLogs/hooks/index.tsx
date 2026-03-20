@@ -57,12 +57,10 @@ const bannerHeight = 40;
 const headerHeight = 60;
 const containerPadding = 5;
 const omniFiltersHeight = 46;
-const tabsHeight = 34;
 
 export const useFlowLogsHeightOffset = () => {
     const promoBanner = usePromoBanner();
-    const heights =
-        headerHeight + containerPadding + omniFiltersHeight + tabsHeight;
+    const heights = headerHeight + containerPadding + omniFiltersHeight;
 
     return promoBanner.state.isVisible ? heights + bannerHeight : heights;
 };
