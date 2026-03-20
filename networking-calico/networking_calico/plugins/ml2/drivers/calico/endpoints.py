@@ -129,13 +129,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 )
 
         # Delete orphaned LiveMigration resources.
-        for name, _, mod_revision in datamodel_v3.get_all(
-            "LiveMigration", namespace
-        ):
+        for name, _, mod_revision in datamodel_v3.get_all("LiveMigration", namespace):
             if name not in expected_lm_names:
-                LOG.warning(
-                    "LiveMigration resync: deleting orphaned LM %s", name
-                )
+                LOG.warning("LiveMigration resync: deleting orphaned LM %s", name)
                 self.delete_live_migration(name, mod_revision=mod_revision)
 
         LOG.info("LiveMigration resync done")

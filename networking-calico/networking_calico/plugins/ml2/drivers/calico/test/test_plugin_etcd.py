@@ -2080,7 +2080,6 @@ class TestLiveMigration(TestPluginEtcdBase):
         # Should NOT have called notify_port_active_direct.
         self.db.nova_notifier.notify_port_active_direct.assert_not_called()
 
-
     def _trigger_resync(self):
         """Trigger a periodic resync by advancing simulated time.
 
@@ -2107,12 +2106,8 @@ class TestLiveMigration(TestPluginEtcdBase):
         self._trigger_resync()
 
         # The resync should have created the LiveMigration and dest WEP.
-        self.assertIn(
-            self._lm_key(self.DEST_HOST), self.recent_writes
-        )
-        self.assertIn(
-            self._ep_key(self.DEST_HOST), self.recent_writes
-        )
+        self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
+        self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
 
     def test_resync_deletes_stale_live_migration(self):
         """Resync deletes orphaned LiveMigration with no migrating port."""
@@ -2125,28 +2120,34 @@ class TestLiveMigration(TestPluginEtcdBase):
             + self.namespace
             + "/stale--lm--name"
         )
-        self.etcd_data[stale_lm_key] = json.dumps({
-            "apiVersion": "projectcalico.org/v3",
-            "kind": "LiveMigration",
-            "metadata": {
-                "name": "stale--lm--name",
-                "namespace": self.namespace,
-            },
-            "spec": {
-                "source": {"workloadEndpoint": {
-                    "hostname": "old-host",
-                    "orchestratorID": "openstack",
-                    "workloadID": self.namespace + "/old-vm",
-                    "endpointID": "old-port-id",
-                }},
-                "target": {"workloadEndpoint": {
-                    "hostname": "new-host",
-                    "orchestratorID": "openstack",
-                    "workloadID": self.namespace + "/old-vm",
-                    "endpointID": "old-port-id",
-                }},
-            },
-        })
+        self.etcd_data[stale_lm_key] = json.dumps(
+            {
+                "apiVersion": "projectcalico.org/v3",
+                "kind": "LiveMigration",
+                "metadata": {
+                    "name": "stale--lm--name",
+                    "namespace": self.namespace,
+                },
+                "spec": {
+                    "source": {
+                        "workloadEndpoint": {
+                            "hostname": "old-host",
+                            "orchestratorID": "openstack",
+                            "workloadID": self.namespace + "/old-vm",
+                            "endpointID": "old-port-id",
+                        }
+                    },
+                    "target": {
+                        "workloadEndpoint": {
+                            "hostname": "new-host",
+                            "orchestratorID": "openstack",
+                            "workloadID": self.namespace + "/old-vm",
+                            "endpointID": "old-port-id",
+                        }
+                    },
+                },
+            }
+        )
 
         self._trigger_resync()
 
