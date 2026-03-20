@@ -1,4 +1,10 @@
-import { getV1Columns, getV2Columns, updateFirstFlowStartTime } from '..';
+import {
+    computeNextSort,
+    getTimeInSeconds,
+    getV1Columns,
+    getV2Columns,
+    updateFirstFlowStartTime,
+} from '..';
 
 describe('utils', () => {
     describe('getV1Columns', () => {
@@ -223,5 +229,159 @@ describe('updateFirstFlowStartTime', () => {
         expect(mockSetFirstFlowStartTime).toHaveBeenCalledWith(
             fixedTime.getTime(),
         );
+    });
+});
+
+describe('getTimeInSeconds', () => {
+    const NOW = 1700000000000;
+
+    beforeEach(() => {
+        jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('should return undefined when time is null', () => {
+        expect(getTimeInSeconds(null)).toBeUndefined();
+    });
+
+    it('should return -3600 when time is 0 (treated as far in the past)', () => {
+        expect(getTimeInSeconds(0)).toBe(-3600);
+    });
+
+    it('should return -3600 when time is more than one hour in the past', () => {
+        const twoHoursAgo = NOW - 2 * 3600 * 1000;
+        expect(getTimeInSeconds(twoHoursAgo)).toBe(-3600);
+    });
+
+    it('should return -3600 when time is exactly one millisecond beyond one hour ago', () => {
+        const justOverOneHour = NOW - 3600 * 1000 - 1;
+        expect(getTimeInSeconds(justOverOneHour)).toBe(-3600);
+    });
+
+    it('should return time in seconds when time is exactly one hour ago', () => {
+        const exactlyOneHour = NOW - 3600 * 1000;
+        expect(getTimeInSeconds(exactlyOneHour)).toBe(
+            Math.round(exactlyOneHour / 1000),
+        );
+    });
+
+    it('should return time in seconds when time is within the last hour', () => {
+        const thirtyMinutesAgo = NOW - 30 * 60 * 1000;
+        expect(getTimeInSeconds(thirtyMinutesAgo)).toBe(
+            Math.round(thirtyMinutesAgo / 1000),
+        );
+    });
+
+    it('should return time in seconds for a recent timestamp', () => {
+        const fiveSecondsAgo = NOW - 5000;
+        expect(getTimeInSeconds(fiveSecondsAgo)).toBe(
+            Math.round(fiveSecondsAgo / 1000),
+        );
+    });
+
+    it('should return time in seconds for a future timestamp', () => {
+        const future = NOW + 60000;
+        expect(getTimeInSeconds(future)).toBe(Math.round(future / 1000));
+    });
+});
+
+describe('computeNextSort', () => {
+    it('should toggle start_time desc when clicking start_time with an existing primary sort', () => {
+        const column = { id: 'start_time' };
+        const sortState = [
+            { id: 'action', desc: false },
+            { id: 'start_time', desc: true },
+        ];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'action', desc: false },
+            { id: 'start_time', desc: false },
+        ]);
+    });
+
+    it('should default start_time to desc=false when clicking start_time with a primary sort but no existing start_time entry', () => {
+        const column = { id: 'start_time' };
+        const sortState = [{ id: 'action', desc: true }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'action', desc: true },
+            { id: 'start_time', desc: false },
+        ]);
+    });
+
+    it('should add an unsorted column as ascending with start_time', () => {
+        const column = { id: 'action', isSorted: false };
+        const sortState = [{ id: 'start_time', desc: true }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'action', desc: false },
+            { id: 'start_time', desc: true },
+        ]);
+    });
+
+    it('should flip a sorted-asc column to descending', () => {
+        const column = { id: 'action', isSorted: true, isSortedDesc: false };
+        const sortState = [
+            { id: 'action', desc: false },
+            { id: 'start_time', desc: true },
+        ];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'action', desc: true },
+            { id: 'start_time', desc: true },
+        ]);
+    });
+
+    it('should remove the column sort when clicking a sorted-desc column, keeping start_time', () => {
+        const column = { id: 'action', isSorted: true, isSortedDesc: true };
+        const sortState = [
+            { id: 'action', desc: true },
+            { id: 'start_time', desc: false },
+        ];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([{ id: 'start_time', desc: false }]);
+    });
+
+    it('should default start_time to desc=true when there is no start_time in sortState', () => {
+        const column = { id: 'dest_port', isSorted: false };
+        const sortState = [{ id: 'action', desc: false }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'dest_port', desc: false },
+            { id: 'start_time', desc: true },
+        ]);
+    });
+
+    it('should not append start_time when clicking the start_time column without a primary sort', () => {
+        const column = { id: 'start_time', isSorted: false };
+        const sortState = [{ id: 'start_time', desc: true }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([{ id: 'start_time', desc: false }]);
+    });
+
+    it('should not append start_time when clicking the end_time column', () => {
+        const column = { id: 'end_time', isSorted: false };
+        const sortState = [{ id: 'start_time', desc: true }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([{ id: 'end_time', desc: false }]);
     });
 });

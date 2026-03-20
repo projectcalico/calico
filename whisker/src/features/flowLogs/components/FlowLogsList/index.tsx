@@ -8,7 +8,11 @@ import { ApiError } from '@/types/api';
 import { FlowLog } from '@/types/render';
 import React from 'react';
 import { CellProps } from 'react-table';
-import { useShouldAnimate, useStoredColumns } from '../../hooks';
+import {
+    useFlowLogSort,
+    useShouldAnimate,
+    useStoredColumns,
+} from '../../hooks';
 import FlowLogDetails from '../FlowLogDetails';
 import FlowLogsTableEmptyMessage from '../FlowLogsTableEmptyMessage';
 import {
@@ -85,9 +89,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
         [storedColumns],
     );
 
-    const [sortState, setSortState] = React.useState([
-        { id: 'start_time', desc: true },
-    ]);
+    const { handleSort, defaultSortState } = useFlowLogSort();
     const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] =
         React.useState(false);
     const shouldAnimate = useShouldAnimate(maxStartTime, totalItems);
@@ -172,53 +174,10 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                     shouldAnimate,
                 }}
                 onSortClicked={onSortClicked}
-                onSort={(column, setSortBy) => {
-                    const primarySort = sortState.find(
-                        (s) => s.id !== 'start_time' && s.id !== 'end_time',
-                    );
-
-                    if (column.id === 'start_time' && primarySort) {
-                        // toggle start_time direction as secondary sort
-                        const currentStartTime = sortState.find(
-                            (s) => s.id === 'start_time',
-                        );
-                        const newDesc = currentStartTime
-                            ? !currentStartTime.desc
-                            : false;
-                        const nextSort = [
-                            primarySort,
-                            { id: 'start_time', desc: newDesc },
-                        ];
-                        setSortState(nextSort);
-                        setSortBy(nextSort);
-                        return;
-                    }
-
-                    const nextSort = [];
-                    if (!column.isSorted) {
-                        nextSort.push({ id: column.id, desc: false });
-                    } else if (!column.isSortedDesc) {
-                        nextSort.push({ id: column.id, desc: true });
-                    }
-                    // preserve start_time as secondary sort
-                    if (
-                        column.id !== 'start_time' &&
-                        column.id !== 'end_time'
-                    ) {
-                        const currentStartTime = sortState.find(
-                            (s) => s.id === 'start_time',
-                        );
-                        nextSort.push({
-                            id: 'start_time',
-                            desc: currentStartTime?.desc ?? true,
-                        });
-                    }
-                    setSortState(nextSort);
-                    setSortBy(nextSort);
-                }}
+                onSort={handleSort}
                 keyProp='id'
                 initialState={{
-                    sortBy: [{ id: 'start_time', desc: true }],
+                    sortBy: defaultSortState,
                 }}
                 size='lg'
             />

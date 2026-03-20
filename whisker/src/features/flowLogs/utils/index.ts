@@ -4,6 +4,7 @@ import { FlowLog } from '@/types/render';
 import { v4 as uuid } from 'uuid';
 import { VisibleColumns } from '../components/FlowLogsList';
 import { ColumnName } from '../components/FlowLogsList/flowLogsTable';
+import { SortColumn, SortEntry } from '../hooks';
 
 export const transformFlowLogsResponse = ({
     start_time,
@@ -29,8 +30,16 @@ export const buildStreamPath = (
     return `flows${queryString}`;
 };
 
-export const getTimeInSeconds = (time: number | null) =>
-    Math.round((time ?? 0) / 1000) || undefined;
+const ONE_HOUR_IN_SECONDS = 3600;
+const ONE_HOUR_IN_MILLISECONDS = ONE_HOUR_IN_SECONDS * 1000;
+
+export const getTimeInSeconds = (time: number | null) => {
+    if (time !== null && time < Date.now() - ONE_HOUR_IN_MILLISECONDS) {
+        return -ONE_HOUR_IN_SECONDS;
+    }
+
+    return Math.round((time ?? 0) / 1000) || undefined;
+};
 
 export const getSeconds = (date: Date | null) => (date?.getTime() ?? 0) / 1000;
 
@@ -107,4 +116,37 @@ export const updateFirstFlowStartTime = (
         );
         setFirstFlowStartTime(sorted[data.length - 1].start_time.getTime());
     }
+};
+
+export const computeNextSort = (
+    column: SortColumn,
+    sortState: SortEntry[],
+): SortEntry[] => {
+    const primarySort = sortState.find(
+        (s) => s.id !== 'start_time' && s.id !== 'end_time',
+    );
+
+    if (column.id === 'start_time' && primarySort) {
+        const currentStartTime = sortState.find((s) => s.id === 'start_time');
+        const newDesc = currentStartTime ? !currentStartTime.desc : false;
+        return [primarySort, { id: 'start_time', desc: newDesc }];
+    }
+
+    const nextSort: SortEntry[] = [];
+
+    if (!column.isSorted) {
+        nextSort.push({ id: column.id, desc: false });
+    } else if (!column.isSortedDesc) {
+        nextSort.push({ id: column.id, desc: true });
+    }
+
+    if (column.id !== 'start_time' && column.id !== 'end_time') {
+        const currentStartTime = sortState.find((s) => s.id === 'start_time');
+        nextSort.push({
+            id: 'start_time',
+            desc: currentStartTime?.desc ?? true,
+        });
+    }
+
+    return nextSort;
 };

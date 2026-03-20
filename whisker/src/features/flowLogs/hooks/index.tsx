@@ -1,8 +1,38 @@
 import { FlowLog } from '@/types/render';
 import React from 'react';
-import { getSeconds, getV1Columns, getV2Columns } from '../utils';
+import {
+    computeNextSort,
+    getSeconds,
+    getV1Columns,
+    getV2Columns,
+} from '../utils';
 import { usePromoBanner } from '@/context/PromoBanner';
 import { VisibleColumns } from '../components/FlowLogsList';
+
+export type SortEntry = { id: string; desc: boolean };
+export type SortColumn = {
+    id: string;
+    isSorted?: boolean;
+    isSortedDesc?: boolean;
+};
+type SetSortBy = (sortBy: SortEntry[]) => void;
+
+const defaultSortState: SortEntry[] = [{ id: 'start_time', desc: true }];
+
+export const useFlowLogSort = () => {
+    const [sortState, setSortState] = React.useState(defaultSortState);
+
+    const handleSort = React.useCallback(
+        (column: SortColumn, setSortBy: SetSortBy) => {
+            const nextSort = computeNextSort(column, sortState);
+            setSortState(nextSort);
+            setSortBy(nextSort);
+        },
+        [sortState],
+    );
+
+    return { sortState, handleSort, defaultSortState };
+};
 
 export const useMaxStartTime = (flowLogs: FlowLog[]) => {
     const max = React.useRef(0);
