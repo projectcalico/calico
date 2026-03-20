@@ -639,7 +639,7 @@ blocks:
             - ./.semaphore/end-to-end/scripts/test_scripts/e2e-validation.sh
   - name: "E2E tests (cluster routing: BIRD)"
     run:
-      when: "true"
+      when: "true or change_in([hack/test/kind/**], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
       - Prerequisites
     task:
@@ -665,7 +665,7 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "E2E tests (cluster routing: Felix)"
     run:
-      when: "true"
+      when: "true or change_in([hack/test/kind/**], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
       - Prerequisites
     task:
