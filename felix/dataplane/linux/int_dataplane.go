@@ -48,6 +48,7 @@ import (
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	bpfringbuf "github.com/projectcalico/calico/felix/bpf/ringbuf"
 	bpfroutes "github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
@@ -922,6 +923,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
+	ringBufSize := calcRingBufSize(config.BPFExportBufferSizeMB)
+	bpfringbuf.SetMapSize(ringBufSize)
 
 	var (
 		bpfEndpointManager *bpfEndpointManager
@@ -935,11 +938,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// Initialisation needed for bpf.
 	if config.BPFEnabled && config.FlowLogsEnabled {
 		var err error
-		// convert buffer size to bytes.
-		ringSize := config.BPFExportBufferSizeMB * 1024 * 1024
-		bpfEvnt, err = events.New(events.SourcePerfEvents, ringSize)
+		bpfEvnt, err = events.New(events.SourceRingBuffer, ringBufSize)
 		if err != nil {
-			log.WithError(err).Error("Failed to create perf event")
+			log.WithError(err).Error("Failed to create ring buffer event source")
 		} else {
 			bpfEventPoller = newBpfEventPoller(bpfEvnt)
 		}
@@ -3106,4 +3107,33 @@ func conntrackMapSizeFromFile() (int, error) {
 		return 0, err
 	}
 	return strconv.Atoi(strings.TrimSpace(string(data)))
+}
+
+// calcRingBufSize computes the ring buffer size in bytes. It scales
+// BPFExportBufferSizeMB by the number of possible CPUs (to preserve the same
+// total capacity as the old per-CPU perf event array), then rounds up to the
+// next power of two (kernel requirement for ring buffer maps).
+func calcRingBufSize(perCPUMB int) int {
+	numCPUs := bpfmaps.NumPossibleCPUs()
+	sizeMB := perCPUMB * numCPUs
+
+	if sizeMB&(sizeMB-1) != 0 {
+		sizeMB = nextPowerOfTwo(sizeMB)
+		log.Infof("Ring buffer size rounded up to %d MB (next power of two)", sizeMB)
+	}
+
+	log.Infof("Ring buffer size: %d MB (%d MB per CPU x %d CPUs)", sizeMB, perCPUMB, numCPUs)
+	return sizeMB * 1024 * 1024
+}
+
+func nextPowerOfTwo(v int) int {
+	v--
+	v |= v >> 1
+	v |= v >> 2
+	v |= v >> 4
+	v |= v >> 8
+	v |= v >> 16
+	v |= v >> 32
+	v++
+	return v
 }
