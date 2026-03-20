@@ -373,8 +373,8 @@ Description:
 	if output, err := runCmd.CombinedOutput(); err != nil {
 		var errStr strings.Builder
 		fmt.Fprintf(&errStr, "Error executing command: %v\n", err)
-		for line := range strings.SplitSeq(string(output), "/n") {
-			fmt.Fprintf(&errStr, " | %s/n", line)
+		for line := range strings.SplitSeq(string(output), "\n") {
+			fmt.Fprintf(&errStr, " | %s\n", line)
 		}
 		return errors.New(errStr.String())
 	}
