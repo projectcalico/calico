@@ -199,13 +199,27 @@ func (m Map) GetHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
 
 // AllHandles returns an iterator over key/value handle pairs.
 func (m Map) AllHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	if m.ptr == nil {
-		return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {}
+	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
+		if m.ptr == nil {
+			return
+		}
+		if cm, ok := m.compact(); ok {
+			it := cm.iter()
+			for it.hasNext() {
+				k, v := it.next()
+				if !yield(k, v) {
+					return
+				}
+			}
+		} else {
+			fm := m.asFallback()
+			for k, v := range fm.m {
+				if !yield(k, v) {
+					return
+				}
+			}
+		}
 	}
-	if cm, ok := m.compact(); ok {
-		return cm.allHandles()
-	}
-	return m.asFallback().allHandles()
 }
 
 // AllStrings returns an iterator over key/value string pairs.

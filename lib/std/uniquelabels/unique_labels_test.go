@@ -36,13 +36,19 @@ import (
 // reference positions from the old key table, so read operations on those
 // Maps will return incorrect results.
 func unsafeTestOnlyReset() {
+	unsafeTestOnlyResetKeyTable()
+	unsafeTestOnlyResetCache()
+}
+
+func unsafeTestOnlyResetCache() {
+	recentCache.entries = [recentMapCacheSize]recentMapCacheEntry{}
+}
+
+func unsafeTestOnlyResetKeyTable() {
 	globalKeyTable = keyTable{}
 	globalKeyTable.snap.Store(&keyTableSnap{
 		byHandle: make(map[uniquestr.Handle]uint8),
 	})
-	recentCache = recentMapCache{
-		seed: maphash.MakeSeed(),
-	}
 }
 
 func TestInternedLabelsJSONRoundTrip(t *testing.T) {
@@ -1048,7 +1054,7 @@ func BenchmarkMake(b *testing.B) {
 		Make(input) // Prime the cache.
 		b.ResetTimer()
 		b.ReportAllocs()
-		for range b.N {
+		for b.Loop() {
 			Make(input)
 		}
 	})
@@ -1059,17 +1065,12 @@ func BenchmarkMake(b *testing.B) {
 		Make(input)
 		b.ResetTimer()
 		b.ReportAllocs()
-		for range b.N {
-			// Evict by storing a dummy entry at the same slot, then call Make.
-			recentCache.Store(0, Map{}) // Clobber slot 0 (may or may not be input's slot).
+		for b.Loop() {
 			// Use a fresh cache to guarantee a miss.
-			unsafeTestOnlyReset()
-			// Re-register keys (not counted as the interesting part, but
-			// necessary for a fair comparison with the old code).
-			Make(map[string]string{"primer": "x"})
-			for k := range input {
-				Make(map[string]string{k: "x"})
-			}
+			b.StopTimer()
+			unsafeTestOnlyResetCache()
+			b.StartTimer()
+
 			Make(input)
 		}
 	})

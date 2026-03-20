@@ -15,7 +15,6 @@
 package uniquelabels
 
 import (
-	"iter"
 	"math/bits"
 	"unsafe"
 
@@ -111,17 +110,6 @@ func (it *compactIter) next() (uniquestr.Handle, uniquestr.Handle) {
 	it.remaining &= it.remaining - 1
 	it.arrayIdx++
 	return k, v
-}
-
-func (cm *compactMap) allHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
-		it := cm.iter()
-		for it.hasNext() {
-			if !yield(it.next()) {
-				return
-			}
-		}
-	}
 }
 
 // marshalJSON writes a JSON object directly from the compact bitfield.

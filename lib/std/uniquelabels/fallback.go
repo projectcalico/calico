@@ -15,8 +15,6 @@
 package uniquelabels
 
 import (
-	"iter"
-
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
 
@@ -35,16 +33,6 @@ func (fm *fallbackMap) len() int {
 func (fm *fallbackMap) getHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
 	v, ok := fm.m[h]
 	return v, ok
-}
-
-func (fm *fallbackMap) allHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
-		for k, v := range fm.m {
-			if !yield(k, v) {
-				return
-			}
-		}
-	}
 }
 
 // marshalJSON writes a JSON object from the fallback handle map.
