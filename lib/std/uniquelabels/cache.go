@@ -21,8 +21,8 @@ import (
 
 // recentCache is a small, direct-mapped cache of recently-computed Map values.
 // It is common for Make to be called in quick succession with the same input
-// from different call sites. Since the keys and values are interned, the
-// handleMap is the main allocation that can be avoided by caching.
+// from different call sites (including UnmarshalJSON). The cache avoids
+// redundant compact-struct allocations and key-table lookups.
 var recentCache = recentMapCache{
 	seed: maphash.MakeSeed(),
 }
@@ -54,6 +54,21 @@ func (c *recentMapCache) Lookup(m map[string]string) (Map, uint64, bool) {
 		return entry.m, hash, true
 	}
 	return Map{}, hash, false
+}
+
+// LookupByHash checks the cache for a Map matching the given hash.
+// The validate function is called on a candidate to confirm it matches.
+// Returns the cached Map and true on hit, or the zero Map and false on miss.
+func (c *recentMapCache) LookupByHash(hash uint64, validate func(Map) bool) (Map, bool) {
+	idx := hash & (recentMapCacheSize - 1)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := c.entries[idx]
+	if entry.hash == hash && validate(entry.m) {
+		return entry.m, true
+	}
+	return Map{}, false
 }
 
 // Store stores a Map in the cache at the slot determined by hash.

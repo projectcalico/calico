@@ -12,7 +12,10 @@ include ../lib.Makefile
 gen-mocks:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd httpmachinery && mockery'
 
-gen-files: gen-mocks
+gen-compact:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd std/uniquelabels && go generate'
+
+gen-files: gen-mocks gen-compact
 
 ci: static-checks ut
 
