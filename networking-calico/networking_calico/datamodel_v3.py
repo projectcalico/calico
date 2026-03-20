@@ -235,7 +235,7 @@ def get_uid(resource_kind, namespace, name):
     try:
         value, _ = _get_with_metadata(resource_kind, namespace, name)
         return value.get("metadata", {}).get("uid", "unknown")
-    except Exception:
+    except etcdv3.KeyNotFound:
         return "unknown"
 
 
