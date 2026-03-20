@@ -4927,12 +4927,22 @@ func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 		children:    make(map[int]*bpfIfaceNode),
 	}
 
-	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
-		trees.addIfaceStandAlone(intf)
-	} else if attrs.MasterIndex != 0 {
+	// Veth and netkit devices use ParentIndex to reference their peer, not a
+	// real parent in a device hierarchy (bond/bridge). Ignore ParentIndex
+	// for these types, but still respect MasterIndex — a veth can be
+	// genuinely enslaved to a bond or bridge.
+	isVethLike := false
+	switch link.Type() {
+	case "veth", "netkit":
+		isVethLike = true
+	}
+
+	if attrs.MasterIndex != 0 {
 		trees.addIfaceWithMaster(intf, attrs.MasterIndex)
-	} else if attrs.ParentIndex != 0 {
+	} else if attrs.ParentIndex != 0 && !isVethLike {
 		trees.addIfaceWithChild(intf, attrs.ParentIndex)
+	} else {
+		trees.addIfaceStandAlone(intf)
 	}
 }
 
