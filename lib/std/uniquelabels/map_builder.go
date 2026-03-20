@@ -25,34 +25,33 @@ import (
 // kvHandle is a key-value pair of interned handles.
 type kvHandle struct{ k, v uniquestr.Handle }
 
-// mapBuilder collects kvHandle pairs and builds a Map.  The kvArr
-// backing array lives on the stack for maps up to maxKeyTableSize
-// entries; larger maps transparently promote to the heap via append.
-type mapBuilder struct {
-	kvArr [maxKeyTableSize]kvHandle
-	kvs   []kvHandle
-}
-
-// init prepares the builder for use.  Must be called before Put.
-func (b *mapBuilder) init() {
-	b.kvs = b.kvArr[:0]
-}
-
-// Put appends a key-value handle pair.
-func (b *mapBuilder) Put(k, v uniquestr.Handle) {
-	b.kvs = append(b.kvs, kvHandle{k, v})
-}
+// mapBuilder is a slice of kvHandle pairs backed by a caller-provided
+// stack array.  Because a slice header is only 24 bytes, value-receiver
+// methods do not force the (large) backing array to escape to the heap.
+// Non-inlineable methods like build() and Finish() receive a cheap copy
+// of the slice header rather than a pointer to the backing storage.
+//
+// Callers declare the backing array on their own stack and slice it:
+//
+//	var buf [maxKeyTableSize]kvHandle
+//	mb := mapBuilder(buf[:0])
+//	mb = append(mb, kvHandle{k, v})
+//
+// append must be done at the call site (not in a method) to keep the
+// backing array on the stack; a method returning append's result would
+// cause the backing array to escape.
+type mapBuilder []kvHandle
 
 // Len returns the number of pairs collected so far.
-func (b *mapBuilder) Len() int {
-	return len(b.kvs)
+func (b mapBuilder) Len() int {
+	return len(b)
 }
 
 // build constructs a Map from the collected pairs.  It tries the
 // compact representation first (all keys known in the key table),
 // falling back to a handleMap + registerKeys or plain fallbackMap.
-func (b *mapBuilder) build() Map {
-	n := len(b.kvs)
+func (b mapBuilder) build() Map {
+	n := len(b)
 
 	// Try compact: all keys already known in the key table.
 	if n <= maxKeyTableSize {
@@ -60,7 +59,7 @@ func (b *mapBuilder) build() Map {
 		var bf uint64
 		var valsByPos [maxKeyTableSize]uniquestr.Handle
 		allKnown := true
-		for _, kv := range b.kvs {
+		for _, kv := range b {
 			if pos, ok := snap.byHandle[kv.k]; ok {
 				bf |= uint64(1) << pos
 				valsByPos[pos] = kv.v
@@ -84,7 +83,7 @@ func (b *mapBuilder) build() Map {
 
 	// Fallback: build a handleMap, try registerKeys for compact.
 	hm := make(handleMap, n)
-	for _, kv := range b.kvs {
+	for _, kv := range b {
 		hm[kv.k] = kv.v
 	}
 	if bf, vals, ok := globalKeyTable.registerKeys(hm); ok {
@@ -94,7 +93,7 @@ func (b *mapBuilder) build() Map {
 }
 
 // Finish builds the Map, consulting and populating the cache.
-func (b *mapBuilder) Finish() Map {
+func (b mapBuilder) Finish() Map {
 	hash := b.computeHash()
 	if cached, ok := recentCache.LookupByHash(hash, b.validate); ok {
 		return cached
@@ -106,11 +105,11 @@ func (b *mapBuilder) Finish() Map {
 
 // computeHash computes an order-independent hash of the collected
 // pairs using the same XOR-of-per-pair strategy as hashMapStringString.
-func (b *mapBuilder) computeHash() uint64 {
+func (b mapBuilder) computeHash() uint64 {
 	var combined uint64
 	var h maphash.Hash
 	h.SetSeed(recentCache.seed)
-	for _, kv := range b.kvs {
+	for _, kv := range b {
 		h.Reset()
 		h.WriteString(kv.k.Value())
 		h.WriteByte(0)
@@ -122,11 +121,11 @@ func (b *mapBuilder) computeHash() uint64 {
 
 // validate checks whether a cached Map contains exactly the pairs
 // in the builder.  Used as the validator callback for LookupByHash.
-func (b *mapBuilder) validate(m Map) bool {
-	if m.Len() != len(b.kvs) {
+func (b mapBuilder) validate(m Map) bool {
+	if m.Len() != len(b) {
 		return false
 	}
-	for _, kv := range b.kvs {
+	for _, kv := range b {
 		if v, ok := m.GetHandle(kv.k); !ok || v != kv.v {
 			return false
 		}

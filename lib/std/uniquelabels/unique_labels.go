@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"math/bits"
 	"unsafe"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
@@ -116,10 +117,10 @@ func Make(m map[string]string) Map {
 	if cached, hash, ok := recentCache.Lookup(m); ok {
 		return cached
 	} else {
-		var b mapBuilder
-		b.init()
+		var buf [maxKeyTableSize]kvHandle
+		b := mapBuilder(buf[:0])
 		for k, v := range m {
-			b.Put(uniquestr.Make(k), uniquestr.Make(v))
+			b = append(b, kvHandle{uniquestr.Make(k), uniquestr.Make(v)})
 		}
 		result := b.build()
 		recentCache.Store(hash, result)
@@ -278,26 +279,46 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 		// Always iterate over the shorter map. This reduces the number of
 		// iterations and, if the shorter map is a subset of the larger, we
 		// can return the smaller map rather than duplicating.
-		return IntersectAndFilter(b, a, include)
+		a, b = b, a
 	}
 
 	if include == nil {
 		include = noOpFilter
 	}
 
-	// Single pass: collect matching pairs into the builder.  Put is
-	// just an append to a stack-backed slice, so the overhead vs the
-	// old first-pass check is one 16-byte stack write per matching
-	// entry — negligible next to the GetHandle lookups.
-	var mb mapBuilder
-	mb.init()
+	// Single pass: collect matching pairs into the builder.  We iterate
+	// the compact/fallback representation directly (not via range-over-
+	// function) so that mb and buf stay on the stack.
+	var buf [maxKeyTableSize]kvHandle
+	mb := mapBuilder(buf[:0])
 	aLen := a.Len()
-	for k, v := range a.AllHandles() {
-		if !include(k, v) {
-			continue
+	if cm, ok := a.compact(); ok {
+		kb := cm.keyBits()
+		snap := globalKeyTable.currentSnap()
+		vals := cm.slice()
+		remaining := kb
+		arrayIdx := 0
+		for remaining != 0 {
+			pos := bits.TrailingZeros64(remaining)
+			k := snap.byIndex[pos]
+			v := vals[arrayIdx]
+			remaining &= remaining - 1
+			arrayIdx++
+			if !include(k, v) {
+				continue
+			}
+			if ov, ok := b.GetHandle(k); ok && ov == v {
+				mb = append(mb, kvHandle{k, v})
+			}
 		}
-		if ov, ok := b.GetHandle(k); ok && ov == v {
-			mb.Put(k, v)
+	} else if fm := a.asFallback(); fm != nil {
+		for k, v := range fm.m {
+			if !include(k, v) {
+				continue
+			}
+			if ov, ok := b.GetHandle(k); ok && ov == v {
+				mb = append(mb, kvHandle{k, v})
+			}
 		}
 	}
 	if mb.Len() == aLen {

@@ -537,10 +537,10 @@ func TestCompactEqualsOptimization(t *testing.T) {
 	// Build a second Map via mapBuilder directly to bypass the cache,
 	// ensuring the test exercises the compact value-comparison path
 	// rather than returning early via pointer equality.
-	var b mapBuilder
-	b.init()
+	var buf [maxKeyTableSize]kvHandle
+	b := mapBuilder(buf[:0])
 	for k, v := range input {
-		b.Put(uniquestr.Make(k), uniquestr.Make(v))
+		b = append(b, kvHandle{uniquestr.Make(k), uniquestr.Make(v)})
 	}
 	m2 := b.build()
 	m3 := Make(map[string]string{"eq-a": "1", "eq-b": "99"})
