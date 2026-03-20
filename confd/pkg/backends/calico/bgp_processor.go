@@ -225,6 +225,18 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 		}
 	}
 
+	config.SetMetricForBGPRoutes = []string{
+		"  if (defined(source) && (source = RTS_BGP) && !defined(krt_metric)) then {",
+		fmt.Sprintf("      krt_metric = %d;", config.NormalRoutePriority),
+		"      if (defined(bgp_local_pref)) then {",
+		fmt.Sprintf("          krt_metric = %d - bgp_local_pref;", birdIntMaxValue),
+		"      }",
+		fmt.Sprintf("      if (krt_metric < %d) then {", config.NormalRoutePriority),
+		fmt.Sprintf("          preference = %d;", birdOverridePreference),
+		"      }",
+		"  }",
+	}
+
 	return nil
 }
 
