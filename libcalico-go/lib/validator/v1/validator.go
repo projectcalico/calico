@@ -53,7 +53,7 @@ var (
 	overlapsV4LinkLocal           = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
 	overlapsV6LinkLocal           = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
 	protocolPortsMsg              = "rules that specify ports must set protocol to TCP or UDP or SCTP"
-	protocolSingleOrRangePortsMsg = "rules with single port or port range must set protocol to TCP or UDP or SCTP"
+	protocolSingleOrRangePortsMsg = "rules with numeric port or port range must set protocol to TCP or UDP or SCTP"
 
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),

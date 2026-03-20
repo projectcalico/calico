@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -117,7 +117,7 @@ var (
 	overlapsV4LinkLocal           = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
 	overlapsV6LinkLocal           = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
 	protocolPortsMsg              = "rules that specify ports must set protocol to TCP or UDP or SCTP"
-	protocolSingleOrRangePortsMsg = "rules with single port or port range must set protocol to TCP or UDP or SCTP"
+	protocolSingleOrRangePortsMsg = "rules with numeric port or port range must set protocol to TCP or UDP or SCTP"
 	protocolIcmpMsg               = "rules that specify ICMP fields must set protocol to ICMP"
 	protocolAndHTTPMsg            = "rules that specify HTTP fields must set protocol to TCP or empty"
 	globalSelectorEntRule         = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
