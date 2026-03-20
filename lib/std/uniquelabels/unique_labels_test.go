@@ -1033,3 +1033,51 @@ func TestFallbackFallbackEquals(t *testing.T) {
 		t.Error("fallback maps with different values should not be equal")
 	}
 }
+
+func BenchmarkIntersectAndFilter(b *testing.B) {
+	const nKeys = 15
+	all := make(map[string]string, nKeys)
+	for i := range nKeys {
+		all[fmt.Sprintf("example.com/label-%d", i)] = fmt.Sprintf("value-%d", i)
+	}
+
+	// Build a filter that excludes ~half the keys.
+	excludeSet := make(map[string]bool, nKeys)
+	i := 0
+	for k := range all {
+		if i%2 == 0 {
+			excludeSet[k] = true
+		}
+		i++
+	}
+	halfFilter := func(k uniquestr.Handle, _ uniquestr.Handle) bool {
+		return !excludeSet[k.Value()]
+	}
+
+	for _, tc := range []struct {
+		name   string
+		filter func(uniquestr.Handle, uniquestr.Handle) bool
+		aType  string // "compact" or "fallback"
+	}{
+		{"compact/no-filter", nil, "compact"},
+		{"compact/with-filter", halfFilter, "compact"},
+		{"fallback/no-filter", nil, "fallback"},
+		{"fallback/with-filter", halfFilter, "fallback"},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			unsafeTestOnlyReset()
+			var a Map
+			if tc.aType == "compact" {
+				a = Make(all)
+			} else {
+				a = makeFallback(all)
+			}
+			bMap := Make(all)
+			b.ResetTimer()
+			b.ReportAllocs()
+			for range b.N {
+				IntersectAndFilter(a, bMap, tc.filter)
+			}
+		})
+	}
+}
