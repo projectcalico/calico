@@ -90,6 +90,82 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         # penalty the first time we need to annotate a port on a cold start.
         self.cache_port_project_data()
 
+    def resync(self, context):
+        super(WorkloadEndpointSyncer, self).resync(context)
+        self._resync_live_migrations(context)
+
+    def _resync_live_migrations(self, context):
+        """Ensure LiveMigration resources and destination WEPs are consistent.
+
+        For each Neutron port with migrating_to set, ensure a destination WEP
+        and LiveMigration resource exist.  For each LiveMigration in etcd that
+        doesn't correspond to a migrating port, delete it.
+        """
+        LOG.info("Starting LiveMigration resync")
+        namespace = self.namespace
+
+        # Build the set of LiveMigration names that should exist, based on
+        # Neutron ports with migrating_to set.
+        expected_lm_names = set()
+        with self.txn_from_context(context, "resync-live-migrations"):
+            for port in self.db.get_ports(context):
+                if not _port_is_endpoint_port(port):
+                    continue
+                dest_host = port.get("binding:profile", {}).get("migrating_to")
+                if dest_host is None:
+                    continue
+
+                dest_port = port.copy()
+                dest_port["binding:host_id"] = dest_host
+                dest_wep_name = endpoint_name(dest_port)
+                expected_lm_names.add(dest_wep_name)
+
+                # Ensure destination WEP exists.
+                self.write_endpoint(dest_port, context, reread=False)
+
+                # Ensure LiveMigration resource exists.
+                datamodel_v3.put(
+                    "LiveMigration",
+                    namespace,
+                    dest_wep_name,
+                    {
+                        "source": {
+                            "workloadEndpoint": {
+                                "hostname": port["binding:host_id"],
+                                "orchestratorID": "openstack",
+                                "workloadID": namespace + "/" + port["device_id"],
+                                "endpointID": port["id"],
+                            },
+                        },
+                        "target": {
+                            "workloadEndpoint": {
+                                "hostname": dest_host,
+                                "orchestratorID": "openstack",
+                                "workloadID": namespace + "/" + port["device_id"],
+                                "endpointID": port["id"],
+                            },
+                        },
+                    },
+                )
+                LOG.info(
+                    "LiveMigration resync: ensured LM and dest WEP for %s",
+                    dest_wep_name,
+                )
+
+        # Delete orphaned LiveMigration resources.
+        for name, _, mod_revision in datamodel_v3.get_all(
+            "LiveMigration", namespace
+        ):
+            if name not in expected_lm_names:
+                LOG.warning(
+                    "LiveMigration resync: deleting orphaned LM %s", name
+                )
+                datamodel_v3.delete(
+                    "LiveMigration", namespace, name, mod_revision=mod_revision
+                )
+
+        LOG.info("LiveMigration resync done")
+
     def delete_legacy_etcd_data(self):
         if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
             datamodel_v3.delete_legacy(self.resource_kind, "")
