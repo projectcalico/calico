@@ -69,15 +69,16 @@ func (b mapBuilder) build() Map {
 			}
 		}
 		if allKnown {
-			// Pack values in bit order.
-			vals := make([]uniquestr.Handle, bits.OnesCount64(bf))
+			// Allocate the compact struct and pack values in bit order.
+			cm := allocCompact(bf|topBit, bits.OnesCount64(bf))
+			vals := cm.slice()
 			remaining := bf
 			for i := range vals {
 				pos := uint(bits.TrailingZeros64(remaining))
 				vals[i] = valsByPos[pos]
 				remaining &= remaining - 1
 			}
-			return Map{ptr: allocCompact(bf|topBit, vals)}
+			return Map{ptr: unsafe.Pointer(cm)}
 		}
 	}
 
@@ -86,8 +87,8 @@ func (b mapBuilder) build() Map {
 	for _, kv := range b {
 		hm[kv.k] = kv.v
 	}
-	if bf, vals, ok := globalKeyTable.registerKeys(hm); ok {
-		return Map{ptr: allocCompact(bf, vals)}
+	if cm, ok := globalKeyTable.registerKeys(hm); ok {
+		return Map{ptr: unsafe.Pointer(cm)}
 	}
 	return Map{ptr: unsafe.Pointer(&fallbackMap{m: hm})}
 }

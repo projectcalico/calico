@@ -130,13 +130,13 @@ func (t *keyTable) currentSnap() *keyTableSnap {
 }
 
 // registerKeys attempts to build a compact map from the pre-interned
-// handleMap.  On success it returns (bitfield|topBit, values, true).
+// handleMap.  On success it returns the *compactMap and true.
 // If the table is full and some keys can't be registered, it returns
-// (0, nil, false).
+// (nil, false).
 //
 // The caller must intern keys/values into a handleMap before calling
 // this method so that uniquestr.Make is called at most once per key.
-func (t *keyTable) registerKeys(hm handleMap) (uint64, []uniquestr.Handle, bool) {
+func (t *keyTable) registerKeys(hm handleMap) (*compactMap, bool) {
 	snap := t.snap.Load()
 
 	// Fast path (lock-free): all keys already known.
@@ -148,11 +148,11 @@ func (t *keyTable) registerKeys(hm handleMap) (uint64, []uniquestr.Handle, bool)
 			return t.registerKeysSlow(hm)
 		}
 	}
-	return bf | topBit, buildValues(snap, bf, hm), true
+	return buildCompact(snap, bf, hm), true
 }
 
 // registerKeysSlow is the mutex-protected path for registering new keys.
-func (t *keyTable) registerKeysSlow(hm handleMap) (uint64, []uniquestr.Handle, bool) {
+func (t *keyTable) registerKeysSlow(hm handleMap) (*compactMap, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -171,10 +171,10 @@ func (t *keyTable) registerKeysSlow(hm handleMap) (uint64, []uniquestr.Handle, b
 		for k := range hm {
 			bf |= uint64(1) << snap.byHandle[k]
 		}
-		return bf | topBit, buildValues(snap, bf, hm), true
+		return buildCompact(snap, bf, hm), true
 	}
 	if snap.len+unknowns > maxKeyTableSize {
-		return 0, nil, false
+		return nil, false
 	}
 
 	// Clone and register new keys.
@@ -192,16 +192,18 @@ func (t *keyTable) registerKeysSlow(hm handleMap) (uint64, []uniquestr.Handle, b
 		}
 	}
 	t.snap.Store(snap)
-	return bf | topBit, buildValues(snap, bf, hm), true
+	return buildCompact(snap, bf, hm), true
 }
 
-// buildValues creates the compact value array ordered by bit position.
-func buildValues(snap *keyTableSnap, bf uint64, hm handleMap) []uniquestr.Handle {
-	vals := make([]uniquestr.Handle, bits.OnesCount64(bf))
+// buildCompact allocates a compactMap and populates its values directly,
+// avoiding an intermediate slice allocation.
+func buildCompact(snap *keyTableSnap, bf uint64, hm handleMap) *compactMap {
+	cm := allocCompact(bf|topBit, len(hm))
+	vals := cm.slice()
 	for k, v := range hm {
 		pos := snap.byHandle[k]
 		arrayIdx := bits.OnesCount64(bf & ((uint64(1) << pos) - 1))
 		vals[arrayIdx] = v
 	}
-	return vals
+	return cm
 }

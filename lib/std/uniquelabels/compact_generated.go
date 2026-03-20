@@ -323,328 +323,266 @@ type compact63 struct {
 	values   [63]uniquestr.Handle
 }
 
-// allocCompact allocates an exactly-sized compact struct and returns an
-// unsafe.Pointer to it.  Each struct type has a properly typed [N]Handle
-// array so the GC traces all stored handles.
-func allocCompact(bitfield uint64, values []uniquestr.Handle) unsafe.Pointer {
-	switch len(values) {
+// allocCompact allocates an exactly-sized compact struct, sets its
+// bitfield, and returns a *compactMap view.  The caller populates
+// values via cm.slice().  Each struct type has a properly typed
+// [N]Handle array so the GC traces all stored handles.
+func allocCompact(bitfield uint64, n int) *compactMap {
+	switch n {
 	case 0:
-		return unsafe.Pointer(&emptyBacking)
+		return (*compactMap)(unsafe.Pointer(&emptyBacking))
 	case 1:
 		p := new(compact1)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 2:
 		p := new(compact2)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 3:
 		p := new(compact3)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 4:
 		p := new(compact4)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 5:
 		p := new(compact5)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 6:
 		p := new(compact6)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 7:
 		p := new(compact7)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 8:
 		p := new(compact8)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 9:
 		p := new(compact9)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 10:
 		p := new(compact10)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 11:
 		p := new(compact11)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 12:
 		p := new(compact12)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 13:
 		p := new(compact13)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 14:
 		p := new(compact14)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 15:
 		p := new(compact15)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 16:
 		p := new(compact16)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 17:
 		p := new(compact17)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 18:
 		p := new(compact18)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 19:
 		p := new(compact19)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 20:
 		p := new(compact20)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 21:
 		p := new(compact21)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 22:
 		p := new(compact22)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 23:
 		p := new(compact23)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 24:
 		p := new(compact24)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 25:
 		p := new(compact25)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 26:
 		p := new(compact26)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 27:
 		p := new(compact27)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 28:
 		p := new(compact28)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 29:
 		p := new(compact29)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 30:
 		p := new(compact30)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 31:
 		p := new(compact31)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 32:
 		p := new(compact32)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 33:
 		p := new(compact33)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 34:
 		p := new(compact34)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 35:
 		p := new(compact35)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 36:
 		p := new(compact36)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 37:
 		p := new(compact37)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 38:
 		p := new(compact38)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 39:
 		p := new(compact39)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 40:
 		p := new(compact40)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 41:
 		p := new(compact41)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 42:
 		p := new(compact42)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 43:
 		p := new(compact43)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 44:
 		p := new(compact44)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 45:
 		p := new(compact45)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 46:
 		p := new(compact46)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 47:
 		p := new(compact47)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 48:
 		p := new(compact48)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 49:
 		p := new(compact49)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 50:
 		p := new(compact50)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 51:
 		p := new(compact51)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 52:
 		p := new(compact52)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 53:
 		p := new(compact53)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 54:
 		p := new(compact54)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 55:
 		p := new(compact55)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 56:
 		p := new(compact56)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 57:
 		p := new(compact57)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 58:
 		p := new(compact58)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 59:
 		p := new(compact59)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 60:
 		p := new(compact60)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 61:
 		p := new(compact61)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 62:
 		p := new(compact62)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	case 63:
 		p := new(compact63)
 		p.bitfield = bitfield
-		copy(p.values[:], values)
-		return unsafe.Pointer(p)
+		return (*compactMap)(unsafe.Pointer(p))
 	default:
 		panic("unreachable: compact map supports at most 63 entries")
 	}

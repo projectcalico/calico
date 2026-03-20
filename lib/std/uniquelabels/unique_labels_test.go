@@ -1048,7 +1048,7 @@ func BenchmarkMake(b *testing.B) {
 	for i := range nKeys {
 		input[fmt.Sprintf("example.com/label-%d", i)] = fmt.Sprintf("value-%d", i)
 	}
-
+	
 	b.Run("cache-hit", func(b *testing.B) {
 		unsafeTestOnlyReset()
 		Make(input) // Prime the cache.

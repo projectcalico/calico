@@ -59,20 +59,20 @@ import (
 	}
 
 	// allocCompact function.
-	fmt.Fprint(f, `// allocCompact allocates an exactly-sized compact struct and returns an
-// unsafe.Pointer to it.  Each struct type has a properly typed [N]Handle
-// array so the GC traces all stored handles.
-func allocCompact(bitfield uint64, values []uniquestr.Handle) unsafe.Pointer {
-	switch len(values) {
+	fmt.Fprint(f, `// allocCompact allocates an exactly-sized compact struct, sets its
+// bitfield, and returns a *compactMap view.  The caller populates
+// values via cm.slice().  Each struct type has a properly typed
+// [N]Handle array so the GC traces all stored handles.
+func allocCompact(bitfield uint64, n int) *compactMap {
+	switch n {
 	case 0:
-		return unsafe.Pointer(&emptyBacking)
+		return (*compactMap)(unsafe.Pointer(&emptyBacking))
 `)
 	for i := 1; i <= maxKeys; i++ {
 		fmt.Fprintf(f, "\tcase %d:\n", i)
 		fmt.Fprintf(f, "\t\tp := new(compact%d)\n", i)
 		fmt.Fprint(f, "\t\tp.bitfield = bitfield\n")
-		fmt.Fprint(f, "\t\tcopy(p.values[:], values)\n")
-		fmt.Fprint(f, "\t\treturn unsafe.Pointer(p)\n")
+		fmt.Fprint(f, "\t\treturn (*compactMap)(unsafe.Pointer(p))\n")
 	}
 	fmt.Fprintf(f, `	default:
 		panic("unreachable: compact map supports at most %d entries")
