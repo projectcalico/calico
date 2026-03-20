@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,13 +32,11 @@ import (
 	"github.com/projectcalico/calico/guardian/test/utils"
 )
 
-// handleConnection accepts a connection from the listener, sets up a yamux session,
-// reads a message from the client, and writes a response. Errors are reported via
-// errCh rather than calling Expect() (which would panic from a non-test goroutine).
-// doneCh is closed when the function completes all its work.
-func handleConnection(t *testing.T, listener net.Listener, errCh chan<- error, doneCh chan<- struct{}) {
-	defer close(doneCh)
-
+// handleConnection accepts a connection, sets up a yamux session, reads a
+// message from the client, writes a response, then waits for clientDoneCh
+// before returning. This ensures the server doesn't tear down its session
+// while the client is still reading.
+func handleConnection(t *testing.T, listener net.Listener, errCh chan<- error, clientDoneCh <-chan struct{}) {
 	conn, err := listener.Accept()
 	if err != nil {
 		errCh <- fmt.Errorf("Accept: %v", err)
@@ -78,6 +77,10 @@ func handleConnection(t *testing.T, listener net.Listener, errCh chan<- error, d
 		errCh <- fmt.Errorf("stream.Write: %v", err)
 		return
 	}
+
+	// Wait for the client to finish before returning, so our deferred
+	// session/stream/conn close doesn't race with the client's read.
+	<-clientDoneCh
 }
 
 func TestDial(t *testing.T) {
@@ -89,13 +92,15 @@ func TestDial(t *testing.T) {
 		defer func() { _ = listener.Close() }()
 
 		errCh := make(chan error, 1)
-		doneCh := make(chan struct{})
-		go handleConnection(t, listener, errCh, doneCh)
+		clientDoneCh := make(chan struct{})
+		var closeOnce sync.Once
+		t.Cleanup(func() { closeOnce.Do(func() { close(clientDoneCh) }) })
+		go handleConnection(t, listener, errCh, clientDoneCh)
 
-		dialer, err := tunnel.NewTLSSessionDialer(listener.Addr().String(), nil)
+		dialer, err := tunnel.NewTLSSessionDialer(listener.Addr().String(), nil, tunnel.WithDialerKeepAliveSettings(false, time.Second))
 		Expect(err).NotTo(HaveOccurred())
 
-		assertExpectations(t, dialer, doneCh)
+		assertExpectations(t, dialer, clientDoneCh, &closeOnce)
 
 		select {
 		case err := <-errCh:
@@ -124,8 +129,10 @@ func TestDial(t *testing.T) {
 		defer func() { _ = listener.Close() }()
 
 		errCh := make(chan error, 1)
-		doneCh := make(chan struct{})
-		go handleConnection(t, listener, errCh, doneCh)
+		clientDoneCh := make(chan struct{})
+		var closeOnce sync.Once
+		t.Cleanup(func() { closeOnce.Do(func() { close(clientDoneCh) }) })
+		go handleConnection(t, listener, errCh, clientDoneCh)
 
 		certPool := x509.NewCertPool()
 		caCert, err := os.ReadFile(serverCrt.Name())
@@ -134,9 +141,9 @@ func TestDial(t *testing.T) {
 
 		dialer, err := tunnel.NewTLSSessionDialer(listener.Addr().String(), &tls.Config{
 			RootCAs: certPool,
-		})
+		}, tunnel.WithDialerKeepAliveSettings(false, time.Second))
 		Expect(err).NotTo(HaveOccurred())
-		assertExpectations(t, dialer, doneCh)
+		assertExpectations(t, dialer, clientDoneCh, &closeOnce)
 
 		select {
 		case err := <-errCh:
@@ -146,7 +153,7 @@ func TestDial(t *testing.T) {
 	})
 }
 
-func assertExpectations(t *testing.T, dialer tunnel.SessionDialer, serverDone <-chan struct{}) {
+func assertExpectations(t *testing.T, dialer tunnel.SessionDialer, clientDoneCh chan struct{}, closeOnce *sync.Once) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -166,13 +173,12 @@ func assertExpectations(t *testing.T, dialer tunnel.SessionDialer, serverDone <-
 	Expect(err).NotTo(HaveOccurred())
 	Expect(string(buf[:n])).To(Equal("Hello from server"))
 
-	// Wait for the server goroutine to finish its Write before closing the session,
-	// otherwise the server's Write races with session.Close().
-	<-serverDone
-
-	err = session.Close()
-	Expect(err).NotTo(HaveOccurred())
+	// Signal the server that we're done reading so it can safely tear down.
+	closeOnce.Do(func() { close(clientDoneCh) })
 
 	err = conn.Close()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = session.Close()
 	Expect(err).NotTo(HaveOccurred())
 }

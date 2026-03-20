@@ -139,19 +139,19 @@ func (c *LiveMigrationClient) EnsureInitialized() error {
 }
 
 // vmimShouldEmitLiveMigration returns true if the VMIM is in a phase that warrants emitting a
-// LiveMigration resource and has the required fields set.  In more detail: only if the migration is
-// actively preparing, running, or failing, and we have the VM Name, Source Pod, and Object UID
-// established.
+// LiveMigration resource and has the required fields set.  We emit as early as possible (from
+// Scheduling phase) so that the TARGET role reaches Felix before or at the same time as the target
+// pod's WorkloadEndpoint.  The Source field may be empty in early phases; it will be populated in
+// subsequent updates when MigrationState.SourcePod becomes available.
 func vmimShouldEmitLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigration) bool {
 	switch vmim.Status.Phase {
-	case kubevirtv1.MigrationTargetReady, kubevirtv1.MigrationRunning, kubevirtv1.MigrationFailed:
+	case kubevirtv1.MigrationScheduling, kubevirtv1.MigrationScheduled,
+		kubevirtv1.MigrationPreparingTarget, kubevirtv1.MigrationTargetReady,
+		kubevirtv1.MigrationRunning, kubevirtv1.MigrationFailed:
 	default:
 		return false
 	}
 	if vmim.Spec.VMIName == "" {
-		return false
-	}
-	if vmim.Status.MigrationState == nil || vmim.Status.MigrationState.SourcePod == "" {
 		return false
 	}
 	if vmim.UID == "" {
@@ -163,9 +163,16 @@ func vmimShouldEmitLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigratio
 // convertVMIMToLiveMigration converts a KubeVirt VirtualMachineInstanceMigration
 // to a Calico LiveMigration KVPair.
 func convertVMIMToLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigration) *model.KVPair {
-	var lm *internalapi.LiveMigration
+	kvp := &model.KVPair{
+		Key: model.ResourceKey{
+			Kind:      internalapi.KindLiveMigration,
+			Namespace: vmim.Namespace,
+			Name:      vmim.Name,
+		},
+		Revision: vmim.ResourceVersion,
+	}
 	if vmimShouldEmitLiveMigration(vmim) {
-		lm = internalapi.NewLiveMigration()
+		lm := internalapi.NewLiveMigration()
 		lm.Name = vmim.Name
 		lm.Namespace = vmim.Namespace
 		lm.ResourceVersion = vmim.ResourceVersion
@@ -173,32 +180,42 @@ func convertVMIMToLiveMigration(vmim *kubevirtv1.VirtualMachineInstanceMigration
 		lm.UID = vmim.UID
 		lm.Labels = vmim.Labels
 		lm.Annotations = vmim.Annotations
+		// Match the target virt-launcher pod by VMI name and migration job UID.
+		// We accept two VMI-name labels:
+		//   - VirtualMachineInstanceIDLabel ("vmi.kubevirt.io/id"): available from
+		//     KubeVirt v1.7.0+, reliable and handles long names via hashing.
+		//   - DeprecatedVirtualMachineNameLabel ("vm.kubevirt.io/name"): available in
+		//     all KubeVirt versions, but less reliable: its value is the VM's hostname
+		//     (not necessarily the VMI name) and truncates without hashing.
+		// We match either so that live migration works with KubeVirt < 1.7 as well.
 		selector := fmt.Sprintf(
-			"%s == '%s' && %s == '%s'",
-			kubevirtv1.MigrationSelectorLabel,
+			"(%s == '%s' || %s == '%s') && %s == '%s'",
+			kubevirtv1.VirtualMachineInstanceIDLabel,
+			vmim.Spec.VMIName,
+			kubevirtv1.DeprecatedVirtualMachineNameLabel,
 			vmim.Spec.VMIName,
 			kubevirtv1.MigrationJobLabel,
 			string(vmim.UID),
 		)
 		lm.Spec = internalapi.LiveMigrationSpec{
-			Source: &types.NamespacedName{
-				Name:      vmim.Status.MigrationState.SourcePod,
-				Namespace: vmim.Namespace,
-			},
-			Destination: &internalapi.WorkloadEndpointIdentifier{
+			Target: &internalapi.LiveMigrationTarget{
 				Selector: &selector,
 			},
 		}
+		// Source is only available once MigrationState is populated (typically from
+		// PreparingTarget/TargetReady phase onwards).  In earlier phases we emit without
+		// Source so that the TARGET role reaches Felix as early as possible.
+		if vmim.Status.MigrationState != nil && vmim.Status.MigrationState.SourcePod != "" {
+			lm.Spec.Source = &internalapi.LiveMigrationSource{
+				Workload: &internalapi.WorkloadIdentifier{
+					OrchestratorID: "k8s",
+					WorkloadID:     vmim.Namespace + "/" + vmim.Status.MigrationState.SourcePod,
+				},
+			}
+		}
+		kvp.Value = lm
 	}
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Kind:      internalapi.KindLiveMigration,
-			Namespace: vmim.Namespace,
-			Name:      vmim.Name,
-		},
-		Value:    lm,
-		Revision: vmim.ResourceVersion,
-	}
+	return kvp
 }
 
 // convertVMIMResourceToLiveMigration is a ConvertK8sResourceToKVPair adapter

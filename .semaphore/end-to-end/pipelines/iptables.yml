@@ -40,6 +40,10 @@ blocks:
   - name: Openshift OCP
     dependencies: []
     task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
       jobs:
         - name: hashrelease
           execution_time_limit:
@@ -748,7 +752,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./scripts/body_flannel-migration.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_flannel-migration.sh
           matrix:
             - env_var: DOWNLEVEL_MANIFEST
               values:

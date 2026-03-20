@@ -64,29 +64,42 @@ func CopyFile(src, dst string) error {
 	return nil
 }
 
-// PathExists validates if a given (relative or absolute) path exists
-func PathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
+func pathInfo(path string) (os.FileInfo, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path for %s: %w", path, err)
 	}
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get info for path %s: %w", absPath, err)
 	}
-	return false, err
+	return info, nil
 }
 
 // DirExists validates if a given (relative or absolute) path exists and
 // is a directory (or as symlink to one)
 func DirExists(path string) (bool, error) {
-	stat, err := os.Stat(path)
-	if err == nil {
-		return stat.IsDir(), nil
+	info, err := pathInfo(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
 	}
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
+	return info.IsDir(), nil
+}
+
+// FileExists validates if a given (relative or absolute) path exists
+// and is a regular file
+func FileExists(path string) (bool, error) {
+	info, err := pathInfo(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
 	}
-	return false, err
+	return info.Mode().IsRegular(), nil
 }
 
 // CheckBinary searches the current PATH for a binary and returns an error if it's not found

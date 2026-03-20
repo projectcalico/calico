@@ -374,6 +374,46 @@ describe('OmniFilter', () => {
         expect(onRequestSearch).toHaveBeenCalledWith(filterId, '');
     });
 
+    it('should close the popover after selecting a filter when listType is select', () => {
+        const onChange = jest.fn();
+
+        render(
+            <OmniFilter
+                {...defaultProps}
+                onChange={onChange}
+                listType='select'
+                showOperatorSelect={false}
+            />,
+        );
+
+        openPopover();
+        expect(screen.getByText(filters[0].label)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText(filters[0].label));
+
+        expect(onChange).toHaveBeenCalled();
+        expect(screen.queryByText(filters[1].label)).not.toBeInTheDocument();
+    });
+
+    it('should keep the popover open after selecting a filter when listType is checkbox', () => {
+        const onChange = jest.fn();
+
+        render(
+            <OmniFilter
+                {...defaultProps}
+                onChange={onChange}
+                listType='checkbox'
+                showOperatorSelect={false}
+            />,
+        );
+
+        openPopover();
+        fireEvent.click(screen.getByText(filters[0].label));
+
+        expect(onChange).toHaveBeenCalled();
+        expect(screen.getByText(filters[1].label)).toBeInTheDocument();
+    });
+
     it('should render custom create button label', () => {
         const onChange = jest.fn();
         const onRequestSearch = jest.fn();

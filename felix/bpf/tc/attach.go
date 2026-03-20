@@ -34,50 +34,53 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 )
 
 type AttachPoint struct {
 	bpf.AttachPoint
 
-	LogFilter                   string
-	LogFilterIdx                int
-	Type                        tcdefs.EndpointType
-	ToOrFrom                    tcdefs.ToOrFromEp
-	HookLayoutV4                hook.Layout
-	HookLayoutV6                hook.Layout
-	HostIPv4                    net.IP
-	HostIPv6                    net.IP
-	HostTunnelIPv4              net.IP
-	HostTunnelIPv6              net.IP
-	IntfIPv4                    net.IP
-	IntfIPv6                    net.IP
-	ToHostDrop                  bool
-	DSR                         bool
-	DSROptoutCIDRs              bool
-	SkipEgressRedirect          bool
-	TunnelMTU                   uint16
-	VXLANPort                   uint16
-	WgPort                      uint16
-	Wg6Port                     uint16
-	ExtToServiceConnmark        uint32
-	PSNATStart                  uint16
-	PSNATEnd                    uint16
-	RPFEnforceOption            uint8
-	NATin                       uint32
-	NATout                      uint32
-	NATOutgoingExcludeHosts     bool
-	UDPOnly                     bool
-	RedirectPeer                bool
-	FlowLogsEnabled             bool
-	OverlayTunnelID             uint32
-	AttachType                  apiv3.BPFAttachOption
-	IngressPacketRateConfigured bool
-	EgressPacketRateConfigured  bool
-	UDPGSOLinearize             bool
-	DSCP                        int8
-	MaglevLUTSize               uint32
-	ProgramsMap                 maps.Map
+	LogFilter                     string
+	LogFilterIdx                  int
+	Type                          tcdefs.EndpointType
+	ToOrFrom                      tcdefs.ToOrFromEp
+	HookLayoutV4                  hook.Layout
+	HookLayoutV6                  hook.Layout
+	HostIPv4                      net.IP
+	HostIPv6                      net.IP
+	HostTunnelIPv4                net.IP
+	HostTunnelIPv6                net.IP
+	IntfIPv4                      net.IP
+	IntfIPv6                      net.IP
+	ToHostDrop                    bool
+	DSR                           bool
+	DSROptoutCIDRs                bool
+	SkipEgressRedirect            bool
+	TunnelMTU                     uint16
+	VXLANPort                     uint16
+	WgPort                        uint16
+	Wg6Port                       uint16
+	ExtToServiceConnmark          uint32
+	PSNATStart                    uint16
+	PSNATEnd                      uint16
+	RPFEnforceOption              uint8
+	NATin                         uint32
+	NATout                        uint32
+	NATOutgoingExcludeHosts       bool
+	UDPOnly                       bool
+	RedirectPeer                  bool
+	FlowLogsEnabled               bool
+	OverlayTunnelID               uint32
+	AttachType                    apiv3.BPFAttachOption
+	IngressPacketRateConfigured   bool
+	EgressPacketRateConfigured    bool
+	WorkloadSrcSpoofingConfigured bool
+	UDPGSOLinearize               bool
+	DSCP                          int8
+	IstioDSCP                     int8
+	MaglevLUTSize                 uint32
+	ProgramsMap                   maps.Map
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -167,7 +170,7 @@ func (ap *AttachPoint) AttachProgram() error {
 	}
 
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
-	* still the same */
+	 * still the same */
 	progsAttached, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	if err != nil {
 		return err
@@ -432,6 +435,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		NatOut:        ap.NATout,
 		LogFilterJmp:  uint32(ap.LogFilterIdx),
 		DSCP:          ap.DSCP,
+		IstioDSCP:     ap.IstioDSCP,
 		MaglevLUTSize: ap.MaglevLUTSize,
 	}
 
@@ -489,6 +493,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
 	}
 
+	if ap.WorkloadSrcSpoofingConfigured {
+		globalData.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
+	}
+
 	if ap.UDPGSOLinearize {
 		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
 	}
@@ -520,8 +528,14 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
 	}
 
+	logIface := ap.Iface
+	if ap.Type != tcdefs.EpTypeWorkload {
+		if prefix := bpfutils.FVLogPrefix(); prefix != "" {
+			logIface = prefix + logIface
+		}
+	}
 	in := []byte("---------------")
-	copy(in, ap.Iface)
+	copy(in, logIface)
 	globalData.IfaceName = string(in)
 
 	globalData.OverlayTunnelID = ap.OverlayTunnelID

@@ -15,19 +15,7 @@ test: ut fv st
 # The target architecture is select by setting the ARCH variable.
 # When ARCH is undefined it is set to the detected host architecture.
 # When ARCH differs from the host architecture a crossbuild will be performed.
-# This variable is only set if ARCHES is not set
-ARCHES ?= $(patsubst docker-image/Dockerfile.%,%,$(wildcard docker-image/Dockerfile.*))
-
-# Some repositories keep their Dockerfile(s) in the root directory instead of in
-# the 'docker-image' subdir. Make sure ARCHES gets filled in either way.
-ifeq ($(ARCHES),)
-	ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
-endif
-
-# If architectures cannot infer from Dockerfiles, set default supported architecture.
-ifeq ($(ARCHES),)
-	ARCHES=amd64 arm64 ppc64le s390x
-endif
+ARCHES ?= amd64 arm64 ppc64le s390x
 
 # list of arches *not* to build when doing *-all
 EXCLUDEARCH?=
@@ -82,6 +70,9 @@ endif
 
 # Enable binfmt adding support for miscellaneous binary formats.
 # This is only needed when running non-native binaries.
+# Marked .PHONY since it produces no file; use as an order-only prerequisite
+# (| register) to avoid triggering unnecessary rebuilds.
+.PHONY: register
 register:
 ifneq ($(BUILDARCH),$(ARCH))
 	docker run --privileged --rm calico/binfmt:qemu-v10.1.3 --install all || true
@@ -138,6 +129,8 @@ endif
 GO_BUILD_IMAGE ?= calico/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
+RUST_BUILD_IMAGE ?= calico/rust-build
+CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
 
 # We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
@@ -181,6 +174,13 @@ define build_binary
 		-e CGO_ENABLED=0 \
 		$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+endef
+
+define build_binary_dir
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=0 \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
 endef
 
 # For windows builds that do not require cgo.
@@ -332,11 +332,10 @@ DOCKER_PULL =
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
-	--build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	--build-arg GIT_VERSION=$(GIT_VERSION) \
+DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) \
 	--build-arg CALICO_BASE=$(CALICO_BASE) \
-	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+	--build-arg GIT_VERSION=$(GIT_VERSION) \
+	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
 DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -358,6 +357,38 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
+
+DOCKER_RUST_BUILD := mkdir -p bin && \
+	docker run --rm \
+		--init \
+		--user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
+		$(EXTRA_DOCKER_ARGS) \
+		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
+		-w /rust/src/$(PACKAGE_NAME) \
+		$(CALICO_RUST_BUILD)
+
+###############################################################################
+# Source file dependency tracking via deps.txt
+#
+# Each component's deps.txt contains both external module dependencies and
+# local in-repo package directories (prefixed with "local:"). If deps.txt
+# has local entries, SRC_FILES is automatically populated with all .go files
+# in those directories. Components can append extra non-Go dependencies
+# (e.g., BPF .c/.h files) after including lib.Makefile.
+#
+# IMAGE_DEPS lists non-Go files that the Docker image depends on (Dockerfiles,
+# config templates, scripts, etc.). Components should override or append to
+# this variable and include $(IMAGE_DEPS) in their .image.created prereqs.
+###############################################################################
+ifneq ($(wildcard deps.txt),)
+SRC_FILES := $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
+endif
+
+IMAGE_DEPS ?= Dockerfile
+
+# Expand a component's deps.txt local entries to the list of .go files.
+# Usage: $(call local-deps-go-files,<component-dir>)
+local-deps-go-files = $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' $(REPO_ROOT)/$(1)/deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
 
 # A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
 .PHONY: force-rebuild
@@ -1005,21 +1036,42 @@ ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
 	)
 endif
 
+# retry_docker_cmd retries a docker command up to a specified number of times.
+# Usage: $(call retry_docker_cmd,<description>,<docker command>,<max retries>,<retry delay>)
+define retry_docker_cmd
+	i=1; \
+	while [ $$i -le $(3) ]; do \
+		$(2) && break; \
+		echo "WARNING: $(1) failed (attempt $$i/$(3)), retrying in $(4)s..."; \
+		if [ $$i -eq $(3) ]; then exit 1; fi; \
+		sleep $(4); \
+		i=$$((i + 1)); \
+	done
+endef
+
+# Configuration options for retrying docker commands 
+MANIFEST_RETRIES ?= 5
+MANIFEST_RETRY_DELAY ?= 5
+
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
 push-image-arch-to-registry-%:
 # If the registry we want to push to doesn't not support manifests don't push the ARCH image.
-	$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*
+	$(call retry_docker_cmd,docker push with quiet flag,$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*,$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 	$(if $(filter $*,amd64),\
-		$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),\
+		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))\
 		$(NOECHO) $(NOOP)\
 	)
 
 # push multi-arch manifest where supported.
 push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
 sub-manifest-%:
-	$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)))
-	$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG)
+	@if [ -z "$(MANIFEST_RETRIES)" ] || ! printf '%s\n' "$(MANIFEST_RETRIES)" | grep -Eq '^[0-9]+$$' || [ "$(MANIFEST_RETRIES)" -lt 1 ]; then \
+		echo "ERROR: MANIFEST_RETRIES must be a positive integer, got '$(MANIFEST_RETRIES)'"; \
+		exit 1; \
+	fi
+	$(call retry_docker_cmd,docker manifest create,$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES))),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
+	$(call retry_docker_cmd,docker manifest push,$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 
 push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
@@ -1347,6 +1399,7 @@ run-k8s-apiserver: run-etcd
 			--max-requests-inflight=0 \
 			--enable-aggregator-routing \
 			--requestheader-client-ca-file=/home/user/certs/ca.pem \
+			--requestheader-allowed-names=kubernetes \
 			--requestheader-username-headers=X-Remote-User \
 			--requestheader-group-headers=X-Remote-Group \
 			--requestheader-extra-headers-prefix=X-Remote-Extra- \
@@ -1432,7 +1485,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 
 	touch $@
 
-kind-cluster-destroy: $(KIND) $(KUBECTL)
+kind-cluster-destroy kind-down: $(KIND) $(KUBECTL)
 	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
 	# This requires we execute CNI del on pods with pod networking.
 	-$(KIND) delete cluster --name $(KIND_NAME)
@@ -1488,6 +1541,170 @@ bin/.helm-updated-$(HELM_VERSION): bin/helm-$(HELM_VERSION)
 helm: bin/helm
 	@echo "helm: $^"
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
+
+###############################################################################
+# Common functions for setting up a kind cluster with Calico for testing.
+###############################################################################
+KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
+KIND_TEST_BUILD_TAG = test-build
+
+# Calico images built locally with latest-$(ARCH) tags. kind-build-images
+# re-tags each as :test-build for the kind cluster.
+KIND_CALICO_IMAGES = \
+	calico/node:$(KIND_TEST_BUILD_TAG) \
+	calico/typha:$(KIND_TEST_BUILD_TAG) \
+	calico/apiserver:$(KIND_TEST_BUILD_TAG) \
+	calico/ctl:$(KIND_TEST_BUILD_TAG) \
+	calico/cni:$(KIND_TEST_BUILD_TAG) \
+	calico/csi:$(KIND_TEST_BUILD_TAG) \
+	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG) \
+	calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG) \
+	calico/kube-controllers:$(KIND_TEST_BUILD_TAG) \
+	calico/goldmane:$(KIND_TEST_BUILD_TAG) \
+	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
+	calico/whisker:$(KIND_TEST_BUILD_TAG) \
+	calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
+
+# Operator is built separately (build-operator.sh tags it directly as
+# :test-build), so it's not in KIND_CALICO_IMAGES.
+KIND_OPERATOR_IMAGE = docker.io/tigera/operator:$(KIND_TEST_BUILD_TAG)
+
+# All images loaded onto the kind cluster.
+KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
+
+# .image.created markers: the per-component image build stamp files.
+# Each depends on its source files via deps.txt so Make knows when
+# to rebuild. The sub-make handles the actual build; we just ensure it
+# runs when sources are newer.
+KIND_IMAGE_MARKERS = \
+	$(REPO_ROOT)/node/.image.created-$(ARCH) \
+	$(REPO_ROOT)/typha/.image.created-$(ARCH) \
+	$(REPO_ROOT)/apiserver/.image.created-$(ARCH) \
+	$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH) \
+	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH) \
+	$(REPO_ROOT)/calicoctl/.image.created-$(ARCH) \
+	$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH) \
+	$(REPO_ROOT)/goldmane/.image.created-$(ARCH) \
+	$(REPO_ROOT)/webhooks/.image.created-$(ARCH) \
+	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
+	$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH)
+
+$(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
+	$(MAKE) -C $(REPO_ROOT)/node image
+
+$(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
+	$(MAKE) -C $(REPO_ROOT)/typha image
+
+$(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
+	$(MAKE) -C $(REPO_ROOT)/apiserver image
+
+$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
+	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
+
+$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
+	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+
+$(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
+	$(MAKE) -C $(REPO_ROOT)/calicoctl image
+
+$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
+	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
+
+$(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
+	$(MAKE) -C $(REPO_ROOT)/goldmane image
+
+$(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
+	$(MAKE) -C $(REPO_ROOT)/webhooks image
+
+$(REPO_ROOT)/whisker/.image.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/whisker image
+
+$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
+	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
+
+# Operator is built from a separate repo/branch and depends on all other
+# images being built first.
+$(REPO_ROOT)/.stamp.operator: $(KIND_IMAGE_MARKERS) $(KIND_INFRA_DIR)/calico_versions.yml
+	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+	touch $@
+
+## Build all component images needed for kind cluster testing, then tag them.
+.PHONY: kind-build-images
+kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
+	@for img in $(KIND_CALICO_IMAGES); do \
+	  base=$${img%%:*}; \
+	  docker tag $$base:latest-$(ARCH) $$img; \
+	done
+
+# Create a kind cluster and deploy Calico on it via Helm. Assumes images are
+# already built and tagged as test-build in the local Docker daemon. If a
+# cluster already exists (stamp file present), the creation step is skipped.
+# Default to v3 CRDs for kind clusters. Override with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 if needed.
+KIND_CALICO_API_GROUP ?= projectcalico.org/v3
+
+# Load images, install Calico via Helm, and wait for readiness on an existing
+# kind cluster. Use kind-up for end-to-end bringup (images + cluster + deploy).
+.PHONY: kind-deploy
+kind-deploy:
+	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
+	REPO_ROOT=$(REPO_ROOT) \
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	KIND=$(KIND) \
+	KIND_NAME=$(KIND_NAME) \
+	ARCH=$(ARCH) \
+	GIT_VERSION=$(GIT_VERSION) \
+	CALICO_API_GROUP=$(KIND_CALICO_API_GROUP) \
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
+	KIND_IMAGES="$(KIND_IMAGES)" \
+	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
+
+# Rebuild any images whose source files have changed, load onto the kind
+# cluster, and restart pods.
+.PHONY: kind-reload
+kind-reload: kind-build-images
+	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
+
+###############################################################################
+# Common functions for setting up a local envtest environment.
+###############################################################################
+ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
+ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
+# Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
+# Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
+ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
+
+## Download envtest binaries (kube-apiserver, etcd) for use by tests that use controller-runtime envtest.
+.PHONY: setup-envtest
+setup-envtest: $(ENVTEST_ASSETS_MARKER)
+$(ENVTEST_ASSETS_MARKER):
+	@echo "Setting up envtest binaries for Kubernetes $(ENVTEST_K8S_VERSION)..."
+	mkdir -p $(ENVTEST_DIR)
+	rm -f $(ENVTEST_DIR)/.envtest-*
+	$(DOCKER_GO_BUILD) sh -c \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
+	touch $@
+
+# Minimum supported Kubernetes version for CEL XValidation (GA in 1.29).
+MIN_K8S_VERSION ?= v1.29.0
+ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+# Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
+ENVTEST_MIN_K8S_MINOR := $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2)
+ENVTEST_MIN_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-min-$(ENVTEST_MIN_K8S_VERSION)
+
+## Download envtest binaries for the minimum supported Kubernetes version.
+.PHONY: setup-envtest-min
+setup-envtest-min: $(ENVTEST_MIN_ASSETS_MARKER)
+$(ENVTEST_MIN_ASSETS_MARKER):
+	@echo "Setting up envtest binaries for minimum K8s $(ENVTEST_MIN_K8S_VERSION)..."
+	mkdir -p $(ENVTEST_DIR)
+	$(DOCKER_GO_BUILD) sh -c \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
+	touch $@
 
 ###############################################################################
 # Common functions for launching a local etcd instance.
@@ -1546,10 +1763,8 @@ help:
 DOCKER_MANIFEST_CMD := docker manifest
 
 ifdef CONFIRM
-CRANE_BINDMOUNT = $(CRANE_BINDMOUNT_CMD)
 DOCKER_MANIFEST = $(DOCKER_MANIFEST_CMD)
 else
-CRANE_BINDMOUNT = echo [DRY RUN] $(CRANE_BINDMOUNT_CMD)
 DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
 endif
 
@@ -1616,18 +1831,6 @@ setup-windows-builder: clean-windows-builder
 
 $(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-%.tar: windows-sub-image-$*
 
-DOCKER_CREDENTIAL_VERSION="2.1.18"
-DOCKER_CREDENTIAL_OS="linux"
-DOCKER_CREDENTIAL_ARCH="amd64"
-$(WINDOWS_DIST)/bin/docker-credential-gcr:
-	-mkdir -p $(WINDOWS_DIST)/bin
-	curl -fsSL  --retry 5 "https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v$(DOCKER_CREDENTIAL_VERSION)/docker-credential-gcr_$(DOCKER_CREDENTIAL_OS)_$(DOCKER_CREDENTIAL_ARCH)-$(DOCKER_CREDENTIAL_VERSION).tar.gz" -o docker-credential-gcr.tar.gz
-	tar xzf docker-credential-gcr.tar.gz --to-stdout docker-credential-gcr | tee $@ > /dev/null && chmod +x $@
-	rm -f docker-credential-gcr.tar.gz
-
-.PHONY: docker-credential-gcr-binary
-docker-credential-gcr-binary: var-require-all-WINDOWS_DIST-DOCKER_CREDENTIAL_VERSION-DOCKER_CREDENTIAL_OS-DOCKER_CREDENTIAL_ARCH $(WINDOWS_DIST)/bin/docker-credential-gcr
-
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
 # image. These must be added as reqs to 'image-windows' (originally defined in
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
@@ -1650,7 +1853,7 @@ image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 		$(MAKE) windows-sub-image-$${version}; \
 	done;
 
-release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows docker-credential-gcr-binary bin/crane
+release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows bin/crane
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
 		all_images=""; \

@@ -613,6 +613,20 @@ var baseTests = []StateList{
 		wireguardV6,
 		wireguardV4V6,
 	},
+
+	// Live migration: local WEP as source, then LM removed.
+	{localEp1WithPolicyLMSource, localEp1WithPolicy},
+	// Live migration: local WEP as source (workload-level), then LM removed.
+	{localEp1WithPolicyLMSourceWorkloadLevel, localEp1WithPolicy},
+	// Live migration: local WEP as target by direct name, then LM removed.
+	{localEp1WithPolicyLMTargetByName, localEp1WithPolicy},
+
+	// Istio tests - verify that the all-istio-weps IPSet is populated correctly
+	{
+		istioWithAmbientPod,
+		istioWithMixedPods,
+		istioSelectorEdgeCases,
+	},
 }
 
 var logOnce sync.Once
@@ -704,6 +718,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf := config.New()
 					conf.FelixHostname = localHostname
 					conf.BPFEnabled = true
+					conf.IstioAmbientMode = "Enabled"
 					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan any)
@@ -827,6 +842,9 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(googleproto.Equal(mockDataplane.Encapsulation(), state.ExpectedEncapsulation)).To(BeTrue(),
 		"Encapsulation incorrect after moving to state: %v",
 		state.Name)
+	Expect(mockDataplane.EndpointToLiveMigrationRole()).To(Equal(state.ExpectedLiveMigrationRoles),
+		"Live migration roles incorrect after moving to state: %v",
+		state.Name)
 }
 
 func stringifyRoutes(routes set.Set[types.RouteUpdate]) []string {
@@ -862,6 +880,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		conf := config.New()
 		conf.FelixHostname = localHostname
 		conf.BPFEnabled = true
+		conf.IstioAmbientMode = "Enabled"
 		conf.SetUseNodeResourceUpdates(expandedTest.UsesNodeResources())
 		conf.RouteSource = expandedTest.RouteSource()
 		mockDataplane = mock.NewMockDataplane()

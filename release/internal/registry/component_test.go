@@ -58,22 +58,3 @@ func TestComponentString(t *testing.T) {
 		})
 	}
 }
-
-func TestOperatorComponentInitImage(t *testing.T) {
-	c := OperatorComponent{
-		Component: Component{
-			Version:  "1.2.3",
-			Image:    "nameprefix/operator",
-			Registry: "quay.io",
-		},
-	}
-	want := Component{
-		Version:  "1.2.3",
-		Image:    "nameprefix/operator-init",
-		Registry: "quay.io",
-	}
-	got := c.InitImage()
-	if got != want {
-		t.Errorf("expected init image %s, got %s", want.String(), got.String())
-	}
-}
