@@ -4927,6 +4927,15 @@ func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 		children:    make(map[int]*bpfIfaceNode),
 	}
 
+	// Veth and netkit devices use ParentIndex to reference their peer, not a
+	// real parent in a device hierarchy (bond/bridge). Treat them as
+	// standalone so they always get TC programs attached.
+	switch link.Type() {
+	case "veth", "netkit":
+		trees.addIfaceStandAlone(intf)
+		return
+	}
+
 	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
 		trees.addIfaceStandAlone(intf)
 	} else if attrs.MasterIndex != 0 {
