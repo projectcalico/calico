@@ -116,6 +116,10 @@ func (m *liveMigrationMonitor) OnUpdate(protoBufMsg any) {
 	case *proto.WorkloadEndpointUpdate:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		m.ifaceNames[id] = msg.Endpoint.Name
+		// Intentionally we don't clear the UID when the LiveMigration resource
+		// is deleted (i.e. when uid becomes "").  If there are any remaining FSM
+		// transitions for this workload, it's clearer for the logs to continue
+		// showing the UID that was associated with the migration.
 		if uid := msg.Endpoint.LiveMigrationUid; uid != "" {
 			m.migrationUIDs[id] = uid
 		}

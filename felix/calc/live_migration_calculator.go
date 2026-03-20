@@ -485,6 +485,10 @@ func (lmc *LiveMigrationCalculator) withRoleUpdateIfNeeded(wepData *wepData, upd
 	oldRole, _ := lmc.liveMigrationRoleAndUID(wepData)
 	updateFunc()
 	newRole, newUID := lmc.liveMigrationRoleAndUID(wepData)
+	// Intentionally we only emit an update when the role changes, not when the
+	// UID changes with the same role.  Overlapping LiveMigrations referencing
+	// the same WEP are transient; avoiding a UID churn keeps the downstream
+	// state (and logs) more stable.
 	if newRole != oldRole {
 		lmc.indicateRole(wepData.key, newRole, newUID)
 	}
