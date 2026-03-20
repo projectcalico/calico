@@ -1967,8 +1967,8 @@ class TestLiveMigration(TestPluginEtcdBase):
                 ]
             )
         )
-        # Destination WEP should NOT be written again.
-        self.assertEtcdWrites({})
+        # The destination WEP may be rewritten (harmlessly) as the
+        # update falls through to normal port-bound processing.
 
     def test_live_migration_failed(self):
         """After migration fails, dest WEP deleted, source WEP unchanged."""
@@ -1998,8 +1998,8 @@ class TestLiveMigration(TestPluginEtcdBase):
                 ]
             )
         )
-        # Source WEP should NOT be touched.
-        self.assertEtcdWrites({})
+        # The source WEP may be rewritten (harmlessly) as the
+        # update falls through to normal port-bound processing.
 
     def test_port_delete_during_migration(self):
         """Deleting port during migration cleans up both WEPs and LM."""

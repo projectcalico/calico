@@ -1002,9 +1002,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             orig_migrating_to = original.get("binding:profile", {}).get("migrating_to")
             curr_migrating_to = port.get("binding:profile", {}).get("migrating_to")
 
-            migration_cleanup_done = False
             if orig_migrating_to is not None and curr_migrating_to is None:
-                # Migration ended — clean up LiveMigration resource.
+                # Live migration ended — clean up LiveMigration resource
+                # and, if the migration failed, the destination WEP.
+                # Source WEP deletion for the success case is handled by
+                # the host-change block below, which covers both cold
+                # and live migration.
                 namespace = self.endpoint_syncer.namespace
                 dest_port = original.copy()
                 dest_port["binding:host_id"] = orig_migrating_to
@@ -1012,7 +1015,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 migration_uid = datamodel_v3.get_uid(
                     "LiveMigration", namespace, dest_wep_name
                 )
-                datamodel_v3.delete("LiveMigration", namespace, dest_wep_name)
+                self.endpoint_syncer.delete_live_migration(dest_wep_name)
 
                 if port["binding:host_id"] == original["binding:host_id"]:
                     # Migration FAILED — host didn't change, delete
@@ -1025,9 +1028,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     )
                     self.endpoint_syncer.delete_endpoint(dest_port)
                 else:
-                    # Migration SUCCEEDED — host changed to destination.
-                    # Delete source WEP.  Destination WEP already exists
-                    # from pre-migration and doesn't need updating.
                     LOG.info(
                         "Live migration %s: succeeded, port %s migrated from %s to %s",
                         migration_uid,
@@ -1035,13 +1035,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         original["binding:host_id"],
                         port["binding:host_id"],
                     )
-                    self.endpoint_syncer.delete_endpoint(original)
 
-                migration_cleanup_done = True
-
-            # Check for migration so that we can reliably delete the
-            # WorkloadEndpoint on the old host.
-            if not migration_cleanup_done and original["binding:host_id"] != port["binding:host_id"]:
+            # Check for migration (cold or live) so that we can reliably
+            # delete the WorkloadEndpoint on the old host.
+            if original["binding:host_id"] != port["binding:host_id"]:
                 LOG.info(
                     "Migration, delete WorkloadEndpoint on old host %s",
                     original["binding:host_id"],
@@ -1049,12 +1046,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.endpoint_syncer.delete_endpoint(original)
                 endpoint_should_already_exist = False
 
-            if not migration_cleanup_done:
-                try:
-                    port = self.db.get_port(plugin_context, port["id"])
-                except n_exc.PortNotFound:
-                    LOG.info("Port no longer exists")
-                    return
+            try:
+                port = self.db.get_port(plugin_context, port["id"])
+            except n_exc.PortNotFound:
+                LOG.info("Port no longer exists")
+                return
 
             # Now, fork execution based on the type of update we're performing.
             # There are a few:
@@ -1067,9 +1063,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # - an update (port bound at all times);
             # - a change to an unbound port (which we don't care about, because
             #   we do nothing with unbound ports).
-            if migration_cleanup_done:
-                pass
-            elif port.get("binding:profile", {}).get("migrating_to") is not None:
+            if port.get("binding:profile", {}).get("migrating_to") is not None:
                 dest_host = port["binding:profile"]["migrating_to"]
 
                 dest_port = port.copy()
