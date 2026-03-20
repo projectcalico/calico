@@ -22,7 +22,7 @@ const ClearableFormLabel: React.FC<ClearableFormLabelProps> = ({
     <FormLabel {...labelStyles} {...props}>
         {props.children}
         {showClearButton && (
-            <Tooltip label='Clear' placement='right' hasArrow>
+            <Tooltip label='Clear' placement='bottom'>
                 <IconButton
                     {...iconButtonStyles}
                     variant='icon'

@@ -1,6 +1,6 @@
 import { objToQueryStr } from '@/libs/tigera/ui-components/utils';
 import { FlowLog as ApiFlowLog } from '@/types/api';
-import { FlowLog, UniqueFlowLogs } from '@/types/render';
+import { FlowLog } from '@/types/render';
 import { v4 as uuid } from 'uuid';
 import { VisibleColumns } from '../components/FlowLogsList';
 import { ColumnName } from '../components/FlowLogsList/flowLogsTable';
@@ -33,45 +33,6 @@ export const getTimeInSeconds = (time: number | null) =>
     Math.round((time ?? 0) / 1000) || undefined;
 
 export const getSeconds = (date: Date | null) => (date?.getTime() ?? 0) / 1000;
-
-export const handleDuplicateFlowLogs = (
-    unique: UniqueFlowLogs & {
-        flowLog: FlowLog;
-    },
-): UniqueFlowLogs & {
-    flowLog: FlowLog | null;
-} => {
-    const { flowLog, flowLogs, startTime } = unique;
-    const { id: _id, ...rest } = flowLog;
-    const json = JSON.stringify(rest);
-
-    if (flowLog.start_time.getTime() === startTime) {
-        return flowLogs.some((item) => json === item.json)
-            ? { startTime, flowLogs: flowLogs, flowLog: null }
-            : {
-                  startTime,
-                  flowLogs: [
-                      ...flowLogs,
-                      {
-                          flowLog,
-                          json,
-                      },
-                  ],
-                  flowLog,
-              };
-    }
-
-    return {
-        startTime: flowLog.start_time.getTime(),
-        flowLogs: [
-            {
-                flowLog,
-                json,
-            },
-        ],
-        flowLog,
-    };
-};
 
 export const getV1Columns = (v1StoredColumns: string, storageKey: string) => {
     const v1Columns = v1StoredColumns ? JSON.parse(v1StoredColumns) : [];

@@ -27,14 +27,6 @@ export type AppConfig = {
     features: Record<string, boolean>;
 };
 
-export type UniqueFlowLogs = {
-    startTime: number;
-    flowLogs: {
-        json: string;
-        flowLog: FlowLog;
-    }[];
-};
-
 export type StreamFilters = Partial<Record<StreamFilterKey, string>>;
 
 export type FilterHintValues = Record<FilterHintKey, string[]>;

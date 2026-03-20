@@ -5,7 +5,7 @@ import {
     FlowLog as ApiFlowLog,
     QueryPage,
 } from '@/types/api';
-import { FilterHintValues, FlowLog, UniqueFlowLogs } from '@/types/render';
+import { FilterHintValues, FlowLog } from '@/types/render';
 import {
     FilterHintKey,
     FilterHintType,
@@ -19,7 +19,6 @@ import React from 'react';
 import {
     buildStreamPath,
     getTimeInSeconds,
-    handleDuplicateFlowLogs,
     transformFlowLogsResponse,
     transformStartTime,
     updateFirstFlowStartTime,
@@ -92,14 +91,8 @@ export const useFlowLogsStream = (
     );
     const startTimeGte = transformStartTime(startTime);
     const path = buildStreamPath(startTimeGte, filters);
-    const uniqueFlowLogs = React.useRef<UniqueFlowLogs>({
-        startTime: 0,
-        flowLogs: [],
-    });
-
     const resetStreamState = React.useCallback(() => {
         streamGeneration.current += 1;
-        uniqueFlowLogs.current = { startTime: 0, flowLogs: [] };
     }, []);
 
     const { startStream, data, totalItems, ...rest } = useStream<
@@ -107,21 +100,7 @@ export const useFlowLogsStream = (
         FlowLog
     >({
         path,
-        transformResponse: (stream) => {
-            const transformed = transformFlowLogsResponse(stream);
-
-            const { flowLog, flowLogs, startTime } = handleDuplicateFlowLogs({
-                flowLog: transformed,
-                ...uniqueFlowLogs.current,
-            });
-
-            uniqueFlowLogs.current = {
-                startTime,
-                flowLogs,
-            };
-
-            return flowLog;
-        },
+        transformResponse: transformFlowLogsResponse,
     });
 
     // First flow start time is needed for accurate filtering
