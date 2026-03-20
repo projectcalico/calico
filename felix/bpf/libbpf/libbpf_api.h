@@ -170,7 +170,7 @@ void bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, b
 
 struct bpf_link* bpf_tcx_program_attach(struct bpf_object *obj, char *secName, int ifIndex)
 {
-	DECLARE_LIBBPF_OPTS(bpf_tcx_opts, attach); 
+	DECLARE_LIBBPF_OPTS(bpf_tcx_opts, attach);
 	struct bpf_program *prog = bpf_object__find_program_by_name(obj, secName);
 	if (!prog) {
 		errno = ENOENT;
@@ -183,6 +183,23 @@ struct bpf_link* bpf_tcx_program_attach(struct bpf_object *obj, char *secName, i
         }
         set_errno(err);
         return link;
+}
+
+struct bpf_link* bpf_netkit_program_attach(struct bpf_object *obj, char *secName, int ifIndex)
+{
+	DECLARE_LIBBPF_OPTS(bpf_netkit_opts, attach);
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, secName);
+	if (!prog) {
+		errno = ENOENT;
+		return NULL;
+	}
+	struct bpf_link *link = bpf_program__attach_netkit(prog, ifIndex, &attach);
+	int err = libbpf_get_error(link);
+	if (err) {
+		link = NULL;
+	}
+	set_errno(err);
+	return link;
 }
 
 void bpf_tc_program_detach(int ifindex, int handle, int pref, bool ingress)
@@ -280,7 +297,8 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint *jumps6,
 			short dscp,
 			short istio_dscp,
-			uint maglev_lut_size)
+			uint maglev_lut_size,
+			uint host_ifindex)
 {
 	struct cali_tc_global_data v4 = {
 		.tunnel_mtu = tmtu,
@@ -298,6 +316,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.dscp = dscp,
 		.istio_dscp = istio_dscp,
 		.maglev_lut_size = maglev_lut_size,
+		.host_ifindex = host_ifindex,
 	};
 
 	strncpy(v4.iface_name, iface_name, sizeof(v4.iface_name));
