@@ -76,23 +76,50 @@ func (cm *compactMap) getHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
 	return cm.slice()[arrayIdx], true
 }
 
+// compactIter is a pull-style iterator over a compactMap's key/value pairs.
+// It is a value type (~48 bytes) designed to live on the caller's stack,
+// avoiding the heap escapes that range-over-function closures cause.
+type compactIter struct {
+	snap      *keyTableSnap
+	vals      []uniquestr.Handle
+	remaining uint64
+	arrayIdx  int
+}
+
+func (cm *compactMap) iter() compactIter {
+	kb := cm.keyBits()
+	var snap *keyTableSnap
+	var vals []uniquestr.Handle
+	if kb != 0 {
+		snap = globalKeyTable.currentSnap()
+		vals = cm.slice()
+	}
+	return compactIter{snap: snap, vals: vals, remaining: kb}
+}
+
+// hasNext reports whether there are more pairs to iterate.
+func (it *compactIter) hasNext() bool {
+	return it.remaining != 0
+}
+
+// next advances to the next pair and returns it.
+// Must only be called when hasNext() is true.
+func (it *compactIter) next() (uniquestr.Handle, uniquestr.Handle) {
+	pos := bits.TrailingZeros64(it.remaining)
+	k := it.snap.byIndex[pos]
+	v := it.vals[it.arrayIdx]
+	it.remaining &= it.remaining - 1
+	it.arrayIdx++
+	return k, v
+}
+
 func (cm *compactMap) allHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
 	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
-		kb := cm.keyBits()
-		if kb == 0 {
-			return
-		}
-		snap := globalKeyTable.currentSnap()
-		vals := cm.slice()
-		bf := kb
-		arrayIdx := 0
-		for bf != 0 {
-			pos := bits.TrailingZeros64(bf)
-			if !yield(snap.byIndex[pos], vals[arrayIdx]) {
+		it := cm.iter()
+		for it.hasNext() {
+			if !yield(it.next()) {
 				return
 			}
-			bf &= bf - 1
-			arrayIdx++
 		}
 	}
 }

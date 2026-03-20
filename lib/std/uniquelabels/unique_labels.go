@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"math/bits"
 	"unsafe"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
@@ -293,17 +292,9 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 	mb := mapBuilder(buf[:0])
 	aLen := a.Len()
 	if cm, ok := a.compact(); ok {
-		kb := cm.keyBits()
-		snap := globalKeyTable.currentSnap()
-		vals := cm.slice()
-		remaining := kb
-		arrayIdx := 0
-		for remaining != 0 {
-			pos := bits.TrailingZeros64(remaining)
-			k := snap.byIndex[pos]
-			v := vals[arrayIdx]
-			remaining &= remaining - 1
-			arrayIdx++
+		it := cm.iter()
+		for it.hasNext() {
+			k, v := it.next()
 			if !include(k, v) {
 				continue
 			}
