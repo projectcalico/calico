@@ -15,50 +15,36 @@
 package operator
 
 import (
-	_ "embed"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
-	"text/template"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/manager/branch"
-)
-
-var (
-	//go:embed templates/images.go.gotmpl
-	componentImagesFileTemplate string
-
-	componentImagesFilePath = filepath.Join("pkg", "components", "images.go")
 )
 
 const (
 	DefaultImage               = registry.TigeraOperatorImage
 	DefaultOrg                 = utils.TigeraOrg
 	DefaultRepoName            = "operator"
-	DefaultRemote              = utils.DefaultRemote
 	DefaultBranchName          = utils.DefaultBranch
 	DefaultReleaseBranchPrefix = "release"
-	DefaultDevTagSuffix        = "0.dev"
 	DefaultRegistry            = "quay.io"
+)
+
+var (
+	defaultProductEnvPrefix = "CALICO"
+	defaultProductRegistry  = registry.DefaultCalicoRegistries[0]
 )
 
 type OperatorManager struct {
 	// Allow specification of command runner so it can be overridden in tests.
 	runner command.CommandRunner
-
-	// dockerRunner is for navigating docker
-	docker *registry.DockerRunner
 
 	// version is the operator version
 	version string
@@ -69,11 +55,12 @@ type OperatorManager struct {
 	// calicoDir is the absolute path to the root directory of the calico repository
 	calicoDir string
 
-	// tmpDir is the absolute path to the temporary directory
-	tmpDir string
+	// calicoVersion is the version of calico to use for the operator. This is only used for hashreleases.
+	calicoVersion string
 
-	// outputDir is the absolute path to the output directory
-	outputDir string
+	// pinnedComponentsFile is the path to the file containing the pinned components for the operator.
+	// This is used for hashreleases and supersedes using calicoVersion.
+	pinnedComponentsFile string
 
 	// image is the name of the operator image (e.g. tigera/operator)
 	image string
@@ -83,21 +70,6 @@ type OperatorManager struct {
 
 	// productRegistry is the registry to use for product images (e.g. quay.io/calico)
 	productRegistry string
-
-	// origin remote repository
-	remote string
-
-	// githubOrg is the organization of the repository
-	githubOrg string
-
-	// repoName is the name of the repository
-	repoName string
-
-	// branch is the branch to use
-	branch string
-
-	// devTag is the development tag identifier
-	devTagIdentifier string
 
 	// releaseBranchPrefix is the prefix for the release branch
 	releaseBranchPrefix string
@@ -121,261 +93,191 @@ type OperatorManager struct {
 
 func NewManager(opts ...Option) *OperatorManager {
 	o := &OperatorManager{
-		runner:          &command.RealCommandRunner{},
-		docker:          registry.MustDockerRunner(),
-		registry:        DefaultRegistry,
-		image:           DefaultImage,
-		productRegistry: registry.DefaultCalicoRegistries[0],
-		validate:        true,
-		publish:         true,
+		runner:   &command.RealCommandRunner{},
+		registry: DefaultRegistry,
+		image:    DefaultImage,
+		validate: true,
+		publish:  true,
 	}
 	for _, opt := range opts {
 		if err := opt(o); err != nil {
 			logrus.WithError(err).Fatal("Failed to apply option")
 		}
 	}
-
+	if o.productRegistry == "" {
+		o.productRegistry = defaultProductRegistry
+	}
 	return o
 }
 
-// imageParts splits the operator image into registry and image name.
-// Typically the operator image is something like "tigera/operator".
-// This function splits it into "tigera" and "operator".
-func (o *OperatorManager) imageParts() (imagePath string, imageName string, err error) {
-	parts := strings.Split(o.image, "/")
-	if len(parts) != 2 {
-		err = fmt.Errorf("failed to parse operator image: %s", o.image)
-		return
+func (o *OperatorManager) Build() error {
+	if err := o.PreBuildValidation(); err != nil {
+		return err
 	}
-	imagePath = strings.TrimSuffix(parts[0], "/")
-	imageName = strings.TrimPrefix(parts[1], "/")
-	return
+	env, logFields := o.env()
+	logFields["product_registry"] = o.productRegistry
+	r, i, err := o.productRegistryParts()
+	if err != nil {
+		return err
+	}
+	logFields[fmt.Sprintf("%s_registry", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
+	logFields[fmt.Sprintf("%s_image_path", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
+	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, r))
+	env = append(env, fmt.Sprintf("%s_IMAGE_PATH=%s", defaultProductEnvPrefix, i))
+	if o.isHashRelease {
+		if o.pinnedComponentsFile != "" {
+			env = append(env, fmt.Sprintf("%s_VERSIONS=%s", defaultProductEnvPrefix, o.pinnedComponentsFile))
+			logFields["pinned_components_file"] = o.pinnedComponentsFile
+		} else if o.calicoVersion != "" {
+			env = append(env, fmt.Sprintf("%s_VERSION=%s", defaultProductEnvPrefix, o.calicoVersion))
+			logFields["calico_version"] = o.calicoVersion
+		}
+		if o.calicoDir != "" {
+			env = append(env, fmt.Sprintf("%s_DIR=%s", defaultProductEnvPrefix, o.calicoDir))
+			logFields["calico_dir"] = o.calicoDir
+		}
+	}
+	logrus.WithFields(logFields).Info("Building operator")
+	out, err := o.make("release", env)
+	if err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("failed to build operator: %w", err)
+	}
+	logrus.WithFields(logFields).Infof("Built operator: %s", out)
+	return nil
+}
+
+func (o *OperatorManager) env() ([]string, logrus.Fields) {
+	logFields := logrus.Fields{
+		"registry": o.registry,
+		"image":    o.image,
+		"version":  o.version,
+	}
+	env := append(os.Environ(),
+		fmt.Sprintf("REGISTRY=%s", o.registry),
+		fmt.Sprintf("IMAGE_NAME=%s", o.image),
+		fmt.Sprintf("VERSION=%s", o.version),
+	)
+	if o.isHashRelease {
+		logFields["hashrelease"] = "true"
+		env = append(env, "HASHRELEASE=true")
+	}
+	if len(o.architectures) > 0 {
+		archs := strings.Join(o.architectures, ",")
+		env = append(env, fmt.Sprintf("ARCHS=%s", archs))
+		logFields["arch"] = archs
+	}
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		env = append(env, "DEBUG=true")
+	}
+	return env, logFields
 }
 
 // productRegistryParts splits the product registry into registry and image path.
 // Typically the product registry is something like "docker.io/calico" or "quay.io/calico".
 // This function splits it into "docker.io" and "calico" or "quay.io" and "calico".
 func (o *OperatorManager) productRegistryParts() (registry string, imagePath string, err error) {
-	parts := strings.Split(o.productRegistry, "/")
+	// Split and filter out empty parts from double slashes or trailing slashes.
+	var parts []string
+	for _, part := range strings.Split(o.productRegistry, "/") {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
 	if len(parts) < 2 {
 		err = fmt.Errorf("failed to parse product registry: %s", o.productRegistry)
 		return
 	}
-	registry = strings.Join(parts[:len(parts)-1], "/")
-	imagePath = parts[len(parts)-1]
+	registry = strings.Join(parts[:len(parts)-1], "/") + "/"
+	imagePath = parts[len(parts)-1] + "/"
 	return
 }
 
-// modifyComponentsImagesFile overwrites the pkg/components/images.go file
-// with the contents of the embedded file to ensure that operator has the right registries.
-// This is ONLY used by hashreleases because the operator uses the images.go file to determine the registry.
-func (o *OperatorManager) modifyComponentsImagesFile() error {
-	destFilePath := filepath.Join(o.dir, componentImagesFilePath)
-	dest, err := os.OpenFile(destFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
-	if err != nil {
-		return fmt.Errorf("failed to open file %s: %w", destFilePath, err)
-	}
-	defer func() { _ = dest.Close() }()
-	tmpl, err := template.New("pkg/components/images.go").Parse(componentImagesFileTemplate)
-	if err != nil {
-		return fmt.Errorf("failed to parse template to overwrite %s file: %w", destFilePath, err)
-	}
-
-	imagePath, _, err := o.imageParts()
-	if err != nil {
-		return err
-	}
-	productRegistry, productImagePath, err := o.productRegistryParts()
-	if err != nil {
-		return err
-	}
-
-	if err := tmpl.Execute(dest, map[string]string{
-		"ImagePath":        imagePath,
-		"Registry":         o.registry,
-		"ProductImagePath": productImagePath,
-		"ProductRegistry":  productRegistry,
-		"Year":             time.Now().Format("2006"),
-	}); err != nil {
-		return fmt.Errorf("failed to write to file %s: %w", destFilePath, err)
-	}
-	return nil
-}
-
-func (o *OperatorManager) Build() error {
-	if !o.isHashRelease {
-		return fmt.Errorf("operator manager builds only for hash releases")
-	}
-	if o.validate {
-		if err := o.PreBuildValidation(); err != nil {
-			return err
-		}
-	}
-	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(o.tmpDir, o.outputDir)
-	if err != nil {
-		return err
-	}
-	if component.Image != o.image {
-		return fmt.Errorf("operator image mismatch: expected %s, got %s", o.image, component.Image)
-	}
-	defer func() {
-		if _, err := o.runner.RunInDir(o.dir, "git", []string{"reset", "--hard"}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to reset repository")
-		}
-	}()
-	if err := o.modifyComponentsImagesFile(); err != nil {
-		return err
-	}
-	env := os.Environ()
-	env = append(env, fmt.Sprintf("OS_VERSIONS=%s", componentsVersionPath))
-	env = append(env, fmt.Sprintf("CALICO_CRDS_DIR=%s", o.calicoDir))
-	if _, err := o.make("gen-versions", env); err != nil {
-		return fmt.Errorf("failed to generate versions: %w", err)
-	}
-	env = os.Environ()
-	env = append(env, fmt.Sprintf("ARCHES=%s", strings.Join(o.architectures, " ")))
-	env = append(env, fmt.Sprintf("GIT_VERSION=%s", component.Version))
-	env = append(env, fmt.Sprintf("BUILD_IMAGE=%s", component.Image))
-	if _, err := o.make("image-all", env); err != nil {
-		return fmt.Errorf("failed to build images: %w", err)
-	}
-	for _, arch := range o.architectures {
-		currentTag := fmt.Sprintf("%s:latest-%s", component.Image, arch)
-		newTag := fmt.Sprintf("%s-%s", component.String(), arch)
-		if err := o.docker.TagImage(currentTag, newTag); err != nil {
-			return fmt.Errorf("failed to tag image %q as %q: %w", currentTag, newTag, err)
-		}
-	}
-	env = os.Environ()
-	env = append(env, fmt.Sprintf("GIT_VERSION=%s", component.Version))
-	env = append(env, fmt.Sprintf("BUILD_IMAGE=%s", component.Image))
-	env = append(env, fmt.Sprintf("BUILD_INIT_IMAGE=%s", component.InitImage().Image))
-	if _, err := o.make("image-init", env); err != nil {
-		return fmt.Errorf("failed to create init image: %w", err)
-	}
-	currentTag := fmt.Sprintf("%s:latest", component.InitImage().Image)
-	newTag := component.InitImage().String()
-	if err := o.docker.TagImage(currentTag, newTag); err != nil {
-		return fmt.Errorf("failed to tag image %q as %q: %w", currentTag, newTag, err)
-	}
-	return nil
-}
-
 func (o *OperatorManager) PreBuildValidation() error {
-	if !o.isHashRelease {
-		return fmt.Errorf("operator manager builds only for hash releases")
+	if !o.validate {
+		return nil
+	}
+	if o.dir == "" {
+		return fmt.Errorf("no repository root specified")
 	}
 	var errStack error
-	if o.dir == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no repository root specified"))
+	dirty, err := utils.GitIsDirty(o.dir)
+	if err != nil {
+		return fmt.Errorf("failed to check if git is dirty: %w", err)
 	}
-	if o.validateBranch {
-		branch, err := utils.GitBranch(o.dir)
-		if err != nil {
-			return fmt.Errorf("failed to determine branch: %s", err)
+	if dirty {
+		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them"))
+	}
+	if o.isHashRelease {
+		if o.calicoVersion == "" && o.pinnedComponentsFile == "" {
+			errStack = errors.Join(errStack, errors.New("hashrelease requires either a calico version or the pinned components file to be specified"))
 		}
-		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, o.releaseBranchPrefix)
-		re := regexp.MustCompile(match)
-		if !re.MatchString(branch) {
-			errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
+		if o.calicoDir == "" {
+			errStack = errors.Join(errStack, errors.New("hashrelease requires the calico directory to be specified"))
 		}
-		dirty, err := utils.GitIsDirty(o.dir)
-		if err != nil {
-			return fmt.Errorf("failed to check if git is dirty: %s", err)
-		}
-		if dirty {
-			errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before building the hashrelease"))
-		}
+	}
+	if !o.validateBranch {
 		return errStack
 	}
-	if len(o.architectures) == 0 {
-		errStack = errors.Join(errStack, fmt.Errorf("no architectures specified"))
-	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
+	branch, err := utils.GitBranch(o.dir)
 	if err != nil {
-		return fmt.Errorf("failed to get operator component: %s", err)
+		return fmt.Errorf("failed to determine branch: %w", err)
 	}
-	if operatorComponent.Version != o.version {
-		errStack = errors.Join(errStack, fmt.Errorf("operator version mismatch: expected %s, got %s", o.version, operatorComponent.Version))
+	match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, o.releaseBranchPrefix)
+	re := regexp.MustCompile(match)
+	if !re.MatchString(branch) {
+		errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
+	}
+	return errStack
+}
+
+func (o *OperatorManager) PrePublishValidation() error {
+	if !o.publish {
+		return nil
+	}
+	if o.dir == "" {
+		return fmt.Errorf("no repository root specified")
+	}
+	var errStack error
+	if o.image == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no operator image specified"))
+	}
+	if o.registry == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no operator registry specified"))
+	}
+	if o.version == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no version specified"))
 	}
 	return errStack
 }
 
 func (o *OperatorManager) Publish() error {
-	if o.validate {
-		if err := o.PrePublishValidation(); err != nil {
-			return err
-		}
-	}
-	fields := logrus.Fields{}
 	if !o.publish {
-		logrus.Warn("Skipping publish is set, will treat as dry-run")
-		fields["dry-run"] = "true"
+		logrus.Warn("Skipping publishing operator")
+		return nil
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get operator component")
-		return fmt.Errorf("failed to get operator component: %w", err)
-	}
-	var imageList []string
-	for _, arch := range o.architectures {
-		imgName := fmt.Sprintf("%s-%s", operatorComponent.String(), arch)
-		fields["image"] = imgName
-		if o.publish {
-			if err := o.docker.PushImage(imgName); err != nil {
-				return err
-			}
-		}
-		logrus.WithFields(fields).Info("Pushed operator image")
-		imageList = append(imageList, imgName)
-	}
-	delete(fields, "image")
-	manifestListName := operatorComponent.String()
-	fields["manifest"] = manifestListName
-	if o.publish {
-		if err = o.docker.ManifestPush(manifestListName, imageList); err != nil {
-			return fmt.Errorf("failed to push manifest list: %w", err)
-		}
-	}
-	logrus.WithFields(fields).Info("Pushed operator manifest")
-	delete(fields, "manifest")
-	initImage := operatorComponent.InitImage()
-	fields["image"] = initImage
-	if o.publish {
-		if err := o.docker.PushImage(initImage.String()); err != nil {
-			return fmt.Errorf("failed to push init image: %w", err)
-		}
-	}
-	logrus.WithFields(fields).Info("Pushed operator init image")
-	return nil
-}
 
-func (o *OperatorManager) PrePublishValidation() error {
-	if !o.isHashRelease {
-		return fmt.Errorf("operator manager publishes only for hash releases")
+	env, logFields := o.env()
+	logrus.WithFields(logFields).Info("Publishing operator")
+	out, err := o.make("release-publish", env)
+	if err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("failed to publish operator: %w", err)
 	}
-	if len(o.architectures) == 0 {
-		return fmt.Errorf("no architectures specified")
-	}
-	if !o.publish {
-		logrus.Warn("Skipping publish is set, will treat as dry-run")
-	}
+	logrus.WithFields(logFields).Infof("Published operator: %s", out)
 	return nil
 }
 
 func (o *OperatorManager) PreReleasePublicValidation() error {
+	if !o.publish || !o.validate {
+		return nil
+	}
 	var errStack error
-	if o.githubOrg == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("GitHub organization not specified"))
-	}
-	if o.repoName == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("GitHub repository not specified"))
-	}
-	if o.remote == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no git remote specified"))
+	if o.dir == "" {
+		errStack = errors.Join(errStack, fmt.Errorf("no repository root specified"))
 	}
 	if o.version == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no operator version specified"))
+		errStack = errors.Join(errStack, fmt.Errorf("no version specified"))
 	}
 	return errStack
 }
@@ -383,52 +285,23 @@ func (o *OperatorManager) PreReleasePublicValidation() error {
 // ReleasePublic publishes the current draft release of the operator to make it publicly available.
 // It determines the latest release version, compares it with the current version, and marks the release as the latest if applicable.
 func (o *OperatorManager) ReleasePublic() error {
-	if !o.validate {
-		if err := o.PreReleasePublicValidation(); err != nil {
-			return err
-		}
+	if !o.publish {
+		logrus.Warn("Skipping releasing operator to public")
+		return nil
 	}
-	// Get the latest version
-	args := []string{
-		"release", "list", "--repo", fmt.Sprintf("%s/%s", o.githubOrg, o.repoName),
-		"--exclude-drafts", "--exclude-prereleases", "--json 'name,isLatest'",
-		"--jq '.[] | select(.isLatest) | .name'",
+	if err := o.PreReleasePublicValidation(); err != nil {
+		return err
 	}
-	out, err := o.runner.RunInDir(o.calicoDir, "./bin/gh", args, nil)
+	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", o.version))
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		env = append(env, "DEBUG=true")
+	}
+	out, err := o.make("release-public", env)
 	if err != nil {
-		return fmt.Errorf("failed to get latest release: %s", err)
-	}
-
-	// Publish the draft release
-	args = []string{
-		"release", "edit", o.version, "--draft=false",
-		"--repo", fmt.Sprintf("%s/%s", o.githubOrg, o.repoName),
-	}
-	latest := version.New(strings.TrimSpace(out))
-	current := version.New(o.version)
-	if current.Semver().GreaterThan(latest.Semver()) {
-		args = append(args, "--latest")
-	}
-	_, err = o.runner.RunInDir(o.calicoDir, "./bin/gh", args, nil)
-	if err != nil {
-		return fmt.Errorf("failed to publish %s draft release: %s", o.version, err)
+		logrus.Error(out)
+		return fmt.Errorf("failed to release operator: %w", err)
 	}
 	return nil
-}
-
-func (o *OperatorManager) CutBranch(stream string) error {
-	m := branch.NewManager(branch.WithRepoRoot(o.dir),
-		branch.WithRepoRemote(o.remote),
-		branch.WithMainBranch(o.branch),
-		branch.WithDevTagIdentifier(o.devTagIdentifier),
-		branch.WithReleaseBranchPrefix(o.releaseBranchPrefix),
-		branch.WithValidate(o.validate),
-		branch.WithPublish(o.publish))
-
-	if stream == "" {
-		return m.CutReleaseBranch()
-	}
-	return m.CutVersionedBranch(stream)
 }
 
 func (o *OperatorManager) make(target string, env []string) (string, error) {

@@ -145,6 +145,14 @@ spec:
                     type: string
                   type: array
                   x-kubernetes-list-type: set
+                ipv4NormalRoutePriority:
+                  maximum: 2147483646
+                  minimum: 1
+                  type: integer
+                ipv6NormalRoutePriority:
+                  maximum: 2147483646
+                  minimum: 1
+                  type: integer
                 listenPort:
                   maximum: 65535
                   minimum: 1
@@ -191,6 +199,11 @@ spec:
                     x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
+                programClusterRoutes:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 serviceClusterIPs:
                   items:
                     properties:
@@ -228,6 +241,21 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message:
+                    nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is
+                    false
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.nodeMeshPassword) || !has(self.nodeToNodeMeshEnabled)
+                    || self.nodeToNodeMeshEnabled == true"
+                - message:
+                    nodeMeshMaxRestartTime cannot be set when nodeToNodeMeshEnabled
+                    is false
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.nodeMeshMaxRestartTime) || !has(self.nodeToNodeMeshEnabled)
+                    || self.nodeToNodeMeshEnabled == true"
           type: object
       served: true
       storage: true
@@ -269,9 +297,29 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              maxLength: 32
+                              pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -280,6 +328,54 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          maxProperties: 1
+                          minProperties: 1
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  maxLength: 32
+                                  pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -295,6 +391,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -303,6 +403,21 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
                 exportV6:
                   items:
@@ -312,9 +427,29 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              maxLength: 32
+                              pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -323,6 +458,54 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          maxProperties: 1
+                          minProperties: 1
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  maxLength: 32
+                                  pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -338,6 +521,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -346,6 +533,21 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
                 importV4:
                   items:
@@ -355,9 +557,29 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
+                        maxLength: 18
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              maxLength: 32
+                              pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -366,6 +588,54 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          maxProperties: 1
+                          minProperties: 1
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  maxLength: 32
+                                  pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -381,6 +651,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -389,6 +663,21 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
                 importV6:
                   items:
@@ -398,9 +687,29 @@ spec:
                           - Accept
                           - Reject
                         type: string
+                      asPathPrefix:
+                        items:
+                          format: int32
+                          type: integer
+                        type: array
                       cidr:
                         format: cidr
+                        maxLength: 43
                         type: string
+                      communities:
+                        properties:
+                          values:
+                            items:
+                              maxLength: 32
+                              pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                              type: string
+                            maxItems: 1
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                        x-kubernetes-map-type: atomic
                       interface:
                         type: string
                       matchOperator:
@@ -409,6 +718,54 @@ spec:
                           - NotEqual
                           - In
                           - NotIn
+                        type: string
+                      operations:
+                        items:
+                          maxProperties: 1
+                          minProperties: 1
+                          properties:
+                            addCommunity:
+                              properties:
+                                value:
+                                  maxLength: 32
+                                  pattern: ^(([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]):([0-9]|[1-9][0-9]{1,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])|([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]):([0-9]|[1-9][0-9]{1,8}|[1-3][0-9]{9}|4[0-1][0-9]{8}|42[0-8][0-9]{7}|429[0-3][0-9]{6}|4294[0-8][0-9]{5}|42949[0-5][0-9]{4}|429496[0-6][0-9]{3}|4294967[0-1][0-9]{2}|42949672[0-8][0-9]|429496729[0-5]))$
+                                  type: string
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prependASPath:
+                              properties:
+                                prefix:
+                                  items:
+                                    format: int32
+                                    type: integer
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - prefix
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            setPriority:
+                              properties:
+                                value:
+                                  maximum: 2147483646
+                                  minimum: 1
+                                  type: integer
+                              required:
+                                - value
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        maxItems: 10
+                        minItems: 1
+                        type: array
+                      peerType:
+                        enum:
+                          - eBGP
+                          - iBGP
                         type: string
                       prefixLength:
                         properties:
@@ -424,6 +781,10 @@ spec:
                             type: integer
                         type: object
                         x-kubernetes-map-type: atomic
+                      priority:
+                        maximum: 2147483646
+                        minimum: 1
+                        type: integer
                       source:
                         enum:
                           - RemotePeers
@@ -432,6 +793,21 @@ spec:
                       - action
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                      - message: cidr and matchOperator must both be set or both be empty
+                        reason: FieldValueInvalid
+                        rule:
+                          (has(self.cidr) && size(self.cidr) > 0) == (has(self.matchOperator)
+                          && size(self.matchOperator) > 0)
+                      - message: cidr is required when prefixLength is set
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.prefixLength) || (has(self.cidr) && size(self.cidr)
+                          > 0)"
+                      - message: operations may only be used with action Accept
+                        rule:
+                          "!has(self.operations) || size(self.operations) == 0 ||
+                          self.action == 'Accept'"
                   type: array
               type: object
           type: object
@@ -482,6 +858,7 @@ spec:
                   format: int32
                   type: integer
                 localWorkloadSelector:
+                  maxLength: 4096
                   type: string
                 maxRestartTime:
                   type: string
@@ -492,8 +869,10 @@ spec:
                     - Keep
                   type: string
                 node:
+                  maxLength: 253
                   type: string
                 nodeSelector:
+                  maxLength: 4096
                   type: string
                 numAllowedLocalASNumbers:
                   format: int32
@@ -515,8 +894,10 @@ spec:
                       x-kubernetes-map-type: atomic
                   type: object
                 peerIP:
+                  maxLength: 64
                   type: string
                 peerSelector:
+                  maxLength: 4096
                   type: string
                 reachableBy:
                   type: string
@@ -537,6 +918,37 @@ spec:
                 ttlSecurity:
                   type: integer
               type: object
+              x-kubernetes-validations:
+                - message: node and nodeSelector cannot both be set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.node) || size(self.node) == 0) || (!has(self.nodeSelector)
+                    || size(self.nodeSelector) == 0)
+                - message: peerIP and peerSelector cannot both be set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.peerIP) || size(self.peerIP) == 0) || (!has(self.peerSelector)
+                    || size(self.peerSelector) == 0)
+                - message: asNumber must be empty when peerSelector is set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.peerSelector) || size(self.peerSelector) == 0) || !has(self.asNumber)
+                    || self.asNumber == 0
+                - message: peerIP must be empty when localWorkloadSelector is set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (!has(self.peerIP) || size(self.peerIP) == 0)
+                - message: peerSelector must be empty when localWorkloadSelector is set
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (!has(self.peerSelector) || size(self.peerSelector) == 0)
+                - message: asNumber is required when localWorkloadSelector is set
+                  reason: FieldValueInvalid
+                  rule:
+                    (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
+                    == 0) || (has(self.asNumber) && self.asNumber != 0)
           type: object
       served: true
       storage: true
@@ -1153,7 +1565,8 @@ spec:
                 bpfKubeProxyHealthzPort:
                   description: |-
                     BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
-                    The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
+                    The health check server is used by external load balancers to determine if this node should receive traffic.
+                    Set to 0 to disable the health check server.  [Default: 10256]
                   type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
                   description: |-
@@ -1722,11 +2135,51 @@ spec:
                     to reduce Felix CPU usage. [Default: 10s]
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                ipv4ElevatedRoutePriority:
+                  description: |-
+                    Route Priority value for an elevated priority Calico-programmed IPv4 route.  Note, higher
+                    values mean lower priority.  Elevated priority is used during VM live migration, and for
+                    optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
+                    [Default: 512]
+                  type: integer
+                ipv4NormalRoutePriority:
+                  description: |-
+                    Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
+                    values mean lower priority. [Default: 1024]
+                  type: integer
+                ipv6ElevatedRoutePriority:
+                  description: |-
+                    Route Priority value for an elevated priority Calico-programmed IPv6 route.  Note, higher
+                    values mean lower priority.  Elevated priority is used during VM live migration, and for
+                    optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
+                    [Default: 512]
+                  type: integer
+                ipv6NormalRoutePriority:
+                  description: |-
+                    Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
+                    values mean lower priority. [Default: 1024]
+                  type: integer
                 ipv6Support:
                   description:
                     IPv6Support controls whether Felix enables support for
                     IPv6 (if supported by the in-use dataplane).
                   type: boolean
+                istioAmbientMode:
+                  description: |-
+                    IstioAmbientMode configures Felix to work together with Tigera's Istio distribution.
+                    [Default: Disabled]
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                istioDSCPMark:
+                  description: |-
+                    IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
+                    SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
+                    with other Istio installation. [Default: 23]
+                  pattern: ^.*
+                  type: integer
+                  x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   description: |-
                     KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.
@@ -1738,6 +2191,13 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                liveMigrationRouteConvergenceTime:
+                  description: |-
+                    LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
+                    VM live migration completes.  This allows routes to converge across the cluster before
+                    reverting to normal priority. [Default: 30s]
+                  pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
                 logActionRateLimit:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
@@ -1905,8 +2365,10 @@ spec:
                   type: string
                 programClusterRoutes:
                   description: |-
-                    ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
-                    Felix always programs VXLAN routes. [Default: Disabled]
+                    ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
+                    when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
+                    it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
+                    Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
                   enum:
                     - Enabled
                     - Disabled
@@ -2188,6 +2650,10 @@ spec:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
               type: object
+              x-kubernetes-validations:
+                - message: routeTableRange and routeTableRanges cannot both be set
+                  reason: FieldValueForbidden
+                  rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           type: object
       served: true
       storage: true
@@ -2291,15 +2757,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -2309,10 +2779,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -2332,10 +2806,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -2402,6 +2880,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -2469,15 +2963,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -2487,10 +2985,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -2510,10 +3012,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -2580,6 +3086,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 namespaceSelector:
                   type: string
@@ -2611,6 +3133,29 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: preDNAT and doNotTrack cannot both be true
+                  reason: FieldValueForbidden
+                  rule:
+                    "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
+                    && self.preDNAT))"
+                - message: preDNAT policy cannot have any egress rules
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
+                    size(self.egress) == 0
+                - message: preDNAT policy cannot have 'Egress' type
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
+                    t == 'Egress')
+                - message:
+                    applyOnForward must be true if either preDNAT or doNotTrack
+                    is true
+                  reason: FieldValueInvalid
+                  rule:
+                    (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
+                    || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
           type: object
       served: true
       storage: true
@@ -2689,8 +3234,10 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 interfaceName:
+                  maxLength: 15
                   type: string
                 node:
+                  maxLength: 253
                   type: string
                 ports:
                   items:
@@ -2699,7 +3246,7 @@ spec:
                         type: string
                       port:
                         maximum: 65535
-                        minimum: 0
+                        minimum: 1
                         type: integer
                       protocol:
                         anyOf:
@@ -2719,6 +3266,15 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: at least one of interfaceName or expectedIPs must be specified
+                  reason: FieldValueInvalid
+                  rule:
+                    (has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs)
+                    && size(self.expectedIPs) > 0)
+                - message: node must be specified
+                  reason: FieldValueInvalid
+                  rule: has(self.node) && size(self.node) > 0
           type: object
       served: true
       storage: true
@@ -2940,6 +3496,7 @@ spec:
                       - Tunnel
                       - LoadBalancer
                     type: string
+                  maxItems: 10
                   type: array
                   x-kubernetes-list-type: set
                 assignmentMode:
@@ -2952,9 +3509,22 @@ spec:
                   maximum: 128
                   minimum: 0
                   type: integer
+                  x-kubernetes-validations:
+                    - message:
+                        Block size cannot be changed; follow IP pool migration
+                        guide to avoid corruption.
+                      reason: FieldValueInvalid
+                      rule: self == oldSelf
                 cidr:
                   format: cidr
+                  maxLength: 48
                   type: string
+                  x-kubernetes-validations:
+                    - message:
+                        CIDR cannot be changed; follow IP pool migration guide
+                        to avoid corruption.
+                      reason: FieldValueInvalid
+                      rule: self == oldSelf
                 disableBGPExport:
                   type: boolean
                 disabled:
@@ -2980,6 +3550,32 @@ spec:
               required:
                 - cidr
               type: object
+              x-kubernetes-validations:
+                - message: ipipMode and vxlanMode cannot both be enabled
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode
+                    == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode)
+                    == 0 || size(self.vxlanMode) == 0"
+                - message: LoadBalancer IP pool cannot have IPIP or VXLAN enabled
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode
+                    == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) ==
+                    0 || self.vxlanMode == 'Never')"
+                - message:
+                    LoadBalancer cannot be combined with Workload or Tunnel allowed
+                    uses
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')"
+                - message: IPIP is not supported on IPv6 pools
+                  reason: FieldValueForbidden
+                  rule:
+                    "!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode
+                    == 'Never' || size(self.ipipMode) == 0"
           type: object
       served: true
       storage: true
@@ -3391,15 +3987,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -3409,10 +4009,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -3432,10 +4036,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -3502,6 +4110,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -3569,15 +4193,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -3587,10 +4215,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -3610,10 +4242,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -3680,6 +4316,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 order:
                   type: number
@@ -3849,15 +4501,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -3867,10 +4523,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -3890,10 +4550,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -3960,6 +4624,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -4027,15 +4707,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -4045,10 +4729,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -4068,10 +4756,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -4138,6 +4830,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 namespaceSelector:
                   type: string
@@ -4156,6 +4864,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete
@@ -4176,6 +4885,29 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: preDNAT and doNotTrack cannot both be true
+                  reason: FieldValueForbidden
+                  rule:
+                    "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
+                    && self.preDNAT))"
+                - message: preDNAT policy cannot have any egress rules
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
+                    size(self.egress) == 0
+                - message: preDNAT policy cannot have 'Egress' type
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
+                    t == 'Egress')
+                - message:
+                    applyOnForward must be true if either preDNAT or doNotTrack
+                    is true
+                  reason: FieldValueInvalid
+                  rule:
+                    (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
+                    || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
           type: object
       served: true
       storage: true
@@ -4425,6 +5157,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete
@@ -4531,15 +5264,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -4549,10 +5286,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -4572,10 +5313,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -4642,6 +5387,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 ingress:
                   items:
@@ -4709,15 +5470,19 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
                         type: object
                       icmp:
@@ -4727,10 +5492,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -4750,10 +5519,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -4820,6 +5593,22 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
                 order:
                   type: number
@@ -4834,6 +5623,7 @@ spec:
                 serviceAccountSelector:
                   type: string
                 stagedAction:
+                  default: Set
                   enum:
                     - Set
                     - Delete
@@ -4897,6 +5687,7 @@ spec:
                     - enum:
                         - Pass
                         - Deny
+                  default: Deny
                   type: string
                 order:
                   type: number
@@ -6364,6 +7155,7 @@ rules:
     resources:
       - ippools
       - felixconfigurations
+      - bgpconfigurations
       - clusterinformations
     verbs:
       - create

@@ -305,14 +305,12 @@ describe('<OmniFilters />', () => {
             ActionOmniFilterMock.onChange({
                 action: 'Allow',
                 staged_action: 'Deny',
-                pending_action: 'Allow',
             });
         });
 
         expect(mockOnMultiChange).toHaveBeenCalledWith({
             action: ['Allow'],
             staged_action: ['Deny'],
-            pending_action: ['Allow'],
         });
     });
 
@@ -330,14 +328,12 @@ describe('<OmniFilters />', () => {
             ActionOmniFilterMock.onChange({
                 action: '',
                 staged_action: '',
-                pending_action: '',
             });
         });
 
         expect(mockOnMultiChange).toHaveBeenCalledWith({
             action: [],
             staged_action: [],
-            pending_action: [],
         });
     });
 });

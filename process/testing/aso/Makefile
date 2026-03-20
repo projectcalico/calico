@@ -4,6 +4,7 @@ KIND_VERSION?=v0.24.0
 KUBE_VERSION?=v1.33.7
 HELM_VERSION?=v3.16.3
 GOMPLATE_VERSION?=v3.11.7
+CRANE_VERSION?=v0.21.2
 
 KIND_CLUSTER_NAME?=kind
 
@@ -69,7 +70,7 @@ CALICO_MARKER:=.calico-installed
 .PHONY: install-calico
 install-calico: $(CALICO_MARKER)
 
-$(CALICO_MARKER): $(KUBEADM_MARKER)
+$(CALICO_MARKER): $(KUBEADM_MARKER) $(BINDIR)/crane
 	@echo "Installing Calico ..."
 	./install-calico.sh
 	touch $@
@@ -119,6 +120,13 @@ $(BINDIR)/helm:
 	chmod +x $@
 	touch $@
 
+CRANE_ARCH = $(subst amd64,x86_64,$(ARCH))
+$(BINDIR)/crane:
+	mkdir -p $(@D)
+	curl -sSfL --retry 5 -o /tmp/crane.tar.gz https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz
+	tar xz -C $(@D) -f /tmp/crane.tar.gz crane && rm -f /tmp/crane.tar.gz
+	touch $@
+
 .PHONY: clean
 clean: delete-vmss uninstall-aso
 	-rm -rf connect.txt
@@ -127,7 +135,7 @@ clean: delete-vmss uninstall-aso
 	-rm -f .sshkey .sshkey.pub
 	-rm -f $(HELPERS)
 	-rm -f kubeadm-config.yaml
-	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml cert-manager.yaml
+	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml cert-manager.yaml kube-proxy-windows.yaml
 	-rm -rf infra/manifests/
 	-rm -rf EE/manifests/
 	-rm -rf OSS/manifests/

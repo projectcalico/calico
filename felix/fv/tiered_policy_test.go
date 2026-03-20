@@ -364,8 +364,8 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 			// BPF
 			out0 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "ingress")
 			out1 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "egress")
-			return strings.Contains(out0, "End of tier tier1: deny") &&
-				strings.Contains(out1, "End of tier tier1: deny")
+			return strings.Contains(out0, "End Tier: tier1  (action: deny)") &&
+				strings.Contains(out1, "End Tier: tier1  (action: deny)")
 		}
 		if BPFMode() {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
@@ -800,6 +800,11 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		}
 
 		It("should generate correct flow logs", func() {
+			// Wait for the initial deny rules to be fully programmed before changing
+			// the tier default action, to avoid racing with the initial programming.
+			Eventually(rulesProgrammed, "15s", "200ms").Should(BeTrue())
+			Consistently(rulesProgrammed, "2s", "200ms").Should(BeTrue())
+
 			tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			tier.Spec.DefaultAction = &actionPass

@@ -141,7 +141,7 @@ export const updateFirstFlowStartTime = (
     setFirstFlowStartTime: (startTime: number | null) => void,
 ) => {
     if (filterFlowStartTime === null && data.length > 0) {
-        const sorted = data.sort(
+        const sorted = data.toSorted(
             (a, b) => b.start_time.getTime() - a.start_time.getTime(),
         );
         setFirstFlowStartTime(sorted[data.length - 1].start_time.getTime());

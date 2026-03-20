@@ -31,7 +31,6 @@ export enum FilterKey {
     start_time = 'start_time',
     action = 'action',
     staged_action = 'staged_action',
-    pending_action = 'pending_action',
 }
 
 export const ListOmniFilterKeys: Omit<
@@ -46,9 +45,7 @@ export const ListOmniFilterKeys: Omit<
     | 'start_time'
     | 'action'
     | 'staged_action'
-    | 'pending_action'
 > = {
-    // [FilterKey.policy]: FilterKey.policy,
     [FilterKey.source_namespace]: FilterKey.source_namespace,
     [FilterKey.source_name]: FilterKey.source_name,
     [FilterKey.dest_namespace]: FilterKey.dest_namespace,
@@ -63,14 +60,8 @@ export type DataListOmniFilterParam = keyof Omit<
 
 export const FilterHintKeys: Omit<
     typeof FilterKey,
-    | 'protocol'
-    | 'dest_port'
-    | 'start_time'
-    | 'action'
-    | 'staged_action'
-    | 'pending_action'
+    'protocol' | 'dest_port' | 'start_time' | 'action' | 'staged_action'
 > = {
-    // [FilterKey.policy]: FilterKey.policy,
     [FilterKey.source_namespace]: FilterKey.source_namespace,
     [FilterKey.source_name]: FilterKey.source_name,
     [FilterKey.dest_namespace]: FilterKey.dest_namespace,
@@ -103,7 +94,6 @@ export const OmniFilterKeys = {
     [FilterKey.start_time]: FilterKey.start_time,
     [FilterKey.action]: FilterKey.action,
     [FilterKey.staged_action]: FilterKey.staged_action,
-    [FilterKey.pending_action]: FilterKey.pending_action,
 } as const;
 
 export type OmniFilterParam = keyof typeof OmniFilterKeys;
@@ -416,15 +406,8 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         transformToFilterHintRequest: transformToList,
         limit: requestPageSize,
     },
-
     staged_action: {
         label: 'Staged Action',
-        filterHintsKey: 'staged_actions',
-        transformToFilterHintRequest: transformToList,
-    },
-
-    pending_action: {
-        label: 'Pending Action',
         filterHintsKey: 'pending_actions',
         transformToFilterHintRequest: transformToList,
     },

@@ -33,6 +33,7 @@ import (
 	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -44,6 +45,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -71,6 +73,12 @@ const (
 
 	// key for ratelimited sync retries.
 	retryKey = "ipamSyncRetry"
+
+	// defaultVMRecreationGracePeriod is the time window to allow VM recreation
+	// (e.g., restart, live migration) before treating the allocation as a leak.
+	// This is separate from the configurable LeakGracePeriod which applies to
+	// pod IP allocations.
+	defaultVMRecreationGracePeriod = 5 * time.Minute
 )
 
 func init() {
@@ -117,7 +125,7 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer) *IPAMController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, deferredInformers *kubevirt.DeferredInformers) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -146,9 +154,10 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 	)
 
 	return &IPAMController{
-		client:    c,
-		clientset: cs,
-		config:    cfg,
+		client:            c,
+		clientset:         cs,
+		config:            cfg,
+		deferredInformers: deferredInformers,
 
 		syncChan: syncChan,
 
@@ -173,6 +182,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		poolManager:                 newPoolManager(),
 		datastoreReady:              true,
 		consolidationWindow:         1 * time.Second,
+		vmRecreationGracePeriod:     defaultVMRecreationGracePeriod,
 
 		// Track blocks which we might want to release.
 		blockReleaseTracker: newBlockReleaseTracker(leakGracePeriod),
@@ -191,6 +201,11 @@ type IPAMController struct {
 	podLister  v1lister.PodLister
 	nodeLister v1lister.NodeLister
 	config     config.NodeControllerConfig
+
+	// deferredInformers provides thread-safe access to KubeVirt VM/VMI cache
+	// indexers. The indexers may be populated lazily after startup if KubeVirt
+	// is installed after kube-controllers.
+	deferredInformers *kubevirt.DeferredInformers
 
 	syncStatus bapi.SyncStatus
 
@@ -241,6 +256,9 @@ type IPAMController struct {
 	// consolidationWindow is the time to wait for additional updates after receiving one before processing the updates
 	// received. This is to allow for multiple node deletion events to be consolidated into a single event.
 	consolidationWindow time.Duration
+
+	// vmRecreationGracePeriod is the time window to allow VM recreation before treating the allocation as a leak.
+	vmRecreationGracePeriod time.Duration
 
 	// For unit testing purposes.
 	pauseRequestChannel chan pauseRequest
@@ -836,6 +854,7 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 			} else {
 				log.WithError(err).Warnf("Failed to lookup corresponding node, skipping %s", cnode)
 			}
+			c.allocationState.markClean(cnode, "node lookup skipped")
 			continue
 		}
 		logc := log.WithFields(log.Fields{"calicoNode": cnode, "k8sNode": knode})
@@ -904,6 +923,16 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 				// - The node the allocation belongs to no longer exists.
 				// - The pod owning this allocation no longer exists.
 				a.markConfirmedLeak()
+			} else if a.isVMAllocation() {
+				// VM/VMI allocation with no backing VM or standalone VMI.
+				// Use a dedicated grace period to tolerate transient gaps
+				// during VM restarts and migrations. If the operator configured
+				// a longer LeakGracePeriod, respect that as well.
+				gracePeriod := c.vmRecreationGracePeriod
+				if c.config.LeakGracePeriod != nil && c.config.LeakGracePeriod.Duration > gracePeriod {
+					gracePeriod = c.config.LeakGracePeriod.Duration
+				}
+				a.markLeak(gracePeriod)
 			} else if c.config.LeakGracePeriod != nil {
 				// The allocation is NOT valid, but the Kubernetes node still exists, so our confidence is lower.
 				// Mark as a candidate leak. If this state remains, it will switch
@@ -925,19 +954,24 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 			if !canDelete {
 				// There are still valid allocations on the node.
 				logc.Infof("Can't cleanup node yet - IPs still in use on this node")
+				c.allocationState.markClean(cnode, "allocations still in use")
 				continue
 			}
 
-			// Mark the node's tunnel addresses for GC.
+			// Mark the node's tunnel addresses as confirmed leaks for GC.
 			for _, a := range tunnelAddresses {
 				a.markConfirmedLeak()
 				c.confirmedLeaks[a.id()] = a
 			}
 
-			// The node is ready have its IPAM affinities released. It exists in Calico IPAM, but
+			// The node is ready to have its IPAM affinities released. It exists in Calico IPAM, but
 			// not in the Kubernetes API. Additionally, we've checked that there are no
-			// outstanding valid allocations on the node.
+			// outstanding valid allocations on the node. Leave the node dirty — it will be
+			// marked clean by releaseNodes once cleanup succeeds.
 			nodesToRelease = append(nodesToRelease, cnode)
+		} else {
+			// Node still exists in Kubernetes, we've finished checking it.
+			c.allocationState.markClean(cnode, "node still exists in Kubernetes")
 		}
 	}
 	return nodesToRelease, nil
@@ -953,6 +987,11 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	if a.isTunnelAddress() {
 		// Tunnel addresses are only valid if the hosting node still exists.
 		return a.knode != ""
+	}
+
+	// Handle VMI-based allocations
+	if a.isVMAllocation() {
+		return c.isVMAllocationValid(a)
 	}
 
 	if ns == "" || pod == "" {
@@ -1048,6 +1087,73 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 	return false
 }
 
+// isVMAllocationValid checks whether the backing VM or standalone VMI for
+// a VMI-type IP allocation still exists. Returns true on any error or missing
+// data to avoid incorrectly releasing in-use IPs.
+func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
+	ns := a.attrs[ipam.AttributeNamespace]
+	vmiName := a.attrs[ipam.AttributeVMIName]
+	logc := log.WithFields(a.fields())
+
+	vmIndexer := c.deferredInformers.VMIndexer()
+	vmiIndexer := c.deferredInformers.VMInstanceIndexer()
+
+	// If we can't reason about it, don't GC it.
+	// (We can tighten this later once attrs are guaranteed.)
+	if ns == "" || vmiName == "" || vmIndexer == nil || vmiIndexer == nil {
+		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
+		return true
+	}
+
+	// Build the cache key using the same format as cache.MetaNamespaceKeyFunc.
+	key := cache.NewObjectName(ns, vmiName).String()
+
+	// Check if the VM exists in the informer cache.
+	_, vmExists, err := vmIndexer.GetByKey(key)
+	if err != nil {
+		logc.WithError(err).Error("Failed to look up VM in cache, assuming allocation is valid")
+		return true
+	}
+	if vmExists {
+		logc.Debug("VM found, allocation is valid")
+		return true
+	}
+
+	// VM not found — check if a standalone VMI (not owned by a VM) exists.
+	// If the VMI has a VM ownerReference but the VM is already gone, the VMI
+	// is just awaiting garbage collection and is not evidence of a valid allocation.
+	obj, vmiExists, err := vmiIndexer.GetByKey(key)
+	if err != nil {
+		logc.WithError(err).Warn("Failed to look up VMI in cache, assuming allocation is valid")
+		return true
+	}
+	if vmiExists {
+		vmi, ok := obj.(*kubevirtv1.VirtualMachineInstance)
+		if !ok {
+			logc.Warn("Unexpected object type in VMI cache, assuming allocation is valid")
+			return true
+		}
+		if !hasVMOwner(vmi) {
+			logc.Debug("Standalone VMI found, allocation is valid")
+			return true
+		}
+		logc.Debug("VMI found but owned by a deleted VM, not treating as valid")
+	}
+
+	logc.Debug("Neither VM nor standalone VMI found")
+	return false
+}
+
+// hasVMOwner returns true if the VMI has an ownerReference pointing to a VirtualMachine.
+func hasVMOwner(vmi *kubevirtv1.VirtualMachineInstance) bool {
+	for i := range vmi.OwnerReferences {
+		if vmi.OwnerReferences[i].Kind == "VirtualMachine" {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *IPAMController) syncIPAM() error {
 	defer logIfSlow(time.Now(), "IPAM sync complete")
 
@@ -1065,7 +1171,9 @@ func (c *IPAMController) syncIPAM() error {
 	log.Debug("Synchronizing IPAM data")
 
 	// Scan known allocations, determining if there are any IP address leaks
-	// or nodes that should have their block affinities released.
+	// or nodes that should have their block affinities released. Each node is
+	// individually marked clean in the dirty set as it is processed, so an early
+	// return here only leaves unprocessed nodes dirty for retry.
 	nodesToRelease, err := c.checkAllocations()
 	if err != nil {
 		return err
@@ -1087,18 +1195,15 @@ func (c *IPAMController) syncIPAM() error {
 
 	// Delete any nodes that we determined can be removed in checkAllocations. These
 	// nodes are no longer in the Kubernetes API, and have no valid allocations, so can be cleaned up entirely
-	// from Calico IPAM.
-	if err = c.releaseNodes(nodesToRelease); err != nil {
-		return err
-	}
-
-	c.allocationState.syncComplete()
+	// from Calico IPAM. Successfully released nodes are marked clean inside releaseNodes;
+	// failed nodes remain dirty and will be retried on the next sync.
+	failedNodes := c.releaseNodes(nodesToRelease)
 	log.Debug("IPAM sync completed")
 
-	// If there is still dirty state, then we need to do another pass.
-	if len(c.confirmedLeaks) > 0 {
-		log.WithField("num", len(c.confirmedLeaks)).Info("Confirmed leaks still exist, scheduling another pass")
-		kick(c.syncChan)
+	// If there is remaining work, return an error so the retry controller schedules
+	// the next sync with exponential backoff, avoiding tight-loop retries.
+	if len(failedNodes) > 0 || len(c.confirmedLeaks) > 0 {
+		return fmt.Errorf("work remaining: %d nodes, %d confirmed leaks", len(failedNodes), len(c.confirmedLeaks))
 	}
 	return nil
 }
@@ -1186,25 +1291,26 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	return nil
 }
 
-func (c *IPAMController) releaseNodes(nodes []string) error {
+// releaseNodes attempts to release IPAM affinities for the given nodes. Returns the
+// list of nodes that failed cleanup so they can be retried on the next sync.
+func (c *IPAMController) releaseNodes(nodes []string) []string {
 	if len(nodes) == 0 {
 		return nil
 	}
 
 	log.WithField("num", len(nodes)).Info("Found a batch of nodes to release")
-	var storedErr error
+	var failedNodes []string
 	for _, cnode := range nodes {
 		logc := log.WithField("node", cnode)
-
-		// Potentially rate limit node cleanup.
 		logc.Info("Cleaning up IPAM affinities for deleted node")
 		if err := c.cleanupNode(cnode); err != nil {
-			// Store the error, but continue. Storing the error ensures we'll retry.
-			logc.WithError(err).Warnf("Error cleaning up node")
-			storedErr = err
+			logc.WithError(err).Warnf("Error cleaning up node, will retry on next sync")
+			failedNodes = append(failedNodes, cnode)
+		} else {
+			c.allocationState.markClean(cnode, "node released successfully")
 		}
 	}
-	return storedErr
+	return failedNodes
 }
 
 func (c *IPAMController) cleanupNode(cnode string) error {
@@ -1217,7 +1323,6 @@ func (c *IPAMController) cleanupNode(cnode string) error {
 		Host:         cnode,
 	}
 
-	// Release the affinities for this node, requiring that the blocks are empty.
 	if err := c.client.IPAM().ReleaseHostAffinities(context.TODO(), affinityCfg, true); err != nil {
 		logc.WithError(err).Errorf("Failed to release block affinities for node")
 		return err

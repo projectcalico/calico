@@ -10,6 +10,7 @@ import React from 'react';
 import { CellProps } from 'react-table';
 import { useShouldAnimate, useStoredColumns } from '../../hooks';
 import FlowLogDetails from '../FlowLogDetails';
+import FlowLogsTableEmptyMessage from '../FlowLogsTableEmptyMessage';
 import {
     ColumnName,
     getStandardColumns,
@@ -26,6 +27,7 @@ type FlowLogsListProps = {
     maxStartTime: number;
     heightOffset: number;
     totalItems: number;
+    hasActiveFilters: boolean;
 };
 
 const columnsHeight = 36;
@@ -54,6 +56,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     maxStartTime,
     heightOffset,
     totalItems,
+    hasActiveFilters,
 }) => {
     const handleOpenColumnCustomizer = React.useCallback(() => {
         setIsColumnCustomizerOpen(true);
@@ -147,7 +150,11 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 memoizedColumnsGenerator={memoizedTableColumns}
                 error={!!error}
                 errorLabel='Could not display any flow logs at this time'
-                emptyTableLabel='Nothing to show yet. Flows will start to appear shortly.'
+                emptyTableLabel={
+                    <FlowLogsTableEmptyMessage
+                        hasActiveFilters={hasActiveFilters}
+                    />
+                }
                 noResultsStyles={{
                     py: 24,
                     '>div': { fontSize: 'sm' },

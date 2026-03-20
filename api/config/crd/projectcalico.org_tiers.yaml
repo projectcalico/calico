@@ -23,6 +23,10 @@ spec:
           jsonPath: .spec.defaultAction
           name: DefaultAction
           type: string
+        - description: Current status of the tier
+          jsonPath: .status.conditions[?(@.type=='Ready')].reason
+          name: Status
+          type: string
       name: v3
       schema:
         openAPIV3Schema:
@@ -45,9 +49,49 @@ spec:
                     - enum:
                         - Pass
                         - Deny
+                  default: Deny
                   type: string
                 order:
                   type: number
+              type: object
+            status:
+              properties:
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
               type: object
           required:
             - metadata
@@ -55,17 +99,21 @@ spec:
           type: object
           x-kubernetes-validations:
             - message: The 'kube-admin' tier must have default action 'Pass'
+              reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'kube-admin' ? self.spec.defaultAction ==
-                'Pass' : true"
+                "self.metadata.name == 'kube-admin' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'kube-baseline' tier must have default action 'Pass'
+              reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'kube-baseline' ? self.spec.defaultAction
-                == 'Pass' : true"
+                "self.metadata.name == 'kube-baseline' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Pass') : true"
             - message: The 'default' tier must have default action 'Deny'
+              reason: FieldValueInvalid
               rule:
-                "self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny'
-                : true"
+                "self.metadata.name == 'default' ? (has(self.spec.defaultAction)
+                && self.spec.defaultAction == 'Deny') : true"
       served: true
       storage: true
-      subresources: {}
+      subresources:
+        status: {}

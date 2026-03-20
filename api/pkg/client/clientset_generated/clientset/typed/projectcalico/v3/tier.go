@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -25,24 +26,29 @@ type TiersGetter interface {
 type TierInterface interface {
 	Create(ctx context.Context, tier *projectcalicov3.Tier, opts v1.CreateOptions) (*projectcalicov3.Tier, error)
 	Update(ctx context.Context, tier *projectcalicov3.Tier, opts v1.UpdateOptions) (*projectcalicov3.Tier, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, tier *projectcalicov3.Tier, opts v1.UpdateOptions) (*projectcalicov3.Tier, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.Tier, error)
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.TierList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.Tier, err error)
+	Apply(ctx context.Context, tier *applyconfigurationgeneratedprojectcalicov3.TierApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.Tier, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, tier *applyconfigurationgeneratedprojectcalicov3.TierApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.Tier, err error)
 	TierExpansion
 }
 
 // tiers implements TierInterface
 type tiers struct {
-	*gentype.ClientWithList[*projectcalicov3.Tier, *projectcalicov3.TierList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.Tier, *projectcalicov3.TierList, *applyconfigurationgeneratedprojectcalicov3.TierApplyConfiguration]
 }
 
 // newTiers returns a Tiers
 func newTiers(c *ProjectcalicoV3Client) *tiers {
 	return &tiers{
-		gentype.NewClientWithList[*projectcalicov3.Tier, *projectcalicov3.TierList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.Tier, *projectcalicov3.TierList, *applyconfigurationgeneratedprojectcalicov3.TierApplyConfiguration](
 			"tiers",
 			c.RESTClient(),
 			scheme.ParameterCodec,

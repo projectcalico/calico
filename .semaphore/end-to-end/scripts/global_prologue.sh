@@ -20,6 +20,10 @@ set -o pipefail
 
 echo "[INFO] starting prologue"
 
+echo "[INFO] Configuring needrestart to auto mode to prevent interactive prompts hanging CI jobs..."
+sudo mkdir -p /etc/needrestart/conf.d 2>/dev/null || true
+printf '\044nrconf{restart} = '\''a'\'';\n' | sudo tee /etc/needrestart/conf.d/50-autorestart.conf > /dev/null 2>/dev/null || true
+
 echo "[INFO] Clean out language tools we don't use to free up disk"
 sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*} /root/.local/share/heroku /usr/local/lib/heroku
 
@@ -42,8 +46,7 @@ RANDOM_TOKEN2=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 4 || true)
 echo "[INFO] random tokens: ${RANDOM_TOKEN1} ${RANDOM_TOKEN2}"
 
 echo "[INFO] Installing jq..."
-sudo apt-get -o Acquire::Retries=5 update  -y
-sudo apt-get install -o Acquire::Retries=5 jq -y
+install-package --skip-update jq
 
 echo "[INFO] exporting default env vars..."
 export SEMAPHORE_PIPELINE_STARTED_AT=$(date +%s)
@@ -89,6 +92,7 @@ export BZ_MCM_PREFIX=${BZ_MCM_PREFIX:-"bz-${PRODUCT}-${RANDOM_TOKEN2}"}
 
 export CLUSTER_NAME=${CLUSTER_NAME:-bz-${PRODUCT}-${RANDOM_TOKEN1}}
 export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER_NAME}-diags.tgz}
+export GS_BUCKET=${GS_BUCKET-semaphore_diags}
 export BANZAI_CORE_BRANCH=${BANZAI_CORE_BRANCH:-""}
 export BZ_TASK_VERSION=${BZ_TASK_VERSION:-"v2.8.1"}
 export SEMAPHORE_AGENT_UPLOAD_JOB_LOGS=${SEMAPHORE_AGENT_UPLOAD_JOB_LOGS:-"when-trimmed"}
@@ -148,11 +152,11 @@ azure_cli_cmd="$azure_cli_cmd; az login --service-principal -u ${AZ_SP_ID} -p ${
 if [[ $PROVISIONER =~ ^azr-.* ]]; then eval "$azure_cli_cmd"; fi
 
 install_tools_cmd="echo \"[INFO] installing addtional tools for c1...\""
-install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing unzip...\" && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 unzip -y && sudo needrestart -r a"
+install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing unzip...\" && install-package --skip-update unzip"
 install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing requests...\" && pip3 install --retries=20 --upgrade requests"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$install_tools_cmd"; fi
 
-if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-tools..."; sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 -y putty-tools && sudo needrestart -r a; fi
+if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-tools..."; install-package --skip-update putty-tools; fi
 
 echo "[INFO] Installing Banzai CLI..."
 [[ -n "${BZ_VERSION}" ]] && export BZ_RELEASE=tags/${BZ_VERSION} || export BZ_RELEASE=latest

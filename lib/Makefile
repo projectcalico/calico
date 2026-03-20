@@ -19,9 +19,10 @@ ci: static-checks ut
 # The ut target runs go test for every immediate subfolder that has a go.mod file. This ensures that we run tests for any
 # new modules added without requiring that the developer explicitly enable running the tests for the new module.
 ut:
+	mkdir -p report
 	@for dir in $$(find . -maxdepth 2 -name "go.mod" -exec dirname {} \; | sort -u); do \
 		echo "Testing $$dir..."; \
-		$(DOCKER_GO_BUILD) sh -c "cd $$dir && go test ./... -cover -count 1"; \
+		$(DOCKER_GO_BUILD) sh -c "cd $$dir && gotestsum --junitfile /go/src/$(PACKAGE_NAME)/report/lib_$$(basename $$dir)_ut.xml -- ./... -cover -count 1"; \
 	done
 
 # The static-checks target runs the go linter for every immediate subfolder that has a go.mod file. This ensures that we

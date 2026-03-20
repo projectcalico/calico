@@ -38,7 +38,7 @@ export interface TableProps {
     hasFixedHeader?: boolean;
     error?: string | boolean;
     errorLabel: string;
-    emptyTableLabel: string;
+    emptyTableLabel: string | React.ReactNode;
     columnsGenerator: any;
     expandRowComponent?: any;
     onRowClicked?: (row: any) => void;

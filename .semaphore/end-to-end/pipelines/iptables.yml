@@ -40,6 +40,10 @@ blocks:
   - name: Openshift OCP
     dependencies: []
     task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
       jobs:
         - name: hashrelease
           execution_time_limit:
@@ -279,6 +283,8 @@ blocks:
               value: gcp-kubeadm
             - name: KUBE_PROXY_MODE
               value: ipvs
+            - name: USE_API_SERVER
+              value: "false"
 
   - name: usage reporting
     dependencies: []
@@ -518,6 +524,8 @@ blocks:
               value: "10.0.0.0/29"
             - name: PROVISIONER
               value: "aws-kubeadm"
+            - name: USE_API_SERVER
+              value: "false"
 
         - name: AKS w AKS CNI + Overlay
           execution_time_limit:
@@ -744,7 +752,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./scripts/body_flannel-migration.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_flannel-migration.sh
           matrix:
             - env_var: DOWNLEVEL_MANIFEST
               values:

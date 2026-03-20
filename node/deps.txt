@@ -1,11 +1,12 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
-This file contains the list of modules that this package depends on
-in order to trigger CI on changes
+Run 'make gen-deps-files' to regenerate.
 
 go 1.25.7
+cel.dev/expr v0.24.0
 github.com/BurntSushi/toml v1.5.0
 github.com/DeRuina/timberjack v1.3.9
 github.com/alexflint/go-filemutex v1.3.0
+github.com/antlr4-go/antlr/v4 v4.13.0
 github.com/aws/aws-sdk-go-v2 v1.39.5
 github.com/aws/aws-sdk-go-v2/config v1.31.16
 github.com/aws/aws-sdk-go-v2/credentials v1.18.20
@@ -55,6 +56,7 @@ github.com/gogo/protobuf v1.3.2
 github.com/golang/protobuf v1.5.4
 github.com/golang/snappy v1.0.0
 github.com/google/btree v1.1.3
+github.com/google/cel-go v0.26.0
 github.com/google/gnostic-models v0.7.0
 github.com/google/go-cmp v0.7.0
 github.com/google/uuid v1.6.0
@@ -96,6 +98,7 @@ github.com/prometheus/client_model v0.6.2
 github.com/prometheus/common v0.67.2
 github.com/prometheus/procfs v0.19.2
 github.com/rivo/uniseg v0.4.7
+github.com/robfig/cron/v3 v3.0.1
 github.com/safchain/ethtool v0.6.2
 github.com/sagikazarmark/locafero v0.11.0
 github.com/sirupsen/logrus v1.9.3
@@ -105,6 +108,7 @@ github.com/spf13/cast v1.10.0
 github.com/spf13/cobra v1.10.1
 github.com/spf13/pflag v1.0.10
 github.com/spf13/viper v1.21.0
+github.com/stoewer/go-strcase v1.3.0
 github.com/subosito/gotenv v1.6.0
 github.com/tchap/go-patricia/v2 v2.3.3
 github.com/vishvananda/netlink v1.3.1
@@ -120,6 +124,7 @@ go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.3
 go.yaml.in/yaml/v3 v3.0.4
 golang.org/x/crypto v0.47.0
+golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
 golang.org/x/net v0.49.0
 golang.org/x/oauth2 v0.34.0
 golang.org/x/sync v0.19.0
@@ -134,31 +139,257 @@ google.golang.org/genproto/googleapis/api v0.0.0-20250818200422-3122310a409c
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c
 google.golang.org/grpc v1.76.0
 google.golang.org/protobuf v1.36.10
-gopkg.in/evanphx/json-patch.v4 v4.12.0
+gopkg.in/evanphx/json-patch.v4 v4.13.0
 gopkg.in/go-playground/validator.v9 v9.30.2
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.34.3
-k8s.io/apiextensions-apiserver v0.34.3
-k8s.io/apimachinery v0.34.3
-k8s.io/apiserver v0.34.3
-k8s.io/client-go v0.34.3
-k8s.io/component-base v0.34.3
-k8s.io/component-helpers v0.34.3
-k8s.io/controller-manager v0.34.3
+k8s.io/api v0.35.2
+k8s.io/apiextensions-apiserver v0.35.2
+k8s.io/apimachinery v0.35.2
+k8s.io/apiserver v0.35.2
+k8s.io/client-go v0.35.2
+k8s.io/component-base v0.35.2
+k8s.io/component-helpers v0.35.2
+k8s.io/controller-manager v0.35.2
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
-k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
-k8s.io/kubelet v0.34.3
-k8s.io/kubernetes v1.34.3
-k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
+k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
+k8s.io/kubelet v0.35.2
+k8s.io/kubernetes v1.35.2
+k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 kubevirt.io/api v1.8.0-alpha.0
 kubevirt.io/containerized-data-importer-api v1.63.1
 kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90
 modernc.org/memory v1.11.0
-sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
+sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
 sigs.k8s.io/knftables v0.0.19
-sigs.k8s.io/network-policy-api v0.1.8-0.20260212153203-412bf65729a5
+sigs.k8s.io/network-policy-api v0.1.8-0.20260217173220-6bb86defe1a7
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.0
 sigs.k8s.io/yaml v1.6.0
+
+local:api/pkg/apis/projectcalico/v3
+local:api/pkg/defaults
+local:api/pkg/lib/numorstring
+local:app-policy/checker
+local:app-policy/policystore
+local:app-policy/types
+local:cni-plugin/internal/pkg/azure
+local:cni-plugin/internal/pkg/utils
+local:cni-plugin/internal/pkg/utils/cri
+local:cni-plugin/pkg/dataplane
+local:cni-plugin/pkg/dataplane/grpc
+local:cni-plugin/pkg/dataplane/grpc/proto
+local:cni-plugin/pkg/dataplane/linux
+local:cni-plugin/pkg/ipamplugin
+local:cni-plugin/pkg/k8s
+local:cni-plugin/pkg/plugin
+local:cni-plugin/pkg/types
+local:cni-plugin/pkg/upgrade
+local:cni-plugin/pkg/wait
+local:confd/pkg/backends
+local:confd/pkg/backends/calico
+local:confd/pkg/backends/types
+local:confd/pkg/config
+local:confd/pkg/log
+local:confd/pkg/resource/template
+local:confd/pkg/run
+local:crypto/pkg/tls
+local:felix/aws
+local:felix/bpf
+local:felix/bpf/allowsources
+local:felix/bpf/arp
+local:felix/bpf/asm
+local:felix/bpf/bpfdefs
+local:felix/bpf/bpfmap
+local:felix/bpf/conntrack
+local:felix/bpf/conntrack/cleanupv1
+local:felix/bpf/conntrack/timeouts
+local:felix/bpf/conntrack/v2
+local:felix/bpf/conntrack/v3
+local:felix/bpf/conntrack/v4
+local:felix/bpf/consistenthash
+local:felix/bpf/counters
+local:felix/bpf/events
+local:felix/bpf/failsafes
+local:felix/bpf/filter
+local:felix/bpf/hook
+local:felix/bpf/ifstate
+local:felix/bpf/ipfrags
+local:felix/bpf/ipsets
+local:felix/bpf/jump
+local:felix/bpf/legacy
+local:felix/bpf/libbpf
+local:felix/bpf/maps
+local:felix/bpf/nat
+local:felix/bpf/perf
+local:felix/bpf/polprog
+local:felix/bpf/profiling
+local:felix/bpf/proxy
+local:felix/bpf/qos
+local:felix/bpf/routes
+local:felix/bpf/state
+local:felix/bpf/tc
+local:felix/bpf/tc/defs
+local:felix/bpf/utils
+local:felix/bpf/xdp
+local:felix/cachingmap
+local:felix/calc
+local:felix/cmd/calico-bpf/commands
+local:felix/collector
+local:felix/collector/flowlog
+local:felix/collector/goldmane
+local:felix/collector/local
+local:felix/collector/types
+local:felix/collector/types/counter
+local:felix/collector/types/endpoint
+local:felix/collector/types/metric
+local:felix/collector/types/tuple
+local:felix/collector/utils
+local:felix/config
+local:felix/conntrack
+local:felix/daemon
+local:felix/dataplane
+local:felix/dataplane/common
+local:felix/dataplane/external
+local:felix/dataplane/inactive
+local:felix/dataplane/ipsets
+local:felix/dataplane/linux
+local:felix/dataplane/linux/dataplanedefs
+local:felix/dataplane/linux/qos
+local:felix/deltatracker
+local:felix/dispatcher
+local:felix/environment
+local:felix/ethtool
+local:felix/generictables
+local:felix/idalloc
+local:felix/ifacemonitor
+local:felix/ip
+local:felix/ipsets
+local:felix/iptables
+local:felix/iptables/cmdshim
+local:felix/jitter
+local:felix/k8sutils
+local:felix/labelindex
+local:felix/labelindex/ipsetmember
+local:felix/labelindex/labelnamevalueindex
+local:felix/labelindex/labelrestrictionindex
+local:felix/linkaddrs
+local:felix/logutils
+local:felix/markbits
+local:felix/multidict
+local:felix/netlinkshim
+local:felix/netlinkshim/handlemgr
+local:felix/nfnetlink
+local:felix/nfnetlink/nfnl
+local:felix/nfnetlink/pkt
+local:felix/nftables
+local:felix/policysync
+local:felix/proto
+local:felix/proto/protoconv
+local:felix/routerule
+local:felix/routetable
+local:felix/routetable/ownershippol
+local:felix/rules
+local:felix/serviceindex
+local:felix/statusrep
+local:felix/stringutils
+local:felix/throttle
+local:felix/timeshim
+local:felix/types
+local:felix/usagerep
+local:felix/vxlanfdb
+local:felix/wireguard
+local:goldmane/pkg/client
+local:goldmane/pkg/goldmane
+local:goldmane/pkg/internal/flowcache
+local:goldmane/pkg/server
+local:goldmane/pkg/storage
+local:goldmane/pkg/stream
+local:goldmane/pkg/types
+local:goldmane/proto
+local:lib/std/chanutil
+local:lib/std/time
+local:lib/std/uniquelabels
+local:lib/std/uniquestr
+local:libcalico-go/config
+local:libcalico-go/lib/apiconfig
+local:libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme
+local:libcalico-go/lib/apis/internalapi
+local:libcalico-go/lib/apis/v1
+local:libcalico-go/lib/apis/v1/unversioned
+local:libcalico-go/lib/backend
+local:libcalico-go/lib/backend/api
+local:libcalico-go/lib/backend/encap
+local:libcalico-go/lib/backend/etcdv3
+local:libcalico-go/lib/backend/k8s
+local:libcalico-go/lib/backend/k8s/conversion
+local:libcalico-go/lib/backend/k8s/resources
+local:libcalico-go/lib/backend/model
+local:libcalico-go/lib/backend/syncersv1/bgpsyncer
+local:libcalico-go/lib/backend/syncersv1/dedupebuffer
+local:libcalico-go/lib/backend/syncersv1/felixsyncer
+local:libcalico-go/lib/backend/syncersv1/nodestatussyncer
+local:libcalico-go/lib/backend/syncersv1/tunnelipsyncer
+local:libcalico-go/lib/backend/syncersv1/updateprocessors
+local:libcalico-go/lib/backend/watchersyncer
+local:libcalico-go/lib/clientv3
+local:libcalico-go/lib/consistenthash
+local:libcalico-go/lib/debugserver
+local:libcalico-go/lib/dispatcher
+local:libcalico-go/lib/epstatusfile
+local:libcalico-go/lib/errors
+local:libcalico-go/lib/hash
+local:libcalico-go/lib/health
+local:libcalico-go/lib/ipam
+local:libcalico-go/lib/ipam/vmipam
+local:libcalico-go/lib/json
+local:libcalico-go/lib/kubevirt
+local:libcalico-go/lib/logutils
+local:libcalico-go/lib/metricsserver
+local:libcalico-go/lib/names
+local:libcalico-go/lib/namespace
+local:libcalico-go/lib/net
+local:libcalico-go/lib/netlinkutils
+local:libcalico-go/lib/options
+local:libcalico-go/lib/packedmap
+local:libcalico-go/lib/prometheus
+local:libcalico-go/lib/readlogger
+local:libcalico-go/lib/resources
+local:libcalico-go/lib/scope
+local:libcalico-go/lib/selector
+local:libcalico-go/lib/selector/parser
+local:libcalico-go/lib/selector/tokenizer
+local:libcalico-go/lib/set
+local:libcalico-go/lib/validator/v1
+local:libcalico-go/lib/validator/v3
+local:libcalico-go/lib/watch
+local:libcalico-go/lib/winutils
+local:node/cmd/calico
+local:node/cmd/calico-ipam
+local:node/cmd/calico-node
+local:node/cmd/calico-node/bpf
+local:node/cmd/mountns
+local:node/pkg/allocateip
+local:node/pkg/calicoclient
+local:node/pkg/cni
+local:node/pkg/flowlogs
+local:node/pkg/health
+local:node/pkg/health/bird
+local:node/pkg/hostpathinit
+local:node/pkg/lifecycle/shutdown
+local:node/pkg/lifecycle/startup
+local:node/pkg/lifecycle/startup/autodetection
+local:node/pkg/lifecycle/startup/autodetection/ipv4
+local:node/pkg/lifecycle/utils
+local:node/pkg/nodeinit
+local:node/pkg/status
+local:node/pkg/status/populators
+local:node/windows-packaging/tests
+local:pkg/buildinfo
+local:pod2daemon/binder
+local:typha/pkg/discovery
+local:typha/pkg/syncclient
+local:typha/pkg/syncclientutils
+local:typha/pkg/syncproto
+local:typha/pkg/tlsutils

@@ -133,6 +133,7 @@ rules:
       - whiskers.operator.tigera.io
       - goldmanes.operator.tigera.io
       - managementclusterconnections.operator.tigera.io
+      - istios.operator.tigera.io
   # We need update and delete access for the ClusterNetworkPolicy CRD to set owner references
   # when assuming control of pre-existing CRDs, for example on OCP.
   - apiGroups:
@@ -268,6 +269,9 @@ rules:
       - whiskers
       - whiskers/finalizers
       - whiskers/status
+      - istios
+      - istios/finalizers
+      - istios/status
     verbs:
       - get
       - list
@@ -308,6 +312,7 @@ rules:
       - projectcalico.org
     resources:
       - felixconfigurations
+      - bgpconfigurations
       - ippools
     verbs:
       - create
@@ -378,6 +383,7 @@ rules:
       - watch
       - create
       - update
+      - delete
   - apiGroups:
       - discovery.k8s.io
     resources:
@@ -389,6 +395,7 @@ rules:
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
+      - validatingwebhookconfigurations
       - mutatingwebhookconfigurations
     verbs:
       - create
@@ -402,6 +409,15 @@ rules:
       - mutatingwebhookconfigurations
     resourceNames:
       - envoy-gateway-topology-injector.tigera-gateway
+    verbs:
+      - update
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    resourceNames:
+      - istiod-default-validator
+      - istio-validator-calico-system
     verbs:
       - update
   # Needed for operator lock
@@ -447,6 +463,19 @@ rules:
       - get
       - list
       - watch
+  # The operator manages MutatingAdmissionPolicy resources for CRD defaulting (k8s 1.32+).
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingadmissionpolicies
+      - mutatingadmissionpolicybindings
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # Add the appropriate pod security policy permissions
   - apiGroups:
       - policy
@@ -467,11 +496,25 @@ rules:
       - create
       - update
       - delete
-  # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
+  # The operator needs to manage NetworkPolicies and GlobalNetworkPolicies via the projectcalico.org API group.
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - networkpolicies
+      - globalnetworkpolicies
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  # For tiered network policy actions, calico-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
     resourceNames:
-      - allow-tigera.*
+      - calico-system.*
     resources:
       - tier.networkpolicies
       - tier.globalnetworkpolicies
@@ -482,11 +525,20 @@ rules:
       - create
       - update
       - delete
-  # For tiered network policy actions, tigera-apiserver requires get authorization on the associated tier.
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - tier.networkpolicies
+      - tier.globalnetworkpolicies
+    verbs:
+      - list
+      - watch
+      - get
+  # For tiered network policy actions, calico-apiserver requires get authorization on the associated tier.
   - apiGroups:
       - projectcalico.org
     resourceNames:
-      - allow-tigera
+      - calico-system
     resources:
       - tiers
     verbs:
@@ -499,6 +551,7 @@ rules:
     resources:
       - tiers
     verbs:
+      - get
       - create
       - list
       - watch
@@ -578,6 +631,33 @@ rules:
       - kubevirt.io
     resources:
       - virtualmachineinstancemigrations
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - update
+    resourceNames:
+      - istiod
+  # The operator checks DatastoreMigration CRs at startup and during reconciliation
+  # to determine whether a v1-to-v3 CRD migration is in progress or complete.
+  - apiGroups:
+      - migration.projectcalico.org
+    resources:
+      - datastoremigrations
     verbs:
       - get
       - list
