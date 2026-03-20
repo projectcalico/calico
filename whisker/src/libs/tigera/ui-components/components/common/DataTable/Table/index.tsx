@@ -61,7 +61,10 @@ export interface TableProps {
     onAllChecked?: () => void;
     memoizedColumnsGenerator?: any;
     isSelectable?: boolean;
-    onSort?: (column: ColumnSortEvent) => void;
+    onSort?: (
+        column: ColumnSortEvent,
+        setSortBy: (sortBy: TableSort[]) => void,
+    ) => void;
     onSortClicked?: () => void;
     initialState?: TableState;
     virtualisationProps?: VirtualisationProps;
@@ -134,6 +137,7 @@ const Table: React.FC<React.PropsWithChildren<TableProps>> = ({
         visibleColumns,
         prepareRow,
         toggleAllRowsExpanded,
+        setSortBy,
     } = useTable(
         {
             data: memoizedData as any,
@@ -202,7 +206,11 @@ const Table: React.FC<React.PropsWithChildren<TableProps>> = ({
                 checkedRows={checkedRows}
                 isAllChecked={isAllChecked}
                 onAllChecked={onAllChecked}
-                onSortCustomHandler={onSort}
+                onSortCustomHandler={
+                    onSort
+                        ? (column: ColumnSortEvent) => onSort(column, setSortBy)
+                        : undefined
+                }
                 onSortClicked={onSortClicked}
             />
 
