@@ -22,9 +22,11 @@ export type TableRowProps = {
     handleCheckboxKey: ({ keyCode }: any, cell: any) => void;
     onClick?: (row: RowType) => void;
     style?: any;
+    isLast?: boolean;
 };
 
 export const TableRow: React.FC<TableRowProps> = ({
+    isLast,
     row,
     prepareRow,
     keyProp,
@@ -67,6 +69,7 @@ export const TableRow: React.FC<TableRowProps> = ({
                 keyProp={keyProp}
                 style={style}
                 onClick={onClick ?? handleClick}
+                isLast={isLast}
             />
 
             {row.isExpanded && renderRowSubComponent ? (
@@ -81,6 +84,7 @@ export const TableRow: React.FC<TableRowProps> = ({
                             ...virtualisationProps.subRowStyles,
                             top: style?.top + virtualisationProps.rowHeight,
                             height: 'max-content',
+                            bg: 'experimental-token-bg-table-expanded',
                         }),
                     }}
                     style={style}

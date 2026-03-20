@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -265,7 +265,7 @@ func (m *vxlanManager) updateNeighborsAndAllowedSources() {
 }
 
 func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) {
+	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) || isBorrowedRoute(r, proto.IPPoolType_VXLAN) {
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{
@@ -351,6 +351,14 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 
 	v1 := l1.(*netlink.Vxlan)
 	v2 := l2.(*netlink.Vxlan)
+
+	// FlowBased is the most fundamental mode difference — a flow-based device
+	// (used by the BPF dataplane with BTF) has no VNI, VtepDevIndex, or SrcAddr
+	// set on the device; the BPF program sets the tunnel key per-packet.
+	// Switching between iptables and eBPF dataplanes requires recreating the device.
+	if v1.FlowBased != v2.FlowBased {
+		return fmt.Sprintf("flow-based mode: %v vs %v", v1.FlowBased, v2.FlowBased)
+	}
 
 	if v1.VxlanId != v2.VxlanId {
 		return fmt.Sprintf("vni: %v vs %v", v1.VxlanId, v2.VxlanId)

@@ -123,7 +123,8 @@ $(BINDIR)/helm:
 CRANE_ARCH = $(subst amd64,x86_64,$(ARCH))
 $(BINDIR)/crane:
 	mkdir -p $(@D)
-	curl -sSfL --retry 5 https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz | tar xz -C $(@D) crane
+	curl -sSfL --retry 5 -o /tmp/crane.tar.gz https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz
+	tar xz -C $(@D) -f /tmp/crane.tar.gz crane && rm -f /tmp/crane.tar.gz
 	touch $@
 
 .PHONY: clean
@@ -134,7 +135,7 @@ clean: delete-vmss uninstall-aso
 	-rm -f .sshkey .sshkey.pub
 	-rm -f $(HELPERS)
 	-rm -f kubeadm-config.yaml
-	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml cert-manager.yaml
+	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml cert-manager.yaml kube-proxy-windows.yaml
 	-rm -rf infra/manifests/
 	-rm -rf EE/manifests/
 	-rm -rf OSS/manifests/

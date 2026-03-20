@@ -300,7 +300,8 @@ spec:
                 bpfKubeProxyHealthzPort:
                   description: |-
                     BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
-                    The health check server is used by external load balancers to determine if this node should receive traffic.  [Default: 10256]
+                    The health check server is used by external load balancers to determine if this node should receive traffic.
+                    Set to 0 to disable the health check server.  [Default: 10256]
                   type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
                   description: |-
@@ -869,11 +870,51 @@ spec:
                     to reduce Felix CPU usage. [Default: 10s]
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                ipv4ElevatedRoutePriority:
+                  description: |-
+                    Route Priority value for an elevated priority Calico-programmed IPv4 route.  Note, higher
+                    values mean lower priority.  Elevated priority is used during VM live migration, and for
+                    optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
+                    [Default: 512]
+                  type: integer
+                ipv4NormalRoutePriority:
+                  description: |-
+                    Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
+                    values mean lower priority. [Default: 1024]
+                  type: integer
+                ipv6ElevatedRoutePriority:
+                  description: |-
+                    Route Priority value for an elevated priority Calico-programmed IPv6 route.  Note, higher
+                    values mean lower priority.  Elevated priority is used during VM live migration, and for
+                    optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
+                    [Default: 512]
+                  type: integer
+                ipv6NormalRoutePriority:
+                  description: |-
+                    Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
+                    values mean lower priority. [Default: 1024]
+                  type: integer
                 ipv6Support:
                   description:
                     IPv6Support controls whether Felix enables support for
                     IPv6 (if supported by the in-use dataplane).
                   type: boolean
+                istioAmbientMode:
+                  description: |-
+                    IstioAmbientMode configures Felix to work together with Tigera's Istio distribution.
+                    [Default: Disabled]
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                istioDSCPMark:
+                  description: |-
+                    IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
+                    SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
+                    with other Istio installation. [Default: 23]
+                  pattern: ^.*
+                  type: integer
+                  x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   description: |-
                     KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.
@@ -885,6 +926,13 @@ spec:
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   type: array
+                liveMigrationRouteConvergenceTime:
+                  description: |-
+                    LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
+                    VM live migration completes.  This allows routes to converge across the cluster before
+                    reverting to normal priority. [Default: 30s]
+                  pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
                 logActionRateLimit:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
@@ -1337,6 +1385,10 @@ spec:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
               type: object
+              x-kubernetes-validations:
+                - message: routeTableRange and routeTableRanges cannot both be set
+                  reason: FieldValueForbidden
+                  rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           type: object
       served: true
       storage: true

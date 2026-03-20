@@ -31,10 +31,10 @@ Usage:
   deps [options] modules <package>          # Print go modules that package depends on
   deps [options] local-dirs <package>       # Print in-repo go package dirs that
                                   # package depends on.
-  deps local-dirs-main-only <package> # Print in-repo go package dirs that
-                                  # package depends on. (Main packages only.)
   deps [options] local-dirs-main-only <package> # Print in-repo go package dirs that
                                   # package depends on. (Main packages only.)
+  deps [options] combined <package>         # Print modules then local dirs (prefixed
+                                  # with "local:") for deps.txt generation.
   deps [options] test-exclusions <package>  # Print glob patterns to match *_test.go
                                   # files in dependency dirs outside the
                                   # package itself.
@@ -105,6 +105,8 @@ func main() {
 		printLocalDirs(pkg, false)
 	case "local-dirs-main-only":
 		printLocalDirs(pkg, true)
+	case "combined":
+		printCombined(pkg)
 	case "test-exclusions":
 		printTestExclusions(pkg)
 	case "sem-change-in":
@@ -364,6 +366,23 @@ func printLocalDirs(pkg string, mainsOnly bool) {
 	logrus.Infof("Loaded %d local dirs.", len(localDirs))
 	for _, dir := range localDirs {
 		_, _ = fmt.Println(dir)
+	}
+}
+
+func printCombined(pkg string) {
+	printModules(pkg)
+	localDirs, err := loadLocalDirs(pkg, true)
+	if err != nil {
+		logrus.Fatalln("Failed to load local dirs:", err)
+		os.Exit(1)
+	}
+	if len(localDirs) > 0 {
+		fmt.Println()
+		for _, dir := range localDirs {
+			// Strip leading "/" and prefix with "local:" so the Makefile
+			// can grep these out easily.
+			_, _ = fmt.Println("local:" + strings.TrimPrefix(dir, "/"))
+		}
 	}
 }
 
