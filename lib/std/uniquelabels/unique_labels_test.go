@@ -987,6 +987,36 @@ func BenchmarkMarshalJSON(b *testing.B) {
 	})
 }
 
+func TestFallbackMarshalJSON(t *testing.T) {
+	unsafeTestOnlyReset()
+	input := map[string]string{"zz": "last", "aa": "first", "mm": "middle"}
+	fb := makeFallback(input)
+	if fb.isCompact() {
+		t.Fatal("expected fallback representation")
+	}
+
+	got, err := json.Marshal(fb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("fallback MarshalJSON = %s, want %s", got, want)
+	}
+
+	// Round-trip: unmarshal and check equivalence.
+	var rt Map
+	if err := json.Unmarshal(got, &rt); err != nil {
+		t.Fatal(err)
+	}
+	if !rt.EquivalentTo(input) {
+		t.Errorf("round-trip mismatch: got %v", rt)
+	}
+}
+
 func TestFallbackFallbackEquals(t *testing.T) {
 	unsafeTestOnlyReset()
 	a := makeFallback(map[string]string{"x": "1", "y": "2"})

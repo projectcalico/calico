@@ -28,10 +28,6 @@ import (
 
 type handleMap = map[uniquestr.Handle]uniquestr.Handle
 
-// emptyBacking is the singleton compact allocation for the Empty map.
-// bitfield = topBit means "compact representation, zero keys present".
-var emptyBacking = compact4{bitfield: topBit}
-
 var (
 	Nil   = Map{}
 	Empty = Map{ptr: unsafe.Pointer(&emptyBacking)}
@@ -63,12 +59,12 @@ type Map struct {
 
 // compact returns the compact view if this Map uses the bitfield
 // representation.  Must not be called when m.ptr is nil.
-func (m Map) compact() (compactMap, bool) {
-	header := *(*uint64)(m.ptr)
-	if header&topBit != 0 {
-		return compactMap{ptr: m.ptr, keyBits: header &^ topBit}, true
+func (m Map) compact() (*compactMap, bool) {
+	cm := (*compactMap)(m.ptr)
+	if cm.bf&topBit != 0 {
+		return cm, true
 	}
-	return compactMap{}, false
+	return nil, false
 }
 
 // asFallback returns the fallback view.  Must only be called when m.ptr is
@@ -82,8 +78,7 @@ func (m Map) isCompact() bool {
 	if m.ptr == nil {
 		return false
 	}
-	_, ok := m.compact()
-	return ok
+	return (*compactMap)(m.ptr).bf&topBit != 0
 }
 
 // IsNil reports whether the map is the nil representation.
@@ -250,16 +245,13 @@ func (m Map) GetHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
 
 // AllHandles returns an iterator over key/value handle pairs.
 func (m Map) AllHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
-		if m.ptr == nil {
-			return
-		}
-		if cm, ok := m.compact(); ok {
-			cm.allHandles(yield)
-		} else {
-			m.asFallback().allHandles(yield)
-		}
+	if m.ptr == nil {
+		return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {}
 	}
+	if cm, ok := m.compact(); ok {
+		return cm.allHandles()
+	}
+	return m.asFallback().allHandles()
 }
 
 // AllStrings returns an iterator over key/value string pairs.
@@ -363,12 +355,14 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 		snap := globalKeyTable.currentSnap()
 		var resultBf uint64
 		var vals []uniquestr.Handle
-		remaining := cm.keyBits
+		kb := cm.keyBits()
+		aVals := cm.slice()
+		remaining := kb
 		aIdx := 0
 		for remaining != 0 {
 			pos := uint(bits.TrailingZeros64(remaining))
 			key := snap.byIndex[pos]
-			val := readValueAt(cm.ptr, aIdx)
+			val := aVals[aIdx]
 			if include(key, val) {
 				if otherV, ok := b.GetHandle(key); ok && otherV == val {
 					resultBf |= uint64(1) << pos

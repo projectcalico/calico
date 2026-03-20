@@ -15,12 +15,12 @@
 package uniquelabels
 
 import (
+	"cmp"
 	"encoding/json"
 	"math/bits"
 	"slices"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
@@ -34,133 +34,17 @@ const maxKeyTableSize = 63
 // _is_ the bitfield; when clear, the allocation is a fallbackMap.
 const topBit = uint64(1) << 63
 
-const handleSize = unsafe.Sizeof(uniquestr.Handle{}) // 8
-
 // globalKeyTable is the package-wide key table shared by all Maps.
 var globalKeyTable keyTable
 
-// fallbackMap is used when the key table is full or a map can't use the
-// compact representation.  The sentinel field occupies the same position as
-// bitfield in the compact types; its top bit is always clear.
-type fallbackMap struct {
-	sentinel uint64 // always 0
-	m        handleMap
-}
-
-// ---- reading helpers (work with any compact struct type) ----
-
-// valuesOffset is the byte offset from the start of a compact struct to its
-// values array.  Derived from compact1 but identical for all compactN types.
-var valuesOffset = unsafe.Offsetof(compact1{}.values)
-
-func readValueAt(ptr unsafe.Pointer, arrayIdx int) uniquestr.Handle {
-	return *(*uniquestr.Handle)(unsafe.Add(ptr, valuesOffset+uintptr(arrayIdx)*handleSize))
-}
-
-// ---- compactMap: read-only view of a compact bitfield-encoded map ----
-
-// compactMap wraps an unsafe.Pointer to a compactN allocation together with the
-// pre-extracted key bitfield.  Methods on compactMap implement the read
-// operations that Map dispatches to.
-type compactMap struct {
-	ptr     unsafe.Pointer
-	keyBits uint64 // bitfield with topBit stripped
-}
-
-func (cm compactMap) len() int {
-	return bits.OnesCount64(cm.keyBits)
-}
-
-func (cm compactMap) getHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
-	if cm.keyBits == 0 {
-		return uniquestr.Handle{}, false
-	}
-	snap := globalKeyTable.currentSnap()
-	pos, ok := snap.byHandle[h]
-	if !ok {
-		return uniquestr.Handle{}, false
-	}
-	if cm.keyBits&(uint64(1)<<pos) == 0 {
-		return uniquestr.Handle{}, false
-	}
-	arrayIdx := bits.OnesCount64(cm.keyBits & ((uint64(1) << pos) - 1))
-	return readValueAt(cm.ptr, arrayIdx), true
-}
-
-func (cm compactMap) allHandles(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
-	if cm.keyBits == 0 {
-		return
-	}
-	snap := globalKeyTable.currentSnap()
-	bf := cm.keyBits
-	arrayIdx := 0
-	for bf != 0 {
-		pos := bits.TrailingZeros64(bf)
-		key := snap.byIndex[pos]
-		val := readValueAt(cm.ptr, arrayIdx)
-		if !yield(key, val) {
-			return
-		}
-		bf &= bf - 1
-		arrayIdx++
-	}
-}
-
-// marshalJSON writes a JSON object directly from the compact bitfield.
-func (cm compactMap) marshalJSON() ([]byte, error) {
-	n := cm.len()
-	if n == 0 {
-		return []byte("{}"), nil
-	}
-	snap := globalKeyTable.currentSnap()
-	var backing [maxKeyTableSize]kv
-	pairs := backing[:n]
-	bf := cm.keyBits
-	for i := range pairs {
-		pos := bits.TrailingZeros64(bf)
-		pairs[i] = kv{
-			key: snap.byIndex[pos].Value(),
-			val: readValueAt(cm.ptr, i).Value(),
-		}
-		bf &= bf - 1
-	}
-	return marshalSortedPairs(pairs)
-}
-
-// marshalJSON writes a JSON object from the fallback handle map.
-func (fm *fallbackMap) marshalJSON() ([]byte, error) {
-	n := len(fm.m)
-	if n == 0 {
-		return []byte("{}"), nil
-	}
-	var backing [maxKeyTableSize]kv
-	// Fallback maps can exceed maxKeyTableSize; heap-allocate if needed.
-	var pairs []kv
-	if n <= maxKeyTableSize {
-		pairs = backing[:n]
-	} else {
-		pairs = make([]kv, n)
-	}
-	i := 0
-	for k, v := range fm.m {
-		pairs[i] = kv{key: k.Value(), val: v.Value()}
-		i++
-	}
-	return marshalSortedPairs(pairs)
-}
+// ---- JSON encoding helpers ----
 
 type kv struct{ key, val string }
 
 // marshalSortedPairs sorts pairs by key and writes them as a JSON object.
 func marshalSortedPairs(pairs []kv) ([]byte, error) {
 	slices.SortFunc(pairs, func(a, b kv) int {
-		if a.key < b.key {
-			return -1
-		}
-		if a.key > b.key {
-			return 1
-		}
-		return 0
+		return cmp.Compare(a.key, b.key)
 	})
 	buf := make([]byte, 0, len(pairs)*40)
 	buf = append(buf, '{')
@@ -205,38 +89,6 @@ func jsonSafe(s string) bool {
 		}
 	}
 	return true
-}
-
-func (cm compactMap) equals(other compactMap) bool {
-	if cm.keyBits != other.keyBits {
-		return false
-	}
-	n := bits.OnesCount64(cm.keyBits)
-	for i := range n {
-		if readValueAt(cm.ptr, i) != readValueAt(other.ptr, i) {
-			return false
-		}
-	}
-	return true
-}
-
-// ---- fallbackMap read methods ----
-
-func (fm *fallbackMap) len() int {
-	return len(fm.m)
-}
-
-func (fm *fallbackMap) getHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
-	v, ok := fm.m[h]
-	return v, ok
-}
-
-func (fm *fallbackMap) allHandles(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
-	for k, v := range fm.m {
-		if !yield(k, v) {
-			return
-		}
-	}
 }
 
 // ---- key table ----
