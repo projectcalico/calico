@@ -82,13 +82,14 @@ func (b mapBuilder) build() Map {
 		}
 	}
 
-	// Fallback: build a handleMap, try registerKeys for compact.
+	// Fallback: try registerKeys with the builder directly.
+	if cm, ok := globalKeyTable.registerKeys(b); ok {
+		return Map{ptr: unsafe.Pointer(cm)}
+	}
+	// True fallback: build handleMap for fallbackMap storage.
 	hm := make(handleMap, n)
 	for _, kv := range b {
 		hm[kv.k] = kv.v
-	}
-	if cm, ok := globalKeyTable.registerKeys(hm); ok {
-		return Map{ptr: unsafe.Pointer(cm)}
 	}
 	return Map{ptr: unsafe.Pointer(&fallbackMap{m: hm})}
 }

@@ -129,30 +129,27 @@ func (t *keyTable) currentSnap() *keyTableSnap {
 	return t.snap.Load()
 }
 
-// registerKeys attempts to build a compact map from the pre-interned
-// handleMap.  On success it returns the *compactMap and true.
+// registerKeys attempts to build a compact map from the pairs in the
+// mapBuilder.  On success it returns the *compactMap and true.
 // If the table is full and some keys can't be registered, it returns
 // (nil, false).
-//
-// The caller must intern keys/values into a handleMap before calling
-// this method so that uniquestr.Make is called at most once per key.
-func (t *keyTable) registerKeys(hm handleMap) (*compactMap, bool) {
+func (t *keyTable) registerKeys(b mapBuilder) (*compactMap, bool) {
 	snap := t.snap.Load()
 
 	// Fast path (lock-free): all keys already known.
 	var bf uint64
-	for k := range hm {
-		if pos, found := snap.byHandle[k]; found {
+	for _, kv := range b {
+		if pos, found := snap.byHandle[kv.k]; found {
 			bf |= uint64(1) << pos
 		} else {
-			return t.registerKeysSlow(hm)
+			return t.registerKeysSlow(b)
 		}
 	}
-	return buildCompact(snap, bf, hm), true
+	return buildCompact(snap, bf, b), true
 }
 
 // registerKeysSlow is the mutex-protected path for registering new keys.
-func (t *keyTable) registerKeysSlow(hm handleMap) (*compactMap, bool) {
+func (t *keyTable) registerKeysSlow(b mapBuilder) (*compactMap, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -160,18 +157,18 @@ func (t *keyTable) registerKeysSlow(hm handleMap) (*compactMap, bool) {
 
 	// Count unknown keys.
 	unknowns := 0
-	for k := range hm {
-		if _, found := snap.byHandle[k]; !found {
+	for _, kv := range b {
+		if _, found := snap.byHandle[kv.k]; !found {
 			unknowns++
 		}
 	}
 	if unknowns == 0 {
 		// All keys now known (registered by another goroutine).
 		var bf uint64
-		for k := range hm {
-			bf |= uint64(1) << snap.byHandle[k]
+		for _, kv := range b {
+			bf |= uint64(1) << snap.byHandle[kv.k]
 		}
-		return buildCompact(snap, bf, hm), true
+		return buildCompact(snap, bf, b), true
 	}
 	if snap.len+unknowns > maxKeyTableSize {
 		return nil, false
@@ -180,30 +177,30 @@ func (t *keyTable) registerKeysSlow(hm handleMap) (*compactMap, bool) {
 	// Clone and register new keys.
 	snap = snap.clone()
 	var bf uint64
-	for k := range hm {
-		if pos, found := snap.byHandle[k]; found {
+	for _, kv := range b {
+		if pos, found := snap.byHandle[kv.k]; found {
 			bf |= uint64(1) << pos
 		} else {
 			pos := uint8(snap.len)
-			snap.byHandle[k] = pos
-			snap.byIndex[pos] = k
+			snap.byHandle[kv.k] = pos
+			snap.byIndex[pos] = kv.k
 			snap.len++
 			bf |= uint64(1) << pos
 		}
 	}
 	t.snap.Store(snap)
-	return buildCompact(snap, bf, hm), true
+	return buildCompact(snap, bf, b), true
 }
 
 // buildCompact allocates a compactMap and populates its values directly,
 // avoiding an intermediate slice allocation.
-func buildCompact(snap *keyTableSnap, bf uint64, hm handleMap) *compactMap {
-	cm := allocCompact(bf|topBit, len(hm))
+func buildCompact(snap *keyTableSnap, bf uint64, b mapBuilder) *compactMap {
+	cm := allocCompact(bf|topBit, len(b))
 	vals := cm.slice()
-	for k, v := range hm {
-		pos := snap.byHandle[k]
+	for _, kv := range b {
+		pos := snap.byHandle[kv.k]
 		arrayIdx := bits.OnesCount64(bf & ((uint64(1) << pos) - 1))
-		vals[arrayIdx] = v
+		vals[arrayIdx] = kv.v
 	}
 	return cm
 }
