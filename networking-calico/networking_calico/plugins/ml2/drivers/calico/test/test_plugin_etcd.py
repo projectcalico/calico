@@ -2081,6 +2081,79 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.db.nova_notifier.notify_port_active_direct.assert_not_called()
 
 
+    def _trigger_resync(self):
+        """Trigger a periodic resync by advancing simulated time.
+
+        The resync thread sleeps for RESYNC_INTERVAL_SECS (default 60s)
+        between resyncs.  We advance by 61s to ensure the next resync
+        fires, and give_way to let eventlet threads run.
+        """
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        with lib.FixedUUID("uuid-resync"):
+            self.simulated_time_advance(61)
+            self.give_way()
+
+    def test_resync_creates_missing_live_migration(self):
+        """Resync creates LiveMigration and dest WEP for migrating port."""
+        self._do_initial_resync()
+
+        # Set up the port as mid-migration in the Neutron DB (migrating_to
+        # set), but with no LiveMigration or dest WEP in etcd.
+        self.osdb_ports[0]["binding:profile"] = {
+            "migrating_to": self.DEST_HOST,
+        }
+
+        self._trigger_resync()
+
+        # The resync should have created the LiveMigration and dest WEP.
+        self.assertIn(
+            self._lm_key(self.DEST_HOST), self.recent_writes
+        )
+        self.assertIn(
+            self._ep_key(self.DEST_HOST), self.recent_writes
+        )
+
+    def test_resync_deletes_stale_live_migration(self):
+        """Resync deletes orphaned LiveMigration with no migrating port."""
+        self._do_initial_resync()
+
+        # Inject a stale LiveMigration into etcd as if a migration was in
+        # progress but has since been cleaned up in Neutron (no migrating_to).
+        stale_lm_key = (
+            "/calico/resources/v3/projectcalico.org/livemigrations/"
+            + self.namespace
+            + "/stale--lm--name"
+        )
+        self.etcd_data[stale_lm_key] = json.dumps({
+            "apiVersion": "projectcalico.org/v3",
+            "kind": "LiveMigration",
+            "metadata": {
+                "name": "stale--lm--name",
+                "namespace": self.namespace,
+            },
+            "spec": {
+                "source": {"workloadEndpoint": {
+                    "hostname": "old-host",
+                    "orchestratorID": "openstack",
+                    "workloadID": self.namespace + "/old-vm",
+                    "endpointID": "old-port-id",
+                }},
+                "target": {"workloadEndpoint": {
+                    "hostname": "new-host",
+                    "orchestratorID": "openstack",
+                    "workloadID": self.namespace + "/old-vm",
+                    "endpointID": "old-port-id",
+                }},
+            },
+        })
+
+        self._trigger_resync()
+
+        # The stale LiveMigration should have been deleted.
+        self.assertIn(stale_lm_key, self.recent_deletes)
+
+
 class TestPluginEtcdRegion(TestPluginEtcdBase):
 
     def setUp_region(self):
