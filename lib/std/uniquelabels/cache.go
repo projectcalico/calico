@@ -56,6 +56,21 @@ func (c *recentMapCache) Lookup(m map[string]string) (Map, uint64, bool) {
 	return Map{}, hash, false
 }
 
+// LookupByHash checks the cache for a Map matching the given hash.
+// The validate function is called on a candidate to confirm it matches.
+// Returns the cached Map and true on hit, or the zero Map and false on miss.
+func (c *recentMapCache) LookupByHash(hash uint64, validate func(Map) bool) (Map, bool) {
+	idx := hash & (recentMapCacheSize - 1)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := c.entries[idx]
+	if entry.hash == hash && validate(entry.m) {
+		return entry.m, true
+	}
+	return Map{}, false
+}
+
 // Store stores a Map in the cache at the slot determined by hash.
 func (c *recentMapCache) Store(hash uint64, result Map) {
 	idx := hash & (recentMapCacheSize - 1)

@@ -534,10 +534,15 @@ func TestCompactEqualsOptimization(t *testing.T) {
 	unsafeTestOnlyReset()
 	input := map[string]string{"eq-a": "1", "eq-b": "2"}
 	m1 := Make(input)
-	// Use makeInner to bypass the cache so m2 is a distinct allocation,
+	// Build a second Map via mapBuilder directly to bypass the cache,
 	// ensuring the test exercises the compact value-comparison path
 	// rather than returning early via pointer equality.
-	m2 := makeInner(input)
+	var b mapBuilder
+	b.init()
+	for k, v := range input {
+		b.Put(uniquestr.Make(k), uniquestr.Make(v))
+	}
+	m2 := b.build()
 	m3 := Make(map[string]string{"eq-a": "1", "eq-b": "99"})
 	m4 := Make(map[string]string{"eq-a": "1"})
 	if !m1.isCompact() || !m2.isCompact() || !m3.isCompact() || !m4.isCompact() {
@@ -861,12 +866,9 @@ func TestFallbackFallbackIntersect(t *testing.T) {
 		t.Fatal("expected both maps to be fallback")
 	}
 
-	// Keys were never registered (makeFallback bypasses the key table),
-	// so the intersection stays fallback.
+	// The intersection builder registers keys in the key table, so the
+	// result is compact even when the inputs were fallback.
 	result := IntersectAndFilter(a, b, nil)
-	if result.isCompact() {
-		t.Error("expected fallback result when keys are not in the key table")
-	}
 	expected := map[string]string{"b": "2"}
 	if !result.EquivalentTo(expected) {
 		t.Errorf("fallback ∩ fallback = %v, want %v", result.RecomputeOriginalMap(), expected)
@@ -1032,6 +1034,45 @@ func TestFallbackFallbackEquals(t *testing.T) {
 	if a.Equals(c) {
 		t.Error("fallback maps with different values should not be equal")
 	}
+}
+
+func BenchmarkMake(b *testing.B) {
+	const nKeys = 15
+	input := make(map[string]string, nKeys)
+	for i := range nKeys {
+		input[fmt.Sprintf("example.com/label-%d", i)] = fmt.Sprintf("value-%d", i)
+	}
+
+	b.Run("cache-hit", func(b *testing.B) {
+		unsafeTestOnlyReset()
+		Make(input) // Prime the cache.
+		b.ResetTimer()
+		b.ReportAllocs()
+		for range b.N {
+			Make(input)
+		}
+	})
+
+	b.Run("cache-miss", func(b *testing.B) {
+		unsafeTestOnlyReset()
+		// Pre-register keys so miss path doesn't include key registration.
+		Make(input)
+		b.ResetTimer()
+		b.ReportAllocs()
+		for range b.N {
+			// Evict by storing a dummy entry at the same slot, then call Make.
+			recentCache.Store(0, Map{}) // Clobber slot 0 (may or may not be input's slot).
+			// Use a fresh cache to guarantee a miss.
+			unsafeTestOnlyReset()
+			// Re-register keys (not counted as the interesting part, but
+			// necessary for a fair comparison with the old code).
+			Make(map[string]string{"primer": "x"})
+			for k := range input {
+				Make(map[string]string{k: "x"})
+			}
+			Make(input)
+		}
+	})
 }
 
 func BenchmarkIntersectAndFilter(b *testing.B) {
