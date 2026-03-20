@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"maps"
 	"math/bits"
 	"unsafe"
 
@@ -113,27 +114,41 @@ func Make(m map[string]string) Map {
 	if len(m) == 0 {
 		return Empty
 	}
-
-	if cached, hash, ok := recentCache.Lookup(m); ok {
-		return cached
-	} else {
-		result := makeInner(m)
-		recentCache.Store(hash, result)
-		return result
-	}
+	return makeInner(len(m), maps.All(m))
 }
 
-// makeInner builds a Map from a non-nil, non-empty map[string]string.
-// It first tries to build a compact representation directly without
-// allocating a Go map; falls back to a handleMap when keys are unknown
-// or the key table is full.
-func makeInner(m map[string]string) Map {
-	if result, ok := tryMakeCompactDirect(m); ok {
+// makeInner builds a Map from a re-iterable sequence of n key/value pairs.
+// It checks the cache first; on miss it builds the Map and stores it.
+func makeInner(n int, seq iter.Seq2[string, string]) Map {
+	hash := recentCache.hashSeq(seq)
+	if cached, ok := recentCache.LookupByHash(hash, func(cached Map) bool {
+		if cached.Len() != n {
+			return false
+		}
+		for k, v := range seq {
+			if cv, ok := cached.GetString(k); !ok || cv != v {
+				return false
+			}
+		}
+		return true
+	}); ok {
+		return cached
+	}
+	result := buildMapFromSeq(n, seq)
+	recentCache.Store(hash, result)
+	return result
+}
+
+// buildMapFromSeq builds a Map from a re-iterable sequence without
+// cache interaction.  It first tries the compact representation directly;
+// falls back to a handleMap when keys are unknown or the key table is full.
+func buildMapFromSeq(n int, seq iter.Seq2[string, string]) Map {
+	if result, ok := tryMakeCompactDirect(n, seq); ok {
 		return result
 	}
 	// Slow path: build a handleMap for key registration or fallback.
-	hm := make(handleMap, len(m))
-	for k, v := range m {
+	hm := make(handleMap, n)
+	for k, v := range seq {
 		hm[uniquestr.Make(k)] = uniquestr.Make(v)
 	}
 	if bf, vals, ok := globalKeyTable.registerKeys(hm); ok {
@@ -143,17 +158,17 @@ func makeInner(m map[string]string) Map {
 }
 
 // tryMakeCompactDirect attempts to build a compact Map directly from
-// the input map without allocating an intermediate handleMap.  Succeeds
+// the input sequence without allocating an intermediate handleMap.  Succeeds
 // when all keys are already in the global key table (the common case
 // after startup).
-func tryMakeCompactDirect(m map[string]string) (Map, bool) {
-	if len(m) > maxKeyTableSize {
+func tryMakeCompactDirect(n int, seq iter.Seq2[string, string]) (Map, bool) {
+	if n > maxKeyTableSize {
 		return Map{}, false
 	}
 	snap := globalKeyTable.currentSnap()
 	var bf uint64
 	var valsByPos [maxKeyTableSize]uniquestr.Handle
-	for k, v := range m {
+	for k, v := range seq {
 		kh := uniquestr.Make(k)
 		pos, found := snap.byHandle[kh]
 		if !found {
@@ -307,6 +322,10 @@ func (m *Map) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// kvHandle holds interned key/value handles collected during
+// IntersectAndFilter's single pass.
+type kvHandle struct{ k, v uniquestr.Handle }
+
 // IntersectAndFilter returns a Map that contains only the key/value pairs that
 // are both:
 //
@@ -315,6 +334,9 @@ func (m *Map) UnmarshalJSON(data []byte) error {
 //
 // If either map is Nil, returns Nil.  Otherwise, returns a non-Nil, but
 // possibly empty Map.  May return one of the input maps.
+//
+// The result goes through makeInner, so repeated intersections with the
+// same output benefit from the cache.
 func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handle) bool) Map {
 	if a.IsNil() || b.IsNil() {
 		return Nil
@@ -331,91 +353,34 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 		include = noOpFilter
 	}
 
-	// Do a pass to determine if we need to allocate a new map.
-	needToFilter := false
-	for k, v := range a.AllHandles() {
-		if !include(k, v) {
-			needToFilter = true
-			break
-		}
-		if otherV, ok := b.GetHandle(k); !ok || otherV != v {
-			needToFilter = true
-			break
-		}
-	}
-	if !needToFilter {
-		// Map a _is_ the intersection.
-		return a
-	}
-
-	// We _do_ need to make a new map, re-do the calculation.
-	// If a is compact, build a compact result (the intersection's keys
-	// are a subset of a's keys, which are all in the key table).
-	if cm, ok := a.compact(); ok {
-		snap := globalKeyTable.currentSnap()
-		var resultBf uint64
-		var vals []uniquestr.Handle
-		kb := cm.keyBits()
-		aVals := cm.slice()
-		remaining := kb
-		aIdx := 0
-		for remaining != 0 {
-			pos := uint(bits.TrailingZeros64(remaining))
-			key := snap.byIndex[pos]
-			val := aVals[aIdx]
-			if include(key, val) {
-				if otherV, ok := b.GetHandle(key); ok && otherV == val {
-					resultBf |= uint64(1) << pos
-					vals = append(vals, val)
-				}
-			}
-			remaining &= remaining - 1
-			aIdx++
-		}
-		if len(vals) == 0 {
-			return Empty
-		}
-		return Map{ptr: allocCompact(resultBf|topBit, vals)}
-	}
-
-	intersection := map[uniquestr.Handle]uniquestr.Handle{}
+	// Single pass: collect matching pairs.
+	var bufArr [maxKeyTableSize]kvHandle
+	buf := bufArr[:0]
+	aLen := a.Len()
 	for k, v := range a.AllHandles() {
 		if !include(k, v) {
 			continue
 		}
-		if otherV, ok := b.GetHandle(k); !ok || otherV != v {
-			continue
+		if otherV, ok := b.GetHandle(k); ok && otherV == v {
+			buf = append(buf, kvHandle{k, v})
 		}
-		intersection[k] = v
 	}
-	if len(intersection) == 0 {
+	if len(buf) == aLen {
+		return a // a IS the intersection.
+	}
+	if len(buf) == 0 {
 		return Empty
 	}
-	// Try to produce a compact result: if every key in the intersection
-	// is already in the key table, we can use the bitfield representation.
-	if len(intersection) <= maxKeyTableSize {
-		snap := globalKeyTable.currentSnap()
-		var bf uint64
-		allKnown := true
-		for k := range intersection {
-			pos, ok := snap.byHandle[k]
-			if !ok {
-				allKnown = false
-				break
+
+	// Build iter.Seq2[string, string] over collected pairs.
+	seq := func(yield func(string, string) bool) {
+		for _, p := range buf {
+			if !yield(p.k.Value(), p.v.Value()) {
+				return
 			}
-			bf |= uint64(1) << pos
-		}
-		if allKnown {
-			vals := make([]uniquestr.Handle, len(intersection))
-			for k, v := range intersection {
-				pos := snap.byHandle[k]
-				arrayIdx := bits.OnesCount64(bf & ((uint64(1) << pos) - 1))
-				vals[arrayIdx] = v
-			}
-			return Map{ptr: allocCompact(bf|topBit, vals)}
 		}
 	}
-	return Map{ptr: unsafe.Pointer(&fallbackMap{m: intersection})}
+	return makeInner(len(buf), seq)
 }
 
 func noOpFilter(uniquestr.Handle, uniquestr.Handle) bool {

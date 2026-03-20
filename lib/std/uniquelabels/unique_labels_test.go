@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/maphash"
+	"maps"
 	"reflect"
 	"sync"
 	"testing"
@@ -534,10 +535,10 @@ func TestCompactEqualsOptimization(t *testing.T) {
 	unsafeTestOnlyReset()
 	input := map[string]string{"eq-a": "1", "eq-b": "2"}
 	m1 := Make(input)
-	// Use makeInner to bypass the cache so m2 is a distinct allocation,
+	// Use buildMapFromSeq to bypass the cache so m2 is a distinct allocation,
 	// ensuring the test exercises the compact value-comparison path
 	// rather than returning early via pointer equality.
-	m2 := makeInner(input)
+	m2 := buildMapFromSeq(len(input), maps.All(input))
 	m3 := Make(map[string]string{"eq-a": "1", "eq-b": "99"})
 	m4 := Make(map[string]string{"eq-a": "1"})
 	if !m1.isCompact() || !m2.isCompact() || !m3.isCompact() || !m4.isCompact() {
@@ -861,11 +862,11 @@ func TestFallbackFallbackIntersect(t *testing.T) {
 		t.Fatal("expected both maps to be fallback")
 	}
 
-	// Keys were never registered (makeFallback bypasses the key table),
-	// so the intersection stays fallback.
+	// Even though inputs are fallback, IntersectAndFilter goes through
+	// makeInner which registers keys, so the result becomes compact.
 	result := IntersectAndFilter(a, b, nil)
-	if result.isCompact() {
-		t.Error("expected fallback result when keys are not in the key table")
+	if !result.isCompact() {
+		t.Error("expected compact result (makeInner registers keys)")
 	}
 	expected := map[string]string{"b": "2"}
 	if !result.EquivalentTo(expected) {

@@ -16,6 +16,7 @@ package uniquelabels
 
 import (
 	"hash/maphash"
+	"iter"
 	"sync"
 )
 
@@ -40,18 +41,30 @@ type recentMapCacheEntry struct {
 	m    Map
 }
 
-// Lookup checks the cache for a Map matching the given map[string]string.
-// Returns the cached Map and true on hit, or the zero Map and false on miss.
-// The returned hash should be passed to Store on miss.
-func (c *recentMapCache) Lookup(m map[string]string) (Map, uint64, bool) {
-	hash := c.hashMapStringString(m)
+// LookupByHash checks the cache for a Map matching the given hash.
+// validate is called (under the cache lock) to confirm the cached Map
+// matches the caller's input.
+func (c *recentMapCache) LookupByHash(hash uint64, validate func(Map) bool) (Map, bool) {
 	idx := hash & (recentMapCacheSize - 1)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	entry := c.entries[idx]
-	if entry.hash == hash && entry.m.EquivalentTo(m) {
-		return entry.m, hash, true
+	if entry.hash == hash && validate(entry.m) {
+		return entry.m, true
+	}
+	return Map{}, false
+}
+
+// Lookup checks the cache for a Map matching the given map[string]string.
+// Returns the cached Map and true on hit, or the zero Map and false on miss.
+// The returned hash should be passed to Store on miss.
+func (c *recentMapCache) Lookup(m map[string]string) (Map, uint64, bool) {
+	hash := c.hashMapStringString(m)
+	if cached, ok := c.LookupByHash(hash, func(cached Map) bool {
+		return cached.EquivalentTo(m)
+	}); ok {
+		return cached, hash, true
 	}
 	return Map{}, hash, false
 }
@@ -75,6 +88,22 @@ func (c *recentMapCache) hashMapStringString(m map[string]string) uint64 {
 		h.Reset()
 		h.WriteString(k)
 		h.WriteByte(0) // Separator so "ab"+"" != "a"+"b".
+		h.WriteString(v)
+		combined ^= h.Sum64()
+	}
+	return combined
+}
+
+// hashSeq computes an order-independent hash of an iter.Seq2[string, string]
+// using the same algorithm as hashMapStringString.
+func (c *recentMapCache) hashSeq(seq iter.Seq2[string, string]) uint64 {
+	var combined uint64
+	var h maphash.Hash
+	h.SetSeed(c.seed)
+	for k, v := range seq {
+		h.Reset()
+		h.WriteString(k)
+		h.WriteByte(0)
 		h.WriteString(v)
 		combined ^= h.Sum64()
 	}
