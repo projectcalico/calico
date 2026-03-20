@@ -1115,12 +1115,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 	}
 
-	// If the NFTablesProxyARPFilter feature is enabled, create nftables ARP table for proxy ARP
+	// If the NFTablesSupported feature is enabled, create nftables ARP table for proxy ARP
 	// suppression.  Note that that feature is different from nftables _mode_.  The latter
 	// configures if we use nftables for policy programming; the former configures if we can use
-	// nftables for proxy ARP filtering.
+	// nftables for other purposes.
 	var arpRootTable *nftables.NftablesTable
-	if featureDetector.GetFeatures().NFTablesProxyARPFilter {
+	if featureDetector.GetFeatures().NFTablesSupported {
 		arpTableOptions := nftables.TableOptions{
 			RefreshInterval:  config.TableRefreshInterval,
 			LookPathOverride: config.LookPathOverride,

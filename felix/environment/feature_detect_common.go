@@ -36,9 +36,9 @@ type Features struct {
 	// KernelHasUDPGSOFix is true if the kernel includes the fix for UDP GSO
 	// FRAGLIST corruption (kernel 6.16+).
 	KernelHasUDPGSOFix bool
-	// NFTablesProxyARPFilter controls if we can use the nftables with the "arp" family to
-	// suppress sending a proxy ARP to a pod for its own IP.
-	NFTablesProxyARPFilter bool
+	// NFTablesSupported controls if we can use the nftables for purposes other than policy
+	// programming.
+	NFTablesSupported bool
 }
 
 type FeatureDetectorIface interface {
