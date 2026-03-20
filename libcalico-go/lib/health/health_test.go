@@ -57,9 +57,9 @@ var _ = Describe("Health", func() {
 
 	BeforeEach(func() {
 		aggregator = health.NewHealthAggregator()
-		aggregator.RegisterReporter(SOURCE1, &health.HealthReport{Ready: true}, 1*time.Second)
-		aggregator.RegisterReporter(SOURCE2, &health.HealthReport{Live: true, Ready: true}, 1*time.Second)
-		aggregator.RegisterReporter(SOURCE3, &health.HealthReport{Live: true}, 1*time.Second)
+		aggregator.RegisterReporter(SOURCE1, &health.HealthReport{Ready: true}, 100*time.Millisecond)
+		aggregator.RegisterReporter(SOURCE2, &health.HealthReport{Live: true, Ready: true}, 100*time.Millisecond)
+		aggregator.RegisterReporter(SOURCE3, &health.HealthReport{Live: true}, 100*time.Millisecond)
 	})
 
 	It("is initially live but not ready", func() {
@@ -124,7 +124,7 @@ var _ = Describe("Health", func() {
 			Context("with time passing so that reports expire", func() {
 
 				BeforeEach(func() {
-					time.Sleep(2 * time.Second)
+					time.Sleep(200 * time.Millisecond)
 				})
 
 				It("is not ready and not live", func() {

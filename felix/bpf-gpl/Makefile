@@ -126,11 +126,11 @@ $(LIBBPF_FILE_CREATED):
 ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
 	$(info "Directory does not exist.")
 	@echo "Directory does not exist."
-	git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
+	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
 endif
 	rm -rf .libbpf-*
 	cd $(LIBBPF_DIR) && \
-		git fetch --tags && git checkout $(LIBBPF_VERSION)
+		env -u GIT_DIR -u GIT_WORK_TREE git fetch --tags && env -u GIT_DIR -u GIT_WORK_TREE git checkout $(LIBBPF_VERSION)
 	touch $(LIBBPF_FILE_CREATED)
 
 
@@ -188,9 +188,23 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 test_xdp%_v6.ll: xdp.c xdp_v6.d calculate-flags
 	$(COMPILE)
 
+tc.d: tc.c
+	$(COMPILE_DEPS)
 tc_v6.d: tc.c
 	$(COMPILE_DEPS)
+xdp.d: xdp.c
+	$(COMPILE_DEPS)
 xdp_v6.d: xdp.c
+	$(COMPILE_DEPS)
+connect_balancer.d: connect_balancer.c
+	$(COMPILE_DEPS)
+connect_balancer_v6.d: connect_balancer_v6.c
+	$(COMPILE_DEPS)
+connect_balancer_v46.d: connect_balancer_v46.c
+	$(COMPILE_DEPS)
+conntrack_cleanup.d: conntrack_cleanup.c
+	$(COMPILE_DEPS)
+conntrack_cleanup_v6.d: conntrack_cleanup.c
 	$(COMPILE_DEPS)
 
 

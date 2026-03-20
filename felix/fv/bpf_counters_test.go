@@ -226,13 +226,13 @@ func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string
 
 	startOfPol := -1
 	for idx, str := range strOut {
-		if strings.Contains(str, fmt.Sprintf("Start of GlobalNetworkPolicy %s", polName)) {
+		if strings.Contains(str, fmt.Sprintf("Policy: GlobalNetworkPolicy %s", polName)) {
 			startOfPol = idx
 			break
 		}
 	}
 	Expect(startOfPol).NotTo(Equal(-1))
-	Expect(strings.Contains(strOut[startOfPol+2], fmt.Sprintf("count = %d", count))).To(BeTrue())
+	Expect(strings.Contains(strOut[startOfPol+2], fmt.Sprintf("Hit count: %d", count))).To(BeTrue())
 }
 
 func checkDroppedByPolicyCounters(g Gomega, felix *infrastructure.Felix, ifName string, iCount, eCount int) {

@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_GATEWAY_VERSION=v1.5.7
+ENVOY_GATEWAY_VERSION=v1.5.9
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -25,7 +25,8 @@ ENVOY_GATEWAY_DOWNLOADED=.envoy-gateway.downloaded
 init-source: $(ENVOY_GATEWAY_DOWNLOADED)
 $(ENVOY_GATEWAY_DOWNLOADED):
 	mkdir -p envoy-gateway
-	curl -sfL https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz | tar xz --strip-components 1 -C envoy-gateway
+	curl -sSfL --retry 5 -o /tmp/envoy-gateway.tar.gz https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz
+	tar xz --strip-components 1 -C envoy-gateway -f /tmp/envoy-gateway.tar.gz && rm -f /tmp/envoy-gateway.tar.gz
 
 # 	Apply patches for the specified Envoy Gateway version if patches directory exists.
 # 	This code checks for the presence of a patches directory corresponding to ENVOY_GATEWAY_VERSION.
@@ -71,7 +72,8 @@ sub-image-%:
 image: $(BUILD_IMAGES)
 
 $(ENVOY_GATEWAY_IMAGE): $(ENVOY_GATEWAY_IMAGE_CREATED)
-$(ENVOY_GATEWAY_IMAGE_CREATED): register Dockerfile build
+# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
+$(ENVOY_GATEWAY_IMAGE_CREATED): Dockerfile build | register
 	$(DOCKER_BUILD) -t $(ENVOY_GATEWAY_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@

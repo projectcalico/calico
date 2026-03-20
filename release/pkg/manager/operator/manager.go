@@ -55,7 +55,12 @@ type OperatorManager struct {
 	// calicoDir is the absolute path to the root directory of the calico repository
 	calicoDir string
 
+	// calicoVersion is the version of calico to use for the operator. This is only used for hashreleases.
 	calicoVersion string
+
+	// pinnedComponentsFile is the path to the file containing the pinned components for the operator.
+	// This is used for hashreleases and supersedes using calicoVersion.
+	pinnedComponentsFile string
 
 	// image is the name of the operator image (e.g. tigera/operator)
 	image string
@@ -110,10 +115,20 @@ func (o *OperatorManager) Build() error {
 		return err
 	}
 	env, logFields := o.env()
-	logFields["calico_registry"] = o.productRegistry
-	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, o.productRegistry))
+	logFields["product_registry"] = o.productRegistry
+	r, i, err := o.productRegistryParts()
+	if err != nil {
+		return err
+	}
+	logFields[fmt.Sprintf("%s_registry", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
+	logFields[fmt.Sprintf("%s_image_path", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
+	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, r))
+	env = append(env, fmt.Sprintf("%s_IMAGE_PATH=%s", defaultProductEnvPrefix, i))
 	if o.isHashRelease {
-		if o.calicoVersion != "" {
+		if o.pinnedComponentsFile != "" {
+			env = append(env, fmt.Sprintf("%s_VERSIONS=%s", defaultProductEnvPrefix, o.pinnedComponentsFile))
+			logFields["pinned_components_file"] = o.pinnedComponentsFile
+		} else if o.calicoVersion != "" {
 			env = append(env, fmt.Sprintf("%s_VERSION=%s", defaultProductEnvPrefix, o.calicoVersion))
 			logFields["calico_version"] = o.calicoVersion
 		}
@@ -158,6 +173,26 @@ func (o *OperatorManager) env() ([]string, logrus.Fields) {
 	return env, logFields
 }
 
+// productRegistryParts splits the product registry into registry and image path.
+// Typically the product registry is something like "docker.io/calico" or "quay.io/calico".
+// This function splits it into "docker.io" and "calico" or "quay.io" and "calico".
+func (o *OperatorManager) productRegistryParts() (registry string, imagePath string, err error) {
+	// Split and filter out empty parts from double slashes or trailing slashes.
+	var parts []string
+	for _, part := range strings.Split(o.productRegistry, "/") {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) < 2 {
+		err = fmt.Errorf("failed to parse product registry: %s", o.productRegistry)
+		return
+	}
+	registry = strings.Join(parts[:len(parts)-1], "/") + "/"
+	imagePath = parts[len(parts)-1] + "/"
+	return
+}
+
 func (o *OperatorManager) PreBuildValidation() error {
 	if !o.validate {
 		return nil
@@ -173,8 +208,13 @@ func (o *OperatorManager) PreBuildValidation() error {
 	if dirty {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them"))
 	}
-	if o.isHashRelease && (o.calicoVersion == "" || o.calicoDir == "") {
-		errStack = errors.Join(errStack, errors.New("hashrelease requires calico version and directory to be specified"))
+	if o.isHashRelease {
+		if o.calicoVersion == "" && o.pinnedComponentsFile == "" {
+			errStack = errors.Join(errStack, errors.New("hashrelease requires either a calico version or the pinned components file to be specified"))
+		}
+		if o.calicoDir == "" {
+			errStack = errors.Join(errStack, errors.New("hashrelease requires the calico directory to be specified"))
+		}
 	}
 	if !o.validateBranch {
 		return errStack

@@ -45,6 +45,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -124,7 +125,7 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, vmIndexer, vmiIndexer cache.Indexer) *IPAMController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, deferredInformers *kubevirt.DeferredInformers) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -153,11 +154,10 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 	)
 
 	return &IPAMController{
-		client:     c,
-		clientset:  cs,
-		config:     cfg,
-		vmIndexer:  vmIndexer,
-		vmiIndexer: vmiIndexer,
+		client:            c,
+		clientset:         cs,
+		config:            cfg,
+		deferredInformers: deferredInformers,
 
 		syncChan: syncChan,
 
@@ -202,10 +202,10 @@ type IPAMController struct {
 	nodeLister v1lister.NodeLister
 	config     config.NodeControllerConfig
 
-	// vmIndexer and vmiIndexer are optional KubeVirt cache indexers for verifying
-	// VM/VMI resources. Nil if KubeVirt is not installed.
-	vmIndexer  cache.Indexer
-	vmiIndexer cache.Indexer
+	// deferredInformers provides thread-safe access to KubeVirt VM/VMI cache
+	// indexers. The indexers may be populated lazily after startup if KubeVirt
+	// is installed after kube-controllers.
+	deferredInformers *kubevirt.DeferredInformers
 
 	syncStatus bapi.SyncStatus
 
@@ -1095,9 +1095,12 @@ func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
 	vmiName := a.attrs[ipam.AttributeVMIName]
 	logc := log.WithFields(a.fields())
 
+	vmIndexer := c.deferredInformers.VMIndexer()
+	vmiIndexer := c.deferredInformers.VMInstanceIndexer()
+
 	// If we can't reason about it, don't GC it.
 	// (We can tighten this later once attrs are guaranteed.)
-	if ns == "" || vmiName == "" || c.vmIndexer == nil || c.vmiIndexer == nil {
+	if ns == "" || vmiName == "" || vmIndexer == nil || vmiIndexer == nil {
 		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
 		return true
 	}
@@ -1106,7 +1109,7 @@ func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
 	key := cache.NewObjectName(ns, vmiName).String()
 
 	// Check if the VM exists in the informer cache.
-	_, vmExists, err := c.vmIndexer.GetByKey(key)
+	_, vmExists, err := vmIndexer.GetByKey(key)
 	if err != nil {
 		logc.WithError(err).Error("Failed to look up VM in cache, assuming allocation is valid")
 		return true
@@ -1119,7 +1122,7 @@ func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
 	// VM not found — check if a standalone VMI (not owned by a VM) exists.
 	// If the VMI has a VM ownerReference but the VM is already gone, the VMI
 	// is just awaiting garbage collection and is not evidence of a valid allocation.
-	obj, vmiExists, err := c.vmiIndexer.GetByKey(key)
+	obj, vmiExists, err := vmiIndexer.GetByKey(key)
 	if err != nil {
 		logc.WithError(err).Warn("Failed to look up VMI in cache, assuming allocation is valid")
 		return true
