@@ -29,6 +29,7 @@ struct name {                              \
 	__s8 dscp;                             \
 	__s8 istio_dscp;                       \
 	__u32 maglev_lut_size;                 \
+	__u32 host_ifindex;                    \
 }
 
 DECLARE_TC_GLOBAL_DATA(cali_tc_global_data, ipv6_addr_t);
