@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -64,7 +65,8 @@ func TestMain(m *testing.M) {
 	calico.NodeName = "kube-master"
 
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{crdDir()},
+		CRDDirectoryPaths:        []string{crdDir()},
+		ControlPlaneStopTimeout:  2 * time.Second,
 	}
 
 	var err error

@@ -27,7 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -420,7 +419,10 @@ func (c *client) SetPrefixes(keys []string) error {
 // When we receive WaitForDatastore and are already InSync, we reset the client's syncer status which blocks
 // GetValues calls.
 func (c *client) OnStatusUpdated(status api.SyncStatus) {
-	c.syncerC <- status
+	select {
+	case c.syncerC <- status:
+	case <-c.stopCh:
+	}
 }
 
 func (c *client) onStatusUpdated(status api.SyncStatus) {
@@ -994,7 +996,10 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 //   - wakes up the watchers so that they can check if any of the prefixes they are
 //     watching have been updated.
 func (c *client) OnUpdates(updates []api.Update) {
-	c.syncerC <- updates
+	select {
+	case c.syncerC <- updates:
+	case <-c.stopCh:
+	}
 }
 
 func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
@@ -1919,27 +1924,17 @@ func (c *client) GetCurrentRevision() uint64 {
 }
 
 // Stop shuts down the client's background goroutines (syncer, watchers, update processor).
-// The syncer must be stopped before closing stopCh because syncer.Stop() sends
-// delete events through syncerC, which the update processor goroutine must drain.
+// stopCh is closed first so that OnUpdates/OnStatusUpdated callbacks (called by the
+// syncer during shutdown to send delete events) return immediately instead of blocking
+// on the zero-capacity syncerC channel.
 func (c *client) Stop() {
+	close(c.stopCh)
+	if c.syncer != nil {
+		c.syncer.Stop()
+	}
 	if c.localBGPPeerWatcher != nil {
 		c.localBGPPeerWatcher.Stop()
 	}
-	if c.syncer != nil {
-		// syncer.Stop() can block while it drains delete events through the
-		// syncerC channel. Run it with a timeout to avoid hanging.
-		done := make(chan struct{})
-		go func() {
-			c.syncer.Stop()
-			close(done)
-		}()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			log.Warn("Timed out waiting for syncer to stop")
-		}
-	}
-	close(c.stopCh)
 }
 
 // matchesPrefix returns true if the key matches any of the supplied prefixes.
