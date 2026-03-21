@@ -86,8 +86,12 @@ class TestSpoof(TestBase):
             return
 
         _log.info("Setting encapsulation to %s via Installation", encap)
-        kubectl("patch installation default --type=json "
-                "-p '[{\"op\":\"add\",\"path\":\"/spec/calicoNetwork/ipPools/0/encapsulation\",\"value\":\"%s\"}]'" % encap)
+        patch_payload = json.dumps([{
+            "op": "add",
+            "path": "/spec/calicoNetwork/ipPools/0/encapsulation",
+            "value": encap,
+        }])
+        kubectl("patch installation default --type=json -p '%s'" % patch_payload)
 
         # Wait for the operator to reconcile the IPPool before restarting pods.
         def pool_reconciled():
