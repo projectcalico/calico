@@ -361,8 +361,11 @@ func runConfdTest(t *testing.T, inputYAML, goldenDir string) {
 		Onetime:  true,
 		SyncOnly: true,
 	}
+	// Create a Calico v3 client for confd's internal use.
+	confdCalicoClient := newCalicoClient(t, kubeconfig)
+
 	ctx := context.Background()
-	err = run.RunWithContext(ctx, confdConfig, nil)
+	err = run.RunWithContext(ctx, confdConfig, confdCalicoClient, k8sClient, nil)
 	require.NoError(t, err, "confd RunWithContext")
 
 	// Compare output files against golden files.

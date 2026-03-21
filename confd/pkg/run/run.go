@@ -23,37 +23,47 @@ import (
 	"syscall"
 
 	logrus "github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/projectcalico/calico/confd/pkg/backends/calico"
 	"github.com/projectcalico/calico/confd/pkg/config"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
-// Run is the original entry point for the confd binary. It handles signal
-// setup and calls os.Exit on completion. New callers should use RunWithContext.
+// Run is the entry point for the confd binary. It creates clients from config/environment,
+// handles signal setup, and calls os.Exit on completion.
 func Run(cfg *config.Config) {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	if err := RunWithContext(ctx, cfg, nil); err != nil {
+	// Create clients from config/environment.
+	cc, k8sClient, err := createClients(cfg)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create clients")
+	}
+
+	if err := RunWithContext(ctx, cfg, cc, k8sClient, nil); err != nil {
 		logrus.Fatal(err.Error())
 	}
 	os.Exit(0)
 }
 
 // RunWithContext runs confd using the provided context for lifecycle management.
-// If storeClient is nil, a new calico client is created from the config.
-// In oneshot mode, it processes templates once and returns.
+// If storeClient is nil, a new calico confd client is created using the provided
+// Calico and K8s clients. In oneshot mode, it processes templates once and returns.
 // In daemon mode, it watches for changes until the context is cancelled.
-func RunWithContext(ctx context.Context, cfg *config.Config, storeClient backends.StoreClient) error {
+func RunWithContext(ctx context.Context, cfg *config.Config, cc clientv3.Interface, k8sClient kubernetes.Interface, storeClient backends.StoreClient) error {
 	logrus.Info("Starting calico-confd")
 
 	if storeClient == nil {
 		var err error
-		storeClient, err = calico.NewCalicoClient(cfg)
+		storeClient, err = calico.NewCalicoClient(cfg, cc, k8sClient)
 		if err != nil {
-			return fmt.Errorf("creating calico client: %w", err)
+			return fmt.Errorf("creating calico confd client: %w", err)
 		}
 	}
 
@@ -94,4 +104,35 @@ func RunWithContext(ctx context.Context, cfg *config.Config, storeClient backend
 			return nil
 		}
 	}
+}
+
+// createClients builds the Calico v3 and Kubernetes clients from config and environment.
+func createClients(cfg *config.Config) (clientv3.Interface, kubernetes.Interface, error) {
+	clientCfg, err := apiconfig.LoadClientConfig(cfg.CalicoConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading calico client config: %w", err)
+	}
+
+	cc, err := clientv3.New(*clientCfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating calico client: %w", err)
+	}
+
+	cfgFile := os.Getenv("KUBECONFIG")
+	restCfg, err := winutils.BuildConfigFromFlags("", cfgFile)
+	if err != nil {
+		logrus.WithError(err).Info("KUBECONFIG not found, attempting in-cluster config")
+		restCfg, err = winutils.GetInClusterConfig()
+		if err != nil {
+			return cc, nil, nil
+		}
+	}
+
+	k8sClient, err := kubernetes.NewForConfig(restCfg)
+	if err != nil {
+		logrus.WithError(err).Warning("Failed to create K8s client")
+		return cc, nil, nil
+	}
+
+	return cc, k8sClient, nil
 }
