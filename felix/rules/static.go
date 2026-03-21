@@ -675,7 +675,7 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.Rule {
 	var rules []generictables.Rule
 
-	if r.nft {
+	if r.nft && r.NFTablesFlowTableOffload == "Enabled" {
 		// Offload established connections that were accepted by Calico policy to the
 		// flowtable for hardware/software fast-path forwarding. Placed before the final
 		// accept so only Calico-managed traffic is offloaded.
