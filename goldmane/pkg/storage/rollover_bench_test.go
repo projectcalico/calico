@@ -25,32 +25,6 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-// rolloverBackward is the old implementation that iterates from newest to oldest.
-func rolloverBackward(d *DiachronicFlow, limiter int64) {
-	for i := len(d.Windows) - 1; i >= 0; i-- {
-		w := d.Windows[i]
-		if w.end <= limiter {
-			d.Windows = d.Windows[i+1:]
-			return
-		}
-	}
-}
-
-// rolloverForward is the new implementation that iterates from oldest to newest.
-func rolloverForward(d *DiachronicFlow, limiter int64) {
-	for i, w := range d.Windows {
-		if w.end > limiter {
-			if i > 0 {
-				d.Windows = d.Windows[i:]
-			}
-			return
-		}
-	}
-	if len(d.Windows) > 0 {
-		d.Windows = d.Windows[:0]
-	}
-}
-
 func buildDiachronicFlow(numWindows int) *DiachronicFlow {
 	k := types.NewFlowKey(
 		&types.FlowKeySource{SourceName: "src", SourceNamespace: "default"},
@@ -79,20 +53,12 @@ func BenchmarkRollover(b *testing.B) {
 		template := buildDiachronicFlow(numWindows)
 		origWindows := template.Windows
 
-		b.Run(fmt.Sprintf("backward/%d_windows", numWindows), func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d_windows", numWindows), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				// Rollover only reslices, so restoring the slice header is sufficient.
 				template.Windows = origWindows
-				rolloverBackward(template, limiter)
-			}
-		})
-
-		b.Run(fmt.Sprintf("forward/%d_windows", numWindows), func(b *testing.B) {
-			b.ReportAllocs()
-			for b.Loop() {
-				template.Windows = origWindows
-				rolloverForward(template, limiter)
+				template.Rollover(limiter)
 			}
 		})
 	}

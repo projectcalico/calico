@@ -54,23 +54,6 @@ func TestSortedCSVIntersection(t *testing.T) {
 	}
 }
 
-// naiveCSVIntersection is the old O(n*m) implementation, preserved here so we can
-// benchmark it against the sorted merge.
-func naiveCSVIntersection(a, b string) string {
-	if a == "" || b == "" {
-		return ""
-	}
-	av := strings.Split(a, ",")
-	bv := strings.Split(b, ",")
-	common := make([]string, 0)
-	for _, v := range av {
-		if slices.Contains(bv, v) {
-			common = append(common, v)
-		}
-	}
-	return strings.Join(common, ",")
-}
-
 // buildSortedCSV generates a sorted, comma-separated string of n labels like "key-00=val-00,...".
 func buildSortedCSV(n int) string {
 	parts := make([]string, n)
@@ -101,14 +84,7 @@ func BenchmarkCSVIntersection(b *testing.B) {
 		a := buildSortedCSV(n)
 		bStr := buildSortedCSVWithOffset(n)
 
-		b.Run(fmt.Sprintf("naive/%d_labels", n), func(b *testing.B) {
-			b.ReportAllocs()
-			for b.Loop() {
-				naiveCSVIntersection(a, bStr)
-			}
-		})
-
-		b.Run(fmt.Sprintf("sorted_merge/%d_labels", n), func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d_labels", n), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				sortedCSVIntersection(a, bStr)
