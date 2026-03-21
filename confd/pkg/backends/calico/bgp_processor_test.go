@@ -37,8 +37,8 @@ func newTestClient(cache, peeringCache map[string]string) *client {
 	c := &client{
 		cache:        cache,
 		peeringCache: peeringCache,
+		configCache:  make(map[int]*bgpConfigCache),
 	}
-	// Ensure waitForSync doesn't block - it's a zero-value WaitGroup which is already "done"
 	return c
 }
 
@@ -2518,11 +2518,6 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 
 	_ = os.Unsetenv("CALICO_ROUTER_ID")
 
-	// Clear the global configCache to start fresh
-	configCacheMutex.Lock()
-	configCache = make(map[int]*bgpConfigCache)
-	configCacheMutex.Unlock()
-
 	// Enable mesh for more realistic scenario
 	meshConfig := map[string]any{
 		"enabled": true,
@@ -2584,9 +2579,9 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 					// Periodically clear the cache to force re-computation and increase
 					// the likelihood of hitting the race condition
 					if iterationCount%5 == 0 {
-						configCacheMutex.Lock()
-						delete(configCache, ipVersion)
-						configCacheMutex.Unlock()
+						c.configCacheMutex.Lock()
+						delete(c.configCache, ipVersion)
+						c.configCacheMutex.Unlock()
 					}
 
 					iterationCount++
