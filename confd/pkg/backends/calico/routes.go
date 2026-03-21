@@ -31,7 +31,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 const (
@@ -65,8 +64,8 @@ type routeGenerator struct {
 	resyncKnownRoutesTrigger   chan struct{}
 }
 
-// NewRouteGenerator initializes a kube-api client and the informers
-func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
+// NewRouteGenerator initializes the route generator using the provided K8s client.
+func NewRouteGenerator(c *client, k8sClient kubernetes.Interface) (rg *routeGenerator, err error) {
 	// Determine the node name we'll use to check for local endpoints.
 	// This value should match the name of the node in the Kubernetes API.
 	// Prefer CALICO_K8S_NODE_REF, and fall back to the Calico node name.
@@ -76,7 +75,6 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	}
 	log.Debugf("Route generator configured to use node name %s", nodename)
 
-	// initialize empty route generator
 	rg = &routeGenerator{
 		client:                     c,
 		nodeName:                   nodename,
@@ -85,24 +83,8 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 		resyncKnownRoutesTrigger:   make(chan struct{}, 1),
 	}
 
-	// set up k8s client
-	// attempt 1: KUBECONFIG env var
-	cfgFile := os.Getenv("KUBECONFIG")
-	cfg, err := winutils.BuildConfigFromFlags("", cfgFile)
-	if err != nil {
-		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")
-		// attempt 2: in cluster config
-		if cfg, err = winutils.GetInClusterConfig(); err != nil {
-			return
-		}
-	}
-	client, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return
-	}
-
-	// set up services informer
-	svcWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "services", "", fields.Everything())
+	// Set up services informer.
+	svcWatcher := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", "", fields.Everything())
 	svcHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onSvcAdd, UpdateFunc: rg.onSvcUpdate, DeleteFunc: rg.onSvcDelete}
 	rg.svcIndexer, rg.svcInformer = cache.NewInformerWithOptions(cache.InformerOptions{
 		ListerWatcher: svcWatcher,
@@ -112,8 +94,8 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 		Indexers:      cache.Indexers{},
 	})
 
-	// set up endpoints informer
-	epWatcher := cache.NewListWatchFromClient(client.DiscoveryV1().RESTClient(), "endpointslices", "", fields.Everything())
+	// Set up endpoint slices informer.
+	epWatcher := cache.NewListWatchFromClient(k8sClient.DiscoveryV1().RESTClient(), "endpointslices", "", fields.Everything())
 	epHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onEPAdd, UpdateFunc: rg.onEPUpdate, DeleteFunc: rg.onEPDelete}
 	rg.epIndexer, rg.epInformer = cache.NewInformerWithOptions(cache.InformerOptions{
 		ListerWatcher: epWatcher,
