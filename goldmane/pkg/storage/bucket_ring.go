@@ -420,12 +420,14 @@ func (r *BucketRing) indexAdd(idx, n int) int {
 func (r *BucketRing) findBucket(t int64) (int, *AggregationBucket) {
 	// Compute the bucket index directly from the timestamp. Each bucket covers exactly
 	// r.interval seconds, so we can calculate how many buckets back from the head this
-	// timestamp falls and map that to a ring index.
+	// timestamp falls and map that to a ring index. We use (EndTime - 1) as the reference
+	// point so that integer division rounds correctly for timestamps within the head bucket
+	// itself (where head.StartTime - t would be negative and truncate toward zero).
 	head := r.buckets[r.headIndex]
 	if t >= head.EndTime || t < r.BeginningOfHistory() {
 		return -1, nil
 	}
-	bucketsBack := int((head.StartTime - t) / int64(r.interval))
+	bucketsBack := int((head.EndTime - 1 - t) / int64(r.interval))
 	idx := r.indexSubtract(r.headIndex, bucketsBack)
 	b := r.buckets[idx]
 	if t >= b.StartTime && t < b.EndTime {
