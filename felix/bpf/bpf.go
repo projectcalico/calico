@@ -2357,6 +2357,12 @@ func LoadObject(file string, data libbpf.GlobalData, mapsToBePinned ...string) (
 }
 
 func LoadObjectWithOptions(file string, data libbpf.GlobalData, configurator ObjectConfigurator, mapsToBePinned ...string) (*libbpf.Obj, error) {
+	return LoadObjectWithPinOverrides(file, data, configurator, nil, mapsToBePinned...)
+}
+
+// LoadObjectWithPinOverrides loads a BPF object with optional map pin path overrides.
+// mapPinOverrides maps C map names (e.g. "cali_progs_ing2") to alternate pin paths.
+func LoadObjectWithPinOverrides(file string, data libbpf.GlobalData, configurator ObjectConfigurator, mapPinOverrides map[string]string, mapsToBePinned ...string) (*libbpf.Obj, error) {
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
 		return nil, err
@@ -2368,7 +2374,7 @@ func LoadObjectWithOptions(file string, data libbpf.GlobalData, configurator Obj
 		}
 	}
 
-	return loadObject(obj, data, mapsToBePinned...)
+	return loadObject(obj, data, mapPinOverrides, mapsToBePinned...)
 }
 
 func LoadObjectWithLogBuffer(file string, data libbpf.GlobalData, logBuf []byte, mapsToBePinned ...string) (*libbpf.Obj, error) {
@@ -2377,10 +2383,10 @@ func LoadObjectWithLogBuffer(file string, data libbpf.GlobalData, logBuf []byte,
 		return nil, err
 	}
 
-	return loadObject(obj, data, mapsToBePinned...)
+	return loadObject(obj, data, nil, mapsToBePinned...)
 }
 
-func loadObject(obj *libbpf.Obj, data libbpf.GlobalData, mapsToBePinned ...string) (*libbpf.Obj, error) {
+func loadObject(obj *libbpf.Obj, data libbpf.GlobalData, mapPinOverrides map[string]string, mapsToBePinned ...string) (*libbpf.Obj, error) {
 	success := false
 	defer func() {
 		if !success {
@@ -2416,16 +2422,19 @@ func loadObject(obj *libbpf.Obj, data libbpf.GlobalData, mapsToBePinned ...strin
 		}
 
 		log.Debugf("Pinning map %s k %d v %d", mapName, m.KeySize(), m.ValueSize())
-		pinDir := MapPinDir()
+		pinPath := path.Join(MapPinDir(), mapName)
+		if override, ok := mapPinOverrides[mapName]; ok {
+			pinPath = override
+		}
 		// If mapsToBePinned is not specified, pin all the maps.
 		if len(mapsToBePinned) == 0 {
-			if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
+			if err := m.SetPinPath(pinPath); err != nil {
 				return nil, fmt.Errorf("error pinning map %s k %d v %d: %w", mapName, m.KeySize(), m.ValueSize(), err)
 			}
 		} else {
 			for _, name := range mapsToBePinned {
 				if mapName == name {
-					if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
+					if err := m.SetPinPath(pinPath); err != nil {
 						return nil, fmt.Errorf("error pinning map %s k %d v %d: %w", mapName, m.KeySize(), m.ValueSize(), err)
 					}
 				}
