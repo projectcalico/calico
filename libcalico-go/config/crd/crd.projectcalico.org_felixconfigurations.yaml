@@ -1057,6 +1057,17 @@ spec:
                     blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
+                nftablesFlowTableOffload:
+                  default: Disabled
+                  description: |-
+                    NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled for
+                    improved forwarding performance. When enabled, established connections accepted by
+                    Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+                    nftables mode is active. [Default: Disabled]
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 nftablesMangleAllowAction:
                   description: |-
                     NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict

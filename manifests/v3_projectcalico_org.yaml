@@ -35002,6 +35002,12 @@ spec:
                 nftablesFilterDenyAction:
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
+                nftablesFlowTableOffload:
+                  default: Disabled
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 nftablesMangleAllowAction:
                   pattern: ^(?i)(Accept|Return)?$
                   type: string

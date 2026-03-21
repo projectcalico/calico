@@ -184,7 +184,8 @@ type Config struct {
 	WireguardThreadingEnabled      bool          `config:"bool;false"`
 
 	// nftables configuration.
-	NFTablesMode string `config:"oneof(Enabled,Disabled,Auto);Auto"`
+	NFTablesMode             string `config:"oneof(Enabled,Disabled,Auto);Auto"`
+	NFTablesFlowTableOffload string `config:"oneof(Enabled,Disabled);Disabled"`
 
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`

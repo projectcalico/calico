@@ -226,9 +226,10 @@ func StartDataplaneDriver(
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
-				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
-				NFTablesMode:          configParams.NFTablesMode,
-				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
+				FlowLogsEnabled:          configParams.FlowLogsEnabled(),
+				NFTablesMode:             configParams.NFTablesMode,
+				NFTablesFlowTableOffload: configParams.NFTablesFlowTableOffload,
+				WorkloadIfacePrefixes:    configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPVersionConfig(
 					ipsets.IPFamilyV4,

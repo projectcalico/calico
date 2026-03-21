@@ -3571,6 +3571,14 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Enum:        []interface{}{"Auto", "Disabled", "Enabled"},
 						},
 					},
+					"nftablesFlowTableOffload": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled for improved forwarding performance. When enabled, established connections accepted by Calico policy are offloaded to the kernel's flowtable fast path. Only applies when nftables mode is active. [Default: Disabled]\n\nPossible enum values:\n - `\"Disabled\"`\n - `\"Enabled\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"Disabled", "Enabled"},
+						},
+					},
 					"nftablesRefreshInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]",

@@ -1126,6 +1126,22 @@ network stack is used.
 | `FelixConfiguration` schema | Port range: either an integer in [0,65535] or a string, representing a range, in format <code>n:m</code> |
 | Default value (YAML) | `0` |
 
+### `NFTablesFlowTableOffload` (config file) / `nftablesFlowTableOffload` (YAML)
+
+Controls whether nftables flowtable offload is enabled for
+improved forwarding performance. When enabled, established connections accepted by
+Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+nftables mode is active.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_NFTablesFlowTableOffload` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `nftablesFlowTableOffload` (YAML) `NFTablesFlowTableOffload` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
+
 ### `NFTablesMode` (config file) / `nftablesMode` (YAML)
 
 Configures nftables support in Felix.
