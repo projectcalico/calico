@@ -79,6 +79,7 @@ func RunWithContext(ctx context.Context, cfg *config.Config, cc clientv3.Interfa
 	}
 
 	if cfg.Onetime {
+		defer storeClient.Stop()
 		if err := template.Process(templateConfig); err != nil {
 			return fmt.Errorf("processing templates: %w", err)
 		}

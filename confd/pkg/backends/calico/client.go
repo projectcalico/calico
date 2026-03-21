@@ -79,6 +79,10 @@ var sensitiveValues = map[string]any{
 	"/calico/bgp/v1/global/node_mesh_password": nil,
 }
 
+// backendClientAccessor is an interface to access the backend client from the main v2 client.
+type backendClientAccessor interface {
+	Backend() api.Client
+}
 
 func NewRouteIndex() *RouteIndex {
 	return &RouteIndex{
@@ -120,7 +124,7 @@ func NewCalicoClient(confdConfig *config.Config, cc clientv3.Interface, k8sClien
 	}
 
 	// Extract the backend client from the v3 client.
-	bc := cc.(api.BackendAccessor).Backend()
+	bc := cc.(backendClientAccessor).Backend()
 
 	// Create the client.  Initialize the cache revision to 1 so that the watcher
 	// code can handle the first iteration by always rendering.
@@ -1902,6 +1906,16 @@ func (c *client) GetCurrentRevision() uint64 {
 	defer c.cacheLock.Unlock()
 	log.Debugf("Current cache revision is %v", c.cacheRevision)
 	return c.cacheRevision
+}
+
+// Stop shuts down the client's background goroutines (syncer, watchers).
+func (c *client) Stop() {
+	if c.syncer != nil {
+		c.syncer.Stop()
+	}
+	if c.localBGPPeerWatcher != nil {
+		c.localBGPPeerWatcher.Stop()
+	}
 }
 
 // matchesPrefix returns true if the key matches any of the supplied prefixes.

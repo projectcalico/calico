@@ -49,9 +49,20 @@ import (
 var (
 	testEnv    *envtest.Environment
 	restConfig *rest.Config
+
+	// Shared K8s client for all tests.
+	sharedK8sClient kubernetes.Interface
+
+	// Shared Calico client for resource setup/cleanup.
+	sharedCalicoClient client.Interface
 )
 
 func TestMain(m *testing.M) {
+	// Set NODENAME early so package-level vars pick it up.
+	os.Setenv("NODENAME", "kube-master")
+	template.NodeName = "kube-master"
+	calico.NodeName = "kube-master"
+
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{crdDir()},
 	}
@@ -63,12 +74,97 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	// Write a kubeconfig for the envtest API server.
+	kubeconfigPath := writeKubeconfigToTmp(restConfig)
+	os.Setenv("DATASTORE_TYPE", "kubernetes")
+	os.Setenv("KUBECONFIG", kubeconfigPath)
+
+	// Create shared clients.
+	sharedK8sClient, err = kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create K8s client: %v\n", err)
+		os.Exit(1)
+	}
+	sharedCalicoClient, err = client.NewFromEnv()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create Calico client: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create shared test fixtures (K8s nodes, block affinities) that are the
+	// same across all test cases.
+	setupSharedFixtures()
+
 	code := m.Run()
 
 	if err := testEnv.Stop(); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to stop envtest: %v\n", err)
 	}
 	os.Exit(code)
+}
+
+func writeKubeconfigToTmp(cfg *rest.Config) string {
+	kubeconfig := clientcmdapi.NewConfig()
+	kubeconfig.Clusters["test"] = &clientcmdapi.Cluster{
+		Server:                   cfg.Host,
+		CertificateAuthorityData: cfg.CAData,
+	}
+	kubeconfig.AuthInfos["test"] = &clientcmdapi.AuthInfo{
+		ClientCertificateData: cfg.CertData,
+		ClientKeyData:         cfg.KeyData,
+	}
+	kubeconfig.Contexts["test"] = &clientcmdapi.Context{
+		Cluster:  "test",
+		AuthInfo: "test",
+	}
+	kubeconfig.CurrentContext = "test"
+
+	dir, err := os.MkdirTemp("", "confd-test-*")
+	if err != nil {
+		panic(err)
+	}
+	path := filepath.Join(dir, "kubeconfig")
+	if err := clientcmd.WriteToFile(*kubeconfig, path); err != nil {
+		panic(err)
+	}
+	return path
+}
+
+// setupSharedFixtures creates K8s nodes and IPAM block affinities used by all tests.
+func setupSharedFixtures() {
+	ctx := context.Background()
+
+	// Create K8s nodes.
+	for _, name := range []string{"kube-master", "kube-node-1", "kube-node-2"} {
+		node := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					"kubernetes.io/arch":     "amd64",
+					"kubernetes.io/os":       "linux",
+					"kubernetes.io/hostname": name,
+				},
+			},
+		}
+		if _, err := sharedK8sClient.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{}); err != nil {
+			panic(fmt.Sprintf("creating K8s node %s: %v", name, err))
+		}
+	}
+
+	// Create block affinities.
+	affinities := []apiv3.BlockAffinity{
+		{ObjectMeta: objectMeta("kube-master-10-0-0-0-30"), Spec: apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "10.0.0.0/30"}},
+		{ObjectMeta: objectMeta("kube-master-10-1-0-0-24"), Spec: apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "10.1.0.0/24"}},
+		{ObjectMeta: objectMeta("kube-master-10-2-0-1-32"), Spec: apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "10.2.0.1/32"}},
+		{ObjectMeta: objectMeta("kube-master-192-168-221-192-26"), Spec: apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "192.168.221.192/26"}},
+		{ObjectMeta: objectMeta("kube-master-192-168-221-64-26"), Spec: apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "192.168.221.64/26", State: "confirmed"}},
+		{ObjectMeta: objectMeta("kube-master-192-168-221-0-26"), Spec: apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "192.168.221.0/26", State: "pending"}},
+	}
+	for _, a := range affinities {
+		if _, err := sharedCalicoClient.BlockAffinities().Create(ctx, &a, options.SetOptions{}); err != nil {
+			panic(fmt.Sprintf("creating BlockAffinity %s: %v", a.Name, err))
+		}
+	}
 }
 
 // crdDir finds the Calico CRD directory by walking up from the current directory.
@@ -92,39 +188,6 @@ func crdDir() string {
 	}
 }
 
-// writeKubeconfig writes a kubeconfig file for the envtest API server.
-func writeKubeconfig(t *testing.T, cfg *rest.Config) string {
-	t.Helper()
-	kubeconfig := clientcmdapi.NewConfig()
-	kubeconfig.Clusters["test"] = &clientcmdapi.Cluster{
-		Server:                   cfg.Host,
-		CertificateAuthorityData: cfg.CAData,
-	}
-	kubeconfig.AuthInfos["test"] = &clientcmdapi.AuthInfo{
-		ClientCertificateData: cfg.CertData,
-		ClientKeyData:         cfg.KeyData,
-	}
-	kubeconfig.Contexts["test"] = &clientcmdapi.Context{
-		Cluster:  "test",
-		AuthInfo: "test",
-	}
-	kubeconfig.CurrentContext = "test"
-
-	path := filepath.Join(t.TempDir(), "kubeconfig")
-	err := clientcmd.WriteToFile(*kubeconfig, path)
-	require.NoError(t, err)
-	return path
-}
-
-// newCalicoClient creates a Calico clientv3 using the envtest kubeconfig.
-func newCalicoClient(t *testing.T, kubeconfig string) client.Interface {
-	t.Helper()
-	t.Setenv("DATASTORE_TYPE", "kubernetes")
-	t.Setenv("KUBECONFIG", kubeconfig)
-	cc, err := client.NewFromEnv()
-	require.NoError(t, err)
-	return cc
-}
 
 // applyResources reads a multi-document YAML file and creates each Calico resource.
 // For Nodes in KDD mode, it first creates a K8s Node, then updates it with
@@ -214,8 +277,9 @@ func applyResources(t *testing.T, cc client.Interface, k8s kubernetes.Interface,
 	}
 }
 
-// deleteAllResources removes all Calico and K8s resources created during a test.
-func deleteAllResources(t *testing.T, cc client.Interface, k8s kubernetes.Interface) {
+// deleteTestResources removes per-test Calico resources (BGPConfig, IPPools, Peers, Filters)
+// but leaves shared fixtures (K8s nodes, block affinities) intact.
+func deleteTestResources(t *testing.T, cc client.Interface) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -238,56 +302,6 @@ func deleteAllResources(t *testing.T, cc client.Interface, k8s kubernetes.Interf
 		for _, c := range configs.Items {
 			_, _ = cc.BGPConfigurations().Delete(ctx, c.Name, options.DeleteOptions{})
 		}
-	}
-	if affinities, err := cc.BlockAffinities().List(ctx, options.ListOptions{}); err == nil {
-		for _, a := range affinities.Items {
-			_, _ = cc.BlockAffinities().Delete(ctx, a.Name, options.DeleteOptions{})
-		}
-	}
-	// Delete K8s nodes (which also removes Calico node data in KDD mode).
-	if nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{}); err == nil {
-		for _, n := range nodes.Items {
-			_ = k8s.CoreV1().Nodes().Delete(ctx, n.Name, metav1.DeleteOptions{})
-		}
-	}
-}
-
-// applyBlockAffinities creates the IPAM block affinities that all standard mesh
-// tests use. These can't be created via calicoctl, only via the K8s API.
-func applyBlockAffinities(t *testing.T, cc client.Interface) {
-	t.Helper()
-	ctx := context.Background()
-
-	affinities := []apiv3.BlockAffinity{
-		{
-			ObjectMeta: objectMeta("kube-master-10-0-0-0-30"),
-			Spec:       apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "10.0.0.0/30", State: ""},
-		},
-		{
-			ObjectMeta: objectMeta("kube-master-10-1-0-0-24"),
-			Spec:       apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "10.1.0.0/24", State: ""},
-		},
-		{
-			ObjectMeta: objectMeta("kube-master-10-2-0-1-32"),
-			Spec:       apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "10.2.0.1/32", State: ""},
-		},
-		{
-			ObjectMeta: objectMeta("kube-master-192-168-221-192-26"),
-			Spec:       apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "192.168.221.192/26", State: ""},
-		},
-		{
-			ObjectMeta: objectMeta("kube-master-192-168-221-64-26"),
-			Spec:       apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "192.168.221.64/26", State: "confirmed"},
-		},
-		{
-			ObjectMeta: objectMeta("kube-master-192-168-221-0-26"),
-			Spec:       apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "192.168.221.0/26", State: "pending"},
-		},
-	}
-
-	for _, a := range affinities {
-		_, err := cc.BlockAffinities().Create(ctx, &a, options.SetOptions{})
-		require.NoError(t, err, "creating BlockAffinity %s", a.Name)
 	}
 }
 
@@ -333,39 +347,24 @@ func runConfdTest(t *testing.T, inputYAML, goldenDir string) {
 	// Rewrite dest paths in TOML configs to point at our temp output dir.
 	rewriteDestPaths(t, filepath.Join(confDir, "conf.d"), outputDir)
 
-	// Write kubeconfig for envtest and set environment.
-	kubeconfig := writeKubeconfig(t, restConfig)
-	t.Setenv("DATASTORE_TYPE", "kubernetes")
-	t.Setenv("KUBECONFIG", kubeconfig)
-	t.Setenv("NODENAME", "kube-master")
-
-	// Set NodeName directly since the package vars are initialized at load time,
-	// before t.Setenv takes effect.
-	template.NodeName = "kube-master"
-	calico.NodeName = "kube-master"
-
-	// Create K8s and Calico clients.
-	k8sClient, err := kubernetes.NewForConfig(restConfig)
-	require.NoError(t, err, "creating K8s client")
-	cc := newCalicoClient(t, kubeconfig)
-
-	// Apply block affinities and test resources.
-	applyBlockAffinities(t, cc)
+	// Apply per-test Calico resources (BGPConfig, Nodes, IPPools, Peers).
+	// K8s nodes and block affinities are shared fixtures created in TestMain.
 	inputPath := filepath.Join("mock_data", "calicoctl", inputYAML)
-	applyResources(t, cc, k8sClient, inputPath)
-	t.Cleanup(func() { deleteAllResources(t, cc, k8sClient) })
+	applyResources(t, sharedCalicoClient, sharedK8sClient, inputPath)
+	t.Cleanup(func() { deleteTestResources(t, sharedCalicoClient) })
 
-	// Run confd oneshot via RunWithContext.
+	// Run confd oneshot. Create a fresh Calico client for confd so its syncer
+	// gets a clean view of the current datastore state.
+	confdCalicoClient, err := client.NewFromEnv()
+	require.NoError(t, err, "creating confd Calico client")
+
 	confdConfig := &config.Config{
 		ConfDir:  confDir,
 		Onetime:  true,
 		SyncOnly: true,
 	}
-	// Create a Calico v3 client for confd's internal use.
-	confdCalicoClient := newCalicoClient(t, kubeconfig)
-
 	ctx := context.Background()
-	err = run.RunWithContext(ctx, confdConfig, confdCalicoClient, k8sClient, nil)
+	err = run.RunWithContext(ctx, confdConfig, confdCalicoClient, sharedK8sClient, nil)
 	require.NoError(t, err, "confd RunWithContext")
 
 	// Compare output files against golden files.
