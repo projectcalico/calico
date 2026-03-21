@@ -261,6 +261,16 @@ func BPFAttachType() string {
 	return strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE"))
 }
 
+// bpfProgPinDir returns the BPF program pin directory for the current
+// attach mode.  In netkit mode, workload programs are pinned under
+// NetkitPinDir; in TCX mode they use TcxPinDir.
+func bpfProgPinDir() string {
+	if infrastructure.NetkitMode() {
+		return bpfdefs.NetkitPinDir
+	}
+	return bpfdefs.TcxPinDir
+}
+
 func describeBPFTests(opts ...bpfTestOpt) bool {
 	if !BPFMode() {
 		// Non-BPF run.
@@ -925,7 +935,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if BPFAttachType() == "tc" {
 							tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
 						} else {
-							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
 						}
 
 						// Removing the ingress program should break connectivity due to the lack of "seen" mark.
@@ -947,7 +957,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 						} else {
 							Eventually(func() string {
-								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
 								return out
 							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
 								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
@@ -957,7 +967,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if BPFAttachType() == "tc" {
 							tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
 						} else {
-							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_egress", w[0].InterfaceName)))
 						}
 						// Removing the egress program doesn't stop traffic.
 
@@ -973,7 +983,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						} else {
 							Eventually(func() string {
-								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_egress", w[0].InterfaceName)))
 								return out
 							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
 								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
@@ -3639,28 +3649,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						var tcpd *tcpdump.TCPDump
 						if testOpts.protocol == "tcp" {
-							iface := w[1][1].InterfaceName
-							srcIP := clusterIP
-							tcpdHost := tc.Felixes[1]
-							if testOpts.connTimeEnabled {
-								iface = "eth0"
-								switch testOpts.tunnel {
-								case "vxlan":
-									iface = "vxlan.calico"
-								case "wireguard":
-									iface = "wireguard.cali"
-									if testOpts.ipv6 {
-										iface = "wireguard.cali-v6"
-									}
-								case "ipip":
-									iface = "tunl0"
-								}
-								srcIP = w[0][0].IP
-								tcpdHost = tc.Felixes[0]
-							}
-							tcpd = tcpdHost.AttachTCPDump(iface)
+							tcpd = w[1][1].AttachTCPDump()
 							tcpd.SetLogEnabled(true)
 
+							srcIP := clusterIP
+							if testOpts.connTimeEnabled {
+								srcIP = w[0][0].IP
+							}
 							ipRegex := "IP"
 							if testOpts.ipv6 {
 								ipRegex = "IP6"
