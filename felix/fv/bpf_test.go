@@ -3649,28 +3649,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						var tcpd *tcpdump.TCPDump
 						if testOpts.protocol == "tcp" {
-							iface := w[1][1].InterfaceName
-							srcIP := clusterIP
-							tcpdHost := tc.Felixes[1]
-							if testOpts.connTimeEnabled {
-								iface = "eth0"
-								switch testOpts.tunnel {
-								case "vxlan":
-									iface = "vxlan.calico"
-								case "wireguard":
-									iface = "wireguard.cali"
-									if testOpts.ipv6 {
-										iface = "wireguard.cali-v6"
-									}
-								case "ipip":
-									iface = "tunl0"
-								}
-								srcIP = w[0][0].IP
-								tcpdHost = tc.Felixes[0]
-							}
-							tcpd = tcpdHost.AttachTCPDump(iface)
+							tcpd = w[1][1].AttachTCPDump()
 							tcpd.SetLogEnabled(true)
 
+							srcIP := clusterIP
+							if testOpts.connTimeEnabled {
+								srcIP = w[0][0].IP
+							}
 							ipRegex := "IP"
 							if testOpts.ipv6 {
 								ipRegex = "IP6"
