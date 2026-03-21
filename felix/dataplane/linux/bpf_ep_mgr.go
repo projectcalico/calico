@@ -1000,22 +1000,34 @@ func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, iface *
 	if ipFamily == 6 {
 		idx = &iface.dpState.v6
 	}
+	isNetkit := iface.info.ifaceType == IfaceTypeNetkit
 	for _, attachHook := range []hook.Hook{hook.XDP, hook.Ingress, hook.Egress} {
-		if err := m.jumpMapDelete(attachHook, idx.policyIdx[attachHook]); err != nil {
+		// XDP is never netkit-attached; only ingress/egress use netkit jump maps.
+		useNetkit := isNetkit && attachHook != hook.XDP
+		if err := m.jumpMapDelete(attachHook, idx.policyIdx[attachHook], useNetkit); err != nil {
 			logrus.WithError(err).Warn("Policy program may leak.")
 		}
-		if err := m.jumpMapAllocs[attachHook].Put(idx.policyIdx[attachHook], name); err != nil {
+		allocs := m.jumpMapAllocs
+		if useNetkit {
+			allocs = m.netkitJumpMapAllocs
+		}
+		if err := allocs[attachHook].Put(idx.policyIdx[attachHook], name); err != nil {
 			logrus.WithError(err).Errorf("Policy family %d, hook %s", ipFamily, attachHook)
 		}
 	}
 }
 
 func (m *bpfEndpointManager) reclaimFilterIdx(name string, iface *bpfInterface) {
+	isNetkit := iface.info.ifaceType == IfaceTypeNetkit
+	allocs := m.jumpMapAllocs
+	if isNetkit {
+		allocs = m.netkitJumpMapAllocs
+	}
 	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
-		if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
+		if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook], isNetkit); err != nil {
 			logrus.WithError(err).Warn("Filter program may leak.")
 		}
-		if err := m.jumpMapAllocs[attachHook].Put(iface.dpState.filterIdx[attachHook], name); err != nil {
+		if err := allocs[attachHook].Put(iface.dpState.filterIdx[attachHook], name); err != nil {
 			logrus.WithError(err).Errorf("Filter hook %s", attachHook)
 		}
 		iface.dpState.filterIdx[attachHook] = -1
@@ -1265,7 +1277,13 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	m.withIface(update.Name, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceIsUp := update.State == ifacemonitor.StateUp
 		iface.info.masterIfIndex = masterIfIndex
-		iface.info.ifaceType = curIfaceType
+		// Only update ifaceType when we successfully determined it;
+		// IfaceTypeUnknown means getIfaceLink failed (e.g. device
+		// already removed), so preserve the previous type for correct
+		// jump map cleanup.
+		if curIfaceType != IfaceTypeUnknown {
+			iface.info.ifaceType = curIfaceType
+		}
 		// Note, only need to handle the mapping and unmapping of the host-* endpoint here.
 		// For specific host endpoints OnHEPUpdate doesn't depend on iface state, and has
 		// already stored and mapped as needed.
@@ -1528,6 +1546,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				} {
 					if idx := fn(); idx != -1 {
 						_ = jumpMapDeleteSubProgs(m.commonMaps.JumpMaps[hook.Ingress], idx, jump.TCMaxEntryPoints)
+						_ = jumpMapDeleteSubProgs(m.commonMaps.NetkitJumpMaps[hook.Ingress], idx, jump.TCMaxEntryPoints)
 					}
 				}
 				for _, fn := range []func() int{
@@ -1537,6 +1556,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				} {
 					if idx := fn(); idx != -1 {
 						_ = jumpMapDeleteSubProgs(m.commonMaps.JumpMaps[hook.Egress], idx, jump.TCMaxEntryPoints)
+						_ = jumpMapDeleteSubProgs(m.commonMaps.NetkitJumpMaps[hook.Egress], idx, jump.TCMaxEntryPoints)
 					}
 				}
 			} else {
@@ -2342,7 +2362,7 @@ func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInt
 		}
 	} else {
 		for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
-			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook]); err != nil {
+			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook], isNetkit); err != nil {
 				logrus.WithError(err).Warn("Filter program may leak.")
 			}
 			if err := filterAllocs[attachHook].Put(state.filterIdx[attachHook], ap.IfaceName()); err != nil {
@@ -2382,7 +2402,7 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 		}
 	} else {
 		for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
-			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook]); err != nil {
+			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook], false); err != nil {
 				logrus.WithError(err).Warn("Filter program may leak.")
 			}
 			if err := m.jumpMapAllocs[attachHook].Put(state.filterIdx[attachHook], ap.IfaceName()); err != nil {
@@ -3423,6 +3443,15 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 	return m.workloadIfaceRegex.MatchString(iface)
 }
 
+// isNetkitAttachPoint checks if the given attach point corresponds to a netkit
+// interface by looking up the interface type in the tracked interfaces map.
+func (m *bpfEndpointManager) isNetkitAttachPoint(ap attachPoint) bool {
+	if tcAP, ok := ap.(*tc.AttachPoint); ok {
+		return string(tcAP.AttachType) == tc.AttachOptionNetkit
+	}
+	return false
+}
+
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
 	return m.dataIfaceRegex.MatchString(iface) ||
 		(m.hostNetworkedNATMode != hostNetworkedNATDisabled && (iface == dataplanedefs.BPFOutDev || iface == "lo"))
@@ -4012,15 +4041,16 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	})
 	m.ifacesLock.Unlock()
 
+	isNetkit := m.isNetkitAttachPoint(ap)
 	if m.v4 != nil {
-		if err := m.jumpMapDelete(ap.HookName(), state.v4.policyIdx[ap.HookName()]); err != nil {
+		if err := m.jumpMapDelete(ap.HookName(), state.v4.policyIdx[ap.HookName()], isNetkit); err != nil {
 			logrus.WithError(err).Warn("Policy program may leak.")
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), 4, ap.HookName())
 	}
 	// Forget the policy debug info
 	if m.v6 != nil {
-		if err := m.jumpMapDelete(ap.HookName(), state.v6.policyIdx[ap.HookName()]); err != nil {
+		if err := m.jumpMapDelete(ap.HookName(), state.v6.policyIdx[ap.HookName()], isNetkit); err != nil {
 			logrus.WithError(err).Warn("Policy program may leak.")
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), 6, ap.HookName())
@@ -4415,15 +4445,19 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 	return insns, nil
 }
 
-func (m *bpfEndpointManager) jumpMapDelete(h hook.Hook, idx int) error {
+func (m *bpfEndpointManager) jumpMapDelete(h hook.Hook, idx int, isNetkit bool) error {
 	if idx < 0 {
 		return nil
 	}
-	logrus.WithFields(logrus.Fields{"hook": h, "index": idx}).Debug("Deleting jump map entry")
+	logrus.WithFields(logrus.Fields{"hook": h, "index": idx, "netkit": isNetkit}).Debug("Deleting jump map entry")
 	jumpMap := m.commonMaps.XDPJumpMap
 	stride := jump.XDPMaxEntryPoints
 	if h != hook.XDP {
-		jumpMap = m.commonMaps.JumpMaps[h]
+		if isNetkit {
+			jumpMap = m.commonMaps.NetkitJumpMaps[h]
+		} else {
+			jumpMap = m.commonMaps.JumpMaps[h]
+		}
 		stride = jump.TCMaxEntryPoints
 	}
 
@@ -4443,7 +4477,12 @@ func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint, ipFamily proto.
 		pm = m.commonMaps.XDPJumpMap
 	} else {
 		stride = jump.TCMaxEntryPoints
-		pm = m.commonMaps.JumpMaps[ap.HookName()]
+		isNetkit := m.isNetkitAttachPoint(ap)
+		if isNetkit {
+			pm = m.commonMaps.NetkitJumpMaps[ap.HookName()]
+		} else {
+			pm = m.commonMaps.JumpMaps[ap.HookName()]
+		}
 	}
 
 	if err := jumpMapDeleteSubProgs(pm, idx, stride); err != nil {
