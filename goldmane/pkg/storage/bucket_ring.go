@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -336,15 +336,15 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 }
 
 func (r *BucketRing) AddFlow(flow *types.Flow) {
-	// Find the window for this Flow based on the global bucket ring. We use the ring to ensure
-	// that time windows are consistent across all DiachronicFlows.
-	start, end, err := r.Window(flow)
-	if err != nil {
+	// Find the bucket for this flow's timestamp. This determines the time window for
+	// the DiachronicFlow as well, so we only need one lookup.
+	_, bucket := r.findBucket(flow.StartTime)
+	if bucket == nil {
 		logrus.WithFields(logrus.Fields{
-			"start": flow.StartTime,
-			// "now":   a.nowFunc().Unix(),
+			"start":  flow.StartTime,
+			"oldest": r.BeginningOfHistory(),
+			"newest": r.EndOfHistory(),
 		}).WithFields(flow.Key.Fields()).
-			WithError(err).
 			Warn("Unable to sort flow into a bucket")
 		return
 	}
@@ -365,26 +365,11 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 			idx.Add(d)
 		}
 	}
-	r.diachronics[*flow.Key].AddFlow(flow, start, end)
+	r.diachronics[*flow.Key].AddFlow(flow, bucket.StartTime, bucket.EndTime)
 
-	// Sort this update into a bucket.
-	_, bucket := r.findBucket(flow.StartTime)
-	if bucket == nil {
-		logrus.WithFields(logrus.Fields{
-			"time":   flow.StartTime,
-			"oldest": r.BeginningOfHistory(),
-			"newest": r.EndOfHistory(),
-		}).Warn("Failed to find bucket, unable to ingest flow")
-		return
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(bucket.Fields()).WithField("flowStart", flow.StartTime).Debug("Adding flow to bucket")
 	}
-
-	// TODO: Adding the flow to the bucket can currently block if the bucket is being accessed
-	// by another thread. This should be relatively rare and short, but ideally we'd make adding a Flow
-	// to a bucket non-blocking.
-	fields := bucket.Fields()
-	fields["flowStart"] = flow.StartTime
-	fields["head"] = r.headIndex
-	logrus.WithFields(fields).Debug("Adding flow to bucket")
 	bucket.AddFlow(flow)
 }
 
@@ -415,17 +400,6 @@ func (r *BucketRing) BeginningOfHistory() int64 {
 
 func (r *BucketRing) EndOfHistory() int64 {
 	return r.buckets[r.headIndex].EndTime
-}
-
-func (r *BucketRing) Window(flow *types.Flow) (int64, int64, error) {
-	// Find the bucket that contains the given time.
-	_, bucket := r.findBucket(flow.StartTime)
-	if bucket == nil {
-		return 0, 0, fmt.Errorf("failed to find bucket for flow")
-	}
-
-	// Return the start and end time of the bucket.
-	return bucket.StartTime, bucket.EndTime, nil
 }
 
 // nextBucketIndex returns the next bucket index, wrapping around if necessary.
