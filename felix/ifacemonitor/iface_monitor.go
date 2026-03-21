@@ -302,6 +302,13 @@ func (m *InterfaceMonitor) lookupLocalAddrs(link netlink.Link) set.Set[string] {
 // name. Now that the conflict is resolved, we can send the notification.
 func (m *InterfaceMonitor) unmaskInterface(ifaceName string, remainingIdx int, link netlink.Link) {
 	remainingInfo := m.ifaceIdxToInfo[remainingIdx]
+	if remainingInfo == nil {
+		log.WithFields(log.Fields{
+			"ifaceName": ifaceName,
+			"ifIndex":   remainingIdx,
+		}).Warn("No info for remaining interface index; skipping unmask.")
+		return
+	}
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"ifIndex":   remainingIdx,
@@ -535,7 +542,15 @@ func (m *InterfaceMonitor) resync() error {
 			for idx := range ids.All() {
 				remainingIdx = idx
 			}
-			m.unmaskInterface(name, remainingIdx, linksByIdx[remainingIdx])
+			link, ok := linksByIdx[remainingIdx]
+			if !ok {
+				log.WithFields(log.Fields{
+					"ifaceName": name,
+					"ifIndex":   remainingIdx,
+				}).Warn("Remaining interface index not found in link list; skipping unmask.")
+				continue
+			}
+			m.unmaskInterface(name, remainingIdx, link)
 		}
 		delete(m.ifaceIdxToInfo, ifIndex)
 	}
