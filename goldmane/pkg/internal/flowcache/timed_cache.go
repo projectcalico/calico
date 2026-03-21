@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,10 @@
 package flowcache
 
 import (
+	"context"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/lib/std/time"
@@ -89,10 +92,15 @@ func (c *ExpiringFlowCache) Iter(f func(f *types.Flow) error) error {
 	return nil
 }
 
-func (c *ExpiringFlowCache) Run(interval time.Duration) {
+func (c *ExpiringFlowCache) Run(ctx context.Context, interval time.Duration) {
 	for {
-		<-time.After(interval)
-		c.DeleteExpired()
+		select {
+		case <-ctx.Done():
+			logrus.Debug("ExpiringFlowCache shutting down")
+			return
+		case <-time.After(interval):
+			c.DeleteExpired()
+		}
 	}
 }
 

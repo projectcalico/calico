@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package server
 
 import (
+	"context"
 	"io"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -80,9 +81,9 @@ type flowCollectorService struct {
 	deduplicator *flowcache.ExpiringFlowCache
 }
 
-func (p *flowCollectorService) Run() {
+func (p *flowCollectorService) Run(ctx context.Context) {
 	logrus.Info("Starting flow collector")
-	p.deduplicator.Run(client.FlowCacheCleanup)
+	p.deduplicator.Run(ctx, client.FlowCacheCleanup)
 }
 
 func (p *flowCollectorService) RegisterWith(srv *grpc.Server) {
