@@ -55,6 +55,7 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
 
 func StartDataplaneDriver(
@@ -65,6 +66,7 @@ func StartDataplaneDriver(
 	fatalErrorCallback func(error),
 	k8sClientSet *kubernetes.Clientset,
 	lc *calc.LookupsCache,
+	ipamClient ipam.Interface,
 ) (DataplaneDriver, *exec.Cmd) {
 	if !configParams.IsLeader() {
 		// Return an inactive dataplane, since we're not the leader.
@@ -423,6 +425,15 @@ func StartDataplaneDriver(
 
 			RouteSource: configParams.RouteSource,
 
+			IPv4NormalRoutePriority:   configParams.IPv4NormalRoutePriority,
+			IPv4ElevatedRoutePriority: configParams.IPv4ElevatedRoutePriority,
+			IPv6NormalRoutePriority:   configParams.IPv6NormalRoutePriority,
+			IPv6ElevatedRoutePriority: configParams.IPv6ElevatedRoutePriority,
+
+			LiveMigrationRouteConvergenceTime: configParams.LiveMigrationRouteConvergenceTime,
+
+			IPAMClient: ipamClient,
+
 			KubernetesProvider: configParams.KubernetesProvider(),
 			Collector:          collector,
 			LookupsCache:       lc,
@@ -434,6 +445,10 @@ func StartDataplaneDriver(
 		if configParams.BPFExternalServiceMode == "dsr" {
 			dpConfig.BPFNodePortDSREnabled = true
 			dpConfig.BPFDSROptoutCIDRs = configParams.BPFDSROptoutCIDRs
+		}
+
+		if configParams.WorkloadSourceSpoofing == "Any" {
+			dpConfig.WorkloadSourceSpoofing = true
 		}
 
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)

@@ -225,16 +225,16 @@ func (c policyComparison) policyHitMatches(h *proto.PolicyHit) bool {
 
 func (c policyComparison) filterMatches(h *proto.PolicyHit, filter *proto.PolicyMatch) bool {
 	// Check Name, Kind, Namespace, Tier, Action.
-	if filter.Name != "" && h.Name != filter.Name {
+	if !StringMatchMatches(filter.Name, h.Name) {
 		return false
 	}
 	if filter.Kind != proto.PolicyKind_KindUnspecified && h.Kind != filter.Kind {
 		return false
 	}
-	if filter.Namespace != "" && h.Namespace != filter.Namespace {
+	if !StringMatchMatches(filter.Namespace, h.Namespace) {
 		return false
 	}
-	if filter.Tier != "" && h.Tier != filter.Tier {
+	if !StringMatchMatches(filter.Tier, h.Tier) {
 		return false
 	}
 	if filter.Action != proto.Action_ActionUnspecified && h.Action != filter.Action {
@@ -242,4 +242,17 @@ func (c policyComparison) filterMatches(h *proto.PolicyHit, filter *proto.Policy
 	}
 
 	return true
+}
+
+// StringMatchMatches returns true if the given value matches the StringMatch filter.
+// A nil filter or empty value means no filter is specified, so it always matches.
+func StringMatchMatches(sm *proto.StringMatch, val string) bool {
+	if sm == nil || sm.Value == "" {
+		return true
+	}
+	if sm.Type == proto.MatchType_Exact {
+		return val == sm.Value
+	}
+	// Fuzzy match uses substring matching, consistent with stringComparison.matchFilter.
+	return strings.Contains(val, sm.Value)
 }

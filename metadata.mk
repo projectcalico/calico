@@ -2,23 +2,25 @@
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
 
-# The version of calico/go-build and calico/base to use.
-GO_BUILD_VER=1.25.7-llvm18.1.8-k8s1.34.4
-CALICO_BASE_VER=ubi9-1771532994
+# Calico toolchain versions and the calico/base image to use.
+GO_BUILD_VER=1.26.1-llvm20.1.8-k8s1.35.2
+RUST_BUILD_VER=1.93.1
+
+CALICO_BASE_VER=ubi9-1774048615
 
 # Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
-K8S_VERSION=v1.34.3
+K8S_VERSION=v1.35.2
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-CRANE_VERSION=v0.20.7
+CRANE_VERSION=v0.21.2
 ETCD_VERSION=v3.5.24
 GHR_VERSION=v0.17.0
 GITHUB_CLI_VERSION=2.76.2
-GOTESTSUM_VERSION=v1.12.3
+GOTESTSUM_VERSION=v1.13.0
 HELM_VERSION=v3.11.3
-KINDEST_NODE_VERSION=v1.34.3
-KIND_VERSION=v0.29.0
+KINDEST_NODE_VERSION=v1.35.1
+KIND_VERSION=v0.31.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.

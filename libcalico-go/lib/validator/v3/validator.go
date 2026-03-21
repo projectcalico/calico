@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package v3
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -29,6 +30,7 @@ import (
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"gopkg.in/go-playground/validator.v9"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -82,43 +84,44 @@ var (
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 
-	interfaceRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
-	bgpFilterInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	bgpFilterPrefixLengthV4 = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
-	bgpFilterPrefixLengthV6 = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$")
-	ignoredInterfaceRegex   = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	ifaceFilterRegex        = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
-	actionRegex             = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
-	protocolRegex           = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
-	ipipModeRegex           = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	assignmentModeRegex     = regexp.MustCompile("^(Automatic|Manual)$")
-	assignIPsRegex          = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
-	logLevelRegex           = regexp.MustCompile("^(Trace|Debug|Info|Warning|Error|Fatal)$")
-	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
-	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
-	bpfCTLBRegex            = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
-	bpfHostNatRegex         = regexp.MustCompile("^(Disabled|Enabled)$")
-	datastoreType           = regexp.MustCompile("^(etcdv3|kubernetes)$")
-	routeSource             = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
-	dropAcceptReturnRegex   = regexp.MustCompile("^(Drop|Accept|Return)$")
-	acceptReturnRegex       = regexp.MustCompile("^(Accept|Return)$")
-	dropRejectRegex         = regexp.MustCompile("^(Drop|Reject)$")
-	ipTypeRegex             = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
-	standardCommunity       = regexp.MustCompile(`^(\d+):(\d+)$`)
-	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
-	number                  = regexp.MustCompile(`(\d+)`)
-	IPv4PortFormat          = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
-	IPv6PortFormat          = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
-	reasonString            = "Reason: "
-	poolUnstictCIDR         = "IP pool CIDR is not strictly masked"
-	overlapsV4LinkLocal     = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
-	overlapsV6LinkLocal     = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
-	protocolPortsMsg        = "rules that specify ports must set protocol to TCP or UDP or SCTP"
-	protocolIcmpMsg         = "rules that specify ICMP fields must set protocol to ICMP"
-	protocolAndHTTPMsg      = "rules that specify HTTP fields must set protocol to TCP or empty"
-	globalSelectorEntRule   = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
-	globalSelectorOnly      = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
+	interfaceRegex                = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
+	bgpFilterInterfaceRegex       = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	bgpFilterPrefixLengthV4       = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
+	bgpFilterPrefixLengthV6       = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$")
+	ignoredInterfaceRegex         = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	ifaceFilterRegex              = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
+	actionRegex                   = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
+	protocolRegex                 = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
+	ipipModeRegex                 = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	vxlanModeRegex                = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	assignmentModeRegex           = regexp.MustCompile("^(Automatic|Manual)$")
+	assignIPsRegex                = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
+	logLevelRegex                 = regexp.MustCompile("^(Trace|Debug|Info|Warning|Error|Fatal)$")
+	bpfLogLevelRegex              = regexp.MustCompile("^(Debug|Info|Off)$")
+	bpfServiceModeRegex           = regexp.MustCompile("^(Tunnel|DSR)$")
+	bpfCTLBRegex                  = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
+	bpfHostNatRegex               = regexp.MustCompile("^(Disabled|Enabled)$")
+	datastoreType                 = regexp.MustCompile("^(etcdv3|kubernetes)$")
+	routeSource                   = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
+	dropAcceptReturnRegex         = regexp.MustCompile("^(Drop|Accept|Return)$")
+	acceptReturnRegex             = regexp.MustCompile("^(Accept|Return)$")
+	dropRejectRegex               = regexp.MustCompile("^(Drop|Reject)$")
+	ipTypeRegex                   = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
+	standardCommunity             = regexp.MustCompile(`^(\d+):(\d+)$`)
+	largeCommunity                = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	number                        = regexp.MustCompile(`(\d+)`)
+	IPv4PortFormat                = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
+	IPv6PortFormat                = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
+	reasonString                  = "Reason: "
+	poolUnstictCIDR               = "IP pool CIDR is not strictly masked"
+	overlapsV4LinkLocal           = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
+	overlapsV6LinkLocal           = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
+	protocolPortsMsg              = "rules that specify ports must set protocol to TCP or UDP or SCTP"
+	protocolSingleOrRangePortsMsg = "rules with numeric port or port range must set protocol to TCP or UDP or SCTP"
+	protocolIcmpMsg               = "rules that specify ICMP fields must set protocol to ICMP"
+	protocolAndHTTPMsg            = "rules that specify HTTP fields must set protocol to TCP or empty"
+	globalSelectorEntRule         = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
+	globalSelectorOnly            = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
 
@@ -142,13 +145,41 @@ var (
 		"|" + string(api.StagedActionLearn) + "|" + string(api.StagedActionIgnore) + ")$")
 )
 
-// Validate is used to validate the supplied structure according to the
-// registered field and structure validators.
+// Validate validates the supplied structure according to registered field and
+// structure validators, plus CRD schema constraints (OpenAPI + CEL). For
+// runtime.Object values, CRD schema defaults are applied in-place before
+// validation so that omitted fields with CRD defaults are populated the same
+// way the Kubernetes API server would on admission.
 func Validate(current any) error {
+	var verr errors.ErrorValidation
+
 	// Perform field-only validation first, that way the struct validators can assume
 	// individual fields are valid format.
 	if err := validate.Struct(current); err != nil {
-		return convertError(err)
+		verr = convertError(err)
+	}
+
+	// Apply CRD schema defaults and then run CRD validation rules (OpenAPI
+	// schema constraints + CEL x-kubernetes-validations). In Kubernetes
+	// datastore mode, the API server handles both defaulting and validation
+	// on admission. In etcd mode there is no API server, so we do both here.
+	if rObj, ok := current.(runtime.Object); ok {
+		if crdErrs := defaultAndValidateCRD(context.Background(), rObj, nil); len(crdErrs) > 0 {
+			for _, e := range crdErrs {
+				name := e.Field
+				if name == "" || name == "<nil>" {
+					name = resolveKind(rObj)
+				}
+				verr.ErroredFields = append(verr.ErroredFields, errors.ErroredField{
+					Name:   name,
+					Reason: e.Detail,
+				})
+			}
+		}
+	}
+
+	if len(verr.ErroredFields) > 0 {
+		return verr
 	}
 	return nil
 }
@@ -262,6 +293,7 @@ func init() {
 	registerStructValidator(validate, validateBGPPeerSpec, api.BGPPeerSpec{})
 	registerStructValidator(validate, validateBGPFilterRuleV4, api.BGPFilterRuleV4{})
 	registerStructValidator(validate, validateBGPFilterRuleV6, api.BGPFilterRuleV6{})
+	registerStructValidator(validate, validateBGPFilterOperation, api.BGPFilterOperation{})
 	registerStructValidator(validate, validateNetworkPolicy, api.NetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkPolicy, api.GlobalNetworkPolicy{})
 	registerStructValidator(validate, validateStagedGlobalNetworkPolicy, api.StagedGlobalNetworkPolicy{})
@@ -1296,23 +1328,42 @@ func validateRule(structLevel validator.StructLevel) {
 
 	// If the protocol does not support ports check that the port values have not
 	// been specified.
-	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
-		if len(rule.Source.Ports) > 0 {
+	if rule.Protocol == nil {
+		if !numorstring.AllPortsAreNamed(rule.Source.Ports) {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-				"Source.Ports", "", reason(protocolPortsMsg), "")
+				"Source.Ports", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
-		if len(rule.Source.NotPorts) > 0 {
+		if !numorstring.AllPortsAreNamed(rule.Source.NotPorts) {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-				"Source.NotPorts", "", reason(protocolPortsMsg), "")
+				"Source.NotPorts", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
-
-		if len(rule.Destination.Ports) > 0 {
+		if !numorstring.AllPortsAreNamed(rule.Destination.Ports) {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-				"Destination.Ports", "", reason(protocolPortsMsg), "")
+				"Destination.Ports", "", reason(protocolSingleOrRangePortsMsg), "")
 		}
-		if len(rule.Destination.NotPorts) > 0 {
+		if !numorstring.AllPortsAreNamed(rule.Destination.NotPorts) {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-				"Destination.NotPorts", "", reason(protocolPortsMsg), "")
+				"Destination.NotPorts", "", reason(protocolSingleOrRangePortsMsg), "")
+		}
+	} else { // Protocol != nil
+		if !rule.Protocol.SupportsPorts() {
+			if len(rule.Source.Ports) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
+					"Source.Ports", "", reason(protocolPortsMsg), "")
+			}
+			if len(rule.Source.NotPorts) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
+					"Source.NotPorts", "", reason(protocolPortsMsg), "")
+			}
+
+			if len(rule.Destination.Ports) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
+					"Destination.Ports", "", reason(protocolPortsMsg), "")
+			}
+			if len(rule.Destination.NotPorts) > 0 {
+				structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
+					"Destination.NotPorts", "", reason(protocolPortsMsg), "")
+			}
 		}
 	}
 
@@ -1581,6 +1632,24 @@ func validateBGPFilterRule(
 	if cidr == "" && prefixLengthV6 != nil {
 		structLevel.ReportError(prefixLengthV6, "PrefixLength", "",
 			reason("CIDR cannot be empty when PrefixLength is not"), "")
+	}
+}
+
+func validateBGPFilterOperation(structLevel validator.StructLevel) {
+	op := structLevel.Current().Interface().(api.BGPFilterOperation)
+	count := 0
+	if op.AddCommunity != nil {
+		count++
+	}
+	if op.PrependASPath != nil {
+		count++
+	}
+	if op.SetPriority != nil {
+		count++
+	}
+	if count != 1 {
+		structLevel.ReportError(op, "BGPFilterOperation", "",
+			reason("exactly one operation must be set"), "")
 	}
 }
 

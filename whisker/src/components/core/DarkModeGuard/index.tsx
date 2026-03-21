@@ -6,7 +6,8 @@ const DarkModeGuard: React.FC<React.PropsWithChildren> = ({ children }) => {
 
     React.useEffect(() => {
         colorMode.setColorMode('dark');
-    }, []);
+        document.body.classList.add('dark');
+    }, [colorMode.colorMode]);
 
     return <>{children}</>;
 };

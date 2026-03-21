@@ -18,6 +18,13 @@ if (!(Test-Path ".\PrepareNode.ps1")) {
     exit 1
 }
 
+# Remove the --pod-infra-container-image flag from PrepareNode.ps1.
+# This flag was removed in Kubernetes v1.34 and causes kubelet to fail to start.
+Write-Host "Patching PrepareNode.ps1 to remove --pod-infra-container-image flag..."
+$prepareNodeContent = Get-Content .\PrepareNode.ps1 -Raw
+$patchedPrepareNodeContent = $prepareNodeContent -replace '\s*--pod-infra-container-image(=\S+)?', ''
+Set-Content .\PrepareNode.ps1 -Value $patchedPrepareNodeContent
+
 Write-Host "Running PrepareNode.ps1 to install Kubernetes binaries (version: $K8sVersion)..."
 .\PrepareNode.ps1 -KubernetesVersion $K8sVersion
 
