@@ -465,6 +465,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		jumpMapEgr = mock.NewMockMap(progsParamsEg)
 		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jumpMapIng)
 		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jumpMapEgr)
+		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, mock.NewMockMap(progsParamsIng))
+		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, mock.NewMockMap(progsParamsEg))
 		xdpJumpMap = mock.NewMockMap(progsParamsIng)
 		commonMaps.XDPJumpMap = xdpJumpMap
 
