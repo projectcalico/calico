@@ -69,27 +69,28 @@ func NewDiachronicFlow(k *types.FlowKey, id int64) *DiachronicFlow {
 }
 
 func (d *DiachronicFlow) Rollover(limiter int64) {
-	// We need to remove any Windows which are no longer within the time range we are interested in.
-	// c.Windows is sorted oldest -> newest, so we can do this pretty easily by iterating in order.
-	// We can stop iterating when we find a Window that is still valid.
-	// Note: Since we Rollover() ever aggregation period, we should never need to remove more than one Window at a time.
-	for i := len(d.Windows) - 1; i >= 0; i-- {
-		w := d.Windows[i]
-		if w.end <= limiter {
-			if logrus.IsLevelEnabled(logrus.DebugLevel) {
-				logrus.WithFields(logrus.Fields{
-					"limiter": limiter,
-					"index":   i,
-					"endTime": w.end,
-				}).Debug("Removing Window(s) before limiter from diachronic flow")
+	// Windows are sorted oldest -> newest. Find the first window that is still valid and
+	// discard everything before it. Iterating forward finds the cut point on the first
+	// check in the common case (one expired window per rollover).
+	for i, w := range d.Windows {
+		if w.end > limiter {
+			if i > 0 {
+				if logrus.IsLevelEnabled(logrus.DebugLevel) {
+					logrus.WithFields(logrus.Fields{
+						"limiter":  limiter,
+						"numStale": i,
+					}).Debug("Removing stale window(s) from diachronic flow")
+				}
+				d.Windows = d.Windows[i:]
 			}
-
-			// Remove the Window and all corresponding statistics.
-			d.Windows = d.Windows[i+1:]
 			return
 		}
 	}
-	logrus.Debug("Rollover called with no windows to rollover")
+
+	// All windows are expired.
+	if len(d.Windows) > 0 {
+		d.Windows = d.Windows[:0]
+	}
 }
 
 func (d *DiachronicFlow) Empty() bool {
