@@ -86,11 +86,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
 
-	# generate all pkg/client contents
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/update-client-gen.sh'
-
-	# generate openapi
+	# generate openapi (must run before client-gen, which uses it for --openapi-schema)
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) openapi-gen \
 		--v 1 --logtostderr \
@@ -105,6 +101,10 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		"k8s.io/apimachinery/pkg/util/intstr" \
 		"k8s.io/apimachinery/pkg/version" \
 		"$(PACKAGE_NAME)/pkg/lib/numorstring"'
+
+	# generate all pkg/client contents
+	$(DOCKER_RUN) $(CALICO_BUILD) \
+	   sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/update-client-gen.sh'
 
 	touch .generate_files
 	$(MAKE) fix
@@ -133,7 +133,7 @@ clean-generated:
 	find $(TOP_SRC_DIRS) -name zz_generated* -exec rm {} \;
 	# rollback changes to the generated clientset directories
 	# find $(TOP_SRC_DIRS) -type d -name *_generated -exec rm -rf {} \;
-	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/openapi
+	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/client/applyconfiguration_generated pkg/openapi
 
 clean-bin:
 	rm -rf $(BINDIR) \

@@ -126,6 +126,13 @@ type Client interface {
 	Close() error
 }
 
+// BackendAccessor is implemented by types that provide access to the underlying
+// backend Client. This avoids the need for ad-hoc local "accessor" interfaces
+// throughout the codebase.
+type BackendAccessor interface {
+	Backend() Client
+}
+
 // StatusClient extends Client, is the interface to the backend datastore.
 type StatusClient interface {
 	Client

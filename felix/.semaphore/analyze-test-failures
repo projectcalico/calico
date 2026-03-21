@@ -238,65 +238,37 @@ else
         exit 0
     fi
 
-    # Collect failed batches from two sources:
-    #   1. Batch directories with XML reports containing <failure> elements.
-    #   2. *-FAILED.log files in artifacts/ (covers cases where XML retrieval failed).
-    # Use an associative array to deduplicate by batch name.
-    declare -A discovered_batches
-
-    # Source 1: batch directories with failed XML reports.
-    for batch_dir in "$ARTIFACTS_DIR"/*/; do
-        [ -d "$batch_dir" ] || continue
-        batch_name="$(basename "$batch_dir")"
-
-        xml_files=("${batch_dir}report/"*.xml)
-        [ -f "${xml_files[0]}" ] || continue
-
-        if has_failures "${xml_files[@]}"; then
-            discovered_batches["$batch_name"]=1
-        fi
-    done
-
-    # Source 2: *-FAILED.log files (may not have corresponding XML reports).
+    # Discover failed batches from -FAILED.log files (the definitive signal
+    # that a batch failed). Don't rely on XML <failure> elements alone — they
+    # can be stale from a previous run on the same VM, causing false positives
+    # (analyzing batches that actually succeeded).
     for failed_log in "$ARTIFACTS_DIR"/test-*-FAILED.log; do
         [ -f "$failed_log" ] || continue
-        # Extract batch name: test-001-FAILED.log -> 001, test-ut-FAILED.log -> ut
         fname="$(basename "$failed_log")"
-        batch_name="${fname#test-}"
-        batch_name="${batch_name%-FAILED.log}"
-        discovered_batches["$batch_name"]=1
-    done
+        # Extract batch identifier: test-NNN-FAILED.log -> NNN, test-ut-FAILED.log -> ut
+        batch_id="${fname#test-}"
+        batch_id="${batch_id%-FAILED.log}"
 
-    for batch_name in "${!discovered_batches[@]}"; do
-        # Find log file.
-        if [ "$batch_name" = "ut" ]; then
-            log_file="$ARTIFACTS_DIR/test-ut.log"
-            if [ ! -f "$log_file" ]; then
-                log_file="$ARTIFACTS_DIR/test-ut-FAILED.log"
-            fi
+        log_file="$failed_log"
+
+        # Determine batch directory name for XML files.
+        # Batch IDs from FAILED.log filenames are zero-padded (e.g. "008")
+        # but artifact directories use plain numbers (e.g. "8").
+        # Use 10# to force decimal interpretation of zero-padded numbers
+        # (otherwise bash treats "008" as invalid octal).
+        if [[ "$batch_id" =~ ^[0-9]+$ ]]; then
+            batch_dir_name=$((10#$batch_id))
         else
-            if [[ "$batch_name" =~ ^[0-9]+$ ]]; then
-                formatted_batch=$(printf "%03d" "$batch_name")
-            else
-                formatted_batch="$batch_name"
-            fi
-            log_file="$ARTIFACTS_DIR/test-${formatted_batch}.log"
-            if [ ! -f "$log_file" ]; then
-                log_file="$ARTIFACTS_DIR/test-${formatted_batch}-FAILED.log"
-            fi
+            batch_dir_name="$batch_id"
         fi
 
-        if [ ! -f "$log_file" ]; then
-            echo "analyze-test-failures: Log file not found for batch $batch_name, skipping."
-            continue
-        fi
+        batch_dir="$ARTIFACTS_DIR/$batch_dir_name"
 
-        # Build XML array (may be empty if reports weren't retrieved).
-        batch_dir="$ARTIFACTS_DIR/$batch_name"
+        # Build XML array for this batch (may be empty if no XML dir).
         xml_json="["
         first=true
-        if [ -d "${batch_dir}/report" ]; then
-            for xf in "${batch_dir}/report/"*.xml; do
+        if [ -d "$batch_dir/report" ]; then
+            for xf in "$batch_dir/report/"*.xml; do
                 [ -f "$xf" ] || continue
                 $first || xml_json+=","
                 xml_json+=$(json_escape "$xf")
@@ -305,13 +277,8 @@ else
         fi
         xml_json+="]"
 
-        # DIAGS.log path.
-        if [[ "$batch_name" =~ ^[0-9]+$ ]]; then
-            diags_batch=$(printf "%03d" "$batch_name")
-        else
-            diags_batch="$batch_name"
-        fi
-        diags_log="$ARTIFACTS_DIR/test-${diags_batch}-DIAGS.log"
+        # DIAGS.log path uses the same zero-padded name as the FAILED.log.
+        diags_log="$ARTIFACTS_DIR/test-${batch_id}-DIAGS.log"
 
         [ $batch_count -gt 0 ] && batches_json+=","
         batches_json+=$(printf '{
