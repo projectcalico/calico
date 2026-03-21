@@ -417,34 +417,39 @@ func (r *BucketRing) indexAdd(idx, n int) int {
 	return (idx + n) % len(r.buckets)
 }
 
-func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
-	// Find the bucket that contains the given time.
-	// TODO: We can do this without iterating over all the buckets by simply calculating
-	// the index based on the time. It's a very small win though - there aren't that many buckets to iterate.
-	//
-	// We always start at the head index and iterate until we find the bucket that contains the time, since
-	// most of the time we'll be looking for a recent bucket.
+func (r *BucketRing) findBucket(t int64) (int, *AggregationBucket) {
+	// Compute the bucket index directly from the timestamp. Each bucket covers exactly
+	// r.interval seconds, so we can calculate how many buckets back from the head this
+	// timestamp falls and map that to a ring index.
+	head := r.buckets[r.headIndex]
+	if t >= head.EndTime || t < r.BeginningOfHistory() {
+		return -1, nil
+	}
+	bucketsBack := int((head.StartTime - t) / int64(r.interval))
+	idx := r.indexSubtract(r.headIndex, bucketsBack)
+	b := r.buckets[idx]
+	if t >= b.StartTime && t < b.EndTime {
+		return idx, b
+	}
+
+	// Shouldn't happen if the ring is consistent, but fall back to linear scan.
+	logrus.WithFields(logrus.Fields{
+		"time":        t,
+		"computed":    idx,
+		"bucketsBack": bucketsBack,
+		"headStart":   head.StartTime,
+	}).Warn("Computed bucket index miss, falling back to scan")
 	i := r.headIndex
 	for {
 		b := r.buckets[i]
-		if time >= b.StartTime && time < b.EndTime {
+		if t >= b.StartTime && t < b.EndTime {
 			return i, b
 		}
-
-		// Check the next bucket. If we've wrapped around, we didn't find the bucket.
-		//
-		// Note: we want to loop through the ring starting with the most recent bucket (headIndex) going
-		// backwards in time, so we need to decrement the index.
 		i = r.indexSubtract(i, 1)
 		if i == r.headIndex {
 			break
 		}
 	}
-	logrus.WithFields(logrus.Fields{
-		"time":   time,
-		"oldest": r.BeginningOfHistory(),
-		"newest": r.EndOfHistory(),
-	}).Warn("Failed to find bucket")
 	return -1, nil
 }
 
