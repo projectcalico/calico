@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -226,22 +226,21 @@ func (e *Emitter) emit(bucket *storage.FlowCollection) error {
 }
 
 func (e *Emitter) collectionToReader(bucket *storage.FlowCollection) (*bytes.Reader, error) {
-	body := []byte{}
-	for _, flow := range bucket.Flows {
-		if len(body) != 0 {
-			// Include a separator between logs.
-			body = append(body, []byte("\n")...)
+	// Pre-size the buffer to reduce reallocations. A typical JSON-encoded flow is ~500 bytes.
+	buf := bytes.NewBuffer(make([]byte, 0, len(bucket.Flows)*512))
+	for i, flow := range bucket.Flows {
+		if i > 0 {
+			buf.WriteByte('\n')
 		}
 
-		// Convert to public format.
 		f := types.FlowToProto(&flow)
 		flowJSON, err := json.Marshal(f)
 		if err != nil {
-			return nil, fmt.Errorf("error marshalling flow: %v", err)
+			return nil, fmt.Errorf("error marshalling flow: %w", err)
 		}
-		body = append(body, flowJSON...)
+		buf.Write(flowJSON)
 	}
-	return bytes.NewReader(body), nil
+	return bytes.NewReader(buf.Bytes()), nil
 }
 
 // saveState updates cached metadata stored across restart. We use a configmap to
