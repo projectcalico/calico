@@ -1719,6 +1719,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(NFTablesMode)
 		**out = **in
 	}
+	if in.NFTablesFlowTableOffload != nil {
+		in, out := &in.NFTablesFlowTableOffload, &out.NFTablesFlowTableOffload
+		*out = new(NFTablesFlowTableOffload)
+		**out = **in
+	}
 	if in.NftablesRefreshInterval != nil {
 		in, out := &in.NftablesRefreshInterval, &out.NftablesRefreshInterval
 		*out = new(v1.Duration)
