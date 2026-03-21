@@ -227,7 +227,8 @@ func StartDataplaneDriver(
 			},
 			RulesConfig: rules.Config{
 				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
-				NFTablesMode:          configParams.NFTablesMode,
+				NFTablesMode:             configParams.NFTablesMode,
+				NFTablesFlowTableOffload: configParams.NFTablesFlowTableOffload,
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPVersionConfig(
