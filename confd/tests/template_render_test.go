@@ -91,10 +91,6 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// Create shared test fixtures (K8s nodes, block affinities) that are the
-	// same across all test cases.
-	setupSharedFixtures()
-
 	code := m.Run()
 
 	if err := testEnv.Stop(); err != nil {
@@ -130,11 +126,12 @@ func writeKubeconfigToTmp(cfg *rest.Config) string {
 	return path
 }
 
-// setupSharedFixtures creates K8s nodes and IPAM block affinities used by all tests.
-func setupSharedFixtures() {
+// createK8sNodes creates the K8s Node objects needed by the test. In KDD mode,
+// Calico Nodes are backed by K8s Nodes, so these must exist before applying
+// Calico Node resources.
+func createK8sNodes(t *testing.T, k8s kubernetes.Interface) {
+	t.Helper()
 	ctx := context.Background()
-
-	// Create K8s nodes.
 	for _, name := range []string{"kube-master", "kube-node-1", "kube-node-2"} {
 		node := &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -146,11 +143,21 @@ func setupSharedFixtures() {
 				},
 			},
 		}
-		if _, err := sharedK8sClient.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{}); err != nil {
-			panic(fmt.Sprintf("creating K8s node %s: %v", name, err))
-		}
+		_, err := k8s.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
+		require.NoError(t, err, "creating K8s node %s", name)
 	}
+}
 
+// deleteK8sNodes removes all K8s Node objects.
+func deleteK8sNodes(t *testing.T, k8s kubernetes.Interface) {
+	t.Helper()
+	ctx := context.Background()
+	nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	require.NoError(t, err, "listing K8s nodes for cleanup")
+	for _, n := range nodes.Items {
+		err := k8s.CoreV1().Nodes().Delete(ctx, n.Name, metav1.DeleteOptions{})
+		require.NoError(t, err, "deleting K8s node %s", n.Name)
+	}
 }
 
 // createBlockAffinities creates the IPAM block affinities used by mesh tests.
@@ -324,21 +331,13 @@ func deleteTestResources(t *testing.T, cc client.Interface) {
 		require.NoError(t, err, "deleting BGPConfiguration %s", c.Name)
 	}
 
-	// Delete block affinities if they still exist. IPPool deletion may have
-	// already removed some of them, so we ignore "not found" errors.
+	// Block affinities may have already been removed by IPPool deletion.
 	affinities, err := cc.BlockAffinities().List(ctx, options.ListOptions{})
 	require.NoError(t, err, "listing BlockAffinities for cleanup")
 	for _, a := range affinities.Items {
-		cc.BlockAffinities().Delete(ctx, a.Name, options.DeleteOptions{}) //nolint:errcheck
-	}
-
-	// Clear Calico Node specs (BGP addresses, etc.) so they don't leak between tests.
-	nodes, err := cc.Nodes().List(ctx, options.ListOptions{})
-	require.NoError(t, err, "listing Nodes for cleanup")
-	for i := range nodes.Items {
-		nodes.Items[i].Spec = internalapi.NodeSpec{}
-		_, err := cc.Nodes().Update(ctx, &nodes.Items[i], options.SetOptions{})
-		require.NoError(t, err, "clearing Node spec for %s", nodes.Items[i].Name)
+		if _, err := cc.BlockAffinities().Delete(ctx, a.Name, options.DeleteOptions{}); err != nil {
+			t.Logf("Warning: failed to delete BlockAffinity %s: %v", a.Name, err)
+		}
 	}
 }
 
@@ -384,13 +383,16 @@ func runConfdTest(t *testing.T, inputYAML, goldenDir string) {
 	// Rewrite dest paths in TOML configs to point at our temp output dir.
 	rewriteDestPaths(t, filepath.Join(confDir, "conf.d"), outputDir)
 
-	// Create block affinities and apply per-test Calico resources.
-	// K8s nodes are shared fixtures from TestMain; block affinities must be
-	// created per-test because IPPool deletion removes associated affinities.
+	// Create all per-test resources: K8s nodes, block affinities, then
+	// Calico resources from the test's input.yaml.
+	createK8sNodes(t, sharedK8sClient)
 	createBlockAffinities(t, sharedCalicoClient)
 	inputPath := filepath.Join("mock_data", "calicoctl", inputYAML)
 	applyResources(t, sharedCalicoClient, sharedK8sClient, inputPath)
-	t.Cleanup(func() { deleteTestResources(t, sharedCalicoClient) })
+	t.Cleanup(func() {
+		deleteTestResources(t, sharedCalicoClient)
+		deleteK8sNodes(t, sharedK8sClient)
+	})
 
 	// Run confd oneshot. Create a fresh Calico client for confd so its syncer
 	// gets a clean view of the current datastore state.

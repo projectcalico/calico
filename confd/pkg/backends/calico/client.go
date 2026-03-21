@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -155,7 +156,9 @@ func NewCalicoClient(confdConfig *config.Config, cc clientv3.Interface, k8sClien
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
 		// calls were processed synchronously.
-		syncerC: make(chan any),
+		syncerC:     make(chan any),
+		stopCh:      make(chan struct{}),
+		configCache: make(map[int]*bgpConfigCache),
 
 		// This channel holds a trigger for existing BGP peerings to be recomputed.  We only
 		// ever need 1 pending trigger, hence capacity 1.  recheckPeerConfig() does a
@@ -276,6 +279,8 @@ func NewCalicoClient(confdConfig *config.Config, cc clientv3.Interface, k8sClien
 	go func() {
 		for {
 			select {
+			case <-c.stopCh:
+				return
 			case e := <-c.syncerC:
 				switch event := e.(type) {
 				case []api.Update:
@@ -378,6 +383,11 @@ type client struct {
 	// Channels used to decouple update and status processing.
 	syncerC  chan any
 	recheckC chan struct{}
+	stopCh   chan struct{}
+
+	// BGP config cache, keyed by IP version (4 or 6).
+	configCache      map[int]*bgpConfigCache
+	configCacheMutex sync.RWMutex
 
 	// Cached value of the default BGP configuration for node to node mesh BGP password lookup.
 	globalBGPConfig *apiv3.BGPConfiguration
@@ -1908,14 +1918,28 @@ func (c *client) GetCurrentRevision() uint64 {
 	return c.cacheRevision
 }
 
-// Stop shuts down the client's background goroutines (syncer, watchers).
+// Stop shuts down the client's background goroutines (syncer, watchers, update processor).
+// The syncer must be stopped before closing stopCh because syncer.Stop() sends
+// delete events through syncerC, which the update processor goroutine must drain.
 func (c *client) Stop() {
-	if c.syncer != nil {
-		c.syncer.Stop()
-	}
 	if c.localBGPPeerWatcher != nil {
 		c.localBGPPeerWatcher.Stop()
 	}
+	if c.syncer != nil {
+		// syncer.Stop() can block while it drains delete events through the
+		// syncerC channel. Run it with a timeout to avoid hanging.
+		done := make(chan struct{})
+		go func() {
+			c.syncer.Stop()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			log.Warn("Timed out waiting for syncer to stop")
+		}
+	}
+	close(c.stopCh)
 }
 
 // matchesPrefix returns true if the key matches any of the supplied prefixes.
