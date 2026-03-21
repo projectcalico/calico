@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -259,7 +259,7 @@ func (e *Emitter) saveState() error {
 	defer cancel()
 	cm := &corev1.ConfigMap{}
 	if err := e.kcli.Get(ctx, configMapKey, cm); err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("error getting configmap: %v", err)
+		return fmt.Errorf("error getting configmap: %w", err)
 	} else if errors.IsNotFound(err) {
 		// Configmap doesn't exist, create it.
 		cm.Name = configMapKey.Name
@@ -276,14 +276,14 @@ func (e *Emitter) saveState() error {
 
 	if cm.ResourceVersion == "" {
 		// Create the configmap.
-		if err := e.kcli.Create(context.Background(), cm); err != nil {
-			return fmt.Errorf("error creating configmap: %v", err)
+		if err := e.kcli.Create(ctx, cm); err != nil {
+			return fmt.Errorf("error creating configmap: %w", err)
 		}
 		logCtx.Debug("Created configmap")
 	} else {
 		// Update the configmap.
-		if err := e.kcli.Update(context.Background(), cm); err != nil {
-			return fmt.Errorf("error updating configmap: %v", err)
+		if err := e.kcli.Update(ctx, cm); err != nil {
+			return fmt.Errorf("error updating configmap: %w", err)
 		}
 		logCtx.Debug("Updated configmap")
 	}
