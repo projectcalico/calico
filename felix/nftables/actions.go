@@ -146,6 +146,10 @@ func escapeLogPrefix(prefix string) string {
 	return fmt.Sprintf("\"%s\"", prefix)
 }
 
+func (s *actionSet) FlowOffload(ft string) generictables.Action {
+	return FlowOffloadAction{FlowTable: ft}
+}
+
 type Referrer interface {
 	ReferencedChain() string
 }
@@ -524,4 +528,17 @@ func (a DSCPAction) ToFragment(features *environment.Features) string {
 
 func (a DSCPAction) String() string {
 	return fmt.Sprintf("DSCP %d", a.Value)
+}
+
+type FlowOffloadAction struct {
+	FlowTable       string
+	TypeFlowOffload struct{}
+}
+
+func (c FlowOffloadAction) ToFragment(features *environment.Features) string {
+	return fmt.Sprintf("flow offload @%s", c.FlowTable)
+}
+
+func (c FlowOffloadAction) String() string {
+	return fmt.Sprintf("FlowOffload:%s", c.FlowTable)
 }
