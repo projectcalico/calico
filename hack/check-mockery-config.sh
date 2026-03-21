@@ -28,7 +28,7 @@ deprecated_keys="mockname|outpkg|with-expecter"
 rc=0
 for config in $(find . -name '.mockery.yaml' -o -name '.mockery.yml' | sort); do
   # Match top-level keys only (lines starting with the key name, no leading whitespace).
-  if grep -Pn "^(${deprecated_keys}):" "$config"; then
+  if grep -En "^(${deprecated_keys}):" "$config"; then
     echo "ERROR: $config contains deprecated mockery v2 config keys. Please migrate to v3 format."
     echo "  mockname    -> structname"
     echo "  outpkg      -> pkgname"
