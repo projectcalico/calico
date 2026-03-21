@@ -151,7 +151,14 @@ func setupSharedFixtures() {
 		}
 	}
 
-	// Create block affinities.
+}
+
+// createBlockAffinities creates the IPAM block affinities used by mesh tests.
+// Must be called per-test because IPPool deletion removes associated affinities.
+func createBlockAffinities(t *testing.T, cc client.Interface) {
+	t.Helper()
+	ctx := context.Background()
+
 	affinities := []apiv3.BlockAffinity{
 		{ObjectMeta: objectMeta("kube-master-10-0-0-0-30"), Spec: apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "10.0.0.0/30"}},
 		{ObjectMeta: objectMeta("kube-master-10-1-0-0-24"), Spec: apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "10.1.0.0/24"}},
@@ -161,8 +168,14 @@ func setupSharedFixtures() {
 		{ObjectMeta: objectMeta("kube-master-192-168-221-0-26"), Spec: apiv3.BlockAffinitySpec{Node: "kube-master", CIDR: "192.168.221.0/26", State: "pending"}},
 	}
 	for _, a := range affinities {
-		if _, err := sharedCalicoClient.BlockAffinities().Create(ctx, &a, options.SetOptions{}); err != nil {
-			panic(fmt.Sprintf("creating BlockAffinity %s: %v", a.Name, err))
+		_, err := cc.BlockAffinities().Create(ctx, &a, options.SetOptions{})
+		if err != nil {
+			// May already exist if IPPool deletion didn't clean it up.
+			existing, getErr := cc.BlockAffinities().Get(ctx, a.Name, options.GetOptions{})
+			require.NoError(t, getErr, "BlockAffinity %s creation failed and get also failed: create err: %v", a.Name, err)
+			a.ResourceVersion = existing.ResourceVersion
+			_, err = cc.BlockAffinities().Update(ctx, &a, options.SetOptions{})
+			require.NoError(t, err, "updating BlockAffinity %s", a.Name)
 		}
 	}
 }
@@ -278,30 +291,54 @@ func applyResources(t *testing.T, cc client.Interface, k8s kubernetes.Interface,
 }
 
 // deleteTestResources removes per-test Calico resources (BGPConfig, IPPools, Peers, Filters)
-// but leaves shared fixtures (K8s nodes, block affinities) intact.
+// and clears Calico Node specs, but leaves shared fixtures (K8s nodes, block affinities) intact.
 func deleteTestResources(t *testing.T, cc client.Interface) {
 	t.Helper()
 	ctx := context.Background()
 
-	if peers, err := cc.BGPPeers().List(ctx, options.ListOptions{}); err == nil {
-		for _, p := range peers.Items {
-			_, _ = cc.BGPPeers().Delete(ctx, p.Name, options.DeleteOptions{})
-		}
+	peers, err := cc.BGPPeers().List(ctx, options.ListOptions{})
+	require.NoError(t, err, "listing BGPPeers for cleanup")
+	for _, p := range peers.Items {
+		_, err := cc.BGPPeers().Delete(ctx, p.Name, options.DeleteOptions{})
+		require.NoError(t, err, "deleting BGPPeer %s", p.Name)
 	}
-	if filters, err := cc.BGPFilter().List(ctx, options.ListOptions{}); err == nil {
-		for _, f := range filters.Items {
-			_, _ = cc.BGPFilter().Delete(ctx, f.Name, options.DeleteOptions{})
-		}
+
+	filters, err := cc.BGPFilter().List(ctx, options.ListOptions{})
+	require.NoError(t, err, "listing BGPFilters for cleanup")
+	for _, f := range filters.Items {
+		_, err := cc.BGPFilter().Delete(ctx, f.Name, options.DeleteOptions{})
+		require.NoError(t, err, "deleting BGPFilter %s", f.Name)
 	}
-	if pools, err := cc.IPPools().List(ctx, options.ListOptions{}); err == nil {
-		for _, p := range pools.Items {
-			_, _ = cc.IPPools().Delete(ctx, p.Name, options.DeleteOptions{})
-		}
+
+	pools, err := cc.IPPools().List(ctx, options.ListOptions{})
+	require.NoError(t, err, "listing IPPools for cleanup")
+	for _, p := range pools.Items {
+		_, err := cc.IPPools().Delete(ctx, p.Name, options.DeleteOptions{})
+		require.NoError(t, err, "deleting IPPool %s", p.Name)
 	}
-	if configs, err := cc.BGPConfigurations().List(ctx, options.ListOptions{}); err == nil {
-		for _, c := range configs.Items {
-			_, _ = cc.BGPConfigurations().Delete(ctx, c.Name, options.DeleteOptions{})
-		}
+
+	configs, err := cc.BGPConfigurations().List(ctx, options.ListOptions{})
+	require.NoError(t, err, "listing BGPConfigurations for cleanup")
+	for _, c := range configs.Items {
+		_, err := cc.BGPConfigurations().Delete(ctx, c.Name, options.DeleteOptions{})
+		require.NoError(t, err, "deleting BGPConfiguration %s", c.Name)
+	}
+
+	// Delete block affinities if they still exist. IPPool deletion may have
+	// already removed some of them, so we ignore "not found" errors.
+	affinities, err := cc.BlockAffinities().List(ctx, options.ListOptions{})
+	require.NoError(t, err, "listing BlockAffinities for cleanup")
+	for _, a := range affinities.Items {
+		cc.BlockAffinities().Delete(ctx, a.Name, options.DeleteOptions{}) //nolint:errcheck
+	}
+
+	// Clear Calico Node specs (BGP addresses, etc.) so they don't leak between tests.
+	nodes, err := cc.Nodes().List(ctx, options.ListOptions{})
+	require.NoError(t, err, "listing Nodes for cleanup")
+	for i := range nodes.Items {
+		nodes.Items[i].Spec = internalapi.NodeSpec{}
+		_, err := cc.Nodes().Update(ctx, &nodes.Items[i], options.SetOptions{})
+		require.NoError(t, err, "clearing Node spec for %s", nodes.Items[i].Name)
 	}
 }
 
@@ -347,8 +384,10 @@ func runConfdTest(t *testing.T, inputYAML, goldenDir string) {
 	// Rewrite dest paths in TOML configs to point at our temp output dir.
 	rewriteDestPaths(t, filepath.Join(confDir, "conf.d"), outputDir)
 
-	// Apply per-test Calico resources (BGPConfig, Nodes, IPPools, Peers).
-	// K8s nodes and block affinities are shared fixtures created in TestMain.
+	// Create block affinities and apply per-test Calico resources.
+	// K8s nodes are shared fixtures from TestMain; block affinities must be
+	// created per-test because IPPool deletion removes associated affinities.
+	createBlockAffinities(t, sharedCalicoClient)
 	inputPath := filepath.Join("mock_data", "calicoctl", inputYAML)
 	applyResources(t, sharedCalicoClient, sharedK8sClient, inputPath)
 	t.Cleanup(func() { deleteTestResources(t, sharedCalicoClient) })
@@ -363,7 +402,8 @@ func runConfdTest(t *testing.T, inputYAML, goldenDir string) {
 		Onetime:  true,
 		SyncOnly: true,
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	err = run.RunWithContext(ctx, confdConfig, confdCalicoClient, sharedK8sClient, nil)
 	require.NoError(t, err, "confd RunWithContext")
 
