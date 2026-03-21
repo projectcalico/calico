@@ -137,6 +137,8 @@ var nonGoDeps = map[string][]string{
 		// Root-level Makefile is used to build operator and other images,
 		// used by the STs.
 		"/Makefile",
+		// Kind cluster test infrastructure (scripts, helm values, configs).
+		"/hack/test/kind",
 	},
 
 	"e2e": {
