@@ -84,31 +84,29 @@ var (
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 
-	interfaceRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
-	bgpFilterInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	bgpFilterPrefixLengthV4 = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
-	bgpFilterPrefixLengthV6 = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$")
-	ignoredInterfaceRegex   = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	ifaceFilterRegex        = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
-	protocolRegex = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
-	standardCommunity       = regexp.MustCompile(`^(\d+):(\d+)$`)
-	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
-	number                  = regexp.MustCompile(`(\d+)`)
-	IPv4PortFormat          = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
-	IPv6PortFormat          = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
-	reasonString            = "Reason: "
-	poolUnstictCIDR         = "IP pool CIDR is not strictly masked"
-	overlapsV4LinkLocal     = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
-	overlapsV6LinkLocal     = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
+	interfaceRegex                = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
+	bgpFilterInterfaceRegex       = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	bgpFilterPrefixLengthV4       = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
+	bgpFilterPrefixLengthV6       = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$")
+	ignoredInterfaceRegex         = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	ifaceFilterRegex              = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
+	protocolRegex                 = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
+	standardCommunity             = regexp.MustCompile(`^(\d+):(\d+)$`)
+	largeCommunity                = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	number                        = regexp.MustCompile(`(\d+)`)
+	IPv4PortFormat                = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
+	IPv6PortFormat                = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
+	reasonString                  = "Reason: "
+	poolUnstictCIDR               = "IP pool CIDR is not strictly masked"
+	overlapsV4LinkLocal           = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
+	overlapsV6LinkLocal           = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
 	protocolPortsMsg              = "rules that specify ports must set protocol to TCP or UDP or SCTP"
 	protocolSingleOrRangePortsMsg = "rules with numeric port or port range must set protocol to TCP or UDP or SCTP"
-	protocolIcmpMsg               = "rules that specify ICMP fields must set protocol to ICMP"
-	protocolAndHTTPMsg      = "rules that specify HTTP fields must set protocol to TCP or empty"
-	globalSelectorEntRule   = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
-	globalSelectorOnly      = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
+	protocolICMPMsg               = "rules that specify ICMP fields must set protocol to ICMP"
+	globalSelectorEntRule         = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
+	globalSelectorOnly            = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
-
 
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
@@ -122,7 +120,6 @@ var (
 
 	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
 	routeTablesReservedLinux = []int{253, 254, 255}
-
 )
 
 // Validate validates the supplied structure according to registered field and
@@ -246,7 +243,6 @@ func init() {
 	registerStructValidator(validate, validateEndpointPort, api.EndpointPort{})
 	registerStructValidator(validate, validateWorkloadEndpointPort, internalapi.WorkloadEndpointPort{})
 	registerStructValidator(validate, validateIPNAT, internalapi.IPNAT{})
-	registerStructValidator(validate, validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validate, validateIPPoolSpec, api.IPPoolSpec{})
 	registerStructValidator(validate, validateNodeSpec, internalapi.NodeSpec{})
 	registerStructValidator(validate, validateIPAMConfigSpec, api.IPAMConfigurationSpec{})
@@ -255,13 +251,9 @@ func init() {
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
 	registerStructValidator(validate, validateFelixConfigSpec, api.FelixConfigurationSpec{})
 	registerStructValidator(validate, validateWorkloadEndpointSpec, internalapi.WorkloadEndpointSpec{})
-	registerStructValidator(validate, validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validate, validateRule, api.Rule{})
 	registerStructValidator(validate, validateEntityRule, api.EntityRule{})
 	registerStructValidator(validate, validateBGPPeerSpec, api.BGPPeerSpec{})
-	registerStructValidator(validate, validateBGPFilterRuleV4, api.BGPFilterRuleV4{})
-	registerStructValidator(validate, validateBGPFilterRuleV6, api.BGPFilterRuleV6{})
-	registerStructValidator(validate, validateBGPFilterOperation, api.BGPFilterOperation{})
 	registerStructValidator(validate, validateNetworkPolicy, api.NetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkPolicy, api.GlobalNetworkPolicy{})
 	registerStructValidator(validate, validateStagedGlobalNetworkPolicy, api.StagedGlobalNetworkPolicy{})
@@ -905,11 +897,6 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 		}
 	}
 
-	if c.RouteTableRange != nil && c.RouteTableRanges != nil {
-		structLevel.ReportError(reflect.ValueOf(c.RouteTableRange),
-			"RouteTableRange", "", reason("cannot be set when `RouteTableRanges` is also set"), "")
-	}
-
 	if c.RouteTableRanges != nil && c.RouteTableRanges.NumDesignatedTables() > int(routeTableRangeMaxTables) {
 		structLevel.ReportError(reflect.ValueOf(c.RouteTableRanges),
 			"RouteTableRanges", "", reason("targets too many tables"), "")
@@ -993,21 +980,6 @@ func validateWorkloadEndpointSpec(structLevel validator.StructLevel) {
 	}
 }
 
-func validateHostEndpointSpec(structLevel validator.StructLevel) {
-	h := structLevel.Current().Interface().(api.HostEndpointSpec)
-
-	// A host endpoint must have an interface name and/or some expected IPs specified.
-	if h.InterfaceName == "" && len(h.ExpectedIPs) == 0 {
-		structLevel.ReportError(reflect.ValueOf(h.InterfaceName),
-			"InterfaceName", "", reason("no interface or expected IPs have been specified"), "")
-	}
-	// A host endpoint must have a nodename specified.
-	if h.Node == "" {
-		structLevel.ReportError(reflect.ValueOf(h.Node),
-			"InterfaceName", "", reason("no node has been specified"), "")
-	}
-}
-
 func validateIPPoolSpec(structLevel validator.StructLevel) {
 	pool := structLevel.Current().Interface().(api.IPPoolSpec)
 
@@ -1033,24 +1005,6 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 		if u == api.IPPoolAllowedUseLoadBalancer {
 			isLoadBalancer = true
 		}
-	}
-
-	// IPIP cannot be enabled for IPv6.
-	if cidr.Version() == 6 && pool.IPIPMode != api.IPIPModeNever {
-		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
-			"IPpool.IPIPMode", "", reason("IPIPMode other than 'Never' is not supported on an IPv6 IP pool"), "")
-	}
-
-	// Cannot have both VXLAN and IPIP on the same IP pool.
-	if ipipModeEnabled(pool.IPIPMode) && vxLanModeEnabled(pool.VXLANMode) {
-		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
-			"IPpool.IPIPMode", "", reason("IPIPMode and VXLANMode cannot be enabled on LoadBalancer IP pool"), "")
-	}
-
-	// Cannot have VXLAN or IPIP enabled on LoadBalancer IP pool.
-	if isLoadBalancer && (ipipModeEnabled(pool.IPIPMode) || vxLanModeEnabled(pool.VXLANMode)) {
-		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
-			"IPpool.IPIPMode", "", reason("Neither IPIPMode nor VXLANMode can be enabled on AllowedUses LoadBalancer IP pool"), "")
 	}
 
 	// Default the blockSize
@@ -1105,13 +1059,7 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	// Allowed use must be one of the enums.
 	for _, a := range pool.AllowedUses {
 		switch a {
-		case api.IPPoolAllowedUseLoadBalancer:
-			continue
-		case api.IPPoolAllowedUseWorkload, api.IPPoolAllowedUseTunnel:
-			if isLoadBalancer {
-				structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
-					"IPpool.AllowedUses", "", reason("LoadBalancer cannot be used at the same time as: "+string(a)), "")
-			}
+		case api.IPPoolAllowedUseLoadBalancer, api.IPPoolAllowedUseWorkload, api.IPPoolAllowedUseTunnel:
 			continue
 		default:
 			structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
@@ -1153,24 +1101,6 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 			structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),
 				"IPpool.NamespaceSelector", "", reason("global() selector is not valid for IPPool namespaceSelector - use all() instead"), "")
 		}
-	}
-}
-
-func vxLanModeEnabled(mode api.VXLANMode) bool {
-	return mode == api.VXLANModeAlways || mode == api.VXLANModeCrossSubnet
-}
-
-func ipipModeEnabled(mode api.IPIPMode) bool {
-	return mode == api.IPIPModeAlways || mode == api.IPIPModeCrossSubnet
-}
-
-func validateICMPFields(structLevel validator.StructLevel) {
-	icmp := structLevel.Current().Interface().(api.ICMPFields)
-
-	// Due to Kernel limitations, ICMP code must always be specified with a type.
-	if icmp.Code != nil && icmp.Type == nil {
-		structLevel.ReportError(reflect.ValueOf(icmp.Code),
-			"Code", "", reason("ICMP code specified without an ICMP type"), "")
 	}
 }
 
@@ -1218,18 +1148,10 @@ func validateRule(structLevel validator.StructLevel) {
 		}
 	}
 
-	// Check that HTTP must not use non-TCP protocols
-	if rule.HTTP != nil && rule.Protocol != nil {
-		tcp := numorstring.ProtocolFromString("TCP")
-		if *rule.Protocol != tcp {
-			structLevel.ReportError(reflect.ValueOf(rule.Protocol), "Protocol", "", reason(protocolAndHTTPMsg), "")
-		}
-	}
-
 	icmp := numorstring.ProtocolFromString("ICMP")
 	icmpv6 := numorstring.ProtocolFromString("ICMPv6")
 	if rule.ICMP != nil && (rule.Protocol == nil || (*rule.Protocol != icmp && *rule.Protocol != icmpv6)) {
-		structLevel.ReportError(reflect.ValueOf(rule.ICMP), "ICMP", "", reason(protocolIcmpMsg), "")
+		structLevel.ReportError(reflect.ValueOf(rule.ICMP), "ICMP", "", reason(protocolICMPMsg), "")
 	}
 
 	// Check that the IPVersion of the protocol matches the IPVersion of the ICMP protocol.
@@ -1287,22 +1209,6 @@ func validateRule(structLevel validator.StructLevel) {
 	scanNets(rule.Destination.Nets, "Destination.Nets")
 	scanNets(rule.Destination.NotNets, "Destination.NotNets")
 
-	usesALP, alpValue, alpField := ruleUsesAppLayerPolicy(&rule)
-	if rule.Action != api.Allow && usesALP {
-		structLevel.ReportError(alpValue, alpField,
-			"", reason("only valid for Allow rules"), "")
-	}
-
-	// Check that destination service rules do not use ports.
-	// Destination service rules use ports specified on the endpoints.
-	if rule.Destination.Services != nil && len(rule.Destination.Ports) != 0 {
-		structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-			"Destination.Ports", "", reason("cannot specify ports with a service selector"), "")
-	}
-	if rule.Destination.Services != nil && len(rule.Destination.NotPorts) != 0 {
-		structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-			"Destination.NotPorts", "", reason("cannot specify notports with a service selector"), "")
-	}
 }
 
 func validateEntityRule(structLevel validator.StructLevel) {
@@ -1376,30 +1282,6 @@ func validateNodeSpec(structLevel validator.StructLevel) {
 func validateBGPPeerSpec(structLevel validator.StructLevel) {
 	ps := structLevel.Current().Interface().(api.BGPPeerSpec)
 
-	if ps.Node != "" && ps.NodeSelector != "" {
-		structLevel.ReportError(reflect.ValueOf(ps.Node), "Node", "",
-			reason("Node field must be empty when NodeSelector is specified"), "")
-	}
-	if ps.PeerIP != "" && ps.PeerSelector != "" {
-		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
-			reason("PeerIP field must be empty when PeerSelector is specified"), "")
-	}
-	if uint32(ps.ASNumber) != 0 && ps.PeerSelector != "" {
-		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
-			reason("ASNumber field must be empty when PeerSelector is specified"), "")
-	}
-	if uint32(ps.ASNumber) == 0 && ps.LocalWorkloadSelector != "" {
-		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
-			reason("ASNumber field must NOT be empty when LocalWorkloadSelector is specified"), "")
-	}
-	if ps.PeerIP != "" && ps.LocalWorkloadSelector != "" {
-		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
-			reason("PeerIP field must be empty when LocalWorkloadSelector is specified"), "")
-	}
-	if ps.PeerSelector != "" && ps.LocalWorkloadSelector != "" {
-		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerSelector", "",
-			reason("PeerSelector field must be empty when LocalWorkloadSelector is specified"), "")
-	}
 	ok, msg := validateReachableBy(ps.ReachableBy, ps.PeerIP)
 	if !ok {
 		structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
@@ -1449,59 +1331,6 @@ func validateReachableByField(fl validator.FieldLevel) bool {
 		}
 	}
 	return true
-}
-
-func validateBGPFilterRuleV4(structLevel validator.StructLevel) {
-	fs := structLevel.Current().Interface().(api.BGPFilterRuleV4)
-	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator, fs.PrefixLength, nil)
-}
-
-func validateBGPFilterRuleV6(structLevel validator.StructLevel) {
-	fs := structLevel.Current().Interface().(api.BGPFilterRuleV6)
-	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator, nil, fs.PrefixLength)
-}
-
-func validateBGPFilterRule(
-	structLevel validator.StructLevel,
-	cidr string,
-	op api.BGPFilterMatchOperator,
-	prefixLengthV4 *api.BGPFilterPrefixLengthV4,
-	prefixLengthV6 *api.BGPFilterPrefixLengthV6,
-) {
-	if cidr != "" && op == "" {
-		structLevel.ReportError(cidr, "CIDR", "",
-			reason("MatchOperator cannot be empty when CIDR is not"), "")
-	}
-	if cidr == "" && op != "" {
-		structLevel.ReportError(op, "MatchOperator", "",
-			reason("CIDR cannot be empty when MatchOperator is not"), "")
-	}
-	if cidr == "" && prefixLengthV4 != nil {
-		structLevel.ReportError(prefixLengthV4, "PrefixLength", "",
-			reason("CIDR cannot be empty when PrefixLength is not"), "")
-	}
-	if cidr == "" && prefixLengthV6 != nil {
-		structLevel.ReportError(prefixLengthV6, "PrefixLength", "",
-			reason("CIDR cannot be empty when PrefixLength is not"), "")
-	}
-}
-
-func validateBGPFilterOperation(structLevel validator.StructLevel) {
-	op := structLevel.Current().Interface().(api.BGPFilterOperation)
-	count := 0
-	if op.AddCommunity != nil {
-		count++
-	}
-	if op.PrependASPath != nil {
-		count++
-	}
-	if op.SetPriority != nil {
-		count++
-	}
-	if count != 1 {
-		structLevel.ReportError(op, "BGPFilterOperation", "",
-			reason("exactly one operation must be set"), "")
-	}
 }
 
 func validateEndpointPort(structLevel validator.StructLevel) {
@@ -1823,30 +1652,6 @@ func validateGlobalNetworkSet(structLevel validator.StructLevel) {
 }
 
 func validateGlobalNetworkPolicySpec(spec *api.GlobalNetworkPolicySpec, structLevel validator.StructLevel) {
-	if spec.DoNotTrack && spec.PreDNAT {
-		structLevel.ReportError(reflect.ValueOf(spec.PreDNAT),
-			"PolicySpec.PreDNAT", "", reason("PreDNAT and DoNotTrack cannot both be true, for a given PolicySpec"), "")
-	}
-
-	if spec.PreDNAT && len(spec.Egress) > 0 {
-		structLevel.ReportError(reflect.ValueOf(spec.Egress),
-			"PolicySpec.Egress", "", reason("PreDNAT PolicySpec cannot have any Egress rules"), "")
-	}
-
-	if spec.PreDNAT && len(spec.Types) > 0 {
-		for _, t := range spec.Types {
-			if t == api.PolicyTypeEgress {
-				structLevel.ReportError(reflect.ValueOf(spec.Types),
-					"PolicySpec.Types", "", reason("PreDNAT PolicySpec cannot have 'egress' Type"), "")
-			}
-		}
-	}
-
-	if !spec.ApplyOnForward && (spec.DoNotTrack || spec.PreDNAT) {
-		structLevel.ReportError(reflect.ValueOf(spec.ApplyOnForward),
-			"PolicySpec.ApplyOnForward", "", reason("ApplyOnForward must be true if either PreDNAT or DoNotTrack is true, for a given PolicySpec"), "")
-	}
-
 	// Check (and disallow) any repeats in Types field.
 	mp := map[api.PolicyType]bool{}
 	for _, t := range spec.Types {
@@ -2209,15 +2014,6 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 		}
 	}
 
-	// Check that node mesh password cannot be set if node to node mesh is disabled.
-	if spec.NodeMeshPassword != nil && spec.NodeToNodeMeshEnabled != nil && !*spec.NodeToNodeMeshEnabled {
-		structLevel.ReportError(reflect.ValueOf(spec), "Spec.NodeMeshPassword", "", reason("spec.NodeMeshPassword cannot be set if spec.NodeToNodeMesh is disabled"), "")
-	}
-
-	// Check that node mesh max restart time cannot be set if node to node mesh is disabled.
-	if spec.NodeMeshMaxRestartTime != nil && spec.NodeToNodeMeshEnabled != nil && !*spec.NodeToNodeMeshEnabled {
-		structLevel.ReportError(reflect.ValueOf(spec), "Spec.NodeMeshMaxRestartTime", "", reason("spec.NodeMeshMaxRestartTime cannot be set if spec.NodeToNodeMesh is disabled"), "")
-	}
 }
 
 func validateBlockAffinitySpec(structLevel validator.StructLevel) {

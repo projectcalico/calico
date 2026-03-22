@@ -17,11 +17,13 @@ package v3
 import (
 	"strings"
 	"testing"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
@@ -403,4 +405,633 @@ func TestCRDValidation_CombinedWithStructValidation(t *testing.T) {
 	if !foundCEL {
 		t.Errorf("expected CEL error about default tier needing Deny, got: %v", err)
 	}
+}
+
+// TestCRDValidation_ICMPFields tests the CEL rule that ICMP code requires type.
+func TestCRDValidation_ICMPFields(t *testing.T) {
+	icmpCode := 3
+	icmpType := 8
+	tcpProto := numorstring.ProtocolFromString("ICMP")
+
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "ICMP code without type fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Allow,
+							Protocol: &tcpProto,
+							ICMP:     &apiv3.ICMPFields{Code: &icmpCode},
+						},
+					},
+				},
+			},
+			errSubstr: "ICMP code specified without an ICMP type",
+		},
+		{
+			name: "ICMP with both type and code passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Allow,
+							Protocol: &tcpProto,
+							ICMP:     &apiv3.ICMPFields{Type: &icmpType, Code: &icmpCode},
+						},
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_HostEndpoint tests CEL rules on HostEndpointSpec.
+func TestCRDValidation_HostEndpoint(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "no interfaceName and no expectedIPs fails",
+			obj: &apiv3.HostEndpoint{
+				TypeMeta:   metav1.TypeMeta{Kind: "HostEndpoint", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-hep"},
+				Spec: apiv3.HostEndpointSpec{
+					Node: "node1",
+				},
+			},
+			errSubstr: "at least one of interfaceName or expectedIPs must be specified",
+		},
+		{
+			name: "no node fails",
+			obj: &apiv3.HostEndpoint{
+				TypeMeta:   metav1.TypeMeta{Kind: "HostEndpoint", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-hep"},
+				Spec: apiv3.HostEndpointSpec{
+					InterfaceName: "eth0",
+				},
+			},
+			errSubstr: "node must be specified",
+		},
+		{
+			name: "valid with interfaceName and node passes",
+			obj: &apiv3.HostEndpoint{
+				TypeMeta:   metav1.TypeMeta{Kind: "HostEndpoint", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-hep"},
+				Spec: apiv3.HostEndpointSpec{
+					Node:          "node1",
+					InterfaceName: "eth0",
+				},
+			},
+		},
+		{
+			name: "valid with expectedIPs and node passes",
+			obj: &apiv3.HostEndpoint{
+				TypeMeta:   metav1.TypeMeta{Kind: "HostEndpoint", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-hep"},
+				Spec: apiv3.HostEndpointSpec{
+					Node:        "node1",
+					ExpectedIPs: []string{"10.0.0.1"},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_BGPFilter tests CEL rules on BGPFilterRuleV4/V6 and
+// MinProperties/MaxProperties on BGPFilterOperation.
+func TestCRDValidation_BGPFilter(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "V4 CIDR without matchOperator fails",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV4: []apiv3.BGPFilterRuleV4{
+						{
+							CIDR:   "10.0.0.0/8",
+							Action: apiv3.Accept,
+						},
+					},
+				},
+			},
+			errSubstr: "cidr and matchOperator must both be set or both be empty",
+		},
+		{
+			name: "V4 matchOperator without CIDR fails",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV4: []apiv3.BGPFilterRuleV4{
+						{
+							MatchOperator: apiv3.MatchOperatorIn,
+							Action:        apiv3.Accept,
+						},
+					},
+				},
+			},
+			errSubstr: "cidr and matchOperator must both be set or both be empty",
+		},
+		{
+			name: "V4 prefixLength without CIDR fails",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV4: []apiv3.BGPFilterRuleV4{
+						{
+							PrefixLength: &apiv3.BGPFilterPrefixLengthV4{Min: ptr.To[int32](16)},
+							Action:       apiv3.Accept,
+						},
+					},
+				},
+			},
+			errSubstr: "cidr is required when prefixLength is set",
+		},
+		{
+			name: "V4 both CIDR and matchOperator passes",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV4: []apiv3.BGPFilterRuleV4{
+						{
+							CIDR:          "10.0.0.0/8",
+							MatchOperator: apiv3.MatchOperatorIn,
+							Action:        apiv3.Accept,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "V6 CIDR without matchOperator fails",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV6: []apiv3.BGPFilterRuleV6{
+						{
+							CIDR:   "fd00::/48",
+							Action: apiv3.Accept,
+						},
+					},
+				},
+			},
+			errSubstr: "cidr and matchOperator must both be set or both be empty",
+		},
+		{
+			name: "V6 matchOperator without CIDR fails",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV6: []apiv3.BGPFilterRuleV6{
+						{
+							MatchOperator: apiv3.MatchOperatorEqual,
+							Action:        apiv3.Accept,
+						},
+					},
+				},
+			},
+			errSubstr: "cidr and matchOperator must both be set or both be empty",
+		},
+		{
+			name: "V6 both CIDR and matchOperator passes",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV6: []apiv3.BGPFilterRuleV6{
+						{
+							CIDR:          "fd00::/48",
+							MatchOperator: apiv3.MatchOperatorEqual,
+							Action:        apiv3.Accept,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "operation with no fields set fails minProperties",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV4: []apiv3.BGPFilterRuleV4{
+						{
+							Action:     apiv3.Accept,
+							Operations: []apiv3.BGPFilterOperation{{}},
+						},
+					},
+				},
+			},
+			errSubstr: "should have at least 1 properties",
+		},
+		{
+			name: "operation with two fields set fails maxProperties",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV4: []apiv3.BGPFilterRuleV4{
+						{
+							Action: apiv3.Accept,
+							Operations: []apiv3.BGPFilterOperation{
+								{
+									AddCommunity: &apiv3.BGPFilterAddCommunity{Value: ptr.To(apiv3.BGPCommunityValue("65000:1"))},
+									SetPriority:  &apiv3.BGPFilterSetPriority{Value: ptr.To(100)},
+								},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "must have at most 1 item",
+		},
+		{
+			name: "operation with single field passes",
+			obj: &apiv3.BGPFilter{
+				TypeMeta:   metav1.TypeMeta{Kind: "BGPFilter", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-filter"},
+				Spec: apiv3.BGPFilterSpec{
+					ExportV4: []apiv3.BGPFilterRuleV4{
+						{
+							Action: apiv3.Accept,
+							Operations: []apiv3.BGPFilterOperation{
+								{
+									SetPriority: &apiv3.BGPFilterSetPriority{Value: ptr.To(100)},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_BGPPeer_CrossField tests the 6 cross-field CEL rules on BGPPeerSpec.
+func TestCRDValidation_BGPPeer_CrossField(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "node and nodeSelector both set fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					Node:         "node1",
+					NodeSelector: "has(label)",
+				},
+			},
+			errSubstr: "node and nodeSelector cannot both be set",
+		},
+		{
+			name: "peerIP and peerSelector both set fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerIP:       "10.0.0.1",
+					PeerSelector: "has(label)",
+				},
+			},
+			errSubstr: "peerIP and peerSelector cannot both be set",
+		},
+		{
+			name: "asNumber and peerSelector both set fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerSelector: "has(label)",
+					ASNumber:     numorstring.ASNumber(65401),
+				},
+			},
+			errSubstr: "asNumber must be empty when peerSelector is set",
+		},
+		{
+			name: "localWorkloadSelector without asNumber fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					LocalWorkloadSelector: "color == 'red'",
+				},
+			},
+			errSubstr: "asNumber is required when localWorkloadSelector is set",
+		},
+		{
+			name: "localWorkloadSelector with peerIP fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					LocalWorkloadSelector: "color == 'red'",
+					ASNumber:              numorstring.ASNumber(65401),
+					PeerIP:                "10.0.0.1",
+				},
+			},
+			errSubstr: "peerIP must be empty when localWorkloadSelector is set",
+		},
+		{
+			name: "localWorkloadSelector with peerSelector fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					LocalWorkloadSelector: "color == 'red'",
+					ASNumber:              numorstring.ASNumber(65401),
+					PeerSelector:          "has(label)",
+				},
+			},
+			errSubstr: "peerSelector must be empty when localWorkloadSelector is set",
+		},
+		{
+			name: "valid node and peerIP passes",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					Node:   "node1",
+					PeerIP: "10.0.0.1",
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_GlobalNetworkPolicy tests CEL rules on GlobalNetworkPolicySpec.
+func TestCRDValidation_GlobalNetworkPolicy(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "doNotTrack and preDNAT both true fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					DoNotTrack:     true,
+					PreDNAT:        true,
+					ApplyOnForward: true,
+				},
+			},
+			errSubstr: "preDNAT and doNotTrack cannot both be true",
+		},
+		{
+			name: "preDNAT with egress rules fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+					Egress: []apiv3.Rule{
+						{Action: apiv3.Allow},
+					},
+				},
+			},
+			errSubstr: "preDNAT policy cannot have any egress rules",
+		},
+		{
+			name: "preDNAT with Egress type fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+					Types:          []apiv3.PolicyType{apiv3.PolicyTypeEgress},
+				},
+			},
+			errSubstr: "preDNAT policy cannot have 'Egress' type",
+		},
+		{
+			name: "applyOnForward false with doNotTrack true fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					DoNotTrack:     true,
+					ApplyOnForward: false,
+				},
+			},
+			errSubstr: "applyOnForward must be true",
+		},
+		{
+			name: "valid preDNAT with ingress and applyOnForward passes",
+			obj: &apiv3.GlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+					Ingress: []apiv3.Rule{
+						{Action: apiv3.Allow},
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_FelixConfiguration tests the CEL rule that routeTableRange
+// and routeTableRanges cannot both be set.
+func TestCRDValidation_FelixConfiguration(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "routeTableRange and routeTableRanges both set fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.FelixConfigurationSpec{
+					RouteTableRange:  &apiv3.RouteTableRange{Min: 1, Max: 250},
+					RouteTableRanges: &apiv3.RouteTableRanges{{Min: 1, Max: 250}},
+				},
+			},
+			errSubstr: "routeTableRange and routeTableRanges cannot both be set",
+		},
+		{
+			name: "only routeTableRanges set passes",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.FelixConfigurationSpec{
+					RouteTableRanges: &apiv3.RouteTableRanges{{Min: 1, Max: 250}},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_BGPConfiguration tests CEL rules on BGPConfigurationSpec
+// for nodeMeshPassword and nodeMeshMaxRestartTime.
+func TestCRDValidation_BGPConfiguration(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "nodeMeshPassword with nodeToNodeMeshEnabled false fails",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					NodeToNodeMeshEnabled: ptr.To(false),
+					NodeMeshPassword: &apiv3.BGPPassword{
+						SecretKeyRef: nil,
+					},
+				},
+			},
+			errSubstr: "nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is false",
+		},
+		{
+			name: "nodeMeshMaxRestartTime with nodeToNodeMeshEnabled false fails",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					NodeToNodeMeshEnabled:  ptr.To(false),
+					NodeMeshMaxRestartTime: &metav1.Duration{Duration: 120 * time.Second},
+				},
+			},
+			errSubstr: "nodeMeshMaxRestartTime cannot be set when nodeToNodeMeshEnabled is false",
+		},
+		{
+			name: "nodeMeshPassword with nodeToNodeMeshEnabled true passes",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					NodeToNodeMeshEnabled: ptr.To(true),
+					NodeMeshPassword: &apiv3.BGPPassword{
+						SecretKeyRef: nil,
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_IPPool_CrossField tests CEL cross-field rules on IPPoolSpec.
+func TestCRDValidation_IPPool_CrossField(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "IPIP and VXLAN both enabled fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "10.0.0.0/24",
+					IPIPMode:  apiv3.IPIPModeAlways,
+					VXLANMode: apiv3.VXLANModeAlways,
+				},
+			},
+			errSubstr: "ipipMode and vxlanMode cannot both be enabled",
+		},
+		{
+			name: "LoadBalancer use with IPIP enabled fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:        "10.0.0.0/24",
+					IPIPMode:    apiv3.IPIPModeAlways,
+					AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+				},
+			},
+			errSubstr: "LoadBalancer IP pool cannot have IPIP or VXLAN enabled",
+		},
+		{
+			name: "LoadBalancer combined with Workload use fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:        "10.0.0.0/24",
+					AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer, apiv3.IPPoolAllowedUseWorkload},
+				},
+			},
+			errSubstr: "LoadBalancer cannot be combined with Workload or Tunnel",
+		},
+		{
+			name: "IPv6 CIDR with IPIP mode fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:     "fd00::/120",
+					IPIPMode: apiv3.IPIPModeAlways,
+				},
+			},
+			errSubstr: "IPIP is not supported on IPv6 pools",
+		},
+		{
+			name: "valid IPv4 with IPIP passes",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:     "10.0.0.0/24",
+					IPIPMode: apiv3.IPIPModeAlways,
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_Rule tests CEL rules on the Rule type.
+func TestCRDValidation_Rule(t *testing.T) {
+	udpProto := numorstring.ProtocolFromString("UDP")
+	tcpProto := numorstring.ProtocolFromString("TCP")
+
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "HTTP match with non-TCP protocol fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Allow,
+							Protocol: &udpProto,
+							HTTP:     &apiv3.HTTPMatch{Methods: []string{"GET"}},
+						},
+					},
+				},
+			},
+			errSubstr: "rules with HTTP match must have protocol TCP or unset",
+		},
+		{
+			name: "HTTP match on Deny rule fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Deny,
+							Protocol: &tcpProto,
+							HTTP:     &apiv3.HTTPMatch{Methods: []string{"GET"}},
+						},
+					},
+				},
+			},
+			errSubstr: "HTTP match is only valid on Allow rules",
+		},
+		{
+			name: "destination ports with destination services fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Allow,
+							Protocol: &tcpProto,
+							Destination: apiv3.EntityRule{
+								Services: &apiv3.ServiceMatch{Name: "my-svc"},
+								Ports:    []numorstring.Port{numorstring.SinglePort(80)},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "ports and notPorts cannot be specified with services",
+		},
+		{
+			name: "valid HTTP match with TCP on Allow rule passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Allow,
+							Protocol: &tcpProto,
+							HTTP:     &apiv3.HTTPMatch{Methods: []string{"GET"}},
+						},
+					},
+				},
+			},
+		},
+	})
 }
