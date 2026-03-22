@@ -16,21 +16,22 @@ package v3
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
+	calicoapi "github.com/projectcalico/api"
 	"github.com/sirupsen/logrus"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	celvalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
+	schemadefaulting "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/defaulting"
 	schemavalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	celconfig "k8s.io/apiserver/pkg/apis/cel"
-
-	"github.com/projectcalico/calico/libcalico-go/config"
 )
 
 var (
@@ -55,7 +56,7 @@ func init() {
 	schemaValidators = make(map[string]schemavalidation.SchemaCreateValidator)
 	schemas = make(map[string]*structuralschema.Structural)
 
-	crds, err := config.AllCRDs()
+	crds, err := calicoapi.AllCRDs()
 	if err != nil {
 		crdInitErr = fmt.Errorf("failed to load CRDs: %w", err)
 		return
@@ -121,27 +122,34 @@ func init() {
 	}
 }
 
-// validateCRD runs CRD validation rules against the given object, including both
-// OpenAPI schema constraints (MinItems, MaxLength, Pattern, Enum, etc.) and
-// CEL x-kubernetes-validations rules.
+// defaultAndValidateCRD applies CRD schema defaults to the object in-place
+// and then runs CRD validation rules (OpenAPI schema constraints + CEL
+// x-kubernetes-validations). A single toUnstructured conversion is shared
+// between defaulting and validation to avoid redundant JSON round-trips.
 //
 // For create operations, pass nil for oldObj.
 // For update operations, pass the previous version as oldObj.
 //
-// Returns nil if the object's Kind has no CRD validators, or if validation passes.
-func validateCRD(ctx context.Context, obj runtime.Object, oldObj runtime.Object) field.ErrorList {
+// Returns nil if the object's Kind has no CRD schema, or if defaulting and
+// validation both succeed.
+func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runtime.Object) field.ErrorList {
 	if crdInitErr != nil {
 		return field.ErrorList{field.InternalError(nil, crdInitErr)}
 	}
 
 	kind := resolveKind(obj)
 
-	// Convert to unstructured map representation for validation.
+	// Convert to unstructured map representation once, shared by both
+	// defaulting and validation.
 	unstructuredObj, err := toUnstructured(obj)
 	if err != nil {
 		return field.ErrorList{field.InternalError(nil, fmt.Errorf("failed to convert object to unstructured: %w", err))}
 	}
 
+	// Apply CRD schema defaults to the unstructured representation.
+	applyCRDDefaults(unstructuredObj, kind)
+
+	// Validate the defaulted unstructured data.
 	var allErrs field.ErrorList
 
 	// Run OpenAPI schema validation (MinItems, MaxLength, Pattern, Enum, etc.).
@@ -163,7 +171,25 @@ func validateCRD(ctx context.Context, obj runtime.Object, oldObj runtime.Object)
 		allErrs = append(allErrs, celErrs...)
 	}
 
+	// Convert the defaulted unstructured data back into the typed object so
+	// the caller sees the applied defaults. We use the converter here (rather
+	// than JSON) because the reverse direction doesn't have the numeric type
+	// mismatch problem that forces toUnstructured to use a JSON round-trip.
+	if m, ok := unstructuredObj.(map[string]any); ok {
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(m, obj); err != nil {
+			allErrs = append(allErrs, field.InternalError(nil, fmt.Errorf("failed to convert defaulted %s from unstructured: %w", kind, err)))
+		}
+	}
+
 	return allErrs
+}
+
+// applyCRDDefaults applies CRD schema default values to an unstructured
+// object representation in-place. This is a no-op if the kind has no schema.
+func applyCRDDefaults(unstructuredObj any, kind string) {
+	if s, ok := schemas[kind]; ok {
+		schemadefaulting.Default(unstructuredObj, s)
+	}
 }
 
 // resolveKind returns the Kind string for a runtime.Object, falling back to
@@ -186,10 +212,50 @@ func toUnstructured(obj runtime.Object) (any, error) {
 		return u.Object, nil
 	}
 
-	// Convert typed object to unstructured map.
-	data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	// Use JSON round-trip instead of runtime.DefaultUnstructuredConverter so
+	// that numeric types match what the API server sees. The converter uses
+	// reflection and preserves Go types (e.g. uint32 → uint64), but the API
+	// server receives JSON where all numbers decode as float64 or int64.
+	// Without this, CEL rules fail at runtime with type mismatches like
+	// "expected int, got uint64" for fields such as numorstring.ASNumber.
+	raw, err := json.Marshal(obj)
 	if err != nil {
 		return nil, err
 	}
+	var data map[string]any
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return nil, err
+	}
+	// encoding/json decodes all numbers as float64 into interface{}, but CEL
+	// expects integer-typed fields as int64. Convert exact-integer float64
+	// values to int64, matching the k8s API server's internal representation.
+	normalizeNumbers(data)
 	return data, nil
+}
+
+// normalizeNumbers recursively walks an unstructured map and converts float64
+// values that represent exact integers to int64.
+func normalizeNumbers(v any) {
+	switch val := v.(type) {
+	case map[string]any:
+		for k, elem := range val {
+			if f, ok := elem.(float64); ok {
+				if f == float64(int64(f)) {
+					val[k] = int64(f)
+				}
+			} else {
+				normalizeNumbers(elem)
+			}
+		}
+	case []any:
+		for i, elem := range val {
+			if f, ok := elem.(float64); ok {
+				if f == float64(int64(f)) {
+					val[i] = int64(f)
+				}
+			} else {
+				normalizeNumbers(elem)
+			}
+		}
+	}
 }

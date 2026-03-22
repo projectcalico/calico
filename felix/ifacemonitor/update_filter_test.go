@@ -231,6 +231,61 @@ func TestUpdateFilter_FilterUpdates_RouteUpdateDelOnly(t *testing.T) {
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
+func TestUpdateFilter_FilterUpdates_LinkSenderNotBlockedAfterCancel(t *testing.T) {
+	t.Log("After cancel, senders on the link input channel should not block")
+	harness, cancel := setUpFilterTest(t)
+	defer close(harness.LinkIn)
+	defer close(harness.RouteIn)
+
+	// Fill the link input channel buffer so the next send would block
+	// if FilterUpdates isn't draining.
+	linkUpd := linkUpdateWithIndex(2)
+	for range cap(harness.LinkIn) {
+		harness.LinkIn <- linkUpd
+	}
+
+	// Cancel the context; FilterUpdates should exit and start draining.
+	cancel()
+	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+
+	// Send many more items than the buffer can hold.  The drain goroutine
+	// must be actively consuming for these sends to succeed.
+	deadline := time.After(time.Second)
+	for range cap(harness.LinkIn) * 10 {
+		select {
+		case harness.LinkIn <- linkUpd:
+		case <-deadline:
+			t.Fatal("send on link input channel blocked after FilterUpdates cancelled")
+		}
+	}
+}
+
+func TestUpdateFilter_FilterUpdates_RouteSenderNotBlockedAfterCancel(t *testing.T) {
+	t.Log("After cancel, senders on the route input channel should not block")
+	harness, cancel := setUpFilterTest(t)
+	defer close(harness.LinkIn)
+	defer close(harness.RouteIn)
+
+	// Fill the route input channel buffer.
+	routeUpd := routeUpdate("10.0.0.1/16", true, 2)
+	for range cap(harness.RouteIn) {
+		harness.RouteIn <- routeUpd
+	}
+
+	// Cancel the context; FilterUpdates should exit and start draining.
+	cancel()
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+
+	deadline := time.After(time.Second)
+	for range cap(harness.RouteIn) * 10 {
+		select {
+		case harness.RouteIn <- routeUpd:
+		case <-deadline:
+			t.Fatal("send on route input channel blocked after FilterUpdates cancelled")
+		}
+	}
+}
+
 type filterUpdatesHarness struct {
 	Time *mocktime.MockTime
 

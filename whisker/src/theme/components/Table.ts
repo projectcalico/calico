@@ -1,24 +1,29 @@
+import { tableAnatomy } from '@chakra-ui/anatomy';
+import { createMultiStyleConfigHelpers } from '@chakra-ui/react';
+
+const { defineMultiStyleConfig } = createMultiStyleConfigHelpers(
+    tableAnatomy.keys,
+);
+
 const defaultStyles = {
     table: {
-        bg: 'tigera-color-surface',
+        bg: 'experimental-token-bg-table-body',
         border: '0px solid',
     },
     th: {
-        bg: 'tigera-color-surface',
-        border: '1px solid',
-        borderTopColor: 'tigera-color-outline',
-        borderBottomColor: 'tigera-color-outline',
-        borderLeftColor: 'tigera-color-outline',
+        bg: 'experimental-token-bg-table-header',
+        borderTopColor: 'experimental-token-border-default',
+        borderBottomColor: 'experimental-token-border-default',
+        borderLeftColor: 'experimental-token-border-default',
         borderLeft: 0,
         paddingLeft: '8px',
         borderTop: 0,
-        borderRightColor: 'tigera-color-outline',
-        fontSize: 'xs',
+        borderRightColor: 'experimental-token-border-default',
+        fontSize: 'sm',
         fontWeight: '700',
         letterSpacing: 'normal',
         px: 2,
         py: 2,
-        color: 'tigera-color-on-surface',
         _last: {
             borderRight: 0,
         },
@@ -27,19 +32,18 @@ const defaultStyles = {
         },
     },
     tr: {
-        borderBottom: '1px',
-        borderBottomColor: 'tigera-color-outline',
+        borderTop: 'none',
     },
     td: {
         fontWeight: '500',
-        color: 'tigera-color-on-surface',
         px: 2,
         py: 2,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        border: 'none',
-        fontSize: 'xs',
+        borderBottom: '1px solid!important',
+        borderBottomColor: 'experimental-token-border-default!important',
+        fontSize: 'sm',
         _first: {
             paddingLeft: 4,
         },
@@ -63,98 +67,80 @@ const smallStyles = {
     },
 };
 
-const largeStyles = {
-    table: defaultStyles.table,
-    th: {
-        ...defaultStyles.th,
-        fontSize: 'sm',
-        fontWeight: '700',
-    },
-    tr: {
-        ...defaultStyles.tr,
-    },
-    td: {
-        ...defaultStyles.td,
-        fontSize: 'sm',
-        lineHeight: 'normal',
-    },
-};
-
-export default {
+export default defineMultiStyleConfig({
     baseStyle: {
         table: {
-            bg: 'tigeraWhite',
-
-            position: 'relative',
+            bg: 'yellow', // TODO: FIX THIS BEFORE MERGING
         },
         th: {
-            borderColor: 'tigeraGrey.200',
+            borderColor: 'experimental-token-border-default',
             borderBottom: '1px',
             textTransform: 'capitalize',
         },
         tr: {
-            position: 'sticky',
-            top: 0,
-        },
-        td: {
-            borderBottom: 0,
+            _last: {
+                td: {
+                    borderBottom: 0,
+                },
+            },
         },
     },
     sizes: {
         sm: smallStyles,
         md: defaultStyles,
-        lg: largeStyles,
+        lg: defaultStyles, //could do with updting if required at some point
     },
     variants: {
+        surface: {
+            table: {
+                bg: 'experimental-token-elevation-surface',
+                borderColor: 'experimental-token-border-default',
+                borderWidth: '1px',
+                borderStyle: 'solid',
+            },
+            th: {
+                bg: 'experimental-token-bg-empty',
+                borderRightWidth: '0',
+            },
+            td: {
+                bg: 'experimental-token-bg-empty',
+            },
+        },
         simple: {
             th: {
-                borderBottom: '0',
                 border: 'none',
-                color: 'tigeraBlack',
+                color: 'experimental-token-fg-default',
             },
         },
         light: {
             th: {
-                borderBottomColor: 'tigeraGrey.200',
-                borderColor: 'tigeraWhite',
-                bg: 'tigeraWhite',
-                borderRightColor: 'tigeraWhite',
-                borderBottom: '0',
+                borderBottomColor: 'experimental-token-border-default',
+                borderBottom: '1px solid',
+                bg: 'experimental-token-bg-empty',
+                borderRight: 'none',
             },
         },
         modal: {
             table: {
-                bg: 'transparent',
-                border: '0px solid',
+                bg: 'experimental-token-elevation-overlay',
             },
             th: {
-                borderBottomColor: 'tigeraGrey.200',
-                borderColor: 'tigeraGrey.200',
-                bg: 'tigeraGrey.200',
-                borderRightColor: 'tigeraGrey.200',
-                borderBottom: '0',
+                border: 'none',
             },
         },
-        expando: {
+        innerExpando: {
             table: {
-                border: 'none',
-                fontWeight: '900',
-                letterSpacing: 'normal',
+                bg: 'experimental-token-bg-empty',
             },
             td: {
-                whiteSpace: 'break-spaces',
-            },
-            th: {
-                border: '0px',
-                background: 'unset',
-                textTransform: 'capitalize',
-                fontWeight: 700,
-                width: '180px',
-                fontSize: 'xs',
-                verticalAlign: 'top',
-                color: 'tigera-color-on-surface',
-                lineHeight: '19px',
-                paddingLeft: '8',
+                _first: {
+                    verticalAlign: 'top',
+                    color: 'tigeraGrey.700',
+                    pl: 8,
+                },
+                _last: {
+                    pr: 0,
+                },
             },
         },
         drawerContent: {
@@ -190,32 +176,5 @@ export default {
                 },
             },
         },
-        // inline: aka table within a table
-        inline: {
-            table: {
-                bg: 'transparent',
-                border: '1px solid',
-                borderColor: 'tigera-color-table-row',
-                borderRadius: 4,
-                borderSpacing: 0,
-                borderCollapse: 'separate',
-                overflow: 'hidden',
-            },
-            th: {
-                verticalAlign: 'top',
-                border: 0,
-                bg: 'tigera-color-table-row',
-                fontSize: 'sm',
-                fontFamily: 'inherit',
-            },
-            tr: {
-                border: 0,
-            },
-            td: {
-                border: 0,
-                fontFamily: 'inherit',
-                fontSize: 'sm',
-            },
-        },
     },
-};
+});

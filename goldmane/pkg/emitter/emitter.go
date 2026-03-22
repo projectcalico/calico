@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -98,6 +98,12 @@ func NewEmitter(opts ...Option) *Emitter {
 }
 
 func (e *Emitter) Run(ctx context.Context) {
+	// Start certificate file watchers for the emitter client. These goroutines
+	// will exit when ctx is cancelled.
+	if err := e.client.watchCerts(ctx); err != nil {
+		logrus.WithError(err).Fatal("Failed to start certificate watchers")
+	}
+
 	// Start by loading any state cached in our configmap, which will allow us to better pick up where we left off
 	// in the event of a restart.
 	if err := e.loadCachedState(); err != nil {
