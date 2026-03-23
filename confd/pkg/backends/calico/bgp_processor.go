@@ -20,7 +20,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -40,15 +39,6 @@ type bgpConfigCache struct {
 	revision uint64
 }
 
-// configCache is indexed by IP version (4 or 6)
-var configCache map[int]*bgpConfigCache
-
-// configCacheMutex protects concurrent access to configCache
-var configCacheMutex sync.RWMutex
-
-func init() {
-	configCache = make(map[int]*bgpConfigCache)
-}
 
 // GetBirdBGPConfig processes raw datastore data into a clean BGP configuration structure
 // ipVersion should be 4 for IPv4 or 6 for IPv6
@@ -56,13 +46,13 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc := log.WithField("ipVersion", ipVersion)
 	currentRevision := c.GetCurrentRevision()
 
-	configCacheMutex.RLock()
-	if cached, ok := configCache[ipVersion]; ok && cached.revision == currentRevision {
-		configCacheMutex.RUnlock()
+	c.configCacheMutex.RLock()
+	if cached, ok := c.configCache[ipVersion]; ok && cached.revision == currentRevision {
+		c.configCacheMutex.RUnlock()
 		logc.Debug("BGP config cache hit, returning cached configuration")
 		return cached.config, nil
 	}
-	configCacheMutex.RUnlock()
+	c.configCacheMutex.RUnlock()
 
 	logc.Debug("BGP config cache miss or expired, processing new configuration")
 
@@ -110,13 +100,13 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		"numOfAcceptedFiltersForBGPExport": len(config.BGPExportFilterForEnabledIPPools),
 	}).Debug("Processed ippools")
 
-	// Update cache with write lock
-	configCacheMutex.Lock()
-	configCache[ipVersion] = &bgpConfigCache{
+	// Update cache with write lock.
+	c.configCacheMutex.Lock()
+	c.configCache[ipVersion] = &bgpConfigCache{
 		config:   config,
 		revision: currentRevision,
 	}
-	configCacheMutex.Unlock()
+	c.configCacheMutex.Unlock()
 	logc.Debug("Updated BGP config cache")
 
 	return config, nil

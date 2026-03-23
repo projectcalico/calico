@@ -24,8 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 type secretWatchData struct {
@@ -42,40 +40,23 @@ type secretWatchData struct {
 type secretWatcher struct {
 	client       *client
 	namespace    string
-	k8sClientset *kubernetes.Clientset
+	k8sClientset kubernetes.Interface
 	mutex        sync.Mutex
 	watches      map[string]*secretWatchData
 }
 
-func NewSecretWatcher(c *client) (*secretWatcher, error) {
+func NewSecretWatcher(c *client, k8sClient kubernetes.Interface) (*secretWatcher, error) {
 	sw := &secretWatcher{
-		client:  c,
-		watches: make(map[string]*secretWatchData),
+		client:       c,
+		k8sClientset: k8sClient,
+		watches:      make(map[string]*secretWatchData),
 	}
 
 	// Find the namespace we're running in.
 	sw.namespace = os.Getenv("NAMESPACE")
 	if sw.namespace == "" {
-		// Default to kube-system.
 		sw.namespace = "kube-system"
 	}
-
-	// set up k8s client
-	// attempt 1: KUBECONFIG env var
-	cfgFile := os.Getenv("KUBECONFIG")
-	cfg, err := winutils.BuildConfigFromFlags("", cfgFile)
-	if err != nil {
-		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")
-		// attempt 2: in cluster config
-		if cfg, err = winutils.GetInClusterConfig(); err != nil {
-			return nil, err
-		}
-	}
-	clientset, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	sw.k8sClientset = clientset
 
 	return sw, nil
 }
