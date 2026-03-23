@@ -1,0 +1,162 @@
+# Namespaces and workloads for Whisker flow log testing.
+# Deploys services across 4 namespaces with diverse ports and protocols.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: frontend
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backend
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: database
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+# Frontend: nginx on port 80
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+        role: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: frontend
+spec:
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 80
+---
+# Backend: nginx on port 8080
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        role: backend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: backend
+spec:
+  selector:
+    app: api
+  ports:
+  - port: 8080
+    targetPort: 80
+---
+# Database: TCP listener on 5432
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: database
+    spec:
+      containers:
+      - name: listener
+        image: busybox:1.36
+        command: ["sh", "-c", "while true; do nc -l -p 5432 -e echo ok; sleep 0.1; done"]
+        ports:
+        - containerPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: database
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+# Monitoring: nginx on port 9090
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metrics
+  template:
+    metadata:
+      labels:
+        app: metrics
+        role: monitoring
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics
+  namespace: monitoring
+spec:
+  selector:
+    app: metrics
+  ports:
+  - port: 9090
+    targetPort: 80

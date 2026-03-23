@@ -1,0 +1,106 @@
+# Staged/pending policies to test the Staged Action filter and policy trace pending section.
+# Includes StagedGlobalNetworkPolicy, StagedNetworkPolicy, and StagedKubernetesNetworkPolicy.
+
+# Staged GlobalNetworkPolicy in default tier (staged Allow)
+apiVersion: projectcalico.org/v3
+kind: StagedGlobalNetworkPolicy
+metadata:
+  name: staged-allow-all
+spec:
+  tier: default
+  order: 9999
+  selector: all()
+  types:
+  - Ingress
+  - Egress
+  ingress:
+  - action: Allow
+  egress:
+  - action: Allow
+---
+# Staged GlobalNetworkPolicy in compliance tier (staged Deny)
+apiVersion: projectcalico.org/v3
+kind: StagedGlobalNetworkPolicy
+metadata:
+  name: staged-compliance-deny-all
+spec:
+  tier: compliance
+  order: 9000
+  selector: all()
+  types:
+  - Ingress
+  - Egress
+  ingress:
+  - action: Deny
+  egress:
+  - action: Deny
+---
+# Staged NetworkPolicy in default tier (staged Deny for frontend)
+apiVersion: projectcalico.org/v3
+kind: StagedNetworkPolicy
+metadata:
+  name: staged-deny-frontend-egress
+  namespace: frontend
+spec:
+  tier: default
+  order: 50
+  selector: app == 'web'
+  types:
+  - Egress
+  egress:
+  - action: Deny
+---
+# Staged NetworkPolicy in security tier (staged isolation for backend)
+apiVersion: projectcalico.org/v3
+kind: StagedNetworkPolicy
+metadata:
+  name: staged-isolate-backend
+  namespace: backend
+spec:
+  tier: security
+  order: 50
+  selector: all()
+  types:
+  - Ingress
+  - Egress
+  ingress:
+  - action: Allow
+    source:
+      namespaceSelector: kubernetes.io/metadata.name == 'frontend'
+  - action: Deny
+  egress:
+  - action: Allow
+    destination:
+      namespaceSelector: kubernetes.io/metadata.name == 'database'
+  - action: Deny
+---
+# Staged NetworkPolicy in platform tier (staged monitoring lockdown)
+apiVersion: projectcalico.org/v3
+kind: StagedNetworkPolicy
+metadata:
+  name: staged-monitoring-lockdown
+  namespace: monitoring
+spec:
+  tier: platform
+  order: 50
+  selector: all()
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    protocol: TCP
+    destination:
+      ports: [9090]
+  - action: Deny
+---
+# Staged Kubernetes NetworkPolicy
+apiVersion: projectcalico.org/v3
+kind: StagedKubernetesNetworkPolicy
+metadata:
+  name: staged-k8s-deny-all-monitoring
+  namespace: monitoring
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
