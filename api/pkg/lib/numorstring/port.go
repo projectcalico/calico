@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -152,3 +152,12 @@ func (Port) OpenAPISchemaType() []string { return []string{"string"} }
 // the OpenAPI spec of this type.
 // See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
 func (Port) OpenAPISchemaFormat() string { return "int-or-string" }
+
+func AllPortsAreNamed(ports []Port) bool {
+	for _, p := range ports {
+		if len(p.PortName) == 0 {
+			return false
+		}
+	}
+	return true
+}
