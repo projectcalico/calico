@@ -124,6 +124,101 @@ func TestAllHandles(t *testing.T) {
 	}
 }
 
+func TestAppendJSONStringMatchesStdlib(t *testing.T) {
+	cases := []string{
+		"",
+		"simple",
+		"with space",
+		`with"quotes`,
+		"with\\backslash",
+		"with\nnewline",
+		"with\ttab",
+		"with\x00null",
+		"with/slash",
+		"emoji: \U0001F600",
+		"unicode: café",
+		"mixed: a\"b\\c\nd\te\x01f",
+		"kubernetes.io/name",
+		"example.com/label-key",
+	}
+	for _, s := range cases {
+		got := string(appendJSONString(nil, s))
+		want, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q) failed: %v", s, err)
+		}
+		if got != string(want) {
+			t.Errorf("appendJSONString(%q) = %s, want %s", s, got, want)
+		}
+	}
+}
+
+func FuzzAppendJSONString(f *testing.F) {
+	f.Add("")
+	f.Add("simple")
+	f.Add(`with"quotes`)
+	f.Add("with\\backslash")
+	f.Add("with\nnewline")
+	f.Add("with\ttab")
+	f.Add("with\x00null")
+	f.Add("emoji: \U0001F600")
+	f.Add("unicode: café")
+	f.Add("kubernetes.io/name")
+	f.Fuzz(func(t *testing.T, s string) {
+		got := string(appendJSONString(nil, s))
+		want, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q) failed: %v", s, err)
+		}
+		if got != string(want) {
+			t.Errorf("appendJSONString(%q) = %s, want %s", s, got, want)
+		}
+	})
+}
+
+func TestMarshalJSONSortsKeys(t *testing.T) {
+	input := map[string]string{"zz": "last", "aa": "first", "mm": "middle"}
+	m := Make(input)
+
+	got, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("MarshalJSON = %s, want %s", got, want)
+	}
+
+	// Round-trip: unmarshal and check equivalence.
+	var rt Map
+	if err := json.Unmarshal(got, &rt); err != nil {
+		t.Fatal(err)
+	}
+	if !rt.EquivalentTo(input) {
+		t.Errorf("round-trip mismatch: got %v", rt)
+	}
+}
+
+func BenchmarkMarshalJSON(b *testing.B) {
+	const nKeys = 15
+	input := make(map[string]string, nKeys)
+	for i := range nKeys {
+		input[fmt.Sprintf("example.com/label-%d", i)] = fmt.Sprintf("value-%d", i)
+	}
+	m := Make(input)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for range b.N {
+		_, err := m.MarshalJSON()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func sameUnderlyingMap(a, b Map) bool {
 	return reflect.ValueOf(a.m).UnsafePointer() == reflect.ValueOf(b.m).UnsafePointer()
 }
