@@ -118,7 +118,8 @@ func (i Map) MarshalJSON() ([]byte, error) {
 	if n == 0 {
 		return []byte("{}"), nil
 	}
-	pairs := make([]keyVal, 0, n)
+	var pairsArr [20]keyVal
+	pairs := pairsArr[:0]
 	for k, v := range i.m {
 		pairs = append(pairs, keyVal{key: k.Value(), val: v.Value()})
 	}
