@@ -39,7 +39,6 @@ type bgpConfigCache struct {
 	revision uint64
 }
 
-
 // GetBirdBGPConfig processes raw datastore data into a clean BGP configuration structure
 // ipVersion should be 4 for IPv4 or 6 for IPv6
 func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
