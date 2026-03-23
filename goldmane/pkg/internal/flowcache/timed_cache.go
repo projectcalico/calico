@@ -93,12 +93,13 @@ func (c *ExpiringFlowCache) Iter(f func(f *types.Flow) error) error {
 }
 
 func (c *ExpiringFlowCache) Run(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	for {
 		select {
 		case <-ctx.Done():
 			logrus.Debug("ExpiringFlowCache shutting down")
 			return
-		case <-time.After(interval):
+		case <-ticker.Chan():
 			c.DeleteExpired()
 		}
 	}
