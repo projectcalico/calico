@@ -52,6 +52,7 @@ var (
 func init() {
 	prometheus.MustRegister(receivedFlowCounter)
 	prometheus.MustRegister(flowProcessLatency)
+	prometheus.MustRegister(numClients)
 }
 
 type Sink interface {
