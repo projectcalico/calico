@@ -47,6 +47,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
+	googleproto "google.golang.org/protobuf/proto"
 	k8sv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -1266,7 +1267,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			iface.info.isUP = true
 			m.updateIfaceStateMap(update.Name, iface)
 		} else {
-			if m.wildcardExists && reflect.DeepEqual(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
+			if m.wildcardExists && googleproto.Equal(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
 				logrus.Debugf("Unmap host-* endpoint for %v", update.Name)
 				m.removeHEPFromIndexes(update.Name, m.wildcardHostEndpoint)
 				delete(m.hostIfaceToEpMap, update.Name)
@@ -3424,7 +3425,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 	// to change as to make this worthwhile.
 
 	// If the host-* endpoint is changing, mark all workload interfaces as dirty.
-	if (wildcardExists != m.wildcardExists) || !reflect.DeepEqual(wildcardHostEndpoint, m.wildcardHostEndpoint) {
+	if (wildcardExists != m.wildcardExists) || !googleproto.Equal(wildcardHostEndpoint, m.wildcardHostEndpoint) {
 		logrus.Infof("Host-* endpoint is changing; was %v, now %v", m.wildcardHostEndpoint, wildcardHostEndpoint)
 		m.removeHEPFromIndexes(allInterfaces, m.wildcardHostEndpoint)
 		m.wildcardHostEndpoint = wildcardHostEndpoint
@@ -3441,7 +3442,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 	// Loop through existing host endpoints, in case they are changing or disappearing.
 	for ifaceName, existingEp := range m.hostIfaceToEpMap {
 		newEp, stillExists := hostIfaceToEpMap[ifaceName]
-		if stillExists && reflect.DeepEqual(newEp, existingEp) {
+		if stillExists && googleproto.Equal(newEp, existingEp) {
 			logrus.Debugf("No change to host endpoint for ifaceName=%v", ifaceName)
 		} else {
 			m.removeHEPFromIndexes(ifaceName, existingEp)
@@ -4926,12 +4927,22 @@ func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 		children:    make(map[int]*bpfIfaceNode),
 	}
 
-	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
-		trees.addIfaceStandAlone(intf)
-	} else if attrs.MasterIndex != 0 {
+	// Veth and netkit devices use ParentIndex to reference their peer, not a
+	// real parent in a device hierarchy (bond/bridge). Ignore ParentIndex
+	// for these types, but still respect MasterIndex — a veth can be
+	// genuinely enslaved to a bond or bridge.
+	isVethLike := false
+	switch link.Type() {
+	case "veth", "netkit":
+		isVethLike = true
+	}
+
+	if attrs.MasterIndex != 0 {
 		trees.addIfaceWithMaster(intf, attrs.MasterIndex)
-	} else if attrs.ParentIndex != 0 {
+	} else if attrs.ParentIndex != 0 && !isVethLike {
 		trees.addIfaceWithChild(intf, attrs.ParentIndex)
+	} else {
+		trees.addIfaceStandAlone(intf)
 	}
 }
 

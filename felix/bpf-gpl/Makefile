@@ -188,9 +188,23 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 test_xdp%_v6.ll: xdp.c xdp_v6.d calculate-flags
 	$(COMPILE)
 
+tc.d: tc.c
+	$(COMPILE_DEPS)
 tc_v6.d: tc.c
 	$(COMPILE_DEPS)
+xdp.d: xdp.c
+	$(COMPILE_DEPS)
 xdp_v6.d: xdp.c
+	$(COMPILE_DEPS)
+connect_balancer.d: connect_balancer.c
+	$(COMPILE_DEPS)
+connect_balancer_v6.d: connect_balancer_v6.c
+	$(COMPILE_DEPS)
+connect_balancer_v46.d: connect_balancer_v46.c
+	$(COMPILE_DEPS)
+conntrack_cleanup.d: conntrack_cleanup.c
+	$(COMPILE_DEPS)
+conntrack_cleanup_v6.d: conntrack_cleanup.c
 	$(COMPILE_DEPS)
 
 

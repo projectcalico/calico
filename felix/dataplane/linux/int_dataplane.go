@@ -79,9 +79,11 @@ import (
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/throttle"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -279,6 +281,17 @@ type Config struct {
 
 	RouteSource string
 
+	IPv4NormalRoutePriority   int
+	IPv4ElevatedRoutePriority int
+	IPv6NormalRoutePriority   int
+	IPv6ElevatedRoutePriority int
+
+	LiveMigrationRouteConvergenceTime time.Duration
+
+	// IPAMClient is the Calico IPAM client used to swap owner attributes
+	// when a KubeVirt live migration completes.
+	IPAMClient ipam.Interface
+
 	KubernetesProvider felixconfig.Provider
 
 	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
@@ -332,6 +345,7 @@ type InternalDataplane struct {
 	natTables       []generictables.Table
 	rawTables       []generictables.Table
 	filterTables    []generictables.Table
+	arpTables       []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
 	ipipParentIfaceC chan string
@@ -355,6 +369,8 @@ type InternalDataplane struct {
 
 	ifaceMonitor *ifacemonitor.InterfaceMonitor
 	ifaceUpdates chan any
+
+	liveMigrationMonitor *liveMigrationMonitor
 
 	endpointStatusCombiner *endpointStatusCombiner
 
@@ -505,6 +521,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		getKubeProxyNftablesEnabled: detectKubeProxyNftablesMode,
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
+	dp.liveMigrationMonitor = newLiveMigrationMonitor(config.LiveMigrationRouteConvergenceTime, config.IPAMClient)
+	dp.RegisterManager(dp.liveMigrationMonitor)
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 	dp.ifaceMonitor.InSyncCallback = dp.onIfaceInSync
@@ -1098,10 +1116,44 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 	}
 
+	// If the NFTablesSupported feature is enabled, create nftables ARP table for proxy ARP
+	// suppression.  Note that that feature is different from nftables _mode_.  The latter
+	// configures if we use nftables for policy programming; the former configures if we can use
+	// nftables for other purposes.
+	var arpRootTable *nftables.NftablesTable
+	if featureDetector.GetFeatures().NFTablesSupported {
+		arpTableOptions := nftables.TableOptions{
+			RefreshInterval:  config.TableRefreshInterval,
+			LookPathOverride: config.LookPathOverride,
+			OnStillAlive:     dp.reportHealth,
+			OpRecorder:       dp.loopSummarizer,
+			NewDataplane:     config.NewNftablesDataplane,
+		}
+		arpRootTable = nftables.NewARPTable("calico-arp", rules.RuleHashPrefix, featureDetector, arpTableOptions, false)
+	}
+	var arpFilterTable generictables.Table
+	var arpMaps nftables.MapsDataplane
+	if arpRootTable != nil {
+		arpFilterTable = nftables.NewTableLayer("filter", arpRootTable)
+		arpMaps = arpFilterTable.(nftables.MapsDataplane)
+		dp.allTables = append(dp.allTables, arpRootTable)
+		dp.arpTables = append(dp.arpTables, arpFilterTable)
+	}
+
 	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
 	epManager := newEndpointManager(
+		&endpointManagerConfig{
+			kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
+			wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
+			bpfEnabled:             config.BPFEnabled,
+			bpfAttachType:          config.BPFAttachType,
+			nft:                    nftablesEnabled,
+			floatingIPsEnabled:     config.FloatingIPsEnabled,
+			normalRoutePriority:    config.IPv4NormalRoutePriority,
+			elevatedRoutePriority:  config.IPv4ElevatedRoutePriority,
+		},
 		rawTableV4,
 		mangleTableV4,
 		filterTableV4,
@@ -1109,21 +1161,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV4,
 		4,
 		epMarkMapper,
-		config.RulesConfig.KubeIPVSSupportEnabled,
-		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
 		filterMaps,
-		config.BPFEnabled,
-		config.BPFAttachType,
 		bpfEndpointManager,
 		callbacks,
-		config.FloatingIPsEnabled,
-		nftablesEnabled,
 		linkAddrsManagerV4,
+		arpFilterTable,
+		arpMaps,
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
+	dp.liveMigrationMonitor.listener = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 
@@ -1308,6 +1357,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
 		dp.RegisterManager(newEndpointManager(
+			&endpointManagerConfig{
+				kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
+				wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
+				bpfEnabled:             config.BPFEnabled,
+				bpfAttachType:          config.BPFAttachType,
+				nft:                    nftablesEnabled,
+				floatingIPsEnabled:     config.FloatingIPsEnabled,
+				normalRoutePriority:    config.IPv6NormalRoutePriority,
+				elevatedRoutePriority:  config.IPv6ElevatedRoutePriority,
+			},
 			rawTableV6,
 			mangleTableV6,
 			filterTableV6,
@@ -1315,18 +1374,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6,
 			6,
 			epMarkMapper,
-			config.RulesConfig.KubeIPVSSupportEnabled,
-			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
 			filterMapsV6,
-			config.BPFEnabled,
-			config.BPFAttachType,
 			nil,
 			callbacks,
-			config.FloatingIPsEnabled,
-			nftablesEnabled,
 			linkAddrsManagerV6,
+			nil, // arpTable - ARP is IPv4 only
+			nil, // arpMaps
 		))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
@@ -2094,6 +2149,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			}})
 		}
 	}
+
+	for _, t := range d.arpTables {
+		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
+			Match:  nftables.Match(),
+			Action: nftables.Actions().Jump(rules.ChainARPDispatch),
+		}})
+	}
 }
 
 // setUpIptablesBPFEarly that need to be written asap
@@ -2206,6 +2268,12 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 			Action: d.actions.Jump(rules.ChainManglePostrouting),
 		}})
 	}
+	for _, t := range d.arpTables {
+		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
+			Match:  nftables.Match(),
+			Action: nftables.Actions().Jump(rules.ChainARPDispatch),
+		}})
+	}
 	if d.xdpState != nil {
 		if err := d.setXDPFailsafePorts(); err != nil {
 			log.Warnf("failed to set XDP failsafe ports, disabling XDP: %v", err)
@@ -2302,6 +2370,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onDatastoreMessage(msg)
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
+		case id := <-d.liveMigrationMonitor.timerC:
+			d.onLiveMigrationTimerPop(id)
+			drainChan(d.liveMigrationMonitor.timerC, d.onLiveMigrationTimerPop)
+		case id := <-d.liveMigrationMonitor.garpC:
+			d.onLiveMigrationGARPDetected(id)
+			drainChan(d.liveMigrationMonitor.garpC, d.onLiveMigrationGARPDetected)
 		case name := <-d.ipipParentIfaceC:
 			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.noEncapParentIfaceC:
@@ -2457,6 +2531,16 @@ func (d *InternalDataplane) onIfaceMonitorMessage(ifaceUpdate any) {
 	if d.addrsUpdateBatchSize > 0 {
 		summaryAddrBatchSize.Observe(float64(d.addrsUpdateBatchSize))
 	}
+}
+
+func (d *InternalDataplane) onLiveMigrationTimerPop(id types.WorkloadEndpointID) {
+	d.liveMigrationMonitor.OnTimerPop(id)
+	d.dataplaneNeedsSync = true
+}
+
+func (d *InternalDataplane) onLiveMigrationGARPDetected(id types.WorkloadEndpointID) {
+	d.liveMigrationMonitor.OnGARPDetected(id)
+	d.dataplaneNeedsSync = true
 }
 
 func (d *InternalDataplane) processIfaceUpdate(ifaceUpdate any) {

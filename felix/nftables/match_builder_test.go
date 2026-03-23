@@ -135,6 +135,11 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("InInterfaceVMAP", nftables.Match().InInterfaceVMAP("vmap1234").(nftables.NFTMatchCriteria).SetLayer("filter"), "iifname vmap @filter-vmap1234"),
 	Entry("OutInterfaceVMAP", nftables.Match().OutInterfaceVMAP("vmap1234").(nftables.NFTMatchCriteria).SetLayer("raw"), "oifname vmap @raw-vmap1234"),
 
+	// ARP family matches.
+	Entry("ARPOperation", nftables.Match().ARPOperation("reply"), "arp operation reply"),
+	Entry("ARPSrcIP", nftables.Match().ARPSrcIP("10.0.0.1"), "arp saddr ip 10.0.0.1"),
+	Entry("ARP combined", nftables.Match().OutInterface("cali1234").ARPOperation("reply").ARPSrcIP("10.0.0.1"), "oifname cali1234 arp operation reply arp saddr ip 10.0.0.1"),
+
 	// Check multiple match criteria are joined correctly.
 	Entry("Protocol and ports", nftables.Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080), "meta l4proto tcp tcp sport { 1234 } tcp dport { 8080 }"),
 )
