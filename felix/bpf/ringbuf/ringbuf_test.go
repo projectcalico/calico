@@ -134,6 +134,26 @@ func TestReadOneMultipleEvents(t *testing.T) {
 	Expect(ok).To(BeFalse())
 }
 
+func TestReadOneHighPositions(t *testing.T) {
+	RegisterTestingT(t)
+
+	rb := newTestRingBuffer(64)
+	data := []byte{0xCA, 0xFE}
+
+	// Simulate a long-running system where positions have wrapped many times.
+	startPos := uint64(1) << 40
+	*rb.consumerPos = startPos
+
+	recSize := appendRecord(rb, startPos, 0, data)
+	*rb.producerPos = startPos + recSize
+
+	event, ok, err := rb.readOne()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ok).To(BeTrue())
+	Expect(event.Data()).To(Equal(data))
+	Expect(*rb.consumerPos).To(Equal(startPos + recSize))
+}
+
 func TestReadOneBusyBit(t *testing.T) {
 	RegisterTestingT(t)
 

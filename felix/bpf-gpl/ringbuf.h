@@ -48,12 +48,13 @@ static CALI_BPF_INLINE void ringbuf_flush_drops(void)
 	}
 
 	__u64 now = bpf_ktime_get_ns();
-
+	
+	bpf_spin_lock(&val->lock);
 	if (val->count == 0 || now - val->last_flush_ts < CALI_RB_FLUSH_INTERVAL_NS) {
+		bpf_spin_unlock(&val->lock);
 		return;
 	}
 
-	bpf_spin_lock(&val->lock);
 	__u64 dropped = val->count;
 	val->count = 0;
 	bpf_spin_unlock(&val->lock);
