@@ -15,10 +15,12 @@
 package uniquelabels
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"iter"
 	"maps"
+	"slices"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
@@ -105,11 +107,36 @@ func (i Map) Equals(other Map) bool {
 
 // MarshalJSON implements the json.Marshaler interface. Must be defined on the
 // value receiver so that Map can be embedded in other structs.
+//
+// Writes JSON directly with sorted keys, avoiding encoding/json reflection
+// on the handleMap (Go 1.26's encoding/json panics on unique.Handle map keys).
 func (i Map) MarshalJSON() ([]byte, error) {
-	// Convert to map[string]string before marshaling to avoid a panic in
-	// Go 1.26's encoding/json mapEncoder when encoding map keys of type
-	// uniquestr.Handle (which wraps unique.Handle[string]).
-	return json.Marshal(i.RecomputeOriginalMap())
+	if i.m == nil {
+		return []byte("null"), nil
+	}
+	n := len(i.m)
+	if n == 0 {
+		return []byte("{}"), nil
+	}
+	pairs := make([]keyVal, 0, n)
+	for k, v := range i.m {
+		pairs = append(pairs, keyVal{key: k.Value(), val: v.Value()})
+	}
+	slices.SortFunc(pairs, func(a, b keyVal) int {
+		return cmp.Compare(a.key, b.key)
+	})
+	buf := make([]byte, 0, n*40)
+	buf = append(buf, '{')
+	for j, p := range pairs {
+		if j > 0 {
+			buf = append(buf, ',')
+		}
+		buf = appendJSONString(buf, p.key)
+		buf = append(buf, ':')
+		buf = appendJSONString(buf, p.val)
+	}
+	buf = append(buf, '}')
+	return buf, nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.  Must be defined on
@@ -251,6 +278,38 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 }
 
 func noOpFilter(uniquestr.Handle, uniquestr.Handle) bool {
+	return true
+}
+
+// keyVal is a string key-value pair used for JSON marshalling.
+type keyVal struct{ key, val string }
+
+// appendJSONString appends a JSON-encoded string (with quotes) to buf.
+// All printable ASCII except '"' and '\\' is safe to embed directly in
+// a JSON string.  Falls back to json.Marshal for anything else.
+func appendJSONString(buf []byte, s string) []byte {
+	if jsonSafe(s) {
+		buf = append(buf, '"')
+		buf = append(buf, s...)
+		buf = append(buf, '"')
+		return buf
+	}
+	// Slow path: delegate to encoding/json for correct escaping.
+	quoted, _ := json.Marshal(s)
+	return append(buf, quoted...)
+}
+
+// jsonSafe reports whether s contains only bytes that are safe to embed
+// in a JSON string without escaping: printable ASCII (0x20..0x7E)
+// excluding '"', '\\', and HTML-sensitive characters '&', '<', '>'
+// (which json.Marshal escapes by default).
+func jsonSafe(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c > 0x7E || c == '"' || c == '\\' || c == '&' || c == '<' || c == '>' {
+			return false
+		}
+	}
 	return true
 }
 
