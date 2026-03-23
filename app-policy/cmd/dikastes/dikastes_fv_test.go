@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/checker"
+	"github.com/projectcalico/calico/app-policy/pkg/dikastes"
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/app-policy/syncher"
 	"github.com/projectcalico/calico/app-policy/uds"
@@ -221,10 +222,10 @@ func newDikastesTestEnv(t *testing.T, ctx context.Context) *dikastesTestEnv {
 	syncSocketPath := path.Join(socketDir, "policysync.sock")
 	ss := newTestSyncServer(ctx, syncSocketPath)
 
-	// Create the dikastes authz server using the same newCheckServer as runServer().
+	// Create the dikastes authz server using the exported NewCheckServer.
 	storeManager := policystore.NewPolicyStoreManager()
 	gs := grpc.NewServer()
-	newCheckServer(ctx, gs, storeManager)
+	dikastes.NewCheckServer(ctx, gs, storeManager)
 
 	dikastesSocketPath := path.Join(socketDir, "dikastes.sock")
 	lis, err := net.Listen("unix", dikastesSocketPath)
