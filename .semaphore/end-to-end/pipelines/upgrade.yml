@@ -30,9 +30,11 @@ global_job_config:
     - name: PRODUCT
       value: calico
     - name: RELEASE_STREAM # in this context, this is the version to upgrade from
-      value: v3.29
+      value: v3.30
     - name: USE_HASH_RELEASE
       value: "false"
+    - name: UPLEVEL_RELEASE_STREAM
+      value: v3.32
     - name: UPLEVEL_PRODUCT
       value: calico
     - name: UPLEVEL_PRE_RELEASE
