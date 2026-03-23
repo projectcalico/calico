@@ -370,7 +370,7 @@ func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, presen
 		"present":   present,
 	}).Debug("expectAddrStateCb")
 
-	Eventually(dp.addrC).Should(Receive(&cbIface))
+	EventuallyWithOffset(1, dp.addrC).Should(Receive(&cbIface))
 	log.WithFields(log.Fields{
 		"ifaceName": cbIface.ifaceName,
 		"addrs":     cbIface.addrs,
@@ -519,7 +519,7 @@ var _ = Describe("ifacemonitor", func() {
 	})
 
 	It("should skip netlink address updates for ipvs", func() {
-		var netlinkUpdates = func(iface string) {
+		netlinkUpdates := func(iface string) {
 			// Should not receive any address callbacks.
 			idx := nl.nextIndex
 
@@ -543,6 +543,7 @@ var _ = Describe("ifacemonitor", func() {
 			dp.expectLinkStateCb(iface, ifacemonitor.StateNotPresent, idx)
 
 			// Check it can be added again.
+			By("Adding the interface again")
 			idx = nl.nextIndex
 			nl.addLink(iface)
 			resyncC <- time.Time{}
@@ -667,6 +668,122 @@ var _ = Describe("ifacemonitor", func() {
 		// ready to read it.)
 		resyncC <- time.Time{}
 		resyncC <- time.Time{}
+
+		Expect(fatalErrC).ToNot(BeClosed())
+	})
+
+	It("should handle out of order interface delete and add", func() {
+		// This test simulates a race condition on interface deletion/recreation where
+		// the add is processed before the delete.
+
+		// Add a link and an address.
+		idx1 := nl.nextIndex
+		nl.addLink("eth0")
+		resyncC <- time.Time{}
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx1)
+		dp.expectAddrStateCb("eth0", "", true)
+		nl.addAddr("eth0", "10.0.240.10/24")
+		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
+
+		// Set the link up, and expect a link callback.  Addresses are unchanged, so there
+		// is no address callback.
+		nl.changeLinkState("eth0", "up")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp, idx1)
+
+		// Now, we get an out-of-order add for a link with the same name, but a new ifindex.
+		// In the test stub, addLink overwrites eth0 with a new index, so LinkList will
+		// only return the new index.
+		idx2 := nl.nextIndex
+		nl.addLink("eth0")
+
+		// The resync detects that idx1 is stale (not returned by LinkList)
+		// and cleans it up. It also "unmasks" idx2, notifying its state
+		// now that the name conflict is resolved.
+		resyncC <- time.Time{}
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx1)
+		dp.expectAddrStateCb("eth0", "", false)
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx2)
+		dp.expectAddrStateCb("eth0", "", true)
+
+		// The route update for the new address comes through immediately.
+		nl.addAddr("eth0", "10.0.240.11/24")
+		dp.expectAddrStateCb("eth0", "10.0.240.11", true)
+
+		// Bring the link up. After the filter releases the batched NEWLINK,
+		// the monitor sees the state change from down to up.
+		nl.changeLinkState("eth0", "up")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp, idx2)
+
+		// Send the late delete for idx1. Since the resync already cleaned it
+		// up, this is mostly a no-op, but the unmasking logic detects that
+		// there's still exactly one remaining index and sends a redundant
+		// notification for idx2.
+		update := netlink.LinkUpdate{
+			Header: unix.NlMsghdr{
+				Type: syscall.RTM_DELLINK,
+			},
+			Link: &netlink.Dummy{
+				LinkAttrs: netlink.LinkAttrs{
+					Name:  "eth0",
+					Index: idx1,
+				},
+			},
+		}
+		nl.linkUpdates <- update
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp, idx2)
+		dp.expectAddrStateCb("eth0", "10.0.240.11", true)
+
+		// Trigger a resync to verify steady state.
+		resyncC <- time.Time{}
+
+		// We still shouldn't see any link state change - the interface is still up.
+		dp.notExpectLinkStateCb()
+
+		// Now delete the new interface. This should result in a deletion callback for the second ifindex, and no more callbacks after that.
+		nl.delLink("eth0")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx2)
+	})
+
+	It("should clean up stale indices on resync when interface moves to a new index", func() {
+		// This test verifies that resync correctly cleans up a stale ifindex
+		// when an interface is recreated at a new index without the old index's
+		// delete being received first.
+
+		// Add eth0 at idx1 and bring it up.
+		idx1 := nl.nextIndex
+		nl.addLink("eth0")
+		resyncC <- time.Time{}
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx1)
+		dp.expectAddrStateCb("eth0", "", true)
+		nl.changeLinkState("eth0", "up")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp, idx1)
+
+		// Simulate eth0 being recreated at a new index (idx2). The test stub's
+		// addLink overwrites the old entry, so LinkList will only return idx2.
+		// The monitor receives the NEWLINK for idx2, but never gets a DELLINK
+		// for idx1 — simulating the race.
+		idx2 := nl.nextIndex
+		nl.addLink("eth0")
+
+		// Trigger a resync. LinkList returns eth0 only at idx2. The resync
+		// detects that idx1 is stale (not in the set of current indices),
+		// cleans it up, and "unmasks" idx2 by notifying its state.
+		resyncC <- time.Time{}
+
+		// Deletion callback for the stale idx1, then unmasking for idx2.
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx1)
+		dp.expectAddrStateCb("eth0", "", false)
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx2)
+		dp.expectAddrStateCb("eth0", "", true)
+
+		// Now bring up the new link. After the filter delay, the monitor
+		// sees the state change from down to up for idx2.
+		nl.changeLinkState("eth0", "up")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp, idx2)
+
+		// Verify steady state — another resync should produce no callbacks.
+		resyncC <- time.Time{}
+		dp.notExpectLinkStateCb()
 
 		Expect(fatalErrC).ToNot(BeClosed())
 	})

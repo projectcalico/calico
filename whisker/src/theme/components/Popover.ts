@@ -6,11 +6,7 @@ const { definePartsStyle, defineMultiStyleConfig } =
 export default defineMultiStyleConfig({
     baseStyle: {
         content: {
-            _dark: {
-                backgroundColor: 'tigeraGrey.1000',
-                boxShadow: 'none!important',
-                border: 'none',
-            },
+            backgroundColor: 'experimental-token-elevation-overlay',
         },
         header: {
             _dark: {
@@ -51,11 +47,6 @@ export default defineMultiStyleConfig({
                 _focus: {
                     boxShadow: 'none',
                     outline: 'none',
-                },
-                _dark: {
-                    backgroundColor: 'tigeraGrey.1000',
-                    boxShadow: 'none!important',
-                    border: 'none',
                 },
             },
         }),

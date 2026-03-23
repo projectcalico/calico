@@ -18,8 +18,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/lib/std/time"
 )
@@ -94,10 +92,10 @@ func (c *ExpiringFlowCache) Iter(f func(f *types.Flow) error) error {
 
 func (c *ExpiringFlowCache) Run(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Debug("ExpiringFlowCache shutting down")
 			return
 		case <-ticker.Chan():
 			c.DeleteExpired()
