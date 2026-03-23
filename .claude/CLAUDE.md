@@ -150,6 +150,21 @@ All new `.go` files require:
 
 eBPF files in `felix/bpf-gpl/` require dual Apache/GPL headers with SPDX identifiers. The pre-commit hook validates license headers.
 
+### File layout
+
+- Place utility methods/functions after (but close to) the methods/functions 
+  that use them, generally want the context that a function is called in to 
+  appear before the detail of the function body.
+- For files that contain "object" structs:
+  - Small typedefs/enums/constants.
+  - Main struct definition
+  - Constructors
+  - Methods; in some intuitive ordering
+    - Expected call order works well for readability "Add" before "Remove", "Start" before "Stop"
+    - Group similar methods together
+  - Utility functions; can be interspersed with methods if tightly coupled with particular methods.
+  - Larger secondary structs at the bottom.
+
 ## Repository Architecture
 
 ### Component Dependency Order
@@ -294,6 +309,8 @@ Image loading is incremental — `kind-reload` and `kind-deploy` compare local D
 - Race detector enabled by default on amd64/arm64 (`FV_RACE_DETECTOR_ENABLED`)
 
 ## PR Requirements
+
+**ALWAYS** use the PR template (`.github/PULL_REQUEST_TEMPLATE.md`) when submitting pull requests. The only mandatory section is the **Release Note** — fill it in with a one-line summary of the user-facing impact of the change. Take a broad view of "user-facing": bug fixes, new features, performance improvements, and behavioral changes all qualify. If there is genuinely no user-facing impact, write "None".
 
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
 

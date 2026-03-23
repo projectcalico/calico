@@ -210,7 +210,7 @@ PROD_BPF_GPL_PROGS=$(addprefix bin/bpf/, $(notdir $(BPF_GPL_O_FILES)))
 PROD_BPF_PROGS=$(PROD_BPF_APACHE_PROGS) $(PROD_BPF_GPL_PROGS)
 
 .PHONY: build-bpf clean-bpf
-build-bpf: $(PROD_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
+build-bpf: $(LIBBPF_A) $(PROD_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
 
 $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	rm -rf bin/bpf
@@ -275,7 +275,9 @@ $(FELIX_CONTAINER_CREATED): $(IMAGE_DEPS) \
                             ../metadata.mk \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild) \
                             | register
-	$(DOCKER_BUILD) --network=host -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
+	$(DOCKER_BUILD) \
+		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		-t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
 

@@ -260,6 +260,7 @@ class TestBase(TestCase):
         else:
             raise Exception("DaemonSet %s/%s failed to roll out within 120s" % (ns, ds))
 
+
     def scale_deployment(self, deployment, ns, replicas):
         return kubectl("scale deployment %s -n %s --replicas %s" %
                        (deployment, ns, replicas)).strip()

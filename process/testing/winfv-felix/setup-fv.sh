@@ -69,6 +69,9 @@ function upload_calico_images(){
 
   ${KUBECTL} --kubeconfig="${KUBECONFIG}" annotate ds -n calico-system calico-node-windows unsupported.operator.tigera.io/ignore="true"
   ${KUBECTL} --kubeconfig="${KUBECONFIG}" patch ds -n calico-system calico-node-windows --patch-file "${SCRIPT_DIR}/calico-node-windows.yaml"
+
+  echo "Waiting for calico-node-windows to be ready after image replacement..."
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" rollout status ds -n calico-system calico-node-windows --timeout=600s
 }
 
 function start_test_infra(){
