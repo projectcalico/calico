@@ -860,6 +860,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 			{
 				DestinationNamedPort: "http-port",
 			},
+			{
+				DestinationNamedPort: "8080", // This should be converted to a named port not a numeric one.
+			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -943,12 +946,18 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 
 		Expect(len(gnp.Spec.Ingress)).To(Equal(6))
 		Expect(gnp.Spec.Ingress[0].Source.NamespaceSelector).To(Equal("k == 'v'"))
-		Expect(gnp.Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{{PortName: "http-port"}}))
+		Expect(gnp.Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{
+			{PortName: "http-port"},
+			{PortName: "8080"},
+		}))
 		Expect(gnp.Spec.Ingress[0].Protocol).To(BeNil())
 
 		Expect(gnp.Spec.Ingress[1].Source.NamespaceSelector).To(Equal("all()"))
 		Expect(gnp.Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
-		Expect(gnp.Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{{PortName: "http-port"}}))
+		Expect(gnp.Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{
+			{PortName: "http-port"},
+			{PortName: "8080"},
+		}))
 		Expect(gnp.Spec.Ingress[1].Protocol).To(BeNil())
 
 		Expect(gnp.Spec.Ingress[2].Source.NamespaceSelector).To(Equal("k == 'v'"))
@@ -971,12 +980,18 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 
 		Expect(gnp.Spec.Egress).To(HaveLen(6))
 		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(Equal("k3 == 'v3'"))
-		Expect(gnp.Spec.Egress[0].Destination.Ports).To(Equal([]numorstring.Port{{PortName: "http-port"}}))
+		Expect(gnp.Spec.Egress[0].Destination.Ports).To(Equal([]numorstring.Port{
+			{PortName: "http-port"},
+			{PortName: "8080"},
+		}))
 		Expect(gnp.Spec.Egress[0].Protocol).To(BeNil())
 
 		Expect(gnp.Spec.Egress[1].Destination.NamespaceSelector).To(Equal("k4 == 'v4'"))
 		Expect(gnp.Spec.Egress[1].Destination.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k5 == 'v5'"))
-		Expect(gnp.Spec.Egress[1].Destination.Ports).To(Equal([]numorstring.Port{{PortName: "http-port"}}))
+		Expect(gnp.Spec.Egress[1].Destination.Ports).To(Equal([]numorstring.Port{
+			{PortName: "http-port"},
+			{PortName: "8080"},
+		}))
 		Expect(gnp.Spec.Egress[1].Protocol).To(BeNil())
 
 		Expect(gnp.Spec.Egress[2].Destination.NamespaceSelector).To(Equal("k3 == 'v3'"))
