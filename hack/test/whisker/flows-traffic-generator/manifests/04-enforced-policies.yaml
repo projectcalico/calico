@@ -1,0 +1,275 @@
+# Enforced Calico policies across multiple tiers.
+# Generates Allow, Deny, and Pass action flows.
+
+# --- compliance tier (GlobalNetworkPolicies) ---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: restrict-external-access
+spec:
+  tier: compliance
+  order: 100
+  selector: all()
+  types:
+  - Egress
+  egress:
+  - action: Deny
+    destination:
+      nets: ["0.0.0.0/0"]
+      notNets: ["10.0.0.0/8"]
+  - action: Pass
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: audit-all-ingress
+spec:
+  tier: compliance
+  order: 200
+  selector: all()
+  types:
+  - Ingress
+  ingress:
+  - action: Pass
+---
+# --- security tier (Deny policies for database + frontend) ---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: deny-db-to-frontend
+  namespace: database
+spec:
+  tier: security
+  order: 100
+  selector: role == 'client'
+  types:
+  - Egress
+  egress:
+  - action: Deny
+    destination:
+      namespaceSelector: kubernetes.io/metadata.name == 'frontend'
+  - action: Pass
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: deny-db-to-backend
+  namespace: database
+spec:
+  tier: security
+  order: 110
+  selector: role == 'client'
+  types:
+  - Egress
+  egress:
+  - action: Deny
+    destination:
+      namespaceSelector: kubernetes.io/metadata.name == 'backend'
+  - action: Pass
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: isolate-db-ingress
+  namespace: database
+spec:
+  tier: security
+  order: 50
+  selector: app == 'postgres'
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    source:
+      namespaceSelector: kubernetes.io/metadata.name == 'backend'
+  - action: Deny
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: frontend-ingress-control
+  namespace: frontend
+spec:
+  tier: security
+  order: 100
+  selector: app == 'web'
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    source:
+      namespaceSelector: kubernetes.io/metadata.name == 'monitoring'
+  - action: Allow
+    source:
+      namespaceSelector: kubernetes.io/metadata.name == 'frontend'
+  - action: Deny
+    source:
+      namespaceSelector: kubernetes.io/metadata.name == 'database'
+  - action: Pass
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: deny-monitoring-to-db
+spec:
+  tier: security
+  order: 120
+  namespaceSelector: kubernetes.io/metadata.name == 'monitoring'
+  selector: app == 'traffic-gen'
+  types:
+  - Egress
+  egress:
+  - action: Deny
+    destination:
+      namespaceSelector: kubernetes.io/metadata.name == 'database'
+  - action: Pass
+---
+# --- platform tier (Allow policies) ---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: frontend
+spec:
+  tier: platform
+  order: 100
+  selector: app == 'traffic-gen'
+  types:
+  - Egress
+  egress:
+  - action: Allow
+    destination:
+      namespaceSelector: kubernetes.io/metadata.name == 'backend'
+  - action: Pass
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-db
+  namespace: backend
+spec:
+  tier: platform
+  order: 100
+  selector: app == 'traffic-gen'
+  types:
+  - Egress
+  egress:
+  - action: Allow
+    destination:
+      namespaceSelector: kubernetes.io/metadata.name == 'database'
+  - action: Pass
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: backend-to-monitoring
+  namespace: backend
+spec:
+  tier: platform
+  order: 200
+  selector: app == 'traffic-gen'
+  types:
+  - Egress
+  egress:
+  - action: Allow
+    destination:
+      namespaceSelector: kubernetes.io/metadata.name == 'monitoring'
+  - action: Pass
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: monitoring-egress-allow
+  namespace: monitoring
+spec:
+  tier: platform
+  order: 100
+  selector: app == 'traffic-gen'
+  types:
+  - Egress
+  egress:
+  - action: Allow
+    protocol: TCP
+    destination:
+      ports: [80, 8080]
+  - action: Pass
+---
+# --- application tier (fine-grained app policies) ---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: frontend-rate-limit
+  namespace: frontend
+spec:
+  tier: application
+  order: 100
+  selector: app == 'traffic-gen'
+  types:
+  - Egress
+  egress:
+  - action: Allow
+    protocol: TCP
+    destination:
+      ports: [80, 8080, 5432, 9090]
+  - action: Allow
+    protocol: UDP
+    destination:
+      ports: [53]
+  - action: Deny
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: api-server-policy
+  namespace: backend
+spec:
+  tier: application
+  order: 100
+  selector: app == 'api'
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    protocol: TCP
+    destination:
+      ports: [80]
+  - action: Deny
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: postgres-access-control
+  namespace: database
+spec:
+  tier: application
+  order: 100
+  selector: app == 'postgres'
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    protocol: TCP
+    destination:
+      ports: [5432]
+    source:
+      namespaceSelector: kubernetes.io/metadata.name == 'backend'
+  - action: Pass
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: restrict-udp-non-dns
+spec:
+  tier: application
+  order: 200
+  selector: role == 'client'
+  types:
+  - Egress
+  egress:
+  - action: Allow
+    protocol: UDP
+    destination:
+      ports: [53]
+  - action: Deny
+    protocol: UDP
+  - action: Pass
