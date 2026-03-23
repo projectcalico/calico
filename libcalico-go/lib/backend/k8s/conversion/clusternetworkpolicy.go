@@ -399,7 +399,7 @@ func k8sCNPPortToCalicoFields(cnpProto *clusternetpol.ClusterNetworkPolicyProtoc
 
 	if len(cnpProto.DestinationNamedPort) != 0 {
 		var port numorstring.Port
-		port, err = numorstring.PortFromString(cnpProto.DestinationNamedPort)
+		port = numorstring.NamedPort(cnpProto.DestinationNamedPort)
 		dstPort = &port
 		return
 	}
