@@ -2583,7 +2583,7 @@ class InvalidData(TestBase):
                                              'source': {}}],
                                 'order': 100000,
                                 'selector': ""}
-                   }, "Action = 'jumpupanddown'"),
+                   }, 'supported values: "Allow", "Deny", "Log", "Pass"'),
                    ("policy-NetworkPolicyNameRejected", {
                        'apiVersion': API_VERSION,
                        'kind': 'NetworkPolicy',

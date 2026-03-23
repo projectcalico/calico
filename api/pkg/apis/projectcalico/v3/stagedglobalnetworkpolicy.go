@@ -46,7 +46,7 @@ type StagedGlobalNetworkPolicy struct {
 type StagedGlobalNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
-	StagedAction StagedAction `json:"stagedAction,omitempty" validate:"omitempty,stagedAction"`
+	StagedAction StagedAction `json:"stagedAction,omitempty"`
 
 	// The name of the tier that this policy belongs to.  If this is omitted, the default
 	// tier (name is "default") is assumed.  The specified tier must exist in order to create
@@ -110,7 +110,7 @@ type StagedGlobalNetworkPolicySpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=2
 	// +listType=set
-	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
+	Types []PolicyType `json:"types,omitempty"`
 
 	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in

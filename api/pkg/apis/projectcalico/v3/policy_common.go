@@ -38,13 +38,13 @@ const (
 // +kubebuilder:validation:XValidation:rule="self.action == 'Allow' || !has(self.http)",message="HTTP match is only valid on Allow rules",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.destination) || !has(self.destination.services) || (!has(self.destination.ports) || size(self.destination.ports) == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts) == 0)",message="ports and notPorts cannot be specified with services",reason=FieldValueForbidden
 type Rule struct {
-	Action Action `json:"action" validate:"action"`
+	Action Action `json:"action"`
 
 	// IPVersion is an optional field that restricts the rule to only match a specific IP
 	// version.
 	// +kubebuilder:validation:Enum=4;6
 	// +optional
-	IPVersion *int `json:"ipVersion,omitempty" validate:"omitempty,ipVersion"`
+	IPVersion *int `json:"ipVersion,omitempty"`
 
 	// Protocol is an optional field that restricts the rule to only apply to traffic of
 	// a specific IP protocol. Required if any of the EntityRules contain Ports

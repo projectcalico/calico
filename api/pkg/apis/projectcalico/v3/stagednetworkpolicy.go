@@ -42,7 +42,7 @@ type StagedNetworkPolicy struct {
 type StagedNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
-	StagedAction StagedAction `json:"stagedAction,omitempty" validate:"omitempty,stagedAction"`
+	StagedAction StagedAction `json:"stagedAction,omitempty"`
 
 	// The name of the tier that this policy belongs to.  If this is omitted, the default
 	// tier (name is "default") is assumed.  The specified tier must exist in order to create
@@ -106,7 +106,7 @@ type StagedNetworkPolicySpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=2
 	// +listType=set
-	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
+	Types []PolicyType `json:"types,omitempty"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
