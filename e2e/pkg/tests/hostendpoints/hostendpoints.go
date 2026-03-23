@@ -260,7 +260,7 @@ var _ = describe.CalicoDescribe(
 							Protocol: &numorstring.Protocol{Type: numorstring.NumOrStringString, StrVal: "TCP"},
 							Destination: v3.EntityRule{
 								Ports: []numorstring.Port{
-									numorstring.NamedPort("hepport"),
+									numorstring.Port{PortName: "hepport"},
 								},
 							},
 						},
@@ -336,7 +336,7 @@ var _ = describe.CalicoDescribe(
 								Protocol: &numorstring.Protocol{Type: numorstring.NumOrStringString, StrVal: "TCP"},
 								Destination: v3.EntityRule{
 									Ports: []numorstring.Port{
-										numorstring.NamedPort("hepport"),
+										numorstring.Port{PortName: "hepport"},
 									},
 								},
 							},

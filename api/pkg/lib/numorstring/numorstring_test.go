@@ -220,6 +220,8 @@ func init() {
 		// Named port tests.
 		Entry("named port http-port", "http-port", namedPortFromString("http-port"), true),
 		Entry("named port 8080", "8080", numorstring.Port{}, false),
+		Entry("named port with space", "http port", numorstring.Port{}, false),
+		Entry("named port with invalid chars", "http%port", numorstring.Port{}, false),
 	)
 
 	// Perform tests of DSCP FromString method.
