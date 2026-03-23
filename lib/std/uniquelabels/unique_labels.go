@@ -295,7 +295,10 @@ func appendJSONString(buf []byte, s string) []byte {
 		return buf
 	}
 	// Slow path: delegate to encoding/json for correct escaping.
-	quoted, _ := json.Marshal(s)
+	quoted, err := json.Marshal(s)
+	if err != nil {
+		panic("appendJSONString: json.Marshal failed: " + err.Error())
+	}
 	return append(buf, quoted...)
 }
 
