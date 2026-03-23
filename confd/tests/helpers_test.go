@@ -746,3 +746,132 @@ func rewriteDestPaths(t *testing.T, confDDir, outputDir string) {
 		require.NoError(t, os.WriteFile(path, []byte(newData), 0644))
 	}
 }
+
+// confdDaemon represents a running confd instance for daemon-mode tests.
+// It allows tests to apply resource changes while confd is running and
+// poll for output to match expected golden files.
+type confdDaemon struct {
+	t         *testing.T
+	be        *datastoreBackend
+	outputDir string
+	cancel    context.CancelFunc
+	errCh     chan error
+}
+
+// startConfdDaemon starts confd in daemon mode (not oneshot) with block
+// affinities pre-created. The caller applies resources and calls
+// expectOutput at each step. Call stop() when done.
+func startConfdDaemon(t *testing.T, be *datastoreBackend) *confdDaemon {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	confDir := filepath.Join(tmpDir, "confd")
+	outputDir := filepath.Join(confDir, "config")
+	require.NoError(t, os.MkdirAll(outputDir, 0755))
+
+	srcConfDir := filepath.Join("..", "etc", "calico", "confd")
+	copyDir(t, filepath.Join(srcConfDir, "conf.d"), filepath.Join(confDir, "conf.d"))
+	copyDir(t, filepath.Join(srcConfDir, "templates"), filepath.Join(confDir, "templates"))
+	rewriteDestPaths(t, filepath.Join(confDir, "conf.d"), outputDir)
+
+	createBlockAffinities(t, be)
+
+	confdCalicoClient, err := client.New(apiconfig.CalicoAPIConfig{Spec: be.datastoreConfig})
+	require.NoError(t, err, "creating confd Calico client")
+
+	confdConfig := &config.Config{
+		ConfDir:  confDir,
+		Onetime:  false,
+		SyncOnly: true,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run.RunWithContext(
+			ctx,
+			confdConfig,
+			confdCalicoClient,
+			be.k8sClientset,
+			be.datastoreConfig,
+			&syncclientutils.TyphaConfig{},
+			nil,
+		)
+	}()
+
+	// Wait briefly for confd to start and sync.
+	time.Sleep(500 * time.Millisecond)
+
+	d := &confdDaemon{
+		t:         t,
+		be:        be,
+		outputDir: outputDir,
+		cancel:    cancel,
+		errCh:     errCh,
+	}
+	t.Cleanup(d.stop)
+	return d
+}
+
+// stop shuts down the running confd instance.
+func (d *confdDaemon) stop() {
+	d.cancel()
+	select {
+	case err := <-d.errCh:
+		if err != nil {
+			d.t.Logf("confd daemon exited with error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		d.t.Log("confd daemon did not stop within 5s")
+	}
+}
+
+// expectOutput polls until the rendered output matches the golden files in
+// goldenDir, with a timeout of 10 seconds (matching the bash test behavior).
+func (d *confdDaemon) expectOutput(goldenDir string) {
+	d.t.Helper()
+
+	goldenFiles := []string{
+		"bird.cfg",
+		"bird6.cfg",
+		"bird_ipam.cfg",
+		"bird6_ipam.cfg",
+		"bird_aggr.cfg",
+		"bird6_aggr.cfg",
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		allMatch := true
+		var lastMismatch string
+		for _, f := range goldenFiles {
+			actualPath := filepath.Join(d.outputDir, f)
+			got, err := os.ReadFile(actualPath)
+			if err != nil {
+				allMatch = false
+				lastMismatch = fmt.Sprintf("%s: %v", f, err)
+				break
+			}
+
+			expectedPath := filepath.Join("compiled_templates", goldenDir, f)
+			want, err := os.ReadFile(expectedPath)
+			if err != nil {
+				d.t.Fatalf("reading golden file %s: %v", expectedPath, err)
+			}
+
+			if normalizeBlankLines(string(got)) != normalizeBlankLines(string(want)) {
+				allMatch = false
+				lastMismatch = fmt.Sprintf("%s does not match %s", f, expectedPath)
+				break
+			}
+		}
+
+		if allMatch {
+			return
+		}
+
+		if time.Now().After(deadline) {
+			d.t.Fatalf("timed out waiting for output to match %s (last mismatch: %s)", goldenDir, lastMismatch)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
