@@ -27,7 +27,7 @@ installation:
             resources:
               requests:
                 cpu: 100m
-                memory: 128Mi
+                memory: 512Mi
               limits:
                 cpu: 500m
                 memory: 512Mi
@@ -41,7 +41,7 @@ installation:
             resources:
               requests:
                 cpu: 50m
-                memory: 64Mi
+                memory: 256Mi
               limits:
                 cpu: 500m
                 memory: 256Mi
@@ -55,7 +55,7 @@ installation:
             resources:
               requests:
                 cpu: 50m
-                memory: 64Mi
+                memory: 256Mi
               limits:
                 cpu: 500m
                 memory: 256Mi
@@ -77,10 +77,10 @@ apiServer:
             resources:
               requests:
                 cpu: 50m
-                memory: 64Mi
+                memory: 128Mi
               limits:
                 cpu: 500m
-                memory: 256Mi
+                memory: 128Mi
   calicoWebhooksDeployment:
     spec:
       template:
@@ -95,7 +95,7 @@ apiServer:
                 memory: 64Mi
               limits:
                 cpu: 200m
-                memory: 128Mi
+                memory: 64Mi
 
 goldmane:
   enabled: true
@@ -108,7 +108,7 @@ goldmane:
             resources:
               requests:
                 cpu: 50m
-                memory: 64Mi
+                memory: 128Mi
               limits:
                 cpu: 200m
                 memory: 128Mi
@@ -124,7 +124,7 @@ whisker:
             resources:
               requests:
                 cpu: 10m
-                memory: 32Mi
+                memory: 128Mi
               limits:
                 cpu: 100m
                 memory: 128Mi
@@ -132,7 +132,7 @@ whisker:
             resources:
               requests:
                 cpu: 50m
-                memory: 64Mi
+                memory: 128Mi
               limits:
                 cpu: 200m
                 memory: 128Mi
@@ -149,7 +149,7 @@ tigeraOperator:
 resources:
   requests:
     cpu: 50m
-    memory: 64Mi
+    memory: 256Mi
   limits:
     cpu: 500m
     memory: 256Mi
