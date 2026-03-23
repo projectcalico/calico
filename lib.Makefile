@@ -1550,16 +1550,16 @@ KIND_TEST_BUILD_TAG = test-build
 
 # Calico images built locally with latest-$(ARCH) tags. kind-build-images
 # re-tags each as :test-build for the kind cluster.
+# Components whose images are provided by the uber calico/calico image
+# (operator uses "calico <subcommand>" as the container command):
+#   typha, kube-controllers, apiserver, csi
+# These no longer need individual images loaded into the kind cluster.
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
-	calico/typha:$(KIND_TEST_BUILD_TAG) \
-	calico/apiserver:$(KIND_TEST_BUILD_TAG) \
 	calico/ctl:$(KIND_TEST_BUILD_TAG) \
 	calico/cni:$(KIND_TEST_BUILD_TAG) \
-	calico/csi:$(KIND_TEST_BUILD_TAG) \
 	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG) \
 	calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG) \
-	calico/kube-controllers:$(KIND_TEST_BUILD_TAG) \
 	calico/goldmane:$(KIND_TEST_BUILD_TAG) \
 	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
@@ -1579,12 +1579,9 @@ KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
 # runs when sources are newer.
 KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
-	$(REPO_ROOT)/typha/.image.created-$(ARCH) \
-	$(REPO_ROOT)/apiserver/.image.created-$(ARCH) \
 	$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH) \
 	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH) \
 	$(REPO_ROOT)/calicoctl/.image.created-$(ARCH) \
-	$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH) \
 	$(REPO_ROOT)/goldmane/.image.created-$(ARCH) \
 	$(REPO_ROOT)/webhooks/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
@@ -1630,7 +1627,7 @@ $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd/c
 # Operator is built from a separate repo/branch and depends on all other
 # images being built first.
 $(REPO_ROOT)/.stamp.operator: $(KIND_IMAGE_MARKERS) $(KIND_INFRA_DIR)/calico_versions.yml
-	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+	cd $(KIND_INFRA_DIR) && REPO=$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
 	touch $@
 
 ## Build all component images needed for kind cluster testing, then tag them.
