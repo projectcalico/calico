@@ -626,23 +626,9 @@ execute_tests_oneshot() {
     # confd, so order the tests accordingly.  Since the default nodeToNodeMeshEnabled setting
     # is true, perform the mesh tests first.  Then run the explicit peering tests - we should
     # see confd terminate when we turn of the mesh.
+    # Most oneshot tests have been migrated to Go (confd/tests/template_render_test.go).
+    # Only tests that need special env vars remain here.
     for i in $(seq 1 2); do
-        run_individual_test_oneshot 'mesh/bgp-export'
-        run_individual_test_oneshot 'mesh/ipip-always'
-        run_individual_test_oneshot 'mesh/ipip-cross-subnet'
-        run_individual_test_oneshot 'mesh/ipip-off'
-        run_individual_test_oneshot 'mesh/vxlan-always'
-        run_individual_test_oneshot 'explicit_peering/global'
-        run_individual_test_oneshot 'explicit_peering/specific_node'
-        run_individual_test_oneshot 'explicit_peering/selectors'
-        run_individual_test_oneshot 'explicit_peering/route_reflector'
-        run_individual_test_oneshot 'explicit_peering/route_reflector_v6_by_ip'
-        run_individual_test_oneshot 'mesh/static-routes'
-        run_individual_test_oneshot 'mesh/static-routes-exclude-node'
-        run_individual_test_oneshot 'mesh/communities'
-        run_individual_test_oneshot 'mesh/restart-time'
-        run_individual_test_oneshot 'explicit_peering/keepnexthop'
-        run_individual_test_oneshot 'explicit_peering/keepnexthop-global'
         export CALICO_ROUTER_ID=10.10.10.10
         run_individual_test_oneshot 'mesh/static-routes-no-ipv4-address'
         export -n CALICO_ROUTER_ID
