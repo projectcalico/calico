@@ -209,7 +209,7 @@ func init() {
 
 	DescribeTable("NumOrString named ports",
 		func(input string, expected numorstring.Port, valid bool) {
-			err, p := numorstring.NamedPort(input)
+			p, err := numorstring.NamedPort(input)
 			if valid {
 				Expect(err).To(BeNil())
 			} else {
