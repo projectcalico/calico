@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,57 +16,15 @@ package main
 
 import (
 	"flag"
-	"os"
 
-	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/pod2daemon/csidriver/driver"
+	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
 )
 
 func main() {
-	// Set the log output to stdout to prevent some components from interpreting logs as errors (e.g. fluentd).
-	log.SetOutput(os.Stdout)
-	// Set up logging formatting.
-	logutils.ConfigureFormatter("csi-driver")
-	// Set the preliminary log level
-	log.SetLevel(log.WarnLevel)
-
-	// Read out the configurable settings
 	logLevel := flag.String("loglevel", "", "Log level for the driver to report on")
 	endpoint := flag.String("endpoint", "", "location of the unix domain socket the Kubelet communicates with the CSI plugin on")
-	nodeId := flag.String("nodeid", "", "Node ID unique to the node")
+	nodeID := flag.String("nodeid", "", "Node ID unique to the node")
 	flag.Parse()
 
-	// Parse and inspect the configuration
-	config, err := driver.RetrieveConfig()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Overwrite the log level from the flag if given
-	if *logLevel != "" {
-		config.LogLevel = *logLevel
-	}
-
-	// Set the log level from the configuration
-	level, err := log.ParseLevel(config.LogLevel)
-	if err != nil {
-		log.Fatalf("Could not parse the log level: %v", err)
-	}
-	log.SetLevel(level)
-
-	// Overwrite the node ID given from the flag
-	config.NodeID = *nodeId
-
-	// Overwrite the endpoint given from the flag if given
-	if *endpoint != "" {
-		config.Endpoint = *endpoint
-	}
-
-	// Instantiate driver and run
-	d := driver.NewDriver(config)
-	if err := d.Run(); err != nil {
-		log.Fatal(err)
-	}
+	csi.Run(*logLevel, *endpoint, *nodeID)
 }
