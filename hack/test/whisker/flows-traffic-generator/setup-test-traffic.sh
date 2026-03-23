@@ -44,6 +44,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFESTS_DIR="${SCRIPT_DIR}/manifests"
+NAMESPACES="frontend backend database monitoring"
+
+# Wait for namespaces to be fully removed if a previous teardown is still in progress.
+for ns in ${NAMESPACES}; do
+  if kubectl get namespace "${ns}" &>/dev/null; then
+    echo "==> Namespace ${ns} still exists, waiting for it to terminate..."
+    kubectl wait --for=delete namespace/"${ns}" --timeout=60s 2>/dev/null || true
+  fi
+done
 
 echo "==> Deploying namespaces and workloads..."
 kubectl apply -f "${MANIFESTS_DIR}/01-namespaces-and-workloads.yaml"
@@ -65,7 +74,7 @@ kubectl apply -f "${MANIFESTS_DIR}/06-staged-policies.yaml"
 
 echo "==> Waiting for workload pods to be ready..."
 for ns in frontend backend database monitoring; do
-  kubectl wait --for=condition=Available --timeout=120s -n "${ns}" deployment --all
+  kubectl wait --for=condition=Available --timeout=60s -n "${ns}" deployment --all
 done
 
 echo "==> Verifying pods:"

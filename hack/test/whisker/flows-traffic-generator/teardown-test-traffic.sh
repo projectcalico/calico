@@ -14,23 +14,42 @@
 # limitations under the License.
 
 # Remove all resources created by setup-test-traffic.sh.
+#
+# Order: all Calico policies (namespaced + global + staged) first, then tiers,
+# then namespaces. Deleting Calico resources before the namespace avoids slow
+# finalizer-based cleanup that causes namespace deletion to hang.
 
 set -euo pipefail
 
-echo "==> Removing staged policies..."
-kubectl delete stagedglobalnetworkpolicy staged-allow-all staged-compliance-deny-all --ignore-not-found
-kubectl delete stagednetworkpolicy -n frontend staged-deny-frontend-egress --ignore-not-found
-kubectl delete stagednetworkpolicy -n backend staged-isolate-backend --ignore-not-found
-kubectl delete stagednetworkpolicy -n monitoring staged-monitoring-lockdown --ignore-not-found
-kubectl delete stagedkubernetesnetworkpolicy -n monitoring staged-k8s-deny-all-monitoring --ignore-not-found
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFESTS_DIR="${SCRIPT_DIR}/manifests"
 
-echo "==> Removing enforced policies..."
-kubectl delete globalnetworkpolicy restrict-external-access audit-all-ingress deny-monitoring-to-db restrict-udp-non-dns --ignore-not-found
+echo "==> Removing staged policies..."
+kubectl delete -f "${MANIFESTS_DIR}/06-staged-policies.yaml" --ignore-not-found --wait=false
+
+echo "==> Removing Kubernetes NetworkPolicies..."
+kubectl delete -f "${MANIFESTS_DIR}/05-k8s-network-policies.yaml" --ignore-not-found --wait=false
+
+echo "==> Removing enforced Calico policies..."
+kubectl delete -f "${MANIFESTS_DIR}/04-enforced-policies.yaml" --ignore-not-found --wait=false
 
 echo "==> Removing tiers..."
-kubectl delete tier compliance security platform application --ignore-not-found
+kubectl delete -f "${MANIFESTS_DIR}/03-tiers.yaml" --ignore-not-found --wait=false
 
-echo "==> Removing namespaces (this deletes all workloads, services, and namespaced policies)..."
-kubectl delete namespace frontend backend database monitoring --ignore-not-found
+echo "==> Force-deleting pods to avoid stuck finalizers..."
+for ns in frontend backend database monitoring; do
+  kubectl delete pods -n "${ns}" --all --force --grace-period=0 2>/dev/null || true
+done
+
+echo "==> Removing namespaces..."
+kubectl delete namespace frontend backend database monitoring --ignore-not-found --wait=false
+
+echo "==> Waiting for namespaces to be fully removed..."
+for ns in frontend backend database monitoring; do
+  if kubectl get namespace "${ns}" &>/dev/null; then
+    kubectl wait --for=delete namespace/"${ns}" --timeout=60s 2>/dev/null || \
+      echo "    WARNING: namespace ${ns} still terminating after 60s"
+  fi
+done
 
 echo "==> Teardown complete."
