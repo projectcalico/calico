@@ -34,7 +34,7 @@ global_job_config:
     - name: USE_HASH_RELEASE
       value: "false"
     - name: UPLEVEL_RELEASE_STREAM
-      value: release-v3.32
+      value: v3.32
     - name: UPLEVEL_PRODUCT
       value: calico
     - name: UPLEVEL_PRE_RELEASE
