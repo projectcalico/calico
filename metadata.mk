@@ -6,14 +6,14 @@
 GO_BUILD_VER=1.26.1-llvm20.1.8-k8s1.35.2
 RUST_BUILD_VER=1.93.1
 
-CALICO_BASE_VER=ubi9-1773420533
+CALICO_BASE_VER=ubi9-1774048615
 
 # Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
 K8S_VERSION=v1.35.2
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-CRANE_VERSION=v0.21.2
+CRANE_VERSION=v0.21.3
 ETCD_VERSION=v3.5.24
 GHR_VERSION=v0.17.0
 GITHUB_CLI_VERSION=2.76.2

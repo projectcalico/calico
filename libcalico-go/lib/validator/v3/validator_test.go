@@ -1411,6 +1411,20 @@ func init() {
 					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, false),
+		Entry("should accept Rule with dest named ports and no protocol",
+			api.Rule{
+				Action: "Allow",
+				Destination: api.EntityRule{
+					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
+				},
+			}, true),
+		Entry("should accept Rule with !source named ports and no protocol",
+			api.Rule{
+				Action: "Allow",
+				Source: api.EntityRule{
+					NotPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+				},
+			}, true),
 		Entry("should reject Rule with invalid port (port 0)",
 			api.Rule{
 				Action:   "Allow",
