@@ -178,21 +178,6 @@ func init() {
 	// Initialise static data.
 	validate = validator.New()
 
-	// Register field validators.
-	// These validators are now enforced by CRD schema validation in
-	// crd_validation.go. We still register them as no-ops because
-	// go-playground/validator panics on unknown validation tags.
-	for _, tag := range []string{
-		"action", "ipVersion", "ipIpMode", "vxlanMode", "assignmentMode",
-		"assignIPs", "policyType", "logLevel", "bpfLogLevel", "bpfServiceMode",
-		"bpfConnectTimeLoadBalancing", "bpfHostNetworkedNATWithoutCTLB",
-		"dropAcceptReturn", "acceptReturn", "dropReject", "datastoreType",
-		"ipType", "sourceAddress",
-		"filterAction", "matchOperator", "stagedAction", "iptablesBackend",
-	} {
-		registerFieldValidator(tag, func(fl validator.FieldLevel) bool { return true })
-	}
-
 	// Validators kept because CRD schemas lack the constraint.
 	registerFieldValidator("createDefaultHostEndpoint", validateCreateDefaultHostEndpoint)
 

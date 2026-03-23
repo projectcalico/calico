@@ -65,7 +65,7 @@ type KubeControllersConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
 	// Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
 	// +kubebuilder:validation:Enum=None;Debug;Info;Warning;Error;Fatal;Panic
-	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
+	LogSeverityScreen string `json:"logSeverityScreen,omitempty"`
 
 	// HealthChecks enables or disables support for health checks [Default: Enabled]
 	// Valid values are: "Enabled", "Disabled".
@@ -219,7 +219,7 @@ type NamespaceControllerConfig struct {
 type LoadBalancerControllerConfig struct {
 	// AssignIPs controls which LoadBalancer Service gets IP assigned from Calico IPAM.
 	// +kubebuilder:default=AllServices
-	AssignIPs AssignIPs `json:"assignIPs,omitempty" validate:"omitempty,assignIPs"`
+	AssignIPs AssignIPs `json:"assignIPs,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=AllServices;RequestedServicesOnly

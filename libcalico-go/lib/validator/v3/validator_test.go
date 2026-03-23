@@ -537,17 +537,20 @@ func init() {
 			}, true,
 		),
 		Entry("should reject a node mesh BGP password if node to node mesh is disabled",
-			api.BGPConfigurationSpec{
-				NodeToNodeMeshEnabled: &Vfalse,
-				NodeMeshPassword: &api.BGPPassword{
-					SecretKeyRef: &k8sv1.SecretKeySelector{
-						LocalObjectReference: k8sv1.LocalObjectReference{
-							Name: "test-secret",
+			&api.BGPConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec: api.BGPConfigurationSpec{
+					NodeToNodeMeshEnabled: &Vfalse,
+					NodeMeshPassword: &api.BGPPassword{
+						SecretKeyRef: &k8sv1.SecretKeySelector{
+							LocalObjectReference: k8sv1.LocalObjectReference{
+								Name: "test-secret",
+							},
+							Key: "bgp-password",
 						},
-						Key: "bgp-password",
 					},
 				},
-			}, true,
+			}, false,
 		),
 		Entry("should accept a node mesh max restart time if node to node mesh is enabled",
 			api.BGPConfigurationSpec{
@@ -556,10 +559,13 @@ func init() {
 			}, true,
 		),
 		Entry("should reject a node mesh max restart time if node to node mesh is disabled",
-			api.BGPConfigurationSpec{
-				NodeToNodeMeshEnabled:  &Vfalse,
-				NodeMeshMaxRestartTime: &v1.Duration{Duration: 200 * time.Second},
-			}, true,
+			&api.BGPConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec: api.BGPConfigurationSpec{
+					NodeToNodeMeshEnabled:  &Vfalse,
+					NodeMeshMaxRestartTime: &v1.Duration{Duration: 200 * time.Second},
+				},
+			}, false,
 		),
 		Entry("should accept valid interface names",
 			api.BGPConfigurationSpec{
@@ -817,7 +823,7 @@ func init() {
 		Entry("should accept a valid BPFLogLevel value 'Debug'", api.FelixConfigurationSpec{BPFLogLevel: "Debug"}, true),
 		Entry("should accept a valid BPFLogLevel value 'Off'", api.FelixConfigurationSpec{BPFLogLevel: "Off"}, true),
 
-		Entry("should reject a valid BPFExternalServiceMode value 'Foo'", &api.FelixConfiguration{
+		Entry("should reject an invalid BPFExternalServiceMode value 'Foo'", &api.FelixConfiguration{
 			ObjectMeta: v1.ObjectMeta{Name: "default"},
 			Spec:       api.FelixConfigurationSpec{BPFExternalServiceMode: "Foo"},
 		}, false),
@@ -849,14 +855,18 @@ func init() {
 		Entry("should reject single route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0x10000}}}, false),
 		Entry("should reject multiple route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 2}, {Min: 3, Max: 4}, {Min: 5, Max: 0x10000}}}, false),
 
-		Entry("should reject spec with both RouteTableRanges and RouteTableRange set", api.FelixConfigurationSpec{
-			RouteTableRanges: &api.RouteTableRanges{
-				{Min: 1, Max: 250},
-			},
-			RouteTableRange: &api.RouteTableRange{
-				Min: 1, Max: 250,
-			},
-		}, true),
+		Entry("should reject spec with both RouteTableRanges and RouteTableRange",
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec: api.FelixConfigurationSpec{
+					RouteTableRanges: &api.RouteTableRanges{
+						{Min: 1, Max: 250},
+					},
+					RouteTableRange: &api.RouteTableRange{
+						Min: 1, Max: 250,
+					},
+				},
+			}, false),
 
 		Entry("should reject an invalid MTUIfacePattern value '*'", api.FelixConfigurationSpec{MTUIfacePattern: "*"}, false),
 		Entry("should accept a valid MTUIfacePattern value 'eth.*'", api.FelixConfigurationSpec{MTUIfacePattern: "eth.*"}, true),
@@ -1008,13 +1018,20 @@ func init() {
 				ExpectedIPs:   []string{ipv4_1, ipv6_1},
 				Node:          "node01",
 			}, true),
-		Entry("should reject host endpoint with no config", api.HostEndpointSpec{}, true),
-		Entry("should reject host endpoint with blank interface an no IPs",
-			api.HostEndpointSpec{
-				InterfaceName: "",
-				ExpectedIPs:   []string{},
-				Node:          "node01",
-			}, true),
+		Entry("should reject host endpoint with no config",
+			&api.HostEndpoint{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec:       api.HostEndpointSpec{},
+			}, false),
+		Entry("should reject host endpoint with blank interface and no IPs",
+			&api.HostEndpoint{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.HostEndpointSpec{
+					InterfaceName: "",
+					ExpectedIPs:   []string{},
+					Node:          "node01",
+				},
+			}, false),
 		Entry("should accept host endpoint with prefixed profile name",
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
@@ -1148,16 +1165,18 @@ func init() {
 					AssignmentMode: &assignmentModeAutomatic,
 				},
 			}, true),
-		// Empty assignment mode is omitted via omitempty and defaults to
-		// Automatic in the CRD, matching API server behavior.
-		Entry("should accept IP pool with empty assignment mode (defaults to Automatic)",
-			api.IPPool{
+		// Empty assignment mode is rejected by the CRD enum validator. In
+		// a real API server request, omitempty would omit the zero value and
+		// the CRD default (Automatic) would be applied, but Validate() sees
+		// the raw Go struct where the zero value is present.
+		Entry("should reject IP pool with empty assignment mode",
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:           netv4_4,
 					AssignmentMode: assignmentModeInvalid,
 				},
-			}, true),
+			}, false),
 		Entry("should reject IP pool with LoadBlancer and disableBGPExport true",
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
@@ -1375,7 +1394,10 @@ func init() {
 		}, false),
 
 		// (API) VXLANMode
-		Entry("should reject IPIP mode and VXLAN mode", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Always", VXLANMode: "Always"}, true),
+		Entry("should reject IPIP mode and VXLAN mode", &api.IPPool{
+			ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+			Spec:       api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Always", VXLANMode: "Always"},
+		}, false),
 		Entry("should accept VXLAN mode Always", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "Always"}, true),
 		Entry("should accept VXLAN mode CrossSubnet", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: api.VXLANModeCrossSubnet}, true),
 		Entry("should accept VXLAN mode Never ", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "Never"}, true),
@@ -1394,7 +1416,16 @@ func init() {
 		Entry("should accept ICMP with type with max value", api.ICMPFields{Type: &V254}, true),
 		Entry("should accept ICMP with type and code with min value", api.ICMPFields{Type: &V128, Code: &V0}, true),
 		Entry("should accept ICMP with type and code with min value", api.ICMPFields{Type: &V128, Code: &V255}, true),
-		Entry("should reject ICMP with code and no type", api.ICMPFields{Code: &V0}, true),
+		Entry("should reject ICMP with code and no type",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action: "Allow",
+						ICMP:   &api.ICMPFields{Code: &V0},
+					}},
+				},
+			}, false),
 		Entry("should reject ICMP with type too high", api.ICMPFields{Type: &V255}, false),
 		Entry("should reject ICMP with code too high", api.ICMPFields{Type: &V128, Code: &V256}, false),
 
@@ -1795,16 +1826,26 @@ func init() {
 				HTTP:   &api.HTTPMatch{Methods: []string{"GET"}},
 			}, true),
 		Entry("should reject Deny rule with HTTP clause",
-			api.Rule{
-				Action: "Deny",
-				HTTP:   &api.HTTPMatch{Methods: []string{"GET"}},
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action: "Deny",
+						HTTP:   &api.HTTPMatch{Methods: []string{"GET"}},
+					}},
+				},
+			}, false),
 		Entry("should reject non-TCP protocol with HTTP clause",
-			api.Rule{
-				Action:   "Allow",
-				Protocol: protocolFromString("UDP"),
-				HTTP:     &api.HTTPMatch{Methods: []string{"GET"}},
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:   "Allow",
+						Protocol: protocolFromString("UDP"),
+						HTTP:     &api.HTTPMatch{Methods: []string{"GET"}},
+					}},
+				},
+			}, false),
 		Entry("should accept TCP protocol with HTTP clause",
 			api.Rule{
 				Action:   "Allow",
@@ -2100,13 +2141,17 @@ func init() {
 				Max: int32Helper(64),
 			},
 		}, false),
-		Entry("should reject BGPFilterV4 rule with PrefixLength populated and CIDR missing", api.BGPFilterRuleV4{
-			Interface: "ethx.",
-			Action:    "Reject",
-			PrefixLength: &api.BGPFilterPrefixLengthV4{
-				Min: int32Helper(16),
-			},
-		}, true),
+		Entry("should reject BGPFilterV4 rule with PrefixLength populated and CIDR missing",
+			&api.BGPFilter{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPFilterSpec{ExportV4: []api.BGPFilterRuleV4{{
+					Interface: "ethx.",
+					Action:    "Reject",
+					PrefixLength: &api.BGPFilterPrefixLengthV4{
+						Min: int32Helper(16),
+					},
+				}}},
+			}, false),
 		Entry("should accept BGPFilterV6 rule with PrefixLength Min set", api.BGPFilterRuleV6{
 			CIDR:          "ffff::/128",
 			MatchOperator: "In",
@@ -2131,13 +2176,17 @@ func init() {
 				Min: int32Helper(-16),
 			},
 		}, false),
-		Entry("should reject BGPFilterV6 rule with PrefixLength populated and CIDR missing", api.BGPFilterRuleV6{
-			Interface: "*.calico",
-			Action:    "Reject",
-			PrefixLength: &api.BGPFilterPrefixLengthV6{
-				Min: int32Helper(120),
-			},
-		}, true),
+		Entry("should reject BGPFilterV6 rule with PrefixLength populated and CIDR missing",
+			&api.BGPFilter{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPFilterSpec{ExportV6: []api.BGPFilterRuleV6{{
+					Interface: "*.calico",
+					Action:    "Reject",
+					PrefixLength: &api.BGPFilterPrefixLengthV6{
+						Min: int32Helper(120),
+					},
+				}}},
+			}, false),
 
 		// (API) BGPFilterOperation
 		Entry("should accept BGPFilterOperation with AddCommunity set", api.BGPFilterOperation{
@@ -2149,16 +2198,37 @@ func init() {
 		Entry("should accept BGPFilterOperation with SetPriority set", api.BGPFilterOperation{
 			SetPriority: &api.BGPFilterSetPriority{Value: intHelper(256)},
 		}, true),
-		Entry("should reject BGPFilterOperation with no fields set", api.BGPFilterOperation{}, true),
-		Entry("should reject BGPFilterOperation with two fields set", api.BGPFilterOperation{
-			AddCommunity: &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
-			SetPriority:  &api.BGPFilterSetPriority{Value: intHelper(256)},
-		}, true),
-		Entry("should reject BGPFilterOperation with all fields set", api.BGPFilterOperation{
-			AddCommunity:  &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
-			PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}},
-			SetPriority:   &api.BGPFilterSetPriority{Value: intHelper(256)},
-		}, true),
+		Entry("should reject BGPFilterOperation with no fields set",
+			&api.BGPFilter{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPFilterSpec{ExportV4: []api.BGPFilterRuleV4{{
+					Action:     "Accept",
+					Operations: []api.BGPFilterOperation{{}},
+				}}},
+			}, false),
+		Entry("should reject BGPFilterOperation with two fields set",
+			&api.BGPFilter{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPFilterSpec{ExportV4: []api.BGPFilterRuleV4{{
+					Action: "Accept",
+					Operations: []api.BGPFilterOperation{{
+						AddCommunity: &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
+						SetPriority:  &api.BGPFilterSetPriority{Value: intHelper(256)},
+					}},
+				}}},
+			}, false),
+		Entry("should reject BGPFilterOperation with all fields set",
+			&api.BGPFilter{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPFilterSpec{ExportV4: []api.BGPFilterRuleV4{{
+					Action: "Accept",
+					Operations: []api.BGPFilterOperation{{
+						AddCommunity:  &api.BGPFilterAddCommunity{Value: communityValHelper("65000:100")},
+						PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}},
+						SetPriority:   &api.BGPFilterSetPriority{Value: intHelper(256)},
+					}},
+				}}},
+			}, false),
 
 		// (API) BGPFilterRuleV4 with Operations
 		Entry("should accept BGPFilterRuleV4 with single operation", api.BGPFilterRuleV4{
@@ -2174,46 +2244,74 @@ func init() {
 				{PrependASPath: &api.BGPFilterPrependASPath{Prefix: []numorstring.ASNumber{65000}}},
 			},
 		}, true),
-		Entry("should reject BGPFilterRuleV4 with empty operation", api.BGPFilterRuleV4{
-			Action: "Accept",
-			Operations: []api.BGPFilterOperation{
-				{},
-			},
-		}, true),
+		Entry("should reject BGPFilterRuleV4 with empty operation",
+			&api.BGPFilter{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPFilterSpec{ExportV4: []api.BGPFilterRuleV4{{
+					Action: "Accept",
+					Operations: []api.BGPFilterOperation{
+						{},
+					},
+				}}},
+			}, false),
 
 		// (API) BGPPeerSpec
 		Entry("should accept valid BGPPeerSpec", api.BGPPeerSpec{PeerIP: ipv4_1}, true),
 		Entry("should reject invalid BGPPeerSpec (IPv4)", api.BGPPeerSpec{PeerIP: bad_ipv4_1}, false),
 		Entry("should reject invalid BGPPeerSpec (IPv6)", api.BGPPeerSpec{PeerIP: bad_ipv6_1}, false),
-		Entry("should reject BGPPeerSpec with both Node and NodeSelector", api.BGPPeerSpec{
-			Node:         "my-node",
-			NodeSelector: "has(mylabel)",
-		}, true),
-		Entry("should reject BGPPeerSpec with both PeerIP and PeerSelector", api.BGPPeerSpec{
-			PeerIP:       ipv4_1,
-			PeerSelector: "has(mylabel)",
-		}, true),
-		Entry("should reject BGPPeerSpec with both ASNumber and PeerSelector", api.BGPPeerSpec{
-			ASNumber:     as61234,
-			PeerSelector: "has(mylabel)",
-		}, true),
+		Entry("should reject BGPPeerSpec with both Node and NodeSelector",
+			&api.BGPPeer{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPPeerSpec{
+					Node:         "my-node",
+					NodeSelector: "has(mylabel)",
+				},
+			}, false),
+		Entry("should reject BGPPeerSpec with both PeerIP and PeerSelector",
+			&api.BGPPeer{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPPeerSpec{
+					PeerIP:       ipv4_1,
+					PeerSelector: "has(mylabel)",
+				},
+			}, false),
+		Entry("should reject BGPPeerSpec with both ASNumber and PeerSelector",
+			&api.BGPPeer{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPPeerSpec{
+					ASNumber:     as61234,
+					PeerSelector: "has(mylabel)",
+				},
+			}, false),
 		Entry("should accept BGPPeerSpec with NodeSelector and PeerSelector", api.BGPPeerSpec{
 			NodeSelector: "has(mylabel)",
 			PeerSelector: "has(mylabel)",
 		}, true),
-		Entry("should reject BGPPeerSpec with LocalWorkloadSelector and empty ASNumber", api.BGPPeerSpec{
-			LocalWorkloadSelector: "has(labelone)",
-		}, true),
-		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerSelector", api.BGPPeerSpec{
-			LocalWorkloadSelector: "has(labelone)",
-			PeerSelector:          "has(labeltwo)",
-			ASNumber:              as61234,
-		}, true),
-		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerIP", api.BGPPeerSpec{
-			LocalWorkloadSelector: "has(labelone)",
-			PeerIP:                ipv4_1,
-			ASNumber:              as61234,
-		}, true),
+		Entry("should reject BGPPeerSpec with LocalWorkloadSelector and empty ASNumber",
+			&api.BGPPeer{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPPeerSpec{
+					LocalWorkloadSelector: "has(labelone)",
+				},
+			}, false),
+		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerSelector",
+			&api.BGPPeer{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPPeerSpec{
+					LocalWorkloadSelector: "has(labelone)",
+					PeerSelector:          "has(labeltwo)",
+					ASNumber:              as61234,
+				},
+			}, false),
+		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerIP",
+			&api.BGPPeer{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.BGPPeerSpec{
+					LocalWorkloadSelector: "has(labelone)",
+					PeerIP:                ipv4_1,
+					ASNumber:              as61234,
+				},
+			}, false),
 		Entry("should reject BGPPeerSpec with both positive KeepOriginalNextHop and non-empty NextHopMode", api.BGPPeerSpec{
 			KeepOriginalNextHop: true,
 			NextHopMode:         &nextHopMode,
@@ -3955,9 +4053,7 @@ var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.Datasto
 	BeforeEach(func() {
 		// Clean the datastore before each test.
 		bc, err := backend.NewClient(config)
-		if err != nil {
-			Skip("Skipping e2e test: unable to create backend client: " + err.Error())
-		}
+		Expect(err).NotTo(HaveOccurred())
 		Expect(bc.Clean()).To(Succeed(), "Failed to clean datastore before test")
 	})
 
