@@ -12,16 +12,12 @@ import {
     FilterKey,
     OmniFilterProperties,
 } from '@/utils/omniFilter';
+import { InfoOutlineIcon } from '@chakra-ui/icons';
 import {
-    Accordion,
-    AccordionButton,
-    AccordionIcon,
-    AccordionItem,
-    AccordionPanel,
-    Box,
     Flex,
     FormControl,
     Text,
+    Tooltip,
     useDisclosure,
 } from '@chakra-ui/react';
 import React from 'react';
@@ -31,16 +27,12 @@ import { radioStyles } from './styles';
 
 const testId = 'action-omni-filter';
 
-type ActionKeys =
-    | FilterKey.action
-    | FilterKey.staged_action
-    | FilterKey.pending_action;
+type ActionKeys = FilterKey.action | FilterKey.staged_action;
 
 type ActionOmniFilterProps = {
     onChange: (event: {
         action: string | undefined;
         staged_action: string | undefined;
-        pending_action: string | undefined;
     }) => void;
     selectedFilters: string[];
     filterLabel: string;
@@ -52,27 +44,19 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
     const [actions, setActions] = React.useState({
         action: value.action ?? '',
         staged_action: value.staged_action ?? '',
-        pending_action: value.pending_action ?? '',
     });
-    const [reduceMotion, setReduceMotion] = React.useState(false);
+
     const { isOpen, onClose, onToggle } = useDisclosure({
-        onClose: () => setReduceMotion(true),
         onOpen: () => {
             setActions({
                 action: value.action ?? '',
                 staged_action: value.staged_action ?? '',
-                pending_action: value.pending_action ?? '',
             });
         },
     });
 
     const filterCount = Object.values(value).flat().filter(Boolean).length;
     const isActive = filterCount > 0;
-
-    // needed because of chakra bug
-    React.useEffect(() => {
-        setReduceMotion(!isOpen);
-    }, [isOpen]);
 
     const handleChange = React.useCallback(
         (key: ActionKeys, value: string) => {
@@ -116,7 +100,7 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                             clearButtonAriaLabel='Clear Action'
                             htmlFor={FilterKey.action}
                         >
-                            Action
+                            <Text lineHeight='1'>Action</Text>
                         </FormLabel>
                         <RadioToggle
                             name={FilterKey.action}
@@ -137,8 +121,14 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                             clearButtonAriaLabel='Clear Staged Action'
                             htmlFor={FilterKey.staged_action}
                         >
-                            Staged Action
+                            <Flex alignItems='center' gap={1}>
+                                <Text lineHeight='1'>Staged Action</Text>
+                                <Tooltip label='Filter by the action that would be applied if staged network policies were enforced now'>
+                                    <InfoOutlineIcon boxSize={3} />
+                                </Tooltip>
+                            </Flex>
                         </FormLabel>
+
                         <RadioToggle
                             value={actions.staged_action}
                             name={FilterKey.staged_action}
@@ -153,60 +143,6 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                             testId='radio-toggle-staged_action'
                         />
                     </FormControl>
-
-                    <Accordion
-                        mt={2}
-                        allowMultiple
-                        defaultIndex={actions.pending_action ? [0] : undefined}
-                        reduceMotion={reduceMotion}
-                    >
-                        <AccordionItem border='none'>
-                            <AccordionButton px={1}>
-                                <Box
-                                    as='span'
-                                    flex='1'
-                                    textAlign='left'
-                                    color='tigeraGrey.200'
-                                    fontSize='sm'
-                                >
-                                    More filters
-                                </Box>
-                                <AccordionIcon />
-                            </AccordionButton>
-
-                            <AccordionPanel py={0} px={1}>
-                                <FormControl>
-                                    <FormLabel
-                                        showClearButton={
-                                            !!actions.pending_action
-                                        }
-                                        onClear={() =>
-                                            handleClear(
-                                                FilterKey.pending_action,
-                                            )
-                                        }
-                                        clearButtonAriaLabel='Clear Pending Action'
-                                        htmlFor={FilterKey.pending_action}
-                                    >
-                                        Pending Action
-                                    </FormLabel>
-                                    <RadioToggle
-                                        value={actions.pending_action}
-                                        name={FilterKey.pending_action}
-                                        onChange={(pending_action) =>
-                                            handleChange(
-                                                FilterKey.pending_action,
-                                                pending_action,
-                                            )
-                                        }
-                                        options={radioOptions}
-                                        containerStyles={radioStyles}
-                                        testId='radio-toggle-pending_action'
-                                    />
-                                </FormControl>
-                            </AccordionPanel>
-                        </AccordionItem>
-                    </Accordion>
                 </OmniFilterBody>
                 <OmniFilterFooter
                     testId={testId}
@@ -215,7 +151,6 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                             onChange({
                                 action: undefined,
                                 staged_action: undefined,
-                                pending_action: undefined,
                             });
                             onClose();
                         },

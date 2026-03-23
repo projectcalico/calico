@@ -819,7 +819,8 @@ func (r *CalicoManager) assertImageVersions() error {
 			}
 		case "cni-windows", "node-windows":
 			// Skip windows images
-		case "csi", "dikastes", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "flannel-migration-controller", "goldmane", "node-driver-registrar", "pod2daemon-flexvol", "whisker", "whisker-backend":
+		case "csi", "dikastes", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "flannel-migration-controller", "goldmane", "istio-install-cni", "istio-pilot", "istio-proxyv2", "istio-ztunnel",
+			"node-driver-registrar", "pod2daemon-flexvol", "whisker", "whisker-backend":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
 				if err != nil {

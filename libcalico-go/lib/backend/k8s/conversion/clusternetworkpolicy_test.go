@@ -857,6 +857,12 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 					},
 				},
 			},
+			{
+				DestinationNamedPort: "http-port",
+			},
+			{
+				DestinationNamedPort: "8080", // This should be converted to a named port not a numeric one.
+			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -932,39 +938,79 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Admin tier", func() {
 			},
 		}
 
+		protoTCP := numorstring.ProtocolFromString("tcp")
+		protoUDP := numorstring.ProtocolFromString("udp")
 		gnp := convertToGNP(&cnp, nil)
 
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
 
-		Expect(len(gnp.Spec.Ingress)).To(Equal(4))
+		Expect(len(gnp.Spec.Ingress)).To(Equal(6))
 		Expect(gnp.Spec.Ingress[0].Source.NamespaceSelector).To(Equal("k == 'v'"))
-		Expect(gnp.Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(gnp.Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{
+			{PortName: "http-port"},
+			{PortName: "8080"},
+		}))
+		Expect(gnp.Spec.Ingress[0].Protocol).To(BeNil())
 
 		Expect(gnp.Spec.Ingress[1].Source.NamespaceSelector).To(Equal("all()"))
 		Expect(gnp.Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
-		Expect(gnp.Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(gnp.Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{
+			{PortName: "http-port"},
+			{PortName: "8080"},
+		}))
+		Expect(gnp.Spec.Ingress[1].Protocol).To(BeNil())
 
 		Expect(gnp.Spec.Ingress[2].Source.NamespaceSelector).To(Equal("k == 'v'"))
-		Expect(gnp.Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(gnp.Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(*gnp.Spec.Ingress[2].Protocol).To(Equal(protoTCP))
 
 		Expect(gnp.Spec.Ingress[3].Source.NamespaceSelector).To(Equal("all()"))
 		Expect(gnp.Spec.Ingress[3].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
-		Expect(gnp.Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(gnp.Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(*gnp.Spec.Ingress[3].Protocol).To(Equal(protoTCP))
 
-		Expect(gnp.Spec.Egress).To(HaveLen(4))
+		Expect(gnp.Spec.Ingress[4].Source.NamespaceSelector).To(Equal("k == 'v'"))
+		Expect(gnp.Spec.Ingress[4].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(*gnp.Spec.Ingress[4].Protocol).To(Equal(protoUDP))
+
+		Expect(gnp.Spec.Ingress[5].Source.NamespaceSelector).To(Equal("all()"))
+		Expect(gnp.Spec.Ingress[5].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
+		Expect(gnp.Spec.Ingress[5].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(*gnp.Spec.Ingress[5].Protocol).To(Equal(protoUDP))
+
+		Expect(gnp.Spec.Egress).To(HaveLen(6))
 		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(Equal("k3 == 'v3'"))
-		Expect(gnp.Spec.Egress[0].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(gnp.Spec.Egress[0].Destination.Ports).To(Equal([]numorstring.Port{
+			{PortName: "http-port"},
+			{PortName: "8080"},
+		}))
+		Expect(gnp.Spec.Egress[0].Protocol).To(BeNil())
 
 		Expect(gnp.Spec.Egress[1].Destination.NamespaceSelector).To(Equal("k4 == 'v4'"))
 		Expect(gnp.Spec.Egress[1].Destination.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k5 == 'v5'"))
-		Expect(gnp.Spec.Egress[1].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(gnp.Spec.Egress[1].Destination.Ports).To(Equal([]numorstring.Port{
+			{PortName: "http-port"},
+			{PortName: "8080"},
+		}))
+		Expect(gnp.Spec.Egress[1].Protocol).To(BeNil())
 
 		Expect(gnp.Spec.Egress[2].Destination.NamespaceSelector).To(Equal("k3 == 'v3'"))
-		Expect(gnp.Spec.Egress[2].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(gnp.Spec.Egress[2].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(*gnp.Spec.Egress[2].Protocol).To(Equal(protoTCP))
 
 		Expect(gnp.Spec.Egress[3].Destination.NamespaceSelector).To(Equal("k4 == 'v4'"))
 		Expect(gnp.Spec.Egress[3].Destination.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k5 == 'v5'"))
-		Expect(gnp.Spec.Egress[3].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(gnp.Spec.Egress[3].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(*gnp.Spec.Egress[3].Protocol).To(Equal(protoTCP))
+
+		Expect(gnp.Spec.Egress[4].Destination.NamespaceSelector).To(Equal("k3 == 'v3'"))
+		Expect(gnp.Spec.Egress[4].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(*gnp.Spec.Egress[4].Protocol).To(Equal(protoUDP))
+
+		Expect(gnp.Spec.Egress[5].Destination.NamespaceSelector).To(Equal("k4 == 'v4'"))
+		Expect(gnp.Spec.Egress[5].Destination.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k5 == 'v5'"))
+		Expect(gnp.Spec.Egress[5].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(*gnp.Spec.Egress[5].Protocol).To(Equal(protoUDP))
 
 		// Check that Types field exists and has only 'ingress'
 		Expect(len(gnp.Spec.Types)).To(Equal(2))
@@ -2010,6 +2056,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 					},
 				},
 			},
+			{
+				DestinationNamedPort: "http-port",
+			},
 		}
 		bcnp := clusternetpol.ClusterNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2083,7 +2132,17 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 			apiv3.Rule{
 				Metadata: k8sClusterNetworkPolicyToCalicoMetadata("The first ingress rule"),
 				Action:   "Allow",
-				Protocol: &protoTCP, // Defaulted to TCP.
+				Source: apiv3.EntityRule{
+					NamespaceSelector: "k == 'v' && k2 == 'v2'",
+				},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{numorstring.Port{PortName: "http-port"}},
+				},
+			},
+			apiv3.Rule{
+				Metadata: k8sClusterNetworkPolicyToCalicoMetadata("The first ingress rule"),
+				Action:   "Allow",
+				Protocol: &protoTCP,
 				Source: apiv3.EntityRule{
 					NamespaceSelector: "k == 'v' && k2 == 'v2'",
 				},
@@ -2119,6 +2178,9 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 						Number: 80,
 					},
 				},
+			},
+			{
+				DestinationNamedPort: "foobar",
 			},
 		}
 		cnp := clusternetpol.ClusterNetworkPolicy{

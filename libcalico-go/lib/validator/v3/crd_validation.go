@@ -26,6 +26,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	celvalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
+	schemadefaulting "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/defaulting"
 	schemavalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -121,27 +122,34 @@ func init() {
 	}
 }
 
-// validateCRD runs CRD validation rules against the given object, including both
-// OpenAPI schema constraints (MinItems, MaxLength, Pattern, Enum, etc.) and
-// CEL x-kubernetes-validations rules.
+// defaultAndValidateCRD applies CRD schema defaults to the object in-place
+// and then runs CRD validation rules (OpenAPI schema constraints + CEL
+// x-kubernetes-validations). A single toUnstructured conversion is shared
+// between defaulting and validation to avoid redundant JSON round-trips.
 //
 // For create operations, pass nil for oldObj.
 // For update operations, pass the previous version as oldObj.
 //
-// Returns nil if the object's Kind has no CRD validators, or if validation passes.
-func validateCRD(ctx context.Context, obj runtime.Object, oldObj runtime.Object) field.ErrorList {
+// Returns nil if the object's Kind has no CRD schema, or if defaulting and
+// validation both succeed.
+func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runtime.Object) field.ErrorList {
 	if crdInitErr != nil {
 		return field.ErrorList{field.InternalError(nil, crdInitErr)}
 	}
 
 	kind := resolveKind(obj)
 
-	// Convert to unstructured map representation for validation.
+	// Convert to unstructured map representation once, shared by both
+	// defaulting and validation.
 	unstructuredObj, err := toUnstructured(obj)
 	if err != nil {
 		return field.ErrorList{field.InternalError(nil, fmt.Errorf("failed to convert object to unstructured: %w", err))}
 	}
 
+	// Apply CRD schema defaults to the unstructured representation.
+	applyCRDDefaults(unstructuredObj, kind)
+
+	// Validate the defaulted unstructured data.
 	var allErrs field.ErrorList
 
 	// Run OpenAPI schema validation (MinItems, MaxLength, Pattern, Enum, etc.).
@@ -163,7 +171,25 @@ func validateCRD(ctx context.Context, obj runtime.Object, oldObj runtime.Object)
 		allErrs = append(allErrs, celErrs...)
 	}
 
+	// Convert the defaulted unstructured data back into the typed object so
+	// the caller sees the applied defaults. We use the converter here (rather
+	// than JSON) because the reverse direction doesn't have the numeric type
+	// mismatch problem that forces toUnstructured to use a JSON round-trip.
+	if m, ok := unstructuredObj.(map[string]any); ok {
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(m, obj); err != nil {
+			allErrs = append(allErrs, field.InternalError(nil, fmt.Errorf("failed to convert defaulted %s from unstructured: %w", kind, err)))
+		}
+	}
+
 	return allErrs
+}
+
+// applyCRDDefaults applies CRD schema default values to an unstructured
+// object representation in-place. This is a no-op if the kind has no schema.
+func applyCRDDefaults(unstructuredObj any, kind string) {
+	if s, ok := schemas[kind]; ok {
+		schemadefaulting.Default(unstructuredObj, s)
+	}
 }
 
 // resolveKind returns the Kind string for a runtime.Object, falling back to

@@ -1,9 +1,10 @@
 import { objToQueryStr } from '@/libs/tigera/ui-components/utils';
 import { FlowLog as ApiFlowLog } from '@/types/api';
-import { FlowLog, UniqueFlowLogs } from '@/types/render';
+import { FlowLog } from '@/types/render';
 import { v4 as uuid } from 'uuid';
 import { VisibleColumns } from '../components/FlowLogsList';
 import { ColumnName } from '../components/FlowLogsList/flowLogsTable';
+import { SortColumn, SortEntry } from '../hooks';
 
 export const transformFlowLogsResponse = ({
     start_time,
@@ -29,49 +30,18 @@ export const buildStreamPath = (
     return `flows${queryString}`;
 };
 
-export const getTimeInSeconds = (time: number | null) =>
-    Math.round((time ?? 0) / 1000) || undefined;
+const ONE_HOUR_IN_SECONDS = 3600;
+const ONE_HOUR_IN_MILLISECONDS = ONE_HOUR_IN_SECONDS * 1000;
 
-export const getSeconds = (date: Date | null) => (date?.getTime() ?? 0) / 1000;
-
-export const handleDuplicateFlowLogs = (
-    unique: UniqueFlowLogs & {
-        flowLog: FlowLog;
-    },
-): UniqueFlowLogs & {
-    flowLog: FlowLog | null;
-} => {
-    const { flowLog, flowLogs, startTime } = unique;
-    const { id: _id, ...rest } = flowLog;
-    const json = JSON.stringify(rest);
-
-    if (flowLog.start_time.getTime() === startTime) {
-        return flowLogs.some((item) => json === item.json)
-            ? { startTime, flowLogs: flowLogs, flowLog: null }
-            : {
-                  startTime,
-                  flowLogs: [
-                      ...flowLogs,
-                      {
-                          flowLog,
-                          json,
-                      },
-                  ],
-                  flowLog,
-              };
+export const getTimeInSeconds = (time: number | null) => {
+    if (time !== null && time < Date.now() - ONE_HOUR_IN_MILLISECONDS) {
+        return -ONE_HOUR_IN_SECONDS;
     }
 
-    return {
-        startTime: flowLog.start_time.getTime(),
-        flowLogs: [
-            {
-                flowLog,
-                json,
-            },
-        ],
-        flowLog,
-    };
+    return Math.round((time ?? 0) / 1000) || undefined;
 };
+
+export const getSeconds = (date: Date | null) => (date?.getTime() ?? 0) / 1000;
 
 export const getV1Columns = (v1StoredColumns: string, storageKey: string) => {
     const v1Columns = v1StoredColumns ? JSON.parse(v1StoredColumns) : [];
@@ -141,9 +111,42 @@ export const updateFirstFlowStartTime = (
     setFirstFlowStartTime: (startTime: number | null) => void,
 ) => {
     if (filterFlowStartTime === null && data.length > 0) {
-        const sorted = data.sort(
+        const sorted = data.toSorted(
             (a, b) => b.start_time.getTime() - a.start_time.getTime(),
         );
         setFirstFlowStartTime(sorted[data.length - 1].start_time.getTime());
     }
+};
+
+export const computeNextSort = (
+    column: SortColumn,
+    sortState: SortEntry[],
+): SortEntry[] => {
+    const primarySort = sortState.find(
+        (s) => s.id !== 'start_time' && s.id !== 'end_time',
+    );
+
+    if (column.id === 'start_time' && primarySort) {
+        const currentStartTime = sortState.find((s) => s.id === 'start_time');
+        const newDesc = currentStartTime ? !currentStartTime.desc : false;
+        return [primarySort, { id: 'start_time', desc: newDesc }];
+    }
+
+    const nextSort: SortEntry[] = [];
+
+    if (!column.isSorted) {
+        nextSort.push({ id: column.id, desc: false });
+    } else if (!column.isSortedDesc) {
+        nextSort.push({ id: column.id, desc: true });
+    }
+
+    if (column.id !== 'start_time' && column.id !== 'end_time') {
+        const currentStartTime = sortState.find((s) => s.id === 'start_time');
+        nextSort.push({
+            id: 'start_time',
+            desc: currentStartTime?.desc ?? true,
+        });
+    }
+
+    return nextSort;
 };

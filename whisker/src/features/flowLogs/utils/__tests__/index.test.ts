@@ -1,151 +1,12 @@
-import { FlowLog } from '@/types/render';
 import {
-    handleDuplicateFlowLogs,
+    computeNextSort,
+    getTimeInSeconds,
     getV1Columns,
     getV2Columns,
     updateFirstFlowStartTime,
 } from '..';
 
-const createFlowLog = (
-    startTime: Date,
-    name: string = 'fake-source-name',
-): FlowLog => ({
-    id: '1',
-    start_time: startTime,
-    end_time: new Date(),
-    action: 'Allow',
-    source_name: name,
-    source_namespace: 'tigera-prometheus',
-    source_labels:
-        'app.kubernetes.io/version=2.54.1","prometheus=calico-node-prometheus","app.kubernetes.io/name=prometheus","statefulset.kubernetes.io/pod-name=prometheus-calico-node-prometheus-0","operator.prometheus.io/shard=0","app.kubernetes.io/instance=calico-node-prometheus","operator.prometheus.io/name=calico-node-prometheus","controller-revision-hash=prometheus-calico-node-prometheus-749869ffc6","apps.kubernetes.io/pod-index=0","app.kubernetes.io/managed-by=prometheus-operator","k8s-app=tigera-prometheus',
-    dest_name: 'app.kubernetes.io/managed-by-tigera',
-    dest_namespace: 'kube-system',
-    dest_labels:
-        'app.kubernetes.io/version=2.54.1","prometheus=calico-node-prometheus","app.kubernetes.io/name=prometheus","statefulset.kubernetes.io/pod-name=prometheus-calico-node-prometheus-0","operator.prometheus.io/shard=0","app.kubernetes.io/instance=calico-node-prometheus","operator.prometheus.io/name=calico-node-prometheus","controller-revision-hash=prometheus-calico-node-prometheus-749869ffc6","apps.kubernetes.io/pod-index=0","app.kubernetes.io/managed-by=prometheus-operator","k8s-app=tigera-prometheus',
-    protocol: 'udp',
-    dest_port: '53',
-    reporter: 'src',
-    packets_in: '6',
-    packets_out: '6',
-    bytes_in: '1286',
-    bytes_out: '640',
-    policies: {
-        enforced: [
-            {
-                kind: '',
-                name: '',
-                namespace: '',
-                tier: '',
-                action: '',
-                policy_index: 0,
-                rule_index: 0,
-                trigger: null,
-            },
-        ],
-        pending: [
-            {
-                kind: '',
-                name: '',
-                namespace: '',
-                tier: '',
-                action: '',
-                policy_index: 0,
-                rule_index: 0,
-                trigger: null,
-            },
-        ],
-    },
-});
-
 describe('utils', () => {
-    describe('handleDuplicateFlowLogs', () => {
-        it('should return null when a flow already exists', () => {
-            const flowLog = createFlowLog(new Date(0));
-            const flowLogs = [
-                {
-                    flowLog,
-                    json: JSON.stringify({ ...flowLog, id: undefined }),
-                },
-            ];
-            const startTime = new Date(0).getTime();
-
-            const result = handleDuplicateFlowLogs({
-                flowLog,
-                startTime,
-                flowLogs,
-            });
-
-            expect(result).toEqual({
-                flowLog: null,
-                flowLogs,
-                startTime,
-            });
-        });
-
-        it('should return a new response when a the start time is different', () => {
-            const flowLog = createFlowLog(new Date(1));
-            const oldFlowLog = createFlowLog(new Date(0));
-            const flowLogs = [
-                {
-                    flowLog: oldFlowLog,
-                    json: JSON.stringify({ ...oldFlowLog, id: undefined }),
-                },
-                {
-                    flowLog: oldFlowLog,
-                    json: JSON.stringify({ ...oldFlowLog, id: undefined }),
-                },
-            ];
-            const startTime = new Date(0).getTime();
-
-            const result = handleDuplicateFlowLogs({
-                flowLog,
-                startTime,
-                flowLogs,
-            });
-
-            expect(result).toEqual({
-                flowLog,
-                flowLogs: [
-                    {
-                        flowLog,
-                        json: JSON.stringify({ ...flowLog, id: undefined }),
-                    },
-                ],
-                startTime: flowLog.start_time.getTime(),
-            });
-        });
-
-        it('should add the flow log to the existing list', () => {
-            const flowLog = createFlowLog(new Date(0), 'new-flow');
-            const oldFlowLog = createFlowLog(new Date(0));
-            const flowLogs = [
-                {
-                    flowLog: oldFlowLog,
-                    json: JSON.stringify({ ...oldFlowLog, id: undefined }),
-                },
-            ];
-            const startTime = new Date(0).getTime();
-
-            const result = handleDuplicateFlowLogs({
-                flowLog,
-                startTime,
-                flowLogs,
-            });
-
-            expect(result).toEqual({
-                flowLog,
-                flowLogs: [
-                    ...flowLogs,
-                    {
-                        flowLog,
-                        json: JSON.stringify({ ...flowLog, id: undefined }),
-                    },
-                ],
-                startTime,
-            });
-        });
-    });
-
     describe('getV1Columns', () => {
         const mockLocalStorage = {
             removeItem: jest.fn(),
@@ -368,5 +229,159 @@ describe('updateFirstFlowStartTime', () => {
         expect(mockSetFirstFlowStartTime).toHaveBeenCalledWith(
             fixedTime.getTime(),
         );
+    });
+});
+
+describe('getTimeInSeconds', () => {
+    const NOW = 1700000000000;
+
+    beforeEach(() => {
+        jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('should return undefined when time is null', () => {
+        expect(getTimeInSeconds(null)).toBeUndefined();
+    });
+
+    it('should return -3600 when time is 0 (treated as far in the past)', () => {
+        expect(getTimeInSeconds(0)).toBe(-3600);
+    });
+
+    it('should return -3600 when time is more than one hour in the past', () => {
+        const twoHoursAgo = NOW - 2 * 3600 * 1000;
+        expect(getTimeInSeconds(twoHoursAgo)).toBe(-3600);
+    });
+
+    it('should return -3600 when time is exactly one millisecond beyond one hour ago', () => {
+        const justOverOneHour = NOW - 3600 * 1000 - 1;
+        expect(getTimeInSeconds(justOverOneHour)).toBe(-3600);
+    });
+
+    it('should return time in seconds when time is exactly one hour ago', () => {
+        const exactlyOneHour = NOW - 3600 * 1000;
+        expect(getTimeInSeconds(exactlyOneHour)).toBe(
+            Math.round(exactlyOneHour / 1000),
+        );
+    });
+
+    it('should return time in seconds when time is within the last hour', () => {
+        const thirtyMinutesAgo = NOW - 30 * 60 * 1000;
+        expect(getTimeInSeconds(thirtyMinutesAgo)).toBe(
+            Math.round(thirtyMinutesAgo / 1000),
+        );
+    });
+
+    it('should return time in seconds for a recent timestamp', () => {
+        const fiveSecondsAgo = NOW - 5000;
+        expect(getTimeInSeconds(fiveSecondsAgo)).toBe(
+            Math.round(fiveSecondsAgo / 1000),
+        );
+    });
+
+    it('should return time in seconds for a future timestamp', () => {
+        const future = NOW + 60000;
+        expect(getTimeInSeconds(future)).toBe(Math.round(future / 1000));
+    });
+});
+
+describe('computeNextSort', () => {
+    it('should toggle start_time desc when clicking start_time with an existing primary sort', () => {
+        const column = { id: 'start_time' };
+        const sortState = [
+            { id: 'action', desc: false },
+            { id: 'start_time', desc: true },
+        ];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'action', desc: false },
+            { id: 'start_time', desc: false },
+        ]);
+    });
+
+    it('should default start_time to desc=false when clicking start_time with a primary sort but no existing start_time entry', () => {
+        const column = { id: 'start_time' };
+        const sortState = [{ id: 'action', desc: true }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'action', desc: true },
+            { id: 'start_time', desc: false },
+        ]);
+    });
+
+    it('should add an unsorted column as ascending with start_time', () => {
+        const column = { id: 'action', isSorted: false };
+        const sortState = [{ id: 'start_time', desc: true }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'action', desc: false },
+            { id: 'start_time', desc: true },
+        ]);
+    });
+
+    it('should flip a sorted-asc column to descending', () => {
+        const column = { id: 'action', isSorted: true, isSortedDesc: false };
+        const sortState = [
+            { id: 'action', desc: false },
+            { id: 'start_time', desc: true },
+        ];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'action', desc: true },
+            { id: 'start_time', desc: true },
+        ]);
+    });
+
+    it('should remove the column sort when clicking a sorted-desc column, keeping start_time', () => {
+        const column = { id: 'action', isSorted: true, isSortedDesc: true };
+        const sortState = [
+            { id: 'action', desc: true },
+            { id: 'start_time', desc: false },
+        ];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([{ id: 'start_time', desc: false }]);
+    });
+
+    it('should default start_time to desc=true when there is no start_time in sortState', () => {
+        const column = { id: 'dest_port', isSorted: false };
+        const sortState = [{ id: 'action', desc: false }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([
+            { id: 'dest_port', desc: false },
+            { id: 'start_time', desc: true },
+        ]);
+    });
+
+    it('should not append start_time when clicking the start_time column without a primary sort', () => {
+        const column = { id: 'start_time', isSorted: false };
+        const sortState = [{ id: 'start_time', desc: true }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([{ id: 'start_time', desc: false }]);
+    });
+
+    it('should not append start_time when clicking the end_time column', () => {
+        const column = { id: 'end_time', isSorted: false };
+        const sortState = [{ id: 'start_time', desc: true }];
+
+        const result = computeNextSort(column, sortState);
+
+        expect(result).toEqual([{ id: 'end_time', desc: false }]);
     });
 });

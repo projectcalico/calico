@@ -37,5 +37,6 @@ export default {
         '<rootDir>/src/components/index.ts',
         '<rootDir>/src/features/flowLogs/components/index.ts',
         '<rootDir>/test-utils',
+        '<rootDir>/src/components/common/shadcn',
     ],
 };

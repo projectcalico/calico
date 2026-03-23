@@ -5,7 +5,7 @@ import {
     FlowLog as ApiFlowLog,
     QueryPage,
 } from '@/types/api';
-import { FilterHintValues, FlowLog, UniqueFlowLogs } from '@/types/render';
+import { FilterHintValues, FlowLog } from '@/types/render';
 import {
     FilterHintKey,
     FilterHintType,
@@ -19,7 +19,6 @@ import React from 'react';
 import {
     buildStreamPath,
     getTimeInSeconds,
-    handleDuplicateFlowLogs,
     transformFlowLogsResponse,
     transformStartTime,
     updateFirstFlowStartTime,
@@ -71,7 +70,7 @@ export const useInfiniteFilterQuery = (
             fetchFilters({
                 page: pageParam as number,
                 type: FilterHintTypes[filterParam],
-                pageSize: OmniFilterProperties[filterParam].limit! ?? 1,
+                pageSize: OmniFilterProperties[filterParam].limit ?? 1,
                 filters: query ?? undefined,
             }).then((response) =>
                 transformToQueryPage(response, pageParam as number),
@@ -86,45 +85,34 @@ export const useFlowLogsStream = (
 ) => {
     const firstFlowStartTime = React.useRef<number | null>(null);
     const restartTime = React.useRef<number | null>(null);
+    const streamGeneration = React.useRef(0);
     const filters = transformToFlowsFilterQuery(
         filterHintValues as FilterHintValues,
     );
     const startTimeGte = transformStartTime(startTime);
     const path = buildStreamPath(startTimeGte, filters);
-    const uniqueFlowLogs = React.useRef<UniqueFlowLogs>({
-        startTime: 0,
-        flowLogs: [],
-    });
+    const resetStreamState = React.useCallback(() => {
+        streamGeneration.current += 1;
+    }, []);
 
     const { startStream, data, totalItems, ...rest } = useStream<
         ApiFlowLog,
         FlowLog
     >({
         path,
-        transformResponse: (stream) => {
-            const transformed = transformFlowLogsResponse(stream);
-
-            const { flowLog, flowLogs, startTime } = handleDuplicateFlowLogs({
-                flowLog: transformed,
-                ...uniqueFlowLogs.current,
-            });
-
-            uniqueFlowLogs.current = {
-                startTime,
-                flowLogs,
-            };
-
-            return flowLog;
-        },
+        transformResponse: transformFlowLogsResponse,
     });
 
     // First flow start time is needed for accurate filtering
     React.useEffect(() => {
+        const generation = streamGeneration.current;
         updateFirstFlowStartTime(
             data,
             firstFlowStartTime.current,
             (startTime) => {
-                firstFlowStartTime.current = startTime;
+                if (streamGeneration.current === generation) {
+                    firstFlowStartTime.current = startTime;
+                }
             },
         );
 
@@ -144,20 +132,23 @@ export const useFlowLogsStream = (
     );
 
     useDidUpdate(() => {
+        resetStreamState();
         const path = buildStreamPath(
             getTimeInSeconds(firstFlowStartTime.current),
             filters,
         );
         updateStream(path);
-    }, [filters, updateStream]);
+    }, [filters, updateStream, resetStreamState]);
 
     useDidUpdate(() => {
+        resetStreamState();
         // set first flow start time to null when the start time filter changes. It will be set to the first flow start time when the stream starts again.
         firstFlowStartTime.current = null;
         updateStream(buildStreamPath(startTimeGte, filters));
-    }, [startTime, updateStream]);
+    }, [startTime, updateStream, resetStreamState]);
 
     const start = () => {
+        resetStreamState();
         const path = buildStreamPath(
             getTimeInSeconds(restartTime.current),
             filters,
