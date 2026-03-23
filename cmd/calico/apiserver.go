@@ -31,8 +31,9 @@ import (
 
 func newAPIServerCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "apiserver",
-		Short: "Run the Calico API server",
+		Use:                "apiserver",
+		Short:              "Run the Calico API server",
+		DisableFlagParsing: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			logs.InitLogs()
 			defer logs.FlushLogs()
@@ -59,6 +60,7 @@ func newAPIServerCommand() *cobra.Command {
 				os.Exit(1)
 			}
 
+			serverCmd.SetArgs(args)
 			code := cli.Run(serverCmd)
 			os.Exit(code)
 		},

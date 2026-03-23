@@ -1563,7 +1563,8 @@ KIND_CALICO_IMAGES = \
 	calico/goldmane:$(KIND_TEST_BUILD_TAG) \
 	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
-	calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
+	calico/whisker-backend:$(KIND_TEST_BUILD_TAG) \
+	calico/calico:$(KIND_TEST_BUILD_TAG)
 
 # Operator is built separately (build-operator.sh tags it directly as
 # :test-build), so it's not in KIND_CALICO_IMAGES.
@@ -1587,7 +1588,8 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/goldmane/.image.created-$(ARCH) \
 	$(REPO_ROOT)/webhooks/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
-	$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH)
+	$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH) \
+	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
@@ -1621,6 +1623,9 @@ $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 
 $(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
 	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
+
+$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd/calico)
+	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
 
 # Operator is built from a separate repo/branch and depends on all other
 # images being built first.
