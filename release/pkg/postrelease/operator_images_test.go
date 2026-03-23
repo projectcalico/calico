@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -27,10 +28,8 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 		t.Fatalf("failed to pull operator image %s: %v\n%s", fqOperatorImage, err, string(out))
 	}
 
-	// Run the operator image with --print-images=list to get the list of images it uses.
 	t.Logf("Running operator image %s with --print-images=listcalico", fqOperatorImage)
-	runCmd := exec.Command("docker", "run", "--rm", fqOperatorImage, "--print-images=listcalico")
-	out, err := runCmd.CombinedOutput()
+	out, err := command.Run("docker", []string{"run", "--rm", fqOperatorImage, "--print-images=listcalico"})
 	if err != nil {
 		t.Fatalf("failed to run operator image %s with --print-images=listcalico: %v\n%s", fqOperatorImage, err, string(out))
 	}
