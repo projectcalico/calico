@@ -203,7 +203,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 			pol.Namespace = "fv"
 			pol.Name = "policy-1"
 			ports := []numorstring.Port{
-				numorstring.NamedPort(sharedPortName),
+				numorstring.Port{PortName: sharedPortName},
 			}
 			for i := range numNumericPorts {
 				ports = append(ports, numorstring.SinglePort(3000+uint16(i)))
@@ -375,9 +375,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 
 			entityRule := api.EntityRule{
 				Ports: []numorstring.Port{
-					numorstring.NamedPort(sharedPortName),
-					numorstring.NamedPort(w0PortName),
-					numorstring.NamedPort(w1PortName),
+					numorstring.Port{PortName: sharedPortName},
+					numorstring.Port{PortName: w0PortName},
+					numorstring.Port{PortName: w1PortName},
 					numorstring.SinglePort(4000),
 				},
 				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
@@ -627,7 +627,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 		Describe("with negated ports conflicting with positive ports", func() {
 			BeforeEach(func() {
 				ports := []numorstring.Port{
-					numorstring.NamedPort(w0PortName),
+					numorstring.Port{PortName: w0PortName},
 					numorstring.SinglePort(w1Port),
 					numorstring.SinglePort(4000),
 				}
@@ -665,9 +665,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 
 			entityRule := api.EntityRule{
 				Ports: []numorstring.Port{
-					numorstring.NamedPort(sharedPortName),
-					numorstring.NamedPort(w0PortName),
-					numorstring.NamedPort(w1PortName),
+					numorstring.Port{PortName: sharedPortName},
+					numorstring.Port{PortName: w0PortName},
+					numorstring.Port{PortName: w1PortName},
 				},
 				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
 					w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
@@ -787,7 +787,7 @@ var _ = infrastructure.DatastoreDescribe("TCP: named port with a simulated kuber
 			Protocol: &protoStruct,
 			Destination: api.EntityRule{
 				Ports: []numorstring.Port{
-					numorstring.NamedPort("http-port"),
+					numorstring.Port{PortName: "http-port"},
 				},
 			},
 		}
@@ -937,7 +937,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 				Action:   api.Allow,
 				Protocol: &tcp,
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.NamedPort("http")},
+					Ports: []numorstring.Port{numorstring.Port{PortName: "http"}},
 				},
 			},
 		}
@@ -955,7 +955,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 				Action:   api.Allow,
 				Protocol: &tcp,
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.NamedPort("http")},
+					Ports: []numorstring.Port{numorstring.Port{PortName: "http"}},
 				},
 			},
 		}
@@ -976,13 +976,13 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 		expectNamedPortOpen()
 
 		// Switch to incorrect named port, should fail.
-		pol.Spec.Egress[0].Destination.Ports[0] = numorstring.NamedPort("wrong")
+		pol.Spec.Egress[0].Destination.Ports[0] = numorstring.Port{PortName: "wrong"}
 		pol, err = client.GlobalNetworkPolicies().Update(utils.Ctx, pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		expectNoConnectivity()
 
 		// Switch to correct named port, should work.
-		pol.Spec.Egress[0].Destination.Ports[0] = numorstring.NamedPort("http")
+		pol.Spec.Egress[0].Destination.Ports[0] = numorstring.Port{PortName: "http"}
 		pol, err = client.GlobalNetworkPolicies().Update(utils.Ctx, pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		expectNamedPortOpen()
@@ -1075,7 +1075,7 @@ var _ = infrastructure.DatastoreDescribe("tests with mixed TCP/UDP", []apiconfig
 				Protocol: &protoTCPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
-						numorstring.NamedPort("udp-port"),
+						numorstring.Port{PortName: "udp-port"},
 					},
 				},
 			},
@@ -1084,7 +1084,7 @@ var _ = infrastructure.DatastoreDescribe("tests with mixed TCP/UDP", []apiconfig
 				Protocol: &protoUDPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
-						numorstring.NamedPort("http-port"),
+						numorstring.Port{PortName: "http-port"},
 					},
 				},
 			},

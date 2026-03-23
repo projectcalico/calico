@@ -434,7 +434,7 @@ var (
 		InboundRules: []model.Rule{
 			{
 				Protocol: &protoTCP,
-				SrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
+				SrcPorts: []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 			},
 		},
 		OutboundRules: []model.Rule{
@@ -451,7 +451,7 @@ var policy1_order20_with_named_port_tcpport_negated = model.Policy{
 	InboundRules: []model.Rule{
 		{
 			Protocol:    &protoTCP,
-			NotSrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
+			NotSrcPorts: []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
@@ -468,7 +468,7 @@ var policy_with_named_port_inherit = model.Policy{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: "profile == 'prof-1'",
-			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{},
@@ -483,7 +483,7 @@ var policy1_order20_with_selector_and_named_port_tcpport = model.Policy{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: allSelector,
-			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
@@ -501,7 +501,7 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport = model.Policy{
 			Protocol:       &protoTCP,
 			SrcSelector:    allSelector,
 			NotSrcSelector: "foo == 'bar'",
-			NotSrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+			NotSrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress"},
@@ -516,7 +516,7 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = model.Po
 			Protocol:       &protoTCP,
 			DstSelector:    allSelector,
 			NotDstSelector: "foo == 'bar'",
-			NotDstPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+			NotSrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress"},
@@ -530,7 +530,7 @@ var policy1_order20_with_selector_and_named_port_udpport = model.Policy{
 		{
 			Protocol:    &protoUDP,
 			SrcSelector: allSelector,
-			SrcPorts:    []numorstring.Port{numorstring.NamedPort("udpport")},
+			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "udpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
@@ -546,13 +546,13 @@ var policy1_order20_with_named_port_mismatched_protocol = model.Policy{
 	InboundRules: []model.Rule{
 		{
 			Protocol: &protoTCP,
-			SrcPorts: []numorstring.Port{numorstring.NamedPort("udpport")},
+			SrcPorts: []numorstring.Port{numorstring.Port{PortName: "udpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
 		{
 			Protocol: &protoUDP,
-			SrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
+			SrcPorts: []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress", "egress"},
@@ -569,7 +569,7 @@ var policy1_order20_with_selector_and_named_port_tcpport2 = model.Policy{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: allSelector,
-			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport2")},
+			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport2"}},
 		},
 	},
 	Types: []string{"ingress", "egress"},
