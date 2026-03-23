@@ -20,6 +20,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/stream"
@@ -323,7 +325,7 @@ func (a *Goldmane) Stream(req *proto.FlowStreamRequest) (stream.Stream, error) {
 	// Wait for a response.
 	s := <-respCh
 	if s == nil {
-		return nil, fmt.Errorf("failed to establish new stream")
+		return nil, status.Error(codes.ResourceExhausted, "max number of streams reached, try again later")
 	}
 	return s, nil
 }
