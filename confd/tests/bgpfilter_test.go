@@ -34,6 +34,11 @@ func TestBGPFilterTemplates(t *testing.T) {
 		{"import_only/explicit_peer", "bgpfilter/import_only/explicit_peer/input.yaml", "bgpfilter/import_only/explicit_peer"},
 		{"import_only/global_peer", "bgpfilter/import_only/global_peer/input.yaml", "bgpfilter/import_only/global_peer"},
 		{"v6_only/global_peer", "bgpfilter/v6_only/global_peer/input.yaml", "bgpfilter/v6_only/global_peer"},
+		{"export_only/explicit_peer", "bgpfilter/export_only/explicit_peer/input.yaml", "bgpfilter/export_only/explicit_peer"},
+		{"export_only/global_peer", "bgpfilter/export_only/global_peer/input.yaml", "bgpfilter/export_only/global_peer"},
+		{"v4_only/explicit_peer", "bgpfilter/v4_only/explicit_peer/input.yaml", "bgpfilter/v4_only/explicit_peer"},
+		{"v4_only/global_peer", "bgpfilter/v4_only/global_peer/input.yaml", "bgpfilter/v4_only/global_peer"},
+		{"v6_only/explicit_peer", "bgpfilter/v6_only/explicit_peer/input.yaml", "bgpfilter/v6_only/explicit_peer"},
 	}
 
 	for _, be := range activeBackends {
