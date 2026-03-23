@@ -48,14 +48,17 @@ static CALI_BPF_INLINE void ringbuf_flush_drops(void)
 	}
 
 	__u64 now = bpf_ktime_get_ns();
-
+	
 	if (val->count == 0 || now - val->last_flush_ts < CALI_RB_FLUSH_INTERVAL_NS) {
 		return;
 	}
 
 	bpf_spin_lock(&val->lock);
-	__u64 dropped = val->count;
-	val->count = 0;
+	__u64 dropped = __sync_lock_test_and_set(&val->count, 0);
+	if (dropped == 0) {
+		bpf_spin_unlock(&val->lock);
+		return;
+	}
 	bpf_spin_unlock(&val->lock);
 
 	/* Cannot call bpf_ringbuf_output while holding the lock. */
