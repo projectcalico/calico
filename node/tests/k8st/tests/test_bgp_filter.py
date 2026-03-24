@@ -112,7 +112,7 @@ EOF
             if result is not None and not present:
                 raise Exception('route present when it should not be')
             return result
-        result = retry_until_success(fn, retries=10, wait_time=3)
+        result = retry_until_success(fn, timeout=60)
         return result
 
     def _assert_route_present_in_cluster_bird(self, calicoPod, route, peerIP, ipv6=False, globalPeer=False):
@@ -132,7 +132,7 @@ EOF
             if result is not None and not present:
                 raise Exception('route present when it should not be')
             return result
-        result = retry_until_success(fn, retries=10, wait_time=3)
+        result = retry_until_success(fn, timeout=60)
         return result
 
     def _assert_route_present_in_external_bird(self, birdContainer, birdPeer, routeRegex, peerIPRegex, ipv6=False):

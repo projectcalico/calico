@@ -95,7 +95,7 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
     # Check how much space there is inside the container.  We may need
     # to retry this, as it may take a while for the image to download
     # and the container to start running.
-    retry_until_success(run, retries=30, wait_time=2, function_args=["docker exec %s df -h" % name])
+    retry_until_success(run, timeout=60, function_args=["docker exec %s df -h" % name])
 
     # Install curl and iproute2.
     run("docker exec %s apk add --no-cache curl iproute2" % name)
@@ -141,51 +141,64 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
     return birdy_ip
 
 def retry_until_success(fun,
-                        retries=90,
-                        wait_time=1,
+                        timeout=90,
                         ex_class=None,
                         log_exception=True,
                         function_args=None,
                         function_kwargs=None):
     """
-    Retries function until no exception is thrown. If exception continues,
-    it is reraised.
+    Retries function until no exception is thrown, or the timeout expires.
+
+    Uses exponential backoff (factor 1.5, starting at 0.5s, capped at 10s).
+    The time taken by each invocation of the function counts toward the
+    timeout, so the wall-clock deadline is predictable regardless of how
+    long the function itself takes.
+
+    Logs a warning if more than half the timeout was consumed before success.
+
     :param fun: the function to be repeatedly called
-    :param retries: the maximum number of times to retry the function.  A value
-    of 0 will run the function once with no retries.
-    :param wait_time: the time to wait between retries (in s)
-    :param ex_class: The class of expected exceptions.
-    :param log_exception: By default this function logs the exception if the
-    function is still failing after max retries.   This log can sometimes be
-    superfluous -- if e.g. the calling code is going to make a better log --
-    and can be suppressed by setting this parameter to False.
-    :param function_args: A list of arguments to pass to function
-    :param function_kwargs: A dictionary of keyword arguments to pass to
-                            function
-    :returns: the value returned by function
+    :param timeout: maximum wall-clock seconds before giving up (default 90)
+    :param ex_class: only retry this exception class; others propagate immediately
+    :param log_exception: if True (default), log the final exception on timeout
+    :param function_args: a list of positional arguments to pass to fun
+    :param function_kwargs: a dict of keyword arguments to pass to fun
+    :returns: the value returned by fun
     """
     if function_args is None:
         function_args = []
     if function_kwargs is None:
         function_kwargs = {}
-    for retry in range(retries + 1):
+
+    deadline = time.time() + timeout
+    backoff = 0.5
+    max_backoff = 10.0
+    attempts = 0
+
+    while True:
+        attempts += 1
         try:
             result = fun(*function_args, **function_kwargs)
         except Exception as e:
             if ex_class and e.__class__ is not ex_class:
-                _log.exception("Hit unexpected exception in function - "
-                               "not retrying.")
+                _log.exception("Hit unexpected exception in function - not retrying.")
                 raise
-            if retry < retries:
-                _log.debug("Hit exception in function - retrying: %s", e)
-                time.sleep(wait_time)
-            else:
+            now = time.time()
+            if now >= deadline:
                 if log_exception:
-                    _log.exception("Function %s did not succeed before "
-                                   "timeout.", fun)
+                    _log.exception("Function %s did not succeed within %ds timeout (%d attempts).",
+                                   function_name(fun), timeout, attempts)
                 raise
+            remaining = deadline - now
+            sleep_time = min(backoff, remaining, max_backoff)
+            _log.debug("Hit exception in function - retrying in %.1fs (%.1fs remaining): %s",
+                       sleep_time, remaining, e)
+            time.sleep(sleep_time)
+            backoff = min(backoff * 1.5, max_backoff)
         else:
-            # Successfully ran the function
+            elapsed = time.time() - (deadline - timeout)
+            if elapsed > timeout / 2:
+                _log.warning("Function %s succeeded but used %.1fs of %ds timeout (%d attempts).",
+                             function_name(fun), elapsed, timeout, attempts)
             return result
 
 
