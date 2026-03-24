@@ -22,6 +22,8 @@ components:
     version: test-build
   apiserver:
     version: test-build
+  calico/calico:
+    version: test-build
   csi:
     version: test-build
   csi-node-driver-registrar:

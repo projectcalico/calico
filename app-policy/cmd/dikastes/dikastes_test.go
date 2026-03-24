@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,12 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+
+	"github.com/projectcalico/calico/app-policy/pkg/dikastes"
 )
 
 func TestTerminationHandler_ServeHTTP(t *testing.T) {
-	th := httpTerminationHandler{make(chan bool, 1)}
+	th := dikastes.HTTPTerminationHandler{TermChan: make(chan bool, 1)}
 	req := httptest.NewRequest("POST", "http://127.0.0.1:7777/terminate", nil)
 	w := httptest.NewRecorder()
 	th.ServeHTTP(w, req)
@@ -36,7 +38,7 @@ func TestTerminationHandler_ServeHTTP(t *testing.T) {
 	}
 
 	select {
-	case <-th.termChan:
+	case <-th.TermChan:
 		return
 	default:
 		t.Error("termination handler did not write to channel as expected")
@@ -44,7 +46,7 @@ func TestTerminationHandler_ServeHTTP(t *testing.T) {
 }
 
 func TestHttpTerminationHandler_RunHTTPServer(t *testing.T) {
-	th := httpTerminationHandler{make(chan bool, 1)}
+	th := dikastes.HTTPTerminationHandler{TermChan: make(chan bool, 1)}
 	type input struct {
 		addr, port string
 	}
