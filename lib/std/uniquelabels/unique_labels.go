@@ -118,6 +118,9 @@ func (i Map) MarshalJSON() ([]byte, error) {
 	if n == 0 {
 		return []byte("{}"), nil
 	}
+	// Stack-allocate space for up to 20 key-value pairs, which covers
+	// the vast majority of Kubernetes label maps.  Maps with more entries
+	// transparently spill to the heap via append.
 	var pairsArr [20]keyVal
 	pairs := pairsArr[:0]
 	for k, v := range i.m {
@@ -286,8 +289,8 @@ func noOpFilter(uniquestr.Handle, uniquestr.Handle) bool {
 type keyVal struct{ key, val string }
 
 // appendJSONString appends a JSON-encoded string (with quotes) to buf.
-// All printable ASCII except '"' and '\\' is safe to embed directly in
-// a JSON string.  Falls back to json.Marshal for anything else.
+// All printable ASCII except '"', '\\', '&', '<', and '>' is safe to embed
+// directly in a JSON string.  Falls back to json.Marshal for anything else.
 func appendJSONString(buf []byte, s string) []byte {
 	if jsonSafe(s) {
 		buf = append(buf, '"')

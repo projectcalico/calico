@@ -202,6 +202,36 @@ func TestMarshalJSONSortsKeys(t *testing.T) {
 	}
 }
 
+func TestMarshalJSONManyKeys(t *testing.T) {
+	// Exercises the heap-spill path when the number of entries exceeds
+	// the stack-allocated pairsArr capacity (20).
+	input := make(map[string]string, 30)
+	for i := range 30 {
+		input[fmt.Sprintf("key-%02d", i)] = fmt.Sprintf("val-%02d", i)
+	}
+	m := Make(input)
+
+	got, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("MarshalJSON (30 keys) = %s, want %s", got, want)
+	}
+
+	var rt Map
+	if err := json.Unmarshal(got, &rt); err != nil {
+		t.Fatal(err)
+	}
+	if !rt.EquivalentTo(input) {
+		t.Errorf("round-trip mismatch for 30-key map")
+	}
+}
+
 func BenchmarkMarshalJSON(b *testing.B) {
 	const nKeys = 15
 	input := make(map[string]string, nKeys)
