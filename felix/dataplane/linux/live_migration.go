@@ -236,14 +236,14 @@ func (s liveMigrationState) String() string {
 }
 
 type liveMigrationFSM struct {
-	logCtx       *logrus.Entry
-	id           types.WorkloadEndpointID
-	monitor      *liveMigrationMonitor
-	currentState liveMigrationState
-	migrationUID string
-	timer        *time.Timer
-	pcapHandle   garpHandle
-	garpWG       sync.WaitGroup
+	logCtx          *logrus.Entry
+	id              types.WorkloadEndpointID
+	monitor         *liveMigrationMonitor
+	currentState    liveMigrationState
+	migrationUID    string
+	timer           *time.Timer
+	pcapHandle      garpHandle
+	garpWG          sync.WaitGroup
 	ipamSwapStarted bool
 }
 
