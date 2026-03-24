@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -25,9 +26,11 @@ import (
 
 func newTyphaCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "typha",
-		Short: "Run the Typha datastore fan-out proxy",
+		Use:                "typha",
+		Short:              "Run the Typha datastore fan-out proxy",
+		DisableFlagParsing: true,
 		Run: func(cmd *cobra.Command, args []string) {
+			os.Args = append([]string{"calico-typha"}, args...)
 			typha := daemon.New()
 			err := typha.InitializeAndServeForever(context.Background())
 			logrus.WithError(err).Panic("InitializeAndServeForever returned")
