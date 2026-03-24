@@ -236,15 +236,15 @@ func (s liveMigrationState) String() string {
 }
 
 type liveMigrationFSM struct {
-	logCtx          *logrus.Entry
-	id              types.WorkloadEndpointID
-	monitor         *liveMigrationMonitor
-	currentState    liveMigrationState
-	migrationUID    string
-	timer           *time.Timer
-	pcapHandle      garpHandle
-	garpWG          sync.WaitGroup
-	ipamSwapStarted bool
+	logCtx       *logrus.Entry
+	id           types.WorkloadEndpointID
+	monitor      *liveMigrationMonitor
+	currentState liveMigrationState
+	migrationUID string
+	timer        *time.Timer
+	pcapHandle   garpHandle
+	garpWG       sync.WaitGroup
+	ipamSwapOnce sync.Once
 }
 
 func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
@@ -451,21 +451,19 @@ func isGARPOrRARP(packet gopacket.Packet) bool {
 // startIPAMOwnerSwap begins an asynchronous IPAM owner attribute swap when a
 // live migration completes.  It is called when entering both the Live state
 // (happy path: GARP detected) and the TimeWait state (missed GARP path:
-// Target→TimeWait).  The ipamSwapStarted flag ensures the swap is initiated at
-// most once per FSM lifecycle, so the Live→TimeWait transition does not trigger
-// a duplicate swap.
-//
-// It uses the VMI name from the proto.WorkloadEndpoint (extracted from the
-// pod's labels by the calc graph) and calls vmipam.EnsureActiveVMOwnerAttrs to
-// atomically promote the alternate (target) owner attributes to active.
-// Transient errors are retried with backoff.  This runs in a goroutine to
-// avoid blocking the dataplane main loop.
+// Target→TimeWait).  sync.Once ensures the swap is initiated at most once per
+// FSM lifecycle, so the Live→TimeWait transition does not trigger a duplicate.
 func (f *liveMigrationFSM) startIPAMOwnerSwap() {
-	if f.ipamSwapStarted {
-		f.logCtx.Debug("IPAM owner swap already initiated, skipping")
-		return
-	}
+	f.ipamSwapOnce.Do(f.doIPAMOwnerSwap)
+}
 
+// doIPAMOwnerSwap performs the actual IPAM owner attribute swap.  It uses the
+// VMI name from the proto.WorkloadEndpoint (extracted from the pod's labels by
+// the calc graph) and calls vmipam.EnsureActiveVMOwnerAttrs to atomically
+// promote the alternate (target) owner attributes to active.  Transient errors
+// are retried with backoff.  This runs in a goroutine to avoid blocking the
+// dataplane main loop.
+func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 	vmiName := f.monitor.vmiNames[f.id]
 	if vmiName == "" {
 		f.logCtx.Debug("No VMI name available, skipping IPAM owner swap")
@@ -488,7 +486,6 @@ func (f *liveMigrationFSM) startIPAMOwnerSwap() {
 		"vmiName":   vmiName,
 	})
 	logCtx.Info("Starting IPAM owner attribute swap for live migration")
-	f.ipamSwapStarted = true
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
