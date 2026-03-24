@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"sync"
 	"unsafe"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
@@ -281,16 +282,29 @@ func (m Map) MarshalJSON() ([]byte, error) {
 	return marshalSortedPairs(pairs)
 }
 
+// rawMapPool reuses map[string]string allocations for UnmarshalJSON.
+// json.Unmarshal into a non-nil map reuses the existing bucket array,
+// avoiding repeated map header+bucket allocations.
+var rawMapPool = sync.Pool{
+	New: func() any {
+		return make(map[string]string, 16)
+	},
+}
+
 // UnmarshalJSON implements the json.Unmarshaler interface.  Unmarshalling
 // goes through Make so that keys are registered in the global key table
 // and the cache is consulted.  This is important because UnmarshalJSON is
 // the main entry point when receiving data from Typha.
 func (m *Map) UnmarshalJSON(data []byte) error {
-	var raw map[string]string
+	raw := rawMapPool.Get().(map[string]string)
+	clear(raw)
 	if err := json.Unmarshal(data, &raw); err != nil {
+		rawMapPool.Put(raw)
 		return err
 	}
 	*m = Make(raw)
+	clear(raw) // Release string references for GC.
+	rawMapPool.Put(raw)
 	return nil
 }
 

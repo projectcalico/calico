@@ -995,6 +995,36 @@ func BenchmarkMarshalJSON(b *testing.B) {
 	})
 }
 
+func BenchmarkUnmarshalJSON(b *testing.B) {
+	const nKeys = 15
+	input := make(map[string]string, nKeys)
+	for i := range nKeys {
+		input[fmt.Sprintf("example.com/label-%d", i)] = fmt.Sprintf("value-%d", i)
+	}
+	unsafeTestOnlyReset()
+	m := Make(input)
+	data, _ := m.MarshalJSON()
+
+	b.Run("cache-hit", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			var m Map
+			_ = m.UnmarshalJSON(data)
+		}
+	})
+
+	b.Run("cache-miss", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			b.StopTimer()
+			unsafeTestOnlyResetCache()
+			b.StartTimer()
+			var m Map
+			_ = m.UnmarshalJSON(data)
+		}
+	})
+}
+
 func TestFallbackMarshalJSON(t *testing.T) {
 	unsafeTestOnlyReset()
 	input := map[string]string{"zz": "last", "aa": "first", "mm": "middle"}
