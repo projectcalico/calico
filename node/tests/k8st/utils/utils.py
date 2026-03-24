@@ -158,7 +158,7 @@ def retry_until_success(fun,
 
     :param fun: the function to be repeatedly called
     :param timeout: maximum wall-clock seconds before giving up (default 90)
-    :param ex_class: only retry this exception class; others propagate immediately
+    :param ex_class: only retry this exception class (or tuple of classes); others propagate immediately
     :param log_exception: if True (default), log the final exception on timeout
     :param function_args: a list of positional arguments to pass to fun
     :param function_kwargs: a dict of keyword arguments to pass to fun
@@ -169,7 +169,8 @@ def retry_until_success(fun,
     if function_kwargs is None:
         function_kwargs = {}
 
-    deadline = time.time() + timeout
+    start = time.monotonic()
+    deadline = start + timeout
     backoff = 0.5
     max_backoff = 10.0
     attempts = 0
@@ -179,13 +180,13 @@ def retry_until_success(fun,
         try:
             result = fun(*function_args, **function_kwargs)
         except Exception as e:
-            if ex_class and e.__class__ is not ex_class:
+            if ex_class is not None and not isinstance(e, ex_class):
                 _log.exception("Hit unexpected exception in function - not retrying.")
                 raise
-            now = time.time()
+            now = time.monotonic()
             if now >= deadline:
                 if log_exception:
-                    _log.exception("Function %s did not succeed within %ds timeout (%d attempts).",
+                    _log.exception("Function %s did not succeed within %.0fs timeout (%d attempts).",
                                    function_name(fun), timeout, attempts)
                 raise
             remaining = deadline - now
@@ -195,9 +196,9 @@ def retry_until_success(fun,
             time.sleep(sleep_time)
             backoff = min(backoff * 1.5, max_backoff)
         else:
-            elapsed = time.time() - (deadline - timeout)
+            elapsed = time.monotonic() - start
             if elapsed > timeout / 2:
-                _log.warning("Function %s succeeded but used %.1fs of %ds timeout (%d attempts).",
+                _log.warning("Function %s succeeded but used %.1fs of %.0fs timeout (%d attempts).",
                              function_name(fun), elapsed, timeout, attempts)
             return result
 
