@@ -759,6 +759,7 @@ var bpfMapTypeMap = map[string]int{
 	"percpu_array":     6,
 	"lru_hash":         9,
 	"lpm_trie":         11,
+	"ringbuf":          27,
 }
 
 func CreateBPFMap(mapType string, keySize int, valueSize int, maxEntries int, flags int, name string) (int, error) {
