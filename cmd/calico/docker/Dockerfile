@@ -7,6 +7,7 @@ ARG GIT_VERSION
 ARG BIN_DIR
 
 COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calico
+COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver-registrar
 
 COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 

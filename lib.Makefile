@@ -1550,20 +1550,12 @@ KIND_TEST_BUILD_TAG = test-build
 
 # Calico images built locally with latest-$(ARCH) tags. kind-build-images
 # re-tags each as :test-build for the kind cluster.
-# Components whose images are provided by the uber calico/calico image
-# (operator uses "calico <subcommand>" as the container command):
-#   typha, kube-controllers, apiserver, csi
-# These no longer need individual images loaded into the kind cluster.
+# Most components are provided by the uber calico/calico image, which
+# uses "calico <subcommand>" as the container command. Only node (not yet
+# migrated) and whisker (TypeScript/nginx, not a Go binary) remain separate.
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
-	calico/ctl:$(KIND_TEST_BUILD_TAG) \
-	calico/cni:$(KIND_TEST_BUILD_TAG) \
-	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG) \
-	calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG) \
-	calico/goldmane:$(KIND_TEST_BUILD_TAG) \
-	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
-	calico/whisker-backend:$(KIND_TEST_BUILD_TAG) \
 	calico/calico:$(KIND_TEST_BUILD_TAG)
 
 # Operator is built separately (build-operator.sh tags it directly as
@@ -1579,13 +1571,7 @@ KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
 # runs when sources are newer.
 KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
-	$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH) \
-	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH) \
-	$(REPO_ROOT)/calicoctl/.image.created-$(ARCH) \
-	$(REPO_ROOT)/goldmane/.image.created-$(ARCH) \
-	$(REPO_ROOT)/webhooks/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
-	$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH) \
 	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)

@@ -56,7 +56,12 @@ image: $(CALICO_IMAGE)
 
 $(CALICO_IMAGE): $(CONTAINER_MARKER)
 IMAGE_DEPS = docker/Dockerfile
-$(CONTAINER_MARKER): $(IMAGE_DEPS) $(BINARIES) $(BINDIR)/LICENSE
+
+REGISTRAR_BIN = ../../pod2daemon/bin/node-driver-registrar-$(ARCH)
+$(REGISTRAR_BIN):
+	$(MAKE) -C ../../pod2daemon bin/node-driver-registrar-$(ARCH)
+
+$(CONTAINER_MARKER): $(IMAGE_DEPS) $(BINARIES) $(BINDIR)/LICENSE $(REGISTRAR_BIN)
 	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):latest-$(ARCH) -f docker/Dockerfile ../..
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(CALICO_IMAGE)
 	touch $@
