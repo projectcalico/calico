@@ -2,7 +2,7 @@
 This file contains the list of modules that this package depends on
 in order to trigger CI on changes
 
-go 1.24.13
+go 1.25.8
 github.com/beorn7/perks v1.0.1
 github.com/cespare/xxhash/v2 v2.3.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
@@ -31,9 +31,9 @@ golang.org/x/text v0.34.0
 golang.org/x/time v0.14.0
 google.golang.org/protobuf v1.36.7
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.33.8
-k8s.io/apimachinery v0.33.8
-k8s.io/client-go v0.33.8
+k8s.io/api v0.33.9
+k8s.io/apimachinery v0.33.9
+k8s.io/client-go v0.33.9
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.130.1
 k8s.io/utils v0.0.0-20241210054802-24370beab758
