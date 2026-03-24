@@ -6,49 +6,21 @@ components:
     version: master
   typha:
     version: test-build
-  node:
+  calico/node:
     version: test-build
-  cni:
+  calico/cni:
     version: test-build
-  node-windows:
-    version: test-build
-  cni-windows:
-    version: test-build
-  kube-controllers:
-    version: test-build
-  goldmane:
+  calico/kube-controllers:
     version: test-build
   flexvol:
     version: test-build
-  apiserver:
+  calico/apiserver:
     version: test-build
   calico/calico:
     version: test-build
-  csi:
+  calico/csi:
     version: test-build
   csi-node-driver-registrar:
     version: test-build
-  key-cert-provisioner:
-    version: test-build
-  webhooks:
-    version: test-build
-  whisker:
-    version: test-build
-  whisker-backend:
-    version: test-build
-  envoy-gateway:
-    version: test-build
-  envoy-proxy:
-    version: test-build
-  envoy-ratelimit:
-    version: test-build
-  guardian:
-    version: test-build
-  istio-pilot:
-    version: test-build
-  istio-install-cni:
-    version: test-build
-  istio-ztunnel:
-    version: test-build
-  istio-proxyv2:
+  calico/windows-upgrade:
     version: test-build
