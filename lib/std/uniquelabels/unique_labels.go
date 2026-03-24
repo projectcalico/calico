@@ -146,19 +146,9 @@ func (i Map) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON implements the json.Unmarshaler interface.  Must be defined on
 // the pointer receiver so that it can have side effects.
 func (i *Map) UnmarshalJSON(data []byte) error {
-	// Unmarshal via map[string]string to avoid Go 1.26 encoding/json issues
-	// with unique.Handle[string]-based map keys.
-	var sm map[string]string
-	if err := json.Unmarshal(data, &sm); err != nil {
+	var hm handleMap
+	if err := json.Unmarshal(data, &hm); err != nil {
 		return err
-	}
-	if sm == nil {
-		i.m = nil
-		return nil
-	}
-	hm := make(handleMap, len(sm))
-	for k, v := range sm {
-		hm[uniquestr.Make(k)] = uniquestr.Make(v)
 	}
 	i.m = hm
 	return nil
