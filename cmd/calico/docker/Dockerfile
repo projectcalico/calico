@@ -9,10 +9,10 @@ ARG BIN_DIR
 COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calico
 COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver-registrar
 
-# CNI plugin install expects binaries at /opt/cni/bin/
-RUN mkdir -p /opt/cni/bin && \
-    ln -s /usr/bin/calico /opt/cni/bin/calico && \
-    ln -s /usr/bin/calico /opt/cni/bin/calico-ipam
+# CNI plugin install expects binaries at /opt/cni/bin/.
+# The base image has no shell, so we copy the binary to the expected paths.
+COPY ${BIN_DIR}/calico-${TARGETARCH} /opt/cni/bin/calico
+COPY ${BIN_DIR}/calico-${TARGETARCH} /opt/cni/bin/calico-ipam
 
 COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
