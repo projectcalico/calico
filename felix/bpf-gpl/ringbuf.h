@@ -24,13 +24,17 @@ struct {					\
 // max_entries IS the buffer size in bytes.
 CALI_RINGBUF(cali_rb_evnt, 1024 * 1024)
 
-// Shared drop counter and flush timestamp, protected by a spinlock.
+// Shared drop counter and flush timestamp.
 // Drops are emitted as EVENT_LOST_EVENTS through the ring buffer itself;
 // Go never reads this map directly.
+//
+// No bpf_spin_lock: kprobe/tracing programs cannot reference maps whose
+// value type contains a spin lock. Instead, count uses atomic XCHG
+// (__sync_lock_test_and_set) for the read-and-zero in flush, and
+// __sync_fetch_and_add for increments.
 #define CALI_RB_FLUSH_INTERVAL_NS (5ULL * 1000000000ULL) /* 5 seconds */
 
 struct rb_drops_val {
-	struct bpf_spin_lock lock;
 	__u64 count;
 	__u64 last_flush_ts;
 };
@@ -48,20 +52,16 @@ static CALI_BPF_INLINE void ringbuf_flush_drops(void)
 	}
 
 	__u64 now = bpf_ktime_get_ns();
-	
-	if (val->count == 0 || now - val->last_flush_ts < CALI_RB_FLUSH_INTERVAL_NS) {
+	if (now - val->last_flush_ts < CALI_RB_FLUSH_INTERVAL_NS) {
 		return;
 	}
 
-	bpf_spin_lock(&val->lock);
 	__u64 dropped = __sync_lock_test_and_set(&val->count, 0);
 	if (dropped == 0) {
-		bpf_spin_unlock(&val->lock);
 		return;
 	}
-	bpf_spin_unlock(&val->lock);
 
-	/* Cannot call bpf_ringbuf_output while holding the lock. */
+	/* Emit the accumulated drop count as a lost-events notification. */
 	struct {
 		struct event_header hdr;
 		__u64 count;

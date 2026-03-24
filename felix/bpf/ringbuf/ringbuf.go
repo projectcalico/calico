@@ -104,14 +104,14 @@ func SetMapSize(size int) {
 }
 
 // DropsMap returns the shared array map used by the BPF side to track dropped
-// events. The value is struct rb_drops_val { bpf_spin_lock(4) + pad(4) +
-// count(8) + last_flush_ts(8) } = 24 bytes. Go never reads this map; it
-// exists only for EnsureExists() to create/pin the map.
+// events. The value is struct rb_drops_val { count(8) + last_flush_ts(8) } =
+// 16 bytes. Go never reads this map; it exists only for EnsureExists() to
+// create/pin the map.
 func DropsMap() maps.Map {
 	return maps.NewPinnedMap(maps.MapParameters{
 		Type:       "array",
 		KeySize:    4,
-		ValueSize:  24,
+		ValueSize:  16,
 		MaxEntries: 1,
 		Name:       DropsMapName,
 		Version:    1,

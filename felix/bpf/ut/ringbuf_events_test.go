@@ -152,9 +152,9 @@ func TestRingBufFillup(t *testing.T) {
 	// Drain any leftover events from previous tests and reset the drops map
 	// so we start with a completely clean state.
 	rb.Drain()
-	// Reset the single-entry drops map (struct rb_drops_val = 24 bytes).
+	// Reset the single-entry drops map (struct rb_drops_val = 16 bytes).
 	k := make([]byte, 4) // key = 0
-	zeroVal := make([]byte, 24)
+	zeroVal := make([]byte, 16)
 	err = ringBufDropsMap.Update(k, zeroVal)
 	Expect(err).NotTo(HaveOccurred())
 
