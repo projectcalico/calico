@@ -516,7 +516,7 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = model.Po
 			Protocol:       &protoTCP,
 			DstSelector:    allSelector,
 			NotDstSelector: "foo == 'bar'",
-			NotSrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
+			NotDstPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress"},
