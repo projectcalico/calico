@@ -95,15 +95,7 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
     # Check how much space there is inside the container.  We may need
     # to retry this, as it may take a while for the image to download
     # and the container to start running.
-    for attempt in range(30):
-        try:
-            run("docker exec %s df -h" % name)
-            break
-        except subprocess.CalledProcessError:
-            _log.info("Container not ready yet (attempt %d)", attempt)
-            time.sleep(2)
-    else:
-        raise Exception("Container %s failed to start after 30 attempts" % name)
+    retry_until_success(run, retries=30, wait_time=2, function_args=["docker exec %s df -h" % name])
 
     # Install curl and iproute2.
     run("docker exec %s apk add --no-cache curl iproute2" % name)
