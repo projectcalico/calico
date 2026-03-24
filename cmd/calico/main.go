@@ -17,8 +17,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
+	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 func newRootCommand() *cobra.Command {
@@ -43,6 +48,9 @@ func newRootCommand() *cobra.Command {
 		newDikastesCommand(),
 		newHealthzCommand(),
 		newCSICommand(),
+		newFlexvolCommand(),
+		newCtlCommand(),
+		newCNICommand(),
 		newVersionCommand(),
 	)
 
@@ -50,6 +58,19 @@ func newRootCommand() *cobra.Command {
 }
 
 func main() {
+	// When installed as a CNI plugin on the host, the binary may be invoked
+	// directly by the container runtime. Detect this and dispatch accordingly.
+	_, filename := filepath.Split(os.Args[0])
+	switch filename {
+	case "calico-ipam", "calico-ipam.exe":
+		ipamplugin.Main(buildinfo.Version)
+		return
+	}
+	if os.Getenv("CNI_COMMAND") != "" {
+		plugin.Main(buildinfo.Version)
+		return
+	}
+
 	if err := newRootCommand().Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
