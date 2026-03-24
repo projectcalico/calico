@@ -138,10 +138,9 @@ message ToDataplane {
     // WireguardEndpointV6Remove is sent to undo IPv6 wireguard on the host.
     WireguardEndpointV6Remove wireguard_endpoint_v6_remove = 34;
 
-    // HostMetadataV6Update is sent when a host IPv6 address is added or updated.
-    HostMetadataV6Update host_metadata_v6_update = 35;
-    // HostMetadataV6Remove is sent when a host IPv6 address is removed.
-    HostMetadataV6Remove host_metadata_v6_remove = 36;
+    // Field numbers 35 and 36 were used by HostMetadataV6Update and
+    // HostMetadataV6Remove, which have been replaced by the dual-stack
+    // HostMetadataV4V6Update (37) and HostMetadataV4V6Remove (38).
   }
 }
 
@@ -562,16 +561,6 @@ message HostMetadataUpdate {
 message HostMetadataRemove {
   string hostname = 1;
   string ipv4_addr = 2;
-}
-
-message HostMetadataV6Update {
-  string hostname = 1;
-  string ipv6_addr = 2;
-}
-
-message HostMetadataV6Remove {
-  string hostname = 1;
-  string ipv6_addr = 2;
 }
 
 message IPAMPoolUpdate {

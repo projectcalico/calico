@@ -76,8 +76,6 @@ type EventSequencer struct {
 	pendingEndpointDeletes       set.Set[model.Key]
 	pendingHostIPUpdates         map[string]*net.IP
 	pendingHostIPDeletes         set.Set[string]
-	pendingHostIPv6Updates       map[string]*net.IP
-	pendingHostIPv6Deletes       set.Set[string]
 	pendingHostMetadataUpdates   map[string]*hostInfo
 	pendingHostMetadataDeletes   set.Set[string]
 	pendingIPPoolUpdates         map[ip.CIDR]*model.IPPool
@@ -105,7 +103,6 @@ type EventSequencer struct {
 	sentProfiles        set.Set[model.ProfileRulesKey]
 	sentEndpoints       set.Set[model.Key]
 	sentHostIPs         set.Set[string]
-	sentHostIPv6s       set.Set[string]
 	sentHosts           set.Set[string]
 	sentIPPools         set.Set[ip.CIDR]
 	sentServiceAccounts set.Set[types.ServiceAccountID]
@@ -157,8 +154,6 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingEndpointDeletes:       set.New[model.Key](),
 		pendingHostIPUpdates:         map[string]*net.IP{},
 		pendingHostIPDeletes:         set.New[string](),
-		pendingHostIPv6Updates:       map[string]*net.IP{},
-		pendingHostIPv6Deletes:       set.New[string](),
 		pendingHostMetadataUpdates:   map[string]*hostInfo{},
 		pendingHostMetadataDeletes:   set.New[string](),
 		pendingIPPoolUpdates:         map[ip.CIDR]*model.IPPool{},
@@ -182,7 +177,6 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		sentProfiles:        set.New[model.ProfileRulesKey](),
 		sentEndpoints:       set.New[model.Key](),
 		sentHostIPs:         set.New[string](),
-		sentHostIPv6s:       set.New[string](),
 		sentHosts:           set.New[string](),
 		sentIPPools:         set.New[ip.CIDR](),
 		sentServiceAccounts: set.New[types.ServiceAccountID](),
@@ -655,48 +649,6 @@ func (buf *EventSequencer) flushHostIPDeletes() {
 	}
 }
 
-func (buf *EventSequencer) OnHostIPv6Update(hostname string, ip *net.IP) {
-	log.WithFields(log.Fields{
-		"hostname": hostname,
-		"ip":       ip,
-	}).Debug("Host IPv6 update")
-	buf.pendingHostIPv6Deletes.Discard(hostname)
-	buf.pendingHostIPv6Updates[hostname] = ip
-}
-
-func (buf *EventSequencer) flushHostIPv6Updates() {
-	for hostname, hostIP := range buf.pendingHostIPv6Updates {
-		hostIPv6Addr := ""
-		if hostIP != nil {
-			hostIPv6Addr = hostIP.String()
-		}
-		buf.Callback(&proto.HostMetadataV6Update{
-			Hostname: hostname,
-			Ipv6Addr: hostIPv6Addr,
-		})
-		buf.sentHostIPv6s.Add(hostname)
-		delete(buf.pendingHostIPv6Updates, hostname)
-	}
-}
-
-func (buf *EventSequencer) OnHostIPv6Remove(hostname string) {
-	log.WithField("hostname", hostname).Debug("Host IPv6 removed")
-	delete(buf.pendingHostIPv6Updates, hostname)
-	if buf.sentHostIPv6s.Contains(hostname) {
-		buf.pendingHostIPv6Deletes.Add(hostname)
-	}
-}
-
-func (buf *EventSequencer) flushHostIPv6Deletes() {
-	for item := range buf.pendingHostIPv6Deletes.All() {
-		buf.Callback(&proto.HostMetadataV6Remove{
-			Hostname: item,
-		})
-		buf.sentHostIPv6s.Discard(item)
-		buf.pendingHostIPv6Deletes.Discard(item)
-	}
-}
-
 func (buf *EventSequencer) OnHostMetadataUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string) {
 	log.WithFields(log.Fields{
 		"hostname": hostname,
@@ -920,8 +872,6 @@ func (buf *EventSequencer) Flush() {
 	buf.flushHostWireguardUpdates()
 	buf.flushHostIPDeletes()
 	buf.flushHostIPUpdates()
-	buf.flushHostIPv6Deletes()
-	buf.flushHostIPv6Updates()
 	buf.flushHostDeletes()
 	buf.flushHostUpdates()
 	buf.flushIPPoolDeletes()
