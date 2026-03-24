@@ -36,6 +36,10 @@ class DiagsCollector(object):
         pass
 
     def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            # Test passed, no need to collect diagnostics.
+            return
+
         # Print out diagnostics for the test. These will go to screen
         # on test failure.
         _log.info("===================================================")
@@ -91,13 +95,7 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
     # Check how much space there is inside the container.  We may need
     # to retry this, as it may take a while for the image to download
     # and the container to start running.
-    while True:
-        try:
-            run("docker exec %s df -h" % name)
-            break
-        except subprocess.CalledProcessError:
-            _log.exception("Container not ready yet")
-            time.sleep(20)
+    retry_until_success(run, retries=30, wait_time=2, function_args=["docker exec %s df -h" % name])
 
     # Install curl and iproute2.
     run("docker exec %s apk add --no-cache curl iproute2" % name)
