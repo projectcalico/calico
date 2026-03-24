@@ -219,7 +219,7 @@ func init() {
 		},
 		// Named port tests.
 		Entry("named port http-port", "http-port", numorstring.Port{PortName: "http-port"}, true),
-		Entry("named port 8080", "8080", numorstring.Port{}, false),
+		Entry("named port 8080", "8080", numorstring.Port{PortName: "8080"}, true),
 		Entry("named port with space", "http port", numorstring.Port{}, false),
 		Entry("named port with invalid chars", "http%port", numorstring.Port{}, false),
 	)
