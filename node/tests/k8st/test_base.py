@@ -222,7 +222,7 @@ class TestBase(TestCase):
                 # Success
                 pass
 
-        retry_until_success(is_it_gone_yet, retries=10, wait_time=10, function_args=[name, resource_type])
+        retry_until_success(is_it_gone_yet, timeout=120, function_args=[name, resource_type])
 
     class StillThere(Exception):
         pass

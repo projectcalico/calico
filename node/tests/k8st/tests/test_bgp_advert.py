@@ -711,7 +711,7 @@ EOF
                 routes = self.get_routes()
                 for cip in cluster_ips:
                     self.assertIn(cip, routes)
-            retry_until_success(check_routes_advertised, retries=3, wait_time=5)
+            retry_until_success(check_routes_advertised, timeout=20)
 
             # Scale to 0 replicas, assert all routes are removed.
             self.scale_deployment(local_svc, self.ns, 0)
@@ -720,7 +720,7 @@ EOF
                 routes = self.get_routes()
                 for cip in cluster_ips:
                     self.assertNotIn(cip, routes)
-            retry_until_success(check_routes_gone, retries=10, wait_time=5)
+            retry_until_success(check_routes_gone, timeout=60)
 
     def test_bgp_filter_ip_advertisement(self):
         with DiagsCollector():
