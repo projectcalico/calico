@@ -50,3 +50,5 @@ components:
     version: test-build
   istio-proxyv2:
     version: test-build
+  calico:
+    version: test-build
