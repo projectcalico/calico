@@ -232,22 +232,21 @@ func (e *Emitter) emit(bucket *storage.FlowCollection) error {
 }
 
 func (e *Emitter) collectionToReader(bucket *storage.FlowCollection) (*bytes.Reader, error) {
-	body := []byte{}
-	for _, flow := range bucket.Flows {
-		if len(body) != 0 {
-			// Include a separator between logs.
-			body = append(body, []byte("\n")...)
+	// Pre-size the buffer to reduce reallocations. A typical JSON-encoded flow is ~500 bytes.
+	buf := bytes.NewBuffer(make([]byte, 0, len(bucket.Flows)*512))
+	for i, flow := range bucket.Flows {
+		if i > 0 {
+			buf.WriteByte('\n')
 		}
 
-		// Convert to public format.
 		f := types.FlowToProto(&flow)
 		flowJSON, err := json.Marshal(f)
 		if err != nil {
-			return nil, fmt.Errorf("error marshalling flow: %v", err)
+			return nil, fmt.Errorf("error marshalling flow: %w", err)
 		}
-		body = append(body, flowJSON...)
+		buf.Write(flowJSON)
 	}
-	return bytes.NewReader(body), nil
+	return bytes.NewReader(buf.Bytes()), nil
 }
 
 // saveState updates cached metadata stored across restart. We use a configmap to
@@ -265,7 +264,7 @@ func (e *Emitter) saveState() error {
 	defer cancel()
 	cm := &corev1.ConfigMap{}
 	if err := e.kcli.Get(ctx, configMapKey, cm); err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("error getting configmap: %v", err)
+		return fmt.Errorf("error getting configmap: %w", err)
 	} else if errors.IsNotFound(err) {
 		// Configmap doesn't exist, create it.
 		cm.Name = configMapKey.Name
@@ -282,14 +281,14 @@ func (e *Emitter) saveState() error {
 
 	if cm.ResourceVersion == "" {
 		// Create the configmap.
-		if err := e.kcli.Create(context.Background(), cm); err != nil {
-			return fmt.Errorf("error creating configmap: %v", err)
+		if err := e.kcli.Create(ctx, cm); err != nil {
+			return fmt.Errorf("error creating configmap: %w", err)
 		}
 		logCtx.Debug("Created configmap")
 	} else {
 		// Update the configmap.
-		if err := e.kcli.Update(context.Background(), cm); err != nil {
-			return fmt.Errorf("error updating configmap: %v", err)
+		if err := e.kcli.Update(ctx, cm); err != nil {
+			return fmt.Errorf("error updating configmap: %w", err)
 		}
 		logCtx.Debug("Updated configmap")
 	}

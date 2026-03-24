@@ -42,17 +42,19 @@ import (
 )
 
 const (
-	roleLabel  = "e2e.projectcalico.org/role"
-	roleClient = "client"
-	roleServer = "server"
+	roleLabel             = "e2e.projectcalico.org/role"
+	roleClient            = "client"
+	roleServer            = "server"
+	defaultExecuteTimeout = 30 * time.Second
 )
 
 type connectionTester struct {
-	f            *framework.Framework
-	servers      map[string]*Server
-	clients      map[string]*Client
-	expectations map[string]*Expectation
-	deployed     bool
+	f              *framework.Framework
+	servers        map[string]*Server
+	clients        map[string]*Client
+	expectations   map[string]*Expectation
+	deployed       bool
+	executeTimeout time.Duration
 }
 
 type ConnectionTester interface {
@@ -68,6 +70,7 @@ type ConnectionTester interface {
 	ExpectFailure(client *Client, targets ...Target)
 	Execute()
 	ResetExpectations()
+	WithTimeout(d time.Duration)
 
 	// Methods for continuous execution.
 	ExpectContinuously(client *Client, targets ...Target) Checkpointer
@@ -106,6 +109,15 @@ func (c *connectionTester) ResetExpectations() {
 		framework.Fail(fmt.Sprintf("ResetExpectations() called before all expectations were tested: %v", err), 1)
 	}
 	c.expectations = make(map[string]*Expectation)
+	c.executeTimeout = 0
+}
+
+// WithTimeout sets the timeout for the next Execute() call. The timeout
+// resets to the default after each ResetExpectations(). This is useful when
+// a particular connectivity check needs more time, e.g. waiting for Windows
+// HNS policy programming.
+func (c *connectionTester) WithTimeout(d time.Duration) {
+	c.executeTimeout = d
 }
 
 func (c *connectionTester) Deploy() {
@@ -399,7 +411,11 @@ func (c *connectionTester) Execute() {
 	// Context to control overall timeout for all connections. After it times out, we'll forcefully
 	// terminate any remaining connections. This avoids deadlocking the test waiting for results if
 	// something goes wrong.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeout := c.executeTimeout
+	if timeout == 0 {
+		timeout = defaultExecuteTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Launch all of the connections in parallel. We'll wait for them all to finish at the end and report on success / failure.
