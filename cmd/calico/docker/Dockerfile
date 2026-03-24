@@ -9,6 +9,11 @@ ARG BIN_DIR
 COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calico
 COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver-registrar
 
+# CNI plugin install expects binaries at /opt/cni/bin/
+RUN mkdir -p /opt/cni/bin && \
+    ln -s /usr/bin/calico /opt/cni/bin/calico && \
+    ln -s /usr/bin/calico /opt/cni/bin/calico-ipam
+
 COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
 LABEL org.opencontainers.image.description="Calico uber binary containing all Calico components."
