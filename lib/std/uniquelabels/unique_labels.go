@@ -256,10 +256,29 @@ func (m Map) MarshalJSON() ([]byte, error) {
 	if m.ptr == nil {
 		return []byte("null"), nil
 	}
+
+	var backing [maxKeyTableSize]kv
+	pairs := backing[:0]
 	if cm, ok := m.compact(); ok {
-		return cm.marshalJSON()
+		it := cm.iter()
+		for it.hasNext() {
+			k, v := it.next()
+			pairs = append(pairs, kv{
+				key: k.Value(),
+				val: v.Value(),
+			})
+		}
+	} else {
+		fm := m.asFallback()
+		for k, v := range fm.m {
+			pairs = append(pairs, kv{
+				key: k.Value(),
+				val: v.Value(),
+			})
+		}
 	}
-	return m.asFallback().marshalJSON()
+
+	return marshalSortedPairs(pairs)
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.  Unmarshalling

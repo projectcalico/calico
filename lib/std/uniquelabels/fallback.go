@@ -34,25 +34,3 @@ func (fm *fallbackMap) getHandle(h uniquestr.Handle) (uniquestr.Handle, bool) {
 	v, ok := fm.m[h]
 	return v, ok
 }
-
-// marshalJSON writes a JSON object from the fallback handle map.
-func (fm *fallbackMap) marshalJSON() ([]byte, error) {
-	n := len(fm.m)
-	if n == 0 {
-		return []byte("{}"), nil
-	}
-	var backing [maxKeyTableSize]kv
-	// Fallback maps can exceed maxKeyTableSize; heap-allocate if needed.
-	var pairs []kv
-	if n <= maxKeyTableSize {
-		pairs = backing[:n]
-	} else {
-		pairs = make([]kv, n)
-	}
-	i := 0
-	for k, v := range fm.m {
-		pairs[i] = kv{key: k.Value(), val: v.Value()}
-		i++
-	}
-	return marshalSortedPairs(pairs)
-}

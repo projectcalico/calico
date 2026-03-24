@@ -86,14 +86,11 @@ type compactIter struct {
 }
 
 func (cm *compactMap) iter() compactIter {
-	kb := cm.keyBits()
-	var snap *keyTableSnap
-	var vals []uniquestr.Handle
-	if kb != 0 {
-		snap = globalKeyTable.currentSnap()
-		vals = cm.slice()
+	return compactIter{
+		snap:      globalKeyTable.currentSnap(),
+		vals:      cm.slice(),
+		remaining: cm.keyBits(),
 	}
-	return compactIter{snap: snap, vals: vals, remaining: kb}
 }
 
 // hasNext reports whether there are more pairs to iterate.
@@ -110,29 +107,6 @@ func (it *compactIter) next() (uniquestr.Handle, uniquestr.Handle) {
 	it.remaining &= it.remaining - 1
 	it.arrayIdx++
 	return k, v
-}
-
-// marshalJSON writes a JSON object directly from the compact bitfield.
-func (cm *compactMap) marshalJSON() ([]byte, error) {
-	kb := cm.keyBits()
-	n := bits.OnesCount64(kb)
-	if n == 0 {
-		return []byte("{}"), nil
-	}
-	snap := globalKeyTable.currentSnap()
-	vals := cm.slice()
-	var backing [maxKeyTableSize]kv
-	pairs := backing[:n]
-	bf := kb
-	for i := range pairs {
-		pos := bits.TrailingZeros64(bf)
-		pairs[i] = kv{
-			key: snap.byIndex[pos].Value(),
-			val: vals[i].Value(),
-		}
-		bf &= bf - 1
-	}
-	return marshalSortedPairs(pairs)
 }
 
 func (cm *compactMap) equals(other *compactMap) bool {
