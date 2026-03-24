@@ -1,5 +1,5 @@
-// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,22 +15,32 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
+
+	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/app-policy/pkg/healthz"
 )
 
-func main() {
+func newHealthzCommand() *cobra.Command {
 	var dialPath string
-	flag.StringVar(&dialPath, "dialPath", healthz.DefaultDialPath, "Path to health check gRPC service")
-	flag.Parse()
 
-	if len(flag.Args()) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: %s (liveness|readiness)\n", os.Args[0])
-		os.Exit(1)
+	cmd := &cobra.Command{
+		Use:   "healthz (liveness|readiness)",
+		Short: "Check Dikastes health status",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			check := args[0]
+			if check != "liveness" && check != "readiness" {
+				fmt.Fprintf(os.Stderr, "Invalid check type %q, expected \"liveness\" or \"readiness\"\n", check)
+				os.Exit(1)
+			}
+			healthz.Run(dialPath, check)
+		},
 	}
 
-	healthz.Run(dialPath, flag.Arg(0))
+	cmd.Flags().StringVar(&dialPath, "dialPath", healthz.DefaultDialPath, "Path to health check gRPC service")
+
+	return cmd
 }
