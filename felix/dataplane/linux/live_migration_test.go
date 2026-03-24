@@ -934,7 +934,6 @@ func TestVMINameTracking(t *testing.T) {
 	})
 
 	t.Run("IPAM swap only called once when going Live then TimeWait", func(t *testing.T) {
-		g := NewWithT(t)
 		m := newTestMonitor(testConvergenceTime)
 
 		wepIDWithNS := types.WorkloadEndpointID{
@@ -943,7 +942,6 @@ func TestVMINameTracking(t *testing.T) {
 			EndpointId:     "ep-1",
 		}
 
-		callCount := 0
 		called := make(chan struct{}, 2)
 		m.ensureActiveVMOwnerAttrs = func(
 			ctx context.Context,
@@ -953,7 +951,6 @@ func TestVMINameTracking(t *testing.T) {
 			vmiName string,
 			targetPodName string,
 		) error {
-			callCount++
 			called <- struct{}{}
 			return nil
 		}
@@ -975,9 +972,13 @@ func TestVMINameTracking(t *testing.T) {
 		m.OnUpdate(wepUpdate(wepIDWithNS, proto.LiveMigrationRole_NO_ROLE))
 		drainUpdates(m)
 
-		// Give the goroutine a chance to run if it was incorrectly triggered.
-		time.Sleep(100 * time.Millisecond)
-		g.Expect(callCount).To(Equal(1), "IPAM swap should only be called once")
+		// Verify no second call arrives.
+		select {
+		case <-called:
+			t.Fatal("IPAM swap should only be called once, got second call")
+		case <-time.After(200 * time.Millisecond):
+			// Expected: no second call.
+		}
 	})
 }
 

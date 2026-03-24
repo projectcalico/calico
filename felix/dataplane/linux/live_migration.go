@@ -244,7 +244,7 @@ type liveMigrationFSM struct {
 	timer        *time.Timer
 	pcapHandle   garpHandle
 	garpWG       sync.WaitGroup
-	ipamSwapDone bool
+	ipamSwapStarted bool
 }
 
 func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
@@ -451,9 +451,9 @@ func isGARPOrRARP(packet gopacket.Packet) bool {
 // startIPAMOwnerSwap begins an asynchronous IPAM owner attribute swap when a
 // live migration completes.  It is called when entering both the Live state
 // (happy path: GARP detected) and the TimeWait state (missed GARP path:
-// Target→TimeWait).  The ipamSwapDone flag ensures the swap runs at most once
-// per FSM lifecycle, so the Live→TimeWait transition does not trigger a
-// duplicate swap.
+// Target→TimeWait).  The ipamSwapStarted flag ensures the swap is initiated at
+// most once per FSM lifecycle, so the Live→TimeWait transition does not trigger
+// a duplicate swap.
 //
 // It uses the VMI name from the proto.WorkloadEndpoint (extracted from the
 // pod's labels by the calc graph) and calls vmipam.EnsureActiveVMOwnerAttrs to
@@ -461,7 +461,7 @@ func isGARPOrRARP(packet gopacket.Packet) bool {
 // Transient errors are retried with backoff.  This runs in a goroutine to
 // avoid blocking the dataplane main loop.
 func (f *liveMigrationFSM) startIPAMOwnerSwap() {
-	if f.ipamSwapDone {
+	if f.ipamSwapStarted {
 		f.logCtx.Debug("IPAM owner swap already initiated, skipping")
 		return
 	}
@@ -488,7 +488,7 @@ func (f *liveMigrationFSM) startIPAMOwnerSwap() {
 		"vmiName":   vmiName,
 	})
 	logCtx.Info("Starting IPAM owner attribute swap for live migration")
-	f.ipamSwapDone = true
+	f.ipamSwapStarted = true
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
