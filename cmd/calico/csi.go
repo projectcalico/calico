@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,16 +15,27 @@
 package main
 
 import (
-	"flag"
+	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
 )
 
-func main() {
-	logLevel := flag.String("loglevel", "", "Log level for the driver to report on")
-	endpoint := flag.String("endpoint", "", "location of the unix domain socket the Kubelet communicates with the CSI plugin on")
-	nodeID := flag.String("nodeid", "", "Node ID unique to the node")
-	flag.Parse()
+func newCSICommand() *cobra.Command {
+	var logLevel string
+	var endpoint string
+	var nodeID string
 
-	csi.Run(*logLevel, *endpoint, *nodeID)
+	cmd := &cobra.Command{
+		Use:   "csi",
+		Short: "Run the Calico CSI node driver",
+		Run: func(cmd *cobra.Command, args []string) {
+			csi.Run(logLevel, endpoint, nodeID)
+		},
+	}
+
+	cmd.Flags().StringVar(&logLevel, "loglevel", "", "Log level for the driver")
+	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Unix domain socket path for Kubelet communication")
+	cmd.Flags().StringVar(&nodeID, "nodeid", "", "Node ID unique to the node")
+
+	return cmd
 }

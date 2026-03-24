@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,16 +15,22 @@
 package main
 
 import (
-	"flag"
+	"context"
 
-	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
+	"github.com/projectcalico/calico/typha/pkg/daemon"
 )
 
-func main() {
-	logLevel := flag.String("loglevel", "", "Log level for the driver to report on")
-	endpoint := flag.String("endpoint", "", "location of the unix domain socket the Kubelet communicates with the CSI plugin on")
-	nodeID := flag.String("nodeid", "", "Node ID unique to the node")
-	flag.Parse()
-
-	csi.Run(*logLevel, *endpoint, *nodeID)
+func newTyphaCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "typha",
+		Short: "Run the Typha datastore fan-out proxy",
+		Run: func(cmd *cobra.Command, args []string) {
+			typha := daemon.New()
+			err := typha.InitializeAndServeForever(context.Background())
+			logrus.WithError(err).Panic("InitializeAndServeForever returned")
+		},
+	}
 }
