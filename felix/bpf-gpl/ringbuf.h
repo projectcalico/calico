@@ -71,11 +71,10 @@ static CALI_BPF_INLINE void ringbuf_flush_drops(void)
 		.count = dropped,
 	};
 	if (bpf_ringbuf_output(&cali_rb_evnt, &evt, sizeof(evt), 0) != 0) {
-		/* Ring still full — restore the counter so drops are not lost.
-		 * Concurrent increments between unlock and here are preserved:
-		 * the restore adds back the original amount on top of any new
-		 * increments, so the total remains accurate. */
-		__sync_fetch_and_add(&val->count, dropped);
+		/* Ring still full — restore the counter so drops are not lost. */
+		bpf_spin_lock(&val->lock);
+		val->count += dropped;
+		bpf_spin_unlock(&val->lock);
 		return;
 	}
 
@@ -96,7 +95,9 @@ static CALI_BPF_INLINE int ringbuf_submit_event(void *data, __u64 size)
 		__u32 key = 0;
 		struct rb_drops_val *val = cali_rb_drops_lookup_elem(&key);
 		if (val) {
-			__sync_fetch_and_add(&val->count, 1);
+			bpf_spin_lock(&val->lock);
+			val->count++;
+			bpf_spin_unlock(&val->lock);
 		}
 	} else {
 		ringbuf_flush_drops();
