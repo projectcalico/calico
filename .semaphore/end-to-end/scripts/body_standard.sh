@@ -114,7 +114,7 @@ else
         -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
         -w /go/src/github.com/projectcalico/calico \
         "calico/go-build:${GO_BUILD_VER}" \
-        go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" ./e2e/bin/k8s/e2e.test -- "${K8S_E2E_FLAGS}" |& tee -a >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
+        go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} |& tee -a >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
       popd
     else
       echo "[INFO] starting bz testing..."
