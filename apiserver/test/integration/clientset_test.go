@@ -2147,39 +2147,39 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	bgpFilterClient := client.ProjectcalicoV3().BGPFilters()
 	r1v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
 	r1v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
 	r2v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	r2v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	r3v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
 	r3v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
@@ -2195,13 +2195,13 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	}
 	r5v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	r5v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Action:        v3.Accept,
 	}
 	r6v4 := v3.BGPFilterRuleV4{
@@ -2260,19 +2260,19 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	}
 
 	for i := range size {
-		if bgpFilterNew.Spec.ExportV4[i] != bgpFilter.Spec.ExportV4[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ExportV4[i], bgpFilter.Spec.ExportV4[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ExportV4: \n%+v\n%+v",
 				bgpFilter.Spec.ExportV4, bgpFilterNew.Spec.ExportV4)
 		}
-		if bgpFilterNew.Spec.ImportV4[i] != bgpFilter.Spec.ImportV4[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ImportV4[i], bgpFilter.Spec.ImportV4[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ImportV4: \n%+v\n%+v",
 				bgpFilter.Spec.ImportV4, bgpFilterNew.Spec.ImportV4)
 		}
-		if bgpFilterNew.Spec.ExportV6[i] != bgpFilter.Spec.ExportV6[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ExportV6[i], bgpFilter.Spec.ExportV6[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ExportV6: \n%+v\n%+v",
 				bgpFilter.Spec.ExportV6, bgpFilterNew.Spec.ExportV6)
 		}
-		if bgpFilterNew.Spec.ImportV6[i] != bgpFilter.Spec.ImportV6[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ImportV6[i], bgpFilter.Spec.ImportV6[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ImportV6: \n%+v\n%+v",
 				bgpFilter.Spec.ImportV6, bgpFilterNew.Spec.ImportV6)
 		}

@@ -87,6 +87,7 @@ var (
 		"cni-plugin",
 		"goldmane",
 		"guardian",
+		"istio",
 		"key-cert-provisioner",
 		"kube-controllers",
 		"node",

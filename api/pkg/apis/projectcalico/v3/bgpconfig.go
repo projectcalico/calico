@@ -66,6 +66,8 @@ const (
 )
 
 // BGPConfigurationSpec contains the values of the BGP configuration.
+// +kubebuilder:validation:XValidation:rule="!has(self.nodeMeshPassword) || !has(self.nodeToNodeMeshEnabled) || self.nodeToNodeMeshEnabled == true",message="nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is false",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.nodeMeshMaxRestartTime) || !has(self.nodeToNodeMeshEnabled) || self.nodeToNodeMeshEnabled == true",message="nodeMeshMaxRestartTime cannot be set when nodeToNodeMeshEnabled is false",reason=FieldValueForbidden
 type BGPConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
 	// +kubebuilder:default=Info
@@ -154,6 +156,24 @@ type BGPConfigurationSpec struct {
 	// +kubebuilder:validation:Enum=Enabled;Disabled
 	// +optional
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
+
+	// IPv4NormalRoutePriority is the normal route priority (metric) that Felix uses for IPv4
+	// workload routes. This must match the value configured in FelixConfiguration. BIRD uses
+	// this to identify elevated-priority routes during live migration and to override local
+	// workload routes with higher-priority BGP-learned routes. [Default: 1024]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
+	// +optional
+	IPv4NormalRoutePriority *int `json:"ipv4NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
+
+	// IPv6NormalRoutePriority is the normal route priority (metric) that Felix uses for IPv6
+	// workload routes. This must match the value configured in FelixConfiguration. BIRD uses
+	// this to identify elevated-priority routes during live migration and to override local
+	// workload routes with higher-priority BGP-learned routes. [Default: 1024]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
+	// +optional
+	IPv6NormalRoutePriority *int `json:"ipv6NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.

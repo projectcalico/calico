@@ -1,7 +1,38 @@
 import { FlowLog } from '@/types/render';
 import React from 'react';
-import { getSeconds } from '../utils';
+import {
+    computeNextSort,
+    getSeconds,
+    getV1Columns,
+    getV2Columns,
+} from '../utils';
 import { usePromoBanner } from '@/context/PromoBanner';
+import { VisibleColumns } from '../components/FlowLogsList';
+
+export type SortEntry = { id: string; desc: boolean };
+export type SortColumn = {
+    id: string;
+    isSorted?: boolean;
+    isSortedDesc?: boolean;
+};
+type SetSortBy = (sortBy: SortEntry[]) => void;
+
+const defaultSortState: SortEntry[] = [{ id: 'start_time', desc: true }];
+
+export const useFlowLogSort = () => {
+    const [sortState, setSortState] = React.useState(defaultSortState);
+
+    const handleSort = React.useCallback(
+        (column: SortColumn, setSortBy: SetSortBy) => {
+            const nextSort = computeNextSort(column, sortState);
+            setSortState(nextSort);
+            setSortBy(nextSort);
+        },
+        [sortState],
+    );
+
+    return { sortState, handleSort, defaultSortState };
+};
 
 export const useMaxStartTime = (flowLogs: FlowLog[]) => {
     const max = React.useRef(0);
@@ -56,12 +87,49 @@ const bannerHeight = 40;
 const headerHeight = 60;
 const containerPadding = 5;
 const omniFiltersHeight = 46;
-const tabsHeight = 34;
 
 export const useFlowLogsHeightOffset = () => {
     const promoBanner = usePromoBanner();
-    const heights =
-        headerHeight + containerPadding + omniFiltersHeight + tabsHeight;
+    const heights = headerHeight + containerPadding + omniFiltersHeight;
 
     return promoBanner.state.isVisible ? heights + bannerHeight : heights;
+};
+
+const key = 'whisker-flow-logs-stream-columns-v2';
+export const useStoredColumns = (initialValue: VisibleColumns) => {
+    const [storedValue, setStoredValue] = React.useState<
+        VisibleColumns | undefined
+    >(() => {
+        try {
+            const v1StoredColumns = window.localStorage.getItem(
+                'whisker-flow-logs-stream-columns',
+            );
+
+            if (v1StoredColumns) {
+                return getV1Columns(v1StoredColumns, key);
+            }
+
+            const storedColumns = window.localStorage.getItem(key);
+
+            return getV2Columns(storedColumns!, key, initialValue);
+        } catch (_error) {
+            return initialValue;
+        }
+    });
+
+    const setValue = (value: VisibleColumns | undefined) => {
+        try {
+            if (value === undefined) {
+                window.localStorage.removeItem(key);
+            } else {
+                window.localStorage.setItem(key, JSON.stringify(value));
+            }
+
+            setStoredValue(value);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    return [storedValue ?? initialValue, setValue] as const;
 };

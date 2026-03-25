@@ -236,5 +236,11 @@ make image                   # Build all images (slow)
 - Component `README.md` files for specific build instructions
 - Component `Makefile` for available targets
 
+## PR Requirements
+
+**ALWAYS** use the PR template (`.github/PULL_REQUEST_TEMPLATE.md`) when submitting pull requests. The only mandatory section is the **Release Note** — fill it in with a one-line summary of the user-facing impact of the change. Take a broad view of "user-facing": bug fixes, new features, performance improvements, and behavioral changes all qualify. If there is genuinely no user-facing impact, write "None".
+
+Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
+
 ### Trust These Instructions
 These instructions are based on actual testing of the build system. Only search for additional information if you encounter specific errors not covered here or if the repository structure has changed significantly.

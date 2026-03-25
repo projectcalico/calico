@@ -111,3 +111,7 @@ promotions:
     pipeline_file: push-images/e2e-test.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
+  - name: Push istio images
+    pipeline_file: push-images/istio.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"

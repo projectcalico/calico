@@ -1041,3 +1041,64 @@ var _ = Describe("Enabled table cache invalidation", func() {
 			"Expected List to be called again because enabled table always invalidates cache after apply")
 	})
 })
+
+var _ = Describe("ARP Table", func() {
+	var table *nftables.NftablesTable
+	var featureDetector *environment.FeatureDetector
+	var f *fakeNFT
+	BeforeEach(func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		featureDetector = environment.NewFeatureDetector(nil)
+		table = nftables.NewARPTable(
+			"calico-arp",
+			rules.RuleHashPrefix,
+			featureDetector,
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+			},
+			true,
+		)
+	})
+
+	It("should create only filter-OUTPUT base chain", func() {
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		chains, err := f.List(context.TODO(), "chain")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(chains).To(ConsistOf("filter-OUTPUT"))
+	})
+
+	It("should use ARP family", func() {
+		Expect(f.family).To(Equal(knftables.ARPFamily))
+	})
+
+	It("should report IPv4", func() {
+		Expect(table.IPVersion()).To(Equal(uint8(4)))
+	})
+
+	It("should support inserting rules into the OUTPUT base chain", func() {
+		table.InsertOrAppendRules("filter-OUTPUT", []generictables.Rule{{
+			Match:  nftables.Match(),
+			Action: nftables.JumpAction{Target: "cali-arp-dispatch"},
+		}})
+
+		chain := generictables.Chain{
+			Name: "cali-arp-dispatch",
+			Rules: []generictables.Rule{{
+				Match:  nftables.Match().OutInterface("cali1234").ARPOperation("reply").ARPSrcIP("10.0.0.1"),
+				Action: nftables.DropAction{},
+			}},
+		}
+		table.UpdateChain(&chain)
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		chains, err := f.List(context.TODO(), "chain")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(chains).To(ContainElement("cali-arp-dispatch"))
+	})
+})

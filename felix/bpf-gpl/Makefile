@@ -61,7 +61,7 @@ UT_OBJS+=ut/ip_parse_test_v6.o
 UT_OBJS+=ut/tcp_rst_v6.o
 
 XDP_MAP_HEADERS := jump.h
-COMMON_MAP_HEADERS := counters.h ifstate.h perf_types.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
+COMMON_MAP_HEADERS := counters.h ifstate.h ringbuf.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
 IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_types.h policy.h routes.h sendrecv.h
 IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
@@ -188,9 +188,23 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 test_xdp%_v6.ll: xdp.c xdp_v6.d calculate-flags
 	$(COMPILE)
 
+tc.d: tc.c
+	$(COMPILE_DEPS)
 tc_v6.d: tc.c
 	$(COMPILE_DEPS)
+xdp.d: xdp.c
+	$(COMPILE_DEPS)
 xdp_v6.d: xdp.c
+	$(COMPILE_DEPS)
+connect_balancer.d: connect_balancer.c
+	$(COMPILE_DEPS)
+connect_balancer_v6.d: connect_balancer_v6.c
+	$(COMPILE_DEPS)
+connect_balancer_v46.d: connect_balancer_v46.c
+	$(COMPILE_DEPS)
+conntrack_cleanup.d: conntrack_cleanup.c
+	$(COMPILE_DEPS)
+conntrack_cleanup_v6.d: conntrack_cleanup.c
 	$(COMPILE_DEPS)
 
 

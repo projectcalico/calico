@@ -15,19 +15,7 @@ test: ut fv st
 # The target architecture is select by setting the ARCH variable.
 # When ARCH is undefined it is set to the detected host architecture.
 # When ARCH differs from the host architecture a crossbuild will be performed.
-# This variable is only set if ARCHES is not set
-ARCHES ?= $(patsubst docker-image/Dockerfile.%,%,$(wildcard docker-image/Dockerfile.*))
-
-# Some repositories keep their Dockerfile(s) in the root directory instead of in
-# the 'docker-image' subdir. Make sure ARCHES gets filled in either way.
-ifeq ($(ARCHES),)
-	ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
-endif
-
-# If architectures cannot infer from Dockerfiles, set default supported architecture.
-ifeq ($(ARCHES),)
-	ARCHES=amd64 arm64 ppc64le s390x
-endif
+ARCHES ?= amd64 arm64 ppc64le s390x
 
 # list of arches *not* to build when doing *-all
 EXCLUDEARCH?=
@@ -87,7 +75,7 @@ endif
 .PHONY: register
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --privileged --rm calico/binfmt:qemu-v10.1.3 --install all || true
+	docker run --privileged --rm calico/binfmt:qemu-v10.1.4 --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
@@ -141,6 +129,8 @@ endif
 GO_BUILD_IMAGE ?= calico/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
+RUST_BUILD_IMAGE ?= calico/rust-build
+CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
 
 # We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
@@ -184,6 +174,13 @@ define build_binary
 		-e CGO_ENABLED=0 \
 		$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+endef
+
+define build_binary_dir
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=0 \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
 endef
 
 # For windows builds that do not require cgo.
@@ -335,11 +332,10 @@ DOCKER_PULL =
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
-	--build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	--build-arg GIT_VERSION=$(GIT_VERSION) \
+DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) \
 	--build-arg CALICO_BASE=$(CALICO_BASE) \
-	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+	--build-arg GIT_VERSION=$(GIT_VERSION) \
+	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
 DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -361,6 +357,15 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
+
+DOCKER_RUST_BUILD := mkdir -p bin && \
+	docker run --rm \
+		--init \
+		--user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
+		$(EXTRA_DOCKER_ARGS) \
+		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
+		-w /rust/src/$(PACKAGE_NAME) \
+		$(CALICO_RUST_BUILD)
 
 ###############################################################################
 # Source file dependency tracking via deps.txt
@@ -1031,21 +1036,42 @@ ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
 	)
 endif
 
+# retry_docker_cmd retries a docker command up to a specified number of times.
+# Usage: $(call retry_docker_cmd,<description>,<docker command>,<max retries>,<retry delay>)
+define retry_docker_cmd
+	i=1; \
+	while [ $$i -le $(3) ]; do \
+		$(2) && break; \
+		echo "WARNING: $(1) failed (attempt $$i/$(3)), retrying in $(4)s..."; \
+		if [ $$i -eq $(3) ]; then exit 1; fi; \
+		sleep $(4); \
+		i=$$((i + 1)); \
+	done
+endef
+
+# Configuration options for retrying docker commands 
+MANIFEST_RETRIES ?= 5
+MANIFEST_RETRY_DELAY ?= 5
+
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
 push-image-arch-to-registry-%:
 # If the registry we want to push to doesn't not support manifests don't push the ARCH image.
-	$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*
+	$(call retry_docker_cmd,docker push with quiet flag,$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*,$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 	$(if $(filter $*,amd64),\
-		$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),\
+		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))\
 		$(NOECHO) $(NOOP)\
 	)
 
 # push multi-arch manifest where supported.
 push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
 sub-manifest-%:
-	$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)))
-	$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG)
+	@if [ -z "$(MANIFEST_RETRIES)" ] || ! printf '%s\n' "$(MANIFEST_RETRIES)" | grep -Eq '^[0-9]+$$' || [ "$(MANIFEST_RETRIES)" -lt 1 ]; then \
+		echo "ERROR: MANIFEST_RETRIES must be a positive integer, got '$(MANIFEST_RETRIES)'"; \
+		exit 1; \
+	fi
+	$(call retry_docker_cmd,docker manifest create,$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES))),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
+	$(call retry_docker_cmd,docker manifest push,$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 
 push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
@@ -1373,6 +1399,7 @@ run-k8s-apiserver: run-etcd
 			--max-requests-inflight=0 \
 			--enable-aggregator-routing \
 			--requestheader-client-ca-file=/home/user/certs/ca.pem \
+			--requestheader-allowed-names=kubernetes \
 			--requestheader-username-headers=X-Remote-User \
 			--requestheader-group-headers=X-Remote-Group \
 			--requestheader-extra-headers-prefix=X-Remote-Extra- \
@@ -1664,6 +1691,46 @@ kind-reload:
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 
 ###############################################################################
+# Common functions for setting up a local envtest environment.
+###############################################################################
+ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
+ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
+# Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
+# Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
+ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
+
+## Download envtest binaries (kube-apiserver, etcd) for use by tests that use controller-runtime envtest.
+.PHONY: setup-envtest
+setup-envtest: $(ENVTEST_ASSETS_MARKER)
+$(ENVTEST_ASSETS_MARKER):
+	@echo "Setting up envtest binaries for Kubernetes $(ENVTEST_K8S_VERSION)..."
+	mkdir -p $(ENVTEST_DIR)
+	rm -f $(ENVTEST_DIR)/.envtest-*
+	$(DOCKER_GO_BUILD) sh -c \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
+	touch $@
+
+# Minimum supported Kubernetes version for CEL XValidation (GA in 1.29).
+MIN_K8S_VERSION ?= v1.29.0
+ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+# Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
+ENVTEST_MIN_K8S_MINOR := $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2)
+ENVTEST_MIN_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-min-$(ENVTEST_MIN_K8S_VERSION)
+
+## Download envtest binaries for the minimum supported Kubernetes version.
+.PHONY: setup-envtest-min
+setup-envtest-min: $(ENVTEST_MIN_ASSETS_MARKER)
+$(ENVTEST_MIN_ASSETS_MARKER):
+	@echo "Setting up envtest binaries for minimum K8s $(ENVTEST_MIN_K8S_VERSION)..."
+	mkdir -p $(ENVTEST_DIR)
+	$(DOCKER_GO_BUILD) sh -c \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
+	touch $@
+
+###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)
@@ -1720,10 +1787,8 @@ help:
 DOCKER_MANIFEST_CMD := docker manifest
 
 ifdef CONFIRM
-CRANE_BINDMOUNT = $(CRANE_BINDMOUNT_CMD)
 DOCKER_MANIFEST = $(DOCKER_MANIFEST_CMD)
 else
-CRANE_BINDMOUNT = echo [DRY RUN] $(CRANE_BINDMOUNT_CMD)
 DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
 endif
 
@@ -1790,18 +1855,6 @@ setup-windows-builder: clean-windows-builder
 
 $(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-%.tar: windows-sub-image-$*
 
-DOCKER_CREDENTIAL_VERSION="2.1.18"
-DOCKER_CREDENTIAL_OS="linux"
-DOCKER_CREDENTIAL_ARCH="amd64"
-$(WINDOWS_DIST)/bin/docker-credential-gcr:
-	-mkdir -p $(WINDOWS_DIST)/bin
-	curl -fsSL  --retry 5 "https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v$(DOCKER_CREDENTIAL_VERSION)/docker-credential-gcr_$(DOCKER_CREDENTIAL_OS)_$(DOCKER_CREDENTIAL_ARCH)-$(DOCKER_CREDENTIAL_VERSION).tar.gz" -o docker-credential-gcr.tar.gz
-	tar xzf docker-credential-gcr.tar.gz --to-stdout docker-credential-gcr | tee $@ > /dev/null && chmod +x $@
-	rm -f docker-credential-gcr.tar.gz
-
-.PHONY: docker-credential-gcr-binary
-docker-credential-gcr-binary: var-require-all-WINDOWS_DIST-DOCKER_CREDENTIAL_VERSION-DOCKER_CREDENTIAL_OS-DOCKER_CREDENTIAL_ARCH $(WINDOWS_DIST)/bin/docker-credential-gcr
-
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
 # image. These must be added as reqs to 'image-windows' (originally defined in
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
@@ -1824,7 +1877,7 @@ image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 		$(MAKE) windows-sub-image-$${version}; \
 	done;
 
-release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows docker-credential-gcr-binary bin/crane
+release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows bin/crane
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
 		all_images=""; \
