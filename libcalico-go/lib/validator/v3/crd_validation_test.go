@@ -1562,3 +1562,61 @@ func TestCRDValidation_RouteTableIDRange(t *testing.T) {
 		},
 	})
 }
+
+// TestCRDValidation_BGPConfiguration_Communities tests CEL rules for BGP community cross-references.
+func TestCRDValidation_BGPConfiguration_Communities(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "communities without prefixAdvertisements fails",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					Communities: []apiv3.Community{
+						{Name: "my-community", Value: "65001:100"},
+					},
+				},
+			},
+			errSubstr: "communities are defined but not used in prefixAdvertisements",
+		},
+		{
+			name: "communities with prefixAdvertisements passes",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					Communities: []apiv3.Community{
+						{Name: "my-community", Value: "65001:100"},
+					},
+					PrefixAdvertisements: []apiv3.PrefixAdvertisement{
+						{CIDR: "10.0.0.0/24", Communities: []string{"my-community"}},
+					},
+				},
+			},
+		},
+		{
+			name: "prefixAdvertisement referencing undefined community fails",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					Communities: []apiv3.Community{
+						{Name: "my-community", Value: "65001:100"},
+					},
+					PrefixAdvertisements: []apiv3.PrefixAdvertisement{
+						{CIDR: "10.0.0.0/24", Communities: []string{"nonexistent"}},
+					},
+				},
+			},
+			errSubstr: "community used is invalid or not defined",
+		},
+		{
+			name: "prefixAdvertisement using inline community value passes",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					PrefixAdvertisements: []apiv3.PrefixAdvertisement{
+						{CIDR: "10.0.0.0/24", Communities: []string{"65001:100"}},
+					},
+				},
+			},
+		},
+	})
+}

@@ -1719,11 +1719,6 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 		}
 	}
 
-	if (len(spec.PrefixAdvertisements) == 0) && (len(communities) != 0) {
-		structLevel.ReportError(reflect.ValueOf(communities), "Spec.Communities[]", "",
-			reason("communities are defined but not used in Spec.PrefixAdvertisement[]."), "")
-	}
-
 	// check if Spec.PrefixAdvertisement.Communities are valid
 	for _, pa := range spec.PrefixAdvertisements {
 		_, _, err := cnet.ParseCIDROrIP(pa.CIDR)
@@ -1733,6 +1728,7 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 				reason("invalid CIDR value."), "")
 		}
 
+		// The community cross-reference check exceeds the CEL cost budget, so it stays in Go.
 		for _, v := range pa.Communities {
 			isValid := isValidCommunity(v, "Spec.PrefixAdvertisement[].Communities[]", structLevel)
 			if !isValid {
@@ -1765,9 +1761,9 @@ func validateHealthTimeoutOverride(structLevel validator.StructLevel) {
 	}
 }
 
-func isCommunityDefined(community string, communityKVPairs []api.Community) bool {
-	for _, val := range communityKVPairs {
-		if val.Name == community {
+func isCommunityDefined(communityValue string, communities []api.Community) bool {
+	for _, c := range communities {
+		if c.Name == communityValue {
 			return true
 		}
 	}
