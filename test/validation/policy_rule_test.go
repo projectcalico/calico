@@ -190,6 +190,174 @@ func TestICMPFields_Validation(t *testing.T) {
 	}
 }
 
+func TestRule_ICMP_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		obj     client.Object
+		wantErr string
+	}{
+		{
+			name: "ICMP fields with non-ICMP protocol is rejected",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:   v3.Allow,
+							Protocol: ptr.To(numorstring.ProtocolFromString("TCP")),
+							ICMP:     &v3.ICMPFields{Type: ptr.To(8)},
+						},
+					},
+				},
+			},
+			wantErr: "ICMP fields require protocol to be ICMP or ICMPv6",
+		},
+		{
+			name: "ICMP protocol with ipVersion 6 is rejected",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:    v3.Allow,
+							Protocol:  ptr.To(numorstring.ProtocolFromString("ICMP")),
+							IPVersion: ptr.To(6),
+						},
+					},
+				},
+			},
+			wantErr: "protocol ICMP requires ipVersion 4",
+		},
+		{
+			name: "ICMPv6 protocol with ipVersion 4 is rejected",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:    v3.Allow,
+							Protocol:  ptr.To(numorstring.ProtocolFromString("ICMPv6")),
+							IPVersion: ptr.To(4),
+						},
+					},
+				},
+			},
+			wantErr: "protocol ICMPv6 requires ipVersion 6",
+		},
+		{
+			name: "ICMP protocol with ipVersion 4 is accepted",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:    v3.Allow,
+							Protocol:  ptr.To(numorstring.ProtocolFromString("ICMP")),
+							IPVersion: ptr.To(4),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ICMP fields with ICMP protocol is accepted",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:   v3.Allow,
+							Protocol: ptr.To(numorstring.ProtocolFromString("ICMP")),
+							ICMP:     &v3.ICMPFields{Type: ptr.To(8)},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr != "" {
+				expectCreateFails(t, tt.obj, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, tt.obj)
+			}
+		})
+	}
+}
+
+func TestEntityRule_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		obj     client.Object
+		wantErr string
+	}{
+		{
+			name: "services with namespaceSelector is rejected",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action: v3.Allow,
+							Source: v3.EntityRule{
+								Services:          &v3.ServiceMatch{Name: "svc1"},
+								NamespaceSelector: "all()",
+							},
+						},
+					},
+				},
+			},
+			wantErr: "cannot specify NamespaceSelector and Services on the same rule",
+		},
+		{
+			name: "services with serviceAccounts is rejected",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action: v3.Allow,
+							Source: v3.EntityRule{
+								Services:        &v3.ServiceMatch{Name: "svc1"},
+								ServiceAccounts: &v3.ServiceAccountMatch{Names: []string{"sa1"}},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "cannot specify ServiceAccounts and Services on the same rule",
+		},
+		{
+			name: "services with name alone is accepted",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action: v3.Allow,
+							Source: v3.EntityRule{
+								Services: &v3.ServiceMatch{Name: "svc1"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr != "" {
+				expectCreateFails(t, tt.obj, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, tt.obj)
+			}
+		})
+	}
+}
+
 func TestNetworkPolicy_Defaults(t *testing.T) {
 	np := &v3.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np-dflt"), Namespace: "default"},

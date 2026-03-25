@@ -83,8 +83,9 @@ func TestIPPool_Validation(t *testing.T) {
 			obj: &v3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
 				Spec: v3.IPPoolSpec{
-					CIDR:        nextPoolCIDR(),
-					AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
+					CIDR:         nextPoolCIDR(),
+					AllowedUses:  []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
+					NodeSelector: "all()",
 				},
 			},
 		},
@@ -148,6 +149,86 @@ func TestIPPool_Validation(t *testing.T) {
 					IPIPMode: v3.IPIPModeAlways,
 				},
 			},
+		},
+		{
+			name: "LoadBalancer pool with disableBGPExport is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:             nextPoolCIDR(),
+					AllowedUses:      []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
+					DisableBGPExport: true,
+					NodeSelector:     "all()",
+				},
+			},
+			wantErr: "LoadBalancer IP pools cannot disable BGP export",
+		},
+		{
+			name: "LoadBalancer pool with wrong nodeSelector is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:         nextPoolCIDR(),
+					AllowedUses:  []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
+					NodeSelector: "has(node-role)",
+				},
+			},
+			wantErr: "IP Pool with AllowedUse LoadBalancer must have nodeSelector set to all()",
+		},
+		{
+			name: "LoadBalancer pool with nodeSelector all() is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:         nextPoolCIDR(),
+					AllowedUses:  []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
+					NodeSelector: "all()",
+				},
+			},
+		},
+		{
+			name: "Tunnel pool with namespaceSelector is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:              nextPoolCIDR(),
+					AllowedUses:       []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel},
+					NamespaceSelector: "has(ns-label)",
+				},
+			},
+			wantErr: "IP Pool with AllowedUse Tunnel cannot have namespaceSelector",
+		},
+		{
+			name: "Tunnel pool without namespaceSelector is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:        nextPoolCIDR(),
+					AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel},
+				},
+			},
+		},
+		{
+			name: "nodeSelector containing global() is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:         nextPoolCIDR(),
+					NodeSelector: "global()",
+				},
+			},
+			wantErr: "global() selector is not valid for IPPool nodeSelector",
+		},
+		{
+			name: "namespaceSelector containing global() is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:              nextPoolCIDR(),
+					NamespaceSelector: "global()",
+				},
+			},
+			wantErr: "global() selector is not valid for IPPool namespaceSelector",
 		},
 	}
 

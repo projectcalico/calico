@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -821,12 +821,15 @@ func init() {
 			mustParsePortRange(10000, 11000), mustParsePortRange(12000, 13000),
 			numorstring.SinglePort(15000),
 		}}, true),
-		Entry("should reject a too-long KubeNodePortRanges value", api.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{
-			mustParsePortRange(3000, 4000), mustParsePortRange(5000, 6000),
-			mustParsePortRange(7000, 8000), mustParsePortRange(8000, 9000),
-			mustParsePortRange(10000, 11000), mustParsePortRange(12000, 13000),
-			mustParsePortRange(14000, 15000), mustParsePortRange(16000, 17000),
-		}}, false),
+		Entry("should reject a too-long KubeNodePortRanges value", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec: api.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{
+				mustParsePortRange(3000, 4000), mustParsePortRange(5000, 6000),
+				mustParsePortRange(7000, 8000), mustParsePortRange(8000, 9000),
+				mustParsePortRange(10000, 11000), mustParsePortRange(12000, 13000),
+				mustParsePortRange(14000, 15000), mustParsePortRange(16000, 17000),
+			}},
+		}, false),
 		Entry("should reject a named port KubeNodePortRanges value", api.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{
 			numorstring.Port{PortName: "testport"},
 		}}, false),
@@ -923,19 +926,43 @@ func init() {
 		Entry("should accept a valid BPFDataIfacePattern value 'eth.*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "eth.*"}, true),
 
 		Entry("should accept valid route table range", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 1, Max: 250}}, true),
-		Entry("should reject route table range min too small", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 0, Max: 250}}, false),
-		Entry("should reject route table range min negative", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: -5, Max: 250}}, false),
-		Entry("should reject route table range max < min", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 50, Max: 45}}, false),
-		Entry("should reject route table range max too large", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 1, Max: 253}}, false),
+		Entry("should reject route table range min too small", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 0, Max: 250}},
+		}, false),
+		Entry("should reject route table range min negative", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: -5, Max: 250}},
+		}, false),
+		Entry("should reject route table range max < min", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 50, Max: 45}},
+		}, false),
+		Entry("should reject route table range max too large", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 1, Max: 253}},
+		}, false),
 		Entry("should accept route table range with min == max", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 8, Max: 8}}, true),
 
 		Entry("should accept valid route table ranges", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 10000}}}, true),
 		Entry("should accept route table ranges with min == max", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 8, Max: 8}}}, true),
 		Entry("should accept multiple route table ranges with min == max", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 8, Max: 8}, {Min: 7, Max: 7}}}, true),
-		Entry("should reject route table ranges min too small", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 0, Max: 250}}}, false),
-		Entry("should reject route table ranges min negative", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: -5, Max: 250}}}, false),
-		Entry("should reject route table ranges max < min", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 50, Max: 45}}}, false),
-		Entry("should reject route table ranges max too large", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0xf00000000}}}, false),
+		Entry("should reject route table ranges min too small", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 0, Max: 250}}},
+		}, false),
+		Entry("should reject route table ranges min negative", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: -5, Max: 250}}},
+		}, false),
+		Entry("should reject route table ranges max < min", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 50, Max: 45}}},
+		}, false),
+		Entry("should reject route table ranges max too large", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0xf00000000}}},
+		}, false),
 		Entry("should reject single route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0x10000}}}, false),
 		Entry("should reject multiple route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 2}, {Min: 3, Max: 4}, {Min: 5, Max: 0x10000}}}, false),
 
@@ -1221,7 +1248,7 @@ func init() {
 				},
 			}, true),
 		Entry("should reject IP pool with invalid allowed uses combination",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1232,7 +1259,7 @@ func init() {
 				},
 			}, false),
 		Entry("should reject IP pool with invalid allowed uses",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1262,7 +1289,7 @@ func init() {
 				},
 			}, false),
 		Entry("should reject IP pool with LoadBlancer and disableBGPExport true",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1273,7 +1300,7 @@ func init() {
 				},
 			}, false),
 		Entry("should reject IP pool with LoadBlancer and VXLAN mode enabled",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1284,7 +1311,7 @@ func init() {
 				},
 			}, false),
 		Entry("should reject IP pool with LoadBlancer and IPIP mode enabled",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1295,7 +1322,7 @@ func init() {
 				},
 			}, false),
 		Entry("should reject IP pool with LoadBlancer and nodeSelector other than all()",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1306,7 +1333,7 @@ func init() {
 				},
 			}, false),
 		Entry("should reject IP pool with Tunnel allowedUse and namespaceSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1317,7 +1344,7 @@ func init() {
 				},
 			}, false),
 		Entry("should reject IP pool with Tunnel and Workload allowedUses and namespaceSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1339,7 +1366,7 @@ func init() {
 				},
 			}, true),
 		Entry("should reject IP pool with invalid nodeSelector (global)",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:         netv4_4,
@@ -1387,7 +1414,7 @@ func init() {
 				},
 			}, true),
 		Entry("should reject IP pool with invalid namespaceSelector (global)",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:              netv4_4,
@@ -1671,57 +1698,82 @@ func init() {
 				},
 			}, true),
 		Entry("should reject Rule with icmp fields and no protocol",
-			api.Rule{
-				Action:    "Allow",
-				IPVersion: &V4,
-				ICMP: &api.ICMPFields{
-					Type: &V0,
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:    "Allow",
+						IPVersion: &V4,
+						ICMP:      &api.ICMPFields{Type: &V0},
+					}},
 				},
 			}, false),
 		Entry("should not reject Rule with icmp fields and no ipversion",
-			api.Rule{
-				Action:   "Allow",
-				Protocol: protocolFromString("ICMP"),
-				ICMP: &api.ICMPFields{
-					Type: &V0,
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:   "Allow",
+						Protocol: protocolFromString("ICMP"),
+						ICMP:     &api.ICMPFields{Type: &V0},
+					}},
 				},
 			}, true),
 		Entry("should not reject Rule with icmpv6 fields and no ipversion",
-			api.Rule{
-				Action:   "Allow",
-				Protocol: protocolFromString("ICMPv6"),
-				ICMP: &api.ICMPFields{
-					Type: &V0,
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:   "Allow",
+						Protocol: protocolFromString("ICMPv6"),
+						ICMP:     &api.ICMPFields{Type: &V0},
+					}},
 				},
 			}, true),
 		Entry("should reject Rule with mismatched ipversion for icmp",
-			api.Rule{
-				Action:    "Allow",
-				Protocol:  protocolFromString("ICMP"),
-				IPVersion: &V6,
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:    "Allow",
+						Protocol:  protocolFromString("ICMP"),
+						IPVersion: &V6,
+					}},
+				},
 			}, false),
 		Entry("should reject Rule with mismatched ipversion for icmpv6",
-			api.Rule{
-				Action:    "Allow",
-				Protocol:  protocolFromString("ICMPv6"),
-				IPVersion: &V4,
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:    "Allow",
+						Protocol:  protocolFromString("ICMPv6"),
+						IPVersion: &V4,
+					}},
+				},
 			}, false),
 		Entry("should allow Rule with correct ipversion for icmp",
-			api.Rule{
-				Action:    "Allow",
-				IPVersion: &V4,
-				Protocol:  protocolFromString("ICMP"),
-				ICMP: &api.ICMPFields{
-					Type: &V0,
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:    "Allow",
+						IPVersion: &V4,
+						Protocol:  protocolFromString("ICMP"),
+						ICMP:      &api.ICMPFields{Type: &V0},
+					}},
 				},
 			}, true),
 		Entry("should allow Rule with correct ipversion for icmpv6",
-			api.Rule{
-				Action:    "Allow",
-				IPVersion: &V6,
-				Protocol:  protocolFromString("ICMPv6"),
-				ICMP: &api.ICMPFields{
-					Type: &V0,
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:    "Allow",
+						IPVersion: &V6,
+						Protocol:  protocolFromString("ICMPv6"),
+						ICMP:      &api.ICMPFields{Type: &V0},
+					}},
 				},
 			}, true),
 		Entry("should reject Rule with source ports and protocol type 7",
@@ -2448,15 +2500,24 @@ func init() {
 					ASNumber:              as61234,
 				},
 			}, false),
-		Entry("should reject BGPPeerSpec with both positive KeepOriginalNextHop and non-empty NextHopMode", api.BGPPeerSpec{
-			KeepOriginalNextHop: true,
-			NextHopMode:         &nextHopMode,
+		Entry("should reject BGPPeerSpec with both positive KeepOriginalNextHop and non-empty NextHopMode", &api.BGPPeer{
+			ObjectMeta: v1.ObjectMeta{Name: "test-peer"},
+			Spec: api.BGPPeerSpec{
+				KeepOriginalNextHop: true,
+				NextHopMode:         &nextHopMode,
+			},
 		}, false),
-		Entry("should reject BGPPeer with ReachableBy but without PeerIP", api.BGPPeerSpec{
-			ReachableBy: ipv4_2,
+		Entry("should reject BGPPeer with ReachableBy but without PeerIP", &api.BGPPeer{
+			ObjectMeta: v1.ObjectMeta{Name: "test-peer"},
+			Spec: api.BGPPeerSpec{
+				ReachableBy: ipv4_2,
+			},
 		}, false),
-		Entry("should reject BGPPeer with ReachableBy (IPv6) but without PeerIP", api.BGPPeerSpec{
-			ReachableBy: ipv6_2,
+		Entry("should reject BGPPeer with ReachableBy (IPv6) but without PeerIP", &api.BGPPeer{
+			ObjectMeta: v1.ObjectMeta{Name: "test-peer"},
+			Spec: api.BGPPeerSpec{
+				ReachableBy: ipv6_2,
+			},
 		}, false),
 		Entry("should accept BGPPeer with ReachableBy and PeerIP", api.BGPPeerSpec{
 			PeerIP:      peerv4_1,
@@ -3790,28 +3851,58 @@ func init() {
 		// Validate EntityRule against special selectors global().
 		// Extra spaces added in some cases to make sure validation handles it.
 		Entry("disallow global() in EntityRule selector field",
-			&api.EntityRule{
-				Selector: "  global()  ",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action: "Allow",
+						Source: api.EntityRule{Selector: "  global()  "},
+					}},
+				},
 			}, false,
 		),
 		Entry("allow global() in EntityRule namespaceSelector field",
-			&api.EntityRule{
-				NamespaceSelector: "  global()  ",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action: "Allow",
+						Source: api.EntityRule{NamespaceSelector: "  global()  "},
+					}},
+				},
 			}, true,
 		),
 		Entry("disallow global() in EntityRule namespaceSelector field AND'd with other expressions",
-			&api.EntityRule{
-				NamespaceSelector: " global() && all()",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action: "Allow",
+						Source: api.EntityRule{NamespaceSelector: " global() && all()"},
+					}},
+				},
 			}, false,
 		),
 		Entry("disallow global() in EntityRule namespaceSelector field OR'd other expressions",
-			&api.EntityRule{
-				NamespaceSelector: "global()||all()",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action: "Allow",
+						Source: api.EntityRule{NamespaceSelector: "global()||all()"},
+					}},
+				},
 			}, false,
 		),
 		Entry("disallow bad selectors in EntityRule selector field",
-			&api.EntityRule{
-				Selector: "global() && bad",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action: "Allow",
+						Source: api.EntityRule{Selector: "global() && bad"},
+					}},
+				},
 			}, false,
 		),
 		Entry("allow HTTP Path with permitted match clauses",
