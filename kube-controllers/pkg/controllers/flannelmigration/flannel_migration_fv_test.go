@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ const (
 
 var emptyLabel = map[string]string{}
 
-var _ = Describe("flannel-migration-controller FV test", func() {
+var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd                *containers.Container
 		migrationController *containers.Container
@@ -87,7 +87,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 		migrationController.Stop()
 	}
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -118,7 +118,17 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
+	})
 
+	AfterAll(func() {
+		_ = calicoClient.Close()
+		controllerManager.Stop()
+		apiserver.Stop()
+		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	BeforeEach(func() {
 		// Initialise a new Flannel cluster
 		flannelCluster = testutils.NewFlannelCluster(k8sClient, "192.168.0.0/16")
 
@@ -134,12 +144,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 	})
 
 	AfterEach(func() {
-		_ = calicoClient.Close()
-		flannelCluster.Reset()
-		controllerManager.Stop()
-		apiserver.Stop()
-		etcd.Stop()
-		removeKubeconfig()
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, testutils.CleanupOptions{})
 	})
 
 	Context("Should migrate FV tests", func() {

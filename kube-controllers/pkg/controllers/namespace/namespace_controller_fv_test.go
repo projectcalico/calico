@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package namespace_test
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -32,7 +33,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico namespace controller FV tests (etcd mode)", func() {
+var _ = Describe("Calico namespace controller FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -44,7 +45,7 @@ var _ = Describe("Calico namespace controller FV tests (etcd mode)", func() {
 		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -76,7 +77,7 @@ var _ = Describe("Calico namespace controller FV tests (etcd mode)", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
@@ -87,8 +88,9 @@ var _ = Describe("Calico namespace controller FV tests (etcd mode)", func() {
 
 	Context("Namespace Profile FV tests", func() {
 		var profName string
+		var nsName string
 		BeforeEach(func() {
-			nsName := "peanutbutter"
+			nsName = fmt.Sprintf("peanutbutter-%d", time.Now().UnixNano())
 			profName = "kns." + nsName
 			ns := &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -105,6 +107,15 @@ var _ = Describe("Calico namespace controller FV tests (etcd mode)", func() {
 				profile, _ := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
 				return profile
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
+		})
+
+		AfterEach(func() {
+			ctx := context.Background()
+			_ = k8sClient.CoreV1().Namespaces().Delete(ctx, nsName, metav1.DeleteOptions{})
+			Eventually(func() bool {
+				_, err := k8sClient.CoreV1().Namespaces().Get(ctx, nsName, metav1.GetOptions{})
+				return err != nil
+			}, 30*time.Second, 500*time.Millisecond).Should(BeTrue())
 		})
 
 		It("should write new profiles in etcd to match namespaces in k8s ", func() {
