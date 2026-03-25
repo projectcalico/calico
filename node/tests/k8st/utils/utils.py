@@ -199,7 +199,7 @@ def retry_until_success(fun,
             elapsed = time.monotonic() - start
             if elapsed > timeout / 2:
                 _log.warning("Function %s succeeded but used %.1fs of %.0fs timeout (%d attempts).",
-                             function_name(fun), elapsed, timeout, attempts)
+                             function_name(fun), elapsed, timeout, attempts, stack_info=True)
             return result
 
 
