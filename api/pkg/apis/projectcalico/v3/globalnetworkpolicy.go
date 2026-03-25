@@ -119,7 +119,7 @@ type GlobalNetworkPolicySpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=2
 	// +listType=set
-	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
+	Types []PolicyType `json:"types,omitempty"`
 
 	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in

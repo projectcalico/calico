@@ -247,7 +247,7 @@ type FelixConfigurationSpec struct {
 	// should be cleaned up to avoid confusing interactions.
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^(?i)(Auto|Legacy|NFT)?$`
-	IptablesBackend *IptablesBackend `json:"iptablesBackend,omitempty" validate:"omitempty,iptablesBackend"`
+	IptablesBackend *IptablesBackend `json:"iptablesBackend,omitempty"`
 
 	// XDPRefreshInterval is the period at which Felix re-checks all XDP state to ensure that no
 	// other process has accidentally broken Calico's BPF maps or attached programs. Set to 0 to
@@ -308,24 +308,24 @@ type FelixConfigurationSpec struct {
 	// once it has completed processing workload endpoint egress policy. Use ACCEPT to unconditionally accept packets
 	// from workloads after processing workload endpoint egress policy. [Default: Drop]
 	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Accept|Return)?$`
-	DefaultEndpointToHostAction string `json:"defaultEndpointToHostAction,omitempty" validate:"omitempty,dropAcceptReturn"`
+	DefaultEndpointToHostAction string `json:"defaultEndpointToHostAction,omitempty"`
 
 	// IptablesFilterAllowAction controls what happens to traffic that is accepted by a Felix policy chain in the
 	// iptables filter table (which is used for "normal" policy). The default will immediately `Accept` the traffic. Use
 	// `Return` to send the traffic back up to the system chains for further processing.
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
-	IptablesFilterAllowAction string `json:"iptablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
+	IptablesFilterAllowAction string `json:"iptablesFilterAllowAction,omitempty"`
 
 	// IptablesMangleAllowAction controls what happens to traffic that is accepted by a Felix policy chain in the
 	// iptables mangle table (which is used for "pre-DNAT" policy). The default will immediately `Accept` the traffic.
 	// Use `Return` to send the traffic back up to the system chains for further processing.
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
-	IptablesMangleAllowAction string `json:"iptablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
+	IptablesMangleAllowAction string `json:"iptablesMangleAllowAction,omitempty"`
 
 	// IptablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic
 	// with an iptables "DROP" action. If you want to use "REJECT" action instead you can configure it in here.
 	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
-	IptablesFilterDenyAction string `json:"iptablesFilterDenyAction,omitempty" validate:"omitempty,dropReject"`
+	IptablesFilterDenyAction string `json:"iptablesFilterDenyAction,omitempty"`
 
 	// LogPrefix is the log prefix that Felix uses when rendering LOG rules. It is possible to use the following specifiers
 	// to include extra information in the log prefix.
@@ -356,16 +356,16 @@ type FelixConfigurationSpec struct {
 
 	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]
 	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
-	LogSeverityFile string `json:"logSeverityFile,omitempty" validate:"omitempty,logLevel"`
+	LogSeverityFile string `json:"logSeverityFile,omitempty"`
 
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
 	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
-	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
+	LogSeverityScreen string `json:"logSeverityScreen,omitempty"`
 
 	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
 	// [Default: Info]
 	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
-	LogSeveritySys string `json:"logSeveritySys,omitempty" validate:"omitempty,logLevel"`
+	LogSeveritySys string `json:"logSeveritySys,omitempty"`
 
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
 	// Only logs from files with names that match the given regular expression are included.  The filter only applies
@@ -650,18 +650,18 @@ type FelixConfigurationSpec struct {
 	// in the filter table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively,
 	// `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
-	NftablesFilterAllowAction string `json:"nftablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
+	NftablesFilterAllowAction string `json:"nftablesFilterAllowAction,omitempty"`
 
 	// NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
 	// in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively,
 	// `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
-	NftablesMangleAllowAction string `json:"nftablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
+	NftablesMangleAllowAction string `json:"nftablesMangleAllowAction,omitempty"`
 
 	// NftablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default, Calico
 	// blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
 	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
-	NftablesFilterDenyAction string `json:"nftablesFilterDenyAction,omitempty" validate:"omitempty,dropReject"`
+	NftablesFilterDenyAction string `json:"nftablesFilterDenyAction,omitempty"`
 
 	// NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
@@ -687,7 +687,7 @@ type FelixConfigurationSpec struct {
 	// [Default: Off].
 	// +optional
 	// +kubebuilder:validation:Pattern=`^(?i)(Off|Info|Debug)?$`
-	BPFLogLevel string `json:"bpfLogLevel" validate:"omitempty,bpfLogLevel"`
+	BPFLogLevel string `json:"bpfLogLevel"`
 
 	// BPFConntrackLogLevel controls the log level of the BPF conntrack cleanup program, which runs periodically
 	// to clean up expired BPF conntrack entries.
@@ -772,7 +772,7 @@ type FelixConfigurationSpec struct {
 	// is sent directly from the remote node.  In "DSR" mode, the remote node appears to use the IP of the ingress
 	// node; this requires a permissive L2 network.  [Default: Tunnel]
 	// +kubebuilder:validation:Pattern=`^(?i)(Tunnel|DSR)?$`
-	BPFExternalServiceMode string `json:"bpfExternalServiceMode,omitempty" validate:"omitempty,bpfServiceMode"`
+	BPFExternalServiceMode string `json:"bpfExternalServiceMode,omitempty"`
 
 	// BPFDSROptoutCIDRs is a list of CIDRs which are excluded from DSR. That is, clients
 	// in those CIDRs will access service node ports as if BPFExternalServiceMode was set to
@@ -952,7 +952,7 @@ type FelixConfigurationSpec struct {
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
 	// +kubebuilder:validation:Pattern=`^(?i)(WorkloadIPs|CalicoIPAM)?$`
-	RouteSource string `json:"routeSource,omitempty" validate:"omitempty,routeSource"`
+	RouteSource string `json:"routeSource,omitempty"`
 
 	// Calico programs additional Linux route tables for various purposes.
 	// RouteTableRanges specifies a set of table index ranges that Calico should use.

@@ -115,7 +115,7 @@ type NetworkPolicySpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=2
 	// +listType=set
-	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
+	Types []PolicyType `json:"types,omitempty"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`

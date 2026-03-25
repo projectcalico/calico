@@ -94,11 +94,11 @@ type IPPoolSpec struct {
 	CIDR string `json:"cidr" validate:"net"`
 
 	// Contains configuration for VXLAN tunneling for this pool.
-	VXLANMode VXLANMode `json:"vxlanMode,omitempty" validate:"omitempty,vxlanMode"`
+	VXLANMode VXLANMode `json:"vxlanMode,omitempty"`
 
 	// Contains configuration for IPIP tunneling for this pool.
 	// For IPv6 pools, IPIP tunneling must be disabled.
-	IPIPMode IPIPMode `json:"ipipMode,omitempty" validate:"omitempty,ipIpMode"`
+	IPIPMode IPIPMode `json:"ipipMode,omitempty"`
 
 	// When natOutgoing is true, packets sent from Calico networked containers in
 	// this pool to destinations outside of this pool will be masqueraded.
@@ -134,7 +134,7 @@ type IPPoolSpec struct {
 	// Determines the mode how IP addresses should be assigned from this pool
 	// +optional
 	// +kubebuilder:default=Automatic
-	AssignmentMode *AssignmentMode `json:"assignmentMode,omitempty" validate:"omitempty,assignmentMode"`
+	AssignmentMode *AssignmentMode `json:"assignmentMode,omitempty"`
 }
 
 // IPPoolAllowedUse defines the allowed uses for an IP pool.
@@ -212,7 +212,7 @@ type IPIPConfiguration struct {
 	// addresses within this pool.  A mode of "cross-subnet" will only use IPIP
 	// tunneling when the destination node is on a different subnet to the
 	// originating node.  The default value (if not specified) is "always".
-	Mode EncapMode `json:"mode,omitempty" validate:"ipIpMode"`
+	Mode EncapMode `json:"mode,omitempty"`
 }
 
 // NewIPPool creates a new (zeroed) IPPool struct with the TypeMetadata initialised to the current
