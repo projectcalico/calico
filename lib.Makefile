@@ -1622,9 +1622,10 @@ $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 $(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
 	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
 
-# Operator is built from a separate repo/branch and depends on all other
-# images being built first.
-$(REPO_ROOT)/.stamp.operator: $(KIND_IMAGE_MARKERS) $(KIND_INFRA_DIR)/calico_versions.yml
+# Operator is built from a separate repo/branch. It only needs
+# calico_versions.yml (a static file with version strings), not the
+# actual built images, so it can run in parallel with component builds.
+$(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml
 	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
 	touch $@
 
@@ -1661,7 +1662,8 @@ kind-deploy:
 # Rebuild any images whose source files have changed, load onto the kind
 # cluster, and restart pods.
 .PHONY: kind-reload
-kind-reload: kind-build-images
+kind-reload:
+	$(MAKE) -j$(shell nproc) kind-build-images
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
