@@ -1219,3 +1219,220 @@ func TestCRDValidation_Rule(t *testing.T) {
 		},
 	})
 }
+
+// TestCRDValidation_Rule_ICMP tests CEL rules for ICMP protocol/ipVersion constraints.
+func TestCRDValidation_Rule_ICMP(t *testing.T) {
+	icmpProto := numorstring.ProtocolFromString("ICMP")
+	icmpv6Proto := numorstring.ProtocolFromString("ICMPv6")
+	tcpProto := numorstring.ProtocolFromString("TCP")
+	icmpType := 8
+
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "ICMP fields without ICMP protocol fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Allow,
+							Protocol: &tcpProto,
+							ICMP:     &apiv3.ICMPFields{Type: &icmpType},
+						},
+					},
+				},
+			},
+			errSubstr: "ICMP fields require protocol to be ICMP or ICMPv6",
+		},
+		{
+			name: "ICMP fields with ICMP protocol passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Allow,
+							Protocol: &icmpProto,
+							ICMP:     &apiv3.ICMPFields{Type: &icmpType},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ICMP protocol with ipVersion 6 fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:    apiv3.Allow,
+							Protocol:  &icmpProto,
+							IPVersion: ptr.To(6),
+						},
+					},
+				},
+			},
+			errSubstr: "protocol ICMP requires ipVersion 4",
+		},
+		{
+			name: "ICMPv6 protocol with ipVersion 4 fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:    apiv3.Allow,
+							Protocol:  &icmpv6Proto,
+							IPVersion: ptr.To(4),
+						},
+					},
+				},
+			},
+			errSubstr: "protocol ICMPv6 requires ipVersion 6",
+		},
+		{
+			name: "ICMP protocol with ipVersion 4 passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:    apiv3.Allow,
+							Protocol:  &icmpProto,
+							IPVersion: ptr.To(4),
+						},
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_EntityRule tests CEL rules on the EntityRule type.
+func TestCRDValidation_EntityRule(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "services with namespaceSelector fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services:          &apiv3.ServiceMatch{Name: "svc1"},
+								NamespaceSelector: "all()",
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "cannot specify NamespaceSelector and Services on the same rule",
+		},
+		{
+			name: "services with selector fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services: &apiv3.ServiceMatch{Name: "svc1"},
+								Selector: "all()",
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "cannot specify Selector/NotSelector and Services on the same rule",
+		},
+		{
+			name: "services with serviceAccounts fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services:        &apiv3.ServiceMatch{Name: "svc1"},
+								ServiceAccounts: &apiv3.ServiceAccountMatch{Names: []string{"sa1"}},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "cannot specify ServiceAccounts and Services on the same rule",
+		},
+		{
+			name: "services with nets fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services: &apiv3.ServiceMatch{Name: "svc1"},
+								Nets:     []string{"10.0.0.0/8"},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "cannot specify Nets/NotNets and Services on the same rule",
+		},
+		{
+			name: "services without name fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services: &apiv3.ServiceMatch{},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "must specify a service name",
+		},
+		{
+			name: "selector with global() fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Selector: "global()",
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "services with name alone passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services: &apiv3.ServiceMatch{Name: "svc1"},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+}

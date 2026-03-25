@@ -102,8 +102,6 @@ var (
 	overlapsV6LinkLocal           = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
 	protocolPortsMsg              = "rules that specify ports must set protocol to TCP or UDP or SCTP"
 	protocolSingleOrRangePortsMsg = "rules with numeric port or port range must set protocol to TCP or UDP or SCTP"
-	protocolICMPMsg               = "rules that specify ICMP fields must set protocol to ICMP"
-	globalSelectorEntRule         = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
 	globalSelectorOnly            = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
@@ -1086,24 +1084,6 @@ func validateRule(structLevel validator.StructLevel) {
 		}
 	}
 
-	icmp := numorstring.ProtocolFromString("ICMP")
-	icmpv6 := numorstring.ProtocolFromString("ICMPv6")
-	if rule.ICMP != nil && (rule.Protocol == nil || (*rule.Protocol != icmp && *rule.Protocol != icmpv6)) {
-		structLevel.ReportError(reflect.ValueOf(rule.ICMP), "ICMP", "", reason(protocolICMPMsg), "")
-	}
-
-	// Check that the IPVersion of the protocol matches the IPVersion of the ICMP protocol.
-	if (rule.Protocol != nil && *rule.Protocol == icmp) || (rule.NotProtocol != nil && *rule.NotProtocol == icmp) {
-		if rule.IPVersion != nil && *rule.IPVersion != 4 {
-			structLevel.ReportError(reflect.ValueOf(rule.ICMP), "IPVersion", "", reason("must set ipversion to '4' with protocol icmp"), "")
-		}
-	}
-	if (rule.Protocol != nil && *rule.Protocol == icmpv6) || (rule.NotProtocol != nil && *rule.NotProtocol == icmpv6) {
-		if rule.IPVersion != nil && *rule.IPVersion != 6 {
-			structLevel.ReportError(reflect.ValueOf(rule.ICMP), "IPVersion", "", reason("must set ipversion to '6' with protocol icmpv6"), "")
-		}
-	}
-
 	var seenV4, seenV6 bool
 
 	scanNets := func(nets []string, fieldName string) {
@@ -1151,9 +1131,28 @@ func validateRule(structLevel validator.StructLevel) {
 
 func validateEntityRule(structLevel validator.StructLevel) {
 	rule := structLevel.Current().Interface().(api.EntityRule)
-	if strings.Contains(rule.Selector, globalSelector) {
+
+	// The selector global() check, services+selector/notSelector, and services+nets/notNets
+	// checks exceed the CEL cost budget (EntityRule is nested inside Rule arrays without
+	// MaxItems), so they remain in Go.
+	if strings.Contains(rule.Selector, "global(") {
 		structLevel.ReportError(reflect.ValueOf(rule.Selector),
-			"Selector field", "", reason(globalSelectorEntRule), "")
+			"Selector field", "", reason("global() can only be used in an EntityRule namespaceSelector"), "")
+	}
+
+	if rule.Services != nil {
+		if rule.Services.Name == "" {
+			structLevel.ReportError(reflect.ValueOf(rule.Services),
+				"Services field", "", reason("must specify a service name"), "")
+		}
+		if rule.Selector != "" || rule.NotSelector != "" {
+			structLevel.ReportError(reflect.ValueOf(rule.Services),
+				"Services field", "", reason("cannot specify Selector/NotSelector and Services on the same rule"), "")
+		}
+		if len(rule.Nets) != 0 || len(rule.NotNets) != 0 {
+			structLevel.ReportError(reflect.ValueOf(rule.Services),
+				"Services field", "", reason("cannot specify Nets/NotNets and Services on the same rule"), "")
+		}
 	}
 
 	if strings.Contains(rule.NamespaceSelector, "global(") &&
@@ -1166,33 +1165,6 @@ func validateEntityRule(structLevel validator.StructLevel) {
 			// If the namespaceSelector contains global(), then it should be the only selector.
 			structLevel.ReportError(reflect.ValueOf(rule.NamespaceSelector),
 				"NamespaceSelector field", "", reason(globalSelectorOnly), "")
-		}
-	}
-
-	if rule.Services != nil {
-		// Make sure it's not empty.
-		if rule.Services.Name == "" {
-			structLevel.ReportError(reflect.ValueOf(rule.Services),
-				"Services field", "", reason("must specify a service name"), "")
-		}
-
-		// Make sure the rest of the entity rule is consistent.
-		if rule.NamespaceSelector != "" {
-			structLevel.ReportError(reflect.ValueOf(rule.Services),
-				"Services field", "", reason("cannot specify NamespaceSelector and Services on the same rule"), "")
-		}
-		if rule.Selector != "" || rule.NotSelector != "" {
-			structLevel.ReportError(reflect.ValueOf(rule.Services),
-				"Services field", "", reason("cannot specify Selector/NotSelector and Services on the same rule"), "")
-		}
-		if rule.ServiceAccounts != nil {
-			structLevel.ReportError(reflect.ValueOf(rule.Services),
-				"Services field", "", reason("cannot specify ServiceAccounts and Services on the same rule"), "")
-		}
-		if len(rule.Nets) != 0 || len(rule.NotNets) != 0 {
-			// Service rules use IPs specified on the endpoints.
-			structLevel.ReportError(reflect.ValueOf(rule.Services),
-				"Services field", "", reason("cannot specify Nets/NotNets and Services on the same rule"), "")
 		}
 	}
 }
