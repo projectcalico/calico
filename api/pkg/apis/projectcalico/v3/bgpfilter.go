@@ -99,7 +99,7 @@ type BGPFilterRuleV4 struct {
 	// an exact prefix match, "In" requires the route to be contained within the CIDR (or equal),
 	// "NotEqual" and "NotIn" are their negations.  Only meaningful when CIDR is also specified.
 	// Required when CIDR is set.
-	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
+	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty"`
 
 	// If non-empty, this filter rule will only apply to routes being imported from or exported
 	// to a BGP peer of the specified type.  If empty, the rule applies to all peers.
@@ -126,7 +126,7 @@ type BGPFilterRuleV4 struct {
 	// +kubebuilder:validation:Maximum=2147483646
 	Priority *int `json:"priority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 
-	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
+	Action BGPFilterAction `json:"action" validate:"required"`
 
 	// Operations is an ordered list of route modifications to apply to matching routes before
 	// accepting them.  Only valid when Action is "Accept"; specifying operations with "Reject"
@@ -175,7 +175,7 @@ type BGPFilterRuleV6 struct {
 	// an exact prefix match, "In" requires the route to be contained within the CIDR (or equal),
 	// "NotEqual" and "NotIn" are their negations.  Only meaningful when CIDR is also specified.
 	// Required when CIDR is set.
-	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
+	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty"`
 
 	// If non-empty, this filter rule will only apply to routes being imported from or exported
 	// to a BGP peer of the specified type.  If empty, the rule applies to all peers.
@@ -202,7 +202,7 @@ type BGPFilterRuleV6 struct {
 	// +kubebuilder:validation:Maximum=2147483646
 	Priority *int `json:"priority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 
-	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
+	Action BGPFilterAction `json:"action" validate:"required"`
 
 	// Operations is an ordered list of route modifications to apply to matching routes before
 	// accepting them.  Only valid when Action is "Accept"; specifying operations with "Reject"
