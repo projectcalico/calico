@@ -115,15 +115,7 @@ func (t *CIDRTrie) LPM(cidr CIDR) (CIDR, interface{}) {
 	n := t.root
 	var match *CIDRNode
 
-	for {
-		if n == nil {
-			break
-		}
-
-		if !n.cidr.Contains(cidr.Addr()) {
-			break
-		}
-
+	for n != nil && n.cidr.Contains(cidr.Addr()) {
 		if n.data != nil {
 			match = n
 		}

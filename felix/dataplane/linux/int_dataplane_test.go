@@ -187,14 +187,14 @@ var _ = Describe("Constructor test", func() {
 
 type mockCollector struct{}
 
-func (_ *mockCollector) ReportingChannel() chan<- *proto.DataplaneStats { return nil }
+func (*mockCollector) ReportingChannel() chan<- *proto.DataplaneStats { return nil }
 
-func (_ *mockCollector) Start() error { return nil }
+func (*mockCollector) Start() error { return nil }
 
-func (_ *mockCollector) RegisterMetricsReporter(types.Reporter) {}
+func (*mockCollector) RegisterMetricsReporter(types.Reporter) {}
 
-func (_ *mockCollector) SetDataplaneInfoReader(types.DataplaneInfoReader) {}
+func (*mockCollector) SetDataplaneInfoReader(types.DataplaneInfoReader) {}
 
-func (_ *mockCollector) SetPacketInfoReader(types.PacketInfoReader) {}
+func (*mockCollector) SetPacketInfoReader(types.PacketInfoReader) {}
 
-func (_ *mockCollector) SetConntrackInfoReader(types.ConntrackInfoReader) {}
+func (*mockCollector) SetConntrackInfoReader(types.ConntrackInfoReader) {}

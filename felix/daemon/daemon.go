@@ -659,8 +659,8 @@ configRetry:
 
 		usageRep := usagerep.New(
 			usagerep.StaticItems{KubernetesVersion: kubernetesVersion},
-			configParams.UsageReportingInitialDelaySecs,
-			configParams.UsageReportingIntervalSecs,
+			configParams.UsageReportingInitialDelay,
+			configParams.UsageReportingInterval,
 			statsChanOut,
 			connToUsageRepUpdChan,
 		)
@@ -683,7 +683,7 @@ configRetry:
 	log.Infof("Started the processing graph")
 	var stopSignalChans []chan<- *sync.WaitGroup
 	if configParams.EndpointReportingEnabled {
-		delay := configParams.EndpointReportingDelaySecs
+		delay := configParams.EndpointReportingDelay
 		log.WithField("delay", delay).Info(
 			"Endpoint status reporting enabled, starting status reporter")
 
@@ -1168,7 +1168,7 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg
 		defer fc.configLock.Unlock()
 		hostname = fc.config.FelixHostname
 		regionString = model.RegionString(fc.config.OpenstackRegion)
-		reportingTTL = fc.config.ReportingTTLSecs
+		reportingTTL = fc.config.ReportingTTL
 	}()
 
 	kv := model.KVPair{
@@ -1240,7 +1240,7 @@ func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string, ipVe
 		if ipVersion == proto.IPVersion_IPV6 {
 			storedPublicKey = node.Status.WireguardPublicKeyV6
 		} else if ipVersion != proto.IPVersion_IPV4 {
-			return fmt.Errorf("Unknown IP version: %d", ipVersion)
+			return fmt.Errorf("unknown IP version: %d", ipVersion)
 		}
 		if storedPublicKey != dpPubKey {
 			updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

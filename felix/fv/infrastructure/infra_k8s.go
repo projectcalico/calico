@@ -28,7 +28,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -154,7 +154,7 @@ func createK8sDatastoreInfra(opts ...CreateOption) DatastoreInfra {
 
 func createK8sDatastoreInfraWithIndex(index K8sInfraIndex, opts ...CreateOption) DatastoreInfra {
 	infra, err := GetK8sDatastoreInfra(index, opts...)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return infra
 }
 
@@ -423,7 +423,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 		var resp *http.Response
 		resp, err = insecureHTTPClient.Get(kds.Endpoint + "/apis/crd.projectcalico.org/v1/felixconfigurations")
 		if resp.StatusCode != 200 {
-			err = fmt.Errorf("Bad status (%v) for CRD GET request", resp.StatusCode)
+			err = fmt.Errorf("bad status (%v) for CRD GET request", resp.StatusCode)
 		}
 		if err != nil || resp.StatusCode != 200 {
 			log.WithError(err).WithField("status", resp.StatusCode).Warn("Waiting for API server to respond to requests")
@@ -636,7 +636,7 @@ func (kds *K8sDatastoreInfra) GetClusterGUID() string {
 		"default",
 		options.GetOptions{},
 	)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return ci.Spec.ClusterGUID
 }
 
@@ -707,7 +707,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 		},
 	}
 	if len(felix.IPv6) > 0 && v6CIDR != nil {
-		nodeIn.ObjectMeta.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
+		nodeIn.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
 		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx))
 		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses, v1.NodeAddress{
 			Address: felix.IPv6,
@@ -981,8 +981,8 @@ func cleanupAllNamespaces(clientset *kubernetes.Clientset, calicoClient client.I
 	}
 	log.WithField("count", len(nsList.Items)).Info("Namespaces present")
 	for _, ns := range nsList.Items {
-		if ns.Status.Phase != v1.NamespaceTerminating && !isSystemNamespace(ns.ObjectMeta.Name) {
-			err = clientset.CoreV1().Namespaces().Delete(context.Background(), ns.ObjectMeta.Name, DeleteImmediately)
+		if ns.Status.Phase != v1.NamespaceTerminating && !isSystemNamespace(ns.Name) {
+			err = clientset.CoreV1().Namespaces().Delete(context.Background(), ns.Name, DeleteImmediately)
 			if err != nil {
 				panic(err)
 			}
@@ -999,7 +999,7 @@ func cleanupAllNodes(clientset *kubernetes.Clientset, calicoClient client.Interf
 	}
 	log.WithField("count", len(nodeList.Items)).Info("Nodes present")
 	for _, node := range nodeList.Items {
-		err = clientset.CoreV1().Nodes().Delete(context.Background(), node.ObjectMeta.Name, DeleteImmediately)
+		err = clientset.CoreV1().Nodes().Delete(context.Background(), node.Name, DeleteImmediately)
 		if err != nil {
 			panic(err)
 		}
@@ -1019,7 +1019,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, calicoClient client.Interfa
 	waiter := sync.WaitGroup{}
 	waiter.Add(len(nsList.Items))
 	for _, ns := range nsList.Items {
-		nsName := ns.ObjectMeta.Name
+		nsName := ns.Name
 		go func() {
 			admission <- 1
 			podList, err := clientset.CoreV1().Pods(nsName).List(context.Background(), metav1.ListOptions{})
@@ -1029,7 +1029,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, calicoClient client.Interfa
 			log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Debug(
 				"Pods present")
 			for _, pod := range podList.Items {
-				err = clientset.CoreV1().Pods(nsName).Delete(context.Background(), pod.ObjectMeta.Name, DeleteImmediately)
+				err = clientset.CoreV1().Pods(nsName).Delete(context.Background(), pod.Name, DeleteImmediately)
 				if err != nil {
 					panic(err)
 				}
@@ -1321,7 +1321,7 @@ func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
 
 func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v1.Pod {
 	if wep.Labels != nil {
-		pod.ObjectMeta.Labels = wep.Labels
+		pod.Labels = wep.Labels
 	}
 	if wep.Spec.QoSControls != nil {
 		if pod.Annotations == nil {

@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -132,7 +132,7 @@ func Run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 		log.WithError(err).Info("Starting workload failed, retrying")
 		w, err = run(c, name, profile, ip, ports, protocol, opts...)
 	}
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	return w
 }
@@ -254,11 +254,11 @@ func (w *Workload) Start() error {
 	w.runCmd = utils.Command("docker", "exec", w.C.Name, "sh", "-c", command)
 	w.outPipe, err = w.runCmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Getting StdoutPipe failed: %v", err)
+		return fmt.Errorf("getting StdoutPipe failed: %v", err)
 	}
 	w.errPipe, err = w.runCmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("Getting StderrPipe failed: %v", err)
+		return fmt.Errorf("getting StderrPipe failed: %v", err)
 	}
 	err = w.runCmd.Start()
 	if err != nil {
@@ -364,14 +364,14 @@ func (w *Workload) Configure(client client.Interface) {
 	wep.Namespace = "fv"
 	var err error
 	w.WorkloadEndpoint, err = client.WorkloadEndpoints().Create(utils.Ctx, w.WorkloadEndpoint, utils.NoOptions)
-	Expect(err).NotTo(HaveOccurred(), "Failed to create workload in the calico datastore.")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create workload in the calico datastore.")
 }
 
 // RemoveFromDatastore removes the workload endpoint from the datastore.
 // Deprecated: should use RemoveFromInfra.
 func (w *Workload) RemoveFromDatastore(client client.Interface) {
 	_, err := client.WorkloadEndpoints().Delete(utils.Ctx, "fv", w.WorkloadEndpoint.Name, options.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 }
 
 // ConfigureInInfra creates the workload endpoint for this Workload.
@@ -385,7 +385,7 @@ func (w *Workload) ConfigureInInfra(infra infrastructure.DatastoreInfra) {
 	wep.Spec.InterfaceName = w.InterfaceName
 	var err error
 	w.WorkloadEndpoint, err = infra.AddWorkload(wep)
-	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to add workload")
 }
 
 // UpdateInInfra updates the workload endpoint for this Workload.
@@ -400,7 +400,7 @@ func (w *Workload) UpdateInInfra(infra infrastructure.DatastoreInfra) {
 	var err error
 	w.WorkloadEndpoint, err = infra.UpdateWorkload(wep)
 	log.WithFields(log.Fields{"Workload": w, "WorkloadEndpoint": w.WorkloadEndpoint, "QoSControls": w.WorkloadEndpoint.Spec.QoSControls}).Infof("Update WorkloadEndpoint")
-	Expect(err).NotTo(HaveOccurred(), "Failed to update workload")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to update workload")
 }
 
 // ConfigureInInfraAsSpoofInterface creates a valid workload endpoint for this Workload, using the spoof interface
@@ -414,7 +414,7 @@ func (w *Workload) ConfigureInInfraAsSpoofInterface(infra infrastructure.Datasto
 	wep.Spec.InterfaceName = w.SpoofInterfaceName
 	var err error
 	w.SpoofWorkloadEndpoint, err = infra.AddWorkload(wep)
-	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to add workload")
 }
 
 // ConfigureOtherWEPInInfraAsSpoofInterface creates a WEP for the spoof interface that does not match this Workload's
@@ -428,20 +428,20 @@ func (w *Workload) ConfigureOtherWEPInInfraAsSpoofInterface(infra infrastructure
 	wep.Spec.IPNetworks[0] = "1.2.3.4"
 	var err error
 	w.SpoofWorkloadEndpoint, err = infra.AddWorkload(wep)
-	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to add workload")
 }
 
 // RemoveSpoofWEPFromInfra removes the spoof WEP created by ConfigureInInfraAsSpoofInterface or
 // ConfigureOtherWEPInInfraAsSpoofInterface.
 func (w *Workload) RemoveSpoofWEPFromInfra(infra infrastructure.DatastoreInfra) {
 	err := infra.RemoveWorkload(w.SpoofWorkloadEndpoint.Namespace, w.SpoofWorkloadEndpoint.Name)
-	Expect(err).NotTo(HaveOccurred(), "Failed to remove workload")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to remove workload")
 }
 
 // RemoveFromInfra removes the WEP created by ConfigureInInfra.
 func (w *Workload) RemoveFromInfra(infra infrastructure.DatastoreInfra) {
 	err := infra.RemoveWorkload(w.WorkloadEndpoint.Namespace, w.WorkloadEndpoint.Name)
-	Expect(err).NotTo(HaveOccurred(), "Failed to remove workload")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to remove workload")
 }
 
 func (w *Workload) NameSelector() string {
@@ -498,7 +498,7 @@ func (w *Workload) NamespacePath() string {
 
 func (w *Workload) Exec(args ...string) {
 	out, err := w.ExecCombinedOutput(args...)
-	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Exec of %v failed; output: %s", args, out))
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Exec of %v failed; output: %s", args, out))
 }
 
 func (w *Workload) ExecOutput(args ...string) (string, error) {
@@ -523,7 +523,7 @@ func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 	if errors.As(err, &exitErr) {
 		stderr = string(exitErr.Stderr)
 	}
-	Expect(err).NotTo(HaveOccurred(), stderr)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), stderr)
 
 	lines := strings.Split(out, "\n")[1:] // Skip header line
 	var rttSum time.Duration
@@ -533,10 +533,10 @@ func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 			continue
 		}
 		matches := rttRegexp.FindStringSubmatch(line)
-		Expect(matches).To(HaveLen(2), "Failed to extract RTT from line: "+line)
+		gomega.Expect(matches).To(gomega.HaveLen(2), "Failed to extract RTT from line: "+line)
 		rttMsecStr := matches[1]
 		rttMsec, err := strconv.ParseFloat(rttMsecStr, 64)
-		Expect(err).ToNot(HaveOccurred())
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		if rttMsec > 1000 {
 			// There's a bug in hping where it occasionally reports RTT+1s instead of RTT.  Work around that
 			// but keep track of the number of workarounds and bail out if we see too many.
@@ -545,13 +545,13 @@ func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 		}
 		rttSum += time.Duration(rttMsec * float64(time.Millisecond))
 	}
-	Expect(numBuggyRTTs).To(BeNumerically("<", len(lines)/2),
+	gomega.Expect(numBuggyRTTs).To(gomega.BeNumerically("<", len(lines)/2),
 		"hping reported a large number of >1s RTTs; full output:\n"+out)
 	meanRtt := rttSum / time.Duration(len(lines))
 	return meanRtt, out
 }
 
-func (w *Workload) SendPacketsTo(ip string, count int, size int) (error, string) {
+func (w *Workload) SendPacketsTo(ip string, count int, size int) (string, error) {
 	c := fmt.Sprintf("%d", count)
 	s := fmt.Sprintf("%d", size)
 	_, err := w.ExecOutput("ping", "-c", c, "-W", "1", "-s", s, ip)
@@ -560,7 +560,7 @@ func (w *Workload) SendPacketsTo(ip string, count int, size int) (error, string)
 	if errors.As(err, &exitErr) {
 		stderr = string(exitErr.Stderr)
 	}
-	return err, stderr
+	return stderr, err
 }
 
 type SideService struct {
@@ -571,7 +571,7 @@ type SideService struct {
 }
 
 func (s *SideService) Stop() {
-	Expect(s.stop()).NotTo(HaveOccurred())
+	gomega.Expect(s.stop()).NotTo(gomega.HaveOccurred())
 }
 
 func (s *SideService) stop() error {
@@ -598,7 +598,7 @@ func (s *SideService) stop() error {
 
 func (w *Workload) StartSideService() *SideService {
 	s, err := startSideService(w)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return s
 }
 
@@ -677,7 +677,7 @@ func (w *Workload) StartPersistentConnection(
 	opts PersistentConnectionOpts,
 ) *connectivity.PersistentConnection {
 	pc, err := w.StartPersistentConnectionMayFail(ip, port, opts)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	return pc
 }
@@ -770,12 +770,12 @@ type SpoofedWorkload struct {
 
 func (s *SpoofedWorkload) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 	opts = s.appendSourceIPOpt(opts)
-	s.Workload.preRetryCleanupInner(ip, port, protocol, "(spoofed)", opts...)
+	s.preRetryCleanupInner(ip, port, protocol, "(spoofed)", opts...)
 }
 
 func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
 	opts = s.appendSourceIPOpt(opts)
-	return s.Workload.canConnectToInner(ip, port, protocol, "(spoofed)", opts...)
+	return s.canConnectToInner(ip, port, protocol, "(spoofed)", opts...)
 }
 
 func (s *SpoofedWorkload) appendSourceIPOpt(opts []connectivity.CheckOption) []connectivity.CheckOption {
@@ -801,14 +801,14 @@ func (p *Port) SourceIPs() []string {
 
 func (p *Port) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 	opts = p.maybeAppendPortOpt(opts)
-	p.Workload.preRetryCleanupInner(ip, port, protocol, "(with source port)", opts...)
+	p.preRetryCleanupInner(ip, port, protocol, "(with source port)", opts...)
 }
 
 // Return if a connection is good and packet loss string "PacketLoss[xx]".
 // If it is not a packet loss test, packet loss string is "".
 func (p *Port) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
 	opts = p.maybeAppendPortOpt(opts)
-	return p.Workload.canConnectToInner(ip, port, protocol, "(with source port)", opts...)
+	return p.canConnectToInner(ip, port, protocol, "(with source port)", opts...)
 }
 
 func (p *Port) maybeAppendPortOpt(opts []connectivity.CheckOption) []connectivity.CheckOption {
@@ -854,18 +854,18 @@ func (p *Port) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 		return p.Workload.ToMatcher(explicitPort...)
 	}
 	return &connectivity.Matcher{
-		IP:         p.Workload.IP,
+		IP:         p.IP,
 		Port:       fmt.Sprint(p.Port),
-		TargetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
-		IP6:        p.Workload.IP6,
+		TargetName: fmt.Sprintf("%s on port %d", p.Name, p.Port),
+		IP6:        p.IP6,
 	}
 }
 
 func (w *Workload) InterfaceIndex() int {
 	out, err := w.C.ExecOutput("ip", "link", "show", "dev", w.InterfaceName)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	ifIndex, err := strconv.Atoi(strings.SplitN(out, ":", 2)[0])
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	log.Infof("%v is ifindex %v", w.InterfaceName, ifIndex)
 	return ifIndex
 }

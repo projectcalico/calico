@@ -8,35 +8,35 @@ import (
 type DummyTable struct {
 }
 
-func (_ *DummyTable) OnIfaceStateChanged(_ string, _ int, _ ifacemonitor.State) {
+func (d *DummyTable) OnIfaceStateChanged(_ string, _ int, _ ifacemonitor.State) {
 }
 
-func (_ *DummyTable) QueueResync() {
+func (d *DummyTable) QueueResync() {
 }
 
-func (_ *DummyTable) QueueResyncIface(string) {
+func (d *DummyTable) QueueResyncIface(string) {
 }
 
-func (_ *DummyTable) Apply() error {
+func (d *DummyTable) Apply() error {
 	return nil
 }
 
-func (_ *DummyTable) SetRoutes(routeClass RouteClass, ifaceName string, targets []Target) {
+func (d *DummyTable) SetRoutes(routeClass RouteClass, ifaceName string, targets []Target) {
 }
 
-func (_ *DummyTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr ip.CIDR) {
+func (d *DummyTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr ip.CIDR) {
 }
 
-func (_ *DummyTable) RouteUpdate(routeClass RouteClass, ifaceName string, target Target) {
+func (d *DummyTable) RouteUpdate(routeClass RouteClass, ifaceName string, target Target) {
 }
 
-func (_ *DummyTable) Index() int {
+func (d *DummyTable) Index() int {
 	return 0
 }
 
-func (_ *DummyTable) ReadRoutesFromKernel(ifaceName string) ([]Target, error) {
+func (d *DummyTable) ReadRoutesFromKernel(ifaceName string) ([]Target, error) {
 	return nil, nil
 }
 
-func (_ *DummyTable) SetRemoveExternalRoutes(b bool) {
+func (d *DummyTable) SetRemoveExternalRoutes(b bool) {
 }

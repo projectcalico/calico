@@ -3,14 +3,14 @@
 #################################################################################################
 
 # The version of calico/go-build and calico/base to use.
-GO_BUILD_VER=1.24.13-llvm18.1.8-k8s1.33.8
-CALICO_BASE_VER=ubi9-1764972441
+GO_BUILD_VER=1.25.8-llvm18.1.8-k8s1.33.10
+CALICO_BASE_VER=ubi9-1757635857
 
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
-K8S_VERSION=v1.33.3
+K8S_VERSION=v1.33.10
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2

@@ -613,7 +613,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 						maxElem, err := strconv.Atoi(parts[idx+1])
 						if err != nil {
 							return fmt.Errorf(
-								"Failed to parse ipset list Header line. line: '%v', err: %w", line, err)
+								"failed to parse ipset list Header line. line: '%v', err: %w", line, err)
 						}
 						meta.MaxSize = maxElem
 						break
@@ -621,13 +621,13 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 					if p == "range" {
 						if idx+1 >= len(parts) {
 							return fmt.Errorf(
-								"Failed to parse ipset list Header line, nothing after 'range'. line: '%v'", line)
+								"failed to parse ipset list Header line, nothing after 'range'. line: '%v'", line)
 						}
 						// For bitmaps, we see "range 123-456"
 						rMin, rMAx, err := ParseRange(parts[idx+1])
 						if err != nil {
 							return fmt.Errorf(
-								"Failed to parse ipset list Header line. line: '%v', err: %w", line, err)
+								"failed to parse ipset list Header line. line: '%v', err: %w", line, err)
 						}
 						meta.RangeMin = rMin
 						meta.RangeMax = rMAx
@@ -687,7 +687,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 					return scanner.Err()
 				})
 				if err != nil {
-					return fmt.Errorf("Failed to read members from 'ipset list'. err: %w", err)
+					return fmt.Errorf("failed to read members from 'ipset list'. err: %w", err)
 				}
 
 				if numMissing := memberTracker.PendingUpdates().Len(); numMissing > 0 {

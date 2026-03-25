@@ -453,13 +453,13 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 		}
 		for _, addr := range addrs {
 			// Match address with or without subnet mask
-			if addr.IPNet.IP.String() == parentAddr || addr.IPNet.String() == parentAddr {
+			if addr.IP.String() == parentAddr || addr.IPNet.String() == parentAddr {
 				m.logCtx.Debugf("Found parent interface: %s", link)
 				return link, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("Unable to find parent interface with address %s", parentAddr)
+	return nil, fmt.Errorf("unable to find parent interface with address %s", parentAddr)
 }
 
 // KeepDeviceInSync runs in a loop and checks that the device is still correctly configured, and updates it if necessary.

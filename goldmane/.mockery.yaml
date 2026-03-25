@@ -1,15 +1,16 @@
-with-expecter: True
 inpackage: False
 dir: "{{.InterfaceDir}}/mocks"
-mockname: "{{.InterfaceName}}"
-outpkg: "mocks"
 filename: "{{.InterfaceName}}.go"
-resolve-type-alias: False
-issue-845-fix: True
 packages:
   github.com/projectcalico/calico/goldmane/pkg/client:
+    config:
+      pkgname: "mocks"
+      structname: "{{.InterfaceName}}"
     interfaces:
       FlowsClient:
   github.com/projectcalico/calico/goldmane/proto:
+    config:
+      pkgname: "mocks"
+      structname: "{{.InterfaceName}}"
     interfaces:
       Flows_StreamClient:

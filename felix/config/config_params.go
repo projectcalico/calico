@@ -304,10 +304,10 @@ type Config struct {
 	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled);Disabled"`
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
-	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"`
+	IptablesPostWriteCheckInterval time.Duration     `config:"seconds;5"`
 	IptablesLockFilePath               string            `config:"file;/run/xtables.lock"`
-	IptablesLockTimeoutSecs            time.Duration     `config:"seconds;0"`
-	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"`
+	IptablesLockTimeout            time.Duration     `config:"seconds;0"`
+	IptablesLockProbeInterval      time.Duration     `config:"millis;50"`
 	FeatureDetectOverride              map[string]string `config:"keyvaluelist;;"`
 	FeatureGates                       map[string]string `config:"keyvaluelist;;"`
 	IpsetsRefreshInterval              time.Duration     `config:"seconds;90"`
@@ -316,7 +316,7 @@ type Config struct {
 
 	PolicySyncPathPrefix string `config:"file;;"`
 
-	NetlinkTimeoutSecs time.Duration `config:"seconds;10"`
+	NetlinkTimeout time.Duration `config:"seconds;10"`
 
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
 	MetadataPort int    `config:"int(0:65535);8775;die-on-fail"`
@@ -380,11 +380,11 @@ type Config struct {
 
 	WorkloadSourceSpoofing string `config:"oneof(Disabled,Any);Disabled"`
 
-	ReportingIntervalSecs time.Duration `config:"seconds;30"`
-	ReportingTTLSecs      time.Duration `config:"seconds;90"`
+	ReportingInterval time.Duration `config:"seconds;30"`
+	ReportingTTL      time.Duration `config:"seconds;90"`
 
 	EndpointReportingEnabled   bool          `config:"bool;false"`
-	EndpointReportingDelaySecs time.Duration `config:"seconds;1"`
+	EndpointReportingDelay time.Duration `config:"seconds;1"`
 
 	// EndpointStatusPathPrefix is the path to the directory
 	// where endpoint status will be written. Endpoint status
@@ -425,8 +425,8 @@ type Config struct {
 	NATOutgoingExclusions string             `config:"oneof(IPPoolsOnly,IPPoolsAndHostIPs);IPPoolsOnly"`
 
 	UsageReportingEnabled          bool          `config:"bool;true"`
-	UsageReportingInitialDelaySecs time.Duration `config:"seconds;300"`
-	UsageReportingIntervalSecs     time.Duration `config:"seconds;86400"`
+	UsageReportingInitialDelay time.Duration `config:"seconds;300"`
+	UsageReportingInterval     time.Duration `config:"seconds;86400"`
 	ClusterGUID                    string        `config:"string;baddecaf"`
 	ClusterType                    string        `config:"string;"`
 	CalicoVersion                  string        `config:"string;"`
@@ -947,7 +947,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
 	}
 
-	if !(config.Encapsulation.IPIPEnabled || config.Encapsulation.VXLANEnabled || config.BPFEnabled) {
+	if !config.Encapsulation.IPIPEnabled && !config.Encapsulation.VXLANEnabled && !config.BPFEnabled {
 		// Polling k8s for node updates is expensive (because we get many superfluous
 		// updates) so disable if we don't need it.
 		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
@@ -959,7 +959,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 // Validate() performs cross-field validation.
 func (config *Config) Validate() (err error) {
 	if config.FelixHostname == "" {
-		err = errors.New("Failed to determine hostname")
+		err = errors.New("failed to determine hostname")
 	}
 
 	if config.DatastoreType == "etcdv3" && len(config.EtcdEndpoints) == 0 {
@@ -983,9 +983,9 @@ func (config *Config) Validate() (err error) {
 			config.TyphaCertFile == "" ||
 			config.TyphaCAFile == "" ||
 			(config.TyphaCN == "" && config.TyphaURISAN == "") {
-			err = errors.New("If any Felix-Typha TLS config parameters are specified," +
+			err = errors.New("if any Felix-Typha TLS config parameters are specified," +
 				" they _all_ must be" +
-				" - except that either TyphaCN or TyphaURISAN may be left unset.")
+				" - except that either TyphaCN or TyphaURISAN may be left unset")
 		}
 	}
 
@@ -1202,6 +1202,24 @@ func loadParams() {
 			metadata.Default = metadata.ZeroValue
 		}
 		knownParams[strings.ToLower(field.Name)] = param
+	}
+
+	// Register backward-compat aliases for renamed fields so that the old
+	// config-file / environment-variable names (and the API's confignamev1
+	// values) still resolve correctly.
+	aliases := map[string]string{
+		"iptablespostwritecheckintervalsecs": "iptablespostwritecheckinterval",
+		"iptableslocktimeoutsecs":            "iptableslocktimeout",
+		"iptableslockprobeintervalmillis":    "iptableslockprobeinterval",
+		"netlinktimeoutsecs":                 "netlinktimeout",
+		"reportingintervalsecs":              "reportinginterval",
+		"reportingttlsecs":                   "reportingttl",
+		"endpointreportingdelaysecs":         "endpointreportingdelay",
+		"usagereportinginitialdelaysecs":     "usagereportinginitialdelay",
+		"usagereportingintervalsecs":         "usagereportinginterval",
+	}
+	for oldName, newName := range aliases {
+		knownParams[oldName] = knownParams[newName]
 	}
 }
 

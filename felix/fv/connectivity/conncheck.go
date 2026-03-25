@@ -29,7 +29,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 
@@ -310,7 +310,7 @@ func (c *Checker) CheckConnectivityPacketLoss(opts ...interface{}) {
 }
 
 func (c *Checker) CheckConnectivityWithTimeout(timeout time.Duration, opts ...interface{}) {
-	Expect(timeout).To(BeNumerically(">", 100*time.Millisecond),
+	gomega.Expect(timeout).To(gomega.BeNumerically(">", 100*time.Millisecond),
 		"Very low timeout, did you mean to multiply by time.<Unit>?")
 	c.CheckConnectivityWithTimeoutOffset(2, timeout, opts...)
 }
@@ -560,11 +560,11 @@ func ExpectWithClientAdjustedMTU(from, to int) ExpectationOption {
 
 // ExpectWithLoss asserts that the connection has a certain loss rate
 func ExpectWithLoss(duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int) ExpectationOption {
-	Expect(duration.Seconds()).NotTo(BeZero(),
+	gomega.Expect(duration.Seconds()).NotTo(gomega.BeZero(),
 		"Packet loss test must have a duration")
-	Expect(maxPacketLossPercent).To(BeNumerically("<=", 100),
+	gomega.Expect(maxPacketLossPercent).To(gomega.BeNumerically("<=", 100),
 		"Loss percentage should be <=100")
-	Expect(maxPacketLossPercent >= 0 || maxPacketLossNumber >= 0).To(BeTrue(),
+	gomega.Expect(maxPacketLossPercent >= 0 || maxPacketLossNumber >= 0).To(gomega.BeTrue(),
 		"Either loss count or percent must be specified")
 
 	return func(e *Expectation) {
@@ -788,11 +788,11 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 	connectionCmd.Env = []string{"GODEBUG=netdns=1"}
 
 	outPipe, err := connectionCmd.StdoutPipe()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	errPipe, err := connectionCmd.StderrPipe()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	err = connectionCmd.Start()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -810,8 +810,8 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 	}()
 
 	wg.Wait()
-	Expect(outErr).NotTo(HaveOccurred())
-	Expect(errErr).NotTo(HaveOccurred())
+	gomega.Expect(outErr).NotTo(gomega.HaveOccurred())
+	gomega.Expect(errErr).NotTo(gomega.HaveOccurred())
 
 	err = connectionCmd.Wait()
 	logCxt.WithFields(log.Fields{
@@ -964,7 +964,7 @@ type PersistentConnection struct {
 
 func (pc *PersistentConnection) Stop() {
 	log.Infof("Stopping PersistentConnection %s, loopFile %s", pc.RuntimeName, pc.loopFile)
-	Expect(pc.stop()).NotTo(HaveOccurred())
+	gomega.Expect(pc.stop()).NotTo(gomega.HaveOccurred())
 }
 
 var permConnIdx = 0 // XXX perhaps should be atomic / locked
