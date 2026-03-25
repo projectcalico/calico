@@ -69,7 +69,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			// libcalico-go's IP struct wraps a standard library IP struct.  To
 			// compare two IPs, we need to unwrap them and use Equal() since standard
 			// library IPs have multiple, equivalent, representations.
-			if oldIP != nil && ip.IP.Equal(oldIP.IP) {
+			if oldIP != nil && ip.Equal(oldIP.IP) {
 				log.WithField("update", update).Debug("Ignoring duplicate HostIP update")
 				return
 			}
@@ -145,7 +145,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 					if node.Spec.BGP.IPv6Address != "" {
 						ip, _, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
 						oldIP := h.hostIPv6s[hostname]
-						if oldIP != nil && ip.IP.Equal(oldIP.IP) {
+						if oldIP != nil && ip.Equal(oldIP.IP) {
 							log.WithField("update", update).Debug("Ignoring duplicate Node IPv6 address update")
 							return
 						}
@@ -170,7 +170,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 					}
 					if ip != nil {
 						oldIP := h.hostIPv6s[hostname]
-						if oldIP != nil && ip.IP.Equal(oldIP.IP) {
+						if oldIP != nil && ip.Equal(oldIP.IP) {
 							log.WithField("update", update).Debug("Ignoring duplicate Node IPv6 address update")
 							return
 						}

@@ -93,6 +93,6 @@ const (
 	RemoteSubnetRoute NetworkPolicyType = "RemoteSubnetRoute"
 )
 
-func (_ API) ListNetworks() ([]HostComputeNetwork, error) {
+func (API) ListNetworks() ([]HostComputeNetwork, error) {
 	return nil, nil
 }

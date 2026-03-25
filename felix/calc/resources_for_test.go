@@ -28,10 +28,8 @@ import (
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
-	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // Canned hostnames.
@@ -270,8 +268,8 @@ var remoteWlEp1DualStack = WorkloadEndpoint{
 	Name:       "cali1",
 	Mac:        mustParseMac("01:02:03:04:05:06"),
 	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
-	IPv4Nets:   []calinet.IPNet{mustParseNet("10.1.0.1/32"), mustParseNet("10.1.0.2/32")},
-	IPv6Nets:   []calinet.IPNet{mustParseNet("fe80:fe11::1/128"), mustParseNet("fe80:fe11::2/128")},
+	IPv4Nets:   []net.IPNet{mustParseNet("10.1.0.1/32"), mustParseNet("10.1.0.2/32")},
+	IPv6Nets:   []net.IPNet{mustParseNet("fe80:fe11::1/128"), mustParseNet("fe80:fe11::2/128")},
 	Labels: uniquelabels.Make(map[string]string{
 		"id": "rem-ep-1",
 		"x":  "x",
@@ -980,8 +978,8 @@ var localIPAMBlockWithBorrows = AllocationBlock{
 var (
 	p                 = int32(80)
 	tcp               = v1.ProtocolTCP
-	endpointSliceKey1 = model.ResourceKey{Name: "eps", Namespace: "default", Kind: "KubernetesEndpointSlice"}
-	endpointSliceKey2 = model.ResourceKey{Name: "eps-2", Namespace: "default", Kind: "KubernetesEndpointSlice"}
+	endpointSliceKey1 = ResourceKey{Name: "eps", Namespace: "default", Kind: "KubernetesEndpointSlice"}
+	endpointSliceKey2 = ResourceKey{Name: "eps-2", Namespace: "default", Kind: "KubernetesEndpointSlice"}
 	endpointSlice1    = discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{Name: "eps", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "svc"}},
 		Endpoints: []discovery.Endpoint{
@@ -1030,11 +1028,11 @@ var endpointSlice2NewIPs2 = discovery.EndpointSlice{
 }
 
 var (
-	servicePolicyKey  = model.PolicyKey{Name: "svc-policy"}
-	servicePolicyKey2 = model.PolicyKey{Name: "svc-policy2"}
-	servicePolicy     = model.Policy{
+	servicePolicyKey  = PolicyKey{Name: "svc-policy"}
+	servicePolicyKey2 = PolicyKey{Name: "svc-policy2"}
+	servicePolicy     = Policy{
 		Namespace: "default",
-		OutboundRules: []model.Rule{
+		OutboundRules: []Rule{
 			{
 				Action:              "Allow",
 				DstService:          "svc",
@@ -1046,9 +1044,9 @@ var (
 	}
 )
 
-var servicePolicyNoPorts = model.Policy{
+var servicePolicyNoPorts = Policy{
 	Namespace: "default",
-	InboundRules: []model.Rule{
+	InboundRules: []Rule{
 		{
 			Action:              "Allow",
 			SrcService:          "svc",

@@ -147,8 +147,8 @@ func (l *Locker) Close() error {
 }
 
 var (
-	Err14LockTimeout = errors.New("Timed out waiting for iptables 1.4 lock")
-	Err16LockTimeout = errors.New("Timed out waiting for iptables 1.6 lock")
+	Err14LockTimeout = errors.New("timed out waiting for iptables 1.4 lock")
+	Err16LockTimeout = errors.New("timed out waiting for iptables 1.6 lock")
 )
 
 func GrabIptablesLocks(lockFilePath, socketName string, timeout, probeInterval time.Duration) (io.Closer, error) {

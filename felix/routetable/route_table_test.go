@@ -1133,7 +1133,7 @@ var _ = Describe("RouteTable", func() {
 			})
 
 			It("should panic after all its retries are exhausted", func() {
-				Expect(rt.Apply()).To(Equal(ConnectFailed))
+				Expect(rt.Apply()).To(Equal(ErrConnectFailed))
 				Expect(func() { _ = rt.Apply() }).To(Panic())
 			})
 		})
@@ -1150,7 +1150,7 @@ var _ = Describe("RouteTable", func() {
 				})
 				err = rt.Apply()
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(Equal(UpdateFailed))
+				Expect(err).To(Equal(ErrUpdateFailed))
 
 				dataplane.FailuresToSimulate = 0
 				dataplane.PersistFailures = false

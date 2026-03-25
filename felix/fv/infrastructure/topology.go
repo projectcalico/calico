@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -199,7 +199,7 @@ func StartNNodeEtcdTopology(
 	log.Infof("Starting a %d-node etcd topology.", n)
 
 	eds, err := GetEtcdDatastoreInfra()
-	Expect(err).ToNot(HaveOccurred())
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	etcd = eds.etcdContainer
 	infra = eds
 
@@ -268,7 +268,7 @@ func StartNNodeTopology(
 	if opts.InitialFelixConfiguration != nil {
 		log.WithField("config", opts.InitialFelixConfiguration).Info(
 			"Installing initial FelixConfiguration")
-		Eventually(func() error {
+		gomega.Eventually(func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_, err = client.FelixConfigurations().Create(ctx, opts.InitialFelixConfiguration, options.SetOptions{})
@@ -278,28 +278,28 @@ func StartNNodeTopology(
 				_, _ = client.FelixConfigurations().Delete(ctx, "default", options.DeleteOptions{})
 			}
 			return err
-		}, "10s").ShouldNot(HaveOccurred())
+		}, "10s").ShouldNot(gomega.HaveOccurred())
 	}
 
 	if n > 1 {
-		Eventually(func() error {
+		gomega.Eventually(func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if opts.UseIPPools {
 				_, err = CreateDefaultIPPoolFromOpts(ctx, client, opts, 4)
 			}
 			return err
-		}).ShouldNot(HaveOccurred())
+		}).ShouldNot(gomega.HaveOccurred())
 
 		if opts.EnableIPv6 {
-			Eventually(func() error {
+			gomega.Eventually(func() error {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				if opts.UseIPPools {
 					_, err = CreateDefaultIPPoolFromOpts(ctx, client, opts, 6)
 				}
 				return err
-			}).ShouldNot(HaveOccurred())
+			}).ShouldNot(gomega.HaveOccurred())
 		}
 	}
 
@@ -355,9 +355,9 @@ func StartNNodeTopology(
 	wg.Wait()
 
 	_, IPv4CIDR, err := net.ParseCIDR(opts.IPPoolCIDR)
-	Expect(err).To(BeNil())
+	gomega.Expect(err).To(gomega.BeNil())
 	_, IPv6CIDR, err := net.ParseCIDR(opts.IPv6PoolCIDR)
-	Expect(err).To(BeNil())
+	gomega.Expect(err).To(gomega.BeNil())
 
 	for i := 0; i < n; i++ {
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = ""
@@ -365,7 +365,7 @@ func StartNNodeTopology(
 		felix.TyphaIP = typhaIP
 
 		if opts.EnableIPv6 {
-			Expect(felix.IPv6).ToNot(BeEmpty(), "IPv6 enabled but Felix didn't get an IPv6 address, is docker configured for IPv6?")
+			gomega.Expect(felix.IPv6).ToNot(gomega.BeEmpty(), "IPv6 enabled but Felix didn't get an IPv6 address, is docker configured for IPv6?")
 		}
 
 		expectedIPs := []string{felix.IP}
@@ -379,12 +379,12 @@ func StartNNodeTopology(
 
 		setUpBGPNodeIPAndIPIPTunnelIP := n > 1 || opts.NeedNodeIP
 		if opts.IPIPMode != api.IPIPModeNever {
-			ExpectWithOffset(1, opts.IPIPStrategy).ToNot(BeNil(), "IPIPMode is set but IPIPStrategy is nil")
+			gomega.ExpectWithOffset(1, opts.IPIPStrategy).ToNot(gomega.BeNil(), "IPIPMode is set but IPIPStrategy is nil")
 			infra.SetExpectedIPIPTunnelAddr(felix, opts.IPIPStrategy.TunnelAddress(i), setUpBGPNodeIPAndIPIPTunnelIP)
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 		}
 		if opts.VXLANMode != api.VXLANModeNever {
-			ExpectWithOffset(1, opts.VXLANStrategy).ToNot(BeNil(), "VXLANMode is set but VXLANStrategy is nil")
+			gomega.ExpectWithOffset(1, opts.VXLANStrategy).ToNot(gomega.BeNil(), "VXLANMode is set but VXLANStrategy is nil")
 			infra.SetExpectedVXLANTunnelAddr(felix, opts.VXLANStrategy.TunnelAddress(i))
 			expectedIPs = append(expectedIPs, felix.ExpectedVXLANTunnelAddr)
 			if opts.EnableIPv6 {
@@ -420,7 +420,7 @@ func StartNNodeTopology(
 		if w != nil {
 			// Wait for any expected Felix restart...
 			log.Info("Wait for Felix to restart")
-			Eventually(w, "10s").Should(BeClosed(),
+			gomega.Eventually(w, "10s").Should(gomega.BeClosed(),
 				fmt.Sprintf("Timed out waiting for %s to restart", felix.Name))
 		}
 
@@ -442,7 +442,7 @@ func StartNNodeTopology(
 				},
 			}
 			_, err := client.HostEndpoints().Create(context.Background(), hep, options.SetOptions{})
-			Expect(err).ToNot(HaveOccurred())
+			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		}
 
 		if opts.TriggerDelayedFelixStart {
@@ -504,9 +504,9 @@ func needToSimulateBIRDRoutesNoEncap(opts *TopologyOptions) bool {
 func programBIRDRoutesIPIP(felix *Felix, dest, gw string) {
 	// Can get "Nexthop device is not up" error here if tunl0 device is
 	// not ready yet, which can happen especially if Felix start was delayed.
-	Eventually(func() error {
+	gomega.Eventually(func() error {
 		return felix.ExecMayFail("ip", "route", "add", dest, "via", gw, "dev", "tunl0", "onlink", "proto", "100")
-	}, "10s", "1s").ShouldNot(HaveOccurred())
+	}, "10s", "1s").ShouldNot(gomega.HaveOccurred())
 }
 
 func programBIRDRoutesNoEncap(felix *Felix, dest, gw string, ipv6 bool) {
@@ -514,15 +514,15 @@ func programBIRDRoutesNoEncap(felix *Felix, dest, gw string, ipv6 bool) {
 	// If IPIP routes are enabled, these routes will conflict with configured ones and a 'RTNETLINK answers: File exists' error would occur.
 	if ipv6 {
 		err := felix.ExecMayFail("ip", "-6", "route", "add", dest, "via", gw, "dev", "eth0")
-		Expect(err).ToNot(HaveOccurred())
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	} else {
 		err := felix.ExecMayFail("ip", "route", "add", dest, "via", gw, "dev", "eth0")
-		Expect(err).ToNot(HaveOccurred())
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	}
 }
 
 func mustInitDatastore(client client.Interface) {
-	Eventually(func() error {
+	gomega.Eventually(func() error {
 		log.Info("Initializing the datastore...")
 		ctx, cancelFun := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancelFun()
@@ -533,5 +533,5 @@ func mustInitDatastore(client client.Interface) {
 		)
 		log.WithError(err).Info("EnsureInitialized result")
 		return err
-	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
+	}).ShouldNot(gomega.HaveOccurred(), "mustInitDatastore failed")
 }
