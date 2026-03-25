@@ -128,6 +128,30 @@ func TestCRDValidation_Tier(t *testing.T) {
 			},
 			errSubstr: "default",
 		},
+		{
+			name: "default tier with wrong order fails",
+			obj: &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.TierSpec{Order: &customOrder, DefaultAction: &deny},
+			},
+			errSubstr: "default tier order must be 1000000",
+		},
+		{
+			name: "kube-admin tier with wrong order fails",
+			obj: &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "kube-admin"},
+				Spec:       apiv3.TierSpec{Order: &customOrder, DefaultAction: &pass},
+			},
+			errSubstr: "kube-admin tier order must be 1000",
+		},
+		{
+			name: "kube-baseline tier with wrong order fails",
+			obj: &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "kube-baseline"},
+				Spec:       apiv3.TierSpec{Order: &customOrder, DefaultAction: &pass},
+			},
+			errSubstr: "kube-baseline tier order must be 10000000",
+		},
 	})
 }
 

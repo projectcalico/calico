@@ -35,7 +35,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
@@ -1345,41 +1344,7 @@ func validateTier(structLevel validator.StructLevel) {
 		)
 	}
 
-	if tier.Name == names.DefaultTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.DefaultTierOrder {
-			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
-				"TierSpec.Order",
-				"",
-				reason(fmt.Sprintf("default tier order must be %v", api.DefaultTierOrder)),
-				"",
-			)
-		}
-	}
-
-	if tier.Name == names.KubeAdminTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.KubeAdminTierOrder {
-			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
-				"TierSpec.Order",
-				"",
-				reason(fmt.Sprintf("kube-admin tier order must be %v", api.KubeAdminTierOrder)),
-				"",
-			)
-		}
-	}
-
-	if tier.Name == names.KubeBaselineTierName {
-		if tier.Spec.Order == nil || *tier.Spec.Order != api.KubeBaselineTierOrder {
-			structLevel.ReportError(
-				reflect.ValueOf(tier.Spec.Order),
-				"TierSpec.Order",
-				"",
-				reason(fmt.Sprintf("kube-baseline tier order must be %v", api.KubeBaselineTierOrder)),
-				"",
-			)
-		}
-	}
+	// Well-known tier order enforcement is handled by CEL XValidation rules on the CRD.
 
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)
 	validateObjectMetaLabels(structLevel, tier.Labels)
