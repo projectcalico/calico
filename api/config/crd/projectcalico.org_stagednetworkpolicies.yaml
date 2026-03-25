@@ -457,8 +457,10 @@ spec:
                     type: string
                   type: array
                 selector:
+                  maxLength: 4096
                   type: string
                 serviceAccountSelector:
+                  maxLength: 4096
                   type: string
                 stagedAction:
                   default: Set
@@ -482,6 +484,13 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: global() can only be used in an EntityRule namespaceSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.selector) || !self.selector.contains('global(')"
+                - message: global() can only be used in an EntityRule namespaceSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
           required:
             - metadata
             - spec

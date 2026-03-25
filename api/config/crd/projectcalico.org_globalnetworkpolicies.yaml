@@ -456,6 +456,7 @@ spec:
                           == 0)"
                   type: array
                 namespaceSelector:
+                  maxLength: 4096
                   type: string
                 order:
                   type: number
@@ -468,8 +469,10 @@ spec:
                 preDNAT:
                   type: boolean
                 selector:
+                  maxLength: 4096
                   type: string
                 serviceAccountSelector:
+                  maxLength: 4096
                   type: string
                 tier:
                   default: default
@@ -508,6 +511,15 @@ spec:
                   rule:
                     (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
                     || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
+                - message: global() can only be used in an EntityRule namespaceSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.selector) || !self.selector.contains('global(')"
+                - message: global() can only be used in an EntityRule namespaceSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+                - message: global() can only be used in an EntityRule namespaceSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
           required:
             - metadata
             - spec

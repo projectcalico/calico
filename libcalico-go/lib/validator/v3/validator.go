@@ -1414,16 +1414,7 @@ func validateTier(structLevel validator.StructLevel) {
 }
 
 func validateNetworkPolicySpec(spec *api.NetworkPolicySpec, structLevel validator.StructLevel) {
-	// Check (and disallow) any repeats in Types field.
-	mp := map[api.PolicyType]bool{}
-	for _, t := range spec.Types {
-		if _, exists := mp[t]; exists {
-			structLevel.ReportError(reflect.ValueOf(spec.Types),
-				"NetworkPolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"), "")
-		} else {
-			mp[t] = true
-		}
-	}
+	// Types uniqueness is enforced by +listType=set on the CRD.
 
 	for _, r := range spec.Egress {
 		// Services are only allowed in the destination on Egress rules.
@@ -1451,25 +1442,8 @@ func validateNetworkPolicySpec(spec *api.NetworkPolicySpec, structLevel validato
 		}
 	}
 
-	// Check that the selector doesn't have the global() selector which is only
-	// valid as an EntityRule namespaceSelector.
-	if strings.Contains(spec.Selector, globalSelector) {
-		structLevel.ReportError(
-			reflect.ValueOf(spec.Selector),
-			"NetworkPolicySpec.Selector",
-			"",
-			reason(globalSelectorEntRule),
-			"")
-	}
-
-	if strings.Contains(spec.ServiceAccountSelector, globalSelector) {
-		structLevel.ReportError(
-			reflect.ValueOf(spec.ServiceAccountSelector),
-			"NetworkPolicySpec.ServiceAccountSelector",
-			"",
-			reason(globalSelectorEntRule),
-			"")
-	}
+	// global() selector checks on Selector and ServiceAccountSelector are handled
+	// by CEL XValidation rules on the CRD.
 }
 
 func validateNetworkPolicy(structLevel validator.StructLevel) {
@@ -1583,16 +1557,7 @@ func validateGlobalNetworkSet(structLevel validator.StructLevel) {
 }
 
 func validateGlobalNetworkPolicySpec(spec *api.GlobalNetworkPolicySpec, structLevel validator.StructLevel) {
-	// Check (and disallow) any repeats in Types field.
-	mp := map[api.PolicyType]bool{}
-	for _, t := range spec.Types {
-		if _, exists := mp[t]; exists {
-			structLevel.ReportError(reflect.ValueOf(spec.Types),
-				"GlobalNetworkPolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"), "")
-		} else {
-			mp[t] = true
-		}
-	}
+	// Types uniqueness is enforced by +listType=set on the CRD.
 
 	for _, r := range spec.Egress {
 		// Services are only allowed as a destination on Egress rules.
@@ -1639,34 +1604,8 @@ func validateGlobalNetworkPolicySpec(spec *api.GlobalNetworkPolicySpec, structLe
 		}
 	}
 
-	// Check that the selector doesn't have the global() selector which is only
-	// valid as an EntityRule namespaceSelector.
-	if strings.Contains(spec.Selector, globalSelector) {
-		structLevel.ReportError(
-			reflect.ValueOf(spec.Selector),
-			"GlobalNetworkPolicySpec.Selector",
-			"",
-			reason(globalSelectorEntRule),
-			"")
-	}
-
-	if strings.Contains(spec.ServiceAccountSelector, globalSelector) {
-		structLevel.ReportError(
-			reflect.ValueOf(spec.Selector),
-			"GlobalNetworkPolicySpec.ServiceAccountSelector",
-			"",
-			reason(globalSelectorEntRule),
-			"")
-	}
-
-	if strings.Contains(spec.NamespaceSelector, globalSelector) {
-		structLevel.ReportError(
-			reflect.ValueOf(spec.Selector),
-			"GlobalNetworkPolicySpec.NamespaceSelector",
-			"",
-			reason(globalSelectorEntRule),
-			"")
-	}
+	// global() selector checks on Selector, ServiceAccountSelector, and NamespaceSelector
+	// are handled by CEL XValidation rules on the CRD.
 }
 
 func validateGlobalNetworkPolicy(structLevel validator.StructLevel) {

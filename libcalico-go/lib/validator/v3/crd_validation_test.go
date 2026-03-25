@@ -883,6 +883,63 @@ func TestCRDValidation_GlobalNetworkPolicy(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "GNP selector with global() fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					Selector: "global()",
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "GNP namespaceSelector with global() fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					NamespaceSelector: "global()",
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+	})
+}
+
+// TestCRDValidation_NetworkPolicy_GlobalSelector tests CEL rules on NetworkPolicySpec.
+func TestCRDValidation_NetworkPolicy_GlobalSelector(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "NP selector with global() fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-np", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Selector: "global()",
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "NP serviceAccountSelector with global() fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-np", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					ServiceAccountSelector: "global()",
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "NP with normal selector passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-np", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Selector: "all()",
+				},
+			},
+		},
 	})
 }
 
