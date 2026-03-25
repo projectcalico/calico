@@ -47,9 +47,7 @@ const (
 	// Maximum size of annotations.
 	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
 
-	// linux can support route-table indices up to 0xFFFFFFFF
-	// however, using 0xFFFFFFFF tables would require too much computation, so the total number of designated tables is capped at 0xFFFF
-	routeTableMaxLinux       uint32 = 0xffffffff
+	// using 0xFFFFFFFF tables would require too much computation, so the total number of designated tables is capped at 0xFFFF
 	routeTableRangeMaxTables uint32 = 0xffff
 
 	globalSelector = "global()"
@@ -114,9 +112,6 @@ var (
 		IP:   net.ParseIP("fe80::"),
 		Mask: net.CIDRMask(10, 128),
 	}
-
-	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
-	routeTablesReservedLinux = []int{253, 254, 255}
 )
 
 // Validate validates the supplied structure according to registered field and
@@ -249,8 +244,6 @@ func init() {
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
-	registerStructValidator(validate, validateRouteTableIDRange, api.RouteTableIDRange{})
-	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
 	registerStructValidator(validate, validateBlockAffinitySpec, api.BlockAffinitySpec{})
 	registerStructValidator(validate, validateHealthTimeoutOverride, api.HealthTimeoutOverride{})
@@ -811,16 +804,9 @@ func validateIPNAT(structLevel validator.StructLevel) {
 func validateFelixConfigSpec(structLevel validator.StructLevel) {
 	c := structLevel.Current().Interface().(api.FelixConfigurationSpec)
 
-	// Validate that the node port ranges list isn't too long and contains only numeric ports.
-	// We set the limit at 7 because the iptables multiport match can accept at most 15 port
-	// numbers, with each port range requiring 2 entries.
+	// Validate that the node port ranges list contains only numeric ports.
+	// Max length (7) is enforced by CRD MaxItems.
 	if c.KubeNodePortRanges != nil {
-		if len(*c.KubeNodePortRanges) > 7 {
-			structLevel.ReportError(reflect.ValueOf(*c.KubeNodePortRanges),
-				"KubeNodePortRanges", "",
-				reason("node port ranges list is too long (max 7)"), "")
-		}
-
 		for _, p := range *c.KubeNodePortRanges {
 			if p.PortName != "" {
 				structLevel.ReportError(reflect.ValueOf(*c.KubeNodePortRanges),
@@ -1717,69 +1703,6 @@ func validateObjectMetaLabels(structLevel validator.StructLevel, labels map[stri
 func validateRuleMetadata(structLevel validator.StructLevel) {
 	ruleMeta := structLevel.Current().Interface().(api.RuleMetadata)
 	validateObjectMetaAnnotations(structLevel, ruleMeta.Annotations)
-}
-
-func validateRouteTableRange(structLevel validator.StructLevel) {
-	r := structLevel.Current().Interface().(api.RouteTableRange)
-	if r.Min >= 1 && r.Max >= r.Min && r.Max <= 250 {
-		log.Debugf("RouteTableRange is valid: %v", r)
-	} else {
-		log.Warningf("RouteTableRange is invalid: %v", r)
-		structLevel.ReportError(
-			reflect.ValueOf(r),
-			"RouteTableRange",
-			"",
-			reason("must be a range of route table indices within 1..250"),
-			"",
-		)
-	}
-}
-
-func validateRouteTableIDRange(structLevel validator.StructLevel) {
-	r := structLevel.Current().Interface().(api.RouteTableIDRange)
-	if r.Min > r.Max {
-		log.Warningf("RouteTableRange is invalid: %v", r)
-		structLevel.ReportError(
-			reflect.ValueOf(r),
-			"RouteTableRange",
-			"",
-			reason("min value cannot be greater than max value"),
-			"",
-		)
-	}
-
-	if r.Min <= 0 {
-		log.Warningf("RouteTableRange is invalid: %v", r)
-		structLevel.ReportError(
-			reflect.ValueOf(r),
-			"RouteTableRange",
-			"",
-			reason("cannot target indices < 1"),
-			"",
-		)
-	}
-
-	if int64(r.Max) > int64(routeTableMaxLinux) {
-		log.Warningf("RouteTableRange is invalid: %v", r)
-		structLevel.ReportError(
-			reflect.ValueOf(r),
-			"RouteTableRange",
-			"",
-			reason("max index too high"),
-			"",
-		)
-	}
-
-	// check if ranges collide with reserved linux tables
-	includesReserved := false
-	for _, rsrv := range routeTablesReservedLinux {
-		if r.Min <= rsrv && r.Max >= rsrv {
-			includesReserved = false
-		}
-	}
-	if includesReserved {
-		log.Infof("Felix route-table range includes reserved Linux tables, values 253-255 will be ignored.")
-	}
 }
 
 func validateBGPConfigurationSpec(structLevel validator.StructLevel) {

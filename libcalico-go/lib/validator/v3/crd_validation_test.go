@@ -1460,3 +1460,105 @@ func TestCRDValidation_EntityRule(t *testing.T) {
 		},
 	})
 }
+
+// TestCRDValidation_FelixConfig_Addresses tests IPv4/IPv6 address heuristic CEL rules.
+func TestCRDValidation_FelixConfig_Addresses(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "natOutgoingAddress with IPv6 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{NATOutgoingAddress: "fd00::1"},
+			},
+			errSubstr: "natOutgoingAddress must be a valid IPv4 address",
+		},
+		{
+			name: "natOutgoingAddress with IPv4 passes",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{NATOutgoingAddress: "10.0.0.1"},
+			},
+		},
+		{
+			name: "deviceRouteSourceAddressIPv6 with IPv4 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: "10.0.0.1"},
+			},
+			errSubstr: "deviceRouteSourceAddressIPv6 must be a valid IPv6 address",
+		},
+		{
+			name: "deviceRouteSourceAddressIPv6 with IPv6 passes",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: "fd00::1"},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_RouteTableRange tests CEL rules on RouteTableRange.
+func TestCRDValidation_RouteTableRange(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "valid range passes",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRange: &apiv3.RouteTableRange{Min: 1, Max: 250}},
+			},
+		},
+		{
+			name: "min=0 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRange: &apiv3.RouteTableRange{Min: 0, Max: 250}},
+			},
+			errSubstr: "must be a range of route table indices within 1..250",
+		},
+		{
+			name: "max > 250 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRange: &apiv3.RouteTableRange{Min: 1, Max: 251}},
+			},
+			errSubstr: "must be a range of route table indices within 1..250",
+		},
+		{
+			name: "min > max fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRange: &apiv3.RouteTableRange{Min: 200, Max: 100}},
+			},
+			errSubstr: "must be a range of route table indices within 1..250",
+		},
+	})
+}
+
+// TestCRDValidation_RouteTableIDRange tests CEL rules on RouteTableIDRange.
+func TestCRDValidation_RouteTableIDRange(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "valid range passes",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRanges: &apiv3.RouteTableRanges{{Min: 1, Max: 100}}},
+			},
+		},
+		{
+			name: "min=0 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRanges: &apiv3.RouteTableRanges{{Min: 0, Max: 100}}},
+			},
+			errSubstr: "min must be >= 1",
+		},
+		{
+			name: "min > max fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRanges: &apiv3.RouteTableRanges{{Min: 200, Max: 100}}},
+			},
+			errSubstr: "min must not be greater than max",
+		},
+	})
+}
