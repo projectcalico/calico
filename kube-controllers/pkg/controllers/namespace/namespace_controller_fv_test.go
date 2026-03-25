@@ -110,12 +110,7 @@ var _ = Describe("Calico namespace controller FV tests (etcd mode)", Ordered, Co
 		})
 
 		AfterEach(func() {
-			ctx := context.Background()
-			_ = k8sClient.CoreV1().Namespaces().Delete(ctx, nsName, metav1.DeleteOptions{})
-			Eventually(func() bool {
-				_, err := k8sClient.CoreV1().Namespaces().Get(ctx, nsName, metav1.GetOptions{})
-				return err != nil
-			}, 30*time.Second, 500*time.Millisecond).Should(BeTrue())
+			testutils.CleanupK8sNamespaces(context.Background(), k8sClient)
 		})
 
 		It("should write new profiles in etcd to match namespaces in k8s ", func() {
