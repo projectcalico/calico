@@ -15,6 +15,10 @@ linters:
           - staticcheck
         path: _test\.go
         text: "SA4017:|SA4006:"
+      - linters:
+          - staticcheck
+        path: config/config_params\.go
+        text: "ST1011:"
     paths:
       - third_party$
       - builtin$

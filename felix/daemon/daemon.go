@@ -659,8 +659,8 @@ configRetry:
 
 		usageRep := usagerep.New(
 			usagerep.StaticItems{KubernetesVersion: kubernetesVersion},
-			configParams.UsageReportingInitialDelay,
-			configParams.UsageReportingInterval,
+			configParams.UsageReportingInitialDelaySecs,
+			configParams.UsageReportingIntervalSecs,
 			statsChanOut,
 			connToUsageRepUpdChan,
 		)
@@ -683,7 +683,7 @@ configRetry:
 	log.Infof("Started the processing graph")
 	var stopSignalChans []chan<- *sync.WaitGroup
 	if configParams.EndpointReportingEnabled {
-		delay := configParams.EndpointReportingDelay
+		delay := configParams.EndpointReportingDelaySecs
 		log.WithField("delay", delay).Info(
 			"Endpoint status reporting enabled, starting status reporter")
 
@@ -1168,7 +1168,7 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg
 		defer fc.configLock.Unlock()
 		hostname = fc.config.FelixHostname
 		regionString = model.RegionString(fc.config.OpenstackRegion)
-		reportingTTL = fc.config.ReportingTTL
+		reportingTTL = fc.config.ReportingTTLSecs
 	}()
 
 	kv := model.KVPair{

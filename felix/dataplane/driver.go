@@ -215,7 +215,7 @@ func StartDataplaneDriver(
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
 				ResyncInterval:    configParams.InterfaceRefreshInterval,
-				NetlinkTimeout:    configParams.NetlinkTimeout,
+				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
 				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
@@ -330,19 +330,19 @@ func StartDataplaneDriver(
 			ProgramClusterRoutes:           configParams.ProgramClusterRoutesEnabled(),
 			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
-			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckInterval,
+			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
 			IptablesInsertMode:             configParams.ChainInsertMode,
 			IptablesLockFilePath:           configParams.IptablesLockFilePath,
-			IptablesLockTimeout:            configParams.IptablesLockTimeout,
-			IptablesLockProbeInterval:      configParams.IptablesLockProbeInterval,
+			IptablesLockTimeout:            configParams.IptablesLockTimeoutSecs,
+			IptablesLockProbeInterval:      configParams.IptablesLockProbeIntervalMillis,
 			MaxIPSetSize:                   configParams.MaxIpsetSize,
 			IPv6Enabled:                    configParams.Ipv6Support,
 			BPFIpv6Enabled:                 configParams.Ipv6Support && configParams.BPFEnabled,
 			BPFHostConntrackBypass:         configParams.BPFHostConntrackBypass,
-			StatusReportingInterval:        configParams.ReportingInterval,
+			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 			XDPRefreshInterval:             configParams.XDPRefreshInterval,
 
-			NetlinkTimeout: configParams.NetlinkTimeout,
+			NetlinkTimeout: configParams.NetlinkTimeoutSecs,
 
 			ConfigChangedRestartCallback: configChangedRestartCallback,
 			FatalErrorRestartCallback:    fatalErrorCallback,

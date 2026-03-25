@@ -34,8 +34,8 @@ import (
 )
 
 var (
-	errSimulated = errors.New("dummy error")
-	errAlreadyExists  = errors.New("already exists")
+	errSimulated     = errors.New("dummy error")
+	errAlreadyExists = errors.New("already exists")
 )
 
 var _ = Describe("RouteRules Construct", func() {

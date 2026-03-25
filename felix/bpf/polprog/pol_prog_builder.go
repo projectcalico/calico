@@ -357,7 +357,7 @@ func (p *Builder) writeProgramFooter() {
 	p.b.Store32(asm.R9, asm.R1, stateOffPolResult)
 
 	// Execute the tail call to drop program
-	p.b.Mov64(asm.R1, asm.R6)                            // First arg is the context.
+	p.b.Mov64(asm.R1, asm.R6)                        // First arg is the context.
 	p.b.LoadMapFD(asm.R2, uint32(p.staticJumpMapFD)) // Second arg is the map.
 	if p.useJmps {
 		p.b.AddCommentF("Deny jump to %d", p.denyJmp)
@@ -382,7 +382,7 @@ func (p *Builder) writeProgramFooter() {
 		p.b.MovImm32(asm.R1, int32(state.PolicyAllow))
 		p.b.Store32(asm.R9, asm.R1, stateOffPolResult)
 		// Execute the tail call.
-		p.b.Mov64(asm.R1, asm.R6)                            // First arg is the context.
+		p.b.Mov64(asm.R1, asm.R6)                        // First arg is the context.
 		p.b.LoadMapFD(asm.R2, uint32(p.staticJumpMapFD)) // Second arg is the map.
 		if p.useJmps {
 			p.b.AddCommentF("Allow jump to %d", p.allowJmp)
@@ -1189,7 +1189,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	// on the first time through.
 	jumpIdx := SubProgramJumpIdx(p.policyMapIndex, len(p.blocks), p.policyMapStride)
 
-	p.b.Mov64(asm.R1, asm.R6)                            // First arg is the context.
+	p.b.Mov64(asm.R1, asm.R6)                        // First arg is the context.
 	p.b.LoadMapFD(asm.R2, uint32(p.policyJumpMapFD)) // Second arg is the map.
 	p.b.AddCommentF(fmt.Sprintf("Tail call to policy program at index %d * %d + %d = %d", p.policyMapStride, len(p.blocks), p.policyMapIndex, jumpIdx))
 	p.b.MovImm64(asm.R3, int32(jumpIdx)) // Third arg is index to jump to.
