@@ -1272,40 +1272,33 @@ func validateNodeSpec(structLevel validator.StructLevel) {
 func validateBGPPeerSpec(structLevel validator.StructLevel) {
 	ps := structLevel.Current().Interface().(api.BGPPeerSpec)
 
-	ok, msg := validateReachableBy(ps.ReachableBy, ps.PeerIP)
-	if !ok {
-		structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
-			reason(msg), "")
+	// Validate that reachableBy and peerIP are the same address family. The basic
+	// "reachableBy requires peerIP" and "keepOriginalNextHop vs nextHopMode" checks
+	// are handled by CEL XValidation rules on the CRD.
+	if ps.ReachableBy != "" && ps.PeerIP != "" {
+		reachableByAddr := cnet.ParseIP(ps.ReachableBy)
+		if reachableByAddr == nil {
+			structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
+				reason("ReachableBy is invalid address"), "")
+			return
+		}
+		peerAddrStr, _, ok := processIPPort(ps.PeerIP)
+		if !ok {
+			structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
+				reason("PeerIP is invalid address"), "")
+			return
+		}
+		peerAddr := cnet.ParseIP(peerAddrStr)
+		if peerAddr == nil {
+			structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
+				reason("PeerIP is invalid IP address"), "")
+			return
+		}
+		if reachableByAddr.Version() != peerAddr.Version() {
+			structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
+				reason("ReachableBy and PeerIP address family mismatched"), "")
+		}
 	}
-	if ps.KeepOriginalNextHop && ps.NextHopMode != nil {
-		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "KeepOriginalNextHop", "",
-			reason("The KeepOriginalNextHop field is deprecated. It must not be set to true when NextHopMode is configured."), "")
-	}
-}
-
-func validateReachableBy(reachableBy, peerIP string) (bool, string) {
-	if reachableBy == "" {
-		return true, ""
-	}
-	if reachableBy != "" && peerIP == "" {
-		return false, "ReachablyBy field must be empty when PeerIP is empty"
-	}
-	reachableByAddr := cnet.ParseIP(reachableBy)
-	if reachableByAddr == nil {
-		return false, "ReachableBy is invalid address"
-	}
-	peerAddrStr, _, ok := processIPPort(peerIP)
-	if !ok {
-		return false, "PeerIP is invalid address"
-	}
-	peerAddr := cnet.ParseIP(peerAddrStr)
-	if peerAddr == nil {
-		return false, "PeerIP is invalid IP address"
-	}
-	if reachableByAddr.Version() != peerAddr.Version() {
-		return false, "ReachableBy and PeerIP address family mismatched"
-	}
-	return true, ""
 }
 
 // validateReachableByField validates that reachableBy value, the address of the

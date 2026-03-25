@@ -753,6 +753,63 @@ func TestCRDValidation_BGPPeer_CrossField(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "reachableBy without peerIP fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerSelector: "all()",
+					ReachableBy:  "10.0.0.254",
+				},
+			},
+			errSubstr: "reachableBy must be empty when peerIP is empty",
+		},
+		{
+			name: "reachableBy with peerIP passes",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerIP:      "10.0.0.1",
+					ASNumber:    numorstring.ASNumber(64512),
+					ReachableBy: "10.0.0.254",
+				},
+			},
+		},
+		{
+			name: "keepOriginalNextHop with nextHopMode fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerIP:              "10.0.0.1",
+					ASNumber:            numorstring.ASNumber(64512),
+					KeepOriginalNextHop: true,
+					NextHopMode:         ptr.To(apiv3.NextHopMode(apiv3.NextHopModeSelf)),
+				},
+			},
+			errSubstr: "keepOriginalNextHop and nextHopMode cannot both be set",
+		},
+		{
+			name: "keepOriginalNextHop alone passes",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerIP:              "10.0.0.1",
+					ASNumber:            numorstring.ASNumber(64512),
+					KeepOriginalNextHop: true,
+				},
+			},
+		},
+		{
+			name: "nextHopMode alone passes",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerIP:      "10.0.0.1",
+					ASNumber:    numorstring.ASNumber(64512),
+					NextHopMode: ptr.To(apiv3.NextHopMode(apiv3.NextHopModeKeep)),
+				},
+			},
+		},
 	})
 }
 
