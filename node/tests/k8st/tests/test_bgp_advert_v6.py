@@ -296,7 +296,7 @@ EOF
 # """ % self.external_node_ip)
 
             # Connectivity to nginx-local should always succeed.
-            retry_until_success(curl, function_args=[local_svc_ip])
+            retry_until_success(curl, timeout=300, function_args=[local_svc_ip])
 
             # NOTE: Unlike in the IPv6 case (in test_bgp_advert.py) we cannot successfully test that
             # connectivity to nginx-cluster is load-balanced across all nodes (and hence, with the
@@ -455,7 +455,7 @@ EOF
                 routes = self.get_routes()
                 for cip in cluster_ips:
                     self.assertIn(cip, routes)
-            retry_until_success(check_routes_advertised, retries=3, wait_time=5)
+            retry_until_success(check_routes_advertised, timeout=20)
 
             # Scale to 0 replicas, assert all routes are removed.
             self.scale_deployment(local_svc, self.ns, 0)
@@ -464,7 +464,7 @@ EOF
                 routes = self.get_routes()
                 for cip in cluster_ips:
                     self.assertNotIn(cip, routes)
-            retry_until_success(check_routes_gone, retries=10, wait_time=5)
+            retry_until_success(check_routes_gone, timeout=60)
 
     def test_bgp_filter_ip_advertisement(self):
         with DiagsCollector():
