@@ -96,7 +96,7 @@ class TestSpoof(TestBase):
             if p["spec"]["ipipMode"] != ipip_mode or p["spec"]["vxlanMode"] != vxlan_mode:
                 raise Exception("IPPool not yet reconciled: ipipMode=%s vxlanMode=%s" %
                                 (p["spec"]["ipipMode"], p["spec"]["vxlanMode"]))
-        retry_until_success(pool_reconciled, retries=30, wait_time=2)
+        retry_until_success(pool_reconciled, timeout=60)
 
         # Restart calico-node to cleanly apply the new encapsulation.
         kubectl("delete po -n calico-system -l k8s-app=calico-node")
