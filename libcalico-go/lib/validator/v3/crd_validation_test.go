@@ -1015,6 +1015,76 @@ func TestCRDValidation_IPPool_CrossField(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "LB pool with disableBGPExport fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:             "10.0.0.0/24",
+					AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+					DisableBGPExport: true,
+					NodeSelector:     "all()",
+				},
+			},
+			errSubstr: "LoadBalancer IP pools cannot disable BGP export",
+		},
+		{
+			name: "LB pool with wrong nodeSelector fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:         "10.0.0.0/24",
+					AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+					NodeSelector: "has(node-role)",
+				},
+			},
+			errSubstr: "IP Pool with AllowedUse LoadBalancer must have nodeSelector set to all()",
+		},
+		{
+			name: "LB pool with correct config passes",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:         "10.0.0.0/24",
+					AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+					NodeSelector: "all()",
+				},
+			},
+		},
+		{
+			name: "Tunnel pool with namespaceSelector fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:              "10.0.0.0/24",
+					AllowedUses:       []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseTunnel},
+					NamespaceSelector: "has(ns-label)",
+				},
+			},
+			errSubstr: "IP Pool with AllowedUse Tunnel cannot have namespaceSelector",
+		},
+		{
+			name: "nodeSelector with global() fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:         "10.0.0.0/24",
+					NodeSelector: "global()",
+				},
+			},
+			errSubstr: "global() selector is not valid for IPPool nodeSelector",
+		},
+		{
+			name: "namespaceSelector with global() fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:              "10.0.0.0/24",
+					NamespaceSelector: "global()",
+				},
+			},
+			errSubstr: "global() selector is not valid for IPPool namespaceSelector",
+		},
 	})
 }
 

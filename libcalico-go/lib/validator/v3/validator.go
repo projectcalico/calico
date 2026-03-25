@@ -20,7 +20,6 @@ import (
 	"net"
 	"reflect"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -990,13 +989,6 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	// Normalize the CIDR before persisting.
 	pool.CIDR = cidr.String()
 
-	isLoadBalancer := false
-	for _, u := range pool.AllowedUses {
-		if u == api.IPPoolAllowedUseLoadBalancer {
-			isLoadBalancer = true
-		}
-	}
-
 	// Default the blockSize
 	if pool.BlockSize == 0 {
 		if ipAddr.Version() == 4 {
@@ -1046,52 +1038,8 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 			"IPpool.CIDR", "", reason(overlapsV6LinkLocal), "")
 	}
 
-	// Allowed use must be one of the enums.
-	for _, a := range pool.AllowedUses {
-		switch a {
-		case api.IPPoolAllowedUseLoadBalancer, api.IPPoolAllowedUseWorkload, api.IPPoolAllowedUseTunnel:
-			continue
-		default:
-			structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
-				"IPpool.AllowedUses", "", reason("unknown use: "+string(a)), "")
-		}
-	}
-
-	if isLoadBalancer && pool.DisableBGPExport {
-		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
-			"IPpool.DisableBGPExport", "", reason("IP Pool with AllowedUse LoadBalancer must have DisableBGPExport set to true"), "")
-	}
-
-	if isLoadBalancer && pool.NodeSelector != "all()" {
-		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
-			"IPpool.NodeSelector", "", reason("IP Pool with AllowedUse LoadBalancer must have node selector set to all()"), "")
-	}
-
-	// Check for invalid combination: Tunnel allowedUse with namespaceSelector
-	hasTunnelUse := slices.Contains(pool.AllowedUses, api.IPPoolAllowedUseTunnel)
-
-	if hasTunnelUse && pool.NamespaceSelector != "" {
-		structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),
-			"IPpool.NamespaceSelector", "", reason("IP Pool with AllowedUse Tunnel cannot have namespaceSelector specified - tunnel IPs are not namespaced resources"), "")
-	}
-
-	// Enhanced validation for NodeSelector based on Calico selector reference
-	if pool.NodeSelector != "" {
-		// Check for invalid global() selector in nodeSelector context
-		if strings.Contains(pool.NodeSelector, "global(") {
-			structLevel.ReportError(reflect.ValueOf(pool.NodeSelector),
-				"IPpool.NodeSelector", "", reason("global() selector is not valid for IPPool nodeSelector - use all() instead"), "")
-		}
-	}
-
-	// Enhanced validation for NamespaceSelector based on Calico selector reference
-	if pool.NamespaceSelector != "" {
-		// Check for invalid global() selector in namespaceSelector context
-		if strings.Contains(pool.NamespaceSelector, "global(") {
-			structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),
-				"IPpool.NamespaceSelector", "", reason("global() selector is not valid for IPPool namespaceSelector - use all() instead"), "")
-		}
-	}
+	// AllowedUses enum, LB constraints, Tunnel/namespaceSelector, and global() selector
+	// checks are handled by CEL XValidation rules and CRD schema Enum on the IPPoolAllowedUse type.
 }
 
 func validateRule(structLevel validator.StructLevel) {

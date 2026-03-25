@@ -85,6 +85,11 @@ type IPPoolStatus struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) == 0 || self.vxlanMode == 'Never')",message="LoadBalancer IP pool cannot have IPIP or VXLAN enabled",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')",message="LoadBalancer cannot be combined with Workload or Tunnel allowed uses",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode == 'Never' || size(self.ipipMode) == 0",message="IPIP is not supported on IPv6 pools",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || !has(self.disableBGPExport) || !self.disableBGPExport",message="LoadBalancer IP pools cannot disable BGP export",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || self.nodeSelector == 'all()'",message="IP Pool with AllowedUse LoadBalancer must have nodeSelector set to all()",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'Tunnel') || !has(self.namespaceSelector) || size(self.namespaceSelector) == 0",message="IP Pool with AllowedUse Tunnel cannot have namespaceSelector",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.nodeSelector) || !self.nodeSelector.contains('global(')",message="global() selector is not valid for IPPool nodeSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')",message="global() selector is not valid for IPPool namespaceSelector",reason=FieldValueInvalid
 type IPPoolSpec struct {
 	// The pool CIDR.
 	// +kubebuilder:validation:Required
@@ -119,10 +124,12 @@ type IPPoolSpec struct {
 	BlockSize int `json:"blockSize,omitempty"`
 
 	// Allows IPPool to allocate for a specific node by label selector.
+	// +kubebuilder:validation:MaxLength=4096
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
 
 	// Allows IPPool to allocate for a specific namespace by label selector.
 	// If specified, both namespaceSelector and nodeSelector must match for the pool to be used.
+	// +kubebuilder:validation:MaxLength=4096
 	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`
 
 	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
