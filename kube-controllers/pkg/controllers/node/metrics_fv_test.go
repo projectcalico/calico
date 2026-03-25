@@ -43,7 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("kube-controllers metrics FV tests", Ordered, func() {
+var _ = Describe("kube-controllers metrics FV tests", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container

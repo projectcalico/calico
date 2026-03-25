@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Auto Hostendpoint FV tests", Ordered, func() {
+var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		nodeController    *containers.Container
@@ -152,7 +152,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, func() {
 		if nodeController != nil {
 			nodeController.Stop()
 		}
-		testutils.CleanupAllResources(context.Background(), k8sClient, c, nil, false, false)
+		testutils.CleanupAllResources(context.Background(), k8sClient, c, nil, testutils.CleanupOptions{})
 	})
 
 	It("should create and sync hostendpoints for Calico nodes", func() {

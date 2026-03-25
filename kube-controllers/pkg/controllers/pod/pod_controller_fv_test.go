@@ -36,7 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico pod controller FV tests (etcd mode)", Ordered, func() {
+var _ = Describe("Calico pod controller FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -90,7 +90,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", Ordered, func() {
 	})
 
 	AfterEach(func() {
-		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, false, false)
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, testutils.CleanupOptions{})
 	})
 
 	It("should not overwrite a workload endpoint's container ID", func() {

@@ -36,7 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", Ordered, func() {
+var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd         *containers.Container
 		calicoClient client.Interface

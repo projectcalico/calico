@@ -43,7 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico node controller FV tests (KDD mode)", Ordered, func() {
+var _ = Describe("Calico node controller FV tests (KDD mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -108,7 +108,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", Ordered, func() {
 	})
 
 	AfterEach(func() {
-		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, false, false)
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, testutils.CleanupOptions{})
 	})
 
 	Context("Mainline FV tests", func() {
@@ -410,7 +410,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", Ordered, func() {
 	})
 })
 
-var _ = Describe("Calico node controller FV tests (etcd mode)", Ordered, func() {
+var _ = Describe("Calico node controller FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -467,7 +467,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", Ordered, func() 
 	})
 
 	AfterEach(func() {
-		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, false, true)
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, testutils.CleanupOptions{KeepDefaultConfigs: true})
 	})
 
 	Context("Node FV tests", func() {

@@ -53,7 +53,7 @@ const (
 
 var emptyLabel = map[string]string{}
 
-var _ = Describe("flannel-migration-controller FV test", Ordered, func() {
+var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd                *containers.Container
 		migrationController *containers.Container
@@ -144,7 +144,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, func() {
 	})
 
 	AfterEach(func() {
-		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, false, false)
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, testutils.CleanupOptions{})
 	})
 
 	Context("Should migrate FV tests", func() {

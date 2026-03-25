@@ -36,7 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", Ordered, func() {
+var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd                   *containers.Container
 		loadbalancercontroller *containers.Container
@@ -193,7 +193,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", Ordered,
 	})
 
 	AfterEach(func() {
-		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, false, false)
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, testutils.CleanupOptions{})
 	})
 
 	Context("Service LoadBalancer FV tests - LoadBalancer AllServices mode", func() {

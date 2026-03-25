@@ -30,41 +30,45 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
+// CleanupOptions controls the behavior of CleanupAllResources.
+type CleanupOptions struct {
+	// DeletePodsBeforeNodes causes pods to be deleted with GracePeriodSeconds=0
+	// before nodes. This avoids orphaned pod GC delays (~50s) when a
+	// kube-controller-manager is running in the test.
+	DeletePodsBeforeNodes bool
+
+	// KeepDefaultConfigs preserves FelixConfigurations and BGPConfigurations
+	// named "default" during cleanup.
+	KeepDefaultConfigs bool
+}
+
 // CleanupAllResources deletes all test resources between specs. Pass nil for any
 // client that isn't available in the test suite. All list/delete errors are logged
 // rather than silently discarded, and delete errors are treated as best-effort since
 // the resource may already be gone.
-//
-// When deletePodsBeforeNodes is true, pods are deleted with GracePeriodSeconds=0
-// before nodes. This avoids orphaned pod GC delays (~50s) when a kube-controller-manager
-// is running in the test.
-//
-// FelixConfigurations and BGPConfigurations named "default" are preserved when
-// keepDefaultConfigs is true.
 func CleanupAllResources(
 	ctx context.Context,
 	k8sClient kubernetes.Interface,
 	calicoClient client.Interface,
 	bc api.Client,
-	deletePodsBeforeNodes bool,
-	keepDefaultConfigs bool,
+	opts CleanupOptions,
 ) {
 	if k8sClient != nil {
 		// Delete pods before nodes if requested, to avoid orphan GC delays.
-		if deletePodsBeforeNodes {
+		if opts.DeletePodsBeforeNodes {
 			cleanupK8sPods(ctx, k8sClient)
 		}
 
 		cleanupK8sNodes(ctx, k8sClient)
 
-		if !deletePodsBeforeNodes {
+		if !opts.DeletePodsBeforeNodes {
 			cleanupK8sPods(ctx, k8sClient)
 		}
 
 		cleanupK8sServices(ctx, k8sClient)
-		cleanupK8sNetworkPolicies(ctx, k8sClient)
+		CleanupK8sNetworkPolicies(ctx, k8sClient)
 		cleanupK8sDaemonSets(ctx, k8sClient)
-		cleanupK8sNamespaces(ctx, k8sClient)
+		CleanupK8sNamespaces(ctx, k8sClient)
 	}
 
 	// IPAM resources must use DeleteKVP in KDD mode.
@@ -79,10 +83,10 @@ func CleanupAllResources(
 		cleanupIPPools(ctx, calicoClient)
 		cleanupHostEndpoints(ctx, calicoClient)
 		cleanupWorkloadEndpoints(ctx, calicoClient)
-		cleanupCalicoNetworkPolicies(ctx, calicoClient)
-		cleanupFelixConfigurations(ctx, calicoClient, keepDefaultConfigs)
+		CleanupCalicoNetworkPolicies(ctx, calicoClient)
+		cleanupFelixConfigurations(ctx, calicoClient, opts.KeepDefaultConfigs)
 		cleanupBGPPeers(ctx, calicoClient)
-		cleanupBGPConfigurations(ctx, calicoClient, keepDefaultConfigs)
+		cleanupBGPConfigurations(ctx, calicoClient, opts.KeepDefaultConfigs)
 
 		if _, err := calicoClient.KubeControllersConfiguration().Delete(ctx, "default", options.DeleteOptions{}); err != nil {
 			log.WithError(err).Debug("Failed to delete KubeControllersConfiguration during cleanup")
@@ -159,7 +163,7 @@ func cleanupK8sServices(ctx context.Context, k8sClient kubernetes.Interface) {
 	}
 }
 
-func cleanupK8sNetworkPolicies(ctx context.Context, k8sClient kubernetes.Interface) {
+func CleanupK8sNetworkPolicies(ctx context.Context, k8sClient kubernetes.Interface) {
 	nsList, err := k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		log.WithError(err).Warn("Failed to list namespaces during cleanup")
@@ -191,7 +195,7 @@ func cleanupK8sDaemonSets(ctx context.Context, k8sClient kubernetes.Interface) {
 	}
 }
 
-func cleanupK8sNamespaces(ctx context.Context, k8sClient kubernetes.Interface) {
+func CleanupK8sNamespaces(ctx context.Context, k8sClient kubernetes.Interface) {
 	nsList, err := k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		log.WithError(err).Warn("Failed to list namespaces during cleanup")
@@ -343,7 +347,7 @@ func cleanupWorkloadEndpoints(ctx context.Context, c client.Interface) {
 	}
 }
 
-func cleanupCalicoNetworkPolicies(ctx context.Context, c client.Interface) {
+func CleanupCalicoNetworkPolicies(ctx context.Context, c client.Interface) {
 	nsList, err := c.NetworkPolicies().List(ctx, options.ListOptions{})
 	if err != nil {
 		log.WithError(err).Warn("Failed to list Calico NetworkPolicies during cleanup")
