@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ var (
 	retryInterval = 100 * time.Millisecond
 )
 
-var _ = Describe("IPAM garbage collection FV tests with short leak grace period", func() {
+var _ = Describe("IPAM garbage collection FV tests with short leak grace period", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		controller        *containers.Container
@@ -57,10 +57,12 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		bc                backend.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		kconfigfile       string
+		removeKubeconfig  func()
 		nodeA             string
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -69,8 +71,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
@@ -91,6 +92,21 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		}
 		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
 		bc = calicoClient.(accessor).Backend()
+
+		// Run controller manager.
+		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
+	})
+
+	AfterAll(func() {
+		_ = calicoClient.Close()
+		controllerManager.Stop()
+		apiserver.Stop()
+		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	BeforeEach(func() {
+		var err error
 
 		// Create an IP pool with room for 4 blocks.
 		By("creating an IP pool for the test", func() {
@@ -125,15 +141,23 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("creating a serviceaccount for the test", func() {
-			sa := &v1.ServiceAccount{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "default",
-					Namespace: "default",
-				},
-			}
+		By("ensuring a serviceaccount exists for the test", func() {
 			Eventually(func() error {
-				_, err := k8sClient.CoreV1().ServiceAccounts("default").Create(
+				_, err := k8sClient.CoreV1().ServiceAccounts("default").Get(
+					context.Background(),
+					"default",
+					metav1.GetOptions{},
+				)
+				if err == nil {
+					return nil
+				}
+				sa := &v1.ServiceAccount{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "default",
+						Namespace: "default",
+					},
+				}
+				_, err = k8sClient.CoreV1().ServiceAccounts("default").Create(
 					context.Background(),
 					sa,
 					metav1.CreateOptions{},
@@ -144,21 +168,11 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 
 		// Start the controller.
 		controller = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile, "node")
-
-		// Run controller manager.
-		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
 	AfterEach(func() {
-		// Delete the IP pool.
-		_, err := calicoClient.IPPools().Delete(context.Background(), "test-ipam-gc-ippool", options.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		_ = calicoClient.Close()
-		controllerManager.Stop()
 		controller.Stop()
-		apiserver.Stop()
-		etcd.Stop()
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, testutils.CleanupOptions{DeletePodsBeforeNodes: true})
 	})
 
 	It("should NOT clean up tunnel IP allocations", func() {
@@ -565,7 +579,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 	})
 })
 
-var _ = Describe("IPAM garbage collection FV tests with long leak grace period", func() {
+var _ = Describe("IPAM garbage collection FV tests with long leak grace period", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		controller        *containers.Container
@@ -579,7 +593,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -609,6 +623,21 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		}
 		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
 		bc = calicoClient.(accessor).Backend()
+
+		// Run controller manager.
+		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
+	})
+
+	AfterAll(func() {
+		_ = calicoClient.Close()
+		controllerManager.Stop()
+		apiserver.Stop()
+		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	BeforeEach(func() {
+		var err error
 
 		// Create an IP pool with room for 4 blocks.
 		By("creating an IP pool for the test", func() {
@@ -644,15 +673,23 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("creating a serviceaccount for the test", func() {
-			sa := &v1.ServiceAccount{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "default",
-					Namespace: "default",
-				},
-			}
+		By("ensuring a serviceaccount exists for the test", func() {
 			Eventually(func() error {
-				_, err := k8sClient.CoreV1().ServiceAccounts("default").Create(
+				_, err := k8sClient.CoreV1().ServiceAccounts("default").Get(
+					context.Background(),
+					"default",
+					metav1.GetOptions{},
+				)
+				if err == nil {
+					return nil
+				}
+				sa := &v1.ServiceAccount{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "default",
+						Namespace: "default",
+					},
+				}
+				_, err = k8sClient.CoreV1().ServiceAccounts("default").Create(
 					context.Background(),
 					sa,
 					metav1.CreateOptions{},
@@ -663,22 +700,11 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 
 		// Start the controller.
 		controller = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile, "node")
-
-		// Run controller manager.
-		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
 	AfterEach(func() {
-		// Delete the IP pool.
-		_, err := calicoClient.IPPools().Delete(context.Background(), "test-ipam-gc-ippool", options.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		_ = calicoClient.Close()
-		controllerManager.Stop()
 		controller.Stop()
-		apiserver.Stop()
-		etcd.Stop()
-		removeKubeconfig()
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, testutils.CleanupOptions{DeletePodsBeforeNodes: true})
 	})
 
 	It("should NOT clean up empty blocks within the grace period", func() {
