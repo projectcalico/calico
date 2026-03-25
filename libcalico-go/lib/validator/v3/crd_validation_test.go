@@ -411,7 +411,7 @@ func TestCRDValidation_CombinedWithStructValidation(t *testing.T) {
 func TestCRDValidation_ICMPFields(t *testing.T) {
 	icmpCode := 3
 	icmpType := 8
-	tcpProto := numorstring.ProtocolFromString("ICMP")
+	icmpProto := numorstring.ProtocolFromString("ICMP")
 
 	runCRDTests(t, []crdTestCase{
 		{
@@ -422,7 +422,7 @@ func TestCRDValidation_ICMPFields(t *testing.T) {
 					Ingress: []apiv3.Rule{
 						{
 							Action:   apiv3.Allow,
-							Protocol: &tcpProto,
+							Protocol: &icmpProto,
 							ICMP:     &apiv3.ICMPFields{Code: &icmpCode},
 						},
 					},
@@ -438,7 +438,7 @@ func TestCRDValidation_ICMPFields(t *testing.T) {
 					Ingress: []apiv3.Rule{
 						{
 							Action:   apiv3.Allow,
-							Protocol: &tcpProto,
+							Protocol: &icmpProto,
 							ICMP:     &apiv3.ICMPFields{Type: &icmpType, Code: &icmpCode},
 						},
 					},

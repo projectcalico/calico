@@ -78,7 +78,7 @@ type NodeAddress struct {
 	Address string `json:"address" validate:"net"`
 
 	// Type is the node IP type
-	Type string `json:"type,omitempty"`
+	Type string `json:"type,omitempty" validate:"omitempty,ipType"`
 }
 
 type NodeInterface struct {

@@ -952,7 +952,7 @@ type FelixConfigurationSpec struct {
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
 	// +kubebuilder:validation:Pattern=`^(?i)(WorkloadIPs|CalicoIPAM)?$`
-	RouteSource string `json:"routeSource,omitempty" validate:"omitempty,routeSource"`
+	RouteSource string `json:"routeSource,omitempty"`
 
 	// Calico programs additional Linux route tables for various purposes.
 	// RouteTableRanges specifies a set of table index ranges that Calico should use.

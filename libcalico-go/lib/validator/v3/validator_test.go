@@ -347,17 +347,20 @@ func init() {
 			false,
 		),
 		Entry("should reject HostEndpointSpec with a missing node",
-			api.HostEndpointSpec{
-				InterfaceName: "eth0",
-				Ports: []api.EndpointPort{
-					{
-						Name:     "a-valid-port",
-						Protocol: protoTCP,
-						Port:     1234,
+			&api.HostEndpoint{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.HostEndpointSpec{
+					InterfaceName: "eth0",
+					Ports: []api.EndpointPort{
+						{
+							Name:     "a-valid-port",
+							Protocol: protoTCP,
+							Port:     1234,
+						},
 					},
 				},
 			},
-			true,
+			false,
 		),
 		Entry("should accept HostEndpointSpec with name-clashing ports (m)",
 			api.HostEndpointSpec{
@@ -2055,22 +2058,34 @@ func init() {
 			MatchOperator: "NotEqual",
 			Action:        "Accept",
 		}, true),
-		Entry("should reject BGPFilter rule with no CIDR when MatchOperator is set - 1", api.BGPFilterRuleV4{
-			MatchOperator: "NotEqual",
-			Action:        "Reject",
-		}, true),
-		Entry("should reject BGPFilter rule with no CIDR when MatchOperator is set - 2", api.BGPFilterRuleV6{
-			MatchOperator: "NotEqual",
-			Action:        "Reject",
-		}, true),
-		Entry("should reject BGPFilter rule with no MatchOperator when CIDR is set - 1", api.BGPFilterRuleV4{
-			CIDR:   "10.0.10.0/32",
-			Action: "Reject",
-		}, true),
-		Entry("should reject BGPFilter rule with no MatchOperator when CIDR is set - 2", api.BGPFilterRuleV6{
-			CIDR:   "ffff::/128",
-			Action: "Reject",
-		}, true),
+		Entry("should reject BGPFilter rule with no CIDR when MatchOperator is set - 1", &api.BGPFilter{
+			ObjectMeta: v1.ObjectMeta{Name: "test-filter"},
+			Spec: api.BGPFilterSpec{ExportV4: []api.BGPFilterRuleV4{{
+				MatchOperator: "NotEqual",
+				Action:        "Reject",
+			}}},
+		}, false),
+		Entry("should reject BGPFilter rule with no CIDR when MatchOperator is set - 2", &api.BGPFilter{
+			ObjectMeta: v1.ObjectMeta{Name: "test-filter"},
+			Spec: api.BGPFilterSpec{ExportV6: []api.BGPFilterRuleV6{{
+				MatchOperator: "NotEqual",
+				Action:        "Reject",
+			}}},
+		}, false),
+		Entry("should reject BGPFilter rule with no MatchOperator when CIDR is set - 1", &api.BGPFilter{
+			ObjectMeta: v1.ObjectMeta{Name: "test-filter"},
+			Spec: api.BGPFilterSpec{ExportV4: []api.BGPFilterRuleV4{{
+				CIDR:   "10.0.10.0/32",
+				Action: "Reject",
+			}}},
+		}, false),
+		Entry("should reject BGPFilter rule with no MatchOperator when CIDR is set - 2", &api.BGPFilter{
+			ObjectMeta: v1.ObjectMeta{Name: "test-filter"},
+			Spec: api.BGPFilterSpec{ExportV6: []api.BGPFilterRuleV6{{
+				CIDR:   "ffff::/128",
+				Action: "Reject",
+			}}},
+		}, false),
 		Entry("should reject BGPFilter rule with invalid Action - 1", &api.BGPFilter{
 			ObjectMeta: v1.ObjectMeta{Name: "test-filter"},
 			Spec: api.BGPFilterSpec{ExportV4: []api.BGPFilterRuleV4{{

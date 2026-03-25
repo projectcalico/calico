@@ -91,6 +91,7 @@ var (
 	ignoredInterfaceRegex         = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
 	ifaceFilterRegex              = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
 	protocolRegex                 = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
+	ipTypeRegex                   = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
 	standardCommunity             = regexp.MustCompile(`^(\d+):(\d+)$`)
 	largeCommunity                = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 	number                        = regexp.MustCompile(`(\d+)`)
@@ -178,10 +179,16 @@ func init() {
 	// Initialise static data.
 	validate = validator.New()
 
-	// Validators kept because CRD schemas lack the constraint.
+	// Validators for internal API types that have no backing CRD.
+	// These must remain as Go validators since CRD schema validation
+	// cannot cover them.
 	registerFieldValidator("createDefaultHostEndpoint", validateCreateDefaultHostEndpoint)
+	registerFieldValidator("ipType", validateIPType)
 
-	// Register field validators for constraints NOT covered by CRD schemas.
+	// Validators for fields on CRD-backed types where the constraint is
+	// not expressible via CRD schema annotations (e.g., complex format
+	// checks, cross-field logic handled in Go, or fields on internal
+	// sub-structs shared with non-CRD types).
 	registerFieldValidator("interface", validateInterface)
 	registerFieldValidator("bgpFilterInterface", validateBGPFilterInterface)
 	registerFieldValidator("bgpFilterPrefixLengthV4", validateBGPFilterPrefixLengthV4)
@@ -202,7 +209,6 @@ func init() {
 	registerFieldValidator("keyValueList", validateKeyValueList)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
 	registerFieldValidator("regexp", validateRegexp)
-	registerFieldValidator("routeSource", validateRouteSource)
 	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
 	registerFieldValidator("IP:port", validateIPPort)
 	registerFieldValidator("reachableBy", validateReachableByField)
@@ -357,11 +363,10 @@ func validateRegexp(fl validator.FieldLevel) bool {
 	return err == nil
 }
 
-func validateRouteSource(fl validator.FieldLevel) bool {
+func validateIPType(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
-	log.Debugf("Validate routeSource: %s", s)
-	_, err := regexp.Compile(s)
-	return err == nil
+	log.Debugf("Validate IPType: %s", s)
+	return ipTypeRegex.MatchString(s)
 }
 
 func validateWireguardPublicKey(fl validator.FieldLevel) bool {
