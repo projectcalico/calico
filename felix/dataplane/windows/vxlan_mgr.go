@@ -249,6 +249,6 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 }
 
 func macToWindowsFormat(linuxFormat string) string {
-	windowsFormat := strings.Replace(linuxFormat, ":", "-", -1)
+	windowsFormat := strings.ReplaceAll(linuxFormat, ":", "-")
 	return windowsFormat
 }

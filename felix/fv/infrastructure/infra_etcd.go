@@ -21,7 +21,7 @@ import (
 	"net"
 	"os"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
@@ -43,7 +43,7 @@ type EtcdDatastoreInfra struct {
 
 func createEtcdDatastoreInfra(opts ...CreateOption) DatastoreInfra {
 	infra, err := GetEtcdDatastoreInfra()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return infra
 }
 
@@ -100,7 +100,7 @@ func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
 		"default",
 		options.GetOptions{},
 	)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return ci.Spec.ClusterGUID
 }
 
@@ -164,13 +164,13 @@ func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *
 		nodeAddressV6 := libapi.NodeAddress{Address: felix.IPv6, Type: libapi.InternalIP}
 		felixNode.Spec.Addresses = append(felixNode.Spec.Addresses, nodeAddressV6)
 	}
-	Eventually(func() error {
+	gomega.Eventually(func() error {
 		_, err := eds.GetCalicoClient().Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
 		if err != nil {
 			log.WithError(err).Warn("Failed to create node")
 		}
 		return err
-	}, "10s", "500ms").ShouldNot(HaveOccurred())
+	}, "10s", "500ms").ShouldNot(gomega.HaveOccurred())
 }
 
 func (eds *EtcdDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
@@ -209,7 +209,7 @@ func (eds *EtcdDatastoreInfra) AddDefaultAllow() string {
 	defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
 	defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
 	_, err := eds.GetCalicoClient().Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return defaultProfile.Name
 }
 

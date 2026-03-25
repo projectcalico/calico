@@ -34,8 +34,8 @@ import (
 )
 
 var (
-	simulatedError = errors.New("dummy error")
-	alreadyExists  = errors.New("already exists")
+	errSimulated     = errors.New("dummy error")
+	errAlreadyExists = errors.New("already exists")
 )
 
 var _ = Describe("RouteRules Construct", func() {
@@ -305,7 +305,7 @@ var _ = Describe("RouteRules", func() {
 
 			It("should panic after all its retries are exhausted", func() {
 				for i := 0; i < 3; i++ {
-					Expect(rrs.Apply()).To(Equal(ConnectFailed))
+					Expect(rrs.Apply()).To(Equal(ErrConnectFailed))
 				}
 				Expect(func() { _ = rrs.Apply() }).To(Panic())
 			})
@@ -467,7 +467,7 @@ func (d *mockDataplane) shouldFail(flag failFlags) bool {
 func (d *mockDataplane) NewNetlinkHandle() (HandleIface, error) {
 	d.NumNewNetlinkCalls++
 	if d.PersistentlyFailToConnect || d.shouldFail(failNextNewNetlinkHandle) {
-		return nil, simulatedError
+		return nil, errSimulated
 	}
 	Expect(d.NetlinkOpen).To(BeFalse())
 	d.NetlinkOpen = true
@@ -482,7 +482,7 @@ func (d *mockDataplane) Delete() {
 func (d *mockDataplane) SetSocketTimeout(to time.Duration) error {
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(failNextSetSocketTimeout) {
-		return simulatedError
+		return errSimulated
 	}
 	return nil
 }
@@ -490,7 +490,7 @@ func (d *mockDataplane) SetSocketTimeout(to time.Duration) error {
 func (d *mockDataplane) RuleList(family int) ([]netlink.Rule, error) {
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(failNextRuleList) {
-		return nil, simulatedError
+		return nil, errSimulated
 	}
 	var rules []netlink.Rule
 	for _, rule := range d.ruleKeyToRule {
@@ -514,13 +514,13 @@ func (d *mockDataplane) removeMockRule(rule *netlink.Rule) {
 func (d *mockDataplane) RuleAdd(rule *netlink.Rule) error {
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(failNextRuleAdd) {
-		return simulatedError
+		return errSimulated
 	}
 	key := keyForRule(rule)
 	log.WithField("ruleKey", key).Info("Mock dataplane: RuleAdd called")
 	d.addedRuleKeys.Add(key)
 	if _, ok := d.ruleKeyToRule[key]; ok {
-		return alreadyExists
+		return errAlreadyExists
 	} else {
 		d.ruleKeyToRule[key] = *rule
 		return nil
@@ -530,7 +530,7 @@ func (d *mockDataplane) RuleAdd(rule *netlink.Rule) error {
 func (d *mockDataplane) RuleDel(rule *netlink.Rule) error {
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(failNextRuleDel) {
-		return simulatedError
+		return errSimulated
 	}
 	key := keyForRule(rule)
 	log.WithField("ruleKey", key).Info("Mock dataplane: RuleDel called")
