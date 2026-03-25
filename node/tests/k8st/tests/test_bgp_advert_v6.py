@@ -296,8 +296,7 @@ EOF
 # """ % self.external_node_ip)
 
             # Connectivity to nginx-local should always succeed.
-            for i in range(attempts):
-              retry_until_success(curl, timeout=300, function_args=[local_svc_ip])
+            retry_until_success(curl, timeout=300, function_args=[local_svc_ip])
 
             # NOTE: Unlike in the IPv6 case (in test_bgp_advert.py) we cannot successfully test that
             # connectivity to nginx-cluster is load-balanced across all nodes (and hence, with the
