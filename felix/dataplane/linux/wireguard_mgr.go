@@ -79,9 +79,10 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 		m.wireguardRouteTable.EndpointRemove(msg.Hostname)
 	case *proto.HostMetadataV4V6Update:
 		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Update update")
-		if m.ipVersion == 4 {
+		switch m.ipVersion {
+		case 4:
 			m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromString(msg.Ipv4Addr))
-		} else if m.ipVersion == 6 {
+		case 6:
 			m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromString(msg.Ipv6Addr))
 		}
 	case *proto.HostMetadataV4V6Remove:
