@@ -20,7 +20,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 )
@@ -110,14 +109,14 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotDestPortRanges", Match().Protocol("udp").NotDestPortRanges(portRanges), "meta l4proto udp udp dport != { 1234, 5678-6000 }"),
 
 	// Ports using protocol number.
-	Entry("ProtocolNum.SourcePorts", Match().ProtocolNum(nftables.ProtoTCP).SourcePorts(1234, 5678), "meta l4proto 6 tcp sport { 1234, 5678 }"),
-	Entry("ProtocolNum.NotSourcePorts", Match().ProtocolNum(nftables.ProtoUDP).NotSourcePorts(1234, 5678), "meta l4proto 17 udp sport != { 1234, 5678 }"),
-	Entry("ProtocolNum.DestPorts", Match().ProtocolNum(nftables.ProtoTCP).DestPorts(1234, 5678), "meta l4proto 6 tcp dport { 1234, 5678 }"),
-	Entry("ProtocolNum.NotDestPorts", Match().ProtocolNum(nftables.ProtoUDP).NotDestPorts(1234, 5678), "meta l4proto 17 udp dport != { 1234, 5678 }"),
-	Entry("ProtocolNum.SourcePortRanges", Match().ProtocolNum(nftables.ProtoUDP).SourcePortRanges(portRanges), "meta l4proto 17 udp sport { 1234, 5678-6000 }"),
-	Entry("ProtocolNum.NotSourcePortRanges", Match().ProtocolNum(nftables.ProtoUDP).NotSourcePortRanges(portRanges), "meta l4proto 17 udp sport != { 1234, 5678-6000 }"),
-	Entry("ProtocolNum.DestPortRanges", Match().ProtocolNum(nftables.ProtoUDP).DestPortRanges(portRanges), "meta l4proto 17 udp dport { 1234, 5678-6000 }"),
-	Entry("ProtocolNum.NotDestPortRanges", Match().ProtocolNum(nftables.ProtoUDP).NotDestPortRanges(portRanges), "meta l4proto 17 udp dport != { 1234, 5678-6000 }"),
+	Entry("ProtocolNum.SourcePorts", Match().ProtocolNum(ProtoTCP).SourcePorts(1234, 5678), "meta l4proto 6 tcp sport { 1234, 5678 }"),
+	Entry("ProtocolNum.NotSourcePorts", Match().ProtocolNum(ProtoUDP).NotSourcePorts(1234, 5678), "meta l4proto 17 udp sport != { 1234, 5678 }"),
+	Entry("ProtocolNum.DestPorts", Match().ProtocolNum(ProtoTCP).DestPorts(1234, 5678), "meta l4proto 6 tcp dport { 1234, 5678 }"),
+	Entry("ProtocolNum.NotDestPorts", Match().ProtocolNum(ProtoUDP).NotDestPorts(1234, 5678), "meta l4proto 17 udp dport != { 1234, 5678 }"),
+	Entry("ProtocolNum.SourcePortRanges", Match().ProtocolNum(ProtoUDP).SourcePortRanges(portRanges), "meta l4proto 17 udp sport { 1234, 5678-6000 }"),
+	Entry("ProtocolNum.NotSourcePortRanges", Match().ProtocolNum(ProtoUDP).NotSourcePortRanges(portRanges), "meta l4proto 17 udp sport != { 1234, 5678-6000 }"),
+	Entry("ProtocolNum.DestPortRanges", Match().ProtocolNum(ProtoUDP).DestPortRanges(portRanges), "meta l4proto 17 udp dport { 1234, 5678-6000 }"),
+	Entry("ProtocolNum.NotDestPortRanges", Match().ProtocolNum(ProtoUDP).NotDestPortRanges(portRanges), "meta l4proto 17 udp dport != { 1234, 5678-6000 }"),
 
 	// ICMP.
 	Entry("ICMPType", Match().ICMPType(123), "icmp type 123"),
@@ -130,8 +129,8 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotICMPV6TypeAndCode", Match().NotICMPV6TypeAndCode(123, 5), "icmpv6 type != 123 code != 5"),
 
 	// Limits.
-	Entry("Limit with rate", nftables.Match().Limit("10/minute", 0), "limit rate 10/minute"),
-	Entry("Limit with rate and burst", nftables.Match().Limit("20/hour", 10), "limit rate 20/hour burst 10 packets"),
+	Entry("Limit with rate", Match().Limit("10/minute", 0), "limit rate 10/minute"),
+	Entry("Limit with rate and burst", Match().Limit("20/hour", 10), "limit rate 20/hour burst 10 packets"),
 
 	// VMAPs
 	Entry("InInterfaceVMAP", Match().InInterfaceVMAP("vmap1234").(NFTMatchCriteria).SetLayer("filter"), "iifname vmap @filter-vmap1234"),

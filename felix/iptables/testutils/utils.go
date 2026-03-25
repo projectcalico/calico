@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
@@ -106,31 +106,31 @@ func (d *MockDataplane) NewCmd(name string, arg ...string) cmdshim.CmdIface {
 	d.CmdNames = append(d.CmdNames, name)
 
 	if d.NftablesMode && name != "iptables" {
-		Expect(name).To(ContainSubstring("-nft"))
+		gomega.Expect(name).To(gomega.ContainSubstring("-nft"))
 	}
 
 	switch name {
 	case "iptables-restore", "ip6tables-restore",
 		"iptables-legacy-restore", "ip6tables-legacy-restore",
 		"iptables-nft-restore", "ip6tables-nft-restore":
-		Expect(arg).To(Equal([]string{"--noflush", "--verbose"}))
+		gomega.Expect(arg).To(gomega.Equal([]string{"--noflush", "--verbose"}))
 		cmd = &restoreCmd{
 			Dataplane: d,
 		}
 	case "iptables-save", "ip6tables-save",
 		"iptables-legacy-save", "ip6tables-legacy-save",
 		"iptables-nft-save", "ip6tables-nft-save":
-		Expect(arg).To(Equal([]string{"-t", d.Table}))
+		gomega.Expect(arg).To(gomega.Equal([]string{"-t", d.Table}))
 		cmd = &saveCmd{
 			Dataplane: d,
 		}
 	case "iptables":
-		Expect(arg).To(Equal([]string{"--version"}))
+		gomega.Expect(arg).To(gomega.Equal([]string{"--version"}))
 		cmd = &versionCmd{
 			Dataplane: d,
 		}
 	default:
-		Fail(fmt.Sprintf("Unexpected command %v", name))
+		ginkgo.Fail(fmt.Sprintf("Unexpected command %v", name))
 	}
 
 	d.Cmds = append(d.Cmds, cmd)
@@ -200,23 +200,23 @@ func (d *restoreCmd) SetStderr(w io.Writer) {
 }
 
 func (d *restoreCmd) Output() ([]byte, error) {
-	Fail("Not implemented")
-	return nil, errors.New("Not implemented")
+	ginkgo.Fail("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (d *restoreCmd) StdoutPipe() (io.ReadCloser, error) {
-	Fail("Not implemented")
-	return nil, errors.New("Not implemented")
+	ginkgo.Fail("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (d *restoreCmd) Start() error {
-	Fail("Not implemented")
-	return errors.New("Not implemented")
+	ginkgo.Fail("Not implemented")
+	return errors.New("not implemented")
 }
 
 func (d *restoreCmd) Wait() error {
-	Fail("Not implemented")
-	return errors.New("Not implemented")
+	ginkgo.Fail("Not implemented")
+	return errors.New("not implemented")
 }
 
 func (d *restoreCmd) Kill() error {
@@ -232,7 +232,7 @@ func (d *restoreCmd) Run() error {
 	// Get the input.
 	var buf bytes.Buffer
 	_, err := buf.ReadFrom(d.Stdin)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	input := buf.String()
 
 	if d.Dataplane.OnPreRestore != nil {
@@ -243,11 +243,11 @@ func (d *restoreCmd) Run() error {
 	if d.Dataplane.FailNextRestore {
 		log.Warn("Simulating an iptables-restore failure")
 		d.Dataplane.FailNextRestore = false
-		return errors.New("Simulated failure")
+		return errors.New("simulated failure")
 	}
 	if d.Dataplane.FailAllRestores {
 		log.Warn("Simulating an iptables-restore failure")
-		return errors.New("Simulated failure")
+		return errors.New("simulated failure")
 	}
 
 	// Process it line by line.
@@ -268,17 +268,17 @@ func (d *restoreCmd) Run() error {
 		if strings.HasPrefix(line, "*") {
 			// Start of a table.
 			if tableSeen {
-				Expect(d.Dataplane.NftablesMode).To(BeTrue(), "Only nft mode should use more than one transaction")
+				gomega.Expect(d.Dataplane.NftablesMode).To(gomega.BeTrue(), "Only nft mode should use more than one transaction")
 				// We've already had one transaction, check that it was committed
-				Expect(commitSeen).To(BeTrue())
+				gomega.Expect(commitSeen).To(gomega.BeTrue())
 				commitSeen = false
 			}
-			Expect(line[1:]).To(Equal(d.Dataplane.Table))
+			gomega.Expect(line[1:]).To(gomega.Equal(d.Dataplane.Table))
 			tableSeen = true
 			continue
 		}
-		Expect(tableSeen).To(BeTrue(), "No *table stanza before starting input")
-		Expect(commitSeen).To(BeFalse(), "Unexpected line after COMMIT")
+		gomega.Expect(tableSeen).To(gomega.BeTrue(), "No *table stanza before starting input")
+		gomega.Expect(commitSeen).To(gomega.BeFalse(), "Unexpected line after COMMIT")
 		if line == "COMMIT" {
 			commitSeen = true
 			continue
@@ -290,7 +290,7 @@ func (d *restoreCmd) Run() error {
 			// Chain forward-ref, creates and flushes the chain as needed.
 			parts := strings.Split(line[1:], " ")
 			chainName := parts[0]
-			Expect(parts[1:]).To(Equal([]string{"-", "-"}))
+			gomega.Expect(parts[1:]).To(gomega.Equal([]string{"-", "-"}))
 			chains[chainName] = []string{}
 			d.Dataplane.FlushedChains.Add(chainName)
 			continue
@@ -303,16 +303,16 @@ func (d *restoreCmd) Run() error {
 		case "-A", "--append":
 			chainName = parts[1]
 			if strings.HasPrefix(chainName, "cali") && d.Dataplane.NftablesMode {
-				Expect(d.Dataplane.FlushedChains.Contains(chainName)).To(BeTrue(),
+				gomega.Expect(d.Dataplane.FlushedChains.Contains(chainName)).To(gomega.BeTrue(),
 					"In nft mode, it's not safe to modify chain without flushing")
 			}
 			rest := strings.Join(parts[2:], " ")
-			Expect(chains[chainName]).NotTo(BeNil(), "Append to unknown chain: "+chainName)
+			gomega.Expect(chains[chainName]).NotTo(gomega.BeNil(), "Append to unknown chain: "+chainName)
 			chains[chainName] = append(chains[chainName], rest)
 			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: len(chains[chainName])})
 		case "-I", "--insert":
 			chainName = parts[1]
-			Expect(chains[chainName]).NotTo(BeNil(), "Insert to unknown chain: "+chainName)
+			gomega.Expect(chains[chainName]).NotTo(gomega.BeNil(), "Insert to unknown chain: "+chainName)
 			chains[chainName] = append(chains[chainName], "") // Make room
 			chain := chains[chainName]
 
@@ -330,14 +330,14 @@ func (d *restoreCmd) Run() error {
 				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: 1})
 			}
 		case "-R", "--replace":
-			Expect(d.Dataplane.NftablesMode).To(BeFalse(), "Replace shouldn't be used in nft mode")
+			gomega.Expect(d.Dataplane.NftablesMode).To(gomega.BeFalse(), "Replace shouldn't be used in nft mode")
 			chainName = parts[1]
 			ruleNum, err := strconv.Atoi(parts[2]) // 1-indexed position of rule.
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			rest := strings.Join(parts[3:], " ")
 			ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
 			chain := chains[chainName]
-			Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Replace of nonexistent rule")
+			gomega.Expect(len(chain)).To(gomega.BeNumerically(">", ruleIdx), "Replace of nonexistent rule")
 			chain[ruleIdx] = rest
 			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
 		case "-D", "--delete":
@@ -345,12 +345,12 @@ func (d *restoreCmd) Run() error {
 
 			// If second arg is numeric, this is a delete by line number.
 			if ruleNum, err := strconv.Atoi(parts[2]); err == nil {
-				Expect(parts).To(HaveLen(3), "Unexpected argument after rule position in --delete")
-				Expect(chainName).To(HavePrefix("cali"), "Deleting rule from non-calico chain by number can cause races")
+				gomega.Expect(parts).To(gomega.HaveLen(3), "Unexpected argument after rule position in --delete")
+				gomega.Expect(chainName).To(gomega.HavePrefix("cali"), "Deleting rule from non-calico chain by number can cause races")
 
 				ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
 				chain := chains[chainName]
-				Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Delete of nonexistent rule")
+				gomega.Expect(len(chain)).To(gomega.BeNumerically(">", ruleIdx), "Delete of nonexistent rule")
 
 				for i := ruleIdx; i < len(chain)-1; i++ {
 					chain[i] = chain[i+1]
@@ -375,24 +375,24 @@ func (d *restoreCmd) Run() error {
 					newChain = append(newChain, chain[i])
 				}
 
-				Expect(found).To(BeTrue(), "Delete of nonexistent rule")
+				gomega.Expect(found).To(gomega.BeTrue(), "Delete of nonexistent rule")
 				chains[chainName] = newChain
 				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: i})
 
 			}
 		case "-X", "--delete-chain":
 			chainName = parts[1]
-			Expect(parts).To(HaveLen(2), "--delete-chain only has one argument")
-			Expect(chains[chainName]).To(Equal([]string{}), "Only empty chains can be deleted")
+			gomega.Expect(parts).To(gomega.HaveLen(2), "--delete-chain only has one argument")
+			gomega.Expect(chains[chainName]).To(gomega.Equal([]string{}), "Only empty chains can be deleted")
 			delete(chains, chainName)
 			d.Dataplane.DeletedChains.Add(chainName)
 		default:
-			Fail("Unknown action: " + action)
+			ginkgo.Fail("Unknown action: " + action)
 		}
 		log.Debugf("Updated chain '%s' (len=%v); new contents:\n\t%v",
 			chainName, len(chains[chainName]), strings.Join(chains[chainName], "\n\t"))
 	}
-	Expect(commitSeen).To(BeTrue(), "didn't see a COMMIT line")
+	gomega.Expect(commitSeen).To(gomega.BeTrue(), "didn't see a COMMIT line")
 	return nil
 }
 
@@ -416,15 +416,15 @@ func (d *saveCmd) String() string {
 }
 
 func (d *saveCmd) SetStdin(r io.Reader) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *saveCmd) SetStdout(w io.Writer) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *saveCmd) SetStderr(w io.Writer) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *saveCmd) Start() error {
@@ -458,10 +458,10 @@ func (d *saveCmd) Kill() error {
 func (d *saveCmd) Output() ([]byte, error) {
 	if d.Dataplane.FailNextSaveRead {
 		d.Dataplane.FailNextSaveRead = false
-		return nil, errors.New("Simulated failure")
+		return nil, errors.New("simulated failure")
 	}
 	if d.Dataplane.FailAllSaves {
-		return nil, errors.New("Simulated failure")
+		return nil, errors.New("simulated failure")
 	}
 	var buf bytes.Buffer
 
@@ -488,12 +488,12 @@ func (d *saveCmd) StdoutPipe() (io.ReadCloser, error) {
 	var readErr error
 	if d.Dataplane.FailNextSaveRead {
 		d.Dataplane.FailNextSaveRead = false
-		readErr = errors.New("Simulated Read() failure.")
+		readErr = errors.New("simulated Read() failure")
 	}
 
 	if d.Dataplane.FailNextSaveStdoutPipe {
 		d.Dataplane.FailNextSaveStdoutPipe = false
-		return nil, errors.New("Simulated StdoutPipe() failure.")
+		return nil, errors.New("simulated StdoutPipe() failure")
 	}
 
 	buf, err := d.Output()
@@ -502,7 +502,7 @@ func (d *saveCmd) StdoutPipe() (io.ReadCloser, error) {
 	}
 	var closeErr error
 	if d.Dataplane.FailNextPipeClose {
-		closeErr = errors.New("Dummy deferred flush error")
+		closeErr = errors.New("dummy deferred flush error")
 		d.Dataplane.FailNextPipeClose = false
 	}
 	cb := &closableBuffer{
@@ -512,14 +512,14 @@ func (d *saveCmd) StdoutPipe() (io.ReadCloser, error) {
 	}
 	d.Dataplane.PipeBuffers = append(d.Dataplane.PipeBuffers, cb)
 	if d.stdoutPipe != nil {
-		Fail("StdoutPipe() called more than once")
+		ginkgo.Fail("StdoutPipe() called more than once")
 	}
 	d.stdoutPipe = cb
 	return cb, nil
 }
 
 func (d *saveCmd) Run() error {
-	return errors.New("Not implemented")
+	return errors.New("not implemented")
 }
 
 type versionCmd struct {
@@ -531,15 +531,15 @@ func (d *versionCmd) String() string {
 }
 
 func (d *versionCmd) SetStdin(r io.Reader) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *versionCmd) SetStdout(w io.Writer) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *versionCmd) SetStderr(w io.Writer) {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 }
 
 func (d *versionCmd) Start() error {
@@ -551,30 +551,30 @@ func (d *versionCmd) Start() error {
 }
 
 func (d *versionCmd) Wait() error {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 	return nil
 }
 
 func (d *versionCmd) Kill() error {
-	Fail("Not implemented")
+	ginkgo.Fail("Not implemented")
 	return nil
 }
 
 func (d *versionCmd) Output() ([]byte, error) {
 	if d.Dataplane.FailNextVersion {
 		d.Dataplane.FailNextVersion = false
-		return nil, errors.New("Simulated failure")
+		return nil, errors.New("simulated failure")
 	}
 
 	return []byte(d.Dataplane.Version), nil
 }
 
 func (d *versionCmd) StdoutPipe() (io.ReadCloser, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (d *versionCmd) Run() error {
-	return errors.New("Not implemented")
+	return errors.New("not implemented")
 }
 
 type closableBuffer struct {
@@ -592,7 +592,7 @@ func (b *closableBuffer) Read(p []byte) (n int, err error) {
 
 func (b *closableBuffer) Close() error {
 	if b.Closed {
-		Fail("Already closed")
+		ginkgo.Fail("Already closed")
 	}
 	b.Closed = true
 	return b.CloseErr

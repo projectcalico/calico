@@ -252,7 +252,7 @@ func WrapPayloadWithEnvelope(msg interface{}, seqNo uint64) (*proto.ToDataplane,
 		envelope.Payload = &proto.ToDataplane_ServiceRemove{ServiceRemove: msg}
 
 	default:
-		return nil, fmt.Errorf("Unknown message type: %T", msg)
+		return nil, fmt.Errorf("unknown message type: %T", msg)
 	}
 
 	return envelope, nil
