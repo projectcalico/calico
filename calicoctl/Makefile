@@ -24,9 +24,7 @@ include ../lib.Makefile
 
 CALICOCTL_DIR=calicoctl
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
-SRC_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go') $(shell find ../libcalico-go -name '*.go')
-
-TEST_CONTAINER_NAME ?= calico/test
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
@@ -75,7 +73,7 @@ bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 .PHONY: image $(CALICOCTL_IMAGE)
 image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
-$(CTL_CONTAINER_CREATED): Dockerfile bin/calicoctl-linux-$(ARCH)
+$(CTL_CONTAINER_CREATED): $(IMAGE_DEPS) bin/calicoctl-linux-$(ARCH)
 	cp ../LICENSE.md bin/LICENSE
 	$(DOCKER_BUILD) -t $(CALICOCTL_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
@@ -102,7 +100,8 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev.
 ut: bin/calicoctl-linux-$(ARCH)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r $(GINKGO_ARGS) calicoctl/*'
+	mkdir -p report
+	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --junit-report=calicoctl_ut.xml --output-dir=report/ $(GINKGO_ARGS) calicoctl/*'
 
 ###############################################################################
 # FVs
@@ -113,18 +112,19 @@ fv: bin/calicoctl-linux-$(ARCH) version-helper
 	$(MAKE) run-etcd
 
 	# We start two API servers in order to test multiple kubeconfig support
-	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=6443 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
-	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=6444 KUBE_MOCK_NODE_MANIFEST=mock-node-second.yaml
+	$(MAKE) run-kubernetes-control-plane KUBE_APISERVER_PORT=6443 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
+	$(MAKE) run-kubernetes-control-plane KUBE_APISERVER_PORT=6444 KUBE_MOCK_NODE_MANIFEST=mock-node-second.yaml
 
 	# Ensure anonymous is permitted to be admin.
 	while ! docker exec st-apiserver-6443 kubectl --server=https://127.0.0.1:6443 create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do sleep 2; done
 
 	# Run the tests
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test $(GO_TEST_ARGS) ./tests/fv'
+	mkdir -p report
+	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && gotestsum --junitfile report/calicoctl_fv.xml -- $(GO_TEST_ARGS) -count=1 ./tests/fv'
 	# Cleanup
 	$(MAKE) stop-etcd
-	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=6443
-	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=6444
+	$(MAKE) stop-kubernetes-control-plane KUBE_APISERVER_PORT=6443
+	$(MAKE) stop-kubernetes-control-plane KUBE_APISERVER_PORT=6444
 
 ###############################################################################
 # STs
@@ -138,8 +138,9 @@ ST_OPTIONS?=
 .PHONY: st
 ## Run the STs in a container
 st: bin/calicoctl-linux-$(ARCH) version-helper
+	$(MAKE) -C ../node test_image
 	$(MAKE) run-etcd
-	$(MAKE) run-kubernetes-master
+	$(MAKE) run-kubernetes-control-plane
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -152,15 +153,15 @@ st: bin/calicoctl-linux-$(ARCH) version-helper
 		   -v $(CURDIR):/code \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
-		   sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
+		   sh -c 'pytest $(ST_TO_RUN) -sv --junit-xml="/code/report/nosetests.xml" $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
-	$(MAKE) stop-kubernetes-master
+	$(MAKE) stop-kubernetes-control-plane
 
-## Run a local kubernetes master with API
+## Run a local kubernetes control plane.
 # TODO: Commonize this with the functions in lib.Makefile.
 # For now, these tests do something special and launch two apiserver on different ports, so it makes sense
 # to keep them separate.
-run-kubernetes-master: stop-kubernetes-master
+run-kubernetes-control-plane: stop-kubernetes-control-plane
 	# Run a Kubernetes apiserver using Docker.
 	docker run --net=host --detach \
 		--name st-apiserver-${KUBE_APISERVER_PORT} \
@@ -212,20 +213,20 @@ run-kubernetes-master: stop-kubernetes-master
 	# Apply CRDs because the tests require them.
 	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
-		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd; \
-		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
+		apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
+		do echo "Waiting for Calico CRDs to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
 	-docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		create namespace test
 
-## Stop the local kubernetes master
-stop-kubernetes-master:
+## Stop the local kubernetes control plane.
+stop-kubernetes-control-plane:
 	# Delete the cluster role binding.
 	-docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl delete clusterrolebinding anonymous-admin
 
-	# Stop master components.
+	# Stop control plane components.
 	-docker rm -f st-apiserver-${KUBE_APISERVER_PORT} st-controller-manager-${KUBE_APISERVER_PORT}
 
 ###############################################################################

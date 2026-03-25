@@ -49,7 +49,7 @@ func IterUnion[T comparable](sets []Set[T], f func(item T) bool) {
 			for item := range s1.All() {
 				// To check if we've seen this item before, look for it in
 				// the sets we've already scanned.
-				for j := 0; j < i; j++ {
+				for j := range i {
 					if sets[j].Contains(item) {
 						continue itemsLoop
 					}

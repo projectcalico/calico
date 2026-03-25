@@ -58,6 +58,8 @@ var (
 	// kernel 4.18.0 (v4Dot18Dot0_330) is the first one with this behavior.
 	v5Dot14Dot0     = MustParseVersion("5.14.0")
 	v4Dot18Dot0_330 = MustParseVersion("4.18.0-330")
+	// v6Dot16Dot0 contains the fix for UDP GSO FRAGLIST corruption in skb_segment().
+	v6Dot16Dot0 = MustParseVersion("6.16.0")
 )
 
 type FeatureDetector struct {
@@ -137,6 +139,8 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		IPIPDeviceIsL3:           d.ipipDeviceIsL3(),
 		KernelSideRouteFiltering: netlinkSupportsStrict,
 		NFLogSize:                kerV.Compare(v4Dot8Dot0) >= 0,
+		KernelHasUDPGSOFix:       kerV.Compare(v6Dot16Dot0) >= 0,
+		NFTablesSupported:        true,
 	}
 
 	for k, v := range d.featureOverride {
@@ -315,7 +319,7 @@ func (d *FeatureDetector) netlinkSupportsStrict() (bool, error) {
 
 func countRulesInIptableOutput(in []byte) int {
 	count := 0
-	for _, x := range bytes.Split(in, []byte("\n")) {
+	for x := range bytes.SplitSeq(in, []byte("\n")) {
 		if len(x) >= 1 && x[0] == '-' {
 			count++
 		}

@@ -1,0 +1,23 @@
+- name: webhooks
+  run:
+    when: "${CHANGE_IN(webhooks,api,apiserver)}"
+  dependencies:
+    - Prerequisites
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "webhooks"
+    prologue:
+      commands:
+        - cd webhooks
+    jobs:
+      - name: "webhooks: CI"
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+    epilogue:
+      always:
+        commands:
+          - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'

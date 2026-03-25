@@ -26,20 +26,20 @@ import (
 func printUsageAndExit() {
 	_, _ = fmt.Fprint(os.Stderr, `CI Dependency helper tool.
 
-Usage: 
+Usage:
 
   deps [options] modules <package>          # Print go modules that package depends on
   deps [options] local-dirs <package>       # Print in-repo go package dirs that
                                   # package depends on.
-  deps local-dirs-main-only <package> # Print in-repo go package dirs that 
-                                  # package depends on. (Main packages only.)
   deps [options] local-dirs-main-only <package> # Print in-repo go package dirs that
                                   # package depends on. (Main packages only.)
+  deps [options] combined <package>         # Print modules then local dirs (prefixed
+                                  # with "local:") for deps.txt generation.
   deps [options] test-exclusions <package>  # Print glob patterns to match *_test.go
-                                  # files in dependency dirs outside the 
+                                  # files in dependency dirs outside the
                                   # package itself.
   deps [options] sem-change-in(-pretty) <package>[,<secondary package>...] # Print a SemaphoreCI
-                                  # conditions DSL change_in() clause for 
+                                  # conditions DSL change_in() clause for
                                   # <package>, including non-test deps from
                                   # any <secondary package> clauses.
 
@@ -54,7 +54,7 @@ The test-exclusions and sem-change-in sub-commands are intended to be used with
 packages at the top-level of the repo.  Test exclusions are based on whether
 a dependency is within the package.
 
-The change_in() clause always depends on the whole package directory itself. 
+The change_in() clause always depends on the whole package directory itself.
 Some non-Go dependencies are hard-coded in the tool.  For example, it knows
 that node depends on felix/bpf-*.
 `)
@@ -105,6 +105,8 @@ func main() {
 		printLocalDirs(pkg, false)
 	case "local-dirs-main-only":
 		printLocalDirs(pkg, true)
+	case "combined":
+		printCombined(pkg)
 	case "test-exclusions":
 		printTestExclusions(pkg)
 	case "sem-change-in":
@@ -132,6 +134,16 @@ var nonGoDeps = map[string][]string{
 		// BPF programs.
 		"/felix/bpf-apache",
 		"/felix/bpf-gpl",
+		// Root-level Makefile is used to build operator and other images,
+		// used by the STs.
+		"/Makefile",
+		// Kind cluster test infrastructure (scripts, helm values, configs).
+		"/hack/test/kind",
+	},
+
+	"e2e": {
+		// Root-level Makefile is used to build the operator and other images.
+		"/Makefile",
 	},
 
 	// Whisker is not a go project so we list the whole thing.
@@ -260,8 +272,8 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	// also run typha, api server, etc.  Add inclusions for those.
 	for _, otherPkg := range otherPkgs {
 		const nonGoPrefix = "non-go:"
-		if strings.HasPrefix(otherPkg, nonGoPrefix) {
-			inclusions.Add(strings.TrimPrefix(otherPkg, nonGoPrefix))
+		if after, ok := strings.CutPrefix(otherPkg, nonGoPrefix); ok {
+			inclusions.Add(after)
 			continue
 		}
 
@@ -359,6 +371,23 @@ func printLocalDirs(pkg string, mainsOnly bool) {
 	}
 }
 
+func printCombined(pkg string) {
+	printModules(pkg)
+	localDirs, err := loadLocalDirs(pkg, true)
+	if err != nil {
+		logrus.Fatalln("Failed to load local dirs:", err)
+		os.Exit(1)
+	}
+	if len(localDirs) > 0 {
+		fmt.Println()
+		for _, dir := range localDirs {
+			// Strip leading "/" and prefix with "local:" so the Makefile
+			// can grep these out easily.
+			_, _ = fmt.Println("local:" + strings.TrimPrefix(dir, "/"))
+		}
+	}
+}
+
 func printTestExclusions(pkg string) {
 	localDirs, err := loadLocalDirs(pkg, false)
 	if err != nil {
@@ -426,6 +455,9 @@ func printModules(pkg string) {
 	// For ease, do the full cross product. Only takes ~100ms.
 	var mods []string
 	for _, mod := range modules {
+		if mod.Replace != nil {
+			mod = *mod.Replace
+		}
 		for _, pkg := range packageDeps {
 			if strings.HasPrefix(pkg, mod.Path) {
 				if mod.Version != "" {
@@ -502,6 +534,7 @@ func findMainPackages(pkg string) ([]string, error) {
 type module struct {
 	Path    string
 	Version string
+	Replace *module
 }
 
 func loadGoMods() ([]module, error) {
@@ -674,16 +707,16 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 func indentBlocks(blocks []templateData) []templateData {
 	for i, block := range blocks {
 		lines := strings.Split(block.content, "\n")
-		indented := ""
+		var indented strings.Builder
 		for _, line := range lines {
 			if line == "" {
 				// Ignore blank lines (and in particular, the empty "line" that
 				// Split() creates if the content ends with a newline.
 				continue
 			}
-			indented += "  " + line + "\n"
+			indented.WriteString("  " + line + "\n")
 		}
-		blocks[i].content = indented
+		blocks[i].content = indented.String()
 	}
 	return blocks
 }

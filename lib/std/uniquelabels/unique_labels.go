@@ -15,10 +15,12 @@
 package uniquelabels
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"iter"
 	"maps"
+	"slices"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
@@ -48,25 +50,53 @@ type Map struct {
 	m handleMap
 }
 
+// EquivalentTo reports whether this Map contains exactly the same entries as
+// the given map[string]string. Iterates the Map's handles, converting back to
+// strings via pointer dereference rather than iterating the input map (which
+// would require uniquestr.Make per key lookup).
+func (i Map) EquivalentTo(m map[string]string) bool {
+	if i.IsNil() != (m == nil) {
+		return false
+	}
+	if len(m) != i.Len() {
+		return false
+	}
+	for k, v := range i.AllStrings() {
+		if mv, ok := m[k]; !ok || mv != v {
+			return false
+		}
+	}
+	return true
+}
+
 // Make makes an interned copy of the given map.  In order to benefit from
 // interning the map, the original map must be discarded and only the interned
 // copy should be kept.
 //
 // If passed nil, returns the zero value of Map.  If passed an empty map,
 // returns the singleton Empty.
+//
+// Make caches recently-returned Maps so that repeated calls with the same input
+// return the same Map, avoiding redundant handleMap allocations.
 func Make(m map[string]string) Map {
-	var hm handleMap
 	if m == nil {
 		return Nil
 	}
 	if len(m) == 0 {
 		return Empty
 	}
-	hm = make(handleMap, len(m))
-	for k, v := range m {
-		hm[uniquestr.Make(k)] = uniquestr.Make(v)
+
+	if cached, hash, ok := recentCache.Lookup(m); ok {
+		return cached
+	} else {
+		hm := make(handleMap, len(m))
+		for k, v := range m {
+			hm[uniquestr.Make(k)] = uniquestr.Make(v)
+		}
+		result := Map{m: hm}
+		recentCache.Store(hash, result)
+		return result
 	}
-	return Map{m: hm}
 }
 
 // Equals returns true if the map contains the same key/value pairs as the
@@ -77,8 +107,40 @@ func (i Map) Equals(other Map) bool {
 
 // MarshalJSON implements the json.Marshaler interface. Must be defined on the
 // value receiver so that Map can be embedded in other structs.
+//
+// Writes JSON directly with sorted keys, avoiding encoding/json reflection
+// on the handleMap (Go 1.26's encoding/json panics on unique.Handle map keys).
 func (i Map) MarshalJSON() ([]byte, error) {
-	return json.Marshal(i.m)
+	if i.m == nil {
+		return []byte("null"), nil
+	}
+	n := len(i.m)
+	if n == 0 {
+		return []byte("{}"), nil
+	}
+	// Stack-allocate space for up to 20 key-value pairs, which covers
+	// the vast majority of Kubernetes label maps.  Maps with more entries
+	// transparently spill to the heap via append.
+	var pairsArr [20]keyVal
+	pairs := pairsArr[:0]
+	for k, v := range i.m {
+		pairs = append(pairs, keyVal{key: k.Value(), val: v.Value()})
+	}
+	slices.SortFunc(pairs, func(a, b keyVal) int {
+		return cmp.Compare(a.key, b.key)
+	})
+	buf := make([]byte, 0, n*40)
+	buf = append(buf, '{')
+	for j, p := range pairs {
+		if j > 0 {
+			buf = append(buf, ',')
+		}
+		buf = appendJSONString(buf, p.key)
+		buf = append(buf, ':')
+		buf = appendJSONString(buf, p.val)
+	}
+	buf = append(buf, '}')
+	return buf, nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.  Must be defined on
@@ -210,6 +272,41 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 }
 
 func noOpFilter(uniquestr.Handle, uniquestr.Handle) bool {
+	return true
+}
+
+// keyVal is a string key-value pair used for JSON marshalling.
+type keyVal struct{ key, val string }
+
+// appendJSONString appends a JSON-encoded string (with quotes) to buf.
+// All printable ASCII except '"', '\\', '&', '<', and '>' is safe to embed
+// directly in a JSON string.  Falls back to json.Marshal for anything else.
+func appendJSONString(buf []byte, s string) []byte {
+	if jsonSafe(s) {
+		buf = append(buf, '"')
+		buf = append(buf, s...)
+		buf = append(buf, '"')
+		return buf
+	}
+	// Slow path: delegate to encoding/json for correct escaping.
+	quoted, err := json.Marshal(s)
+	if err != nil {
+		panic("appendJSONString: json.Marshal failed: " + err.Error())
+	}
+	return append(buf, quoted...)
+}
+
+// jsonSafe reports whether s contains only bytes that are safe to embed
+// in a JSON string without escaping: printable ASCII (0x20..0x7E)
+// excluding '"', '\\', and HTML-sensitive characters '&', '<', '>'
+// (which json.Marshal escapes by default).
+func jsonSafe(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c > 0x7E || c == '"' || c == '\\' || c == '&' || c == '<' || c == '>' {
+			return false
+		}
+	}
 	return true
 }
 

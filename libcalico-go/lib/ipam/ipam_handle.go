@@ -17,6 +17,7 @@ package ipam
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -62,4 +63,26 @@ func (h allocationHandle) decrementBlock(blockCidr cnet.IPNet, num int) (*int, e
 
 func (h allocationHandle) empty() bool {
 	return len(h.Block) == 0
+}
+
+// totalCount returns the total number of IP allocations across all blocks for this handle.
+func (h allocationHandle) totalCount() int {
+	total := 0
+	for _, count := range h.Block {
+		total += count
+	}
+	return total
+}
+
+// totalCountByVersion returns the total number of IP allocations for a specific IP version.
+// version should be 4 for IPv4 or 6 for IPv6.
+func (h allocationHandle) totalCountByVersion(version int) int {
+	total := 0
+	for blockCIDR, count := range h.Block {
+		isIPv6 := strings.Contains(blockCIDR, ":")
+		if (version == 4 && !isIPv6) || (version == 6 && isIPv6) {
+			total += count
+		}
+	}
+	return total
 }

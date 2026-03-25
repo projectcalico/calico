@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -382,6 +382,20 @@ var policy1_order20 = model.Policy{
 	Types: []string{"ingress", "egress"},
 }
 
+// A variation of policy1_order20 but in tier-2 instead of default tier.
+var policy1_tier2_order20 = model.Policy{
+	Tier:     "tier-2",
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []model.Rule{
+		{SrcSelector: allSelector},
+	},
+	OutboundRules: []model.Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"ingress", "egress"},
+}
+
 var policy1_order20_always = model.Policy{
 	Tier:     "default",
 	Order:    &order20,
@@ -420,7 +434,7 @@ var (
 		InboundRules: []model.Rule{
 			{
 				Protocol: &protoTCP,
-				SrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
+				SrcPorts: []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 			},
 		},
 		OutboundRules: []model.Rule{
@@ -437,7 +451,7 @@ var policy1_order20_with_named_port_tcpport_negated = model.Policy{
 	InboundRules: []model.Rule{
 		{
 			Protocol:    &protoTCP,
-			NotSrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
+			NotSrcPorts: []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
@@ -454,7 +468,7 @@ var policy_with_named_port_inherit = model.Policy{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: "profile == 'prof-1'",
-			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{},
@@ -469,7 +483,7 @@ var policy1_order20_with_selector_and_named_port_tcpport = model.Policy{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: allSelector,
-			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
@@ -487,7 +501,7 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport = model.Policy{
 			Protocol:       &protoTCP,
 			SrcSelector:    allSelector,
 			NotSrcSelector: "foo == 'bar'",
-			NotSrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+			NotSrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress"},
@@ -502,7 +516,7 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = model.Po
 			Protocol:       &protoTCP,
 			DstSelector:    allSelector,
 			NotDstSelector: "foo == 'bar'",
-			NotDstPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+			NotDstPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress"},
@@ -516,7 +530,7 @@ var policy1_order20_with_selector_and_named_port_udpport = model.Policy{
 		{
 			Protocol:    &protoUDP,
 			SrcSelector: allSelector,
-			SrcPorts:    []numorstring.Port{numorstring.NamedPort("udpport")},
+			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "udpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
@@ -532,13 +546,13 @@ var policy1_order20_with_named_port_mismatched_protocol = model.Policy{
 	InboundRules: []model.Rule{
 		{
 			Protocol: &protoTCP,
-			SrcPorts: []numorstring.Port{numorstring.NamedPort("udpport")},
+			SrcPorts: []numorstring.Port{numorstring.Port{PortName: "udpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
 		{
 			Protocol: &protoUDP,
-			SrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
+			SrcPorts: []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress", "egress"},
@@ -555,7 +569,7 @@ var policy1_order20_with_selector_and_named_port_tcpport2 = model.Policy{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: allSelector,
-			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport2")},
+			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport2"}},
 		},
 	},
 	Types: []string{"ingress", "egress"},
@@ -943,10 +957,10 @@ var remoteIPAMBlockWithBorrows = model.AllocationBlock{
 	Unallocated: []int{3, 4, 5, 6, 7},
 	Attributes: []model.AllocationAttribute{
 		{},
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname,
 		}},
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname2,
 		}},
 	},
@@ -968,10 +982,10 @@ var remoteIPAMBlockWithBorrowsSwitched = model.AllocationBlock{
 	Unallocated: []int{3, 4, 5, 6, 7},
 	Attributes: []model.AllocationAttribute{
 		{},
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname2,
 		}},
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname,
 		}},
 	},
@@ -996,12 +1010,12 @@ var localIPAMBlockWithBorrows = model.AllocationBlock{
 		{},
 
 		// 10.0.0.1 - assigned locally.
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: localHostname,
 		}},
 
 		// 10.0.0.2 - assigned to remoteHostname.
-		{AttrSecondary: map[string]string{
+		{ActiveOwnerAttrs: map[string]string{
 			model.IPAMBlockAttributeNode: remoteHostname,
 		}},
 	},

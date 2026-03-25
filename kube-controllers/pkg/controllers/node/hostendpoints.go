@@ -19,6 +19,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"net"
 	"reflect"
 	"regexp"
@@ -34,7 +35,7 @@ import (
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -112,10 +113,10 @@ func NewAutoHEPController(cfg config.NodeControllerConfig, client client.Interfa
 	return &autoHostEndpointController{
 		config:         cfg,
 		client:         client,
-		nodeCache:      make(map[string]*libapi.Node),
+		nodeCache:      make(map[string]*internalapi.Node),
 		nodeUpdates:    make(chan string, utils.BatchUpdateSize),
-		syncerUpdates:  make(chan interface{}, utils.BatchUpdateSize),
-		syncChan:       make(chan interface{}, 1),
+		syncerUpdates:  make(chan any, utils.BatchUpdateSize),
+		syncChan:       make(chan any, 1),
 		autoHEPTracker: hostEndpointTracker{hostEndpointsByNode: make(map[string]map[string]*api.HostEndpoint)},
 	}
 }
@@ -124,10 +125,10 @@ type autoHostEndpointController struct {
 	config         config.NodeControllerConfig
 	client         client.Interface
 	syncStatus     bapi.SyncStatus
-	nodeCache      map[string]*libapi.Node
+	nodeCache      map[string]*internalapi.Node
 	nodeUpdates    chan string
-	syncerUpdates  chan interface{}
-	syncChan       chan interface{}
+	syncerUpdates  chan any
+	syncChan       chan any
 	autoHEPTracker hostEndpointTracker
 }
 
@@ -170,14 +171,13 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case libapi.KindNode, api.KindHostEndpoint:
+		case internalapi.KindNode, api.KindHostEndpoint:
 			c.syncerUpdates <- update.KVPair
 		}
 	}
-
 }
 
-func (c *autoHostEndpointController) handleUpdate(update interface{}) {
+func (c *autoHostEndpointController) handleUpdate(update any) {
 	switch update := update.(type) {
 	case bapi.SyncStatus:
 		c.syncStatus = update
@@ -188,7 +188,7 @@ func (c *autoHostEndpointController) handleUpdate(update interface{}) {
 		}
 	case model.KVPair:
 		switch update.Key.(model.ResourceKey).Kind {
-		case libapi.KindNode:
+		case internalapi.KindNode:
 			c.handleNodeUpdate(update)
 		case api.KindHostEndpoint:
 			c.handleHostEndpointUpdate(update)
@@ -204,7 +204,7 @@ func (c *autoHostEndpointController) handleNodeUpdate(kvp model.KVPair) {
 		// Node deleted, we want to remove all auto HostEndpoints associated with this node
 		delete(c.nodeCache, nodeName)
 	} else {
-		node := kvp.Value.(*libapi.Node)
+		node := kvp.Value.(*internalapi.Node)
 		c.nodeCache[node.Name] = node
 	}
 
@@ -464,7 +464,7 @@ func hashNameIfTooLong(name string) (string, error) {
 
 // mergeExpectedIPsWithInterfaceIPs merges the provided expected IPs with the IP addresses
 // found on the specified interface of the given node.
-func (c *autoHostEndpointController) mergeExpectedIPsWithInterfaceIPs(expectedIPs []string, iface libapi.NodeInterface) []string {
+func (c *autoHostEndpointController) mergeExpectedIPsWithInterfaceIPs(expectedIPs []string, iface internalapi.NodeInterface) []string {
 	for _, addr := range iface.Addresses {
 		if !slices.Contains(expectedIPs, addr) {
 			expectedIPs = append(expectedIPs, addr)
@@ -475,14 +475,14 @@ func (c *autoHostEndpointController) mergeExpectedIPsWithInterfaceIPs(expectedIP
 }
 
 // getExpectedIPsMatchingInterfaceCIDRs finds the matching node IPs to the CIDRs specified in the template
-func (c *autoHostEndpointController) getExpectedIPsMatchingInterfaceCIDRs(node *libapi.Node, template config.AutoHostEndpointTemplate) []string {
+func (c *autoHostEndpointController) getExpectedIPsMatchingInterfaceCIDRs(node *internalapi.Node, template config.AutoHostEndpointTemplate) []string {
 	filteredExpectedIPs := []string{}
 	expectedIPs := c.getExpectedIPs(node)
 
 	for _, ipAddrs := range expectedIPs {
 		ip := net.ParseIP(ipAddrs)
 		for _, interfaceSelectorCIDR := range template.InterfaceCIDRs {
-			_, cidr, err := net.ParseCIDR(interfaceSelectorCIDR)
+			_, cidr, err := net.ParseCIDR(string(interfaceSelectorCIDR))
 			if err != nil {
 				logrus.WithError(err).Errorf("failed to parse interface selector cidr %s", interfaceSelectorCIDR)
 				return nil
@@ -499,7 +499,7 @@ func (c *autoHostEndpointController) getExpectedIPsMatchingInterfaceCIDRs(node *
 }
 
 // getExpectedIPs returns all the known IPs on the node resource
-func (c *autoHostEndpointController) getExpectedIPs(node *libapi.Node) []string {
+func (c *autoHostEndpointController) getExpectedIPs(node *internalapi.Node) []string {
 	expectedIPs := []string{}
 	ipMap := make(map[string]struct{}) // used to avoid adding duplicates to expectedIPs
 	if node.Spec.BGP != nil {
@@ -537,7 +537,7 @@ func (c *autoHostEndpointController) getExpectedIPs(node *libapi.Node) []string 
 	}
 	for _, addr := range node.Spec.Addresses {
 		// Add internal IPs only
-		if addr.Type == libapi.InternalIP {
+		if addr.Type == internalapi.InternalIP {
 			if _, ok := ipMap[addr.Address]; !ok {
 				ipMap[addr.Address] = struct{}{}
 				expectedIPs = append(expectedIPs, addr.Address)
@@ -569,11 +569,9 @@ func (c *autoHostEndpointController) getExpectedIPs(node *libapi.Node) []string 
 }
 
 // generateAutoHostEndpoint returns a HostEndpoint created based on the specific parameters
-func (c *autoHostEndpointController) generateAutoHostEndpoint(node *libapi.Node, templateLabels map[string]string, hepName string, expectedIPs []string, interfaceName string) *api.HostEndpoint {
+func (c *autoHostEndpointController) generateAutoHostEndpoint(node *internalapi.Node, templateLabels map[string]string, hepName string, expectedIPs []string, interfaceName string) *api.HostEndpoint {
 	hepLabels := make(map[string]string)
-	for k, v := range node.Labels {
-		hepLabels[k] = v
-	}
+	maps.Copy(hepLabels, node.Labels)
 	for k, v := range templateLabels {
 		if _, ok := hepLabels[k]; ok {
 			f := logrus.Fields{"key": k, "nodeVal": hepLabels[k], "userVal": v}

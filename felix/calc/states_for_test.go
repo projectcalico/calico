@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,13 +19,18 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // Canned tiers/policies.
@@ -46,7 +51,8 @@ var tier1_order20 = Tier{
 // might prefer to start with a simpler state instead.
 
 // empty is the base state, with nothing in the datastore or dataplane.
-var empty = NewState().withName("<empty>")
+var empty = NewState().withName("<empty>").
+	withIPSet(rules.IPSetIDAllIstioWEPs, []string{})
 
 // initialisedStore builds on empty, adding in the ready flag and global config.
 var initialisedStore = empty.withKVUpdates(
@@ -233,6 +239,93 @@ var localEp1WithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 	routelocalWlV6ColonOne,
 	routelocalWlV6ColonTwo,
 ).withName("ep1 local, policy with non-default tier")
+
+// States for testing a policy that changes tiers via UPDATE. Both tiers exist
+// throughout; only the policy's Tier field changes. This exercises the tier
+// migration path in the policy sorter and active rules calculator.
+
+var tier2_order30 = Tier{
+	Order: &order30,
+}
+
+// withTwoTiersPolicyInTier1 has both tier-1 and tier-2 resources, with the policy in tier-1.
+var withTwoTiersPolicyInTier1 = initialisedStore.withKVUpdates(
+	KVPair{Key: TierKey{Name: "tier-1"}, Value: &tier1_order20},
+	KVPair{Key: TierKey{Name: "tier-2"}, Value: &tier2_order30},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_tier1_order20},
+).withName("two tiers, policy in tier-1")
+
+// localEp1WithTwoTiersPolicyInTier1 has the endpoint matching pol-1 which is in tier-1.
+var localEp1WithTwoTiersPolicyInTier1 = withTwoTiersPolicyInTier1.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+}).withActivePolicies(
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+).withActiveProfiles(
+	types.ProfileID{Name: "prof-1"},
+	types.ProfileID{Name: "prof-2"},
+	types.ProfileID{Name: "prof-missing"},
+).withEndpoint(
+	localWlEp1Id,
+	[]mock.TierInfo{
+		{
+			Name:            "tier-1",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
+	},
+).withRoutes(
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlV6ColonOne,
+	routelocalWlV6ColonTwo,
+).withName("ep1 local, two tiers, policy in tier-1")
+
+// localEp1WithTwoTiersPolicyInTier2 is the same setup but with the policy moved to tier-2.
+// The only datastore change from the above is the policy's Tier field.
+var localEp1WithTwoTiersPolicyInTier2 = withTwoTiersPolicyInTier1.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+	KVPair{Key: PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}, Value: &policy1_tier2_order20},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1/32",
+	"fc00:fe11::1/128",
+	"10.0.0.2/32",
+	"fc00:fe11::2/128",
+}).withActivePolicies(
+	types.PolicyID{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy},
+).withActiveProfiles(
+	types.ProfileID{Name: "prof-1"},
+	types.ProfileID{Name: "prof-2"},
+	types.ProfileID{Name: "prof-missing"},
+).withEndpoint(
+	localWlEp1Id,
+	[]mock.TierInfo{
+		{
+			Name:            "tier-2",
+			IngressPolicies: []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+			EgressPolicies:  []types.PolicyID{{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}},
+		},
+	},
+).withRoutes(
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlV6ColonOne,
+	routelocalWlV6ColonTwo,
+).withName("ep1 local, two tiers, policy in tier-2")
 
 // localEp2WithPolicyAndTier adds a different endpoint that doesn't match b=="b".
 // This tests an empty IP set.
@@ -1631,8 +1724,8 @@ var vxlanWithBlockRoutes = []types.RouteUpdate{
 }
 
 var (
-	remoteNodeResKey = ResourceKey{Name: remoteHostname, Kind: apiv3.KindNode}
-	localNodeResKey  = ResourceKey{Name: localHostname, Kind: apiv3.KindNode}
+	remoteNodeResKey = ResourceKey{Name: remoteHostname, Kind: internalapi.KindNode}
+	localNodeResKey  = ResourceKey{Name: localHostname, Kind: internalapi.KindNode}
 )
 
 // As vxlanWithBlock but with a host sharing the same IP.  No route update because we tie-break on host name.
@@ -1666,11 +1759,11 @@ var vxlanWithDupNodeIPRemoved = vxlanWithBlockDupNodeIP.withKVUpdates(
 // As vxlanWithBlock but with node resources instead of host IPs.
 var vxlanWithBlockNodeRes = vxlanWithBlock.withKVUpdates(
 	KVPair{Key: remoteHostIPKey, Value: nil},
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: localHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address: remoteHostIP.String() + "/24",
 		}},
 	}},
@@ -1949,19 +2042,19 @@ var vxlanLocalBlockWithBorrowsLocalWEP = vxlanLocalBlockWithBorrows.withKVUpdate
 var vxlanLocalBlockWithBorrowsNodeRes = vxlanLocalBlockWithBorrows.withKVUpdates(
 	KVPair{Key: localHostIPKey, Value: nil},
 	KVPair{Key: remoteHostIPKey, Value: nil},
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address: remoteHostIPWithPrefix,
 		}},
 	}},
-	KVPair{Key: localNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: localNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: localHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address: localHostIPWithPrefix,
 		}},
 	}},
@@ -2015,19 +2108,19 @@ var vxlanLocalBlockWithBorrowsCrossSubnetNodeRes = vxlanLocalBlockWithBorrowsNod
 // As vxlanLocalBlockWithBorrowsCrossSubnetNodeRes but hosts are in a different pool.
 var vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes = vxlanLocalBlockWithBorrowsNodeRes.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLANCrossSubnet},
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address: remoteHostIP.String(), // Omitting the /32 here to check the v3 validator is used for this resource.
 		}},
 	}},
-	KVPair{Key: localNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: localNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: localHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address: localHostIP.String() + "/32",
 		}},
 	}},
@@ -2233,11 +2326,11 @@ var vxlanSlash32NoPool = empty.withKVUpdates(
 var vxlanV6WithBlock = empty.withKVUpdates(
 	KVPair{Key: v6IPPoolKey, Value: &v6IPPoolWithVXLAN},
 	KVPair{Key: remotev6IPAMBlockKey, Value: &remotev6IPAMBlock},
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv6Address: remoteHostIPv6.String() + "/96",
 		}},
 	}},
@@ -2290,11 +2383,11 @@ var vxlanV6BlockDelete = vxlanV6WithBlock.withKVUpdates(
 )
 
 var vxlanV6NodeResIPDelete = vxlanV6WithBlock.withKVUpdates(
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{}},
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{}},
 	}},
 ).withHostMetadataV4V6().withName("VXLAN IPv6 Node Resource IP removed").withRoutes(
 	routeUpdateV6IPPoolVXLAN,
@@ -2308,11 +2401,11 @@ var vxlanV6NodeResIPDelete = vxlanV6WithBlock.withKVUpdates(
 ).withVTEPs()
 
 var vxlanV6NodeResBGPDelete = vxlanV6WithBlock.withKVUpdates(
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: nil},
+		Spec: internalapi.NodeSpec{BGP: nil},
 	}},
 ).withHostMetadataV4V6(
 	&proto.HostMetadataV4V6Update{
@@ -2366,11 +2459,11 @@ var vxlanV4V6WithBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlock},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address: remoteHostIP.String() + "/24",
 			IPv6Address: remoteHostIPv6.String() + "/96",
 		}},
@@ -2436,11 +2529,11 @@ var vxlanV4V6BlockV4Delete = vxlanV4V6WithBlock.withKVUpdates(
 )
 
 var vxlanV4V6NodeResIPv4Delete = vxlanV4V6WithBlock.withKVUpdates(
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv6Address: remoteHostIPv6.String() + "/96",
 		}},
 	}},
@@ -2472,11 +2565,11 @@ var vxlanV4V6NodeResIPv4Delete = vxlanV4V6WithBlock.withKVUpdates(
 )
 
 var vxlanV4V6NodeResIPv6Delete = vxlanV4V6WithBlock.withKVUpdates(
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address: remoteHostIP.String() + "/24",
 		}},
 	}},
@@ -2506,11 +2599,11 @@ var vxlanV4V6NodeResIPv6Delete = vxlanV4V6WithBlock.withKVUpdates(
 )
 
 var vxlanV4V6NodeResBGPDelete = vxlanV4V6WithBlock.withKVUpdates(
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{BGP: nil},
+		Spec: internalapi.NodeSpec{BGP: nil},
 	}},
 ).withHostMetadataV4V6(
 	&proto.HostMetadataV4V6Update{
@@ -2664,15 +2757,15 @@ var hostInIPPool = vxlanWithBlock.withKVUpdates(
 
 // we start from vxlan setup as the test framework expects vxlan enabled
 var nodesWithMoreIPs = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{
-			BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: remoteHostIPWithPrefix,
 			},
-			Addresses: []apiv3.NodeAddress{
+			Addresses: []internalapi.NodeAddress{
 				{
 					Address: remoteHostIPWithPrefix,
 				},
@@ -2682,15 +2775,15 @@ var nodesWithMoreIPs = vxlanWithBlock.withKVUpdates(
 			},
 		},
 	}},
-	KVPair{Key: localNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: localNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: localHostname,
 		},
-		Spec: apiv3.NodeSpec{
-			BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: localHostIPWithPrefix,
 			},
-			Addresses: []apiv3.NodeAddress{
+			Addresses: []internalapi.NodeAddress{
 				{
 					Address: localHostIPWithPrefix,
 				},
@@ -2735,15 +2828,15 @@ var nodesWithMoreIPsRoutes = append(vxlanWithBlockRoutes[0:len(vxlanWithBlockRou
 
 var nodesWithMoreIPsAndDuplicates = nodesWithMoreIPs.withKVUpdates(
 	KVPair{
-		Key: remoteNodeResKey, Value: &apiv3.Node{
+		Key: remoteNodeResKey, Value: &internalapi.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: remoteHostname,
 			},
-			Spec: apiv3.NodeSpec{
-				BGP: &apiv3.NodeBGPSpec{
+			Spec: internalapi.NodeSpec{
+				BGP: &internalapi.NodeBGPSpec{
 					IPv4Address: remoteHostIPWithPrefix,
 				},
-				Addresses: []apiv3.NodeAddress{
+				Addresses: []internalapi.NodeAddress{
 					{
 						Address: "1.2.3.4",
 					},
@@ -2775,15 +2868,15 @@ var nodesWithMoreIPsAndDuplicates = nodesWithMoreIPs.withKVUpdates(
 ).withName("routes for nodes with more IPs and duplicates")
 
 var nodesWithDifferentAddressTypes = nodesWithMoreIPs.withKVUpdates(
-	KVPair{Key: localNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: localNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: localHostname,
 		},
-		Spec: apiv3.NodeSpec{
-			BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: localHostIPWithPrefix,
 			},
-			Addresses: []apiv3.NodeAddress{
+			Addresses: []internalapi.NodeAddress{
 				{
 					Address: localHostIPWithPrefix,
 				},
@@ -2827,30 +2920,30 @@ var nodesWithMoreIPsRoutesDeletedExtras = append(vxlanWithBlockRoutes[0:len(vxla
 )
 
 var nodesWithMoreIPsDeleted = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
 		},
-		Spec: apiv3.NodeSpec{
-			BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: remoteHostIPWithPrefix,
 			},
-			Addresses: []apiv3.NodeAddress{
+			Addresses: []internalapi.NodeAddress{
 				{
 					Address: remoteHostIPWithPrefix,
 				},
 			},
 		},
 	}},
-	KVPair{Key: localNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: localNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: localHostname,
 		},
-		Spec: apiv3.NodeSpec{
-			BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: localHostIPWithPrefix,
 			},
-			Addresses: []apiv3.NodeAddress{
+			Addresses: []internalapi.NodeAddress{
 				{
 					Address: localHostIPWithPrefix,
 				},
@@ -3014,19 +3107,19 @@ var wireguardV4 = empty.withKVUpdates(
 			PublicKey:         wgPublicKey1.String(),
 		},
 	},
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: localHostname,
 		},
-		Spec: apiv3.NodeSpec{
-			BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: remoteHostIP.String() + "/24",
 			},
-			Wireguard: &apiv3.NodeWireguardSpec{
+			Wireguard: &internalapi.NodeWireguardSpec{
 				InterfaceIPv4Address: remoteHost2IP.String(),
 			},
 		},
-		Status: apiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKey: wgPublicKey1.String(),
 		},
 	}},
@@ -3066,19 +3159,19 @@ var wireguardV6 = empty.withKVUpdates(
 			PublicKeyV6:       wgPublicKey2.String(),
 		},
 	},
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: localHostname,
 		},
-		Spec: apiv3.NodeSpec{
-			BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv6Address: remoteHostIPv6.String() + "/96",
 			},
-			Wireguard: &apiv3.NodeWireguardSpec{
+			Wireguard: &internalapi.NodeWireguardSpec{
 				InterfaceIPv6Address: remoteHost2IPv6.String(),
 			},
 		},
-		Status: apiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKeyV6: wgPublicKey2.String(),
 		},
 	}},
@@ -3121,21 +3214,21 @@ var wireguardV4V6 = empty.withKVUpdates(
 			PublicKeyV6:       wgPublicKey2.String(),
 		},
 	},
-	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: localHostname,
 		},
-		Spec: apiv3.NodeSpec{
-			BGP: &apiv3.NodeBGPSpec{
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{
 				IPv4Address: remoteHostIP.String() + "/24",
 				IPv6Address: remoteHostIPv6.String() + "/96",
 			},
-			Wireguard: &apiv3.NodeWireguardSpec{
+			Wireguard: &internalapi.NodeWireguardSpec{
 				InterfaceIPv4Address: remoteHost2IP.String(),
 				InterfaceIPv6Address: remoteHost2IPv6.String(),
 			},
 		},
-		Status: apiv3.NodeStatus{
+		Status: internalapi.NodeStatus{
 			WireguardPublicKey:   wgPublicKey1.String(),
 			WireguardPublicKeyV6: wgPublicKey2.String(),
 		},
@@ -3185,6 +3278,262 @@ var wireguardV4V6 = empty.withKVUpdates(
 	}...,
 )
 
+// Live migration states.  These test that LiveMigration resources correctly set the
+// live_migration_role field on proto.WorkloadEndpoint.
+
+var (
+	// LiveMigration resource keys.
+	liveMigrationKey1 = ResourceKey{
+		Kind:      internalapi.KindLiveMigration,
+		Name:      "lm-1",
+		Namespace: "default",
+	}
+
+	// A selector that matches localWlEp1's labels (has label "a").
+	liveMigrationTargetSelector = "has(a)"
+)
+
+// Case 1: Local WEP is a live migration source.
+var localEp1WithPolicyLMSource = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: liveMigrationKey1, Value: &internalapi.LiveMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      liveMigrationKey1.Name,
+			Namespace: liveMigrationKey1.Namespace,
+		},
+		Spec: internalapi.LiveMigrationSpec{
+			Source: &internalapi.LiveMigrationSource{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       localHostname,
+					OrchestratorID: "orch",
+					WorkloadID:     "wl1",
+					EndpointID:     "ep1",
+				},
+			},
+			Target: &internalapi.LiveMigrationTarget{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       "remote-host",
+					OrchestratorID: "orch",
+					WorkloadID:     "remote-wep",
+					EndpointID:     "ep1",
+				},
+			},
+		},
+	}},
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_SOURCE,
+).withName("ep1 local, policy, LM source")
+
+// Case 2: Local WEP is a live migration target (by direct name).
+var localEp1WithPolicyLMTargetByName = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: liveMigrationKey1, Value: &internalapi.LiveMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      liveMigrationKey1.Name,
+			Namespace: liveMigrationKey1.Namespace,
+		},
+		Spec: internalapi.LiveMigrationSpec{
+			Source: &internalapi.LiveMigrationSource{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       "remote-host",
+					OrchestratorID: "orch",
+					WorkloadID:     "remote-wep",
+					EndpointID:     "ep1",
+				},
+			},
+			Target: &internalapi.LiveMigrationTarget{
+				WorkloadEndpoint: &internalapi.WorkloadEndpointIdentifier{
+					Hostname:       localHostname,
+					OrchestratorID: "orch",
+					WorkloadID:     "wl1",
+					EndpointID:     "ep1",
+				},
+			},
+		},
+	}},
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_TARGET,
+).withName("ep1 local, policy, LM target by name")
+
+// Case 2b: Local WEP is a live migration source (workload-level, matches all endpoints).
+// This is the pattern used by KubeVirt, where a single LiveMigration covers all interfaces
+// of the migrating VM, and the target is identified by a selector.  The target selector
+// must not match the source WEP (in real KubeVirt usage, target pods have migration-specific
+// labels that the source pod does not have).
+var localEp1WithPolicyLMSourceWorkloadLevel = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: liveMigrationKey1, Value: &internalapi.LiveMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      liveMigrationKey1.Name,
+			Namespace: liveMigrationKey1.Namespace,
+		},
+		Spec: internalapi.LiveMigrationSpec{
+			Source: &internalapi.LiveMigrationSource{
+				Workload: &internalapi.WorkloadIdentifier{
+					Hostname:       localHostname,
+					OrchestratorID: "orch",
+					WorkloadID:     "wl1",
+				},
+			},
+			Target: &internalapi.LiveMigrationTarget{
+				Selector: stringPtr("has(migration-target)"),
+			},
+		},
+	}},
+).withLiveMigrationRole(
+	localWlEp1Id, proto.LiveMigrationRole_SOURCE,
+).withName("ep1 local, policy, LM source (workload-level)")
+
+// Test states for Istio functionality
+// Base state with Istio enabled but no endpoints
+var istioBaseState = initialisedStore.withIPSet("all-istio-weps", []string{}).withName("istio base state")
+
+// State with Istio ambient namespace and pod
+// Note: all-istio-weps IPSet should contain WEPs from ambient namespaces
+var istioWithAmbientPod = istioBaseState.withKVUpdates(
+	KVPair{Key: ResourceKey{Name: "istio-ambient", Kind: v3.KindProfile}, Value: namespaceToProfile(&istioNamespaceAmbient)},
+	KVPair{Key: istioWepAmbientKey, Value: &istioWepAmbient},
+).withEndpoint(
+	"orch/istio-wep-ambient/ep1",
+	[]mock.TierInfo{},
+).withActiveProfiles(
+	types.ProfileID{Name: "istio-ambient"},
+).withRoutes(
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.1.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::1/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+).withIPSet("all-istio-weps", []string{
+	"10.10.1.1/32",
+	"fc00:fe10::1/128",
+}).withName("istio with ambient pod")
+
+// State with multiple pods - mixed scenarios
+// Note: all-istio-weps IPSet should contain only ambient and direct-ambient WEPs
+var istioWithMixedPods = istioBaseState.withKVUpdates(
+	KVPair{Key: ResourceKey{Name: "istio-ambient", Kind: v3.KindProfile}, Value: namespaceToProfile(&istioNamespaceAmbient)},
+	KVPair{Key: ResourceKey{Name: "istio-none", Kind: v3.KindProfile}, Value: namespaceToProfile(&istioNamespaceNone)},
+	KVPair{Key: ResourceKey{Name: "regular", Kind: v3.KindProfile}, Value: namespaceToProfile(&regularNamespace)},
+	KVPair{Key: istioWepAmbientKey, Value: &istioWepAmbient},
+	KVPair{Key: istioWepNoneKey, Value: &istioWepNone},
+	KVPair{Key: regularWepKey, Value: &regularWep},
+	KVPair{Key: istioWepDirectAmbientKey, Value: &istioWepDirectAmbient},
+).withEndpoint(
+	"orch/istio-wep-ambient/ep1",
+	[]mock.TierInfo{},
+).withEndpoint(
+	"orch/istio-wep-none/ep1",
+	[]mock.TierInfo{},
+).withEndpoint(
+	"orch/regular-wep/ep1",
+	[]mock.TierInfo{},
+).withEndpoint(
+	"orch/istio-wep-direct-ambient/ep1",
+	[]mock.TierInfo{},
+).withActiveProfiles(
+	types.ProfileID{Name: "istio-ambient"},
+	types.ProfileID{Name: "istio-none"},
+	types.ProfileID{Name: "regular"},
+).withRoutes(
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.1.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::1/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.3.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::3/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.4.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::4/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.5.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::5/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+).withIPSet("all-istio-weps", []string{
+	"10.10.1.1/32",     // ambient namespace WEP
+	"fc00:fe10::1/128", // ambient namespace WEP
+	"10.10.5.1/32",     // direct ambient label WEP
+	"fc00:fe10::5/128", // direct ambient label WEP
+}).withName("istio with mixed pods")
+
+// Edge case: Pod in ambient namespace but with explicit istio.io/dataplane-mode=none label
+// Original selector: Should be EXCLUDED (namespace ambient but pod has explicit none)
+// Your selector: Should be EXCLUDED (pod doesn't have ambient label)
+// This test should FAIL with your change because the pod should NOT be in the IPSet
+var istioSelectorEdgeCases = istioBaseState.withKVUpdates(
+	KVPair{Key: ResourceKey{Name: "istio-ambient", Kind: v3.KindProfile}, Value: namespaceToProfile(&istioNamespaceAmbient)},
+	KVPair{Key: WorkloadEndpointKey{
+		Hostname:       localHostname,
+		OrchestratorID: "orch",
+		WorkloadID:     "ambient-ns-but-pod-none",
+		EndpointID:     "ep1",
+	}, Value: &WorkloadEndpoint{
+		State: "active",
+		Name:  "ambient-ns-but-pod-none",
+		IPv4Nets: []calinet.IPNet{
+			mustParseNet("10.10.9.1/32"),
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"projectcalico.org/namespace": "istio-ambient",
+			v3.LabelIstioDataplaneMode:    v3.LabelIstioDataplaneModeNone, // Explicit none on pod
+		}),
+		ProfileIDs: []string{"istio-ambient"},
+	}},
+).withEndpoint(
+	"orch/ambient-ns-but-pod-none/ep1",
+	[]mock.TierInfo{},
+).withActiveProfiles(
+	types.ProfileID{Name: "istio-ambient"},
+).withRoutes(
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.9.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+).withIPSet("all-istio-weps", []string{
+	// Should be EMPTY - this pod should be excluded by both selectors
+}).withName("istio selector edge cases")
+
 type StateList []State
 
 func (l StateList) String() string {
@@ -3195,12 +3544,12 @@ func (l StateList) String() string {
 	return "[" + strings.Join(names, ", ") + "]"
 }
 
-// UsesNodeResources returns true if any of the KVs in this state are apiv3.Node resources.
+// UsesNodeResources returns true if any of the KVs in this state are internalapi.Node resources.
 // Some calculation graph nodes support either the v3 Node or the old model.HostIP object.
 func (l StateList) UsesNodeResources() bool {
 	for _, s := range l {
 		for _, kv := range s.DatastoreState {
-			if resourceKey, ok := kv.Key.(ResourceKey); ok && resourceKey.Kind == apiv3.KindNode {
+			if resourceKey, ok := kv.Key.(ResourceKey); ok && resourceKey.Kind == internalapi.KindNode {
 				return true
 			}
 		}
@@ -3235,7 +3584,7 @@ func reverseStateOrder(baseTest StateList) (desc string, mappedTests []StateList
 	desc = "with order of states reversed"
 	palindrome := true
 	mappedTest := StateList{}
-	for ii := 0; ii < len(baseTest); ii++ {
+	for ii := range baseTest {
 		mappedTest = append(mappedTest, baseTest[len(baseTest)-ii-1])
 		if &baseTest[len(baseTest)-1-ii] != &baseTest[ii] {
 			palindrome = false
@@ -3319,4 +3668,21 @@ func squashStates(baseTests StateList) (desc string, mappedTests []StateList) {
 	mappedTest = append(mappedTest, mappedState)
 	mappedTests = []StateList{mappedTest}
 	return
+}
+
+func namespaceToProfile(ns *kapiv1.Namespace) *v3.Profile {
+	c := conversion.NewConverter()
+	kv, err := c.NamespaceToProfile(ns)
+	if err != nil {
+		panic(err)
+	}
+	profile, ok := kv.Value.(*v3.Profile)
+	if !ok {
+		panic(fmt.Errorf("Failed to convert namespace to profile.\nns: %v", ns))
+	}
+	return profile
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

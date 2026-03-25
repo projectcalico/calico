@@ -333,7 +333,7 @@ func (s *IPSets) ApplyUpdates(listener ipsets.UpdateListener) {
 		retryDelay *= 2
 	}
 
-	for attempt := 0; attempt < 10; attempt++ {
+	for attempt := range 10 {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an nftables set update failure...")
 		}

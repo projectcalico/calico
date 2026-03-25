@@ -30,7 +30,7 @@ func ReachDestination(dest string, version int) (*net.IPNet, error) {
 	// Open a UDP connection to determine which external IP address is
 	// used to access the supplied destination.
 	protocol := fmt.Sprintf("udp%d", version)
-	address := fmt.Sprintf("[%s]:80", dest)
+	address := gonet.JoinHostPort(dest, "80")
 	conn, err := gonet.Dial(protocol, address)
 	if err != nil {
 		return nil, err

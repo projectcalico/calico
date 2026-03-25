@@ -33,6 +33,12 @@ type Features struct {
 	// KernelSideRouteFiltering is true if the kernel supports filtering netlink route dumps kernel-side.
 	// This is much more efficient.
 	KernelSideRouteFiltering bool
+	// KernelHasUDPGSOFix is true if the kernel includes the fix for UDP GSO
+	// FRAGLIST corruption (kernel 6.16+).
+	KernelHasUDPGSOFix bool
+	// NFTablesSupported controls if we can use the nftables for purposes other than policy
+	// programming.
+	NFTablesSupported bool
 }
 
 type FeatureDetectorIface interface {

@@ -1,0 +1,155 @@
+# Default values.yaml for Calico installation on kind clusters.
+installation:
+  enabled: true
+  registry: docker.io
+
+  # Disable HA control plane.
+  controlPlaneReplicas: 1
+
+  # Disable CSI / flexVolume as they are not used by these tests.
+  kubeletVolumePluginPath: "None"
+  flexVolumePath: "None"
+
+  # Configure CIDRs to match kubeadm cluster.
+  calicoNetwork:
+    # Enable policy setup timeout to increase test reliability.
+    linuxPolicySetupTimeoutSeconds: 5
+    ipPools:
+    - cidr: 192.168.0.0/16
+    - cidr: fd00:10:244::/64
+
+  calicoNodeDaemonSet:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: calico-node
+            resources:
+              requests:
+                cpu: 100m
+                memory: 512Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+
+  typhaDeployment:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: calico-typha
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+
+  calicoKubeControllersDeployment:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: calico-kube-controllers
+            resources:
+              requests:
+                cpu: 50m
+                memory: 256Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+
+# Pin the apiserver / webhooks to the control-plane node so connectivity with the
+# k8s apiserver is not impacted by tests that disable / re-enable networking.
+# Only one of these deployments is created depending on the CRD mode (v1 vs v3),
+# but we include both overrides so that the correct one is always applied.
+apiServer:
+  enabled: true
+  apiServerDeployment:
+    spec:
+      template:
+        spec:
+          nodeSelector:
+            kubernetes.io/hostname: kind-control-plane
+          containers:
+          - name: calico-apiserver
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 128Mi
+  calicoWebhooksDeployment:
+    spec:
+      template:
+        spec:
+          nodeSelector:
+            kubernetes.io/hostname: kind-control-plane
+          containers:
+          - name: calico-webhooks
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 200m
+                memory: 64Mi
+
+goldmane:
+  enabled: true
+  goldmaneDeployment:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: goldmane
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 128Mi
+
+whisker:
+  enabled: true
+  whiskerDeployment:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: whisker
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+          - name: whisker-backend
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 128Mi
+
+# CRDs are installed by `make kind-cluster-create` in lib.Makefile ($(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd;)
+manageCRDs: false
+
+# Configuration for the tigera operator
+tigeraOperator:
+  image: tigera/operator
+  version: test-build
+  registry: docker.io
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

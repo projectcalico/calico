@@ -1,0 +1,360 @@
+// Copyright 2026 Tigera, Inc.
+//
+// Copyright 2018 The Kubernetes Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package rbac
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/admission/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apiserver/pkg/authentication/user"
+	kauth "k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/authorization/cel"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/plugin/pkg/authorizer/webhook"
+	"k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics"
+	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/webhooks/pkg/utils"
+)
+
+// TierGetter is an interface for retrieving Tier resources.
+type TierGetter interface {
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (*v3.Tier, error)
+}
+
+// RegisterHook creates a new tiered RBAC admission webhook authorizer and registers the necessary HTTP handler.
+func RegisterHook(cs kubernetes.Interface, tierGetter TierGetter, handleFn utils.HandleFn) {
+	logrus.WithFields(logrus.Fields{
+		"path": "/rbac",
+	}).Info("Registering RBAC admission webhook")
+
+	// Create a new Kubernetes authorizer.
+	bo := webhook.DefaultRetryBackoff()
+	m := &metrics.NoopAuthorizerMetrics{}
+	compl := cel.NewDefaultCompiler()
+
+	authz, err := webhook.NewFromInterface(cs.AuthorizationV1(), 5*time.Second, 5*time.Second, *bo, kauth.DecisionDeny, m, compl)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
+	}
+	handler := NewTieredRBACHook(authorizer.NewTierAuthorizer(authz), tierGetter).Handler()
+
+	// Register the webhook handlers and a readiness endpoint.
+	http.HandleFunc("/rbac", handleFn(handler))
+}
+
+// NewTieredRBACHook returns a new instance of the tiered RBAC admission webhook backend, which uses
+// the provided TierAuthorizer to perform authorization checks. Note that this hook is implemented as an admission webhook, which
+// has some limitations and benefits compared to a full authorization webhook. Namely:
+// - It can be installed on a cluster without needing to modify Kubernetes API server configuration, making it easier to deploy and manage.
+// - It can only be used to authorize admission requests, so it won't be able to handle authorization for non-admission requests (e.g., kubectl auth can-i).
+// - It does not have access to GET / LIST / WATCH requests, and so cannot make authorization decisions on those requests.
+func NewTieredRBACHook(authz authorizer.TierAuthorizer, tierGetter TierGetter) utils.HandlerProvider {
+	return &tieredRBACHook{authz: authz, tierGetter: tierGetter}
+}
+
+// tieredRBACHook is an admission webhook that uses RBAC to authorize requests based on tier.
+type tieredRBACHook struct {
+	authz      authorizer.TierAuthorizer
+	tierGetter TierGetter
+}
+
+// Handler returns an AdmissionReviewHandler that processes admission reviewes for tiered policies and checks whether the user is authorized to
+// perform the operation. It is the main entry point for the webhook.
+func (h *tieredRBACHook) Handler() utils.AdmissionReviewHandler {
+	return utils.NewDelegateToV1AdmitHandler(h.authorize)
+}
+
+func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse {
+	logCtx := logrus.WithFields(logrus.Fields{
+		"uid":       ar.Request.UID,
+		"kind":      ar.Request.Kind,
+		"resource":  ar.Request.Resource,
+		"operation": ar.Request.Operation,
+		"name":      ar.Request.Name,
+		"namespace": ar.Request.Namespace,
+		"user":      ar.Request.UserInfo.Username,
+	})
+	logCtx.Debug("Handling admission review")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Parse the new object (from Object.Raw) and old object (from OldObject.Raw) to extract
+	// tier information. CREATE/UPDATE have Object.Raw; UPDATE/DELETE have OldObject.Raw.
+	var (
+		obj              client.Object
+		newTier, oldTier string
+		err              error
+	)
+
+	if len(ar.Request.Object.Raw) > 0 {
+		obj, newTier, err = h.parsePolicy(ar.Request.Kind.Kind, ar.Request.Object.Raw)
+		if err != nil {
+			logCtx.WithError(err).Error("Failed to parse policy")
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Failed to parse policy: %v", err),
+					Reason:  metav1.StatusReasonInvalid,
+				},
+			}
+		}
+	}
+	if len(ar.Request.OldObject.Raw) > 0 {
+		var oldObj client.Object
+		oldObj, oldTier, err = h.parsePolicy(ar.Request.Kind.Kind, ar.Request.OldObject.Raw)
+		if err != nil {
+			logCtx.WithError(err).Error("Failed to parse old policy")
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Failed to parse old policy: %v", err),
+					Reason:  metav1.StatusReasonInvalid,
+				},
+			}
+		}
+		if obj == nil {
+			// DELETE: no new object, use the old object for context.
+			obj = oldObj
+		}
+	}
+	if obj == nil {
+		logCtx.Warn("No object in admission request")
+		return &v1.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: "No object in admission request",
+				Reason:  metav1.StatusReasonBadRequest,
+			},
+		}
+	}
+
+	// Create a context with the necessary information to pass to the RBAC authorizer.
+	// This includes the user info from the admission request.
+	ctx, err = augmentContextWithUserInfo(ctx, ar.Request, obj)
+	if err != nil {
+		logCtx.WithError(err).Error("Failed to build authorization context")
+		return &v1.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: fmt.Sprintf("Failed to build authorization context: %v", err),
+				Reason:  metav1.StatusReasonInternalError,
+			},
+		}
+	}
+
+	// Authorize the new tier for CREATE/UPDATE, or the old tier for DELETE.
+	tier := newTier
+	if tier == "" {
+		tier = oldTier
+	}
+	logCtx = logCtx.WithFields(logrus.Fields{"newTier": newTier, "oldTier": oldTier})
+	if err = h.authz.AuthorizeTierOperation(ctx, obj.GetName(), tier); err != nil {
+		logCtx.WithError(err).Warn("User is not authorized")
+		return &v1.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: fmt.Sprintf("Authorization failed: %v", err),
+				Reason:  metav1.StatusReasonForbidden,
+			},
+		}
+	}
+
+	// For CREATE and UPDATE, verify the target tier exists and is not being deleted.
+	if newTier != "" {
+		if resp := h.checkTierExists(ctx, logCtx, newTier); resp != nil {
+			return resp
+		}
+	}
+
+	// For UPDATE operations where the tier changed, also authorize the old tier. A tier change
+	// requires permission on both the old tier (to remove the policy) and the new tier (checked above).
+	if newTier != "" && oldTier != "" && oldTier != newTier {
+		logCtx.WithField("oldTier", oldTier).Debug("Tier changed, authorizing old tier")
+		if err = h.authz.AuthorizeTierOperation(ctx, obj.GetName(), oldTier); err != nil {
+			logCtx.WithError(err).Warn("User is not authorized for old tier")
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Authorization failed for old tier: %v", err),
+					Reason:  metav1.StatusReasonForbidden,
+				},
+			}
+		}
+	}
+
+	// If validation passes, return an allowed response
+	logCtx.Debug("User is authorized")
+	return &v1.AdmissionResponse{Allowed: true}
+}
+
+// checkTierExists verifies the tier exists and is not terminating. Returns an AdmissionResponse if
+// the tier is invalid, or nil if the tier is valid.
+func (h *tieredRBACHook) checkTierExists(ctx context.Context, logCtx *logrus.Entry, tierName string) *v1.AdmissionResponse {
+	tier, err := h.tierGetter.Get(ctx, tierName, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			logCtx.WithField("tier", tierName).Warn("Tier does not exist")
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Tier %q does not exist", tierName),
+					Reason:  metav1.StatusReasonForbidden,
+				},
+			}
+		}
+		logCtx.WithError(err).Error("Failed to get tier")
+		return &v1.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: fmt.Sprintf("Failed to verify tier existence: %v", err),
+				Reason:  metav1.StatusReasonInternalError,
+			},
+		}
+	}
+	if tier.DeletionTimestamp != nil {
+		logCtx.WithField("tier", tierName).Warn("Tier is being deleted")
+		return &v1.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: fmt.Sprintf("Tier %q is being deleted", tierName),
+				Reason:  metav1.StatusReasonForbidden,
+			},
+		}
+	}
+	return nil
+}
+
+// parsePolicy decodes the raw JSON of the policy object from the admission request and extracts the tier information.
+func (h *tieredRBACHook) parsePolicy(kind string, body []byte) (client.Object, string, error) {
+	// Create an empty object of the appropriate type.
+	var obj client.Object
+	switch kind {
+	case v3.KindNetworkPolicy:
+		obj = &v3.NetworkPolicy{}
+	case v3.KindGlobalNetworkPolicy:
+		obj = &v3.GlobalNetworkPolicy{}
+	case v3.KindStagedNetworkPolicy:
+		obj = &v3.StagedNetworkPolicy{}
+	case v3.KindStagedGlobalNetworkPolicy:
+		obj = &v3.StagedGlobalNetworkPolicy{}
+	case v3.KindStagedKubernetesNetworkPolicy:
+		obj = &v3.StagedKubernetesNetworkPolicy{}
+	default:
+		return nil, "", fmt.Errorf("unsupported kind: %s", kind)
+	}
+
+	// Decode the object into the appropriate type.
+	deserializer := utils.Codecs.UniversalDeserializer()
+	_, _, err := deserializer.Decode(body, nil, obj)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to decode object: %v", err)
+	}
+
+	// Extract the tier from the policy's Spec.Tier field. StagedKubernetesNetworkPolicy
+	// doesn't have a Tier field — it's always implicitly in the default tier.
+	tier, ok := names.TierFromPolicy(obj)
+	if !ok {
+		if kind == v3.KindStagedKubernetesNetworkPolicy {
+			return obj, names.DefaultTierName, nil
+		}
+		return nil, "", fmt.Errorf("object does not have a Spec.Tier field")
+	}
+	return obj, tier, nil
+}
+
+// augmentContextWithUserInfo adds the necessary user and request information from the admission request to the context so that it can
+// be accessed by the RBAC authorizer.
+func augmentContextWithUserInfo(ctx context.Context, req *v1.AdmissionRequest, obj client.Object) (context.Context, error) {
+	// Create a user.Info object from the AdmissionRequest's UserInfo.
+	extra := map[string][]string{}
+	for k, v := range req.UserInfo.Extra {
+		extra[k] = v
+	}
+	info := user.DefaultInfo{
+		Name:   req.UserInfo.Username,
+		UID:    req.UserInfo.UID,
+		Groups: req.UserInfo.Groups,
+		Extra:  extra,
+	}
+
+	var resource string
+	switch obj.(type) {
+	case *v3.NetworkPolicy:
+		resource = "networkpolicies"
+	case *v3.GlobalNetworkPolicy:
+		resource = "globalnetworkpolicies"
+	case *v3.StagedNetworkPolicy:
+		resource = "stagednetworkpolicies"
+	case *v3.StagedGlobalNetworkPolicy:
+		resource = "stagedglobalnetworkpolicies"
+	case *v3.StagedKubernetesNetworkPolicy:
+		resource = "stagedkubernetesnetworkpolicies"
+	default:
+		return nil, fmt.Errorf("unsupported object type: %T", obj)
+	}
+
+	// Get the resource path.
+	path := fmt.Sprintf("/apis/projectcalico.org/v3/%s/%s", resource, obj.GetName())
+	if obj.GetNamespace() != "" {
+		path = fmt.Sprintf("/apis/projectcalico.org/v3/namespaces/%s/%s/%s", obj.GetNamespace(), resource, obj.GetName())
+	}
+
+	// Create a RequestInfo object from the AdmissionRequest.
+	ri := &genericapirequest.RequestInfo{
+		IsResourceRequest: true,
+		Path:              path,
+		Verb:              strings.ToLower(string(req.Operation)),
+		APIGroup:          v3.SchemeGroupVersion.Group,
+		APIVersion:        v3.SchemeGroupVersion.Version,
+		Resource:          resource,
+		Name:              obj.GetName(),
+		Namespace:         obj.GetNamespace(),
+	}
+	if req.Operation == v1.Connect {
+		ri.Name = ""
+	}
+
+	// Create a context with the user info and request info.
+	if obj.GetNamespace() != "" {
+		ctx = genericapirequest.WithNamespace(ctx, obj.GetNamespace())
+	}
+	ctx = genericapirequest.WithUser(ctx, &info)
+	ctx = genericapirequest.WithRequestInfo(ctx, ri)
+	return ctx, nil
+}

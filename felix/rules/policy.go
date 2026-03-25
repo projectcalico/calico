@@ -23,13 +23,13 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 )
 
 // ruleRenderer defined in rules_defs.go.
@@ -51,7 +51,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 	}
 
 	inbound := generictables.Chain{
-		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
+		Name: PolicyChainName(PolicyInboundPfx, policyID, r.nft),
 		Rules: r.ProtoRulesToIptablesRules(
 			policy.InboundRules,
 			ipVersion, RuleOwnerTypePolicy,
@@ -63,7 +63,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 		),
 	}
 	outbound := generictables.Chain{
-		Name: PolicyChainName(PolicyOutboundPfx, policyID, r.NFTables),
+		Name: PolicyChainName(PolicyOutboundPfx, policyID, r.nft),
 		// Note that the policy name also includes the tier, so it does not need to be separately specified.
 		Rules: r.ProtoRulesToIptablesRules(
 			policy.OutboundRules,
@@ -82,7 +82,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 	// Profiles are not related to any tier.
 	tier := ""
 	inbound = &generictables.Chain{
-		Name: ProfileChainName(ProfileInboundPfx, profileID, r.NFTables),
+		Name: ProfileChainName(ProfileInboundPfx, profileID, r.nft),
 		Rules: r.ProtoRulesToIptablesRules(
 			profile.InboundRules,
 			ipVersion,
@@ -95,7 +95,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 		),
 	}
 	outbound = &generictables.Chain{
-		Name: ProfileChainName(ProfileOutboundPfx, profileID, r.NFTables),
+		Name: ProfileChainName(ProfileOutboundPfx, profileID, r.nft),
 		Rules: r.ProtoRulesToIptablesRules(
 			profile.OutboundRules,
 			ipVersion, RuleOwnerTypeProfile,
@@ -877,7 +877,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 	if len(pRule.DstPorts) > 0 {
 		logCxt.WithFields(logrus.Fields{
-			"ports": pRule.SrcPorts,
+			"ports": pRule.DstPorts,
 		}).Debug("Adding dst port match")
 		match = match.DestPortRanges(pRule.DstPorts)
 	}
@@ -922,16 +922,16 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	if pRule.NotProtocol != nil {
 		switch p := pRule.NotProtocol.NumberOrName.(type) {
 		case *proto.Protocol_Name:
-			logCxt.WithField("protoName", p.Name).Debug("Adding protocol match")
+			logCxt.WithField("protoName", p.Name).Debug("Adding negated protocol match")
 			match = match.NotProtocol(p.Name)
 		case *proto.Protocol_Number:
-			logCxt.WithField("protoNum", p.Number).Debug("Adding protocol match")
+			logCxt.WithField("protoNum", p.Number).Debug("Adding negated protocol match")
 			match = match.NotProtocolNum(uint8(p.Number))
 		}
 	}
 
 	if len(pRule.NotSrcNet) == 1 {
-		logCxt.WithField("cidr", pRule.NotSrcNet[0]).Debug("Adding !src CIDR match")
+		logCxt.WithField("cidr", pRule.NotSrcNet[0]).Debug("Adding negated src CIDR match")
 		match = match.NotSourceNet(pRule.NotSrcNet[0])
 	} else if len(pRule.NotSrcNet) > 1 {
 		logrus.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotSrcNet.")
@@ -942,14 +942,14 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithFields(logrus.Fields{
 			"ipsetID":   ipsetID,
 			"ipSetName": ipsetName,
-		}).Debug("Adding src IP set match")
+		}).Debug("Adding negated src IP set match")
 		match = match.NotSourceIPSet(ipsetName)
 	}
 
 	if len(pRule.NotSrcPorts) > 0 {
 		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.NotSrcPorts,
-		}).Debug("Adding src port match")
+		}).Debug("Adding negated src port match")
 		for _, portSplit := range SplitPortList(pRule.NotSrcPorts) {
 			match = match.NotSourcePortRanges(portSplit)
 		}
@@ -977,13 +977,13 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithFields(logrus.Fields{
 			"ipsetID":   ipsetID,
 			"ipSetName": ipsetName,
-		}).Debug("Adding dst IP set match")
+		}).Debug("Adding negated dst IP set match")
 	}
 
 	if len(pRule.NotDstPorts) > 0 {
 		logCxt.WithFields(logrus.Fields{
-			"ports": pRule.NotSrcPorts,
-		}).Debug("Adding dst port match")
+			"ports": pRule.NotDstPorts,
+		}).Debug("Adding negated dst port match")
 		for _, portSplit := range SplitPortList(pRule.NotDstPorts) {
 			match = match.NotDestPortRanges(portSplit)
 		}
@@ -1001,21 +1001,21 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	if ipVersion == 4 {
 		switch icmp := pRule.NotIcmp.(type) {
 		case *proto.Rule_NotIcmpTypeCode:
-			logCxt.WithField("icmpTypeCode", icmp).Debug("Adding ICMP type/code match.")
+			logCxt.WithField("icmpTypeCode", icmp).Debug("Adding negated ICMP type/code match.")
 			match = match.NotICMPTypeAndCode(
 				uint8(icmp.NotIcmpTypeCode.Type), uint8(icmp.NotIcmpTypeCode.Code))
 		case *proto.Rule_NotIcmpType:
-			logCxt.WithField("icmpType", icmp).Debug("Adding ICMP type-only match.")
+			logCxt.WithField("icmpType", icmp).Debug("Adding negated ICMP type-only match.")
 			match = match.NotICMPType(uint8(icmp.NotIcmpType))
 		}
 	} else {
 		switch icmp := pRule.NotIcmp.(type) {
 		case *proto.Rule_NotIcmpTypeCode:
-			logCxt.WithField("icmpTypeCode", icmp).Debug("Adding ICMPv6 type/code match.")
+			logCxt.WithField("icmpTypeCode", icmp).Debug("Adding negated ICMPv6 type/code match.")
 			match = match.NotICMPV6TypeAndCode(
 				uint8(icmp.NotIcmpTypeCode.Type), uint8(icmp.NotIcmpTypeCode.Code))
 		case *proto.Rule_NotIcmpType:
-			logCxt.WithField("icmpTypeCode", icmp).Debug("Adding ICMPv6 type-only match.")
+			logCxt.WithField("icmpType", icmp).Debug("Adding negated ICMPv6 type-only match.")
 			match = match.NotICMPV6Type(uint8(icmp.NotIcmpType))
 		}
 	}
@@ -1027,7 +1027,7 @@ func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bo
 	if nft {
 		maxLen = nftables.MaxChainNameLength
 	}
-	return hashutils.GetLengthLimitedID(
+	return hash.GetLengthLimitedID(
 		string(prefix),
 		polID.ID(),
 		maxLen,
@@ -1039,7 +1039,7 @@ func ProfileChainName(prefix ProfileChainNamePrefix, profID *types.ProfileID, nf
 	if nft {
 		maxLen = nftables.MaxChainNameLength
 	}
-	return hashutils.GetLengthLimitedID(
+	return hash.GetLengthLimitedID(
 		string(prefix),
 		profID.Name,
 		maxLen,

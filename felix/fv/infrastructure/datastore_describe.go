@@ -18,7 +18,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
@@ -65,7 +65,7 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 
 			ginkgo.AfterEach(func() {
 				// Always stop the infra after each test (collects diags on failure and cleans up).
-				logrus.WithField("test", ginkgo.CurrentGinkgoTestDescription().FullTestText).Info("DatastoreDescribe AfterEach: stopping infrastructure.")
+				logrus.WithField("test", ginkgo.CurrentSpecReport().FullText).Info("DatastoreDescribe AfterEach: stopping infrastructure.")
 				if len(currentInfra) > 0 {
 					for i := len(currentInfra) - 1; i >= 0; i-- {
 						if currentInfra[i] != nil {
@@ -78,13 +78,13 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 
 			ginkgo.AfterEach(func() {
 				// Then, perform the core file check.
-				logrus.WithField("test", ginkgo.CurrentGinkgoTestDescription().FullTestText).Info("DatastoreDescribe AfterEach: checking for core files.")
+				logrus.WithField("test", ginkgo.CurrentSpecReport().FullText).Info("DatastoreDescribe AfterEach: checking for core files.")
 				afterCoreFiles := readCoreFiles()
 				for item := range coreFilesAtStart.All() {
 					afterCoreFiles.Discard(item)
 				}
 				if afterCoreFiles.Len() != 0 {
-					if ginkgo.CurrentGinkgoTestDescription().Failed {
+					if ginkgo.CurrentSpecReport().Failed() {
 						ginkgo.Fail(fmt.Sprintf("Test FAILED and new core files were detected during tear-down: %v.  "+
 							"Felix must have panicked during the test.", afterCoreFiles.Slice()))
 						return

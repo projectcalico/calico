@@ -16,7 +16,7 @@ BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 ###############################################################################
 include ../lib.Makefile
 
-SRC_FILES=$(shell find cmd -name '*.go') $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 KUBE_CONTROLLER_CONTAINER_CREATED=.image.created-$(ARCH)
 KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=.image.created-$(ARCH)-fips
 
@@ -59,7 +59,7 @@ else
 	$(call build_binary, ./cmd/kube-controllers/, $@)
 endif
 
-$(BINDIR)/wrapper-$(ARCH):
+$(BINDIR)/wrapper-$(ARCH): $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
 else
@@ -85,14 +85,16 @@ sub-image-fips-%:
 
 image: $(KUBE_CONTROLLER_CONTAINER_MARKER)
 
-$(KUBE_CONTROLLER_CONTAINER_CREATED): register Dockerfile docker-image/flannel-migration/Dockerfile $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH)
+IMAGE_DEPS = Dockerfile docker-image/flannel-migration/Dockerfile
+# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
+$(KUBE_CONTROLLER_CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH) | register
 	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): register Dockerfile docker-image/flannel-migration/Dockerfile $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH)
+$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH) | register
 	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-fips-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
@@ -105,6 +107,13 @@ $(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): register Dockerfile docker-image/flan
 # Make sure that a copyright statement exists on all go files.
 check-copyright:
 	./check-copyrights.sh
+
+###############################################################################
+# Code generation
+###############################################################################
+.PHONY: gen-files
+gen-files:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'controller-gen crd paths=./pkg/controllers/migration/... output:crd:dir=pkg/controllers/migration/crd/'
 
 ###############################################################################
 # Tests
@@ -129,13 +138,15 @@ TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 
 ## Run the unit tests in a container.
 test: ut
-ut fv: $(TEST_BINARIES)
+ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED) setup-envtest
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
+		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		   CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
 		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
-		   CRDS=$(CURDIR)/../libcalico-go/config/crd \
+		   CRDS=$(REPO_ROOT)/$(CALICO_CRD_PATH) \
 		   CERTS_PATH=$(CERTS_PATH) \
+		   KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
 		   ./run-uts $(WHAT)
 
 # Produce test binaries for each package that needs them.

@@ -453,7 +453,7 @@ func (pw *profileWatcher) processProfileEvents() {
 		// event needs to be such that the Watch client can resume watching when a watch fails.
 		// The watch client expects a slash separated list of resource versions in the format
 		// <NS Revision/SA Revision>.
-		var value interface{}
+		var value any
 		switch e.Type {
 		case api.WatchModified, api.WatchAdded:
 			value = e.New.Value

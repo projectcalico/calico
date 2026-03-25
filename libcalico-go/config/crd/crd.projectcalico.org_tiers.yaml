@@ -27,9 +27,16 @@ spec:
             spec:
               properties:
                 defaultAction:
-                  enum:
-                    - Pass
-                    - Deny
+                  allOf:
+                    - enum:
+                        - Allow
+                        - Deny
+                        - Log
+                        - Pass
+                    - enum:
+                        - Pass
+                        - Deny
+                  default: Deny
                   type: string
                 order:
                   type: number

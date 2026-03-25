@@ -65,11 +65,8 @@ func MustParseVersion(v string) *Version {
 func (v *Version) Compare(other *Version) int {
 	vlen := len(v.versionSlice)
 	olen := len(other.versionSlice)
-	compLen := vlen
-	if compLen > olen {
-		compLen = olen
-	}
-	for index := 0; index < compLen; index++ {
+	compLen := min(vlen, olen)
+	for index := range compLen {
 		if v.versionSlice[index] == other.versionSlice[index] {
 			continue
 		}

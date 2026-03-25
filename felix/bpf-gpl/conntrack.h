@@ -105,6 +105,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 		struct calico_ct_value *ct_value = cali_ct_lookup_elem(k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!");
+			if (WORKLOAD_SRC_SPOOFING_CONFIGURED && cali_allowsource_lookup(&ctx->state->ip_src, skb_ingress_ifindex(ctx->skb))) {
+				CALI_DEBUG("CT-ALL src IP " IP_FMT " is allowed, skipping CT creation", debug_ip(ctx->state->ip_src));
+				return 0;
+			}
 			goto create;
 		}
 		if (srcLTDest) {
@@ -336,7 +340,7 @@ static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct 
 	if (ctx->ipheader_len == 20) {
 		if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
-			ctx->fwd.res = TC_ACT_SHOT;
+			ctx->state->fwd.res = TC_ACT_SHOT;
 			CALI_DEBUG("ICMP v4 reply: too short getting hdr");
 			return false;
 		}

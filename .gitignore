@@ -1,14 +1,15 @@
-.go-pkg-cache/
-report/
-bin/
 *.created*
 *.pyc
+.go-pkg-cache/
 .idea
 .vscode
-vendor/
 artifacts/
-postrelease-checks.xml
+bin/
+coverprofile.out
 crypto/tmp
+postrelease-checks.xml
+report/
+vendor/
 venv/
 
 /* Produced as part of release */
@@ -23,6 +24,10 @@ builder.coverprofile
 *.pprof
 .release-*.*
 
+/* Image build stamp files for kind testing */
+.stamp.*
+hack/test/kind/infra/operator
+
 /* Created by local kind cluster */
 hack/test/kind/kind
 hack/test/kind/kind-v*
@@ -30,6 +35,7 @@ hack/test/kind/.*updated*
 hack/test/kind/kubectl
 hack/test/kind/kubectl-v*
 hack/test/kind/*kubeconfig.yaml
+hack/test/envtest/
 pod2daemon/node-driver-registrar/
 
 /networking-calico/upper-constraints*.txt

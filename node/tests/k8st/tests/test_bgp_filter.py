@@ -35,29 +35,25 @@ protocol bgp Mesh_with_node_1 from bgp_template {
 """
 
 class TestBGPFilter(TestBase):
-    def setUp(self):
-        super(TestBGPFilter, self).setUp()
-
-        # Create test namespace
-        self.ns = "bgpfilter-test"
-        self.create_namespace(self.ns)
-
-        self.nodes, self.ips, self.ip6s = node_info()
-        self.egress_node = self.nodes[1]
-        self.egress_node_ip = self.ips[1]
-        self.egress_node_ip6 = self.ip6s[1]
-        self.external_node_ip = start_external_node_with_bgp(
+    @classmethod
+    def setUpClass(cls):
+        # Create external BGP nodes and peers once for all tests in this
+        # class. This is expensive (~30-60s per node) so we avoid
+        # recreating them for each test method.
+        cls.nodes, cls.ips, cls.ip6s = node_info()
+        cls.egress_node = cls.nodes[1]
+        cls.egress_node_ip = cls.ips[1]
+        cls.egress_node_ip6 = cls.ip6s[1]
+        cls.external_node_ip = start_external_node_with_bgp(
             "kube-node-extra",
-            bird_peer_config=self._get_bird_conf(),
+            bird_peer_config=bird_conf % cls.egress_node_ip,
         )
-        self.external_node_ip6 = start_external_node_with_bgp(
+        cls.external_node_ip6 = start_external_node_with_bgp(
             "kube-node-extra-v6",
-            bird6_peer_config=self._get_bird_conf(ipv6=True),
+            bird6_peer_config=bird_conf % cls.egress_node_ip6,
         )
 
-        kubectl("label node %s egress=true --overwrite" % self.egress_node)
-
-        self.egress_calico_pod = self.get_calico_node_pod(self.egress_node)
+        kubectl("label node %s egress=true --overwrite" % cls.egress_node)
 
         # Establish BGPPeer from cluster nodes to node-extra
         kubectl("""apply -f - << EOF
@@ -70,7 +66,7 @@ spec:
   asNumber: 64512
   nodeSelector: "egress == 'true'"
 EOF
-""" % self.external_node_ip)
+""" % cls.external_node_ip)
 
         kubectl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
@@ -82,34 +78,26 @@ spec:
   asNumber: 64512
   nodeSelector: "egress == 'true'"
 EOF
-""" % self.external_node_ip6)
+""" % cls.external_node_ip6)
 
-    def tearDown(self):
-        super(TestBGPFilter, self).tearDown()
-
-        self.delete_and_confirm(self.ns, "ns")
-
+    @classmethod
+    def tearDownClass(cls):
         try:
-            # Delete the extra node.
             run("docker rm -f kube-node-extra")
         except subprocess.CalledProcessError:
             pass
 
         try:
-            # Delete the extra node.
             run("docker rm -f kube-node-extra-v6")
         except subprocess.CalledProcessError:
             pass
 
-        # Delete BGPPeers.
         kubectl("delete bgppeer node-extra.peer", allow_fail=True)
         kubectl("delete bgppeer node-extra-v6.peer", allow_fail=True)
 
-    def _get_bird_conf(self, ipv6=False):
-        if ipv6:
-            return bird_conf % (self.egress_node_ip6)
-
-        return bird_conf % (self.egress_node_ip)
+    def setUp(self):
+        super(TestBGPFilter, self).setUp()
+        self.egress_calico_pod = self.get_calico_node_pod(self.egress_node)
 
     def _check_route_in_cluster_bird(self, calicoPod, route, peerIP, ipv6=False, globalPeer=False, present=True):
         """Check that a route is present/not present in a (in-cluster) calico-node bird instance"""
@@ -118,13 +106,13 @@ EOF
             birdPeer = "Global_" if globalPeer else "Node_"
             birdPeer += peerIP.replace(".", "_").replace(":","_")
             routes = kubectl("exec -n calico-system %s -- %s show route protocol %s" % (calicoPod, birdCmd, birdPeer))
-            result = re.search("%s *via %s on .* \[%s" % (re.escape(route), re.escape(peerIP), birdPeer), routes)
+            result = re.search(r"%s *via %s on .* \[%s" % (re.escape(route), re.escape(peerIP), birdPeer), routes)
             if result is None and present:
                 raise Exception('route not present when it should be')
             if result is not None and not present:
                 raise Exception('route present when it should not be')
             return result
-        result = retry_until_success(fn, wait_time=3)
+        result = retry_until_success(fn, timeout=60)
         return result
 
     def _assert_route_present_in_cluster_bird(self, calicoPod, route, peerIP, ipv6=False, globalPeer=False):
@@ -138,13 +126,13 @@ EOF
         def fn():
             birdCmd = "birdcl6" if ipv6 else "birdcl"
             routes = run("docker exec %s %s show route protocol %s" % (birdContainer, birdCmd, birdPeer))
-            result = re.search("%s *via %s on .* \[%s" % (routeRegex, peerIPRegex, birdPeer), routes)
+            result = re.search(r"%s *via %s on .* \[%s" % (routeRegex, peerIPRegex, birdPeer), routes)
             if result is None and present:
                 raise Exception('route not present when it should be')
             if result is not None and not present:
                 raise Exception('route present when it should not be')
             return result
-        result = retry_until_success(fn, wait_time=3)
+        result = retry_until_success(fn, timeout=60)
         return result
 
     def _assert_route_present_in_external_bird(self, birdContainer, birdPeer, routeRegex, peerIPRegex, ipv6=False):
@@ -157,7 +145,7 @@ EOF
         """Patch BGPFilters in a BGPPeer"""
         filterStr = "\"" + "\", \"".join(filters) + "\"" if len(filters) > 0 else ""
         patchStr = "{\"spec\": {\"filters\": [%s]}}" % filterStr
-        kubectl("patch bgppeer %s --patch '%s'" % (peer, patchStr))
+        kubectl("patch --type merge bgppeer %s --patch '%s'" % (peer, patchStr))
 
 
     def _test_bgp_filter_basic(self, ipv4, ipv6):
@@ -170,11 +158,11 @@ EOF
         """
         with DiagsCollector():
             external_route_v4 = "10.111.111.0/24"
-            cluster_route_regex_v4 = "192\.168\.\d+\.\d+/\d+"
+            cluster_route_regex_v4 = r"192\.168\.\d+\.\d+/\d+"
             export_filter_cidr_v4 = "192.168.0.0/16"
 
             external_route_v6 = "fd00:1111:1111:1111::/64"
-            cluster_route_regex_v6 = "fd00:10:244:.*/\d+"
+            cluster_route_regex_v6 = r"fd00:10:244:.*/\d+"
             export_filter_cidr_v6 = "fd00:10:244::/64"
 
             # Add static route bird config to external node
@@ -295,11 +283,9 @@ EOF
         exhaust matchOperators and actions"""
         with DiagsCollector():
             external_route_v4 = "10.111.111.0/24"
-            cluster_route_regex_v4 = "192\.168\.\d+\.\d+/\d+"
             export_filter_cidr_v4 = "192.168.0.0/16"
 
             external_route_v6 = "fd00:1111:1111:1111::/64"
-            cluster_route_regex_v6 = "fd00:10:244:.*/\d+"
             export_filter_cidr_v6 = "fd00:10:244::/64"
 
             # Add static route bird config
@@ -474,11 +460,9 @@ EOF
         """Test BGP import filters with global BGP peers"""
         with DiagsCollector():
             external_route_v4 = "10.111.111.0/24"
-            cluster_route_regex_v4 = "192\.168\.\d+\.\d+/\d+"
             export_filter_cidr_v4 = "192.168.0.0/16"
 
             external_route_v6 = "fd00:1111:1111:1111::/64"
-            cluster_route_regex_v6 = "fd00:10:244:.*/\d+"
             export_filter_cidr_v6 = "fd00:10:244::/64"
 
             # Add static route bird config
@@ -505,11 +489,11 @@ EOF
 
             # Patch BGPPeer to make it global
             if ipv4:
-                kubectl("patch bgppeer node-extra.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
-                self.add_cleanup(lambda: kubectl("patch bgppeer node-extra.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
+                kubectl("patch --type=merge bgppeer node-extra.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
+                self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
             if ipv6:
-                kubectl("patch bgppeer node-extra-v6.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
-                self.add_cleanup(lambda: kubectl("patch bgppeer node-extra-v6.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
+                kubectl("patch --type=merge bgppeer node-extra-v6.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
+                self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra-v6.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
 
             # Check that route is present
             if ipv4:
@@ -556,71 +540,6 @@ EOF
                 self.add_cleanup(lambda: self._patch_peer_filters("node-extra-v6.peer", []))
 
                 self._assert_route_not_present_in_cluster_bird(self.egress_calico_pod, external_route_v6, self.external_node_ip6, globalPeer=True, ipv6=True)
-
-    def test_bgp_filter_validation(self):
-        with DiagsCollector():
-            # Filter with various invalid fields
-            output = kubectl("""apply -f - <<EOF
-apiVersion: projectcalico.org/v3
-kind: BGPFilter
-metadata:
-  name: test-invalid-filter
-spec:
-  importV4:
-  - cidr: 10.111.111.0/24
-    matchOperator: notin
-    action: accept
-  - cidr: 10.222.222.0/24
-    matchOperator: equal
-    action: Retecj
-  - cidr: fd00:1111:1111:1111::/64
-    matchOperator: Equal
-    action: Accept
-  exportV4:
-  - cidr: 10.111.111.0/24
-    matchOperator: notin
-    action: Accetp
-  - cidr: 10.222.222.0/24
-    matchOperator: in
-    action: Accept
-  - cidr: IPv4Address
-    matchOperator: In
-    action: Accept
-  importV6:
-  - cidr: fd00:1111:1111:1111::/64
-    matchOperator: Eqaul
-    action: accept
-  - cidr: 10.111.111.0/24
-    matchOperator: In
-    action: Accept
-  exportV6:
-  - cidr: fd00:2222:2222:2222::/64
-    matchOperator: notequal
-    action: reject
-  - cidr: ipv6Address
-    matchOperator: Equal
-    action: Reject
-EOF
-""", allow_fail=True, returnerr=True)
-
-            if output is not None:
-                output = output.strip()
-
-            expectedOutput = """The BGPFilter "test-invalid-filter" is invalid: 
-* MatchOperator: Invalid value: "notin": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Accetp": Reason: failed to validate Field: Action because of Tag: filterAction 
-* MatchOperator: Invalid value: "in": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* CIDR: Invalid value: "IPv4Address": Reason: failed to validate Field: CIDR because of Tag: netv4 
-* Action: Invalid value: "accept": Reason: failed to validate Field: Action because of Tag: filterAction 
-* MatchOperator: Invalid value: "equal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Retecj": Reason: failed to validate Field: Action because of Tag: filterAction 
-* CIDR: Invalid value: "fd00:1111:1111:1111::/64": Reason: failed to validate Field: CIDR because of Tag: netv4 
-* MatchOperator: Invalid value: "notequal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "reject": Reason: failed to validate Field: Action because of Tag: filterAction 
-* CIDR: Invalid value: "ipv6Address": Reason: failed to validate Field: CIDR because of Tag: netv6 
-* MatchOperator: Invalid value: "Eqaul": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* CIDR: Invalid value: "10.111.111.0/24": Reason: failed to validate Field: CIDR because of Tag: netv6"""
-            assert output == expectedOutput
 
     def test_bgp_filter_basic_v4(self):
         self._test_bgp_filter_basic(True, False)

@@ -483,7 +483,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 	endRules []generictables.Rule,
 	infix string,
 ) ([]*generictables.Chain, *generictables.Chain, []generictables.Rule) {
-	if r.NFTables && (endpointPfx == WorkloadFromEndpointPfx || endpointPfx == WorkloadToEndpointPfx) {
+	if r.nft && (endpointPfx == WorkloadFromEndpointPfx || endpointPfx == WorkloadToEndpointPfx) {
 		// Currently only supported for nftables workload endpoint dispatch.
 		return r.buildSingleDispatchChainsVMAP(
 			chainName,

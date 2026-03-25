@@ -44,7 +44,7 @@ def read_status(name):
     return status_dict['status']
 
 def delete_status(name):
-    kubectl("delete caliconodestatuses.crd.projectcalico.org %s" % name)
+    kubectl("delete caliconodestatus %s" % name)
 
 def is_subdict(small, big):
     return dict(big, **small) == big
@@ -68,7 +68,7 @@ class TestNodeMeshStatus(TestBase):
         delete_status(self.status_name)
 
     def test_dual_stack_status(self):
-        retry_until_success(lambda: read_status(self.status_name), retries=5, wait_time=1)
+        retry_until_success(lambda: read_status(self.status_name), timeout=10)
         status = read_status(self.status_name)
 
         # Should have correct agent status.

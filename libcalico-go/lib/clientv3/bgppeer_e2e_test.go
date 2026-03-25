@@ -18,8 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -73,7 +72,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 		ExportV4: []apiv3.BGPFilterRuleV4{
 			{
 				CIDR:          "10.10.10.0/24",
-				MatchOperator: apiv3.In,
+				MatchOperator: apiv3.MatchOperatorIn,
 				Action:        apiv3.Accept,
 			},
 		},
@@ -83,11 +82,48 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 		ImportV4: []apiv3.BGPFilterRuleV4{
 			{
 				CIDR:          "11.11.11.0/24",
-				MatchOperator: apiv3.NotIn,
+				MatchOperator: apiv3.MatchOperatorNotIn,
 				Action:        apiv3.Reject,
 			},
 		},
 	}
+
+	DescribeTable("BGPPeer PeerIP validation", func(peerIP string, shouldError bool) {
+		c, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		be, err := backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		By("Attempting to create a new BGPPeer with PeerIP: " + peerIP)
+		_, outError := c.BGPPeers().Create(ctx, &apiv3.BGPPeer{
+			ObjectMeta: metav1.ObjectMeta{Name: "bgppeer-peerip-validation"},
+			Spec: apiv3.BGPPeerSpec{
+				Node:     "node1",
+				PeerIP:   peerIP,
+				ASNumber: numorstring.ASNumber(6512),
+			},
+		}, options.SetOptions{})
+
+		if shouldError {
+			Expect(outError).To(HaveOccurred())
+		} else {
+			Expect(outError).NotTo(HaveOccurred())
+		}
+	},
+		// Valid
+		Entry("valid IPv4 address", "192.168.1.1", false),
+		Entry("valid IPv4 address with port", "192.168.5.101:179", false),
+		Entry("valid IPv6 address", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", false),
+		Entry("valid IPv6 address, shortened", "fe80::11", false),
+		Entry("valid IPv6 address with port", "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:179", false),
+
+		// Invalid
+		Entry("invalid IPv4 address", "300.168.1.1", true),
+		Entry("invalid IPv4 address with port", "300.168.5.101:179", true),
+		Entry("invalid IPv6 address", "2001:0db8:85a3:0000:0000:8a2e:0370:7334:12345", true),
+	)
 
 	DescribeTable("BGPPeer e2e CRUD tests",
 		func(name1, name2 string, spec1, spec2 apiv3.BGPPeerSpec) {
@@ -261,13 +297,13 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 				By("Updating BGPPeer name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.BGPPeers().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.BGPPeers().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.BGPPeers().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.BGPPeers().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
 
 				By("Creating BGPPeer name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.BGPPeers().Create(ctx, &apiv3.BGPPeer{
@@ -275,13 +311,13 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.BGPPeers().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.BGPPeers().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.BGPPeers().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {

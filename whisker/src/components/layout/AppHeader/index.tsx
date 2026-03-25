@@ -21,7 +21,7 @@ const AppHeader: React.FC = () => {
                             Calico Whisker is a simplified version of the
                         </Text>
                         <LinkOverlay
-                            data-testId='app-header-calico-cloud-link'
+                            data-testid='app-header-calico-cloud-link'
                             fontSize='sm'
                             fontWeight='bold'
                             color='tigeraGoldMedium'
@@ -32,7 +32,7 @@ const AppHeader: React.FC = () => {
                         </LinkOverlay>
                     </Flex>
 
-                    <CalicoCatIcon fontSize='42px' />
+                    <CalicoCatIcon fontSize='40px' />
                 </Flex>
             </LinkBox>
         </Flex>

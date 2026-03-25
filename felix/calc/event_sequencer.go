@@ -19,6 +19,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/ip"
@@ -32,7 +33,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-type EventHandler func(message interface{})
+type EventHandler func(message any)
 
 type configInterface interface {
 	UpdateFrom(map[string]string, config.Source) (changed bool, err error)
@@ -40,11 +41,19 @@ type configInterface interface {
 	ToConfigUpdate() *proto.ConfigUpdate
 }
 
+// Struct for additional data that feeds into proto.WorkloadEndpoint but is computed rather
+// than stored on resource's database.
+type EndpointComputedDataKind string
+type EndpointComputedData interface {
+	ApplyTo(*proto.WorkloadEndpoint)
+}
+
 // EndpointUpdate contains information about updates applied to the endpoint.
 type endpointUpdate struct {
-	endpoint interface{}
-	peerData *EndpointBGPPeer
-	tierInfo []TierInfo
+	endpoint     any
+	computedData []EndpointComputedData
+	peerData     *EndpointBGPPeer
+	tierInfo     []TierInfo
 }
 
 // EventSequencer buffers and coalesces updates from the calculation graph then flushes them
@@ -385,7 +394,7 @@ func (buf *EventSequencer) flushProfileDeletes() {
 	}
 }
 
-func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
+func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, computedData []EndpointComputedData, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
 	mac := ""
 	if ep.Mac != nil {
 		mac = ep.Mac.String()
@@ -438,7 +447,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		skipRedir.Egress = true
 	}
 
-	return &proto.WorkloadEndpoint{
+	wep := &proto.WorkloadEndpoint{
 		State:                      ep.State,
 		Name:                       ep.Name,
 		Mac:                        mac,
@@ -454,7 +463,14 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		LocalBgpPeer:               localBGPPeer,
 		SkipRedir:                  skipRedir,
 		QosPolicies:                qosPolicies,
+		LiveMigrationVmiName:       vmiNameFromLabels(ep.Labels),
 	}
+
+	for _, cd := range computedData {
+		cd.ApplyTo(wep)
+	}
+
+	return wep
 }
 
 func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, preDNATTiers []*proto.TierInfo, forwardTiers []*proto.TierInfo) *proto.HostEndpoint {
@@ -480,6 +496,7 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 func (buf *EventSequencer) OnEndpointTierUpdate(
 	endpointKey model.EndpointKey,
 	endpoint model.Endpoint,
+	computedData []EndpointComputedData,
 	peerData *EndpointBGPPeer,
 	filteredTiers []TierInfo,
 ) {
@@ -494,9 +511,10 @@ func (buf *EventSequencer) OnEndpointTierUpdate(
 		// Update.
 		buf.pendingEndpointDeletes.Discard(endpointKey)
 		buf.pendingEndpointUpdates[endpointKey] = endpointUpdate{
-			endpoint: endpoint,
-			peerData: peerData,
-			tierInfo: filteredTiers,
+			endpoint:     endpoint,
+			computedData: computedData,
+			peerData:     peerData,
+			tierInfo:     filteredTiers,
 		}
 	}
 }
@@ -516,7 +534,7 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-				Endpoint: ModelWorkloadEndpointToProto(wlep, endpointUpdate.peerData, tiers),
+				Endpoint: ModelWorkloadEndpointToProto(wlep, endpointUpdate.computedData, endpointUpdate.peerData, tiers),
 			})
 		case model.HostEndpointKey:
 			hep := endpoint.(*model.HostEndpoint)
@@ -1197,4 +1215,18 @@ func isVMWorkload(labels uniquelabels.Map) bool {
 		}
 	}
 	return false
+}
+
+// vmiNameFromLabels extracts the KubeVirt VMI name from a pod's labels.
+// Prefers "vmi.kubevirt.io/id" (KubeVirt >= 1.7, reliable) and falls back
+// to "vm.kubevirt.io/name" (all versions, less reliable: uses hostname,
+// truncates without hashing).
+func vmiNameFromLabels(labels uniquelabels.Map) string {
+	if val, ok := labels.GetString(kubevirtv1.VirtualMachineInstanceIDLabel); ok {
+		return val
+	}
+	if val, ok := labels.GetString(kubevirtv1.DeprecatedVirtualMachineNameLabel); ok {
+		return val
+	}
+	return ""
 }

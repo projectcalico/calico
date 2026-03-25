@@ -17,9 +17,8 @@ package usagerep
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -29,7 +28,8 @@ func init() {
 }
 
 func TestUsagerep(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/felix_usagerep_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "UT: felix/usagerep", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/felix_usagerep_suite.xml"
+	ginkgo.RunSpecs(t, "UT: felix/usagerep", suiteConfig, reporterConfig)
 }

@@ -23,7 +23,7 @@ import (
 // msgStringer wraps an API message to customise how we stringify it.  For example, it truncates
 // the lists of members in the (potentially very large) IPSetsUpdate messages.
 type MsgStringer struct {
-	Msg interface{}
+	Msg any
 }
 
 func (m MsgStringer) String() string {

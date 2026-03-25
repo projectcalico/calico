@@ -16,10 +16,11 @@ package loadbalancer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
@@ -32,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -297,8 +297,8 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Expect(serviceSpecific.Status.LoadBalancer.Ingress[0].IP).Should(Equal(v4poolManualSpecifcIP))
 
 			// Update the service type to NodePort, LoadBalancer controller should release the IP
-			svcPatch := map[string]interface{}{}
-			spec := map[string]interface{}{}
+			svcPatch := map[string]any{}
+			spec := map[string]any{}
 			svcPatch["spec"] = spec
 			spec["type"] = v1.ServiceTypeNodePort
 			patch, err := json.Marshal(svcPatch)

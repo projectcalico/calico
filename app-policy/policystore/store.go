@@ -15,6 +15,7 @@
 package policystore
 
 import (
+	"maps"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -128,9 +129,7 @@ func (m *policyStoreManager) GetCurrentEndpoints() map[types.WorkloadEndpointID]
 	defer m.mu.RUnlock()
 
 	copy := make(map[types.WorkloadEndpointID]*proto.WorkloadEndpoint, len(m.current.Endpoints))
-	for k, v := range m.current.Endpoints {
-		copy[k] = v
-	}
+	maps.Copy(copy, m.current.Endpoints)
 	return copy
 }
 

@@ -208,7 +208,7 @@ Typha->Felix: KVs * n
 const DefaultPort = 5473
 
 type Envelope struct {
-	Message interface{}
+	Message any
 }
 
 // logrus only looks for a String() method on the top-level object, make sure we call through to the wrapped object.
@@ -312,7 +312,7 @@ func (m MsgKVs) String() string {
 	var b strings.Builder
 	const limit = 10
 	b.WriteString("syncproto.MsgKVs{Num:")
-	b.WriteString(fmt.Sprint(len(m.KVs)))
+	fmt.Fprint(&b, len(m.KVs))
 	b.WriteString(",KVs:[]{")
 	for i, kv := range m.KVs {
 		if i > 0 {
@@ -382,7 +382,7 @@ func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
 type SerializedUpdate struct {
 	Key               string
 	Value             []byte
-	Revision          interface{}
+	Revision          any
 	V3ResourceVersion string
 	TTL               time.Duration
 	UpdateType        api.UpdateType
@@ -401,7 +401,7 @@ func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 			"is the same version as this component.")
 		return api.Update{}, ErrBadKey
 	}
-	var parsedValue interface{}
+	var parsedValue any
 	if s.Value != nil {
 		var err error
 		parsedValue, err = model.ParseValue(parsedKey, s.Value)

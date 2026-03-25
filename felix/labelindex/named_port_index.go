@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package labelindex
 import (
 	"iter"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -91,19 +92,17 @@ func (d *endpointData) RemoveMatchingIPSetID(id string) {
 }
 
 func (d *endpointData) HasParent(parent *npParentData) bool {
-	for _, p := range d.parents {
-		if p == parent {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(d.parents, parent)
 }
 
-func (d *endpointData) LookupNamedPorts(name string, proto ipsetmember.Protocol) []uint16 {
-	var matchingPorts []uint16
+func (d *endpointData) LookupNamedPorts(name string, proto ipsetmember.Protocol) []namedPortContribution {
+	var matchingPorts []namedPortContribution
 	for _, p := range d.ports {
 		if p.Name == name && proto.MatchesModelProtocol(p.Protocol) {
-			matchingPorts = append(matchingPorts, p.Port)
+			matchingPorts = append(matchingPorts, namedPortContribution{
+				protocol: ipsetmember.ProtocolFrom(p.Protocol),
+				port:     p.Port,
+			})
 		}
 	}
 	return matchingPorts
@@ -783,7 +782,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, rawLab
 }
 
 func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, applyUpdate, revertUpdate func()) {
-	parentData.IterEndpointIDs(func(id interface{}) error {
+	parentData.IterEndpointIDs(func(id any) error {
 		epData, _ := idx.endpointKVIdx.Get(id)
 		// This endpoint matches this parent, calculate its old contribution.  (The revert function
 		// is a no-op on the first loop but keeping it here, rather than at the bottom of the loop
@@ -809,6 +808,11 @@ func (idx *SelectorAndNamedPortIndex) DeleteParentLabels(parentID string) {
 	idx.discardParentIfEmpty(parentID)
 }
 
+type namedPortContribution struct {
+	protocol ipsetmember.Protocol
+	port     uint16
+}
+
 // CalculateEndpointContribution calculates the given endpoint's contribution to the given IP set.
 // If the IP set represents a named port then the returned members will have a named port component.
 // Returns nil if the endpoint doesn't contribute to the IP set.
@@ -816,14 +820,14 @@ func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointD
 	if ipSetData.namedPortProtocol != ipsetmember.ProtocolNone {
 		// This IP set represents a named port match, calculate the cross product of
 		// matching named ports by IP address.
-		portNumbers := d.LookupNamedPorts(ipSetData.namedPort, ipSetData.namedPortProtocol)
-		for _, namedPort := range portNumbers {
+		members := d.LookupNamedPorts(ipSetData.namedPort, ipSetData.namedPortProtocol)
+		for _, member := range members {
 			for _, cidr := range d.nets {
 				// Named ports are always single IP addresses.
 				ipAddr := cidr.Addr()
 				contrib = append(
 					contrib,
-					ipsetmember.MakeIPPortProto(ipAddr, namedPort, ipSetData.namedPortProtocol),
+					ipsetmember.MakeIPPortProto(ipAddr, member.port, member.protocol),
 				)
 			}
 		}
@@ -901,7 +905,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	bestParentStrategy := labelnamevalueindex.ScanStrategy[string](nil)
 	bestParentEndpointEstimate := math.MaxInt
 
-	for k, r := range restrictions {
+	for k, r := range restrictions.All() {
 		epStrat := idx.endpointKVIdx.StrategyFor(k, r)
 		parentStrat := idx.parentKVIdx.StrategyFor(k, r)
 		epsToScan := epStrat.EstimatedItemsToScan()

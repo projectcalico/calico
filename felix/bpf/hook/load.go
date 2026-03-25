@@ -149,7 +149,6 @@ func initObjectFiles() {
 	for _, family := range []int{4, 6} {
 		for _, logLevel := range []string{"off", "debug"} {
 			for _, epToHostDrop := range []bool{false, true} {
-				epToHostDrop := epToHostDrop
 				epTypes := []tcdefs.EndpointType{
 					tcdefs.EpTypeWorkload,
 					tcdefs.EpTypeHost,
@@ -160,9 +159,7 @@ func initObjectFiles() {
 					tcdefs.EpTypeVXLAN,
 				}
 				for _, epType := range epTypes {
-					epType := epType
 					for _, hook := range []Hook{Ingress, Egress} {
-						hook := hook
 						for _, dsr := range []bool{false, true} {
 							toOrFrom := tcdefs.ToEp
 							if hook == Ingress {

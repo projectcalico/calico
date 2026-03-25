@@ -18,8 +18,7 @@ import (
 	"reflect"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -520,7 +519,7 @@ var _ = DescribeTable(
 
 var _ = DescribeTable(
 	"value parsing",
-	func(key Key, rawVal string, expectedVal interface{}) {
+	func(key Key, rawVal string, expectedVal any) {
 		val, err := ParseValue(key, []byte(rawVal))
 		Expect(err).ToNot(HaveOccurred())
 		Expect(val).To(Equal(expectedVal))
@@ -596,48 +595,48 @@ var _ = DescribeTable(
 					{
 						Action:        apiv3.Accept,
 						CIDR:          "77.7.1.0/24",
-						MatchOperator: apiv3.In,
+						MatchOperator: apiv3.MatchOperatorIn,
 					},
 					{
 						Action:        apiv3.Reject,
 						CIDR:          "77.7.2.0/24",
-						MatchOperator: apiv3.NotEqual,
+						MatchOperator: apiv3.MatchOperatorNotEqual,
 					},
 				},
 				ImportV4: []apiv3.BGPFilterRuleV4{
 					{
 						Action:        apiv3.Accept,
 						CIDR:          "77.7.3.0/24",
-						MatchOperator: apiv3.NotIn,
+						MatchOperator: apiv3.MatchOperatorNotIn,
 					},
 					{
 						Action:        apiv3.Reject,
 						CIDR:          "77.7.4.0/24",
-						MatchOperator: apiv3.Equal,
+						MatchOperator: apiv3.MatchOperatorEqual,
 					},
 				},
 				ExportV6: []apiv3.BGPFilterRuleV6{
 					{
 						Action:        apiv3.Accept,
 						CIDR:          "7000:1::0/64",
-						MatchOperator: apiv3.Equal,
+						MatchOperator: apiv3.MatchOperatorEqual,
 					},
 					{
 						Action:        apiv3.Reject,
 						CIDR:          "7000:2::0/64",
-						MatchOperator: apiv3.NotEqual,
+						MatchOperator: apiv3.MatchOperatorNotEqual,
 					},
 				},
 				ImportV6: []apiv3.BGPFilterRuleV6{
 					{
 						Action:        apiv3.Accept,
 						CIDR:          "7000:3::0/64",
-						MatchOperator: apiv3.In,
+						MatchOperator: apiv3.MatchOperatorIn,
 					},
 					{
 						Action:        apiv3.Reject,
 						CIDR:          "7000:4::0/64",
-						MatchOperator: apiv3.NotIn,
+						MatchOperator: apiv3.MatchOperatorNotIn,
 					},
 				},
 			},

@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -171,8 +171,8 @@ func wlChainsForIfaces(ipVersion uint8, ifaceTierNames []string, epMarkMapper ru
 }
 
 func tierToPolicyName(tierName string) string {
-	if strings.HasPrefix(tierName, "tier") {
-		return "pol" + strings.TrimPrefix(tierName, "tier")
+	if after, ok := strings.CutPrefix(tierName, "tier"); ok {
+		return "pol" + after
 	}
 	return "a"
 }
@@ -722,7 +722,7 @@ func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName s
 	t.currentRoutes[ifaceName] = targets
 }
 
-func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, cidr ip.CIDR) {
+func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, routeKey routetable.RouteKey) {
 }
 
 func (t *mockRouteTable) RouteUpdate(routeClass routetable.RouteClass, ifaceName string, target routetable.Target) {
@@ -750,11 +750,11 @@ func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Tar
 }
 
 type statusReportRecorder struct {
-	currentState map[interface{}]string
-	extraInfo    map[interface{}]interface{}
+	currentState map[any]string
+	extraInfo    map[any]any
 }
 
-func (r *statusReportRecorder) endpointStatusUpdateCallback(ipVersion uint8, id interface{}, status string, extraInfo interface{}) {
+func (r *statusReportRecorder) endpointStatusUpdateCallback(ipVersion uint8, id any, status string, extraInfo any) {
 	log.WithFields(log.Fields{
 		"ipVersion": ipVersion,
 		"id":        id,
@@ -840,7 +840,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 		})
 
 		JustBeforeEach(func() {
-			renderer := rules.NewRenderer(rrConfigNormal)
+			renderer := rules.NewRenderer(rrConfigNormal, false)
 			rawTable = newMockTable("raw")
 			mangleTable = newMockTable("mangle")
 			filterTable = newMockTable("filter")
@@ -849,7 +849,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				currentRoutes: map[string][]routetable.Target{},
 			}
 			mockProcSys = &testProcSys{state: map[string]string{}, pathsThatExist: map[string]bool{}}
-			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}, extraInfo: map[interface{}]interface{}{}}
+			statusReportRec = &statusReportRecorder{currentState: map[any]string{}, extraInfo: map[any]any{}}
 			hepListener = &testHEPListener{}
 			nlDataplane = mocknetlink.New()
 			Expect(err).NotTo(HaveOccurred())
@@ -866,6 +866,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			epMgr = newEndpointManagerWithShims(
+				&endpointManagerConfig{
+					kubeIPVSSupportEnabled: rrConfigNormal.KubeIPVSSupportEnabled,
+					wlInterfacePrefixes:    []string{"cali"},
+					bpfEnabled:             false,
+					bpfAttachType:          v3.BPFAttachOptionTCX,
+					nft:                    false,
+					floatingIPsEnabled:     true,
+				},
 				rawTable,
 				mangleTable,
 				filterTable,
@@ -873,20 +881,16 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				routeTable,
 				ipVersion,
 				rules.NewEndpointMarkMapper(rrConfigNormal.MarkEndpoint, rrConfigNormal.MarkNonCaliEndpoint),
-				rrConfigNormal.KubeIPVSSupportEnabled,
-				[]string{"cali"},
 				statusReportRec.endpointStatusUpdateCallback,
 				mockProcSys.write,
 				mockProcSys.stat,
 				"1",
 				nil,
-				false,
-				v3.BPFAttachOptionTCX,
 				hepListener,
 				common.NewCallbacks(),
-				true,
-				false,
 				linkAddrsMgr,
+				nil, // arpTable
+				nil, // arpMaps
 			)
 		})
 
@@ -1107,7 +1111,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 
 				It("should report id1 up", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id1"}: "up",
 					}))
 				})
@@ -1131,7 +1135,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0_tierA"))
 				It("should report id1 up", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id1"}: "up",
 					}))
 				})
@@ -1150,7 +1154,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					}))
 					It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0_tierA"))
 					It("should report id1 up, but id2 now in error", func() {
-						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						Expect(statusReportRec.currentState).To(Equal(map[any]string{
 							types.HostEndpointID{EndpointId: "id1"}: "up",
 							types.HostEndpointID{EndpointId: "id2"}: "error",
 						}))
@@ -1166,7 +1170,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						JustBeforeEach(removeHostEp("id1"))
 						It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0_tierB"))
 						It("should report id2 up only", func() {
-							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							Expect(statusReportRec.currentState).To(Equal(map[any]string{
 								types.HostEndpointID{EndpointId: "id2"}: "up",
 							}))
 						})
@@ -1196,7 +1200,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					}))
 					It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0_tierB"))
 					It("should report id0 up, but id1 now in error", func() {
-						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						Expect(statusReportRec.currentState).To(Equal(map[any]string{
 							types.HostEndpointID{EndpointId: "id0"}: "up",
 							types.HostEndpointID{EndpointId: "id1"}: "error",
 						}))
@@ -1212,7 +1216,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						JustBeforeEach(removeHostEp("id1"))
 						It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0_tierB"))
 						It("should report id0 up only", func() {
-							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							Expect(statusReportRec.currentState).To(Equal(map[any]string{
 								types.HostEndpointID{EndpointId: "id0"}: "up",
 							}))
 						})
@@ -1465,7 +1469,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0"))
 				It("should report id1 up", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id1"}: "up",
 					}))
 				})
@@ -1485,7 +1489,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0"))
 					It("should report id1 up", func() {
-						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						Expect(statusReportRec.currentState).To(Equal(map[any]string{
 							types.HostEndpointID{EndpointId: "id1"}: "up",
 						}))
 					})
@@ -1497,7 +1501,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						}))
 						It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0", "eth1"))
 						It("should report id1 and id22 up", func() {
-							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							Expect(statusReportRec.currentState).To(Equal(map[any]string{
 								types.HostEndpointID{EndpointId: "id1"}:  "up",
 								types.HostEndpointID{EndpointId: "id22"}: "up",
 							}))
@@ -1515,7 +1519,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						// because of alphabetical ordering.  "id1" is then
 						// unused, and so reported as in error.
 						It("should report id1 error and id0 up", func() {
-							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							Expect(statusReportRec.currentState).To(Equal(map[any]string{
 								types.HostEndpointID{EndpointId: "id1"}: "error",
 								types.HostEndpointID{EndpointId: "id0"}: "up",
 							}))
@@ -1529,7 +1533,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						}))
 						It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0", "eth1"))
 						It("should report id1 and id22 up", func() {
-							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							Expect(statusReportRec.currentState).To(Equal(map[any]string{
 								types.HostEndpointID{EndpointId: "id1"}:  "up",
 								types.HostEndpointID{EndpointId: "id22"}: "up",
 							}))
@@ -1545,7 +1549,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report endpoint in error", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id3"}: "error",
 					}))
 				})
@@ -1558,7 +1562,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0"))
 				It("should report id4 up", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id4"}: "up",
 					}))
 				})
@@ -1571,7 +1575,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0"))
 				It("should report id5 up", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id5"}: "up",
 					}))
 				})
@@ -1585,7 +1589,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0"))
 				It("should report id3 up", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id3"}: "up",
 					}))
 				})
@@ -1599,7 +1603,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0"))
 				It("should report id3 up", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id3"}: "up",
 					}))
 				})
@@ -1613,7 +1617,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report id3 error", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id3"}: "error",
 					}))
 				})
@@ -1627,7 +1631,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report id3 error", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id3"}: "error",
 					}))
 				})
@@ -1640,7 +1644,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report id4 error", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id4"}: "error",
 					}))
 				})
@@ -1653,7 +1657,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				}))
 				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report id5 error", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id5"}: "error",
 					}))
 				})
@@ -1667,7 +1671,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			}))
 			It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 			It("should report id3 error", func() {
-				Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+				Expect(statusReportRec.currentState).To(Equal(map[any]string{
 					types.HostEndpointID{EndpointId: "id3"}: "error",
 				}))
 			})
@@ -1686,7 +1690,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 				It("should have expected chains", expectChainsFor(ipVersion, flowlogs, "eth0"))
 				It("should report id3 up", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.HostEndpointID{EndpointId: "id3"}: "up",
 					}))
 				})
@@ -1870,18 +1874,22 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				It("should set routes", func() {
 					if ipVersion == 6 {
 						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
-							CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+							RouteKey: routetable.RouteKey{
+								CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+							},
 							DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 						}})
 					} else {
 						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
-							CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
+							RouteKey: routetable.RouteKey{
+								CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
+							},
 							DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 						}})
 					}
 				})
 				It("should report endpoint down", func() {
-					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					Expect(statusReportRec.currentState).To(Equal(map[any]string{
 						types.ProtoToWorkloadEndpointID(&wlEPID1): "down",
 					}))
 				})
@@ -1900,7 +1908,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						applyUpdates(epMgr)
 					})
 					It("should report the interface as down", func() {
-						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						Expect(statusReportRec.currentState).To(Equal(map[any]string{
 							types.ProtoToWorkloadEndpointID(&wlEPID1): "down",
 						}))
 					})
@@ -1921,7 +1929,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					It("should have expected chains", expectWlChainsFor(ipVersion, flowlogs, "cali12345-ab"))
 					It("should report endpoint up", func() {
-						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						Expect(statusReportRec.currentState).To(Equal(map[any]string{
 							types.ProtoToWorkloadEndpointID(&wlEPID1): "up",
 						}))
 					})
@@ -1976,30 +1984,42 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							if ipVersion == 6 {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDROrIP("2001:db8:3::2/128"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("2001:db8:3::2/128"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDROrIP("2001:db8:4::2/128"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("2001:db8:4::2/128"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
 							} else {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDROrIP("172.16.1.3/32"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("172.16.1.3/32"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDROrIP("172.18.1.4/32"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("172.18.1.4/32"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
@@ -2012,7 +2032,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					// programmed.
 					Context("with floating IPs disabled, but added to the endpoint", func() {
 						JustBeforeEach(func() {
-							epMgr.floatingIPsEnabled = false
+							epMgr.cfg.floatingIPsEnabled = false
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 								Id: &wlEPID1,
 								Endpoint: &proto.WorkloadEndpoint{
@@ -2045,14 +2065,18 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							if ipVersion == 6 {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
 							} else {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
+										RouteKey: routetable.RouteKey{
+											CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
+										},
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
@@ -2109,7 +2133,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 							routeTable.checkRoutes("cali12345-ab", nil)
 						})
 						It("should report endpoint up", func() {
-							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							Expect(statusReportRec.currentState).To(Equal(map[any]string{
 								types.ProtoToWorkloadEndpointID(&wlEPID1): "up",
 							}))
 						})
@@ -2117,12 +2141,16 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						It("should have set routes for new iface", func() {
 							if ipVersion == 6 {
 								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
-									CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+									RouteKey: routetable.RouteKey{
+										CIDR: ip.MustParseCIDROrIP("2001:db8:2::2/128"),
+									},
 									DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 								}})
 							} else {
 								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
-									CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
+									RouteKey: routetable.RouteKey{
+										CIDR: ip.MustParseCIDROrIP("10.0.240.0/24"),
+									},
 									DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 								}})
 							}
@@ -2295,6 +2323,151 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should remove routes", func() {
+					routeTable.checkRoutes("cali12345-ab", nil)
+				})
+			})
+		})
+
+		Describe("live migration route priority", func() {
+			const (
+				normalPriority   = 100
+				elevatedPriority = 50
+			)
+
+			wlEPUpdate := &proto.WorkloadEndpointUpdate{
+				Id: &wlEPID1,
+				Endpoint: &proto.WorkloadEndpoint{
+					State:      "active",
+					Mac:        "01:02:03:04:05:06",
+					Name:       "cali12345-ab",
+					ProfileIds: []string{},
+					Tiers:      []*proto.TierInfo{},
+					Ipv4Nets:   []string{"10.0.240.2/24"},
+					Ipv6Nets:   []string{"2001:db8:2::2/128"},
+				},
+			}
+
+			expectedRouteTarget := func(priority int) []routetable.Target {
+				var cidr string
+				if ipVersion == 6 {
+					cidr = "2001:db8:2::2/128"
+				} else {
+					cidr = "10.0.240.0/24"
+				}
+				return []routetable.Target{{
+					RouteKey: routetable.RouteKey{
+						CIDR:     ip.MustParseCIDROrIP(cidr),
+						Priority: priority,
+					},
+					DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+				}}
+			}
+
+			JustBeforeEach(func() {
+				// Override config with explicit route priorities.
+				epMgr.cfg.normalRoutePriority = normalPriority
+				epMgr.cfg.elevatedRoutePriority = elevatedPriority
+			})
+
+			Context("with endpoint already active", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(wlEPUpdate)
+					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					applyUpdates(epMgr)
+				})
+
+				It("should set routes at normal priority", func() {
+					routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+				})
+
+				Context("when live migration state becomes Target", func() {
+					JustBeforeEach(func() {
+						epMgr.OnLiveMigrationStateUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							liveMigrationStateTarget,
+						)
+						applyUpdates(epMgr)
+					})
+
+					It("should suppress routes", func() {
+						routeTable.checkRoutes("cali12345-ab", nil)
+					})
+
+					Context("when live migration state becomes Live", func() {
+						JustBeforeEach(func() {
+							epMgr.OnLiveMigrationStateUpdate(
+								types.ProtoToWorkloadEndpointID(&wlEPID1),
+								liveMigrationStateLive,
+							)
+							applyUpdates(epMgr)
+						})
+
+						It("should set routes at elevated priority", func() {
+							routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+						})
+
+						Context("when live migration state becomes TimeWait", func() {
+							JustBeforeEach(func() {
+								epMgr.OnLiveMigrationStateUpdate(
+									types.ProtoToWorkloadEndpointID(&wlEPID1),
+									liveMigrationStateTimeWait,
+								)
+								applyUpdates(epMgr)
+							})
+
+							It("should still set routes at elevated priority", func() {
+								routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+							})
+
+							Context("when live migration state becomes Base", func() {
+								JustBeforeEach(func() {
+									epMgr.OnLiveMigrationStateUpdate(
+										types.ProtoToWorkloadEndpointID(&wlEPID1),
+										liveMigrationStateBase,
+									)
+									applyUpdates(epMgr)
+								})
+
+								It("should revert to normal priority", func() {
+									routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+								})
+							})
+						})
+					})
+				})
+
+				Context("when endpoint is removed while in live migration", func() {
+					JustBeforeEach(func() {
+						epMgr.OnLiveMigrationStateUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							liveMigrationStateLive,
+						)
+						applyUpdates(epMgr)
+						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &wlEPID1})
+						applyUpdates(epMgr)
+					})
+
+					It("should remove routes and clean up live migration state", func() {
+						routeTable.checkRoutes("cali12345-ab", nil)
+						Expect(epMgr.pendingLiveMigrationStates).To(BeEmpty())
+					})
+				})
+			})
+
+			Context("when live migration state arrives before endpoint", func() {
+				JustBeforeEach(func() {
+					// Live migration state update arrives but WEP isn't active yet.
+					epMgr.OnLiveMigrationStateUpdate(
+						types.ProtoToWorkloadEndpointID(&wlEPID1),
+						liveMigrationStateTarget,
+					)
+					// Now the WEP arrives.
+					epMgr.OnUpdate(wlEPUpdate)
+					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					applyUpdates(epMgr)
+				})
+
+				It("should suppress routes for the target", func() {
 					routeTable.checkRoutes("cali12345-ab", nil)
 				})
 			})

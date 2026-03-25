@@ -17,6 +17,8 @@ package nftables
 import (
 	"fmt"
 	"math"
+	"net"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -292,7 +294,7 @@ func (g DNATAction) ToFragment(features *environment.Features) string {
 	if g.DestPort == 0 {
 		return fmt.Sprintf("dnat to %s", g.DestAddr)
 	} else {
-		return fmt.Sprintf("dnat to %s:%d", g.DestAddr, g.DestPort)
+		return fmt.Sprintf("dnat to %s", net.JoinHostPort(g.DestAddr, strconv.Itoa(int(g.DestPort))))
 	}
 }
 
@@ -329,7 +331,7 @@ func (g MasqAction) ToFragment(features *environment.Features) string {
 	}
 	if g.ToPorts != "" {
 		// e.g., masquerade to :1024-65535
-		return fmt.Sprintf("masquerade to %s"+fullyRand, g.ToPorts)
+		return fmt.Sprintf("masquerade to :%s"+fullyRand, g.ToPorts)
 	}
 	return "masquerade" + fullyRand
 }

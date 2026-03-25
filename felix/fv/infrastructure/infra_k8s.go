@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -42,7 +42,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -52,6 +52,17 @@ import (
 )
 
 const DefaultBPFLogByteLimit = 64 * 1024 * 1024
+
+// retryBackoff sleeps for the given delay and returns the next delay,
+// doubling each time up to maxDelay.
+func retryBackoff(current, maxDelay time.Duration) time.Duration {
+	time.Sleep(current)
+	next := current * 2
+	if next > maxDelay {
+		next = maxDelay
+	}
+	return next
+}
 
 type K8sDatastoreInfra struct {
 	etcdContainer        *containers.Container
@@ -131,25 +142,19 @@ func TearDownK8sInfra(kds *K8sDatastoreInfra) {
 	}
 
 	if kds.etcdContainer != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			kds.etcdContainer.Stop()
-		}()
+		})
 	}
 	if kds.k8sApiContainer != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			kds.k8sApiContainer.Stop()
-		}()
+		})
 	}
 	if kds.k8sControllerManager != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			kds.k8sControllerManager.Stop()
-		}()
+		})
 	}
 	wg.Wait()
 	log.Info("TearDownK8sInfra done")
@@ -209,7 +214,7 @@ func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
 		kds.bpfLog = RunBPFLog(kds, kds.bpfLogByteLimit)
 	}
-	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
+	K8sInfra[index].runningTest = ginkgo.CurrentSpecReport().FullText()
 }
 
 type CleanupProvider interface {
@@ -238,9 +243,11 @@ func (kds *K8sDatastoreInfra) runK8sApiserver() {
 	if err != nil {
 		panic(err)
 	}
+	crdPath := os.Getenv("CALICO_CRD_PATH")
+
 	args := []string{
 		"-v", os.Getenv("CERTS_PATH") + ":/home/user/certs", // Mount in location of certificates.
-		"-v", pwd + "/../../libcalico-go/config/crd:/crds", // Mount in location of CRDs.
+		"-v", fmt.Sprintf("%s/../../%s:/crds", pwd, crdPath), // Mount in location of CRDs.
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
@@ -360,6 +367,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	log.Info("Started API server")
 
 	start := time.Now()
+	delay := 100 * time.Millisecond
 	for {
 		var err error
 		kds.K8sClient, err = kubernetes.NewForConfig(&rest.Config{
@@ -375,13 +383,14 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to create k8s client.")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 	log.Info("Got k8s client")
 
 	// Allow anonymous connections to the API server.  We also use this command to wait
 	// for the API server to be up.
 	start = time.Now()
+	delay = 100 * time.Millisecond
 	for {
 		err := kds.k8sApiContainer.ExecMayFail(
 			"kubectl", "create", "clusterrolebinding",
@@ -405,11 +414,12 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to install role binding")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 	log.Info("Added role binding.")
 
 	start = time.Now()
+	delay = 500 * time.Millisecond
 	for {
 		_, err := kds.K8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 		if err == nil {
@@ -419,7 +429,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to list namespaces.")
 			return nil, err
 		}
-		time.Sleep(500 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 	log.Info("List namespaces successfully.")
 
@@ -442,14 +452,20 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	kds.BadEndpoint = fmt.Sprintf("https://%s:1234", kds.containerGetIPForURL(kds.k8sApiContainer))
 
 	start = time.Now()
+	delay = 100 * time.Millisecond
+	groupVersion := os.Getenv("CALICO_API_GROUP")
 	for {
 		var resp *http.Response
-		resp, err = insecureHTTPClient.Get(kds.Endpoint + "/apis/crd.projectcalico.org/v1/felixconfigurations")
+		resp, err = insecureHTTPClient.Get(fmt.Sprintf("%s/apis/%s/felixconfigurations", kds.Endpoint, groupVersion))
 		if resp.StatusCode != 200 {
 			err = fmt.Errorf("bad status (%v) for CRD GET request", resp.StatusCode)
 		}
 		if err != nil || resp.StatusCode != 200 {
 			log.WithError(err).WithField("status", resp.StatusCode).Warn("Waiting for API server to respond to requests")
+		}
+		// Back off harder on 429 to give the API server time to recover.
+		if resp.StatusCode == http.StatusTooManyRequests && delay < 1*time.Second {
+			delay = 1 * time.Second
 		}
 		resp.Body.Close()
 		if err == nil {
@@ -459,13 +475,14 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("API server is not responding to requests")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 
 	log.Info("API server is up.")
 
 	kds.CertFileName = "/tmp/" + kds.k8sApiContainer.Name + ".crt"
 	start = time.Now()
+	delay = 100 * time.Millisecond
 	for {
 		// Make sure any retry is clean.
 		_ = os.Remove(kds.CertFileName)
@@ -480,7 +497,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 				log.WithError(err).Error("Failed to get API server cert")
 				return nil, err
 			}
-			time.Sleep(100 * time.Millisecond)
+			delay = retryBackoff(delay, 5*time.Second)
 			continue
 		}
 		// Sometimes the very first felix container that we start fails to
@@ -490,7 +507,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			if time.Since(start) > 120*time.Second {
 				return nil, err
 			}
-			time.Sleep(100 * time.Millisecond)
+			delay = retryBackoff(delay, 5*time.Second)
 			continue
 		}
 		if f, err := os.Open(kds.CertFileName); err != nil {
@@ -498,7 +515,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			if time.Since(start) > 120*time.Second {
 				return nil, err
 			}
-			time.Sleep(100 * time.Millisecond)
+			delay = retryBackoff(delay, 5*time.Second)
 			continue
 		} else {
 			err := f.Sync()
@@ -512,6 +529,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	log.Info("Got API server cert.")
 
 	start = time.Now()
+	delay = 100 * time.Millisecond
 	for {
 		kds.calicoClient, err = client.New(apiconfig.CalicoAPIConfig{
 			Spec: apiconfig.CalicoAPIConfigSpec{
@@ -520,6 +538,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 					K8sAPIEndpoint:           kds.Endpoint,
 					K8sInsecureSkipTLSVerify: true,
 					K8sClientQPS:             100,
+					CalicoAPIGroup:           os.Getenv("CALICO_API_GROUP"),
 				},
 			},
 		})
@@ -539,11 +558,12 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to initialise calico client")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 
 	log.Info("Wait for creating default service account")
 	start = time.Now()
+	delay = 100 * time.Millisecond
 	for {
 		_, err := kds.K8sClient.CoreV1().ServiceAccounts("default").Get(context.Background(), "default", metav1.GetOptions{})
 		if err == nil {
@@ -553,7 +573,7 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 			log.WithError(err).Error("Failed to get default service account.")
 			return nil, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		delay = retryBackoff(delay, 5*time.Second)
 	}
 
 	log.Info("Controller manager is up. k8s datastore setup is done")
@@ -598,7 +618,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 
 	// We do run the per-test cleanup stack, this tears down the resources that
 	// the test created.
-	if ginkgo.CurrentGinkgoTestDescription().Failed {
+	if ginkgo.CurrentSpecReport().Failed() {
 		// Queue up the diags dump so that the cleanupStack will handle any
 		// panic from it.
 		kds.AddCleanup(kds.DumpErrorData)
@@ -679,7 +699,6 @@ func (kds *K8sDatastoreInfra) GetDockerArgs() []string {
 		"-e", "K8S_API_ENDPOINT=" + kds.Endpoint,
 		"-e", "KUBERNETES_MASTER=" + kds.Endpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", kds.CertFileName, "/tmp/apiserver.crt"),
 	}
 }
 
@@ -690,12 +709,15 @@ func (kds *K8sDatastoreInfra) GetBadEndpointDockerArgs() []string {
 		"-e", "TYPHA_DATASTORETYPE=kubernetes",
 		"-e", "K8S_API_ENDPOINT=" + kds.BadEndpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", kds.CertFileName, "/tmp/apiserver.crt"),
 	}
 }
 
 func (kds *K8sDatastoreInfra) GetCalicoClient() client.Interface {
 	return kds.calicoClient
+}
+
+func (kds *K8sDatastoreInfra) UseProjectCalicoV3API() bool {
+	return os.Getenv("CALICO_API_GROUP") == "projectcalico.org/v3"
 }
 
 func (kds *K8sDatastoreInfra) GetClusterGUID() string {
@@ -810,11 +832,12 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 	log.WithField("nodeIn", nodeIn).Debug("Node defined")
 	var nodeOut *v1.Node
 	var err error
+	delay := 1 * time.Second
 	for i := range 5 {
 		nodeOut, err = kds.K8sClient.CoreV1().Nodes().Create(context.Background(), nodeIn, metav1.CreateOptions{})
 		if err != nil {
 			log.WithError(err).WithField("try number", i).Debug("Error creating node")
-			time.Sleep(3 * time.Second)
+			delay = retryBackoff(delay, 5*time.Second)
 			continue
 		}
 		break
@@ -854,7 +877,7 @@ func (kds *K8sDatastoreInfra) RemoveWorkload(ns, name string) error {
 	return err
 }
 
-func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+func (kds *K8sDatastoreInfra) AddWorkload(wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error) {
 	desiredStatus := getPodStatusFromWep(wep)
 	podIn := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},
@@ -899,7 +922,7 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 	return kds.calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, name, options.GetOptions{})
 }
 
-func (kds *K8sDatastoreInfra) UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+func (kds *K8sDatastoreInfra) UpdateWorkload(wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error) {
 	log.WithField("wep", wep).Debug("Updating Pod for workload (labels, annotations and status only)")
 	podIn, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Get(context.Background(), wep.Spec.Workload, metav1.GetOptions{})
 	if err != nil {
@@ -1389,7 +1412,7 @@ func K8sWithDualStack() CreateOption {
 	}
 }
 
-func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
+func getPodStatusFromWep(wep *internalapi.WorkloadEndpoint) v1.PodStatus {
 	podIPs := []v1.PodIP{}
 	for _, ipnet := range wep.Spec.IPNetworks {
 		podIP := strings.Split(ipnet, "/")[0]
@@ -1414,7 +1437,7 @@ func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
 	return podStatus
 }
 
-func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v1.Pod {
+func updatePodLabelsAndAnnotations(wep *internalapi.WorkloadEndpoint, pod *v1.Pod) *v1.Pod {
 	if wep.Labels != nil {
 		pod.Labels = wep.Labels
 	}

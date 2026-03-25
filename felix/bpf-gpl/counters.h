@@ -56,7 +56,7 @@ static CALI_BPF_INLINE void counter_inc(struct cali_tc_ctx *ctx, int type)
 
 static CALI_BPF_INLINE void deny_reason(struct cali_tc_ctx *ctx, int reason)
 {
-	ctx->fwd.reason = reason;
+	ctx->state->fwd.reason = reason;
 	counter_inc(ctx, reason);
 }
 

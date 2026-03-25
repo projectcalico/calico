@@ -35,7 +35,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -144,7 +144,8 @@ func NewIPAMChecker(k8sClient kubernetes.Interface,
 	showAllIPs bool,
 	showProblemIPs bool,
 	outFile string,
-	version string) *IPAMChecker {
+	version string,
+) *IPAMChecker {
 	return &IPAMChecker{
 		allocations:       map[string][]*Allocation{},
 		allocationsByNode: map[string][]*Allocation{},
@@ -474,7 +475,7 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 	return nil
 }
 
-func getWEPIPs(w apiv3.WorkloadEndpoint) ([]string, error) {
+func getWEPIPs(w internalapi.WorkloadEndpoint) ([]string, error) {
 	var ips []string
 	for _, a := range w.Spec.IPNetworks {
 		ip, err := normaliseIP(a)
@@ -513,7 +514,7 @@ func (c *IPAMChecker) printReport() {
 		LeakedHandles:       c.leakedHandles,
 	}
 	bytes, _ := json.MarshalIndent(r, "", "  ")
-	_ = os.WriteFile(c.outFile, bytes, 0777)
+	_ = os.WriteFile(c.outFile, bytes, 0o777)
 }
 
 // recordAllocation takes a block and ordinal within that block and updates
@@ -535,25 +536,25 @@ func (c *IPAMChecker) recordAllocation(b *model.AllocationBlock, ord int) {
 	attrIdx := *b.Allocations[ord]
 	if len(b.Attributes) > attrIdx {
 		attrs := b.Attributes[attrIdx]
-		if attrs.AttrPrimary != nil && *attrs.AttrPrimary == ipam.WindowsReservedHandle {
+		if attrs.HandleID != nil && *attrs.HandleID == ipam.WindowsReservedHandle {
 			c.recordInUseIP(ip, b, "Reserved for Windows")
-		} else if attrs.AttrPrimary != nil {
-			alloc.Handle = *attrs.AttrPrimary
+		} else if attrs.HandleID != nil {
+			alloc.Handle = *attrs.HandleID
 			c.recordInUseHandle(alloc.Handle)
 		}
-		if n := attrs.AttrSecondary["node"]; n != "" {
+		if n := attrs.ActiveOwnerAttrs["node"]; n != "" {
 			node = n
 		}
-		if p := attrs.AttrSecondary["pod"]; p != "" {
+		if p := attrs.ActiveOwnerAttrs["pod"]; p != "" {
 			alloc.Pod = p
 		}
-		if n := attrs.AttrSecondary["namespace"]; n != "" {
+		if n := attrs.ActiveOwnerAttrs["namespace"]; n != "" {
 			alloc.Namespace = n
 		}
-		if t := attrs.AttrSecondary["type"]; t != "" {
+		if t := attrs.ActiveOwnerAttrs["type"]; t != "" {
 			alloc.Type = t
 		}
-		if t := attrs.AttrSecondary["timestamp"]; t != "" {
+		if t := attrs.ActiveOwnerAttrs["timestamp"]; t != "" {
 			alloc.CreationTimestamp = t
 		}
 	}
@@ -584,7 +585,7 @@ func (c *IPAMChecker) recordAllocation(b *model.AllocationBlock, ord int) {
 }
 
 // recordInUseIP records that the given IP is currently being used by the given resource (i.e., pod, node, etc).
-func (c *IPAMChecker) recordInUseIP(ip string, referrer interface{}, friendlyName string) {
+func (c *IPAMChecker) recordInUseIP(ip string, referrer any, friendlyName string) {
 	if c.showAllIPs {
 		fmt.Printf("  %s belongs to %s\n", ip, friendlyName)
 	}
@@ -605,7 +606,7 @@ func (c *IPAMChecker) recordInUseHandle(handle string) {
 	c.inUseHandles.Add(handle)
 }
 
-func getNodeIPs(n apiv3.Node) ([]string, error) {
+func getNodeIPs(n internalapi.Node) ([]string, error) {
 	var ips []string
 	if n.Spec.IPv4VXLANTunnelAddr != "" {
 		ip, err := normaliseIP(n.Spec.IPv4VXLANTunnelAddr)
@@ -689,22 +690,34 @@ type HandleInfo struct {
 
 func formatAttrs(attribute model.AllocationAttribute) string {
 	primary := "<none>"
-	if attribute.AttrPrimary != nil {
-		primary = *attribute.AttrPrimary
+	if attribute.HandleID != nil {
+		primary = *attribute.HandleID
 	}
+
+	result := fmt.Sprintf("Main:%s Extra:%s", primary, kvsFormat(attribute.ActiveOwnerAttrs))
+
+	if len(attribute.AlternateOwnerAttrs) > 0 {
+		result = fmt.Sprintf("%s Alternate:%s", result, kvsFormat(attribute.AlternateOwnerAttrs))
+	}
+
+	return result
+}
+
+// kvsFormat formats a map as a sorted, comma-separated list of key=value pairs.
+func kvsFormat(m map[string]string) string {
 	var keys []string
-	for k := range attribute.AttrSecondary {
+	for k := range m {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	var kvs []string
 	for _, k := range keys {
-		kvs = append(kvs, fmt.Sprintf("%s=%s", k, attribute.AttrSecondary[k]))
+		kvs = append(kvs, fmt.Sprintf("%s=%s", k, m[k]))
 	}
-	return fmt.Sprintf("Main:%s Extra:%s", primary, strings.Join(kvs, ","))
+	return strings.Join(kvs, ",")
 }
 
 type ownerRecord struct {
 	FriendlyName string
-	Resource     interface{}
+	Resource     any
 }

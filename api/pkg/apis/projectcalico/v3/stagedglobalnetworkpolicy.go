@@ -26,20 +26,27 @@ const (
 
 // +genclient
 // +genclient:nonNamespaced
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster,shortName={sgnp}
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
+// +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
 
 // StagedGlobalNetworkPolicy is a staged GlobalNetworkPolicy.
 type StagedGlobalNetworkPolicy struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the Policy.
-	Spec StagedGlobalNetworkPolicySpec `json:"spec,omitempty"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              StagedGlobalNetworkPolicySpec `json:"spec"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT) && self.preDNAT))",message="preDNAT and doNotTrack cannot both be true",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) || size(self.egress) == 0",message="preDNAT policy cannot have any egress rules",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t, t == 'Egress')",message="preDNAT policy cannot have 'Egress' type",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="(has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack) || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))",message="applyOnForward must be true if either preDNAT or doNotTrack is true",reason=FieldValueInvalid
 type StagedGlobalNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
-	StagedAction StagedAction `json:"stagedAction,omitempty" validate:"omitempty,stagedAction"`
+	// +kubebuilder:default=Set
+	StagedAction StagedAction `json:"stagedAction,omitempty"`
 
 	// The name of the tier that this policy belongs to.  If this is omitted, the default
 	// tier (name is "default") is assumed.  The specified tier must exist in order to create
@@ -100,7 +107,10 @@ type StagedGlobalNetworkPolicySpec struct {
 	//
 	// When the policy is read back again, Types will always be one of these values, never empty
 	// or nil.
-	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=2
+	// +listType=set
+	Types []PolicyType `json:"types,omitempty"`
 
 	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in

@@ -53,7 +53,17 @@ components:
     version: v3.31.0
   typha:
     version: v3.31.0
+  webhooks:
+    version: v3.31.0
   whisker:
     version: v3.31.0
   whisker-backend:
+    version: v3.31.0
+  istio-install-cni:
+    version: v3.31.0
+  istio-pilot:
+    version: v3.31.0
+  istio-proxyv2:
+    version: v3.31.0
+  istio-ztunnel:
     version: v3.31.0

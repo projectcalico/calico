@@ -24,13 +24,14 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -213,6 +214,8 @@ func UniqueName(namePrefix string) string {
 	return name
 }
 
+const maxContainerStartRetries = 3
+
 func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) {
 	c = &Container{
 		Name:             name,
@@ -241,33 +244,55 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	// Add remaining args
 	runArgs = append(runArgs, args...)
 
-	c.runCmd = utils.Command("docker", runArgs...)
+	var lastErr error
+	for attempt := 1; attempt <= maxContainerStartRetries; attempt++ {
+		if attempt > 1 {
+			log.WithFields(log.Fields{
+				"container": c.Name,
+				"attempt":   attempt,
+				"lastErr":   lastErr,
+			}).Warn("Retrying container startup after transient failure")
+			// Wait for log goroutines from the previous attempt to finish.
+			c.logFinished.Wait()
+			// Clean up any remnants of the failed container.
+			cleanCmd := utils.Command("docker", "rm", "-f", c.Name)
+			_ = cleanCmd.Run()
+			time.Sleep(time.Second)
+		}
 
-	if opts.WithStdinPipe {
-		var err error
-		c.Stdin, err = c.runCmd.StdinPipe()
+		c.runCmd = utils.Command("docker", runArgs...)
+
+		if opts.WithStdinPipe {
+			var err error
+			c.Stdin, err = c.runCmd.StdinPipe()
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// Get the command's output pipes, so we can merge those into the test's own logging.
+		stdout, err := c.runCmd.StdoutPipe()
 		Expect(err).NotTo(HaveOccurred())
+		stderr, err := c.runCmd.StderrPipe()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Start the container running.
+		err = c.runCmd.Start()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Merge container's output into our own logging.
+		c.logFinished.Add(2)
+
+		go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
+		go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches, nil)
+
+		// Note: it might take a long time for the container to start running,
+		// e.g. if the image needs to be downloaded.
+		lastErr = c.waitUntilRunning()
+		if lastErr == nil {
+			break
+		}
+		log.WithError(lastErr).WithField("container", c.Name).Warn("Container failed to start")
 	}
-
-	// Get the command's output pipes, so we can merge those into the test's own logging.
-	stdout, err := c.runCmd.StdoutPipe()
-	Expect(err).NotTo(HaveOccurred())
-	stderr, err := c.runCmd.StderrPipe()
-	Expect(err).NotTo(HaveOccurred())
-
-	// Start the container running.
-	err = c.runCmd.Start()
-	Expect(err).NotTo(HaveOccurred())
-
-	// Merge container's output into our own logging.
-	c.logFinished.Add(2)
-
-	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
-	go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches, nil)
-
-	// Note: it might take a long time for the container to start running, e.g. if the image
-	// needs to be downloaded.
-	c.WaitUntilRunning()
+	Expect(lastErr).NotTo(HaveOccurred(), fmt.Sprintf("Container %s failed to start after %d attempts", c.Name, maxContainerStartRetries))
 
 	// Fill in rest of container struct.
 	c.IP = c.GetIP()
@@ -425,7 +450,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		// Capture data race warnings and log to file.
 		if strings.Contains(line, "WARNING: DATA RACE") {
 			_, err := fmt.Fprintf(dataRaceFile, "Detected data race (in %s) while running test: %s\n",
-				c.Name, ginkgo.CurrentGinkgoTestDescription().FullTestText)
+				c.Name, ginkgo.CurrentSpecReport().FullText())
 			Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log.")
 			foundDataRace = true
 		}
@@ -539,7 +564,7 @@ func (c *Container) GetPIDs(processName string) []int {
 		return nil
 	}
 	var pids []int
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if line == "" {
 			continue
 		}
@@ -564,7 +589,7 @@ func (c *Container) GetProcInfo(processName string) []ProcInfo {
 		return nil
 	}
 	var pids []ProcInfo
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		log.WithField("line", line).Debug("Parsing ps line")
 		matches := psRegexp.FindStringSubmatch(line)
 		if len(matches) == 0 {
@@ -620,27 +645,43 @@ func (c *Container) GetSinglePID(processName string) int {
 }
 
 func (c *Container) WaitUntilRunning() {
+	err := c.waitUntilRunning()
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func (c *Container) waitUntilRunning() error {
 	log.Info("Wait for container to be listed in docker ps")
 
 	// Set up so we detect if container startup fails.
 	stoppedChan := make(chan struct{})
+	// Capture runCmd locally so the goroutine doesn't race with a retry
+	// that reassigns c.runCmd.
+	runCmd := c.runCmd
 	go func() {
 		defer close(stoppedChan)
-		err := c.runCmd.Wait()
+		err := runCmd.Wait()
 		log.WithError(err).WithField("name", c.Name).Info("Container stopped ('docker run' exited)")
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
-		c.runCmd = nil
+		if c.runCmd == runCmd {
+			c.runCmd = nil
+		}
 	}()
 
 	for {
-		Expect(stoppedChan).NotTo(BeClosed(), fmt.Sprintf("Container %s failed before being listed in 'docker ps'", c.Name))
+		select {
+		case <-stoppedChan:
+			return fmt.Errorf("container %s failed before being listed in 'docker ps'", c.Name)
+		default:
+		}
 
 		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred(), "Failed to run 'docker ps'")
+		if err != nil {
+			return fmt.Errorf("failed to run 'docker ps': %w", err)
+		}
 		if strings.Contains(string(out), c.Name) {
-			break
+			return nil
 		}
 		time.Sleep(1000 * time.Millisecond)
 	}
@@ -801,7 +842,7 @@ func (c *Container) IPSetSizes() map[string]int {
 	currentName := ""
 	membersSeen := false
 	log.WithField("ipsets", ipsetsOutput).Info("IP sets state")
-	for _, line := range strings.Split(ipsetsOutput, "\n") {
+	for line := range strings.SplitSeq(ipsetsOutput, "\n") {
 		log.WithField("line", line).Debug("Parsing line")
 		if strings.HasPrefix(line, "Name:") {
 			currentName = strings.Split(line, " ")[1]
@@ -851,19 +892,19 @@ func (c *Container) NumNFTSetMembers(ipVersion int, setName string) int {
 	}
 
 	type nftResp struct {
-		Nftables []map[string]interface{} `json:"nftables"`
+		Nftables []map[string]any `json:"nftables"`
 	}
 	var resp nftResp
 	Expect(json.Unmarshal([]byte(out), &resp)).NotTo(HaveOccurred(), fmt.Sprintf("Failed to unmarshal JSON: %s", out))
 	for _, obj := range resp.Nftables {
 		if obj["set"] != nil {
-			setObj, ok := obj["set"].(map[string]interface{})
+			setObj, ok := obj["set"].(map[string]any)
 			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse set: %v", obj))
 			if _, ok := setObj["elem"]; !ok {
 				// No elements.
 				return 0
 			}
-			elems, ok := setObj["elem"].([]interface{})
+			elems, ok := setObj["elem"].([]any)
 			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse elem: %v", setObj))
 			return len(elems)
 		}
@@ -896,7 +937,7 @@ func (c *Container) nftablesSetNamesForVersion(ver string) []string {
 	out, err := c.ExecOutput("nft", "list", "sets", ver)
 	Expect(err).NotTo(HaveOccurred(), out)
 	var names []string
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "set ") {
 			// set <name> {
@@ -1023,24 +1064,12 @@ func (c *Container) BPFNATDump(ipv6 bool) map[string][]string {
 // BPFNATHasBackendForService returns true is the given service has the given backend programmed in NAT tables
 func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int, ip string, port int) bool {
 	front := fmt.Sprintf("%s port %d proto %d", svcIP, svcPort, proto)
-	fmtStr := "%s:%d"
-	ipv6 := false
-	ipAddr := net.ParseIP(ip)
-	if ipAddr.To4() == nil {
-		fmtStr = "[%s]:%d"
-		ipv6 = true
-	}
-	back := fmt.Sprintf(fmtStr, ip, port)
+	back := net.JoinHostPort(ip, fmt.Sprint(port))
 
+	ipv6 := net.ParseIP(ip).To4() == nil
 	nat := c.BPFNATDump(ipv6)
 	if natBack, ok := nat[front]; ok {
-		found := false
-		for _, b := range natBack {
-			if b == back {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(natBack, back)
 		if !found {
 			return false
 		}

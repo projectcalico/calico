@@ -7,9 +7,18 @@
 
 #include "types.h"
 
-CALI_MAP(cali_state, 5,
+#define STATE_SIZE 512
+
+static CALI_BPF_INLINE void __compile_state_asserts(void) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-local-typedef"
+COMPILE_TIME_ASSERT(sizeof(struct cali_tc_state) <= STATE_SIZE);
+#pragma clang diagnostic pop
+}
+
+CALI_MAP(cali_state, 6,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
-		__u32, struct cali_tc_state,
+		__u32, char[STATE_SIZE],
 		2, 0)
 
 static CALI_BPF_INLINE struct cali_tc_state *state_get(void)
@@ -87,6 +96,7 @@ enum cali_jump_index {
 	PROG_INDEX_NEW_FLOW,
 	PROG_INDEX_IP_FRAG,
 	PROG_INDEX_MAGLEV,
+	PROG_INDEX_TCP_RST,
 
 	PROG_INDEX_MAIN_DEBUG,
 	PROG_INDEX_POLICY_DEBUG,
@@ -98,6 +108,7 @@ enum cali_jump_index {
 	PROG_INDEX_NEW_FLOW_DEBUG,
 	PROG_INDEX_IP_FRAG_DEBUG,
 	PROG_INDEX_MAGLEV_DEBUG,
+	PROG_INDEX_TCP_RST_DEBUG,
 };
 
 #if CALI_F_XDP

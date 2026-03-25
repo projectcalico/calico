@@ -1,5 +1,5 @@
 # Project Calico BPF dataplane build scripts.
-# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 # Disable implicit rules.
@@ -58,9 +58,10 @@ LD := llc
 UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 UT_OBJS+=ut/ip_parse_test_v6.o
+UT_OBJS+=ut/tcp_rst_v6.o
 
 XDP_MAP_HEADERS := jump.h
-COMMON_MAP_HEADERS := counters.h ifstate.h perf_types.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
+COMMON_MAP_HEADERS := counters.h ifstate.h ringbuf.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
 IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_types.h policy.h routes.h sendrecv.h
 IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
@@ -125,11 +126,11 @@ $(LIBBPF_FILE_CREATED):
 ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
 	$(info "Directory does not exist.")
 	@echo "Directory does not exist."
-	git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
+	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
 endif
 	rm -rf .libbpf-*
 	cd $(LIBBPF_DIR) && \
-		git fetch --tags && git checkout $(LIBBPF_VERSION)
+		env -u GIT_DIR -u GIT_WORK_TREE git fetch --tags && env -u GIT_DIR -u GIT_WORK_TREE git checkout $(LIBBPF_VERSION)
 	touch $(LIBBPF_FILE_CREATED)
 
 
@@ -187,9 +188,23 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 test_xdp%_v6.ll: xdp.c xdp_v6.d calculate-flags
 	$(COMPILE)
 
+tc.d: tc.c
+	$(COMPILE_DEPS)
 tc_v6.d: tc.c
 	$(COMPILE_DEPS)
+xdp.d: xdp.c
+	$(COMPILE_DEPS)
 xdp_v6.d: xdp.c
+	$(COMPILE_DEPS)
+connect_balancer.d: connect_balancer.c
+	$(COMPILE_DEPS)
+connect_balancer_v6.d: connect_balancer_v6.c
+	$(COMPILE_DEPS)
+connect_balancer_v46.d: connect_balancer_v46.c
+	$(COMPILE_DEPS)
+conntrack_cleanup.d: conntrack_cleanup.c
+	$(COMPILE_DEPS)
+conntrack_cleanup_v6.d: conntrack_cleanup.c
 	$(COMPILE_DEPS)
 
 
@@ -219,6 +234,10 @@ ut/%.o: ut/%.ll
 ut/ip_parse_test_v6.ll: ut/ip_parse_test.c
 	$(CC) $(UT_CFLAGS) $(CFLAGS) -DIPVER6 -c $< -o $@
 ut/ip_parse_test_v6.o: ut/ip_parse_test_v6.ll
+	$(LINK)
+ut/tcp_rst_v6.ll: ut/tcp_rst.c
+	$(CC) $(UT_CFLAGS) $(CFLAGS) -DIPVER6 -c $< -o $@
+ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
 	$(LINK)
 
 %_v4.ll: %.c %.d calculate-flags
@@ -308,7 +327,7 @@ bin:
 .PRECIOUS: %.d %_v6.d
 
 COMPILE_DEPS=set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
+		$(CC) -MP -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
@@ -321,7 +340,7 @@ endif
 clean:
 	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll *_map_stub.c
 
-# Fixes an issue where make thinks these .h files are dependencies that need
-# to be built. Just include them as a noop in order to trick make.
+# TODO: remove these catch-all rules once all .d files have been regenerated
+# with -MP (above).  They handle stale .d files that predate the -MP flag.
 /usr/include/%.h:
 	@echo "No need to build $@"

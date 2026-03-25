@@ -30,15 +30,15 @@ import (
 type ResourceCache interface {
 	// Set sets the key to the provided value, and generates an update
 	// on the queue the value has changed.
-	Set(key string, value interface{})
+	Set(key string, value any)
 
 	// Get gets the value associated with the given key.  Returns nil
 	// if the key is not present.
-	Get(key string) (interface{}, bool)
+	Get(key string) (any, bool)
 
 	// Prime sets the key to the provided value, but does not generate
 	// and update on the queue ever.
-	Prime(key string, value interface{})
+	Prime(key string, value any)
 
 	// Delete deletes the value identified by the given key from the cache, and
 	// generates an update on the queue if a value was deleted.
@@ -64,7 +64,7 @@ type ResourceCache interface {
 // Groups together all the arguments to pass in single struct.
 type ResourceCacheArgs struct {
 	// ListFunc returns a mapping of keys to objects from the Calico datastore.
-	ListFunc func() (map[string]interface{}, error)
+	ListFunc func() (map[string]any, error)
 
 	// ObjectType is the type of object which is to be stored in this cache.
 	ObjectType reflect.Type
@@ -95,7 +95,7 @@ type ReconcilerConfig struct {
 type calicoCache struct {
 	threadSafeCache  *cache.Cache
 	workqueue        workqueue.TypedRateLimitingInterface[any]
-	ListFunc         func() (map[string]interface{}, error)
+	ListFunc         func() (map[string]any, error)
 	ObjectType       reflect.Type
 	log              *log.Entry
 	running          bool
@@ -122,7 +122,7 @@ func NewResourceCache(args ResourceCacheArgs) ResourceCache {
 	}
 }
 
-func (c *calicoCache) Set(key string, newObj interface{}) {
+func (c *calicoCache) Set(key string, newObj any) {
 	if reflect.TypeOf(newObj) != c.ObjectType {
 		c.log.Fatalf("Wrong object type received to store in cache. Expected: %s, Found: %s", c.ObjectType, reflect.TypeOf(newObj))
 	}
@@ -159,7 +159,7 @@ func (c *calicoCache) Clean(key string) {
 	c.threadSafeCache.Delete(key)
 }
 
-func (c *calicoCache) Get(key string) (interface{}, bool) {
+func (c *calicoCache) Get(key string) (any, bool) {
 	obj, found := c.threadSafeCache.Get(key)
 	if found {
 		return obj, true
@@ -169,7 +169,7 @@ func (c *calicoCache) Get(key string) (interface{}, bool) {
 
 // Prime adds the key and value to the cache but will never generate
 // an update on the queue.
-func (c *calicoCache) Prime(key string, value interface{}) {
+func (c *calicoCache) Prime(key string, value any) {
 	c.threadSafeCache.Set(key, value, cache.NoExpiration)
 }
 

@@ -54,10 +54,10 @@ type Rule struct {
 	NotICMP *ICMPFields `json:"notICMP,omitempty" validate:"omitempty"`
 
 	// Source contains the match criteria that apply to source entity.
-	Source EntityRule `json:"source,omitempty" validate:"omitempty"`
+	Source EntityRule `json:"source" validate:"omitempty"`
 
 	// Destination contains the match criteria that apply to destination entity.
-	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
+	Destination EntityRule `json:"destination" validate:"omitempty"`
 }
 
 // ICMPFields defines structure for ICMP and NotICMP sub-struct for ICMP code and type

@@ -15,7 +15,7 @@
 package updateprocessors_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -75,7 +75,10 @@ var _ = Describe("Test the NetworkSet update processor", func() {
 		By("adding another CIDR to the existing NetworkSet")
 		cidr2str := "1.2.3.123/32"
 		_, cidr2IPNet, _ := net.ParseCIDROrIP(cidr2str)
-		res.Spec.Nets = []string{cidr1str, cidr2str}
+		res.Spec.Nets = []string{
+			cidr1str,
+			cidr2str,
+		}
 
 		kvps, err = up.Process(&model.KVPair{
 			Key:      v3NetworkSetKey1,

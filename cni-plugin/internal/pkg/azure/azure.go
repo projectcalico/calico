@@ -16,14 +16,14 @@ func MutateConfigAdd(args *skel.CmdArgs, network AzureNetwork) error {
 		logrus.Info("No Azure subnets defined - don't mutate config (add)")
 		return nil
 	}
-	var stdinData map[string]interface{}
+	var stdinData map[string]any
 	var err error
 	if err = json.Unmarshal(args.StdinData, &stdinData); err != nil {
 		return err
 	}
 
 	// For now, we only support a single subnet. The data model supports multiple though.
-	stdinData["ipam"].(map[string]interface{})["subnet"] = network.Subnets[0]
+	stdinData["ipam"].(map[string]any)["subnet"] = network.Subnets[0]
 
 	// Pack it back into the provided args.
 	args.StdinData, err = json.Marshal(stdinData)
@@ -47,7 +47,7 @@ func MutateConfigDel(args *skel.CmdArgs, network AzureNetwork, endpoint AzureEnd
 		return nil
 	}
 
-	var stdinData map[string]interface{}
+	var stdinData map[string]any
 	var err error
 	if err = json.Unmarshal(args.StdinData, &stdinData); err != nil {
 		return err
@@ -57,10 +57,10 @@ func MutateConfigDel(args *skel.CmdArgs, network AzureNetwork, endpoint AzureEnd
 	// The azure-vnet-ipam plugin is not receptive to CIDR notation, so strip the prefix length
 	// if it is present.
 	splits := strings.Split(endpoint.Addresses[0], "/")
-	stdinData["ipam"].(map[string]interface{})["ipAddress"] = splits[0]
+	stdinData["ipam"].(map[string]any)["ipAddress"] = splits[0]
 
 	// For now, we only support a single subnet. The data model supports multiple though.
-	stdinData["ipam"].(map[string]interface{})["subnet"] = network.Subnets[0]
+	stdinData["ipam"].(map[string]any)["subnet"] = network.Subnets[0]
 
 	// Pack it back into the provided args.
 	args.StdinData, err = json.Marshal(stdinData)

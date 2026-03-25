@@ -18,8 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -28,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -76,6 +76,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 	var be bapi.Client
 
 	BeforeEach(func() {
+		v3CRD = k8s.UsingV3CRDs(&config.Spec)
 		var err error
 		c, err = clientv3.New(config)
 		Expect(err).NotTo(HaveOccurred())
@@ -275,19 +276,18 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			dres, outError := c.StagedGlobalNetworkPolicies().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(dres).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec2))
-			time.Sleep(1 * time.Second)
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Updating StagedGlobalNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedGlobalNetworkPolicies().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name2 + ") with error:"))
 
 				By("Creating StagedGlobalNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedGlobalNetworkPolicies().Create(ctx, &apiv3.StagedGlobalNetworkPolicy{
@@ -295,13 +295,13 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -309,7 +309,6 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				dres, outError = c.StagedGlobalNetworkPolicies().Delete(ctx, name2, options.DeleteOptions{})
 				Expect(outError).NotTo(HaveOccurred())
 				Expect(dres).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, name2, spec2))
-				time.Sleep(1 * time.Second)
 			}
 
 			By("Attempting to delete StagedGlobalNetworkPolicy (name2) again")

@@ -120,14 +120,15 @@ func newIPIPManagerWithShims(
 	return m
 }
 
-func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
+func (m *ipipManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataV4V6Update:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname && msg.Ipv4Addr != "" {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+		} else {
+			m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		}
-		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		m.maybeUpdateRoutes()
 	case *proto.HostMetadataV4V6Remove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
@@ -166,8 +167,10 @@ func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetabl
 	}
 
 	return &routetable.Target{
-		Type:     routetable.TargetTypeOnLink,
-		CIDR:     cidr,
+		Type: routetable.TargetTypeOnLink,
+		RouteKey: routetable.RouteKey{
+			CIDR: cidr,
+		},
 		GW:       ip.FromString(remoteAddr),
 		Protocol: m.routeProtocol,
 		MTU:      m.dpConfig.IPIPMTU,

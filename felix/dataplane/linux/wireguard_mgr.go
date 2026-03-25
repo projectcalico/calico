@@ -42,7 +42,7 @@ type wireguardManager struct {
 	ipVersion           uint8
 }
 
-type WireguardStatusUpdateCallback func(ipVersion uint8, id interface{}, status string)
+type WireguardStatusUpdateCallback func(ipVersion uint8, id any, status string)
 
 func newWireguardManager(
 	wireguardRouteTable *wireguard.Wireguard,
@@ -59,7 +59,7 @@ func newWireguardManager(
 	}
 }
 
-func (m *wireguardManager) OnUpdate(protoBufMsg interface{}) {
+func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 	logCtx := log.WithField("ipVersion", m.ipVersion)
 	logCtx.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {

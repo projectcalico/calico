@@ -44,6 +44,10 @@ type hepListener interface {
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
+type liveMigrationListener interface {
+	OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState)
+}
+
 type endpointManagerCallbacks struct {
 	addInterface           *common.AddInterfaceFuncs
 	removeInterface        *common.RemoveInterfaceFuncs
@@ -111,6 +115,17 @@ func (c *endpointManagerCallbacks) InvokeRemoveWorkload(old *proto.WorkloadEndpo
 	c.removeWorkloadEndpoint.Invoke(old)
 }
 
+type endpointManagerConfig struct {
+	kubeIPVSSupportEnabled bool
+	wlInterfacePrefixes    []string
+	bpfEnabled             bool
+	bpfAttachType          apiv3.BPFAttachOption
+	nft                    bool
+	floatingIPsEnabled     bool
+	normalRoutePriority    int
+	elevatedRoutePriority  int
+}
+
 // endpointManager manages the dataplane resources that belong to each endpoint as well as
 // the "dispatch chains" that fan out packets to the right per-endpoint chain.
 //
@@ -123,10 +138,9 @@ func (c *endpointManagerCallbacks) InvokeRemoveWorkload(old *proto.WorkloadEndpo
 // that fail are left in the pending state so they can be retried later.
 type endpointManager struct {
 	// Config.
-	ipVersion              uint8
-	wlIfacesRegexp         *regexp.Regexp
-	kubeIPVSSupportEnabled bool
-	floatingIPsEnabled     bool
+	cfg            *endpointManagerConfig
+	ipVersion      uint8
+	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
 	rawTable     Table
@@ -141,11 +155,16 @@ type endpointManager struct {
 	actions      generictables.ActionFactory
 	filterMaps   nftables.MapsDataplane
 
+	// ARP proxy suppression table (nftables ARP family). nil for IPv6.
+	arpTable Table
+	arpMaps  nftables.MapsDataplane
+
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
-	pendingWlEpUpdates  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
-	pendingIfaceUpdates map[string]ifacemonitor.State
-	dirtyPolicyIDs      set.Set[types.PolicyID]
+	pendingWlEpUpdates         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
+	pendingIfaceUpdates        map[string]ifacemonitor.State
+	pendingLiveMigrationStates map[types.WorkloadEndpointID]liveMigrationState
+	dirtyPolicyIDs             set.Set[types.PolicyID]
 
 	// Active state, updated in CompleteDeferredWork.
 	activeWlEndpoints                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -154,6 +173,8 @@ type endpointManager struct {
 	activeWlIDToChains               map[types.WorkloadEndpointID][]*generictables.Chain
 	activeWlDispatchChains           map[string]*generictables.Chain
 	activeEPMarkDispatchChains       map[string]*generictables.Chain
+	activeARPChains                  map[types.WorkloadEndpointID][]*generictables.Chain
+	activeARPDispatchChains          map[string]*generictables.Chain
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
 
 	activePolicySelectors map[types.PolicyID]string
@@ -216,16 +237,15 @@ type endpointManager struct {
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
-	bpfEnabled             bool
-	bpfAttachType          apiv3.BPFAttachOption
 	bpfEndpointManager     hepListener
 }
 
-type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string, extraInfo interface{})
+type EndpointStatusUpdateCallback func(ipVersion uint8, id any, status string, extraInfo any)
 
 type procSysWriter func(path, value string) error
 
 func newEndpointManager(
+	cfg *endpointManagerConfig,
 	rawTable Table,
 	mangleTable Table,
 	filterTable Table,
@@ -233,20 +253,17 @@ func newEndpointManager(
 	routeTable routetable.Interface,
 	ipVersion uint8,
 	epMarkMapper rules.EndpointMarkMapper,
-	kubeIPVSSupportEnabled bool,
-	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
-	bpfEnabled bool,
-	bpfAttachType apiv3.BPFAttachOption,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	floatingIPsEnabled bool,
-	nft bool,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
+	arpTable Table,
+	arpMaps nftables.MapsDataplane,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
+		cfg,
 		rawTable,
 		mangleTable,
 		filterTable,
@@ -254,24 +271,21 @@ func newEndpointManager(
 		routeTable,
 		ipVersion,
 		epMarkMapper,
-		kubeIPVSSupportEnabled,
-		wlInterfacePrefixes,
 		onWorkloadEndpointStatusUpdate,
 		writeProcSys,
 		os.Stat,
 		defaultRPFilter,
 		filterMaps,
-		bpfEnabled,
-		bpfAttachType,
 		bpfEndpointManager,
 		callbacks,
-		floatingIPsEnabled,
-		nft,
 		linkAddrsMgr,
+		arpTable,
+		arpMaps,
 	)
 }
 
 func newEndpointManagerWithShims(
+	cfg *endpointManagerConfig,
 	rawTable Table,
 	mangleTable Table,
 	filterTable Table,
@@ -279,40 +293,36 @@ func newEndpointManagerWithShims(
 	routeTable routetable.Interface,
 	ipVersion uint8,
 	epMarkMapper rules.EndpointMarkMapper,
-	kubeIPVSSupportEnabled bool,
-	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
-	bpfEnabled bool,
-	bpfAttachType apiv3.BPFAttachOption,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	floatingIPsEnabled bool,
-	nft bool,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
+	arpTable Table,
+	arpMaps nftables.MapsDataplane,
 ) *endpointManager {
-	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
+	wlIfacesPattern := "^(" + strings.Join(cfg.wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
 
 	newMatchFn := iptables.Match
 	actions := iptables.Actions()
-	if nft {
+	if cfg.nft {
 		newMatchFn = nftables.Match
 		actions = nftables.Actions()
 	}
 
 	epManager := &endpointManager{
-		ipVersion:              ipVersion,
-		wlIfacesRegexp:         wlIfacesRegexp,
-		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
-		bpfEnabled:             bpfEnabled,
-		bpfAttachType:          bpfAttachType,
-		filterMaps:             filterMaps,
-		bpfEndpointManager:     bpfEndpointManager,
-		floatingIPsEnabled:     floatingIPsEnabled,
+		cfg:                cfg,
+		ipVersion:          ipVersion,
+		wlIfacesRegexp:     wlIfacesRegexp,
+		filterMaps:         filterMaps,
+		bpfEndpointManager: bpfEndpointManager,
+
+		arpTable: arpTable,
+		arpMaps:  arpMaps,
 
 		newMatch: newMatchFn,
 		actions:  actions,
@@ -328,9 +338,10 @@ func newEndpointManagerWithShims(
 
 		// Pending updates, we store these up as OnUpdate is called, then process them
 		// in CompleteDeferredWork and transfer the important data to the activeXYX fields.
-		pendingWlEpUpdates:  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		pendingIfaceUpdates: map[string]ifacemonitor.State{},
-		dirtyPolicyIDs:      set.New[types.PolicyID](),
+		pendingWlEpUpdates:         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingIfaceUpdates:        map[string]ifacemonitor.State{},
+		pendingLiveMigrationStates: map[types.WorkloadEndpointID]liveMigrationState{},
+		dirtyPolicyIDs:             set.New[types.PolicyID](),
 
 		activeUpIfaces: set.New[string](),
 
@@ -368,6 +379,8 @@ func newEndpointManagerWithShims(
 		activeHostMangleDispatchChains: map[string]*generictables.Chain{},
 		activeHostRawDispatchChains:    map[string]*generictables.Chain{},
 		activeEPMarkDispatchChains:     map[string]*generictables.Chain{},
+		activeARPChains:                map[types.WorkloadEndpointID][]*generictables.Chain{},
+		activeARPDispatchChains:        map[string]*generictables.Chain{},
 		needToCheckDispatchChains:      true, // Need to do start-of-day update.
 		needToCheckEndpointMarkChains:  true, // Need to do start-of-day update.
 		needToCheckLocalBGPPeerIP:      true, // Need to do start-of-day update.
@@ -381,7 +394,7 @@ func newEndpointManagerWithShims(
 	return epManager
 }
 
-func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
+func (m *endpointManager) OnUpdate(protoBufMsg any) {
 	log.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
@@ -450,6 +463,26 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 	}
 }
 
+func (m *endpointManager) OnLiveMigrationStateUpdate(id types.WorkloadEndpointID, state liveMigrationState) {
+	log.WithFields(log.Fields{
+		"id":    id,
+		"state": state,
+	}).Debug("Live migration state update")
+	if state == liveMigrationStateBase {
+		delete(m.pendingLiveMigrationStates, id)
+	} else {
+		m.pendingLiveMigrationStates[id] = state
+	}
+	// Mark the endpoint dirty so CompleteDeferredWork re-evaluates its routes.
+	// Only if there isn't already a pending WEP update, to avoid clobbering a
+	// more recent proto with stale activeWlEndpoints data.
+	if _, alreadyPending := m.pendingWlEpUpdates[id]; !alreadyPending {
+		if ep := m.activeWlEndpoints[id]; ep != nil {
+			m.pendingWlEpUpdates[id] = ep
+		}
+	}
+}
+
 func (m *endpointManager) ResolveUpdateBatch() error {
 	// Copy the pending interface state to the active set and mark any interfaces that have
 	// changed state for reconfiguration by resolveWorkload/HostEndpoints()
@@ -497,7 +530,7 @@ func (m *endpointManager) CompleteDeferredWork() error {
 		m.rpfSkipChainDirty = false
 	}
 
-	if m.kubeIPVSSupportEnabled && m.needToCheckEndpointMarkChains {
+	if m.cfg.kubeIPVSSupportEnabled && m.needToCheckEndpointMarkChains {
 		m.resolveEndpointMarks()
 		m.needToCheckEndpointMarkChains = false
 	}
@@ -701,6 +734,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.callbacks.InvokeRemoveWorkload(oldWorkload)
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
+		m.removeWorkloadARPChains(id)
+		delete(m.pendingLiveMigrationStates, id)
 		if oldWorkload != nil {
 			m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 			// Remove any routes from the routing table.  The RouteTable will remove any
@@ -756,7 +791,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				if oldWorkload != nil && oldWorkload.Name != workload.Name {
 					logCxt.Debug("Interface name changed, cleaning up old state")
 					m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
-					if !m.bpfEnabled {
+					if !m.cfg.bpfEnabled {
 						m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 						if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
 							logCxt.Debugf("Removing RPF configuration for workload %s", workload.Name)
@@ -770,7 +805,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 				}
 				adminUp := workload.State == "active"
-				if !m.bpfEnabled {
+				m.updateWorkloadARPChains(id, workload)
+				if !m.cfg.bpfEnabled {
 					m.updateWorkloadEndpointChains(id, workload, adminUp)
 
 					if len(workload.AllowSpoofedSourcePrefixes) > 0 && !m.hasSourceSpoofingConfiguration(workload.Name) {
@@ -784,55 +820,13 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					}
 				}
 
-				// Collect the IP prefixes that we want to route locally to this endpoint:
 				logCxt.Info("Updating endpoint routes.")
-				var (
-					ipStrings  []string
-					natInfos   []*proto.NatInfo
-					addrSuffix string
-				)
-				if m.ipVersion == 4 {
-					ipStrings = workload.Ipv4Nets
-					natInfos = workload.Ipv4Nat
-					addrSuffix = "/32"
-				} else {
-					ipStrings = workload.Ipv6Nets
-					natInfos = workload.Ipv6Nat
-					addrSuffix = "/128"
-				}
-				alreadyCopied := false
-				for _, natInfo := range natInfos {
-					if m.floatingIPsEnabled || id.OrchestratorId == apiv3.OrchestratorOpenStack {
-						if !alreadyCopied {
-							ipStrings = append([]string(nil), ipStrings...)
-							alreadyCopied = true
-						}
-						ipStrings = append(ipStrings, natInfo.ExtIp+addrSuffix)
-					}
-				}
-
-				var mac net.HardwareAddr
-				if workload.Mac != "" {
-					var err error
-					mac, err = net.ParseMAC(workload.Mac)
-					if err != nil {
-						logCxt.WithError(err).Error(
-							"Failed to parse endpoint's MAC address")
-					}
-				}
-				var routeTargets []routetable.Target
 				if adminUp {
-					logCxt.Debug("Endpoint up, adding routes")
-					for _, s := range ipStrings {
-						routeTargets = append(routeTargets, routetable.Target{
-							CIDR:    ip.MustParseCIDROrIP(s),
-							DestMAC: mac,
-						})
-					}
+					m.routeTable.SetRoutes(workload.Name, m.calculateRoutes(logCxt, id, workload))
 				} else {
 					logCxt.Debug("Endpoint down, removing routes")
+					m.routeTable.SetRoutes(workload.Name, nil)
 				}
-				m.routeTable.SetRoutes(workload.Name, routeTargets)
 				m.wlIfaceNamesToReconfigure.Add(workload.Name)
 				m.activeWlEndpoints[id] = workload
 				m.activeWlIfaceNameToID[workload.Name] = id
@@ -878,7 +872,38 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		}
 	}
 
-	if !m.bpfEnabled && m.needToCheckDispatchChains {
+	// Update ARP dispatch chains unconditionally (works across all dataplane modes).
+	if m.arpTable != nil && m.needToCheckDispatchChains {
+		// Build ARP dispatch vmap: ifaceName → "goto cali-arp-<ifname>"
+		arpMappings := make(map[string][]string)
+		for _, wl := range m.activeWlEndpoints {
+			if len(wl.Ipv4Nets) == 0 {
+				continue
+			}
+			chainName := rules.EndpointChainName(rules.WorkloadARPPfx, wl.Name, nftables.MaxChainNameLength)
+			arpMappings[wl.Name] = []string{fmt.Sprintf("goto %s", chainName)}
+		}
+		m.arpMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesARPDispatchMap, Type: nftables.MapTypeInterfaceMatch}, arpMappings)
+
+		// Build the ARP dispatch chain with a vmap lookup.
+		arpDispatchChain := &generictables.Chain{
+			Name: rules.ChainARPDispatch,
+			Rules: []generictables.Rule{
+				{
+					Match: nftables.Match().OutInterfaceVMAP(rules.NftablesARPDispatchMap),
+				},
+			},
+		}
+		m.updateDispatchChains(m.activeARPDispatchChains, []*generictables.Chain{arpDispatchChain}, m.arpTable)
+
+		if m.cfg.bpfEnabled {
+			// In BPF mode, the filter dispatch block below is skipped,
+			// so clear the flag here.
+			m.needToCheckDispatchChains = false
+		}
+	}
+
+	if !m.cfg.bpfEnabled && m.needToCheckDispatchChains {
 		if m.filterMaps != nil {
 			// Update dispatch verdict maps if needed.
 			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
@@ -923,6 +948,78 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	}
 }
 
+func (m *endpointManager) calculateRoutes(
+	logCxt *log.Entry,
+	id types.WorkloadEndpointID,
+	workload *proto.WorkloadEndpoint,
+) (
+	routeTargets []routetable.Target,
+) {
+	lmState, hasLMState := m.pendingLiveMigrationStates[id]
+	if hasLMState && lmState == liveMigrationStateTarget {
+		logCxt.Debug("Live migration target, suppressing routes")
+		return
+	}
+
+	// Collect the IP prefixes that we want to route locally to this endpoint:
+	var (
+		ipStrings  []string
+		natInfos   []*proto.NatInfo
+		addrSuffix string
+	)
+	if m.ipVersion == 4 {
+		ipStrings = workload.Ipv4Nets
+		natInfos = workload.Ipv4Nat
+		addrSuffix = "/32"
+	} else {
+		ipStrings = workload.Ipv6Nets
+		natInfos = workload.Ipv6Nat
+		addrSuffix = "/128"
+	}
+	alreadyCopied := false
+	for _, natInfo := range natInfos {
+		if m.cfg.floatingIPsEnabled || id.OrchestratorId == apiv3.OrchestratorOpenStack {
+			if !alreadyCopied {
+				ipStrings = append([]string(nil), ipStrings...)
+				alreadyCopied = true
+			}
+			ipStrings = append(ipStrings, natInfo.ExtIp+addrSuffix)
+		}
+	}
+
+	var mac net.HardwareAddr
+	if workload.Mac != "" {
+		var err error
+		mac, err = net.ParseMAC(workload.Mac)
+		if err != nil {
+			logCxt.WithError(err).Error(
+				"Failed to parse endpoint's MAC address")
+		}
+	}
+
+	routePriority := m.cfg.normalRoutePriority
+	if hasLMState {
+		// Live or TimeWait: use elevated priority.
+		routePriority = m.cfg.elevatedRoutePriority
+		logCxt.WithField("priority", routePriority).Debug(
+			"Endpoint up, adding routes with elevated priority for live migration")
+	} else {
+		logCxt.Debug("Endpoint up, adding routes")
+	}
+
+	for _, s := range ipStrings {
+		routeTargets = append(routeTargets, routetable.Target{
+			RouteKey: routetable.RouteKey{
+				CIDR:     ip.MustParseCIDROrIP(s),
+				Priority: routePriority,
+			},
+			DestMAC: mac,
+		})
+	}
+
+	return
+}
+
 func (m *endpointManager) updateWorkloadEndpointChains(
 	id types.WorkloadEndpointID,
 	workload *proto.WorkloadEndpoint,
@@ -941,6 +1038,52 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 	)
 	m.filterTable.UpdateChains(chains)
 	m.activeWlIDToChains[id] = chains
+}
+
+// updateWorkloadARPChains programs ARP proxy suppression chains for a workload.
+// These drop ARP replies from the host that contain the workload's own IP as the
+// ARP source, preventing the host's proxy ARP from confusing the workload.
+func (m *endpointManager) updateWorkloadARPChains(
+	id types.WorkloadEndpointID,
+	workload *proto.WorkloadEndpoint,
+) {
+	if m.arpTable == nil {
+		return
+	}
+
+	maxLen := nftables.MaxChainNameLength
+	chainName := rules.EndpointChainName(rules.WorkloadARPPfx, workload.Name, maxLen)
+
+	var arpRules []generictables.Rule
+	for _, cidr := range workload.Ipv4Nets {
+		// Strip the CIDR suffix (e.g. /32) to get the bare IP.
+		ipAddr := strings.Split(cidr, "/")[0]
+		if ipAddr == "" {
+			continue
+		}
+		arpRules = append(arpRules, generictables.Rule{
+			Match:  nftables.Match().OutInterface(workload.Name).ARPOperation("reply").ARPSrcIP(ipAddr),
+			Action: nftables.DropAction{},
+		})
+	}
+
+	chain := &generictables.Chain{
+		Name:  chainName,
+		Rules: arpRules,
+	}
+	m.arpTable.UpdateChains([]*generictables.Chain{chain})
+	m.activeARPChains[id] = []*generictables.Chain{chain}
+}
+
+// removeWorkloadARPChains removes ARP proxy suppression chains for a workload.
+func (m *endpointManager) removeWorkloadARPChains(id types.WorkloadEndpointID) {
+	if m.arpTable == nil {
+		return
+	}
+	if chains, ok := m.activeARPChains[id]; ok {
+		m.arpTable.RemoveChains(chains)
+		delete(m.activeARPChains, id)
+	}
 }
 
 type tierGroupFilter int
@@ -1015,7 +1158,7 @@ func (m *endpointManager) updateRPFSkipChain() {
 }
 
 func (m *endpointManager) resolveEndpointMarks() {
-	if m.bpfEnabled {
+	if m.cfg.bpfEnabled {
 		return
 	}
 
@@ -1205,7 +1348,7 @@ func (m *endpointManager) updateHostEndpoints() {
 		ifaceNameToPolicyGroups[ifaceName] = append(ifaceNameToPolicyGroups[ifaceName], pgs...)
 	}
 
-	if !m.bpfEnabled {
+	if !m.cfg.bpfEnabled {
 		// Build iptables chains for normal and apply-on-forward host endpoint policy.
 		newHostIfaceFiltChains := map[string][]*generictables.Chain{}
 		newHostIfaceMangleEgressChains := map[string][]*generictables.Chain{}
@@ -1298,7 +1441,7 @@ func (m *endpointManager) updateHostEndpoints() {
 
 		// Update the raw chain, for untracked traffic.
 		var rawChains []*generictables.Chain
-		if m.bpfEnabled {
+		if m.cfg.bpfEnabled {
 			untrackedTierGroups := m.groupTieredPolicy(hostEp.UntrackedTiers, includeOutbound)
 			addPolicyGroups(ifaceName, untrackedTierGroups)
 
@@ -1354,14 +1497,14 @@ func (m *endpointManager) updateHostEndpoints() {
 	// egress policy even in BPF mode.
 	log.WithField("resolvedHostEpIds", newUntrackedIfaceNameToHostEpID).Debug("Rewrite raw dispatch chains?")
 	var newRawDispatchChains []*generictables.Chain
-	if m.bpfEnabled {
+	if m.cfg.bpfEnabled {
 		newRawDispatchChains = m.ruleRenderer.ToHostDispatchChains(newUntrackedIfaceNameToHostEpID, "")
 	} else {
 		newRawDispatchChains = m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID, "", false)
 	}
 	m.updateDispatchChains(m.activeHostRawDispatchChains, newRawDispatchChains, m.rawTable)
 
-	if m.bpfEnabled {
+	if m.cfg.bpfEnabled {
 		// Code after this point is for other dispatch chains and IPVS endpoint marking,
 		// which aren't needed in BPF mode.
 		return
@@ -1537,7 +1680,7 @@ func (m *endpointManager) configureInterface(name string) error {
 	}
 
 	rpFilter := m.defaultRPFilter
-	if m.hasSourceSpoofingConfiguration(name) || m.bpfEnabled {
+	if m.hasSourceSpoofingConfiguration(name) || m.cfg.bpfEnabled {
 		rpFilter = "0"
 	}
 

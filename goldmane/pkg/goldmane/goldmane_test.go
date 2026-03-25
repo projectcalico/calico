@@ -68,11 +68,12 @@ func setupTest(t *testing.T, opts ...goldmane.Option) func() {
 
 func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow, additionalMsg ...string) {
 	if !googleproto.Equal(expected, actual) {
-		msg := fmt.Sprintf("\nExpected:\n\t%v\nActual:\n\t%v", expected, actual)
+		var msg strings.Builder
+		fmt.Fprintf(&msg, "\nExpected:\n\t%v\nActual:\n\t%v", expected, actual)
 		for _, m := range additionalMsg {
-			msg += "\n" + m
+			msg.WriteString("\n" + m)
 		}
-		t.Error(msg)
+		t.Error(msg.String())
 	}
 }
 
@@ -1615,9 +1616,9 @@ func TestStatistics(t *testing.T) {
 				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: true,
 				PolicyMatch: &proto.PolicyMatch{
-					Tier:      hitToMatch.Tier,
-					Name:      hitToMatch.Name,
-					Namespace: hitToMatch.Namespace,
+					Tier:      &proto.StringMatch{Value: hitToMatch.Tier},
+					Name:      &proto.StringMatch{Value: hitToMatch.Name},
+					Namespace: &proto.StringMatch{Value: hitToMatch.Namespace},
 					Kind:      hitToMatch.Kind,
 				},
 			})

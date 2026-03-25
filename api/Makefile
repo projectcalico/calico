@@ -1,3 +1,6 @@
+# The tests in this directory use the projectcalico.org/v3 API group for CRDs.
+CALICO_API_GROUP ?= projectcalico.org/v3
+
 # If ../metadata.mk exists, we're running this logic from within the calico repository.
 # If it does not, then we're in the api repo and we should use the local metadata.mk.
 ifneq ("$(wildcard ../metadata.mk)", "")
@@ -12,6 +15,7 @@ LOCAL_CHECKS     = lint-cache-dir check-copyright
 BINDIR ?= bin
 BUILD_DIR ?= build
 TOP_SRC_DIRS = pkg
+KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -33,6 +37,7 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 		--net=host \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
@@ -52,6 +57,18 @@ build: gen-files examples
 # Regenerate all files if the gen exes changed or any "types.go" files changed
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
+	# Generate CRDs without descriptions
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./pkg/apis/... output:crd:dir=config/crd/'
+	# Remove the first yaml separator line.
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
+	# Run prettier to fix indentation
+	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
+	# Patch in manual tweaks to the generated CRDs.
+	# - Add nullable to IPAM block allocations field to allow null values in the allocations array.
+	# - Remove the profiles CRD. Profiles are backed by Namespaces in Kubernetes and the CRD is not needed.
+	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
+	rm -f config/crd/projectcalico.org_profiles.yaml
+
 	# Generate defaults
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) defaulter-gen \
@@ -69,11 +86,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
 
-	# generate all pkg/client contents
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/update-client-gen.sh'
-
-	# generate openapi
+	# generate openapi (must run before client-gen, which uses it for --openapi-schema)
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) openapi-gen \
 		--v 1 --logtostderr \
@@ -88,6 +101,10 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		"k8s.io/apimachinery/pkg/util/intstr" \
 		"k8s.io/apimachinery/pkg/version" \
 		"$(PACKAGE_NAME)/pkg/lib/numorstring"'
+
+	# generate all pkg/client contents
+	$(DOCKER_RUN) $(CALICO_BUILD) \
+	   sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/update-client-gen.sh'
 
 	touch .generate_files
 	$(MAKE) fix
@@ -116,7 +133,7 @@ clean-generated:
 	find $(TOP_SRC_DIRS) -name zz_generated* -exec rm {} \;
 	# rollback changes to the generated clientset directories
 	# find $(TOP_SRC_DIRS) -type d -name *_generated -exec rm -rf {} \;
-	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/openapi
+	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/client/applyconfiguration_generated pkg/openapi
 
 clean-bin:
 	rm -rf $(BINDIR) \
@@ -133,9 +150,23 @@ WHAT?=.
 GINKGO_FOCUS?=.*
 
 .PHONY:ut
-ut:
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus="$(GINKGO_FOCUS)" $(WHAT)'
+ut: kind-cluster-create
+	mkdir -p report
+	$(DOCKER_RUN) \
+		--privileged \
+		-e KUBECONFIG=/kubeconfig.yaml \
+		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
+		$(CALICO_BUILD) \
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=api_ut.xml --output-dir=report/ -focus="$(GINKGO_FOCUS)" $(WHAT)'
+
+## Run CRD validation tests using envtest (no kind cluster required)
+.PHONY: ut-validation
+ut-validation: setup-envtest
+	$(DOCKER_RUN) \
+		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
+		-e KUBEBUILDER_ASSETS=/envtest \
+		$(CALICO_BUILD) \
+		sh -c 'go test -count=1 ./...'
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files

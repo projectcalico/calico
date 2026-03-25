@@ -38,15 +38,18 @@ function setup_etcd() {
   echo "Setting up etcd server on Linux node..."
 
   # Remove any existing etcd container and start fresh
-  ${MASTER_CONNECT_COMMAND} "sudo docker rm -f calico-etcd" || true
+  ${MASTER_CONNECT_COMMAND} "sudo ctr -n k8s.io task rm -f calico-etcd" || true
+  ${MASTER_CONNECT_COMMAND} "sudo ctr -n k8s.io container delete calico-etcd" || true
 
   # Start etcd container
   ETCD_CONTAINER="quay.io/coreos/etcd:v3.4.6"
-  ${MASTER_CONNECT_COMMAND} "sudo docker run --detach -p 2389:2389 -p 8001:8001 --name calico-etcd ${ETCD_CONTAINER} etcd --advertise-client-urls 'http://${LINUX_PIP}:2389,http://127.0.0.1:2389,http://${LINUX_PIP}:8001,http://127.0.0.1:8001' --listen-client-urls 'http://0.0.0.0:2389,http://0.0.0.0:8001'"
+  ${MASTER_CONNECT_COMMAND} "sudo ctr -n k8s.io images pull ${ETCD_CONTAINER}"
+  ${MASTER_CONNECT_COMMAND} "sudo ctr -n k8s.io run --detach --net-host ${ETCD_CONTAINER} calico-etcd etcd --advertise-client-urls 'http://${LINUX_PIP}:2389,http://127.0.0.1:2389,http://${LINUX_PIP}:8001,http://127.0.0.1:8001' --listen-client-urls 'http://0.0.0.0:2389,http://0.0.0.0:8001'"
 
   echo "Waiting for etcd to be ready..."
   sleep 5
-  ${MASTER_CONNECT_COMMAND} sudo docker ps -a
+  ${MASTER_CONNECT_COMMAND} "sudo ctr -n k8s.io containers list"
+  ${MASTER_CONNECT_COMMAND} "sudo ctr -n k8s.io tasks list"
 
   echo "etcd server is running at ${LINUX_PIP}:2389"
 }

@@ -21,7 +21,7 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/utils"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -44,6 +44,11 @@ type DatastoreInfra interface {
 	// GetCalicoClient will return a client.Interface configured to access
 	// the datastore.
 	GetCalicoClient() client.Interface
+
+	// UseProjectCalicoV3API returns true if the datastore should be accessed using the v3 CRD API instead
+	// of the crd.projectcalico.org API group.
+	UseProjectCalicoV3API() bool
+
 	// GetClusterGUID will return the cluster GUID.
 	GetClusterGUID() string
 	// SetExpectedIPIPTunnelAddr will set the Felix object's
@@ -74,14 +79,14 @@ type DatastoreInfra interface {
 	AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *net.IPNet, idx int, needBGP bool)
 	// AddWorkload will take the appropriate steps to create a workload in the
 	// datastore with the passed in wep values. If this succeeds then the
-	// *libapi.WorkloadEndpoint will be returned, otherwise an error will be
+	// *internalapi.WorkloadEndpoint will be returned, otherwise an error will be
 	// returned.
-	AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error)
+	AddWorkload(wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error)
 	// RemoveWorkload reverses the effect of AddWorkload.
 	RemoveWorkload(ns string, name string) error
 	// UpdateWorkload updates a workload in the infra. On kdd the workload is
 	// removed then added.
-	UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error)
+	UpdateWorkload(wep *internalapi.WorkloadEndpoint) (*internalapi.WorkloadEndpoint, error)
 	// AddDefaultAllow will ensure that the datastore is configured so that
 	// the default profile/namespace will allow traffic. Returns the name of the
 	// default profile.

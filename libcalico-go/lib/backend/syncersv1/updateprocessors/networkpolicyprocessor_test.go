@@ -17,8 +17,7 @@ package updateprocessors_test
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -28,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
@@ -514,7 +513,7 @@ var _ = Describe("Test end-to-end pod and network policy processing", func() {
 		Expect(len(kvps)).To(Equal(1))
 
 		// Expect the serviceaccount name to be set on the resulting WEP.
-		Expect(kvps[0].Value.(*libapiv3.WorkloadEndpoint).Spec.ServiceAccountName).To(Equal(longName))
+		Expect(kvps[0].Value.(*internalapi.WorkloadEndpoint).Spec.ServiceAccountName).To(Equal(longName))
 
 		// Process
 		kvps, err = wepProcessor.Process(kvps[0])

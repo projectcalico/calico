@@ -15,7 +15,7 @@ BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 ###############################################################################
 include ../lib.Makefile
 
-SRC_FILES=$(shell find pkg cmd internal -name '*.go') $(shell find ../libcalico-go -name '*.go')
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 
@@ -133,13 +133,13 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 # Builds the statically compiled binaries into a container.
-$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build build-cni-bins bin/LICENSE
+$(DEPLOY_CONTAINER_STATIC_MARKER): $(IMAGE_DEPS) build build-cni-bins bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # Builds the FIPS binaries into a container.
-$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build build-cni-bins bin/LICENSE
+$(DEPLOY_CONTAINER_FIPS_MARKER): $(IMAGE_DEPS) build build-cni-bins bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
@@ -201,10 +201,52 @@ build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 ###############################################################################
 # Unit Tests
 ###############################################################################
-## Run the unit tests.
-ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
-	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
+
+fv:
+	@echo "No FV tests for CNI plugin"
+
+
+## Install KubeVirt CRDs for testing (without operator/controllers)
+.PHONY: install-kubevirt-crds
+install-kubevirt-crds:
+	@echo "Installing KubeVirt CRDs for testing..."
+	@while ! docker exec calico-local-apiserver kubectl \
+		apply -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml; \
+		do echo "Waiting to install KubeVirt CRDs..."; \
+		sleep 1; \
+		done
+	@echo "KubeVirt CRDs installed successfully"
+
+## Remove KubeVirt CRDs
+.PHONY: remove-kubevirt-crds
+remove-kubevirt-crds:
+	@echo "Removing KubeVirt CRDs..."
+	@docker exec calico-local-apiserver kubectl \
+		delete -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml 2>/dev/null || \
+		echo "KubeVirt CRDs already removed or not present"
+
+
+UT_PREREQS = run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
+
+## Run all unit tests.
+ut: $(UT_PREREQS)
+	$(MAKE) ut-etcd
+	$(MAKE) ut-kdd
+	$(MAKE) ut-kubevirt
+
+## Run unit tests against etcdv3 with CNI spec 0.3.1.
+ut-etcd: $(UT_PREREQS)
+	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3 CNI_SPEC_VERSION=0.3.1 JUNIT_REPORT_NAME=cni_plugin_ut_etcd.xml
+
+## Run unit tests against KDD with CNI spec 1.0.0 (excludes KubeVirt tests).
+ut-kdd: $(UT_PREREQS)
+	$(MAKE) remove-kubevirt-crds
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 JUNIT_REPORT_NAME=cni_plugin_ut_kdd.xml GINKGO_ARGS='--label-filter=!KubeVirt $(GINKGO_ARGS)'
+
+## Run KubeVirt-specific unit tests against KDD with CNI spec 1.0.0.
+ut-kubevirt: $(UT_PREREQS)
+	$(MAKE) install-kubevirt-crds
+	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes CNI_SPEC_VERSION=1.0.0 JUNIT_REPORT_NAME=cni_plugin_ut_kubevirt.xml GINKGO_ARGS='--label-filter=KubeVirt $(GINKGO_ARGS)'
 
 ut-datastore:
 	# The tests need to run as root
@@ -218,35 +260,14 @@ ut-datastore:
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 	-e KUBECONFIG=/home/user/certs/kubeconfig \
 	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
-
-ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
-	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
-	make stop-etcd
-	make stop-k8s-controller
-
-ut-kdd: run-k8s-controller-manager build $(BIN)/host-local
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
-	make stop-etcd
-	make stop-k8s-controller
-
-## Run the tests in a container (as root) for different CNI spec versions
-## to make sure we don't break backwards compatibility.
-.PHONY: test-cni-versions
-test-cni-versions:
-	for cniversion in "0.2.0" "0.3.1" ; do \
-		if make ut CNI_SPEC_VERSION=$$cniversion; then \
-			echo "CNI version $$cniversion PASSED"; \
-		else \
-			echo "CNI version $$cniversion FAILED"; \
-			exit 1; \
-		fi; \
-	done
+			mkdir -p report && \
+			ginkgo -cover -r --junit-report=$(JUNIT_REPORT_NAME) --output-dir=report/ -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
 
 ###############################################################################
 # Install test
@@ -267,7 +288,7 @@ test-install-cni: run-k8s-apiserver image pkg/install/install.test
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download build static-checks test-cni-versions image-all test-install-cni
+ci: clean mod-download build static-checks ut image-all test-install-cni
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -318,4 +339,4 @@ release-publish-latest: release-prereqs
 ## Run the unit tests, watching for changes.
 test-watch: $(BIN)/install run-etcd run-k8s-apiserver
 	# The tests need to run as root
-	CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch -skipPackage pkg/install
+	CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) ginkgo watch -skip-package pkg/install

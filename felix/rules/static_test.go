@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -36,7 +36,7 @@ var _ = Describe("Static", func() {
 	var conf Config
 	JustBeforeEach(func() {
 		// Cast back to the expected type so we can access a finer-grained API for testing.
-		rr = NewRenderer(conf).(*DefaultRuleRenderer)
+		rr = NewRenderer(conf, false).(*DefaultRuleRenderer)
 	})
 
 	checkManglePostrouting := func(ipVersion uint8, ipvs bool) {
@@ -1315,7 +1315,6 @@ var _ = Describe("Static", func() {
 		})
 		for _, ipVersion := range []uint8{4, 6} {
 			// Capture current value of ipVersion.
-			ipVersion := ipVersion
 			ipSetThisHost := fmt.Sprintf("cali%d0this-host", ipVersion)
 
 			portRanges1 := []*proto.PortRange{
@@ -1845,6 +1844,81 @@ var _ = Describe("Static", func() {
 							},
 						},
 					}))
+				})
+			})
+		}
+	})
+
+	Describe("with Istio DSCP rules", func() {
+		BeforeEach(func() {
+			conf = Config{
+				WorkloadIfacePrefixes:   []string{"cali"},
+				IPSetConfigV4:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				MarkAccept:              0x10,
+				MarkPass:                0x20,
+				MarkScratch0:            0x40,
+				MarkScratch1:            0x80,
+				MarkDrop:                0x200,
+				MarkEndpoint:            0xff000,
+				MarkNonCaliEndpoint:     0x1000,
+				IstioAmbientModeEnabled: true,
+				IstioDSCPMark:           10, // Test DSCP value
+			}
+		})
+
+		for _, ipVersion := range []uint8{4, 6} {
+			// Avoid issues with variable capture in closures.
+			ipVerStr := fmt.Sprintf("IPv%d", ipVersion)
+
+			Describe(ipVerStr, func() {
+				It("should generate Istio DSCP marking rules in mangle POSTROUTING chain", func() {
+					chain := rr.StaticManglePostroutingChain(ipVersion)
+					Expect(chain).NotTo(BeNil())
+					Expect(chain.Name).To(Equal("cali-POSTROUTING"))
+
+					var expectedMeshIPSet string
+					if ipVersion == 4 {
+						expectedMeshIPSet = "cali40all-istio-weps"
+					} else {
+						expectedMeshIPSet = "cali60all-istio-weps"
+					}
+
+					// Look for the Istio DSCP marking rule
+					found := false
+					for _, rule := range chain.Rules {
+						if rule.Action != nil {
+							if dscpAction, ok := rule.Action.(iptables.DSCPAction); ok {
+								Expect(dscpAction.Value).To(Equal(uint8(10)))
+
+								// Verify the match conditions
+								matchStr := rule.Match.String()
+								Expect(matchStr).To(ContainSubstring("-p tcp"))
+								Expect(matchStr).To(ContainSubstring("--ctstate NEW"))
+								Expect(matchStr).To(ContainSubstring("--out-interface cali+"))
+								Expect(matchStr).To(ContainSubstring(fmt.Sprintf("--match-set %s dst", expectedMeshIPSet)))
+								Expect(matchStr).To(ContainSubstring(fmt.Sprintf("--match-set %s src", expectedMeshIPSet)))
+								found = true
+								break
+							}
+						}
+					}
+					Expect(found).To(BeTrue(), "Expected to find Istio DSCP marking rule in mangle POSTROUTING chain")
+				})
+
+				It("should not generate Istio DSCP rules when Istio is disabled", func() {
+					conf.IstioAmbientModeEnabled = false
+					rr = NewRenderer(conf, false).(*DefaultRuleRenderer)
+
+					chain := rr.StaticManglePostroutingChain(ipVersion)
+					Expect(chain).NotTo(BeNil())
+
+					// Verify no DSCP actions are present when Istio is disabled
+					for _, rule := range chain.Rules {
+						if rule.Action != nil {
+							Expect(rule.Action).NotTo(BeAssignableToTypeOf(iptables.DSCPAction{}))
+						}
+					}
 				})
 			})
 		}

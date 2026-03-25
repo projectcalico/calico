@@ -36,13 +36,18 @@ ifdef UNIT_TESTS
 UNIT_TEST_FLAGS = -run $(UNIT_TESTS) -v
 endif
 
+# The API server tests always use the crd.projectcalico.org API group, since
+# the server is never used when the projectcalico.org/v3 API is implemented directly as CRDs.
+# Define this prior to including ../lib.Makefile so that the variable is available there.
+CALICO_API_GROUP := crd.projectcalico.org/v1
+
 ##############################################################################
-# Download and include ../lib.Makefile before anything else
+# Include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ##############################################################################
-
 include ../lib.Makefile
+
 
 FIPS ?= false
 
@@ -88,12 +93,12 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 $(API_SERVER_IMAGE): $(CONTAINER_MARKER)
-$(CONTAINER_CREATED): Dockerfile $(BINDIR)/apiserver-$(ARCH) bin/LICENSE
+$(CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/apiserver-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(CONTAINER_FIPS_CREATED): Dockerfile $(BINDIR)/apiserver-$(ARCH) bin/LICENSE
+$(CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(BINDIR)/apiserver-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
@@ -104,8 +109,11 @@ lint-cache-dir:
 
 .PHONY: ut
 ut: lint-cache-dir run-etcd
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" go test $(UNIT_TEST_FLAGS) \
+	mkdir -p report
+	$(DOCKER_RUN) \
+	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
+	$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" gotestsum --junitfile report/apiserver_ut.xml -- $(UNIT_TEST_FLAGS) \
 			$(addprefix $(PACKAGE_NAME)/,$(TEST_DIRS))'
 
 .PHONY: st
@@ -172,6 +180,7 @@ fv-etcd: run-kubernetes-server hack-lib
 fv-kdd: run-kubernetes-server hack-lib
 	$(DOCKER_RUN) \
 		-v $(CERTS_PATH):/home/user/certs \
+		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		$(CALICO_BUILD) \
 		sh -c 'DATASTORE_TYPE="kubernetes" test/integration.sh'

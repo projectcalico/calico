@@ -18,6 +18,7 @@ import (
 	"context"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/defaults"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -57,15 +58,13 @@ func (r globalNetworkPolicies) Create(ctx context.Context, res *apiv3.GlobalNetw
 		resCopy := *res
 		res = &resCopy
 	}
-	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 
-	if err := validator.Validate(res); err != nil {
+	if _, err := defaults.Default(res); err != nil {
 		return nil, err
 	}
 
-	// Add tier labels to policy for lookup.
-	if tier != "default" {
-		res.GetObjectMeta().SetLabels(addTierLabel(res.GetObjectMeta().GetLabels(), tier))
+	if err := validator.Validate(res); err != nil {
+		return nil, err
 	}
 
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindGlobalNetworkPolicy, res)
@@ -90,27 +89,19 @@ func (r globalNetworkPolicies) Update(ctx context.Context, res *apiv3.GlobalNetw
 		resCopy := *res
 		res = &resCopy
 	}
-	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
+
+	if _, err := defaults.Default(res); err != nil {
+		return nil, err
+	}
 
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
 
-	// Add tier labels to policy for lookup.
-	tier := names.TierOrDefault(res.Spec.Tier)
-	if tier != "default" {
-		res.GetObjectMeta().SetLabels(addTierLabel(res.GetObjectMeta().GetLabels(), tier))
-	}
-
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindGlobalNetworkPolicy, res)
 	if out != nil {
-		// Add the tier labels if necessary
-		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
 		return out.(*apiv3.GlobalNetworkPolicy), err
 	}
-
-	// Add the tier labels if necessary
-	res.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(res.GetObjectMeta().GetLabels()))
 
 	return nil, err
 }
@@ -157,37 +148,6 @@ func (r globalNetworkPolicies) List(ctx context.Context, opts options.ListOption
 // supplied options.
 func (r globalNetworkPolicies) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
 	return r.client.resources.Watch(ctx, opts, apiv3.KindGlobalNetworkPolicy, &policyConverter{})
-}
-
-func defaultPolicyTypesField(ingressRules, egressRules []apiv3.Rule, types *[]apiv3.PolicyType) {
-	if len(*types) == 0 {
-		// Default the Types field according to what inbound and outbound rules are present
-		// in the policy.
-		if len(egressRules) == 0 {
-			// Policy has no egress rules, so apply this policy to ingress only.  (Note:
-			// intentionally including the case where the policy also has no ingress
-			// rules.)
-			*types = []apiv3.PolicyType{apiv3.PolicyTypeIngress}
-		} else if len(ingressRules) == 0 {
-			// Policy has egress rules but no ingress rules, so apply this policy to
-			// egress only.
-			*types = []apiv3.PolicyType{apiv3.PolicyTypeEgress}
-		} else {
-			// Policy has both ingress and egress rules, so apply this policy to both
-			// ingress and egress.
-			*types = []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress}
-		}
-	}
-}
-
-func addTierLabel(labels map[string]string, prefix string) map[string]string {
-	// Create the map if it is nil
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-
-	labels[apiv3.LabelTier] = prefix
-	return labels
 }
 
 func defaultTierLabelIfMissing(labels map[string]string) map[string]string {

@@ -5,9 +5,11 @@
 #ifndef __CALI_RPF_H__
 #define __CALI_RPF_H__
 
+#include "bpf.h"
 #include "types.h"
 #include "skb.h"
 #include "routes.h"
+#include "allowsources.h"
 
 #define RPF_RES_FAIL		0
 #define RPF_RES_STRICT		1
@@ -19,9 +21,14 @@ static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt
         CALI_DEBUG("Workload RPF check src=" IP_FMT " skb iface=%d.",
                         debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
         if (!r) {
+				if (WORKLOAD_SRC_SPOOFING_CONFIGURED && cali_allowsource_lookup(&ctx->state->ip_src, ctx->skb->ifindex)) {
+						CALI_INFO("Workload RPF bypass: allowing spoofed source IP");
+						ctx->state->flags |= CALI_ST_SUPPRESS_CT_STATE;
+						return RPF_RES_STRICT;
+				}
                 CALI_INFO("Workload RPF fail: missing route.");
                 return RPF_RES_FAIL;
-        }
+		}
 #ifdef IPVER6
 	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
 		return RPF_RES_STRICT;
@@ -44,9 +51,6 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 {
 	int ret = RPF_RES_FAIL;
 	bool strict;
-#ifdef IPVER6
-	bool linkLocal = false;
-#endif
 	if (!(GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_ENABLED)) {
 		CALI_DEBUG("Host RPF check disabled");
 		return RPF_RES_DISABLED;
@@ -55,9 +59,6 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 #ifdef IPVER6
 	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
 		return RPF_RES_LOOSE;
-	}
-	if (ip_link_local(ctx->state->ip_dst) && ip_link_local(ctx->state->ip_src)) {
-		linkLocal = true;
 	}
 #endif
 
@@ -119,13 +120,17 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 #endif
 			}
 			break;
-#ifdef IPVER6
 		case BPF_FIB_LKUP_RET_NOT_FWDED:
-			if (linkLocal) {
-				ret = RPF_RES_STRICT;
+			if (ip_link_local(ctx->state->ip_src)) {
+#ifdef IPVER6
+				if (ip_link_local(ctx->state->ip_dst)){
+#else
+				if (ip_equal(ctx->state->ip_dst, HOST_IP)) {
+#endif
+					ret = RPF_RES_STRICT;
+				}
 			}
 			break;
-#endif
 
 	}
 

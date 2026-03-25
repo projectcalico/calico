@@ -16,6 +16,7 @@ package rules
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 
@@ -92,7 +93,7 @@ func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion
 			toPorts := fmt.Sprintf("%d-%d", r.NATPortRange.MinPort, r.NATPortRange.MaxPort)
 			portRangeSnatRule := r.Masq(toPorts)
 			if r.NATOutgoingAddress != nil {
-				toAddress := fmt.Sprintf("%s:%s", r.NATOutgoingAddress.String(), toPorts)
+				toAddress := net.JoinHostPort(r.NATOutgoingAddress.String(), toPorts)
 				portRangeSnatRule = r.SNAT(toAddress)
 			}
 			rules = []generictables.Rule{

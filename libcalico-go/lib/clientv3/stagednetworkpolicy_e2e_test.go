@@ -18,8 +18,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -28,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -76,6 +76,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 	var be bapi.Client
 
 	BeforeEach(func() {
+		v3CRD = k8s.UsingV3CRDs(&config.Spec)
+
 		var err error
 		c, err = clientv3.New(config)
 		Expect(err).NotTo(HaveOccurred())
@@ -289,13 +291,13 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				By("Updating StagedNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedNetworkPolicies().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
+				Eventually(func() string {
+					_, err := c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
 
 				By("Creating StagedNetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.StagedNetworkPolicies().Create(ctx, &apiv3.StagedNetworkPolicy{
@@ -303,13 +305,13 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
+				Eventually(func() string {
+					_, err := c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespacedName(namespace2, name2) + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -729,6 +731,6 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				Expect(np.GetName()).To(Equal(name))
 			}
 		},
-		nameNormalizationTests...,
+		nameNormalizationTests,
 	)
 })

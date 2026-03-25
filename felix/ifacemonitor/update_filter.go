@@ -57,6 +57,23 @@ func FilterUpdates(ctx context.Context,
 	defer close(routeOutC)
 	defer close(linkOutC)
 
+	// Drain input channels on exit to unblock netlink goroutines that may
+	// be blocked on a channel send.  Callers must ensure the input channels
+	// are eventually closed (e.g., by closing the netlink subscription) so
+	// that the drain goroutines can terminate.
+	defer func() {
+		go func() {
+			for range linkInC {
+			}
+			logrus.Debug("FilterUpdates: link input channel drained")
+		}()
+		go func() {
+			for range routeInC {
+			}
+			logrus.Debug("FilterUpdates: route input channel drained")
+		}()
+	}()
+
 	u := &updateFilter{
 		Time: timeshim.RealTime(),
 	}
@@ -69,7 +86,7 @@ func FilterUpdates(ctx context.Context,
 
 	type timestampedUpd struct {
 		ReadyAt time.Time
-		Update  interface{} // RouteUpdate or LinkUpdate
+		Update  any // RouteUpdate or LinkUpdate
 	}
 
 	updatesByIfaceIdx := map[int][]timestampedUpd{}

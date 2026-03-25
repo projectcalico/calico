@@ -17,12 +17,13 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
 	"regexp"
 	"strconv"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -47,6 +48,7 @@ var (
 	_ = describeBPFDualStackTests(false, false)
 
 	_ = describeBPFDualStackProxyHealthTests()
+	_ = describeBPFProxyHealthDisabledTests()
 )
 
 func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
@@ -398,7 +400,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				for _, f := range tc.Felixes {
 					felixReady := func() int {
-						return healthStatus("["+f.IPv6+"]", "9099", "readiness")
+						return healthStatus(f.IPv6, "9099", "readiness")
 					}
 					Eventually(felixReady, "10s", "330ms").Should(BeGood())
 					Consistently(felixReady, "10s", "1s").Should(BeGood())
@@ -535,7 +537,7 @@ func describeBPFDualStackProxyHealthTests() bool {
 			}, "10s", "330ms").Should(Equal(200))
 
 			Eventually(func() int {
-				return healthStatus("["+tc.Felixes[0].IPv6+"]", strconv.Itoa(int(healthCheckNodePort)), "")
+				return healthStatus(tc.Felixes[0].IPv6, strconv.Itoa(int(healthCheckNodePort)), "")
 			}, "10s", "330ms").Should(Equal(200))
 
 			// Check health probe on node 1 (no local endpoint) - should return 503
@@ -544,13 +546,63 @@ func describeBPFDualStackProxyHealthTests() bool {
 			}, "10s", "330ms").Should(Equal(503))
 
 			Eventually(func() int {
-				return healthStatus("["+tc.Felixes[1].IPv6+"]", strconv.Itoa(int(healthCheckNodePort)), "")
+				return healthStatus(tc.Felixes[1].IPv6, strconv.Itoa(int(healthCheckNodePort)), "")
 			}, "10s", "330ms").Should(Equal(503))
 
 			// Clean up
 			w0.Stop()
 			err = k8sClient.CoreV1().Services("default").Delete(context.Background(), "test-np-health", metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+}
+
+func describeBPFProxyHealthDisabledTests() bool {
+	if !BPFMode() {
+		return true
+	}
+	desc := "_BPF_ _BPF-SAFE_ BPF kube-proxy health check disabled when port is 0"
+	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+		var (
+			infra infrastructure.DatastoreInfra
+			tc    infrastructure.TopologyContainers
+		)
+
+		BeforeEach(func() {
+			iOpts := []infrastructure.CreateOption{
+				infrastructure.K8sWithDualStack(),
+				infrastructure.K8sWithAPIServerBindAddress("::"),
+				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16"),
+			}
+			infra = getInfra(iOpts...)
+			opts := infrastructure.DefaultTopologyOptions()
+			opts.EnableIPv6 = true
+			opts.IPIPMode = api.IPIPModeNever
+			opts.NATOutgoingEnabled = true
+			opts.BPFProxyHealthzPort = 0
+
+			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+		})
+
+		AfterEach(func() {
+			tc.Stop()
+			infra.Stop()
+		})
+
+		It("should not listen on the kube-proxy health check port", func() {
+			felix := tc.Felixes[0]
+
+			// Felix should be running and healthy on its own health port.
+			Eventually(func() int {
+				return healthStatus(felix.IP, "9099", "readiness")
+			}, "10s", "330ms").Should(BeGood())
+
+			// Verify no socket is listening on port 10256 inside the Felix container.
+			Consistently(func() string {
+				out, err := felix.ExecOutput("ss", "-tln", "sport", "=", "10256")
+				Expect(err).NotTo(HaveOccurred())
+				return out
+			}, "5s", "500ms").ShouldNot(ContainSubstring("LISTEN"))
 		})
 	})
 }
@@ -594,9 +646,7 @@ func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32, hostIfTy
 		"eth0": hostIfType | ready,
 	}
 
-	for k, v := range additionalInterfaces {
-		expectedIfacesToFlags[k] = v
-	}
+	maps.Copy(expectedIfacesToFlags, additionalInterfaces)
 
 	for _, w := range felix.Workloads {
 		if w.Runs() {

@@ -25,11 +25,12 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // GlobalNetworkPolicyList is a list of Policy objects.
 type GlobalNetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []GlobalNetworkPolicy `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -37,14 +38,23 @@ type GlobalNetworkPolicyList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster,shortName={gnp,cgnp}
+// +kubebuilder:selectablefield:JSONPath=`.spec.tier`
+// +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
+// +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 type GlobalNetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec GlobalNetworkPolicySpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec GlobalNetworkPolicySpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT) && self.preDNAT))",message="preDNAT and doNotTrack cannot both be true",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) || size(self.egress) == 0",message="preDNAT policy cannot have any egress rules",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t, t == 'Egress')",message="preDNAT policy cannot have 'Egress' type",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="(has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack) || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))",message="applyOnForward must be true if either preDNAT or doNotTrack is true",reason=FieldValueInvalid
 type GlobalNetworkPolicySpec struct {
 	// The name of the tier that this policy belongs to.  If this is omitted, the default
 	// tier (name is "default") is assumed.  The specified tier must exist in order to create
@@ -91,6 +101,7 @@ type GlobalNetworkPolicySpec struct {
 	// 	deployment != "dev"
 	// 	! has(label_name)
 	Selector string `json:"selector,omitempty" validate:"selector"`
+
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
 	// Types according to what Ingress and Egress rules are present in the policy.  The
@@ -105,15 +116,20 @@ type GlobalNetworkPolicySpec struct {
 	//
 	// When the policy is read back again, Types will always be one of these values, never empty
 	// or nil.
-	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=2
+	// +listType=set
+	Types []PolicyType `json:"types,omitempty"`
 
 	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
 	// this policy are applied before any data plane connection tracking, and packets allowed by
 	// this policy are marked as not to be tracked.
 	DoNotTrack bool `json:"doNotTrack,omitempty"`
+
 	// PreDNAT indicates to apply the rules in this policy before any DNAT.
 	PreDNAT bool `json:"preDNAT,omitempty"`
+
 	// ApplyOnForward indicates to apply the rules in this policy on forward traffic.
 	ApplyOnForward bool `json:"applyOnForward,omitempty"`
 

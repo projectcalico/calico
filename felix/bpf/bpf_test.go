@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"slices"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -155,12 +156,7 @@ func TestRemoveCIDRMap(t *testing.T) {
 }
 
 func strSliceContains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, e)
 }
 
 func TestListCIDRMap(t *testing.T) {
@@ -724,7 +720,7 @@ func TestMemberToIPMask(t *testing.T) {
 		t.Fatalf("got wrong IP: ip=%v expectedIP=%q", ip, expectedIP)
 	}
 	if mask != expectedMask {
-		t.Fatalf("got wrong mask: mask=%v expectedMask=%q", mask, expectedMask)
+		t.Fatalf("got wrong mask: mask=%v expectedMask=%d", mask, expectedMask)
 	}
 
 	member = "192.168.1.1"
@@ -739,7 +735,7 @@ func TestMemberToIPMask(t *testing.T) {
 		t.Fatalf("got wrong IP: ip=%v expectedIP=%q", ip, expectedIP)
 	}
 	if mask != expectedMask {
-		t.Fatalf("got wrong mask: mask=%v expectedMask=%q", mask, expectedMask)
+		t.Fatalf("got wrong mask: mask=%v expectedMask=%d", mask, expectedMask)
 	}
 }
 

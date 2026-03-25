@@ -16,10 +16,11 @@ package mock
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"sync"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -51,6 +52,7 @@ type MockDataplane struct {
 	endpointToPreDNATPolicyOrder   map[string][]TierInfo
 	endpointToAllPolicyIDs         map[string][]types.PolicyID
 	endpointToProfiles             map[string][]string
+	endpointToLiveMigrationRole    map[string]proto.LiveMigrationRole
 	serviceAccounts                map[types.ServiceAccountID]*proto.ServiceAccountUpdate
 	namespaces                     map[types.NamespaceID]*proto.NamespaceUpdate
 	config                         map[string]string
@@ -189,6 +191,13 @@ func (d *MockDataplane) EndpointToProfiles() map[string][]string {
 	return epToProfCopy
 }
 
+func (d *MockDataplane) EndpointToLiveMigrationRole() map[string]proto.LiveMigrationRole {
+	d.Lock()
+	defer d.Unlock()
+
+	return maps.Clone(d.endpointToLiveMigrationRole)
+}
+
 func (d *MockDataplane) EndpointToPolicyOrder() map[string][]TierInfo {
 	d.Lock()
 	defer d.Unlock()
@@ -215,9 +224,7 @@ func (d *MockDataplane) ServiceAccounts() map[types.ServiceAccountID]*proto.Serv
 	defer d.Unlock()
 
 	cpy := make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate)
-	for k, v := range d.serviceAccounts {
-		cpy[k] = v
-	}
+	maps.Copy(cpy, d.serviceAccounts)
 	return cpy
 }
 
@@ -226,9 +233,7 @@ func (d *MockDataplane) Namespaces() map[types.NamespaceID]*proto.NamespaceUpdat
 	defer d.Unlock()
 
 	cpy := make(map[types.NamespaceID]*proto.NamespaceUpdate)
-	for k, v := range d.namespaces {
-		cpy[k] = v
-	}
+	maps.Copy(cpy, d.namespaces)
 	return cpy
 }
 
@@ -267,9 +272,7 @@ func (d *MockDataplane) Config() map[string]string {
 		return nil
 	}
 	localCopy := map[string]string{}
-	for k, v := range d.config {
-		localCopy[k] = v
-	}
+	maps.Copy(localCopy, d.config)
 	return localCopy
 }
 
@@ -289,6 +292,7 @@ func NewMockDataplane() *MockDataplane {
 		endpointToUntrackedPolicyOrder: make(map[string][]TierInfo),
 		endpointToPreDNATPolicyOrder:   make(map[string][]TierInfo),
 		endpointToProfiles:             make(map[string][]string),
+		endpointToLiveMigrationRole:    make(map[string]proto.LiveMigrationRole),
 		endpointToAllPolicyIDs:         make(map[string][]types.PolicyID),
 		serviceAccounts:                make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate),
 		namespaces:                     make(map[types.NamespaceID]*proto.NamespaceUpdate),
@@ -296,7 +300,7 @@ func NewMockDataplane() *MockDataplane {
 	return s
 }
 
-func (d *MockDataplane) OnEvent(event interface{}) {
+func (d *MockDataplane) OnEvent(event any) {
 	d.Lock()
 	defer d.Unlock()
 
@@ -305,7 +309,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	evType := reflect.TypeOf(event).String()
 	fmt.Fprintf(ginkgo.GinkgoWriter, "       <- Event: %v %v\n", evType, event)
 	Expect(event).NotTo(BeNil())
-	Expect(reflect.TypeOf(event).Kind()).To(Equal(reflect.Ptr))
+	Expect(reflect.TypeOf(event).Kind()).To(Equal(reflect.Pointer))
 
 	// Test wrapping the message for the external dataplane
 	switch event := event.(type) {
@@ -423,12 +427,18 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 					"update %v to be active", profID, event))
 		}
 		d.endpointToProfiles[id.String()] = event.Endpoint.ProfileIds
+		if event.Endpoint.LiveMigrationRole != proto.LiveMigrationRole_NO_ROLE {
+			d.endpointToLiveMigrationRole[id.String()] = event.Endpoint.LiveMigrationRole
+		} else {
+			delete(d.endpointToLiveMigrationRole, id.String())
+		}
 	case *proto.WorkloadEndpointRemove:
 		id := workloadId(types.ProtoToWorkloadEndpointID(event.GetId()))
 		delete(d.endpointToPolicyOrder, id.String())
 		delete(d.endpointToUntrackedPolicyOrder, id.String())
 		delete(d.endpointToPreDNATPolicyOrder, id.String())
 		delete(d.endpointToProfiles, id.String())
+		delete(d.endpointToLiveMigrationRole, id.String())
 		delete(d.endpointToAllPolicyIDs, id.String())
 	case *proto.HostEndpointUpdate:
 		tiers := event.Endpoint.Tiers

@@ -132,19 +132,26 @@ func (m *migrateIPAM) PullFromDatastore() error {
 		// Update node names in the block to match the Kubernetes node
 		if m.nodeMap != nil {
 			for i, allocationAttribute := range block.Attributes {
-				// Update the node name if it has a corresponding Kubernetes node name
-				if nodeName, ok := m.nodeMap[allocationAttribute.AttrSecondary["node"]]; ok {
-					block.Attributes[i].AttrSecondary["node"] = nodeName
+				// Update the node name in ActiveOwnerAttrs if it has a corresponding Kubernetes node name
+				if nodeName, ok := m.nodeMap[allocationAttribute.ActiveOwnerAttrs["node"]]; ok {
+					block.Attributes[i].ActiveOwnerAttrs["node"] = nodeName
+				}
+
+				// Update the node name in AlternateOwnerAttrs if present
+				if allocationAttribute.AlternateOwnerAttrs != nil {
+					if nodeName, ok := m.nodeMap[allocationAttribute.AlternateOwnerAttrs["node"]]; ok {
+						block.Attributes[i].AlternateOwnerAttrs["node"] = nodeName
+					}
 				}
 
 				// Update the handle ID for any tunnel addresses
-				if allocationAttribute.AttrPrimary != nil {
+				if allocationAttribute.HandleID != nil {
 					for _, handlePrefix := range ipamHandlePrefixes {
-						if strings.HasPrefix(*allocationAttribute.AttrPrimary, handlePrefix) {
-							etcdNodeName := strings.TrimPrefix(*allocationAttribute.AttrPrimary, handlePrefix)
+						if after, ok0 := strings.CutPrefix(*allocationAttribute.HandleID, handlePrefix); ok0 {
+							etcdNodeName := after
 							if nodeName, ok := m.nodeMap[etcdNodeName]; ok {
 								handleID := fmt.Sprintf("%s%s", handlePrefix, nodeName)
-								block.Attributes[i].AttrPrimary = &handleID
+								block.Attributes[i].HandleID = &handleID
 							}
 						}
 					}
@@ -205,8 +212,8 @@ func (m *migrateIPAM) PullFromDatastore() error {
 			return fmt.Errorf("unable to convert %+v to an IPAMHandleKey", item.Key)
 		}
 		for _, handlePrefix := range ipamHandlePrefixes {
-			if strings.HasPrefix(key.HandleID, handlePrefix) {
-				etcdNodeName := strings.TrimPrefix(key.HandleID, handlePrefix)
+			if after, ok0 := strings.CutPrefix(key.HandleID, handlePrefix); ok0 {
+				etcdNodeName := after
 				if nodeName, ok := m.nodeMap[etcdNodeName]; ok {
 					key.HandleID = fmt.Sprintf("%s%s", handlePrefix, nodeName)
 				}

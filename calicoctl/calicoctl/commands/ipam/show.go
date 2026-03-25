@@ -20,6 +20,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 
 	docopt "github.com/docopt/docopt-go"
@@ -55,7 +56,7 @@ func getBorrowedIPs(ctx context.Context, ippoolClient clientv3.IPPoolInterface, 
 		return nil, 0, err
 	}
 
-	// For really old IP allocations, AttrSecondary[model.IPAMBlockAttributeNode] used to be not set.
+	// For really old IP allocations, ActiveOwnerAttrs[model.IPAMBlockAttributeNode] used to be not set.
 	// Count such IP addresses, and, if any, warn customer as we are unable to classify those as
 	// borrowed or not.
 	unclassifiedIPs := 0
@@ -87,16 +88,21 @@ func getBorrowedIPs(ctx context.Context, ippoolClient clientv3.IPPoolInterface, 
 					}
 				}
 
-				if borrowingNode, ok := attributes.AttrSecondary[model.IPAMBlockAttributeNode]; ok {
+				if borrowingNode, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeNode]; ok {
 					if blockOwner != borrowingNode {
 						bIP := borrowedIP{block: b.CIDR.IPNet.String(), blockOwner: blockOwner, borrowingNode: borrowingNode}
 						bIP.addr = b.OrdinalToIP(i).String()
-						if _, ok := attributes.AttrSecondary[model.IPAMBlockAttributePod]; ok {
-							bIP.allocatedTo = fmt.Sprintf("%s/%s", attributes.AttrSecondary[model.IPAMBlockAttributeNamespace],
-								attributes.AttrSecondary[model.IPAMBlockAttributePod])
+
+						// Determine allocation type and human-readable allocatedTo.
+						ns := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeNamespace]
+						if vmiName, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeVMIName]; ok {
+							bIP.allocationType = "vmi"
+							bIP.allocatedTo = fmt.Sprintf("%s/%s", ns, vmiName)
+						} else if podName, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributePod]; ok {
 							bIP.allocationType = model.IPAMBlockAttributePod
-						} else if _, ok := attributes.AttrSecondary[model.IPAMBlockAttributeType]; ok {
-							bIP.allocationType = attributes.AttrSecondary[model.IPAMBlockAttributeType]
+							bIP.allocatedTo = fmt.Sprintf("%s/%s", ns, podName)
+						} else if t, ok := attributes.ActiveOwnerAttrs[model.IPAMBlockAttributeType]; ok {
+							bIP.allocationType = t
 						}
 						details = append(details, &bIP)
 					}
@@ -143,9 +149,9 @@ func showBorrowedDetails(ctx context.Context, ippoolClient clientv3.IPPoolInterf
 	return nil
 }
 
-func showIP(ctx context.Context, ipamClient ipam.Interface, passedIP interface{}) error {
+func showIP(ctx context.Context, ipamClient ipam.Interface, passedIP any) error {
 	ip := argutils.ValidateIP(passedIP.(string))
-	attr, _, err := ipamClient.GetAssignmentAttributes(ctx, ip)
+	allocAttr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// IP address is not assigned.  The detailed error message here is either
@@ -160,15 +166,50 @@ func showIP(ctx context.Context, ipamClient ipam.Interface, passedIP interface{}
 
 	// IP address is assigned.
 	fmt.Printf("IP %s is in use\n", ip)
-	if len(attr) != 0 {
-		fmt.Println("Attributes:")
-		for k, v := range attr {
-			fmt.Printf("  %v: %v\n", k, v)
-		}
+
+	// Print HandleID
+	if allocAttr.HandleID != nil {
+		fmt.Printf("Handle ID: %s\n", *allocAttr.HandleID)
 	} else {
-		fmt.Println("No attributes defined")
+		fmt.Println("Handle ID: <none>")
 	}
+
+	// Active Owner Attributes
+	active := formatOwnerAttrs("Active Owner Attributes", allocAttr.ActiveOwnerAttrs)
+	if active != "" {
+		fmt.Print(active)
+	} else {
+		fmt.Println("No Active Owner attributes defined")
+	}
+
+	// Alternate Owner Attributes
+	alternate := formatOwnerAttrs("Alternate Owner Attributes", allocAttr.AlternateOwnerAttrs)
+	if alternate != "" {
+		fmt.Print(alternate)
+	}
+
 	return nil
+}
+
+// formatOwnerAttrs formats owner attributes into a printable string.
+// If attrs is empty, it returns an empty string.
+func formatOwnerAttrs(title string, attrs map[string]string) string {
+	if len(attrs) == 0 {
+		return ""
+	}
+
+	keys := make([]string, 0, len(attrs))
+	for k := range attrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s:\n", title)
+	for _, k := range keys {
+		fmt.Fprintf(&b, "  %v: %v\n", k, attrs[k])
+	}
+	return b.String()
 }
 
 func showBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBlocks bool) error {
@@ -221,7 +262,7 @@ func showConfiguration(ctx context.Context, ipamClient ipam.Interface) error {
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"PROPERTY", "VALUE"})
-	genRow := func(name string, value interface{}) []string {
+	genRow := func(name string, value any) []string {
 		return []string{
 			name,
 			fmt.Sprintf("%#v", value),

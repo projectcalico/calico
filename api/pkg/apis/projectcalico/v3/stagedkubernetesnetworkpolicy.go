@@ -27,19 +27,19 @@ const (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:shortName={sknp}
 
 // StagedKubernetesNetworkPolicy is a staged GlobalNetworkPolicy.
 type StagedKubernetesNetworkPolicy struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the Policy.
-	Spec StagedKubernetesNetworkPolicySpec `json:"spec,omitempty"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              StagedKubernetesNetworkPolicySpec `json:"spec"`
 }
 
 type StagedKubernetesNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
-	StagedAction StagedAction `json:"stagedAction,omitempty" validate:"omitempty,stagedAction"`
+	// +kubebuilder:default=Set
+	StagedAction StagedAction `json:"stagedAction,omitempty"`
 
 	// Selects the pods to which this NetworkPolicy object applies. The array of
 	// ingress rules is applied to any pods selected by this field. Multiple network
@@ -47,7 +47,8 @@ type StagedKubernetesNetworkPolicySpec struct {
 	// each are combined additively. This field is NOT optional and follows standard
 	// label selector semantics. An empty podSelector matches all pods in this
 	// namespace.
-	PodSelector metav1.LabelSelector `json:"podSelector,omitempty" protobuf:"bytes,1,opt,name=podSelector"`
+	// +optional
+	PodSelector metav1.LabelSelector `json:"podSelector" protobuf:"bytes,1,opt,name=podSelector"`
 
 	// List of ingress rules to be applied to the selected pods. Traffic is allowed to
 	// a pod if there are no NetworkPolicies selecting the pod
@@ -80,6 +81,9 @@ type StagedKubernetesNetworkPolicySpec struct {
 	// an Egress section and would otherwise default to just [ "Ingress" ]).
 	// This field is beta-level in 1.8
 	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=2
+	// +listType=set
 	PolicyTypes []networkingv1.PolicyType `json:"policyTypes,omitempty" protobuf:"bytes,4,rep,name=policyTypes,casttype=PolicyType"`
 }
 

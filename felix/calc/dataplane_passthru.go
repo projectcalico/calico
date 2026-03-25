@@ -24,7 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
-	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -97,7 +97,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			} else {
 				h.callbacks.OnServiceUpdate(kubernetesServiceToProto(update.Value.(*kapiv1.Service)))
 			}
-		} else if key.Kind == libv3.KindNode {
+		} else if key.Kind == internalapi.KindNode {
 			h.processKindNode(key, update)
 		} else {
 			log.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
@@ -175,7 +175,7 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 		delete(h.hosts, hostname)
 		h.callbacks.OnHostMetadataRemove(hostname)
 	} else {
-		node, _ := update.Value.(*libv3.Node)
+		node, _ := update.Value.(*internalapi.Node)
 		log.WithField("update", update).Debug("Passing-through Node update")
 		bgpIp4net := &net.IPNet{} // required for print in event sequencer
 		bgpIp6net := &net.IPNet{} // required for print in event sequencer
@@ -202,9 +202,9 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 			// similar fallback as for IPv4, see how HostIPKey is generated in
 			// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go
 			var ipnet *net.IPNet
-			_, ipnet = cresources.FindNodeAddress(node, libv3.InternalIP, 6)
+			_, ipnet = cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
 			if ipnet == nil {
-				_, ipnet = cresources.FindNodeAddress(node, libv3.ExternalIP, 6)
+				_, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
 			}
 			nodeUpdate := nodeData{
 				IPv6: ipnet,

@@ -70,6 +70,7 @@ const (
 	IPSetIDAllHostNets        = "all-hosts-net"
 	IPSetIDAllVXLANSourceNets = "all-vxlan-net"
 	IPSetIDThisHostIPs        = "this-host"
+	IPSetIDAllIstioWEPs       = "all-istio-weps"
 
 	ChainFIPDnat = ChainNamePrefix + "fip-dnat"
 	ChainFIPSnat = ChainNamePrefix + "fip-snat"
@@ -90,6 +91,10 @@ const (
 
 	NftablesToWorkloadDispatchMap   = ChainNamePrefix + "to-wl-dispatch"
 	NftablesFromWorkloadDispatchMap = ChainNamePrefix + "from-wl-dispatch"
+
+	WorkloadARPPfx         = ChainNamePrefix + "arp-"
+	NftablesARPDispatchMap = ChainNamePrefix + "arp-dispatch"
+	ChainARPDispatch       = ChainNamePrefix + "arp-dispatch"
 
 	ChainDispatchToHostEndpoint          = ChainNamePrefix + "to-host-endpoint"
 	ChainDispatchFromHostEndpoint        = ChainNamePrefix + "from-host-endpoint"
@@ -365,6 +370,9 @@ type DefaultRuleRenderer struct {
 
 	// maxNameLength is the maximum length of a chain name.
 	maxNameLength int
+
+	// nft is true if we are generating NFTables rules.
+	nft bool
 }
 
 func (r *DefaultRuleRenderer) IptablesFilterDenyAction() generictables.Action {
@@ -456,8 +464,11 @@ type Config struct {
 	BPFForceTrackPacketsFromIfaces []string
 	ServiceLoopPrevention          string
 
-	NFTables        bool
+	NFTablesMode    string
 	FlowLogsEnabled bool
+
+	IstioAmbientModeEnabled bool
+	IstioDSCPMark           uint8
 }
 
 var unusedBitsInBPFMode = map[string]bool{
@@ -500,7 +511,7 @@ func (c *Config) validate() {
 	}
 }
 
-func NewRenderer(config Config) RuleRenderer {
+func NewRenderer(config Config, nft bool) RuleRenderer {
 	log.WithField("config", config).Info("Creating rule renderer.")
 	config.validate()
 
@@ -510,7 +521,7 @@ func NewRenderer(config Config) RuleRenderer {
 	var drop generictables.Action = iptables.DropAction{}
 	var ret generictables.Action = iptables.ReturnAction{}
 
-	if config.NFTables {
+	if nft {
 		actions = nftables.Actions()
 		reject = nftables.RejectAction{}
 		accept = nftables.AcceptAction{}
@@ -519,13 +530,13 @@ func NewRenderer(config Config) RuleRenderer {
 	}
 
 	newMatchFn := func() generictables.MatchCriteria {
-		if config.NFTables {
+		if nft {
 			return nftables.Match()
 		}
 		return iptables.Match()
 	}
 	combineMatches := iptables.Combine
-	if config.NFTables {
+	if nft {
 		combineMatches = nftables.Combine
 	}
 
@@ -592,7 +603,7 @@ func NewRenderer(config Config) RuleRenderer {
 
 	maxNameLength := iptables.MaxChainNameLength
 	wildcard := iptables.Wildcard
-	if config.NFTables {
+	if nft {
 		wildcard = nftables.Wildcard
 		maxNameLength = nftables.MaxChainNameLength
 	}
@@ -609,5 +620,6 @@ func NewRenderer(config Config) RuleRenderer {
 		wildcard:                 wildcard,
 		maxNameLength:            maxNameLength,
 		CombineMatches:           combineMatches,
+		nft:                      nft,
 	}
 }

@@ -15,7 +15,7 @@
 package intdataplane
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
@@ -76,11 +76,11 @@ var _ = Describe("NoEncap Manager", func() {
 	})
 
 	It("successfully adds a route to the noEncap interface", func() {
-		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+		noencapMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
-		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
+		noencapMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node2",
 			Ipv4Addr: "172.0.2.2",
 		})
@@ -142,27 +142,31 @@ var _ = Describe("NoEncap Manager", func() {
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(rt.currentRoutes[routetable.InterfaceNone][0]).To(Equal(
 			routetable.Target{
-				Type:     "blackhole",
-				CIDR:     ip.MustParseCIDROrIP("192.168.0.100/26"),
+				Type: "blackhole",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("192.168.0.100/26"),
+				},
 				Protocol: 80,
 			}))
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes["eth0"][0]).To(Equal(
 			routetable.Target{
-				Type:     "noencap",
-				CIDR:     ip.MustParseCIDROrIP("192.168.0.0/26"),
+				Type: "noencap",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("192.168.0.0/26"),
+				},
 				GW:       ip.FromString("172.0.2.2"),
 				Protocol: 80,
 			}))
 	})
 
 	It("successfully adds a IPv6 route to the noEncap interface", func() {
-		noencapMgrV6.OnUpdate(&proto.HostMetadataV6Update{
+		noencapMgrV6.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node1",
 			Ipv6Addr: "fc00:10:96::2",
 		})
-		noencapMgrV6.OnUpdate(&proto.HostMetadataV6Update{
+		noencapMgrV6.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node2",
 			Ipv6Addr: "fc00:10:10::1",
 		})
@@ -225,16 +229,20 @@ var _ = Describe("NoEncap Manager", func() {
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(rt.currentRoutes[routetable.InterfaceNone][0]).To(Equal(
 			routetable.Target{
-				Type:     "blackhole",
-				CIDR:     ip.MustParseCIDROrIP("dead:beef::1:30/112"),
+				Type: "blackhole",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("dead:beef::1:30/112"),
+				},
 				Protocol: 80,
 			}))
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes["eth0"][0]).To(Equal(
 			routetable.Target{
-				Type:     "noencap",
-				CIDR:     ip.MustParseCIDROrIP("dead:beef::2:10/112"),
+				Type: "noencap",
+				RouteKey: routetable.RouteKey{
+					CIDR: ip.MustParseCIDROrIP("dead:beef::2:10/112"),
+				},
 				GW:       ip.FromString("fc00:10:10::1"),
 				Protocol: 80,
 			}))

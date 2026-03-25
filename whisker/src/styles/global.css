@@ -1,0 +1,84 @@
+@import 'tailwindcss';
+
+/* Tigera design system tokens */
+
+@import './palette.css';
+@import './primitive.css';
+@import './font.css';
+@import './background.css';
+@import './border.css';
+@import './custom.css';
+@import './elevation.css';
+@import './foreground.css';
+@import './links.css';
+@import './on-background.css';
+
+/* when dark class is on html ensure all .dark code below overrides default variables */
+@custom-variant dark (&:is(html .chakra-ui-dark *));
+
+@layer base {
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-tigera-semantic-border-outline, currentColor);
+    }
+    * {
+        @apply border-tigera-token-border-default outline-tigera-token-border-bold/50;
+    }
+    body {
+        @apply bg-tigera-token-elevation-page text-tigera-token-fg-default;
+    }
+}
+
+input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/*** Utility classes ***/
+
+@layer components {
+    .focus-ring-tigera {
+        @apply focus:ring-[3px] 
+        focus:ring-[var(--color-tigera-color-neutral-300)] 
+        focus:border-[var(--color-tigera-color-neutral-300)] 
+        focus-visible:ring-[var(--color-tigera-color-neutral-300)] 
+        focus-visible:border-[var(--color-tigera-color-neutral-300)] 
+        focus-visible:ring-[3px];
+    }
+}
+
+@layer utilities {
+    @keyframes animation-loader-dots {
+        33% {
+            background-size:
+                calc(100% / 3) 0%,
+                calc(100% / 3) 100%,
+                calc(100% / 3) 100%;
+        }
+        50% {
+            background-size:
+                calc(100% / 3) 100%,
+                calc(100% / 3) 0%,
+                calc(100% / 3) 100%;
+        }
+        66% {
+            background-size:
+                calc(100% / 3) 100%,
+                calc(100% / 3) 100%,
+                calc(100% / 3) 0%;
+        }
+    }
+}

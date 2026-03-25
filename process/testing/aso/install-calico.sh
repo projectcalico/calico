@@ -24,7 +24,9 @@ set -o pipefail
 trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo ""; echo "========================================"; echo "Script failed! Showing pod status for debugging:"; echo "========================================"; ./bin/kubectl get pod -A -o wide --kubeconfig=./kubeconfig 2>/dev/null || true; fi; exit $exit_code' EXIT
 
 # Use kubectl with kubeconfig from install-kubeadm.sh
-: ${KUBECTL:=./bin/kubectl}
+: "${KUBECTL:=./bin/kubectl}"
+: "${GOMPLATE:=./bin/gomplate}"
+: "${CRANE:=./bin/crane}"
 
 # Use the kubeconfig that was copied from master node
 KUBECONFIG_FILE="./kubeconfig"
@@ -49,12 +51,21 @@ echo '  RELEASE_STREAM='${RELEASE_STREAM}
 echo '  HASH_RELEASE='${HASH_RELEASE}
 echo '  KUBE_VERSION='${KUBE_VERSION}
 
+
+if [ ${PRODUCT} == 'calient' ]; then
+    rm -rf "${ASO_DIR}/EE/manifests" || true
+    ${GOMPLATE} --input-dir "${ASO_DIR}/EE/templates" --output-dir "${ASO_DIR}/EE/manifests"
+else
+    rm -rf "${ASO_DIR}/OSS/manifests" || true
+    ${GOMPLATE} --input-dir "${ASO_DIR}/OSS/templates" --output-dir "${ASO_DIR}/OSS/manifests"
+fi
+
 if [ ${PRODUCT} == 'calient' ]; then
     # Verify if the required variables are set for Calico EE
     : "${GCR_IO_PULL_SECRET:?Environment variable empty or not defined.}"
     : "${TSEE_TEST_LICENSE:?Environment variable empty or not defined.}"
-    echo '  GCR_IO_PULL_SECRET='${GCR_IO_PULL_SECRET}
-    echo '  TSEE_TEST_LICENSE='${TSEE_TEST_LICENSE}
+    echo '  GCR_IO_PULL_SECRET='"${GCR_IO_PULL_SECRET}"
+    echo '  TSEE_TEST_LICENSE='"${TSEE_TEST_LICENSE}"
 fi
 
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
@@ -86,8 +97,8 @@ fi
 
 # Create a storage class and persistent volume for Calico Enterprise.
 if [ ${PRODUCT} == 'calient' ]; then
-    ${KUBECTL} create -f ./EE/storage-class-azure-file.yaml
-    ${KUBECTL} create -f ./EE/persistent-volume.yaml
+    ${KUBECTL} create -f ./EE/manifests/storage-class-azure-file.yaml
+    ${KUBECTL} create -f ./EE/manifests/persistent-volume.yaml
 fi
 
 # Install Calico on Linux nodes
@@ -124,7 +135,7 @@ if [[ ${PRODUCT} == 'calient' ]]; then
     fi
 
     # Create custom resources
-    ${KUBECTL} create -f ./EE/custom-resources.yaml
+    ${KUBECTL} create -f ./EE/manifests/custom-resources.yaml
 
     # Install Calico EE license (after the Calico apiserver comes up)
     echo "Wait for the Calico apiserver to be ready..."
@@ -134,12 +145,17 @@ if [[ ${PRODUCT} == 'calient' ]]; then
     retry_command 60 "${KUBECTL} create -f ${TSEE_TEST_LICENSE}"
 else
     # Create custom resources
-    ${KUBECTL} create -f ./OSS/custom-resources.yaml
+    ${KUBECTL} create -f ./OSS/manifests/custom-resources.yaml
 fi
 
 echo "Wait for Calico to be ready on Linux nodes..."
 timeout --foreground 300 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Linux nodes"
+
+if [[ ${ASO_LINUX_DATAPLANE} == 'BPF' ]]; then
+    echo "Disabling kube-proxy since Calico is running on the BPF dataplane"
+    ${KUBECTL} patch ds -n kube-system kube-proxy -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": "true"}}}}}'
+fi
 
 # Install Calico on Windows nodes
 echo ""
@@ -152,8 +168,8 @@ ${KUBECTL} patch ipamconfig default --type merge --patch='{"spec": {"strictAffin
 
 echo "Creating kubernetes-services-endpoint ConfigMap..."
 APISERVER=$(${KUBECTL} get configmap -n kube-system kube-proxy -o yaml | awk -F'://' '/server: https:\/\// { print $2 }')
-APISERVER_ADDR=$(echo ${APISERVER} | awk -F':' '{ print $1 }')
-APISERVER_PORT=$(echo ${APISERVER} | awk -F':' '{ print $2 }')
+APISERVER_ADDR=$(echo "${APISERVER}" | awk -F':' '{ print $1 }')
+APISERVER_PORT=$(echo "${APISERVER}" | awk -F':' '{ print $2 }')
 ${KUBECTL} apply -f - << EOF
 kind: ConfigMap
 apiVersion: v1
@@ -176,11 +192,27 @@ echo "Wait for Calico to be ready on Windows nodes..."
 timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Windows nodes"
 
-# Create the kube-proxy-windows daemonset
-echo "Install kube-proxy-windows ${KUBE_VERSION} from sig-windows-tools"
-for iter in {1..5};do
-    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${KUBE_VERSION}/g" | ${KUBECTL} apply -f - && break || echo "download error: retry $iter in 5s" && sleep 5;
-done;
+# Create the kube-proxy-windows daemonset. First check if an exact match for KUBE_VERSION exists
+# in the kube-proxy image tags. If not, fall back to the latest patch release on the same minor
+# version, in case the kube-proxy-windows for the exact patch version hasn't been published yet.
+KUBE_PROXY_WIN_EXACT="$(${CRANE} ls sigwindowstools/kube-proxy | grep "^${KUBE_VERSION}-calico" | head -1 || true)"
+if [[ -n "${KUBE_PROXY_WIN_EXACT}" ]]; then
+    KUBE_PROXY_WIN_VERSION="${KUBE_VERSION}"
+    echo "Found exact kube-proxy-windows tag for ${KUBE_VERSION}"
+else
+    echo "No exact kube-proxy-windows tag for ${KUBE_VERSION}; searching for latest patch on same minor version..."
+    KUBE_PROXY_WIN_TAG="$(${CRANE} ls sigwindowstools/kube-proxy | grep "^${KUBE_VERSION%.*}.*-calico.*" | sort -Vr | head -1 || true)"
+    if [[ -n "${KUBE_PROXY_WIN_TAG}" ]]; then
+        KUBE_PROXY_WIN_VERSION="${KUBE_PROXY_WIN_TAG%%-calico*}"
+    else
+        echo "WARNING: Unable to determine kube-proxy-windows tag for ${KUBE_VERSION}; falling back to ${KUBE_VERSION}" >&2
+        KUBE_PROXY_WIN_VERSION="${KUBE_VERSION}"
+    fi
+fi
+echo "Install kube-proxy-windows ${KUBE_PROXY_WIN_VERSION} (requested Kubernetes version ${KUBE_VERSION}) from sig-windows-tools"
+curl -sSf -L --retry 5 https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml -o kube-proxy-windows.yaml
+sed -i "s/KUBE_PROXY_VERSION/${KUBE_PROXY_WIN_VERSION}/g" kube-proxy-windows.yaml
+${KUBECTL} apply -f ./kube-proxy-windows.yaml
 
 echo "Wait for kube-proxy to be ready on Windows nodes..."
 timeout --foreground 1200 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"
@@ -192,9 +224,9 @@ echo "calico-node-windows pods are ready"
 
 if [[ ${PRODUCT} == 'calient' ]]; then
     echo "Wait for fluentd-node-windows pods to be ready..."
-    echo "It takes a long time for fluentd-node-windows pods to pull images and start.Sleeping for 8 minutes..."
+    echo "It takes a long time for fluentd-node-windows pods to pull images and start. Sleeping for 8 minutes..."
     sleep 480
-    timeout --foreground 300 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=fluentd-node-windows --for=condition=Ready -n tigera-fluentd --timeout=30s; do sleep 5; done"
+    timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=fluentd-node-windows --for=condition=Ready -n tigera-fluentd --timeout=30s; do sleep 5; done"
     echo "fluentd-node-windows pods are ready"
 fi
 

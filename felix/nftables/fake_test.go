@@ -57,6 +57,9 @@ type fakeNFT struct {
 
 	// Allow overriding the next ListElements response for one or more sets to be an error.
 	ListElementsErrors map[string]error
+
+	// Track the number of List calls (simulates nft process spawns).
+	ListCallCount int
 }
 
 func (f *fakeNFT) Reset() {
@@ -124,6 +127,13 @@ func (f *fakeNFT) Check(ctx context.Context, tx *knftables.Transaction) error {
 	return f.fake.Check(ctx, tx)
 }
 
+// ListAll returns a map containing the names of all objects in the table,
+// grouped by object type.
+func (f *fakeNFT) ListAll(ctx context.Context) (map[string][]string, error) {
+	f.preList()
+	return f.fake.ListAll(ctx)
+}
+
 // List returns a list of the names of the objects of objectType ("chain", "set",
 // or "map") in the table. If there are no such objects, this will return an empty
 // list and no error.
@@ -135,6 +145,8 @@ func (f *fakeNFT) List(ctx context.Context, objectType string) ([]string, error)
 func (f *fakeNFT) preList() {
 	f.lock.Lock()
 	defer f.lock.Unlock()
+
+	f.ListCallCount++
 
 	if f.PreList != nil {
 		logrus.Info("Calling PreList")

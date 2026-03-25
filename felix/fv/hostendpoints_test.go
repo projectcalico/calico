@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"os"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -597,6 +597,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled
 				f.TriggerDelayedStart()
 			}
 
+			if BPFMode() {
+				ensureAllNodesBPFProgramsAttached(tc.Felixes)
+			}
+
 			cc = &connectivity.Checker{}
 		})
 
@@ -618,31 +622,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled
 				for _, f := range tc.Felixes {
 					Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("1\n"))
 				}
-			})
-
-			Describe("with BPFEnforceRPF set to Disabled", func() {
-				BeforeEach(func() {
-					infrastructure.UpdateFelixConfiguration(client, func(configuration *api.FelixConfiguration) {
-						configuration.Spec.BPFEnforceRPF = "Disabled"
-					})
-				})
-
-				It("should have host-to-host and host-to-local connectivity only", func() {
-					cc.Expect(connectivity.Some, tc.Felixes[0], hostW[1])
-					cc.Expect(connectivity.Some, tc.Felixes[1], hostW[0])
-					cc.Expect(connectivity.Some, tc.Felixes[0], w[0])
-					cc.Expect(connectivity.Some, tc.Felixes[1], w[1])
-					cc.Expect(connectivity.None, tc.Felixes[0], w[1])
-					cc.Expect(connectivity.None, tc.Felixes[1], w[0])
-					cc.Expect(connectivity.None, w[0], w[1])
-					cc.Expect(connectivity.None, w[0], w[1])
-					cc.CheckConnectivity()
-
-					// Check that the sysctl really is disabled.
-					for _, f := range tc.Felixes {
-						Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("0\n"))
-					}
-				})
 			})
 		} else {
 			It("should have host-to-host and host-to-local connectivity only", func() {

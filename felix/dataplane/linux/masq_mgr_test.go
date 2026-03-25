@@ -15,7 +15,7 @@
 package intdataplane
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -51,7 +51,7 @@ var _ = Describe("Masquerade manager", func() {
 			MarkScratch1: 0x8,
 			MarkDrop:     0x10,
 			MarkEndpoint: 0x11110000,
-		})
+		}, false)
 		masqMgr = newMasqManager(ipSets, natTable, ruleRenderer, 1024, 4)
 	})
 
@@ -111,7 +111,7 @@ var _ = Describe("Masquerade manager", func() {
 		})
 		It("an unrelated update shouldn't trigger work", func() {
 			natTable.UpdateCalled = false
-			masqMgr.OnUpdate(&proto.HostMetadataUpdate{
+			masqMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 				Hostname: "foo",
 				Ipv4Addr: "10.0.0.17",
 			})

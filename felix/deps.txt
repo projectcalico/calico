@@ -1,27 +1,30 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
-This file contains the list of modules that this package depends on
-in order to trigger CI on changes
+Run 'make gen-deps-files' to regenerate.
 
-go 1.25.6
-github.com/aws/aws-sdk-go-v2 v1.39.5
-github.com/aws/aws-sdk-go-v2/config v1.31.16
-github.com/aws/aws-sdk-go-v2/credentials v1.18.20
-github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.12
-github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.12
-github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.12
-github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4
-github.com/aws/aws-sdk-go-v2/service/ec2 v1.259.0
-github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.2
-github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.12
-github.com/aws/aws-sdk-go-v2/service/sso v1.30.0
-github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.4
-github.com/aws/aws-sdk-go-v2/service/sts v1.39.0
-github.com/aws/smithy-go v1.23.1
+go 1.26.1
+cel.dev/expr v0.25.1
+github.com/Masterminds/semver/v3 v3.4.0
+github.com/antlr4-go/antlr/v4 v4.13.0
+github.com/aws/aws-sdk-go-v2 v1.41.3
+github.com/aws/aws-sdk-go-v2/config v1.32.11
+github.com/aws/aws-sdk-go-v2/credentials v1.19.11
+github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.19
+github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.19
+github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.19
+github.com/aws/aws-sdk-go-v2/internal/ini v1.8.5
+github.com/aws/aws-sdk-go-v2/service/ec2 v1.294.0
+github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.6
+github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.19
+github.com/aws/aws-sdk-go-v2/service/signin v1.0.7
+github.com/aws/aws-sdk-go-v2/service/sso v1.30.12
+github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.16
+github.com/aws/aws-sdk-go-v2/service/sts v1.41.8
+github.com/aws/smithy-go v1.24.2
 github.com/beorn7/perks v1.0.1
-github.com/bits-and-blooms/bitset v1.24.2
+github.com/bits-and-blooms/bitset v1.24.4
 github.com/blang/semver/v4 v4.0.0
 github.com/cespare/xxhash/v2 v2.3.0
-github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443
+github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5
 github.com/containernetworking/cni v1.3.0
 github.com/containernetworking/plugins v1.9.0
 github.com/coreos/go-iptables v0.8.0
@@ -30,14 +33,16 @@ github.com/coreos/go-systemd/v22 v22.6.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/distribution/reference v0.6.0
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
-github.com/emicklei/go-restful/v3 v3.12.2
-github.com/envoyproxy/go-control-plane v0.13.4
-github.com/envoyproxy/go-control-plane/envoy v1.35.0
-github.com/envoyproxy/protoc-gen-validate v1.2.1
+github.com/emicklei/go-restful v2.15.0+incompatible
+github.com/emicklei/go-restful/v3 v3.13.0
+github.com/envoyproxy/go-control-plane v0.14.0
+github.com/envoyproxy/go-control-plane/envoy v1.37.0
+github.com/envoyproxy/protoc-gen-validate v1.3.0
 github.com/fsnotify/fsnotify v1.9.0
 github.com/fxamacker/cbor/v2 v2.9.0
 github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
-github.com/go-ini/ini v1.67.0
+github.com/go-kit/log v0.2.1
+github.com/go-logfmt/logfmt v0.6.0
 github.com/go-logr/logr v1.4.3
 github.com/go-openapi/jsonpointer v0.21.0
 github.com/go-openapi/jsonreference v0.20.2
@@ -49,12 +54,14 @@ github.com/gogo/protobuf v1.3.2
 github.com/golang/protobuf v1.5.4
 github.com/golang/snappy v1.0.0
 github.com/google/btree v1.1.3
+github.com/google/cel-go v0.26.0
 github.com/google/gnostic-models v0.7.0
 github.com/google/go-cmp v0.7.0
 github.com/google/uuid v1.6.0
 github.com/gopacket/gopacket v1.4.0
-github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.1
-github.com/ishidawataru/sctp v0.0.0-20250829011129-4b890084db30
+github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
+github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0
+github.com/ishidawataru/sctp v0.0.0-20251114114122-19ddcbc6aae2
 github.com/jinzhu/copier v0.4.0
 github.com/joho/godotenv v1.5.1
 github.com/josharian/intern v1.0.0
@@ -74,83 +81,285 @@ github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
-github.com/nxadm/tail v1.4.8
 github.com/olekukonko/tablewriter v0.0.5
 github.com/onsi/ginkgo v1.16.5
-github.com/onsi/gomega v1.38.2
+github.com/onsi/ginkgo/v2 v2.28.1
+github.com/onsi/gomega v1.39.1
 github.com/opencontainers/go-digest v1.0.0
+github.com/openshift/custom-resource-status v1.1.2
 github.com/pelletier/go-toml v1.9.5
 github.com/pelletier/go-toml/v2 v2.2.4
 github.com/pkg/errors v0.9.1
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
-github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
 github.com/prometheus/client_golang v1.23.2
 github.com/prometheus/client_model v0.6.2
-github.com/prometheus/common v0.67.2
-github.com/prometheus/procfs v0.19.2
+github.com/prometheus/common v0.67.5
+github.com/prometheus/procfs v0.20.1
 github.com/rivo/uniseg v0.4.7
-github.com/safchain/ethtool v0.6.2
+github.com/robfig/cron/v3 v3.0.1
+github.com/safchain/ethtool v0.7.0
 github.com/sagikazarmark/locafero v0.11.0
-github.com/sirupsen/logrus v1.9.3
+github.com/sirupsen/logrus v1.9.4
 github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8
 github.com/spf13/afero v1.15.0
 github.com/spf13/cast v1.10.0
-github.com/spf13/cobra v1.10.1
+github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
 github.com/spf13/viper v1.21.0
+github.com/stoewer/go-strcase v1.3.0
 github.com/subosito/gotenv v1.6.0
 github.com/tchap/go-patricia/v2 v2.3.3
 github.com/vishvananda/netlink v1.3.1
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4
-go.etcd.io/etcd/api/v3 v3.6.5
-go.etcd.io/etcd/client/pkg/v3 v3.6.5
-go.etcd.io/etcd/client/v3 v3.6.5
-go.opentelemetry.io/otel v1.37.0
-go.opentelemetry.io/otel/trace v1.37.0
+go.etcd.io/etcd/api/v3 v3.6.8
+go.etcd.io/etcd/client/pkg/v3 v3.6.8
+go.etcd.io/etcd/client/v3 v3.6.8
+go.opentelemetry.io/otel v1.42.0
+go.opentelemetry.io/otel/trace v1.42.0
 go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.3
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/crypto v0.46.0
-golang.org/x/net v0.48.0
-golang.org/x/oauth2 v0.34.0
-golang.org/x/sync v0.19.0
-golang.org/x/sys v0.39.0
-golang.org/x/term v0.38.0
-golang.org/x/text v0.32.0
-golang.org/x/time v0.14.0
+golang.org/x/crypto v0.49.0
+golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
+golang.org/x/mod v0.34.0
+golang.org/x/net v0.52.0
+golang.org/x/oauth2 v0.36.0
+golang.org/x/sync v0.20.0
+golang.org/x/sys v0.42.0
+golang.org/x/term v0.41.0
+golang.org/x/text v0.35.0
+golang.org/x/time v0.15.0
+golang.org/x/tools v0.42.0
 golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
-google.golang.org/genproto v0.0.0-20250603155806-513f23925822
-google.golang.org/genproto/googleapis/api v0.0.0-20250818200422-3122310a409c
-google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c
-google.golang.org/grpc v1.76.0
-google.golang.org/protobuf v1.36.10
-gopkg.in/evanphx/json-patch.v4 v4.12.0
-gopkg.in/go-playground/validator.v9 v9.30.2
+google.golang.org/genproto v0.0.0-20260128011058-8636f8732409
+google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57
+google.golang.org/genproto/googleapis/rpc v0.0.0-20260311181403-84a4fc48630c
+google.golang.org/grpc v1.79.3
+google.golang.org/protobuf v1.36.11
+gopkg.in/evanphx/json-patch.v4 v4.13.0
+gopkg.in/go-playground/validator.v9 v9.31.0
 gopkg.in/inf.v0 v0.9.1
-gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
+gopkg.in/ini.v1 v1.67.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.34.3
-k8s.io/apiextensions-apiserver v0.34.3
-k8s.io/apimachinery v0.34.3
-k8s.io/apiserver v0.34.3
-k8s.io/client-go v0.34.3
-k8s.io/component-base v0.34.3
-k8s.io/component-helpers v0.34.3
-k8s.io/controller-manager v0.34.3
+k8s.io/api v0.35.3
+k8s.io/apiextensions-apiserver v0.35.3
+k8s.io/apimachinery v0.35.3
+k8s.io/apiserver v0.35.3
+k8s.io/client-go v0.35.3
+k8s.io/component-base v0.35.3
+k8s.io/component-helpers v0.35.3
+k8s.io/controller-manager v0.35.3
 k8s.io/klog v0.2.0
-k8s.io/klog/v2 v2.130.1
-k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
-k8s.io/kubelet v0.34.3
-k8s.io/kubernetes v1.34.3
-k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
+k8s.io/klog/v2 v2.140.0
+k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
+k8s.io/kubelet v0.35.3
+k8s.io/kubernetes v1.35.3
+k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
+kubevirt.io/api v1.8.0-rc.0
+kubevirt.io/containerized-data-importer-api v1.64.0
+kubevirt.io/controller-lifecycle-operator-sdk/api v0.2.4
 modernc.org/memory v1.11.0
-sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
-sigs.k8s.io/knftables v0.0.19
-sigs.k8s.io/network-policy-api v0.1.8-0.20251216172012-399040aaf83d
+sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
+sigs.k8s.io/knftables v0.0.21
+sigs.k8s.io/network-policy-api v0.1.8-0.20260217173220-6bb86defe1a7
 sigs.k8s.io/randfill v1.0.0
-sigs.k8s.io/structured-merge-diff/v6 v6.3.0
+sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482
 sigs.k8s.io/yaml v1.6.0
+
+local:api/pkg/apis/projectcalico/v3
+local:api/pkg/defaults
+local:api/pkg/lib/numorstring
+local:app-policy/checker
+local:app-policy/policystore
+local:app-policy/types
+local:cni-plugin/pkg/dataplane/linux
+local:cni-plugin/pkg/types
+local:crypto/pkg/tls
+local:felix/aws
+local:felix/bpf
+local:felix/bpf/allowsources
+local:felix/bpf/arp
+local:felix/bpf/asm
+local:felix/bpf/bpfdefs
+local:felix/bpf/bpfmap
+local:felix/bpf/cmd
+local:felix/bpf/conntrack
+local:felix/bpf/conntrack/cleanupv1
+local:felix/bpf/conntrack/timeouts
+local:felix/bpf/conntrack/v2
+local:felix/bpf/conntrack/v3
+local:felix/bpf/conntrack/v4
+local:felix/bpf/consistenthash
+local:felix/bpf/counters
+local:felix/bpf/events
+local:felix/bpf/failsafes
+local:felix/bpf/filter
+local:felix/bpf/hook
+local:felix/bpf/ifstate
+local:felix/bpf/ipfrags
+local:felix/bpf/ipsets
+local:felix/bpf/jump
+local:felix/bpf/legacy
+local:felix/bpf/libbpf
+local:felix/bpf/maps
+local:felix/bpf/nat
+local:felix/bpf/polprog
+local:felix/bpf/profiling
+local:felix/bpf/proxy
+local:felix/bpf/qos
+local:felix/bpf/ringbuf
+local:felix/bpf/routes
+local:felix/bpf/state
+local:felix/bpf/tc
+local:felix/bpf/tc/defs
+local:felix/bpf/utils
+local:felix/bpf/xdp
+local:felix/cachingmap
+local:felix/calc
+local:felix/cmd/calico-bpf
+local:felix/cmd/calico-bpf/commands
+local:felix/cmd/calico-felix
+local:felix/cmd/calico-felix-docgen
+local:felix/collector
+local:felix/collector/flowlog
+local:felix/collector/goldmane
+local:felix/collector/local
+local:felix/collector/types
+local:felix/collector/types/counter
+local:felix/collector/types/endpoint
+local:felix/collector/types/metric
+local:felix/collector/types/tuple
+local:felix/collector/utils
+local:felix/config
+local:felix/conntrack
+local:felix/daemon
+local:felix/dataplane
+local:felix/dataplane/common
+local:felix/dataplane/external
+local:felix/dataplane/inactive
+local:felix/dataplane/ipsets
+local:felix/dataplane/linux
+local:felix/dataplane/linux/dataplanedefs
+local:felix/dataplane/linux/qos
+local:felix/deltatracker
+local:felix/dispatcher
+local:felix/environment
+local:felix/ethtool
+local:felix/fv/cgroup
+local:felix/fv/connectivity
+local:felix/fv/pktgen
+local:felix/fv/test-connection
+local:felix/fv/test-workload
+local:felix/fv/utils
+local:felix/generictables
+local:felix/idalloc
+local:felix/idalloc/collision
+local:felix/ifacemonitor
+local:felix/ip
+local:felix/ipsets
+local:felix/iptables
+local:felix/iptables/cmdshim
+local:felix/jitter
+local:felix/k8sfv
+local:felix/k8sutils
+local:felix/labelindex
+local:felix/labelindex/ipsetmember
+local:felix/labelindex/labelnamevalueindex
+local:felix/labelindex/labelrestrictionindex
+local:felix/linkaddrs
+local:felix/logutils
+local:felix/markbits
+local:felix/multidict
+local:felix/netlinkshim
+local:felix/netlinkshim/handlemgr
+local:felix/nfnetlink
+local:felix/nfnetlink/nfnl
+local:felix/nfnetlink/pkt
+local:felix/nftables
+local:felix/policysync
+local:felix/proto
+local:felix/proto/protoconv
+local:felix/routerule
+local:felix/routetable
+local:felix/routetable/ownershippol
+local:felix/rules
+local:felix/serviceindex
+local:felix/statusrep
+local:felix/stringutils
+local:felix/throttle
+local:felix/timeshim
+local:felix/types
+local:felix/usagerep
+local:felix/vxlanfdb
+local:felix/wireguard
+local:goldmane/pkg/client
+local:goldmane/pkg/goldmane
+local:goldmane/pkg/internal/flowcache
+local:goldmane/pkg/server
+local:goldmane/pkg/storage
+local:goldmane/pkg/stream
+local:goldmane/pkg/types
+local:goldmane/proto
+local:lib/std/chanutil
+local:lib/std/time
+local:lib/std/uniquelabels
+local:lib/std/uniquestr
+local:libcalico-go/config
+local:libcalico-go/lib/apiconfig
+local:libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme
+local:libcalico-go/lib/apis/internalapi
+local:libcalico-go/lib/apis/v1
+local:libcalico-go/lib/apis/v1/unversioned
+local:libcalico-go/lib/backend
+local:libcalico-go/lib/backend/api
+local:libcalico-go/lib/backend/encap
+local:libcalico-go/lib/backend/etcdv3
+local:libcalico-go/lib/backend/k8s
+local:libcalico-go/lib/backend/k8s/conversion
+local:libcalico-go/lib/backend/k8s/resources
+local:libcalico-go/lib/backend/model
+local:libcalico-go/lib/backend/syncersv1/dedupebuffer
+local:libcalico-go/lib/backend/syncersv1/felixsyncer
+local:libcalico-go/lib/backend/syncersv1/updateprocessors
+local:libcalico-go/lib/backend/watchersyncer
+local:libcalico-go/lib/clientv3
+local:libcalico-go/lib/consistenthash
+local:libcalico-go/lib/debugserver
+local:libcalico-go/lib/dispatcher
+local:libcalico-go/lib/epstatusfile
+local:libcalico-go/lib/errors
+local:libcalico-go/lib/hash
+local:libcalico-go/lib/health
+local:libcalico-go/lib/ipam
+local:libcalico-go/lib/ipam/vmipam
+local:libcalico-go/lib/logutils
+local:libcalico-go/lib/metricsserver
+local:libcalico-go/lib/names
+local:libcalico-go/lib/namespace
+local:libcalico-go/lib/net
+local:libcalico-go/lib/netlinkutils
+local:libcalico-go/lib/options
+local:libcalico-go/lib/packedmap
+local:libcalico-go/lib/prometheus
+local:libcalico-go/lib/readlogger
+local:libcalico-go/lib/resources
+local:libcalico-go/lib/scope
+local:libcalico-go/lib/selector
+local:libcalico-go/lib/selector/parser
+local:libcalico-go/lib/selector/tokenizer
+local:libcalico-go/lib/set
+local:libcalico-go/lib/validator/v1
+local:libcalico-go/lib/validator/v3
+local:libcalico-go/lib/watch
+local:libcalico-go/lib/winutils
+local:node/pkg/lifecycle/utils
+local:pkg/buildinfo
+local:pod2daemon/binder
+local:typha/pkg/discovery
+local:typha/pkg/syncclient
+local:typha/pkg/syncproto
+local:typha/pkg/tlsutils

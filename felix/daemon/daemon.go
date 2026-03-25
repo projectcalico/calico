@@ -44,7 +44,7 @@ import (
 	"github.com/projectcalico/calico/felix/statusrep"
 	"github.com/projectcalico/calico/felix/usagerep"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
@@ -362,45 +362,7 @@ configRetry:
 
 	doGoRuntimeSetup(configParams)
 
-	if configParams.BPFEnabled {
-		// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
-		if err := dp.SupportsBPF(); err != nil {
-			log.WithError(err).Error("BPF dataplane mode enabled but not supported by the kernel.  Disabling BPF mode.")
-			_, err := configParams.OverrideParam("BPFEnabled", "false")
-			if err != nil {
-				log.WithError(err).Panic("Bug: failed to override config parameter")
-			}
-		} else {
-			// BPF is enabled and supported. Now check for the BPFConntrackCleanupMode.
-			// With the conntrack map type changed to lru_hash, BPFConntrackModeBPFProgram isn't
-			// useful. Hence this option will be deprecated in the near future. If BPFConntrackCleanupMode
-			// is set to BPFConntrackModeBPFProgram, its reset to BPFConntrackModeUserspace.
-			log.Warn("BPF conntrack mode Auto,BPFProgram is not supported and will be deprecated soon. Falling back to userspace cleaner.")
-			_, err := configParams.OverrideParam("BPFConntrackCleanupMode", string(apiv3.BPFConntrackModeUserspace))
-			if err != nil {
-				log.WithError(err).Panic("Bug: failed to override config parameter BPFConntrackCleanupMode")
-			}
-			if configParams.BPFRedirectToPeer == "L2Only" {
-				log.Warn("BPFRedirectToPeer 'L2Only' is deprecated and equals 'Enabled' now.")
-				_, err := configParams.OverrideParam("BPFRedirectToPeer", "Enabled")
-				if err != nil {
-					log.WithError(err).Panic("Bug: failed to override config parameter BPFRedirectToPeer")
-				}
-			}
-		}
-	}
-
-	if configParams.BPFEnabled && configParams.IPForwarding == "Disabled" && configParams.BPFEnforceRPF != "Disabled" {
-		// BPF mode requires IP forwarding to be enabled because the BPF RPF
-		// check fails if it is disabled.  Seems to be an incorrect check in
-		// the kernel.  FIB lookups can only be done for interfaces that have
-		// forwarding enabled.
-		log.Warning("In BPF mode, either IPForwarding must be enabled or BPFEnforceRPF must be disabled. Forcing IPForwarding to 'Enabled'.")
-		_, err := configParams.OverrideParam("IPForwarding", "Enabled")
-		if err != nil {
-			log.WithError(err).Panic("Bug: failed to override config parameter")
-		}
-	}
+	applyBPFOverrides(configParams, dp.SupportsBPF)
 
 	// Set any watchdog timeout overrides before we initialise components.
 	health.SetGlobalTimeoutOverrides(configParams.HealthTimeoutOverrides)
@@ -455,6 +417,9 @@ configRetry:
 		log.Panic("Graceful shutdown took too long")
 	}
 
+	// Get the IPAM client for live migration owner attribute swaps.
+	ipamClient := v3Client.IPAM()
+
 	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		healthAggregator,
@@ -463,6 +428,7 @@ configRetry:
 		fatalErrorCallback,
 		k8sClientSet,
 		lookupsCache,
+		ipamClient,
 	)
 
 	// Defer reporting ready until we've started the dataplane driver.  This
@@ -492,11 +458,11 @@ configRetry:
 	var policySyncServer *policysync.Server
 	var policySyncProcessor *policysync.Processor
 	var policySyncAPIBinder binder.Binder
-	calcGraphClientChannels := []chan<- interface{}{dpConnector.ToDataplane}
+	calcGraphClientChannels := []chan<- any{dpConnector.ToDataplane}
 	if configParams.IsLeader() && configParams.PolicySyncPathPrefix != "" {
 		log.WithField("policySyncPathPrefix", configParams.PolicySyncPathPrefix).Info(
 			"Policy sync API enabled.  Creating the policy sync server.")
-		toPolicySync := make(chan interface{})
+		toPolicySync := make(chan any)
 		policySyncUIDAllocator := policysync.NewUIDAllocator()
 		policySyncProcessor = policysync.NewProcessor(toPolicySync)
 		policySyncServer = policysync.NewServer(
@@ -512,7 +478,7 @@ configRetry:
 	if dpStatsCollector != nil {
 		if apiv3.FlowLogsPolicyEvaluationModeType(configParams.FlowLogsPolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
 			// Fork the calculation graph for dataplane updates that will be sent to the Collector.
-			toCollectorDataplaneSync := make(chan interface{})
+			toCollectorDataplaneSync := make(chan any)
 			// The DataplaneInfoReader wraps and sends the dataplane updates to the Collector.
 			dpir := collector.NewDataplaneInfoReader(toCollectorDataplaneSync)
 			dpStatsCollector.SetDataplaneInfoReader(dpir)
@@ -1000,7 +966,7 @@ func loadConfigFromDatastore(
 	}
 	err = getAndMergeConfig(
 		ctx, client, hostConfig,
-		libapiv3.KindNode, hostname,
+		internalapi.KindNode, hostname,
 		updateprocessors.NewFelixNodeUpdateProcessor(cfg.Spec.K8sUsePodCIDR),
 		&ready,
 	)
@@ -1073,14 +1039,14 @@ type DataplaneConnector struct {
 	config     *config.Config
 
 	configUpdChan chan<- map[string]string
-	ToDataplane   chan interface{}
+	ToDataplane   chan any
 	InSync        chan bool
 
 	// Input channel for msgs from the dataplane.
 	// Msgs popped off this channel are dispatched to all StatusUpdatesFromDataplaneConsumers.
-	statusUpdatesFromDataplane           chan interface{}
-	statusUpdatesFromDataplaneDispatcher *dispatcher.BlockingDispatcher[interface{}]
-	statusUpdatesFromDataplaneConsumers  []chan interface{}
+	statusUpdatesFromDataplane           chan any
+	statusUpdatesFromDataplaneDispatcher *dispatcher.BlockingDispatcher[any]
+	statusUpdatesFromDataplaneConsumers  []chan any
 
 	failureReportChan chan<- string
 	dataplane         dp.DataplaneDriver
@@ -1108,15 +1074,15 @@ func newConnector(configParams *config.Config,
 		configUpdChan:                       configUpdChan,
 		datastore:                           datastore,
 		datastorev3:                         datastorev3,
-		ToDataplane:                         make(chan interface{}),
-		statusUpdatesFromDataplane:          make(chan interface{}),
+		ToDataplane:                         make(chan any),
+		statusUpdatesFromDataplane:          make(chan any),
 		statusUpdatesFromDataplaneConsumers: nil,
 		failureReportChan:                   failureReportChan,
 		dataplane:                           dataplane,
 		wireguardStatUpdateFromDataplane:    make(chan *proto.WireguardStatusUpdate, 1),
 	}
 
-	fromDataplaneDispatcher, err := dispatcher.NewBlockingDispatcher[interface{}](felixConn.statusUpdatesFromDataplane)
+	fromDataplaneDispatcher, err := dispatcher.NewBlockingDispatcher[any](felixConn.statusUpdatesFromDataplane)
 	if err != nil {
 		log.WithError(err).Panic("Failed to create dispatcher for status updates from dataplane")
 	}
@@ -1128,8 +1094,8 @@ func newConnector(configParams *config.Config,
 // NewFromDataplaneConsumer creates a channel which receives status updates from the dataplane.
 // Each call creates a new consumer channel, and each consumer is dispatched dataplane msgs in series.
 // So, it's important that all created chans are continuously drained to avoid deadlocking.
-func (fc *DataplaneConnector) NewFromDataplaneConsumer() <-chan interface{} {
-	fromDataplaneC := make(chan interface{}, 10)
+func (fc *DataplaneConnector) NewFromDataplaneConsumer() <-chan any {
+	fromDataplaneC := make(chan any, 10)
 	fc.statusUpdatesFromDataplaneConsumers = append(fc.statusUpdatesFromDataplaneConsumers, fromDataplaneC)
 	return fromDataplaneC
 }
@@ -1230,7 +1196,7 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg
 
 func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string, ipVersion proto.IPVersion) error {
 	// In case of a recoverable failure (ErrorResourceUpdateConflict), retry update 3 times.
-	for iter := 0; iter < 3; iter++ {
+	for range 3 {
 		// Read node resource from datastore and compare it with the publicKey from dataplane.
 		getCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 
@@ -1469,6 +1435,53 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 func (fc *DataplaneConnector) ApplyNoRestartConfig(old, new *config.Config) {
 	if !reflect.DeepEqual(old.HealthTimeoutOverrides, new.HealthTimeoutOverrides) {
 		health.SetGlobalTimeoutOverrides(new.HealthTimeoutOverrides)
+	}
+}
+
+// applyBPFOverrides checks if BPF mode is enabled and supported, and applies
+// any necessary config overrides for BPF mode compatibility.
+func applyBPFOverrides(configParams *config.Config, supportsBPF func() error) {
+	if !configParams.BPFEnabled {
+		return
+	}
+
+	// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
+	if err := supportsBPF(); err != nil {
+		log.WithError(err).Error("BPF dataplane mode enabled but not supported by the kernel.  Disabling BPF mode.")
+		_, err := configParams.OverrideParam("BPFEnabled", "false")
+		if err != nil {
+			log.WithError(err).Panic("Bug: failed to override config parameter")
+		}
+		return
+	}
+
+	// With the conntrack map type changed to lru_hash, BPFConntrackModeBPFProgram isn't
+	// useful. Hence this option will be deprecated in the near future. If BPFConntrackCleanupMode
+	// is set to BPFConntrackModeBPFProgram, its reset to BPFConntrackModeUserspace.
+	log.Warn("BPF conntrack mode Auto,BPFProgram is not supported and will be deprecated soon. Falling back to userspace cleaner.")
+	_, err := configParams.OverrideParam("BPFConntrackCleanupMode", string(apiv3.BPFConntrackModeUserspace))
+	if err != nil {
+		log.WithError(err).Panic("Bug: failed to override config parameter BPFConntrackCleanupMode")
+	}
+
+	if configParams.BPFRedirectToPeer == "L2Only" {
+		log.Warn("BPFRedirectToPeer 'L2Only' is deprecated and equals 'Enabled' now.")
+		_, err := configParams.OverrideParam("BPFRedirectToPeer", "Enabled")
+		if err != nil {
+			log.WithError(err).Panic("Bug: failed to override config parameter BPFRedirectToPeer")
+		}
+	}
+
+	// BPF mode requires IP forwarding to be enabled because the BPF RPF
+	// check fails if it is disabled.  Seems to be an incorrect check in
+	// the kernel.  FIB lookups can only be done for interfaces that have
+	// forwarding enabled.
+	if configParams.IPForwarding == "Disabled" && configParams.BPFEnforceRPF != "Disabled" {
+		log.Warning("In BPF mode, either IPForwarding must be enabled or BPFEnforceRPF must be disabled. Forcing IPForwarding to 'Enabled'.")
+		_, err := configParams.OverrideParam("IPForwarding", "Enabled")
+		if err != nil {
+			log.WithError(err).Panic("Bug: failed to override config parameter")
+		}
 	}
 }
 

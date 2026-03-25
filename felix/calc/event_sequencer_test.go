@@ -17,8 +17,7 @@ package calc_test
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	googleproto "google.golang.org/protobuf/proto"
@@ -36,7 +35,7 @@ var dscp numorstring.DSCP = numorstring.DSCPFromString("AF43")
 
 var _ = DescribeTable("ModelWorkloadEndpointToProto",
 	func(in model.WorkloadEndpoint, expected *proto.WorkloadEndpoint) {
-		out := calc.ModelWorkloadEndpointToProto(&in, nil, []*proto.TierInfo{})
+		out := calc.ModelWorkloadEndpointToProto(&in, nil, nil, []*proto.TierInfo{})
 		Expect(out).To(Equal(expected))
 	},
 	Entry("workload endpoint with NAT", model.WorkloadEndpoint{
@@ -157,6 +156,32 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		SkipRedir: &proto.WorkloadBpfSkipRedir{Ingress: true, Egress: true},
 	}),
 )
+
+var _ = Describe("ModelWorkloadEndpointToProto with computed data", func() {
+	It("should apply computed data to the proto endpoint", func() {
+		in := model.WorkloadEndpoint{
+			State: "up",
+			Name:  "bill",
+		}
+		cd := &testApplyToComputedData{Annotation: "test-value"}
+		out := calc.ModelWorkloadEndpointToProto(&in, []calc.EndpointComputedData{cd}, nil, []*proto.TierInfo{})
+		Expect(out.State).To(Equal("up"))
+		Expect(out.Name).To(Equal("bill"))
+		Expect(out.Annotations).To(HaveKeyWithValue("computed", "test-value"))
+	})
+})
+
+// testApplyToComputedData implements calc.EndpointComputedData for testing.
+type testApplyToComputedData struct {
+	Annotation string
+}
+
+func (t *testApplyToComputedData) ApplyTo(wep *proto.WorkloadEndpoint) {
+	if wep.Annotations == nil {
+		wep.Annotations = map[string]string{}
+	}
+	wep.Annotations["computed"] = t.Annotation
+}
 
 var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 	var (
@@ -333,7 +358,7 @@ var _ = Describe("ServiceAccount update/remove", func() {
 			Labels: map[string]string{"k1": "v2"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{
+		Expect(recorder.Messages).To(Equal([]any{
 			&proto.ServiceAccountUpdate{
 				Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 				Labels: map[string]string{"k1": "v2"},
@@ -358,7 +383,7 @@ var _ = Describe("ServiceAccount update/remove", func() {
 			Labels: map[string]string{"k1": "v1"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountUpdate{
+		Expect(recorder.Messages).To(Equal([]any{&proto.ServiceAccountUpdate{
 			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		}}))
@@ -370,16 +395,16 @@ var _ = Describe("ServiceAccount update/remove", func() {
 			Labels: map[string]string{"k1": "v1"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountUpdate{
+		Expect(recorder.Messages).To(Equal([]any{&proto.ServiceAccountUpdate{
 			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		}}))
 		// Clear messages
-		recorder.Messages = make([]interface{}, 0)
+		recorder.Messages = make([]any, 0)
 
 		uut.OnServiceAccountRemove(types.ServiceAccountID{Name: "test", Namespace: "test"})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountRemove{
+		Expect(recorder.Messages).To(Equal([]any{&proto.ServiceAccountRemove{
 			Id: &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 		}}))
 	})
@@ -405,7 +430,7 @@ var _ = Describe("Namespace update/remove", func() {
 			Labels: map[string]string{"k1": "v2"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{
+		Expect(recorder.Messages).To(Equal([]any{
 			&proto.NamespaceUpdate{
 				Id:     &proto.NamespaceID{Name: "test"},
 				Labels: map[string]string{"k1": "v2"},
@@ -430,7 +455,7 @@ var _ = Describe("Namespace update/remove", func() {
 			Labels: map[string]string{"k1": "v1"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceUpdate{
+		Expect(recorder.Messages).To(Equal([]any{&proto.NamespaceUpdate{
 			Id:     &proto.NamespaceID{Name: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		}}))
@@ -442,16 +467,16 @@ var _ = Describe("Namespace update/remove", func() {
 			Labels: map[string]string{"k1": "v1"},
 		})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceUpdate{
+		Expect(recorder.Messages).To(Equal([]any{&proto.NamespaceUpdate{
 			Id:     &proto.NamespaceID{Name: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		}}))
 		// Clear messages
-		recorder.Messages = make([]interface{}, 0)
+		recorder.Messages = make([]any, 0)
 
 		uut.OnNamespaceRemove(types.NamespaceID{Name: "test"})
 		uut.Flush()
-		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceRemove{
+		Expect(recorder.Messages).To(Equal([]any{&proto.NamespaceRemove{
 			Id: &proto.NamespaceID{Name: "test"},
 		}}))
 	})
@@ -478,10 +503,10 @@ var _ = Describe("IPPool update/remove", func() {
 })
 
 type dataplaneRecorder struct {
-	Messages []interface{}
+	Messages []any
 }
 
-func (d *dataplaneRecorder) record(message interface{}) {
+func (d *dataplaneRecorder) record(message any) {
 	d.Messages = append(d.Messages, message)
 }
 

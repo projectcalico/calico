@@ -11,8 +11,7 @@ include ../lib.Makefile
 
 ###############################################################################
 
-# All go files.
-SRC_FILES:=$(shell find . -name '*.go' -not -path "./vendor/*" )
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 
 .PHONY: clean
 clean:
@@ -56,6 +55,8 @@ test-kdd: bin/confd-$(ARCH) bin/kubectl bin/bird bin/bird6 bin/calico-node bin/c
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
+		-e CALICO_CRD_PATH=$(CALICO_CRD_PATH) \
+		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e GOPATH=/go \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
@@ -98,7 +99,8 @@ test-etcd: bin/confd-$(ARCH) bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/
 .PHONY: ut
 ## Run the fast set of unit tests in a container.
 ut:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r .'
+	mkdir -p report
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -race --junit-report=confd_ut.xml --output-dir=report/ .'
 
 
 bin/kubectl:
@@ -125,7 +127,8 @@ bin/calico-node:
 	chmod +x $@
 
 bin/etcdctl:
-	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCD_VERSION)/etcd-$(ETCD_VERSION)-linux-$(ARCH).tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCD_VERSION)-linux-$(ARCH)/etcdctl
+	curl -sSfL --retry 5 -o /tmp/etcd.tar.gz https://github.com/coreos/etcd/releases/download/$(ETCD_VERSION)/etcd-$(ETCD_VERSION)-linux-$(ARCH).tar.gz
+	tar -xz -C bin --strip-components=1 -f /tmp/etcd.tar.gz etcd-$(ETCD_VERSION)-linux-$(ARCH)/etcdctl && rm -f /tmp/etcd.tar.gz
 
 bin/calicoctl:
 	make -C ../calicoctl build

@@ -3,7 +3,6 @@ package networkpolicy
 import (
 	"context"
 	"os"
-	"reflect"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -18,6 +17,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	liberr "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
@@ -93,7 +93,7 @@ type policyMigrator struct {
 }
 
 func (c *policyMigrator) RegisterWith(f *utils.DataFeed) {
-	// Register for updates for NetworkPolicy and GlobalNetworkPolicy.
+	// Register for updates for policy resources.
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
 
 	// Register for sync status updates.
@@ -353,28 +353,13 @@ func needsMigration(p client.Object, k model.ResourceKey) bool {
 }
 
 func isDefaultTier(p client.Object) bool {
-	logCtx := logrus.WithFields(logrus.Fields{
-		"namespace": p.GetNamespace(),
-		"name":      p.GetName(),
-	})
-
-	// Use reflection to get the Tier field from the policy spec.
-	spec := reflect.ValueOf(p).Elem().FieldByName("Spec")
-	if !spec.IsValid() {
-		logCtx.Warn("Spec field not found in object")
-		return true // Default to true if Spec field is not found.
-	}
-
-	tierField := spec.FieldByName("Tier")
-	if !tierField.IsValid() {
-		logCtx.Warn("Tier field not found in Spec")
-		return true // Default to true if Tier field is not found.
-	}
-
-	tier, ok := tierField.Interface().(string)
+	tier, ok := names.TierFromPolicy(p)
 	if !ok {
-		logCtx.Warn("Tier field is not a string")
-		return true // Default to true if Tier field is not a string.
+		logrus.WithFields(logrus.Fields{
+			"namespace": p.GetNamespace(),
+			"name":      p.GetName(),
+		}).Warn("Could not extract tier from policy object, assuming default")
+		return true
 	}
-	return tier == "" || tier == "default"
+	return tier == names.DefaultTierName
 }

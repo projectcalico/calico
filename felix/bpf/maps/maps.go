@@ -106,6 +106,7 @@ type Map interface {
 
 	// Size returns the maximun number of entries the table can hold.
 	Size() int
+	BatchUpdate(ks, vs [][]byte, flags uint64) (int, error)
 }
 
 type MapWithExistsCheck interface {
@@ -328,7 +329,7 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 	return nil, fmt.Errorf("unrecognized map type %T", m)
 }
 
-var ErrNotSupported = fmt.Errorf("prog_array iteration not supported")
+var ErrNotSupported = fmt.Errorf("map iteration not supported for this map type")
 
 // Iter iterates over the map, passing each key/value pair to the provided callback function.  Warning:
 // The key and value are owned by the iterator and will be clobbered by the next iteration so they must not be
@@ -337,6 +338,11 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 	if b.Type == "prog_array" {
 		// We currently have a bug in iteration of program array maps;
 		// the C code tight loops due to the empty slots.
+		return ErrNotSupported
+	}
+	if b.Type == "ringbuf" {
+		// Ring buffer maps don't have key/value entries and don't
+		// support bpf_map_get_next_key.
 		return ErrNotSupported
 	}
 	valueSize := b.ValueSize
@@ -422,7 +428,7 @@ func (b *PinnedMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
 	k := make([]byte, 0, count*len(ks[0]))
 	v := make([]byte, 0, count*len(vs[0]))
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		k = append(k, ks[i]...)
 		v = append(v, vs[i]...)
 	}
@@ -460,7 +466,7 @@ func (b *PinnedMap) BatchDelete(ks [][]byte, flags uint64) (int, error) {
 
 	k := make([]byte, 0, count*len(ks[0]))
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		k = append(k, ks[i]...)
 	}
 
@@ -983,7 +989,7 @@ func (m *TypedMap[K, V]) BatchUpdate(ks []K, vs []V) (int, error) {
 			k := make([]byte, 0, count*b.GetKeySize())
 			v := make([]byte, 0, count*b.GetValueSize())
 
-			for i := 0; i < count; i++ {
+			for i := range count {
 				k = append(k, ks[i].AsBytes()...)
 				v = append(v, vs[i].AsBytes()...)
 			}
@@ -1037,7 +1043,7 @@ func (m *TypedMap[K, V]) BatchDelete(ks []K) (int, error) {
 		if isBatchOpsSupported() {
 			k := make([]byte, 0, count*b.GetKeySize())
 
-			for i := 0; i < count; i++ {
+			for i := range count {
 				k = append(k, ks[i].AsBytes()...)
 			}
 

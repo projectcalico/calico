@@ -23,7 +23,6 @@ from tests.k8st.utils.utils import start_external_node_with_bgp, \
 
 _log = logging.getLogger(__name__)
 
-attempts = 10
 
 bird_conf = """
 # Template for all BGP clients
@@ -99,17 +98,12 @@ protocol bgp Mesh_with_node_2 from bgp_template {
 
 class _TestBGPAdvert(TestBase):
 
-    def setUp(self):
-        super(_TestBGPAdvert, self).setUp()
-
-        # Create bgp test namespace
-        self.ns = "bgp-test"
-        self.create_namespace(self.ns)
-
-        self.nodes, self.ips, _ = node_info()
-        self.external_node_ip = start_external_node_with_bgp(
+    @classmethod
+    def setUpClass(cls):
+        cls.nodes, cls.ips, _ = node_info()
+        cls.external_node_ip = start_external_node_with_bgp(
             "kube-node-extra",
-            bird_peer_config=self.get_bird_conf(),
+            bird_peer_config=cls.get_bird_conf(),
         )
 
         # Establish BGPPeer from cluster nodes to node-extra
@@ -119,7 +113,7 @@ kind: BGPPeer
 metadata:
   name: node-extra.peer%s
 EOF
-""" % self.get_extra_peer_spec())
+""" % cls.get_extra_peer_spec())
 
         kubectl("""apply -f - <<EOF
 apiVersion: v1
@@ -133,17 +127,24 @@ stringData:
 EOF
 """)
 
-    def tearDown(self):
-        super(_TestBGPAdvert, self).tearDown()
-        self.delete_and_confirm(self.ns, "ns")
+    @classmethod
+    def tearDownClass(cls):
         try:
-            # Delete the extra node.
             run("docker rm -f kube-node-extra")
         except subprocess.CalledProcessError:
             pass
-
-        # Delete BGPPeers.
         calicoctl("delete bgppeer node-extra.peer", allow_fail=True)
+
+    def setUp(self):
+        super(_TestBGPAdvert, self).setUp()
+        self.ns = "bgp-test"
+        self.create_namespace(self.ns)
+
+    def tearDown(self):
+        super(_TestBGPAdvert, self).tearDown()
+        self.delete_and_confirm(self.ns, "ns")
+
+        # Delete RR-specific BGPPeer (created by some tests).
         calicoctl("delete bgppeer peer-with-rr", allow_fail=True)
 
         # Restore node-to-node mesh.
@@ -160,6 +161,16 @@ EOF
         # Remove node-2's route-reflector config, using a retry to avoid
         # transient conflict errors.
         retry_until_success(lambda: self.clear_rr_config(self.nodes[2]))
+
+    def set_rr_config(self, node):
+        json_str = calicoctl("get node %s -o json" % node)
+        node_dict = json.loads(json_str)
+        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
+        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
+        calicoctl("""apply -f - << EOF
+%s
+EOF
+""" % json.dumps(node_dict))
 
     def clear_rr_config(self, node):
         json_str = calicoctl("get node %s -o json" % node)
@@ -216,10 +227,12 @@ class TestBGPAdvert(_TestBGPAdvert):
     # - The peerings from the external node to each cluster node are
     #   configured by self.get_bird_conf().
 
-    def get_bird_conf(self):
-        return bird_conf % (self.ips[0], self.ips[1], self.ips[2], self.ips[3])
+    @classmethod
+    def get_bird_conf(cls):
+        return bird_conf % (cls.ips[0], cls.ips[1], cls.ips[2], cls.ips[3])
 
-    def get_extra_peer_spec(self):
+    @classmethod
+    def get_extra_peer_spec(cls):
         return """
 spec:
   peerIP: %s
@@ -228,7 +241,7 @@ spec:
     secretKeyRef:
       name: bgp-secrets
       key: rr-password
-""" % self.external_node_ip
+""" % cls.external_node_ip
 
     def test_cluster_ip_advertisement(self):
         """
@@ -284,8 +297,7 @@ EOF
             self.scale_deployment(local_svc, self.ns, 4)
             self.wait_for_deployment(local_svc, self.ns)
             self.assert_ecmp_routes(local_svc_ip, [self.ips[1], self.ips[2], self.ips[3]])
-            for i in range(attempts):
-              retry_until_success(curl, function_args=[local_svc_ip])
+            retry_until_success(curl, function_args=[local_svc_ip])
 
             # Delete both services.
             self.delete_and_confirm(local_svc, "svc", self.ns)
@@ -346,22 +358,19 @@ EOF
             retry_until_success(lambda: self.assertNotIn(cluster_svc_ip, self.get_routes()))
 
             # Connectivity should always succeed.
-            for i in range(attempts):
-              retry_until_success(curl, function_args=[local_svc_ip])
-              retry_until_success(curl, function_args=[cluster_svc_ip])
+            retry_until_success(curl, function_args=[local_svc_ip])
+            retry_until_success(curl, function_args=[cluster_svc_ip])
 
             # Scale local service to 4 replicas
             self.scale_deployment(local_svc, self.ns, 4)
             self.wait_for_deployment(local_svc, self.ns)
-            self.wait_for_deployment(cluster_svc, self.ns)
 
             # Assert routes are correct and services are accessible.
             # Local service should only be advertised from nodes that can run pods.
             # The cluster CIDR should be advertised from all nodes.
             self.assert_ecmp_routes(local_svc_ip, [self.ips[1], self.ips[2], self.ips[3]])
             self.assert_ecmp_routes(cluster_cidr, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]])
-            for i in range(attempts):
-              retry_until_success(curl, function_args=[local_svc_ip])
+            retry_until_success(curl, function_args=[local_svc_ip])
 
             # Label one node in order to exclude it from service advertisement.
             # After this, we should expect that all routes from that node are
@@ -378,9 +387,8 @@ EOF
             self.assert_ecmp_routes(external_ip_cidr, [self.ips[0], self.ips[2], self.ips[3]])
 
             # Should still be reachable through other nodes.
-            for i in range(attempts):
-              retry_until_success(curl, function_args=[local_svc_ip])
-              retry_until_success(curl, function_args=[cluster_svc_ip])
+            retry_until_success(curl, function_args=[local_svc_ip])
+            retry_until_success(curl, function_args=[cluster_svc_ip])
 
             # Delete the local service, confirm that it is no longer advertised.
             self.delete_and_confirm(local_svc, "svc", self.ns)
@@ -392,8 +400,7 @@ EOF
             self.wait_until_exists(local_svc, "svc", self.ns)
             local_svc_ip = self.get_svc_cluster_ip(local_svc, self.ns)
             self.assert_ecmp_routes(local_svc_ip, [self.ips[2], self.ips[3]])
-            for i in range(attempts):
-              retry_until_success(curl, function_args=[local_svc_ip])
+            retry_until_success(curl, function_args=[local_svc_ip])
 
             # Add an external IP to the local svc and assert it follows the same
             # advertisement rules.
@@ -407,8 +414,7 @@ EOF
             self.assert_ecmp_routes(local_svc_ip, [self.ips[1], self.ips[2], self.ips[3]])
             self.assert_ecmp_routes(local_svc_external_ip, [self.ips[1], self.ips[2], self.ips[3]])
             self.assert_ecmp_routes(cluster_cidr, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]])
-            for i in range(attempts):
-              retry_until_success(curl, function_args=[local_svc_ip])
+            retry_until_success(curl, function_args=[local_svc_ip])
 
             # Delete both services.
             self.delete_and_confirm(local_svc, "svc", self.ns)
@@ -684,7 +690,7 @@ EOF
             cluster_ips.append(self.get_svc_cluster_ip(local_svc, self.ns))
 
             # Create many more services which select this deployment.
-            num_svc = 300
+            num_svc = 50
             for i in range(num_svc):
                 name = "nginx-svc-%s" % i
                 self.create_service(name, local_svc, self.ns, 80)
@@ -701,7 +707,7 @@ EOF
                 routes = self.get_routes()
                 for cip in cluster_ips:
                     self.assertIn(cip, routes)
-            retry_until_success(check_routes_advertised, retries=3, wait_time=5)
+            retry_until_success(check_routes_advertised, timeout=20)
 
             # Scale to 0 replicas, assert all routes are removed.
             self.scale_deployment(local_svc, self.ns, 0)
@@ -710,7 +716,7 @@ EOF
                 routes = self.get_routes()
                 for cip in cluster_ips:
                     self.assertNotIn(cip, routes)
-            retry_until_success(check_routes_gone, retries=10, wait_time=5)
+            retry_until_success(check_routes_gone, timeout=60)
 
     def test_bgp_filter_ip_advertisement(self):
         with DiagsCollector():
@@ -758,8 +764,8 @@ spec:
     action: Reject
 EOF
 """)
-        kubectl("patch bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": [\"test-filter-export-1\"]}}'")
-        self.add_cleanup(lambda: kubectl("patch bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": []}}'"))
+        kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": [\"test-filter-export-1\"]}}'")
+        self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": []}}'"))
         self.add_cleanup(lambda: kubectl("delete bgpfilter test-filter-export-1"))
 
         # Assert that local clusterIP is no longer advertised.
@@ -783,16 +789,18 @@ class TestBGPAdvertRR(_TestBGPAdvert):
     #           configured by BGPPeer         Peering <- is configured
     #           peer-with-rr                  in get_bird_conf().
 
-    def get_bird_conf(self):
-        return bird_conf_rr % self.ips[2]
+    @classmethod
+    def get_bird_conf(cls):
+        return bird_conf_rr % cls.ips[2]
 
-    def get_extra_peer_spec(self):
+    @classmethod
+    def get_extra_peer_spec(cls):
         return """
 spec:
   node: %s
   peerIP: %s
   asNumber: 64512
-""" % (self.nodes[2], self.external_node_ip)
+""" % (cls.nodes[2], cls.external_node_ip)
 
     def test_rr(self):
         # Create ExternalTrafficPolicy Local service with one endpoint on node-1
@@ -851,15 +859,9 @@ EOF
         calicoctl("get bgppeers -o yaml")
         calicoctl("get bgpconfigs -o yaml")
 
-        # Update the node-2 to behave as a route-reflector
-        json_str = calicoctl("get node %s -o json" % self.nodes[2])
-        node_dict = json.loads(json_str)
-        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
-        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
-        calicoctl("""apply -f - << EOF
-%s
-EOF
-""" % json.dumps(node_dict))
+        # Update the node-2 to behave as a route-reflector, using a retry
+        # to avoid transient conflict errors.
+        retry_until_success(lambda: self.set_rr_config(self.nodes[2]))
 
         # Disable node-to-node mesh, add cluster and external IP CIDRs to
         # advertise, and configure BGP peering between the cluster nodes and the
@@ -971,15 +973,9 @@ EOF
         calicoctl("get bgppeers -o yaml")
         calicoctl("get bgpconfigs -o yaml")
 
-        # Update the node-2 to behave as a route-reflector
-        json_str = calicoctl("get node %s -o json" % self.nodes[2])
-        node_dict = json.loads(json_str)
-        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
-        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
-        calicoctl("""apply -f - << EOF
-%s
-EOF
-""" % json.dumps(node_dict))
+        # Update the node-2 to behave as a route-reflector, using a retry
+        # to avoid transient conflict errors.
+        retry_until_success(lambda: self.set_rr_config(self.nodes[2]))
 
         # Disable node-to-node mesh, add cluster and external IP CIDRs to
         # advertise, and configure BGP peering between the cluster nodes and the

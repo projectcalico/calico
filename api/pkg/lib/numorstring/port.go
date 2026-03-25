@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,8 +39,13 @@ func SinglePort(port uint16) Port {
 	return Port{MinPort: port, MaxPort: port}
 }
 
-func NamedPort(name string) Port {
-	return Port{PortName: name}
+func NamedPort(name string) (Port, error) {
+	if !nameRegex.MatchString(name) {
+		msg := fmt.Sprintf("invalid name for named port (%s)", name)
+		return Port{}, errors.New(msg)
+	}
+
+	return Port{PortName: name}, nil
 }
 
 // PortFromRange creates a Port struct representing a range of ports.
@@ -85,12 +90,7 @@ func PortFromString(s string) (Port, error) {
 		}
 	}
 
-	if !nameRegex.MatchString(s) {
-		msg := fmt.Sprintf("invalid name for named port (%s)", s)
-		return Port{}, errors.New(msg)
-	}
-
-	return NamedPort(s), nil
+	return NamedPort(s)
 }
 
 // UnmarshalJSON implements the json.Unmarshaller interface.
@@ -152,3 +152,12 @@ func (Port) OpenAPISchemaType() []string { return []string{"string"} }
 // the OpenAPI spec of this type.
 // See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
 func (Port) OpenAPISchemaFormat() string { return "int-or-string" }
+
+func AllPortsAreNamed(ports []Port) bool {
+	for _, p := range ports {
+		if len(p.PortName) == 0 {
+			return false
+		}
+	}
+	return true
+}

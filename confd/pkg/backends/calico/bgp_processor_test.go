@@ -14,11 +14,15 @@
 package calico
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
+	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -42,16 +46,15 @@ func TestBuildImportFilter_DefaultAccept(t *testing.T) {
 	c := &client{}
 
 	// Test with no filter - should return default accept
-	result := c.buildImportFilter(nil, 4)
+	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "accept;")
-	assert.Contains(t, result, "# Prior to introduction of BGP Filters")
 }
 
 func TestBuildImportFilter_EmptyFilters(t *testing.T) {
 	c := &client{}
 
 	// Test with empty filters array - should return default accept
-	result := c.buildImportFilter([]string{}, 4)
+	result := c.buildImportFilter([]string{}, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "accept;")
 }
 
@@ -59,8 +62,8 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 	c := &client{}
 
 	// Test that IPv4 and IPv6 return appropriate default
-	resultV4 := c.buildImportFilter(nil, 4)
-	resultV6 := c.buildImportFilter(nil, 6)
+	resultV4 := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
+	resultV6 := c.buildImportFilter(nil, "64512", "64512", 6, 1024)
 
 	// Both should have accept by default
 	assert.Contains(t, resultV4, "accept;")
@@ -70,17 +73,27 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 func TestBuildExportFilter_SameAS(t *testing.T) {
 	c := &client{}
 
-	// Same AS should result in reject (via calico_export_to_bgp_peers(true))
-	result := c.buildExportFilter(nil, "64512", "64512", 4)
+	// Same AS = iBGP — should include LOCAL_PREF conversion and calico_export_to_bgp_peers(true)
+	result := c.buildExportFilter(nil, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
 	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
 	assert.Contains(t, result, "reject;")
+}
+
+func TestBuildExportFilter_DifferentAS_NoLocalPref(t *testing.T) {
+	c := &client{}
+
+	// Different AS = eBGP — should NOT include LOCAL_PREF conversion
+	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
+	assert.NotContains(t, result, "bgp_local_pref = 2147483647 - krt_metric")
+	assert.Contains(t, result, "calico_export_to_bgp_peers(false)")
 }
 
 func TestBuildExportFilter_DifferentAS_NoFilter(t *testing.T) {
 	c := &client{}
 
 	// Different AS with no filter should use default export filter
-	result := c.buildExportFilter(nil, "65000", "64512", 4)
+	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "calico_export_to_bgp_peers(false)")
 }
 
@@ -88,8 +101,8 @@ func TestBuildExportFilter_IPv4vsIPv6(t *testing.T) {
 	c := &client{}
 
 	// Test that both IPv4 and IPv6 work
-	resultV4 := c.buildExportFilter(nil, "65000", "64512", 4)
-	resultV6 := c.buildExportFilter(nil, "65000", "64512", 6)
+	resultV4 := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
+	resultV6 := c.buildExportFilter(nil, "65000", "64512", 6, 1024)
 
 	// Both should have export filter
 	assert.Contains(t, resultV4, "calico_export_to_bgp_peers")
@@ -100,7 +113,7 @@ func TestBuildExportFilter_EmptyFilters(t *testing.T) {
 	c := &client{}
 
 	// Test with empty filters array
-	result := c.buildExportFilter([]string{}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{}, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "calico_export_to_bgp_peers")
 }
 
@@ -699,6 +712,84 @@ func TestPopulateNodeConfig_DefaultLogLevel(t *testing.T) {
 	assert.Equal(t, "{ states }", config.DebugMode)
 }
 
+func TestPopulateNodeConfig_NormalRoutePriority_Default(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+	c := newTestClient(cache, nil)
+
+	config := &types.BirdBGPConfig{}
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+
+	// Default should be 1024
+	assert.Equal(t, 1024, config.NormalRoutePriority)
+}
+
+func TestPopulateNodeConfig_NormalRoutePriority_FromBGPConfig(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+	c := newTestClient(cache, nil)
+
+	prio := 500
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			IPv4NormalRoutePriority: &prio,
+		},
+	}
+
+	config := &types.BirdBGPConfig{}
+	err := c.populateNodeConfig(config, 4)
+	require.NoError(t, err)
+	assert.Equal(t, 500, config.NormalRoutePriority)
+}
+
+func TestPopulateNodeConfig_NormalRoutePriority_IPv6(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+	c := newTestClient(cache, nil)
+
+	prio4 := 500
+	prio6 := 800
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			IPv4NormalRoutePriority: &prio4,
+			IPv6NormalRoutePriority: &prio6,
+		},
+	}
+
+	config := &types.BirdBGPConfig{}
+	err := c.populateNodeConfig(config, 6)
+	require.NoError(t, err)
+	assert.Equal(t, 800, config.NormalRoutePriority)
+}
+
 // =============================================================================
 // processCommunityRules Tests
 // =============================================================================
@@ -709,10 +800,10 @@ func TestProcessCommunityRules_StandardCommunity(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Community advertisements with standard 2-part community
-	advertisements := []map[string]interface{}{
+	advertisements := []map[string]any{
 		{
 			"cidr":        "10.0.0.0/8",
-			"communities": []interface{}{"65000:100"},
+			"communities": []any{"65000:100"},
 		},
 	}
 	advJSON, _ := json.Marshal(advertisements)
@@ -739,10 +830,10 @@ func TestProcessCommunityRules_LargeCommunity(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Community advertisements with large 3-part community
-	advertisements := []map[string]interface{}{
+	advertisements := []map[string]any{
 		{
 			"cidr":        "172.16.0.0/12",
-			"communities": []interface{}{"65000:100:200"},
+			"communities": []any{"65000:100:200"},
 		},
 	}
 	advJSON, _ := json.Marshal(advertisements)
@@ -769,10 +860,10 @@ func TestProcessCommunityRules_MultipleCommunities(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Multiple communities for a single CIDR
-	advertisements := []map[string]interface{}{
+	advertisements := []map[string]any{
 		{
 			"cidr":        "10.0.0.0/8",
-			"communities": []interface{}{"65000:100", "65000:200", "65001:50:100"},
+			"communities": []any{"65000:100", "65000:200", "65001:50:100"},
 		},
 	}
 	advJSON, _ := json.Marshal(advertisements)
@@ -800,14 +891,14 @@ func TestProcessCommunityRules_MultipleCIDRs(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Multiple advertisements with different CIDRs
-	advertisements := []map[string]interface{}{
+	advertisements := []map[string]any{
 		{
 			"cidr":        "10.0.0.0/8",
-			"communities": []interface{}{"65000:100"},
+			"communities": []any{"65000:100"},
 		},
 		{
 			"cidr":        "192.168.0.0/16",
-			"communities": []interface{}{"65000:200"},
+			"communities": []any{"65000:200"},
 		},
 	}
 	advJSON, _ := json.Marshal(advertisements)
@@ -833,10 +924,10 @@ func TestProcessCommunityRules_IPv6(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// IPv6 prefix advertisement
-	advertisements := []map[string]interface{}{
+	advertisements := []map[string]any{
 		{
 			"cidr":        "fd00::/8",
-			"communities": []interface{}{"65000:100"},
+			"communities": []any{"65000:100"},
 		},
 	}
 	advJSON, _ := json.Marshal(advertisements)
@@ -861,18 +952,18 @@ func TestProcessCommunityRules_NodeSpecific(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Node-specific should take precedence over global
-	nodeAdv := []map[string]interface{}{
+	nodeAdv := []map[string]any{
 		{
 			"cidr":        "10.0.0.0/8",
-			"communities": []interface{}{"65001:100"}, // Node-specific
+			"communities": []any{"65001:100"}, // Node-specific
 		},
 	}
 	nodeAdvJSON, _ := json.Marshal(nodeAdv)
 
-	globalAdv := []map[string]interface{}{
+	globalAdv := []map[string]any{
 		{
 			"cidr":        "172.16.0.0/12",
-			"communities": []interface{}{"65000:200"}, // Global (should be ignored)
+			"communities": []any{"65000:200"}, // Global (should be ignored)
 		},
 	}
 	globalAdvJSON, _ := json.Marshal(globalAdv)
@@ -900,10 +991,10 @@ func TestProcessCommunityRules_GlobalFallback(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Only global defined, no node-specific
-	globalAdv := []map[string]interface{}{
+	globalAdv := []map[string]any{
 		{
 			"cidr":        "172.16.0.0/12",
-			"communities": []interface{}{"65000:200"},
+			"communities": []any{"65000:200"},
 		},
 	}
 	globalAdvJSON, _ := json.Marshal(globalAdv)
@@ -946,10 +1037,10 @@ func TestProcessCommunityRules_EmptyCommunities(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Advertisement with empty communities array
-	advertisements := []map[string]interface{}{
+	advertisements := []map[string]any{
 		{
 			"cidr":        "10.0.0.0/8",
-			"communities": []interface{}{},
+			"communities": []any{},
 		},
 	}
 	advJSON, _ := json.Marshal(advertisements)
@@ -974,10 +1065,10 @@ func TestProcessCommunityRules_InvalidCommunityFormat(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Community with invalid format (not 2 or 3 parts)
-	advertisements := []map[string]interface{}{
+	advertisements := []map[string]any{
 		{
 			"cidr": "10.0.0.0/8",
-			"communities": []interface{}{
+			"communities": []any{
 				"65000",     // Invalid: only 1 part
 				"65000:100", // Valid: 2 parts
 				"a:b:c:d",   // Invalid: 4 parts
@@ -1008,9 +1099,9 @@ func TestProcessCommunityRules_MissingCIDR(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Advertisement without CIDR field
-	advertisements := []map[string]interface{}{
+	advertisements := []map[string]any{
 		{
-			"communities": []interface{}{"65000:100"},
+			"communities": []any{"65000:100"},
 		},
 	}
 	advJSON, _ := json.Marshal(advertisements)
@@ -1035,7 +1126,7 @@ func TestProcessCommunityRules_MissingCommunities(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Advertisement without communities field
-	advertisements := []map[string]interface{}{
+	advertisements := []map[string]any{
 		{
 			"cidr": "10.0.0.0/8",
 		},
@@ -1067,7 +1158,7 @@ func TestProcessMeshPeers_BasicMesh(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Create mesh configuration
-	meshConfig := map[string]interface{}{
+	meshConfig := map[string]any{
 		"enabled": true,
 	}
 	meshConfigJSON, _ := json.Marshal(meshConfig)
@@ -1112,7 +1203,7 @@ func TestProcessMeshPeers_IPv6(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	meshConfig := map[string]interface{}{
+	meshConfig := map[string]any{
 		"enabled": true,
 	}
 	meshConfigJSON, _ := json.Marshal(meshConfig)
@@ -1145,7 +1236,7 @@ func TestProcessMeshPeers_MeshDisabled(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	meshConfig := map[string]interface{}{
+	meshConfig := map[string]any{
 		"enabled": false,
 	}
 	meshConfigJSON, _ := json.Marshal(meshConfig)
@@ -1175,7 +1266,7 @@ func TestProcessMeshPeers_RouteReflector(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	meshConfig := map[string]interface{}{
+	meshConfig := map[string]any{
 		"enabled": true,
 	}
 	meshConfigJSON, _ := json.Marshal(meshConfig)
@@ -1205,7 +1296,7 @@ func TestProcessMeshPeers_SkipRouteReflectorPeers(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	meshConfig := map[string]interface{}{
+	meshConfig := map[string]any{
 		"enabled": true,
 	}
 	meshConfigJSON, _ := json.Marshal(meshConfig)
@@ -1238,7 +1329,7 @@ func TestProcessMeshPeers_PassiveMode(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	meshConfig := map[string]interface{}{
+	meshConfig := map[string]any{
 		"enabled": true,
 	}
 	meshConfigJSON, _ := json.Marshal(meshConfig)
@@ -1281,7 +1372,7 @@ func TestProcessMeshPeers_WithPasswordAndRestartTime(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	meshConfig := map[string]interface{}{
+	meshConfig := map[string]any{
 		"enabled": true,
 	}
 	meshConfigJSON, _ := json.Marshal(meshConfig)
@@ -1314,7 +1405,7 @@ func TestProcessGlobalPeers_BasicPeer(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":     "192.168.1.100",
 		"as_num": "65000",
 	}
@@ -1347,7 +1438,7 @@ func TestProcessGlobalPeers_IPv6Peer(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":          "2001:db8::100",
 		"as_num":      "65000",
 		"source_addr": "UseNodeIP", // Required to set SourceAddr
@@ -1381,7 +1472,7 @@ func TestProcessGlobalPeers_WithPassword(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":       "192.168.1.100",
 		"as_num":   "65000",
 		"password": "bgp-secret",
@@ -1413,7 +1504,7 @@ func TestProcessGlobalPeers_WithTTLSecurity(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":           "192.168.1.100",
 		"as_num":       "65000",
 		"ttl_security": float64(64),
@@ -1446,7 +1537,7 @@ func TestProcessNodePeers_BasicPeer(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":     "172.16.0.100",
 		"as_num": "65001",
 	}
@@ -1479,7 +1570,7 @@ func TestProcessNodePeers_IPv6Peer(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":     "fe80::100",
 		"as_num": "65001",
 	}
@@ -1512,7 +1603,7 @@ func TestProcessNodePeers_LocalBGPPeer(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Local BGP peers use the regular peer_v4 path with local_bgp_peer: true
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":             "192.168.1.50", // Local workload IP
 		"as_num":         "64512",
 		"local_bgp_peer": true, // This marks it as a local BGP peer
@@ -1544,18 +1635,18 @@ func TestProcessPeers_CombinedMeshGlobalNode(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	meshConfig := map[string]interface{}{
+	meshConfig := map[string]any{
 		"enabled": true,
 	}
 	meshConfigJSON, _ := json.Marshal(meshConfig)
 
-	globalPeerData := map[string]interface{}{
+	globalPeerData := map[string]any{
 		"ip":     "192.168.1.100",
 		"as_num": "65000",
 	}
 	globalPeerJSON, _ := json.Marshal(globalPeerData)
 
-	nodePeerData := map[string]interface{}{
+	nodePeerData := map[string]any{
 		"ip":     "172.16.0.100",
 		"as_num": "65001",
 	}
@@ -1640,7 +1731,7 @@ func TestProcessPeers_NextHopModes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			peerData := map[string]interface{}{
+			peerData := map[string]any{
 				"ip":     "192.168.1.100",
 				"as_num": tt.peerAS,
 			}
@@ -1680,7 +1771,7 @@ func TestProcessPeers_RouteReflectorClient(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":            "192.168.1.100",
 		"as_num":        "64512",     // Same AS for iBGP
 		"rr_cluster_id": "cluster-2", // Different cluster ID
@@ -1714,7 +1805,7 @@ func TestProcessPeers_LocalAS(t *testing.T) {
 	NodeName = "node-1"
 	defer func() { NodeName = originalNodeName }()
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":                 "192.168.1.100",
 		"as_num":             "65000",
 		"local_as_num":       "64000",
@@ -1749,10 +1840,10 @@ func TestProcessPeers_LocalAS(t *testing.T) {
 
 func TestBuildImportFilter_WithBGPFilter(t *testing.T) {
 	// Create a BGP filter resource with import rules
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"importV4": []interface{}{
-				map[string]interface{}{
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
 					"action":        "Accept",
 					"matchOperator": "In",
 					"cidr":          "10.0.0.0/8",
@@ -1768,7 +1859,7 @@ func TestBuildImportFilter_WithBGPFilter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"my-filter"}, 4)
+	result := c.buildImportFilter([]string{"my-filter"}, "64512", "64512", 4, 1024)
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-filter_importFilterV4'();")
@@ -1777,19 +1868,19 @@ func TestBuildImportFilter_WithBGPFilter(t *testing.T) {
 }
 
 func TestBuildImportFilter_WithMultipleBGPFilters(t *testing.T) {
-	filter1 := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"importV4": []interface{}{
-				map[string]interface{}{"action": "Accept"},
+	filter1 := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Accept"},
 			},
 		},
 	}
 	filter1JSON, _ := json.Marshal(filter1)
 
-	filter2 := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"importV4": []interface{}{
-				map[string]interface{}{"action": "Reject"},
+	filter2 := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Reject"},
 			},
 		},
 	}
@@ -1802,7 +1893,7 @@ func TestBuildImportFilter_WithMultipleBGPFilters(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"filter1", "filter2"}, 4)
+	result := c.buildImportFilter([]string{"filter1", "filter2"}, "64512", "64512", 4, 1024)
 
 	// Should include both filter function calls
 	assert.Contains(t, result, "'bgp_filter1_importFilterV4'();")
@@ -1810,10 +1901,10 @@ func TestBuildImportFilter_WithMultipleBGPFilters(t *testing.T) {
 }
 
 func TestBuildImportFilter_IPv6Filter(t *testing.T) {
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"importV6": []interface{}{
-				map[string]interface{}{
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV6": []any{
+				map[string]any{
 					"action": "Accept",
 					"cidr":   "fd00::/8",
 				},
@@ -1828,7 +1919,7 @@ func TestBuildImportFilter_IPv6Filter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"ipv6-filter"}, 6)
+	result := c.buildImportFilter([]string{"ipv6-filter"}, "64512", "64512", 6, 1024)
 
 	// Should use V6 suffix
 	assert.Contains(t, result, "'bgp_ipv6-filter_importFilterV6'();")
@@ -1836,10 +1927,10 @@ func TestBuildImportFilter_IPv6Filter(t *testing.T) {
 
 func TestBuildImportFilter_FilterWithNoImportRules(t *testing.T) {
 	// Filter has export rules but no import rules
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"exportV4": []interface{}{
-				map[string]interface{}{"action": "Accept"},
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{"action": "Accept"},
 			},
 		},
 	}
@@ -1851,7 +1942,7 @@ func TestBuildImportFilter_FilterWithNoImportRules(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"export-only"}, 4)
+	result := c.buildImportFilter([]string{"export-only"}, "64512", "64512", 4, 1024)
 
 	// Should NOT include the filter call since there are no import rules
 	assert.NotContains(t, result, "'bgp_export-only_importFilterV4'();")
@@ -1866,7 +1957,7 @@ func TestBuildImportFilter_FilterNotFound(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"nonexistent-filter"}, 4)
+	result := c.buildImportFilter([]string{"nonexistent-filter"}, "64512", "64512", 4, 1024)
 
 	// Should NOT include the filter call since filter doesn't exist
 	assert.NotContains(t, result, "'bgp_nonexistent-filter_importFilterV4'();")
@@ -1875,10 +1966,10 @@ func TestBuildImportFilter_FilterNotFound(t *testing.T) {
 }
 
 func TestBuildExportFilter_WithBGPFilter(t *testing.T) {
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"exportV4": []interface{}{
-				map[string]interface{}{
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
 					"action": "Accept",
 					"cidr":   "10.0.0.0/8",
 				},
@@ -1893,7 +1984,7 @@ func TestBuildExportFilter_WithBGPFilter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildExportFilter([]string{"my-export-filter"}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"my-export-filter"}, "65000", "64512", 4, 1024)
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-export-filter_exportFilterV4'();")
@@ -1903,10 +1994,10 @@ func TestBuildExportFilter_WithBGPFilter(t *testing.T) {
 }
 
 func TestBuildExportFilter_IPv6Filter(t *testing.T) {
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"exportV6": []interface{}{
-				map[string]interface{}{
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV6": []any{
+				map[string]any{
 					"action": "Accept",
 				},
 			},
@@ -1920,7 +2011,7 @@ func TestBuildExportFilter_IPv6Filter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildExportFilter([]string{"ipv6-export"}, "65000", "64512", 6)
+	result := c.buildExportFilter([]string{"ipv6-export"}, "65000", "64512", 6, 1024)
 
 	// Should use V6 suffix
 	assert.Contains(t, result, "'bgp_ipv6-export_exportFilterV6'();")
@@ -1928,10 +2019,10 @@ func TestBuildExportFilter_IPv6Filter(t *testing.T) {
 
 func TestBuildExportFilter_FilterWithNoExportRules(t *testing.T) {
 	// Filter has import rules but no export rules
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"importV4": []interface{}{
-				map[string]interface{}{"action": "Accept"},
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Accept"},
 			},
 		},
 	}
@@ -1943,12 +2034,203 @@ func TestBuildExportFilter_FilterWithNoExportRules(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildExportFilter([]string{"import-only"}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"import-only"}, "65000", "64512", 4, 1024)
 
 	// Should NOT include the filter call since there are no export rules
 	assert.NotContains(t, result, "'bgp_import-only_exportFilterV4'();")
 	// Should still have calico_export_to_bgp_peers
 	assert.Contains(t, result, "calico_export_to_bgp_peers")
+}
+
+func TestBuildImportFilter_WithPeerType_SameAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "iBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Same AS → sameAS=true → is_same_as=true
+	result := c.buildImportFilter([]string{"pt-filter"}, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
+}
+
+func TestBuildImportFilter_WithPeerType_DifferentAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "eBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Different AS → sameAS=false → is_same_as=false
+	result := c.buildImportFilter([]string{"pt-filter"}, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(false);")
+	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
+}
+
+func TestBuildImportFilter_WithoutPeerType_NoParam(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action": "Accept",
+					"cidr":   "10.0.0.0/8",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/no-pt-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// No PeerType rules → function called without parameter
+	result := c.buildImportFilter([]string{"no-pt-filter"}, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_no-pt-filter_importFilterV4'();")
+	assert.NotContains(t, result, "'bgp_no-pt-filter_importFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_no-pt-filter_importFilterV4'(false);")
+}
+
+func TestBuildExportFilter_WithPeerType_SameAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "iBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-export": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Same AS → sameAS=true → is_same_as=true
+	result := c.buildExportFilter([]string{"pt-export"}, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
+}
+
+func TestBuildExportFilter_WithPeerType_DifferentAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "eBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-export": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Different AS → sameAS=false → is_same_as=false
+	result := c.buildExportFilter([]string{"pt-export"}, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(false);")
+	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
+}
+
+func TestBuildExportFilter_WithoutPeerType_NoParam(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action": "Accept",
+					"cidr":   "10.0.0.0/8",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/no-pt-export": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// No PeerType rules → function called without parameter
+	result := c.buildExportFilter([]string{"no-pt-export"}, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_no-pt-export_exportFilterV4'();")
+	assert.NotContains(t, result, "'bgp_no-pt-export_exportFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_no-pt-export_exportFilterV4'(false);")
+}
+
+func TestBuildImportFilter_MixedPeerTypeAndNonPeerType(t *testing.T) {
+	// Filter with PeerType rule
+	ptFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "eBGP",
+				},
+			},
+		},
+	}
+	ptFilterJSON, _ := json.Marshal(ptFilter)
+
+	// Filter without PeerType
+	noPtFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Accept"},
+			},
+		},
+	}
+	noPtFilterJSON, _ := json.Marshal(noPtFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/with-pt":    string(ptFilterJSON),
+		"/calico/resources/v3/projectcalico.org/bgpfilters/without-pt": string(noPtFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	result := c.buildImportFilter([]string{"with-pt", "without-pt"}, "65000", "64512", 4, 1024)
+
+	// PeerType filter gets the bool parameter
+	assert.Contains(t, result, "'bgp_with-pt_importFilterV4'(false);")
+	// Non-PeerType filter does not
+	assert.Contains(t, result, "'bgp_without-pt_importFilterV4'();")
 }
 
 func TestProcessGlobalPeers_WithBGPFilter(t *testing.T) {
@@ -1957,16 +2239,16 @@ func TestProcessGlobalPeers_WithBGPFilter(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Create BGP filter resource with both import and export rules
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"importV4": []interface{}{
-				map[string]interface{}{
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
 					"action": "Accept",
 					"cidr":   "10.0.0.0/8",
 				},
 			},
-			"exportV4": []interface{}{
-				map[string]interface{}{
+			"exportV4": []any{
+				map[string]any{
 					"action": "Reject",
 					"cidr":   "192.168.0.0/16",
 				},
@@ -1975,10 +2257,10 @@ func TestProcessGlobalPeers_WithBGPFilter(t *testing.T) {
 	}
 	bgpFilterJSON, _ := json.Marshal(bgpFilter)
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":      "192.168.1.100",
 		"as_num":  "65000",
-		"filters": []interface{}{"test-filter"},
+		"filters": []any{"test-filter"},
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
 
@@ -2016,16 +2298,16 @@ func TestProcessGlobalPeers_WithBGPFilter_IPv6(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Create BGP filter resource with IPv6 rules
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"importV6": []interface{}{
-				map[string]interface{}{
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV6": []any{
+				map[string]any{
 					"action": "Accept",
 					"cidr":   "fd00::/8",
 				},
 			},
-			"exportV6": []interface{}{
-				map[string]interface{}{
+			"exportV6": []any{
+				map[string]any{
 					"action": "Accept",
 				},
 			},
@@ -2033,10 +2315,10 @@ func TestProcessGlobalPeers_WithBGPFilter_IPv6(t *testing.T) {
 	}
 	bgpFilterJSON, _ := json.Marshal(bgpFilter)
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":      "2001:db8::100",
 		"as_num":  "65000",
-		"filters": []interface{}{"ipv6-bgp-filter"},
+		"filters": []any{"ipv6-bgp-filter"},
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
 
@@ -2074,19 +2356,19 @@ func TestProcessGlobalPeers_WithLongFilterName(t *testing.T) {
 	// Create a BGP filter with a very long name that needs truncation
 	longFilterName := "this-is-a-very-long-bgp-filter-name-that-exceeds-bird-symbol-limit"
 
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"importV4": []interface{}{
-				map[string]interface{}{"action": "Accept"},
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Accept"},
 			},
 		},
 	}
 	bgpFilterJSON, _ := json.Marshal(bgpFilter)
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":      "192.168.1.100",
 		"as_num":  "65000",
-		"filters": []interface{}{longFilterName},
+		"filters": []any{longFilterName},
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
 
@@ -2126,22 +2408,22 @@ func TestProcessNodePeers_WithBGPFilter(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	// Create BGP filter resource
-	bgpFilter := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"importV4": []interface{}{
-				map[string]interface{}{"action": "Accept"},
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Accept"},
 			},
-			"exportV4": []interface{}{
-				map[string]interface{}{"action": "Accept"},
+			"exportV4": []any{
+				map[string]any{"action": "Accept"},
 			},
 		},
 	}
 	bgpFilterJSON, _ := json.Marshal(bgpFilter)
 
-	peerData := map[string]interface{}{
+	peerData := map[string]any{
 		"ip":      "172.16.0.100",
 		"as_num":  "65001",
-		"filters": []interface{}{"node-peer-filter"},
+		"filters": []any{"node-peer-filter"},
 	}
 	peerDataJSON, _ := json.Marshal(peerData)
 
@@ -2213,4 +2495,147 @@ func TestTruncateBGPFilterName(t *testing.T) {
 			}
 		})
 	}
+}
+
+// =============================================================================
+// Race Condition Tests
+// =============================================================================
+
+// TestConfigCache_ConcurrentReadWrite tests the race condition in the global
+// configCache map when multiple goroutines call GetBirdBGPConfig concurrently.
+//
+// This test simulates the real-world scenario where bird.cfg.template (IPv4)
+// and bird6.cfg.template (IPv6) are rendered simultaneously by different
+// goroutines in processor.go's monitorPrefix function. Each template calls
+// GetBirdBGPConfig with its respective IP version.
+//
+// We now run confd UT with -race, so this test will fail if the configCache map
+// is accessed without proper synchronization.
+func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	// Clear the global configCache to start fresh
+	configCacheMutex.Lock()
+	configCache = make(map[int]*bgpConfigCache)
+	configCacheMutex.Unlock()
+
+	// Enable mesh for more realistic scenario
+	meshConfig := map[string]any{
+		"enabled": true,
+	}
+	meshConfigJSON, err := json.Marshal(meshConfig)
+	require.NoError(t, err)
+
+	// Set up cache with basic configuration needed for GetBirdBGPConfig
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4":   "10.0.0.1",
+		"/calico/bgp/v1/host/test-node/ip_addr_v6":   "fd00::1",
+		"/calico/bgp/v1/global/as_num":               "64512",
+		"/calico/bgp/v1/global/loglevel":             "info",
+		"/calico/bgp/v1/global/node_mesh":            string(meshConfigJSON),
+		"/calico/bgp/v1/host/peer-node-1/ip_addr_v4": "10.0.0.2",
+		"/calico/bgp/v1/host/peer-node-2/ip_addr_v6": "fd00::2",
+	}
+
+	c := newTestClient(cache, nil)
+
+	const numGoroutines = 10
+	const testDuration = 10 * time.Second
+
+	// Create a context with 30-second timeout
+	ctx, cancel := context.WithTimeout(context.Background(), testDuration)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	// Simulate concurrent template rendering - this mimics what happens
+	// in processor.go when monitorPrefix spawns goroutines for each template
+	for i := range numGoroutines {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+
+			// Alternate between IPv4 and IPv6 to simulate bird.cfg.template
+			// and bird6.cfg.template rendering concurrently
+			ipVersion := 4
+			if id%2 == 0 {
+				ipVersion = 6
+			}
+
+			iterationCount := 0
+			for {
+				select {
+				case <-ctx.Done():
+					// Context timeout reached, exit goroutine
+					t.Logf("Goroutine %d (IPv%d) completed %d iterations", id, ipVersion, iterationCount)
+					return
+				default:
+					// This is what the template actually calls via getBGPConfig template function
+					_, err := c.GetBirdBGPConfig(ipVersion)
+					if err != nil {
+						// Some errors are expected if cache is cleared
+						continue
+					}
+
+					// Periodically clear the cache to force re-computation and increase
+					// the likelihood of hitting the race condition
+					if iterationCount%5 == 0 {
+						configCacheMutex.Lock()
+						delete(configCache, ipVersion)
+						configCacheMutex.Unlock()
+					}
+
+					iterationCount++
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestBuildImportFilter_iBGP(t *testing.T) {
+	c := &client{}
+
+	// Same AS = iBGP — should default krt_metric, convert from bgp_local_pref, and set preference
+	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "krt_metric = 1024;")
+	assert.Contains(t, result, "krt_metric = 2147483647 - bgp_local_pref")
+	assert.Contains(t, result, "if (krt_metric < 1024) then")
+	assert.Contains(t, result, "preference = 200;")
+	assert.Contains(t, result, "accept;")
+}
+
+func TestBuildImportFilter_eBGP(t *testing.T) {
+	c := &client{}
+
+	// Different AS = eBGP — should default krt_metric and set preference, but no LOCAL_PREF conversion
+	result := c.buildImportFilter(nil, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "krt_metric = 1024;")
+	assert.NotContains(t, result, "krt_metric = 2147483647 - bgp_local_pref")
+	assert.Contains(t, result, "if (krt_metric < 1024) then")
+	assert.Contains(t, result, "preference = 200;")
+	assert.Contains(t, result, "accept;")
+}
+
+func TestBuildImportFilter_CustomPriority(t *testing.T) {
+	c := &client{}
+
+	// Custom priority should appear in both the default and the preference check
+	result := c.buildImportFilter(nil, "64512", "64512", 4, 2000)
+	assert.Contains(t, result, "krt_metric = 2000;")
+	assert.Contains(t, result, "if (krt_metric < 2000) then")
+}
+
+func TestBuildExportFilter_iBGP_CustomPriority(t *testing.T) {
+	c := &client{}
+
+	// iBGP with custom priority — LOCAL_PREF conversion should still appear
+	result := c.buildExportFilter(nil, "64512", "64512", 4, 2000)
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
+	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
 }

@@ -116,9 +116,6 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			// Ensure a clean starting environment before each test.
-			Expect(utils.CleanDatastore(cli)).ShouldNot(HaveOccurred())
-
 			// Launch a hostNetworked server pod.
 			checker = conncheck.NewConnectionTester(f)
 			hepServer1 = conncheck.NewServer("server", f.Namespace, conncheck.WithPorts(hepPort1, hepPort2), conncheck.WithHostNetworking())
@@ -263,7 +260,7 @@ var _ = describe.CalicoDescribe(
 							Protocol: &numorstring.Protocol{Type: numorstring.NumOrStringString, StrVal: "TCP"},
 							Destination: v3.EntityRule{
 								Ports: []numorstring.Port{
-									numorstring.NamedPort("hepport"),
+									numorstring.Port{PortName: "hepport"},
 								},
 							},
 						},
@@ -339,7 +336,7 @@ var _ = describe.CalicoDescribe(
 								Protocol: &numorstring.Protocol{Type: numorstring.NumOrStringString, StrVal: "TCP"},
 								Destination: v3.EntityRule{
 									Ports: []numorstring.Port{
-										numorstring.NamedPort("hepport"),
+										numorstring.Port{PortName: "hepport"},
 									},
 								},
 							},

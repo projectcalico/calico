@@ -15,6 +15,7 @@
 package resources
 
 import (
+	"encoding/json"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -25,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/json"
 )
 
 const (
@@ -130,6 +130,9 @@ func SetCalicoMetadataFromK8sAnnotations(calicoRes Resource, k8sRes Resource) {
 	}
 }
 
+// ConvertCalicoResourceToK8sResource converts the given Resource from its projectcalico.org/v3 representation
+// to its crd.projectcalico.org/v1 representation.
+//
 // Store Calico Metadata in the k8s resource annotations for CRD backed resources.
 // This should store all Metadata except for those stored in Annotations and Labels and
 // store them in annotations.
@@ -227,6 +230,9 @@ func isOurs(k string) bool {
 	return strings.Contains(k, "projectcalico.org/") || strings.Contains(k, "operator.tigera.io/")
 }
 
+// ConvertK8sResourceToCalicoResource converts the given Resource from its crd.projectcalico.org/v1 representation
+// to its projectcalico.org/v3 representation.
+//
 // Retrieve all of the Calico Metadata from the k8s resource annotations for CRD backed
 // resources. This should remove the relevant Calico Metadata annotation when it has finished.
 func ConvertK8sResourceToCalicoResource(res Resource) error {
