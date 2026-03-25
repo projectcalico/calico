@@ -77,19 +77,16 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 			return
 		}
 		m.wireguardRouteTable.EndpointRemove(msg.Hostname)
-	case *proto.HostMetadataV6Update:
-		logCtx.WithField("msg", msg).Debug("HostMetadataV6Update update")
-		if m.ipVersion != 6 {
-			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
-			return
+	case *proto.HostMetadataV4V6Update:
+		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Update update")
+		switch m.ipVersion {
+		case 4:
+			m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromString(msg.Ipv4Addr))
+		case 6:
+			m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromString(msg.Ipv6Addr))
 		}
-		m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromString(msg.Ipv6Addr))
-	case *proto.HostMetadataV6Remove:
-		if m.ipVersion != 6 {
-			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
-			return
-		}
-		logCtx.WithField("msg", msg).Debug("HostMetadataV6Remove update")
+	case *proto.HostMetadataV4V6Remove:
+		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Remove update")
 		m.wireguardRouteTable.EndpointRemove(msg.Hostname)
 	case *proto.RouteUpdate:
 		logCtx.WithField("msg", msg).Debug("RouteUpdate update")

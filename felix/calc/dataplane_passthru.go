@@ -35,8 +35,7 @@ type DataplanePassthru struct {
 	ipv6Support bool
 	callbacks   passthruCallbacks
 
-	hostIPs   map[string]*net.IP
-	hostIPv6s map[string]*net.IP
+	hostIPs map[string]*net.IP
 }
 
 func NewDataplanePassthru(callbacks passthruCallbacks, ipv6Support bool) *DataplanePassthru {
@@ -44,7 +43,6 @@ func NewDataplanePassthru(callbacks passthruCallbacks, ipv6Support bool) *Datapl
 		ipv6Support: ipv6Support,
 		callbacks:   callbacks,
 		hostIPs:     map[string]*net.IP{},
-		hostIPv6s:   map[string]*net.IP{},
 	}
 }
 
@@ -108,15 +106,11 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 				h.callbacks.OnServiceUpdate(kubernetesServiceToProto(update.Value.(*kapiv1.Service)))
 			}
 		} else if key.Kind == internalapi.KindNode {
-			// Handle node resource to pass-through HostMetadataV6Update/HostMetadataV6Remove messages
-			// with IPv6 node address updates. IPv4 updates are handled above my model.HostIPKey updates.
-			log.WithField("update", update).Debug("Passing-through a Node IPv6 address update")
+			// Handle node resource to pass-through HostMetadataV4V6Update/HostMetadataV4V6Remove
+			// messages with node address updates.
 			log.WithField("update", update).Debug("Passing-through a Node update")
 			hostname := key.Name
 			if update.Value == nil {
-				log.WithField("update", update).Debug("Passing-through Node IPv6 address remove")
-				delete(h.hostIPv6s, hostname)
-				h.callbacks.OnHostIPv6Remove(hostname)
 				log.WithField("update", update).Debug("Passing-through Node remove")
 				h.callbacks.OnHostMetadataRemove(hostname)
 			} else {
@@ -140,27 +134,9 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 						asnumber = node.Spec.BGP.ASNumber.String()
 					}
 				}
-				h.callbacks.OnHostMetadataUpdate(hostname, bgpIp4net, bgpIp6net, asnumber, node.Labels)
-				if node.Spec.BGP != nil {
-					if node.Spec.BGP.IPv6Address != "" {
-						ip, _, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
-						oldIP := h.hostIPv6s[hostname]
-						if oldIP != nil && ip.Equal(oldIP.IP) {
-							log.WithField("update", update).Debug("Ignoring duplicate Node IPv6 address update")
-							return
-						}
-						log.WithField("update", update).Debug("Passing-through Node IPv6 address update")
-						h.hostIPv6s[hostname] = ip
-						h.callbacks.OnHostIPv6Update(hostname, ip)
-					} else if h.hostIPv6s[hostname] != nil {
-						log.WithField("update", update).Debug("Passing-through Node IPv6 address remove")
-						delete(h.hostIPv6s, hostname)
-						h.callbacks.OnHostIPv6Remove(hostname)
-					}
-				}
 
 				if h.ipv6Support && node.Spec.BGP == nil {
-					// BGP is turned off, try to get one from the node resource. This is a
+					// BGP is turned off, try to get IPv6 from the node resource. This is a
 					// similar fallback as for IPv4, see how HostIPKey is generated in
 					// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go
 					var ip *net.IP
@@ -169,20 +145,14 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 						ip, _ = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
 					}
 					if ip != nil {
-						oldIP := h.hostIPv6s[hostname]
-						if oldIP != nil && ip.Equal(oldIP.IP) {
-							log.WithField("update", update).Debug("Ignoring duplicate Node IPv6 address update")
-							return
+						_, ipNet, _ := net.ParseCIDR(ip.String() + "/128")
+						if ipNet != nil {
+							bgpIp6net = ipNet
 						}
-						log.WithField("update", update).Debug("Passing-through Node IPv6 address update")
-						h.hostIPv6s[hostname] = ip
-						h.callbacks.OnHostIPv6Update(hostname, ip)
-					} else if h.hostIPv6s[hostname] != nil {
-						log.WithField("update", update).Debug("Passing-through Node IPv6 address remove")
-						delete(h.hostIPv6s, hostname)
-						h.callbacks.OnHostIPv6Remove(hostname)
 					}
 				}
+
+				h.callbacks.OnHostMetadataUpdate(hostname, bgpIp4net, bgpIp6net, asnumber, node.Labels)
 			}
 		} else {
 			log.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
