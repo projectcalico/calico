@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -595,6 +595,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled
 				// feature.
 				f.Exec("sysctl", "-w", "net.ipv4.ip_forward=0")
 				f.TriggerDelayedStart()
+			}
+
+			// Wait for Felix to be ready and have its dataplane programmed
+			// before running connectivity checks. Without this, early
+			// connection attempts while Felix is still starting can poison
+			// the kernel's negative route cache, causing persistent failures
+			// even after routes are programmed.
+			for _, f := range tc.Felixes {
+				f.WaitForReady()
 			}
 
 			cc = &connectivity.Checker{}
