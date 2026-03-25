@@ -193,8 +193,8 @@ func (rb *RingBuffer) Next() (Event, error) {
 		}
 
 		// No data available — block on epoll.
-		events := make([]unix.EpollEvent, 1)
-		_, err = unix.EpollWait(rb.epollFD, events, -1)
+		var events [1]unix.EpollEvent
+		_, err = unix.EpollWait(rb.epollFD, events[:], -1)
 		if err != nil {
 			// If Close() was called concurrently, the epoll FD was closed
 			// and EpollWait returns EBADF. Treat as normal shutdown.
