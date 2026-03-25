@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -36,7 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", Ordered, func() {
+var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd         *containers.Container
 		calicoClient client.Interface
@@ -63,20 +62,7 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", Ordered
 
 	AfterEach(func() {
 		close(stopCh)
-
-		// Clean up Calico network policies.
-		ctx := context.Background()
-		cnpList, err := calicoClient.NetworkPolicies().List(ctx, options.ListOptions{})
-		if err != nil {
-			log.WithError(err).Warn("Failed to list Calico network policies during cleanup")
-		}
-		if cnpList != nil {
-			for _, cnp := range cnpList.Items {
-				if _, err := calicoClient.NetworkPolicies().Delete(ctx, cnp.Namespace, cnp.Name, options.DeleteOptions{}); err != nil {
-					log.WithError(err).WithField("policy", cnp.Name).Debug("Failed to delete Calico network policy during cleanup")
-				}
-			}
-		}
+		testutils.CleanupCalicoNetworkPolicies(context.Background(), calicoClient)
 	})
 
 	// startController creates a fresh fake K8s client seeded with the given

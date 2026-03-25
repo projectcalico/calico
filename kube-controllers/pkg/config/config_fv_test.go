@@ -32,7 +32,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("KubeControllersConfiguration FV tests", Ordered, func() {
+var _ = Describe("KubeControllersConfiguration FV tests", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		uut               *containers.Container

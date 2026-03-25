@@ -48,7 +48,7 @@ var (
 	retryInterval = 100 * time.Millisecond
 )
 
-var _ = Describe("IPAM garbage collection FV tests with short leak grace period", Ordered, func() {
+var _ = Describe("IPAM garbage collection FV tests with short leak grace period", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		controller        *containers.Container
@@ -172,7 +172,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 
 	AfterEach(func() {
 		controller.Stop()
-		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, true, false)
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, testutils.CleanupOptions{DeletePodsBeforeNodes: true})
 	})
 
 	It("should NOT clean up tunnel IP allocations", func() {
@@ -579,7 +579,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 	})
 })
 
-var _ = Describe("IPAM garbage collection FV tests with long leak grace period", Ordered, func() {
+var _ = Describe("IPAM garbage collection FV tests with long leak grace period", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		controller        *containers.Container
@@ -704,7 +704,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 
 	AfterEach(func() {
 		controller.Stop()
-		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, true, false)
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, testutils.CleanupOptions{DeletePodsBeforeNodes: true})
 	})
 
 	It("should NOT clean up empty blocks within the grace period", func() {

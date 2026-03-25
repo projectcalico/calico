@@ -91,10 +91,10 @@ func NewServiceAccountController(ctx context.Context, k8sClientset kubernetes.In
 
 	// Create a ServiceAccount watcher.
 	listWatcher := &cache.ListWatch{
-		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
 			return k8sClientset.CoreV1().ServiceAccounts("").List(ctx, opts)
 		},
-		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 			return k8sClientset.CoreV1().ServiceAccounts("").Watch(ctx, opts)
 		},
 	}

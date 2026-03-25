@@ -39,7 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, func() {
+var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd      *containers.Container
 		c         client.Interface

@@ -56,10 +56,10 @@ func NewPolicyController(ctx context.Context, clientset kubernetes.Interface, c 
 
 	// Create a NetworkPolicy watcher.
 	listWatcher := &cache.ListWatch{
-		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
 			return clientset.NetworkingV1().NetworkPolicies("").List(ctx, opts)
 		},
-		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 			return clientset.NetworkingV1().NetworkPolicies("").Watch(ctx, opts)
 		},
 	}
