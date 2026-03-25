@@ -20,6 +20,7 @@ import (
 	"net"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -35,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
@@ -47,7 +49,9 @@ const (
 	// Maximum size of annotations.
 	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
 
-	// using 0xFFFFFFFF tables would require too much computation, so the total number of designated tables is capped at 0xFFFF
+	// linux can support route-table indices up to 0xFFFFFFFF
+	// however, using 0xFFFFFFFF tables would require too much computation, so the total number of designated tables is capped at 0xFFFF
+	routeTableMaxLinux       uint32 = 0xffffffff
 	routeTableRangeMaxTables uint32 = 0xffff
 
 	globalSelector = "global()"
@@ -99,6 +103,8 @@ var (
 	overlapsV6LinkLocal           = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
 	protocolPortsMsg              = "rules that specify ports must set protocol to TCP or UDP or SCTP"
 	protocolSingleOrRangePortsMsg = "rules with numeric port or port range must set protocol to TCP or UDP or SCTP"
+	protocolICMPMsg               = "rules that specify ICMP fields must set protocol to ICMP"
+	globalSelectorEntRule         = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
 	globalSelectorOnly            = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
@@ -112,6 +118,9 @@ var (
 		IP:   net.ParseIP("fe80::"),
 		Mask: net.CIDRMask(10, 128),
 	}
+
+	// reserved linux kernel routing tables (cannot be targeted by routeTableRanges)
+	routeTablesReservedLinux = []int{253, 254, 255}
 )
 
 // Validate validates the supplied structure according to registered field and
@@ -244,6 +253,8 @@ func init() {
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
+	registerStructValidator(validate, validateRouteTableIDRange, api.RouteTableIDRange{})
+	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
 	registerStructValidator(validate, validateBlockAffinitySpec, api.BlockAffinitySpec{})
 	registerStructValidator(validate, validateHealthTimeoutOverride, api.HealthTimeoutOverride{})
@@ -804,9 +815,16 @@ func validateIPNAT(structLevel validator.StructLevel) {
 func validateFelixConfigSpec(structLevel validator.StructLevel) {
 	c := structLevel.Current().Interface().(api.FelixConfigurationSpec)
 
-	// Validate that the node port ranges list contains only numeric ports.
-	// Max length (7) is enforced by CRD MaxItems.
+	// Validate that the node port ranges list isn't too long and contains only numeric ports.
+	// We set the limit at 7 because the iptables multiport match can accept at most 15 port
+	// numbers, with each port range requiring 2 entries.
 	if c.KubeNodePortRanges != nil {
+		if len(*c.KubeNodePortRanges) > 7 {
+			structLevel.ReportError(reflect.ValueOf(*c.KubeNodePortRanges),
+				"KubeNodePortRanges", "",
+				reason("node port ranges list is too long (max 7)"), "")
+		}
+
 		for _, p := range *c.KubeNodePortRanges {
 			if p.PortName != "" {
 				structLevel.ReportError(reflect.ValueOf(*c.KubeNodePortRanges),
@@ -972,6 +990,13 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	// Normalize the CIDR before persisting.
 	pool.CIDR = cidr.String()
 
+	isLoadBalancer := false
+	for _, u := range pool.AllowedUses {
+		if u == api.IPPoolAllowedUseLoadBalancer {
+			isLoadBalancer = true
+		}
+	}
+
 	// Default the blockSize
 	if pool.BlockSize == 0 {
 		if ipAddr.Version() == 4 {
@@ -1021,8 +1046,52 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 			"IPpool.CIDR", "", reason(overlapsV6LinkLocal), "")
 	}
 
-	// AllowedUses enum, LB constraints, Tunnel/namespaceSelector, and global() selector
-	// checks are handled by CEL XValidation rules and CRD schema Enum on the IPPoolAllowedUse type.
+	// Allowed use must be one of the enums.
+	for _, a := range pool.AllowedUses {
+		switch a {
+		case api.IPPoolAllowedUseLoadBalancer, api.IPPoolAllowedUseWorkload, api.IPPoolAllowedUseTunnel:
+			continue
+		default:
+			structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
+				"IPpool.AllowedUses", "", reason("unknown use: "+string(a)), "")
+		}
+	}
+
+	if isLoadBalancer && pool.DisableBGPExport {
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.DisableBGPExport", "", reason("IP Pool with AllowedUse LoadBalancer must have DisableBGPExport set to true"), "")
+	}
+
+	if isLoadBalancer && pool.NodeSelector != "all()" {
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.NodeSelector", "", reason("IP Pool with AllowedUse LoadBalancer must have node selector set to all()"), "")
+	}
+
+	// Check for invalid combination: Tunnel allowedUse with namespaceSelector
+	hasTunnelUse := slices.Contains(pool.AllowedUses, api.IPPoolAllowedUseTunnel)
+
+	if hasTunnelUse && pool.NamespaceSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),
+			"IPpool.NamespaceSelector", "", reason("IP Pool with AllowedUse Tunnel cannot have namespaceSelector specified - tunnel IPs are not namespaced resources"), "")
+	}
+
+	// Enhanced validation for NodeSelector based on Calico selector reference
+	if pool.NodeSelector != "" {
+		// Check for invalid global() selector in nodeSelector context
+		if strings.Contains(pool.NodeSelector, "global(") {
+			structLevel.ReportError(reflect.ValueOf(pool.NodeSelector),
+				"IPpool.NodeSelector", "", reason("global() selector is not valid for IPPool nodeSelector - use all() instead"), "")
+		}
+	}
+
+	// Enhanced validation for NamespaceSelector based on Calico selector reference
+	if pool.NamespaceSelector != "" {
+		// Check for invalid global() selector in namespaceSelector context
+		if strings.Contains(pool.NamespaceSelector, "global(") {
+			structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),
+				"IPpool.NamespaceSelector", "", reason("global() selector is not valid for IPPool namespaceSelector - use all() instead"), "")
+		}
+	}
 }
 
 func validateRule(structLevel validator.StructLevel) {
@@ -1066,6 +1135,24 @@ func validateRule(structLevel validator.StructLevel) {
 				structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
 					"Destination.NotPorts", "", reason(protocolPortsMsg), "")
 			}
+		}
+	}
+
+	icmp := numorstring.ProtocolFromString("ICMP")
+	icmpv6 := numorstring.ProtocolFromString("ICMPv6")
+	if rule.ICMP != nil && (rule.Protocol == nil || (*rule.Protocol != icmp && *rule.Protocol != icmpv6)) {
+		structLevel.ReportError(reflect.ValueOf(rule.ICMP), "ICMP", "", reason(protocolICMPMsg), "")
+	}
+
+	// Check that the IPVersion of the protocol matches the IPVersion of the ICMP protocol.
+	if (rule.Protocol != nil && *rule.Protocol == icmp) || (rule.NotProtocol != nil && *rule.NotProtocol == icmp) {
+		if rule.IPVersion != nil && *rule.IPVersion != 4 {
+			structLevel.ReportError(reflect.ValueOf(rule.ICMP), "IPVersion", "", reason("must set ipversion to '4' with protocol icmp"), "")
+		}
+	}
+	if (rule.Protocol != nil && *rule.Protocol == icmpv6) || (rule.NotProtocol != nil && *rule.NotProtocol == icmpv6) {
+		if rule.IPVersion != nil && *rule.IPVersion != 6 {
+			structLevel.ReportError(reflect.ValueOf(rule.ICMP), "IPVersion", "", reason("must set ipversion to '6' with protocol icmpv6"), "")
 		}
 	}
 
@@ -1116,28 +1203,9 @@ func validateRule(structLevel validator.StructLevel) {
 
 func validateEntityRule(structLevel validator.StructLevel) {
 	rule := structLevel.Current().Interface().(api.EntityRule)
-
-	// The selector global() check, services+selector/notSelector, and services+nets/notNets
-	// checks exceed the CEL cost budget (EntityRule is nested inside Rule arrays without
-	// MaxItems), so they remain in Go.
-	if strings.Contains(rule.Selector, "global(") {
+	if strings.Contains(rule.Selector, globalSelector) {
 		structLevel.ReportError(reflect.ValueOf(rule.Selector),
-			"Selector field", "", reason("global() can only be used in an EntityRule namespaceSelector"), "")
-	}
-
-	if rule.Services != nil {
-		if rule.Services.Name == "" {
-			structLevel.ReportError(reflect.ValueOf(rule.Services),
-				"Services field", "", reason("must specify a service name"), "")
-		}
-		if rule.Selector != "" || rule.NotSelector != "" {
-			structLevel.ReportError(reflect.ValueOf(rule.Services),
-				"Services field", "", reason("cannot specify Selector/NotSelector and Services on the same rule"), "")
-		}
-		if len(rule.Nets) != 0 || len(rule.NotNets) != 0 {
-			structLevel.ReportError(reflect.ValueOf(rule.Services),
-				"Services field", "", reason("cannot specify Nets/NotNets and Services on the same rule"), "")
-		}
+			"Selector field", "", reason(globalSelectorEntRule), "")
 	}
 
 	if strings.Contains(rule.NamespaceSelector, "global(") &&
@@ -1150,6 +1218,33 @@ func validateEntityRule(structLevel validator.StructLevel) {
 			// If the namespaceSelector contains global(), then it should be the only selector.
 			structLevel.ReportError(reflect.ValueOf(rule.NamespaceSelector),
 				"NamespaceSelector field", "", reason(globalSelectorOnly), "")
+		}
+	}
+
+	if rule.Services != nil {
+		// Make sure it's not empty.
+		if rule.Services.Name == "" {
+			structLevel.ReportError(reflect.ValueOf(rule.Services),
+				"Services field", "", reason("must specify a service name"), "")
+		}
+
+		// Make sure the rest of the entity rule is consistent.
+		if rule.NamespaceSelector != "" {
+			structLevel.ReportError(reflect.ValueOf(rule.Services),
+				"Services field", "", reason("cannot specify NamespaceSelector and Services on the same rule"), "")
+		}
+		if rule.Selector != "" || rule.NotSelector != "" {
+			structLevel.ReportError(reflect.ValueOf(rule.Services),
+				"Services field", "", reason("cannot specify Selector/NotSelector and Services on the same rule"), "")
+		}
+		if rule.ServiceAccounts != nil {
+			structLevel.ReportError(reflect.ValueOf(rule.Services),
+				"Services field", "", reason("cannot specify ServiceAccounts and Services on the same rule"), "")
+		}
+		if len(rule.Nets) != 0 || len(rule.NotNets) != 0 {
+			// Service rules use IPs specified on the endpoints.
+			structLevel.ReportError(reflect.ValueOf(rule.Services),
+				"Services field", "", reason("cannot specify Nets/NotNets and Services on the same rule"), "")
 		}
 	}
 }
@@ -1177,33 +1272,40 @@ func validateNodeSpec(structLevel validator.StructLevel) {
 func validateBGPPeerSpec(structLevel validator.StructLevel) {
 	ps := structLevel.Current().Interface().(api.BGPPeerSpec)
 
-	// Validate that reachableBy and peerIP are the same address family. The basic
-	// "reachableBy requires peerIP" and "keepOriginalNextHop vs nextHopMode" checks
-	// are handled by CEL XValidation rules on the CRD.
-	if ps.ReachableBy != "" && ps.PeerIP != "" {
-		reachableByAddr := cnet.ParseIP(ps.ReachableBy)
-		if reachableByAddr == nil {
-			structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
-				reason("ReachableBy is invalid address"), "")
-			return
-		}
-		peerAddrStr, _, ok := processIPPort(ps.PeerIP)
-		if !ok {
-			structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
-				reason("PeerIP is invalid address"), "")
-			return
-		}
-		peerAddr := cnet.ParseIP(peerAddrStr)
-		if peerAddr == nil {
-			structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
-				reason("PeerIP is invalid IP address"), "")
-			return
-		}
-		if reachableByAddr.Version() != peerAddr.Version() {
-			structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
-				reason("ReachableBy and PeerIP address family mismatched"), "")
-		}
+	ok, msg := validateReachableBy(ps.ReachableBy, ps.PeerIP)
+	if !ok {
+		structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
+			reason(msg), "")
 	}
+	if ps.KeepOriginalNextHop && ps.NextHopMode != nil {
+		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "KeepOriginalNextHop", "",
+			reason("The KeepOriginalNextHop field is deprecated. It must not be set to true when NextHopMode is configured."), "")
+	}
+}
+
+func validateReachableBy(reachableBy, peerIP string) (bool, string) {
+	if reachableBy == "" {
+		return true, ""
+	}
+	if reachableBy != "" && peerIP == "" {
+		return false, "ReachablyBy field must be empty when PeerIP is empty"
+	}
+	reachableByAddr := cnet.ParseIP(reachableBy)
+	if reachableByAddr == nil {
+		return false, "ReachableBy is invalid address"
+	}
+	peerAddrStr, _, ok := processIPPort(peerIP)
+	if !ok {
+		return false, "PeerIP is invalid address"
+	}
+	peerAddr := cnet.ParseIP(peerAddrStr)
+	if peerAddr == nil {
+		return false, "PeerIP is invalid IP address"
+	}
+	if reachableByAddr.Version() != peerAddr.Version() {
+		return false, "ReachableBy and PeerIP address family mismatched"
+	}
+	return true, ""
 }
 
 // validateReachableByField validates that reachableBy value, the address of the
@@ -1330,14 +1432,57 @@ func validateTier(structLevel validator.StructLevel) {
 		)
 	}
 
-	// Well-known tier order enforcement is handled by CEL XValidation rules on the CRD.
+	if tier.Name == names.DefaultTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.DefaultTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("default tier order must be %v", api.DefaultTierOrder)),
+				"",
+			)
+		}
+	}
+
+	if tier.Name == names.KubeAdminTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.KubeAdminTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("kube-admin tier order must be %v", api.KubeAdminTierOrder)),
+				"",
+			)
+		}
+	}
+
+	if tier.Name == names.KubeBaselineTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.KubeBaselineTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("kube-baseline tier order must be %v", api.KubeBaselineTierOrder)),
+				"",
+			)
+		}
+	}
 
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)
 	validateObjectMetaLabels(structLevel, tier.Labels)
 }
 
 func validateNetworkPolicySpec(spec *api.NetworkPolicySpec, structLevel validator.StructLevel) {
-	// Types uniqueness is enforced by +listType=set on the CRD.
+	// Check (and disallow) any repeats in Types field.
+	mp := map[api.PolicyType]bool{}
+	for _, t := range spec.Types {
+		if _, exists := mp[t]; exists {
+			structLevel.ReportError(reflect.ValueOf(spec.Types),
+				"NetworkPolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"), "")
+		} else {
+			mp[t] = true
+		}
+	}
 
 	for _, r := range spec.Egress {
 		// Services are only allowed in the destination on Egress rules.
@@ -1365,8 +1510,25 @@ func validateNetworkPolicySpec(spec *api.NetworkPolicySpec, structLevel validato
 		}
 	}
 
-	// global() selector checks on Selector and ServiceAccountSelector are handled
-	// by CEL XValidation rules on the CRD.
+	// Check that the selector doesn't have the global() selector which is only
+	// valid as an EntityRule namespaceSelector.
+	if strings.Contains(spec.Selector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.Selector),
+			"NetworkPolicySpec.Selector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
+	}
+
+	if strings.Contains(spec.ServiceAccountSelector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.ServiceAccountSelector),
+			"NetworkPolicySpec.ServiceAccountSelector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
+	}
 }
 
 func validateNetworkPolicy(structLevel validator.StructLevel) {
@@ -1480,7 +1642,16 @@ func validateGlobalNetworkSet(structLevel validator.StructLevel) {
 }
 
 func validateGlobalNetworkPolicySpec(spec *api.GlobalNetworkPolicySpec, structLevel validator.StructLevel) {
-	// Types uniqueness is enforced by +listType=set on the CRD.
+	// Check (and disallow) any repeats in Types field.
+	mp := map[api.PolicyType]bool{}
+	for _, t := range spec.Types {
+		if _, exists := mp[t]; exists {
+			structLevel.ReportError(reflect.ValueOf(spec.Types),
+				"GlobalNetworkPolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"), "")
+		} else {
+			mp[t] = true
+		}
+	}
 
 	for _, r := range spec.Egress {
 		// Services are only allowed as a destination on Egress rules.
@@ -1527,8 +1698,34 @@ func validateGlobalNetworkPolicySpec(spec *api.GlobalNetworkPolicySpec, structLe
 		}
 	}
 
-	// global() selector checks on Selector, ServiceAccountSelector, and NamespaceSelector
-	// are handled by CEL XValidation rules on the CRD.
+	// Check that the selector doesn't have the global() selector which is only
+	// valid as an EntityRule namespaceSelector.
+	if strings.Contains(spec.Selector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.Selector),
+			"GlobalNetworkPolicySpec.Selector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
+	}
+
+	if strings.Contains(spec.ServiceAccountSelector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.Selector),
+			"GlobalNetworkPolicySpec.ServiceAccountSelector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
+	}
+
+	if strings.Contains(spec.NamespaceSelector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.Selector),
+			"GlobalNetworkPolicySpec.NamespaceSelector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
+	}
 }
 
 func validateGlobalNetworkPolicy(structLevel validator.StructLevel) {
@@ -1705,6 +1902,69 @@ func validateRuleMetadata(structLevel validator.StructLevel) {
 	validateObjectMetaAnnotations(structLevel, ruleMeta.Annotations)
 }
 
+func validateRouteTableRange(structLevel validator.StructLevel) {
+	r := structLevel.Current().Interface().(api.RouteTableRange)
+	if r.Min >= 1 && r.Max >= r.Min && r.Max <= 250 {
+		log.Debugf("RouteTableRange is valid: %v", r)
+	} else {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("must be a range of route table indices within 1..250"),
+			"",
+		)
+	}
+}
+
+func validateRouteTableIDRange(structLevel validator.StructLevel) {
+	r := structLevel.Current().Interface().(api.RouteTableIDRange)
+	if r.Min > r.Max {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("min value cannot be greater than max value"),
+			"",
+		)
+	}
+
+	if r.Min <= 0 {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("cannot target indices < 1"),
+			"",
+		)
+	}
+
+	if int64(r.Max) > int64(routeTableMaxLinux) {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("max index too high"),
+			"",
+		)
+	}
+
+	// check if ranges collide with reserved linux tables
+	includesReserved := false
+	for _, rsrv := range routeTablesReservedLinux {
+		if r.Min <= rsrv && r.Max >= rsrv {
+			includesReserved = false
+		}
+	}
+	if includesReserved {
+		log.Infof("Felix route-table range includes reserved Linux tables, values 253-255 will be ignored.")
+	}
+}
+
 func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 	spec := structLevel.Current().Interface().(api.BGPConfigurationSpec)
 
@@ -1719,6 +1979,11 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 		}
 	}
 
+	if (len(spec.PrefixAdvertisements) == 0) && (len(communities) != 0) {
+		structLevel.ReportError(reflect.ValueOf(communities), "Spec.Communities[]", "",
+			reason("communities are defined but not used in Spec.PrefixAdvertisement[]."), "")
+	}
+
 	// check if Spec.PrefixAdvertisement.Communities are valid
 	for _, pa := range spec.PrefixAdvertisements {
 		_, _, err := cnet.ParseCIDROrIP(pa.CIDR)
@@ -1728,7 +1993,6 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 				reason("invalid CIDR value."), "")
 		}
 
-		// The community cross-reference check exceeds the CEL cost budget, so it stays in Go.
 		for _, v := range pa.Communities {
 			isValid := isValidCommunity(v, "Spec.PrefixAdvertisement[].Communities[]", structLevel)
 			if !isValid {
@@ -1761,9 +2025,9 @@ func validateHealthTimeoutOverride(structLevel validator.StructLevel) {
 	}
 }
 
-func isCommunityDefined(communityValue string, communities []api.Community) bool {
-	for _, c := range communities {
-		if c.Name == communityValue {
+func isCommunityDefined(community string, communityKVPairs []api.Community) bool {
+	for _, val := range communityKVPairs {
+		if val.Name == community {
 			return true
 		}
 	}
