@@ -157,8 +157,8 @@ docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
 
 echo
 
-echo "Load docker images onto kind cluster"
-KIND=${KIND} KIND_NAME=${KIND_NAME} ${REPO_ROOT}/hack/test/kind/load_images.sh ${KIND_IMAGES}
+echo "Push docker images to local registry"
+${REPO_ROOT}/hack/test/kind/push_images.sh ${KIND_IMAGES}
 
 echo "Install additional permissions for BGP password"
 ${kubectl} apply -f ${INFRA_DIR}/additional-rbac.yaml
