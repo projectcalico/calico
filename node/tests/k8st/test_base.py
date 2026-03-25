@@ -222,7 +222,7 @@ class TestBase(TestCase):
                 # Success
                 pass
 
-        retry_until_success(is_it_gone_yet, retries=10, wait_time=10, function_args=[name, resource_type])
+        retry_until_success(is_it_gone_yet, retries=30, wait_time=2, function_args=[name, resource_type])
 
     class StillThere(Exception):
         pass
@@ -335,10 +335,10 @@ EOF
         kubectl("delete pod/%s -n %s" % (self.name, self.ns))
 
     def wait_ready(self):
-        kubectl("wait --for=condition=ready pod/%s -n %s --timeout=300s" % (self.name, self.ns))
+        kubectl("wait --for=condition=ready pod/%s -n %s --timeout=60s" % (self.name, self.ns))
 
     def wait_not_ready(self):
-        kubectl("wait --for=condition=Ready=false pod/%s -n %s --timeout=300s" % (self.name, self.ns))
+        kubectl("wait --for=condition=Ready=false pod/%s -n %s --timeout=60s" % (self.name, self.ns))
 
     @property
     def ip(self):
