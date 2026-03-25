@@ -368,7 +368,7 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 	r.diachronics[*flow.Key].AddFlow(flow, bucket.StartTime, bucket.EndTime)
 
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(bucket.Fields()).WithField("flowStart", flow.StartTime).Debug("Adding flow to bucket")
+		logrus.WithFields(bucket.Fields()).WithField("flowStart", flow.StartTime).WithField("head", r.headIndex).Debug("Adding flow to bucket")
 	}
 	bucket.AddFlow(flow)
 }
