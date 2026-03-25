@@ -33,42 +33,39 @@ class ConnectionError(Exception):
 
 
 class TestSpoof(TestBase):
-    def setUp(self):
-        TestBase.setUp(self)
-        self.ns_name = generate_unique_id(5, prefix="spoof")
-        self.create_namespace(self.ns_name)
-        # Create two client pods that live for the duration of the
-        # test.  We will use 'kubectl exec' to try sending/receiving
-        # from these at particular times.
-        #
-        # We do it this way because it takes a
-        # relatively long time (7 seconds?) in this test setup for
-        # Calico routing and policy to be set up correctly for a newly
-        # created pod.
+    @classmethod
+    def setUpClass(cls):
+        # Create namespace and pods once for all spoof tests.
+        cls.ns_name = generate_unique_id(5, prefix="spoof")
+        kubectl("create ns %s" % cls.ns_name)
         nodes, _, _ = node_info()
         kubectl("run "
                 "access "
                 "-n %s "
                 "--image busybox "
                 "--overrides='{\"spec\": {\"nodeName\":\"%s\"}}' "
-                "--command /bin/sh -- -c \"nc -l -u -p 5000 &> /root/snoop.txt\"" % (self.ns_name, nodes[1]))
+                "--command /bin/sh -- -c \"nc -l -u -p 5000 &> /root/snoop.txt\"" % (cls.ns_name, nodes[1]))
         kubectl("run "
                 "scapy "
                 "-n %s "
                 "--image calico/scapy:v2.4.0 "
                 "--overrides='{\"spec\": {\"nodeName\":\"%s\"}}' "
-                "--command /bin/sleep -- 3600" % (self.ns_name, nodes[2]))
+                "--command /bin/sleep -- 3600" % (cls.ns_name, nodes[2]))
 
         kubectl("wait --timeout=2m --for=condition=ready" +
-                " pod/scapy -n %s" % self.ns_name)
+                " pod/scapy -n %s" % cls.ns_name)
         kubectl("wait --timeout=2m --for=condition=ready" +
-                " pod/access -n %s" % self.ns_name)
+                " pod/access -n %s" % cls.ns_name)
 
-    def tearDown(self):
-        self.delete_and_confirm(self.ns_name, "ns")
-        self._set_encapsulation("IPIP")
+    @classmethod
+    def tearDownClass(cls):
+        # Delete namespace.
+        kubectl("delete ns %s" % cls.ns_name)
+        # Restore pool to IPIP mode and restart calico-nodes.
+        cls._set_encapsulation("IPIP")
 
-    def _set_encapsulation(self, encap):
+    @classmethod
+    def _set_encapsulation(cls, encap):
         """Set the cluster's encapsulation mode via the Installation resource.
 
         Patches the Installation CR so the operator reconciles the IPPool.

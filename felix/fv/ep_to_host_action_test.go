@@ -165,10 +165,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 			for _, f := range tc.Felixes {
 				f.TriggerDelayedStart()
 			}
-
-			// Now add the default allow profile, which should give us WEP-to-WEP connectivity.
-			// When we get WEp-to-WEP, we know that Felix has finished programming so the
-			// WEP-to-host test is valid.
+			// In BPF mode, wait for BPF programs to be attached to all
+			// interfaces before testing connectivity.  Without this, the
+			// CTLB may allow connect() but tc hooks aren't attached yet,
+			// causing "no route to host".  We can't use WaitForReady()
+			// because some test cases set INPUT=DROP + wildcard HEP deny,
+			// which blocks the health check even on loopback.
+			if BPFMode() {
+				ensureAllNodesBPFProgramsAttached(tc.Felixes)
+			}
 
 			By("Checking connectivity")
 			cc.Expect(expectedConn, w[0], hostW[0])
