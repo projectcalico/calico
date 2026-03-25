@@ -2012,7 +2012,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			cfg := config.NodeControllerConfig{
 				LeakGracePeriod: &metav1.Duration{Duration: 1 * time.Hour},
 			}
-			c = NewIPAMController(cfg, cli, scaleCS, scalePodIndexer, scaleNodeIndexer, vmIndexer, vmiIndexer)
+			c = NewIPAMController(cfg, cli, scaleCS, scalePodIndexer, scaleNodeIndexer, deferredInformers)
 			c.consolidationWindow = 1 * time.Second
 
 			// Start the controller.

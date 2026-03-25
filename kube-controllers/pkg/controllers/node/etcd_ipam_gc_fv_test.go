@@ -91,7 +91,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 			cfg,
 			nodeInformer, podInformer,
 			dataFeed,
-			nil, nil,
+			nil,
 		)
 
 		go nodeInformer.Run(stopCh)
