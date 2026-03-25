@@ -596,6 +596,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled
 				f.Exec("sysctl", "-w", "net.ipv4.ip_forward=0")
 				f.TriggerDelayedStart()
 			}
+			// In BPF mode, wait for BPF programs to be attached to all
+			// interfaces before testing connectivity.  Without this, the
+			// CTLB may allow connect() but tc hooks aren't attached yet,
+			// causing "no route to host".
+			if BPFMode() {
+				ensureAllNodesBPFProgramsAttached(tc.Felixes)
+			}
 
 			cc = &connectivity.Checker{}
 		})
