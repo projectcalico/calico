@@ -23,8 +23,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
@@ -49,7 +50,7 @@ type serviceAccountController struct {
 }
 
 // NewServiceAccountController returns a controller which manages ServiceAccount objects.
-func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
+func NewServiceAccountController(ctx context.Context, k8sClientset kubernetes.Interface, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
 	serviceAccountConverter := converter.NewServiceAccountConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
@@ -89,7 +90,14 @@ func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.C
 	ccache := rcache.NewResourceCache(cacheArgs)
 
 	// Create a ServiceAccount watcher.
-	listWatcher := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "serviceaccounts", "", fields.Everything())
+	listWatcher := &cache.ListWatch{
+		ListWithContextFunc: func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+			return k8sClientset.CoreV1().ServiceAccounts("").List(ctx, opts)
+		},
+		WatchFuncWithContext: func(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
+			return k8sClientset.CoreV1().ServiceAccounts("").Watch(ctx, opts)
+		},
+	}
 
 	// Bind the calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.

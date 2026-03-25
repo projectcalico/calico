@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,93 +23,94 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() {
+var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
-		etcd              *containers.Container
-		kubeControllers   *containers.Container
-		apiserver         *containers.Container
-		calicoClient      client.Interface
-		k8sClient         *kubernetes.Clientset
-		controllerManager *containers.Container
-		err               error
+		etcd         *containers.Container
+		calicoClient client.Interface
+		k8sClient    *fake.Clientset
+		stopCh       chan struct{}
 	)
 
-	BeforeEach(func() {
-		// Run etcd.
+	BeforeAll(func() {
+		// Run etcd for the Calico datastore.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
 
-		// Run apiserver.
-		apiserver = testutils.RunK8sApiserver(etcd.IP)
-
-		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
-
-		// Run the controller.
-		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
-
-		k8sClient, err = testutils.GetK8sClient(kconfigfile)
+		// Create the default tier, which is required for network policy creation.
+		_, err := calicoClient.Tiers().Create(context.Background(), &api.Tier{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+		}, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-
-		// Wait for the apiserver to be available.
-		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
-			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
-
-		// Run controller manager.  Empirically it can take around 10s until the
-		// controller manager is ready to create default service accounts, even
-		// when the k8s image has already been downloaded to run the API
-		// server.  We use Eventually to allow for possible delay when doing
-		// initial pod creation below.
-		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
-		controllerManager.Stop()
-		kubeControllers.Stop()
-		apiserver.Stop()
 		etcd.Stop()
 	})
 
+	AfterEach(func() {
+		close(stopCh)
+		testutils.CleanupCalicoNetworkPolicies(context.Background(), calicoClient)
+	})
+
+	// startController creates a fresh fake K8s client seeded with the given
+	// objects, then starts the policy controller in-process. By creating
+	// objects before the controller, the informer's initial List picks them
+	// up deterministically without any watch-establishment race.
+	startController := func(objects ...networkingv1.NetworkPolicy) {
+		runtimeObjs := make([]k8sRuntime.Object, len(objects))
+		for i := range objects {
+			runtimeObjs[i] = &objects[i]
+		}
+		k8sClient = fake.NewSimpleClientset(runtimeObjs...)
+		stopCh = make(chan struct{})
+
+		ctrl := networkpolicy.NewPolicyController(
+			context.Background(),
+			k8sClient,
+			calicoClient,
+			config.GenericControllerConfig{
+				ReconcilerPeriod: time.Second,
+				NumberOfWorkers:  1,
+			},
+		)
+		go ctrl.Run(stopCh)
+	}
+
 	Context("NetworkPolicy FV tests", func() {
 		var (
-			policyName        string
-			genPolicyName     string
-			policyNamespace   string
-			policyLabels      map[string]string
-			policyAnnotations map[string]string
+			policyName      string
+			genPolicyName   string
+			policyNamespace string
 		)
 
 		BeforeEach(func() {
-			// Create a Kubernetes NetworkPolicy.
 			policyName = "jelly"
 			genPolicyName = "knp.default." + policyName
 			policyNamespace = "default"
-			policyAnnotations = map[string]string{
-				"annotK": "annotV",
-			}
-			policyLabels = map[string]string{
-				"labelK": "labelV",
-			}
 
-			np := &networkingv1.NetworkPolicy{
+			np := networkingv1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:        policyName,
-					Namespace:   policyNamespace,
-					Annotations: policyAnnotations,
-					Labels:      policyLabels,
+					Name:      policyName,
+					Namespace: policyNamespace,
+					Annotations: map[string]string{
+						"annotK": "annotV",
+					},
+					Labels: map[string]string{
+						"labelK": "labelV",
+					},
 				},
 				Spec: networkingv1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{
@@ -120,14 +121,10 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() 
 				},
 			}
 
-			// Create the NP.
-			Eventually(func() error {
-				_, err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Create(context.Background(),
-					np, metav1.CreateOptions{})
-				return err
-			}, time.Second*5).ShouldNot(HaveOccurred())
+			startController(np)
 
-			// Wait for it to appear in Calico's etcd.
+			// Wait for it to appear in Calico's etcd. This also confirms the
+			// informer's initial List has been processed and its Watch is active.
 			Eventually(func() *api.NetworkPolicy {
 				policy, _ := calicoClient.NetworkPolicies().Get(context.Background(), policyNamespace, genPolicyName, options.GetOptions{})
 				return policy
@@ -185,19 +182,16 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() 
 
 	Context("NetworkPolicy egress FV tests", func() {
 		var (
-			policyName      string
 			genPolicyName   string
 			policyNamespace string
 		)
 
 		BeforeEach(func() {
-			// Create a Kubernetes NetworkPolicy.
-			policyName = "jelly"
-			genPolicyName = "knp.default." + policyName
+			genPolicyName = "knp.default.jelly"
 			policyNamespace = "default"
-			np := &networkingv1.NetworkPolicy{
+			np := networkingv1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      policyName,
+					Name:      "jelly",
 					Namespace: policyNamespace,
 				},
 				Spec: networkingv1.NetworkPolicySpec{
@@ -222,12 +216,7 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() 
 				},
 			}
 
-			// Create the NP.
-			Eventually(func() error {
-				_, err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Create(context.Background(),
-					np, metav1.CreateOptions{})
-				return err
-			}, time.Second*5).ShouldNot(HaveOccurred())
+			startController(np)
 
 			// Wait for it to appear in Calico's etcd.
 			Eventually(func() *api.NetworkPolicy {

@@ -24,9 +24,10 @@ import (
 	log "github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
@@ -50,11 +51,18 @@ type policyController struct {
 }
 
 // NewPolicyController returns a controller which manages NetworkPolicy objects.
-func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
+func NewPolicyController(ctx context.Context, clientset kubernetes.Interface, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
 	policyConverter := converter.NewPolicyConverter()
 
 	// Create a NetworkPolicy watcher.
-	listWatcher := cache.NewListWatchFromClient(clientset.NetworkingV1().RESTClient(), "networkpolicies", "", fields.Everything())
+	listWatcher := &cache.ListWatch{
+		ListWithContextFunc: func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+			return clientset.NetworkingV1().NetworkPolicies("").List(ctx, opts)
+		},
+		WatchFuncWithContext: func(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
+			return clientset.NetworkingV1().NetworkPolicies("").Watch(ctx, opts)
+		},
+	}
 
 	// Function returns map of policyName:policy stored by policy controller
 	// in datastore.

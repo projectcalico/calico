@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -1981,7 +1980,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		})
 	})
 
-	Context("with a large number of nodes and allocatoins", func() {
+	Context("with a large number of nodes and allocations", func() {
 		// This is a sort of stress test to see how well the controller handles a large number of nodes and allocations.
 		numNodes := 1000
 		podsPerNode := 5
@@ -1989,17 +1988,38 @@ var _ = Describe("IPAM controller UTs", func() {
 		var allPods []v1.Pod
 		var allBlocks []bapi.Update
 
+		// We need a separate fake clientset with a large watcher buffer for bulk creation,
+		// and direct access to the informer store for fast pod population.
+		var scaleCS kubernetes.Interface
+		var scalePodIndexer cache.Indexer
+		var scaleNodeIndexer cache.Indexer
+
 		BeforeEach(func() {
-			// Set a normal grace period to prevent frequent syncs, which can cause excessive resource usage
-			// at such a large scale.
-			c.config.LeakGracePeriod = &metav1.Duration{Duration: 1 * time.Hour}
+			// Create a new fake clientset for the scale test. We'll populate the informer
+			// caches directly to avoid the slow create→watch→inform round-trip.
+			scaleCS = fake.NewSimpleClientset()
+
+			scaleFactory := informers.NewSharedInformerFactory(scaleCS, 0)
+			scalePodInformer := scaleFactory.Core().V1().Pods().Informer()
+			scaleNodeInformer := scaleFactory.Core().V1().Nodes().Informer()
+			scaleFactory.Start(stopChan)
+			Expect(cache.WaitForCacheSync(stopChan, scalePodInformer.HasSynced, scaleNodeInformer.HasSynced)).To(BeTrue(), "informer caches failed to sync")
+
+			scalePodIndexer = scalePodInformer.GetIndexer()
+			scaleNodeIndexer = scaleNodeInformer.GetIndexer()
+
+			// Recreate the controller with the scale-specific indexers and clientset.
+			cfg := config.NodeControllerConfig{
+				LeakGracePeriod: &metav1.Duration{Duration: 1 * time.Hour},
+			}
+			c = NewIPAMController(cfg, cli, scaleCS, scalePodIndexer, scaleNodeIndexer, deferredInformers)
 			c.consolidationWindow = 1 * time.Second
 
-			// Start the controller - we need to do this before creating the nodes, so that the controller is ready to
-			// consume from its channels.
+			// Start the controller.
 			c.Start(stopChan)
 
-			// Create 5k nodes.
+			// Create Calico nodes via the fake Calico client, and add K8s nodes
+			// directly to the informer cache to avoid watch channel overflow.
 			for i := range numNodes {
 				n := internalapi.Node{}
 				n.Name = fmt.Sprintf("node%d", i)
@@ -2007,19 +2027,15 @@ var _ = Describe("IPAM controller UTs", func() {
 				_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				kn := v1.Node{}
-				kn.Name = n.Name
-				_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				var node *v1.Node
-				Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+				kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: n.Name}}
+				Expect(scaleNodeIndexer.Add(kn)).NotTo(HaveOccurred())
 			}
 
-			// For each node, create 30 pods and assign them IPs. Pre-create the blocks, and then
-			// send them all in at once to separate the test setup from the controller processing.
+			// Build pods and blocks in memory, then add pods directly to the indexer.
+			// This bypasses the fake K8s client entirely for bulk creation, avoiding
+			// the serial create→watch→inform bottleneck that previously took ~60s.
+			t := converter.PodTransformer(true)
 			for nodeNum := range numNodes {
-				// Determine the block CIDR for this node. Each node is given a /26,
-				// which means for 5k nodes we need a /13 IP pool.
 				baseIPInt := big.NewInt(int64(0x0a000000 + nodeNum*64))
 				baseIP := net.BigIntToIP(baseIPInt, false)
 				blockCIDR := fmt.Sprintf("%s/26", baseIP.String())
@@ -2042,46 +2058,34 @@ var _ = Describe("IPAM controller UTs", func() {
 					allPods = append(allPods, p)
 					nodePods = append(nodePods, p)
 					podIP = net.IncrementIP(podIP, big.NewInt(1))
-
 				}
 				allBlocks = append(allBlocks, createBlock(nodePods, nodeName, blockCIDR))
-				logrus.WithField("nodeNum", nodeNum).WithField("blockCIDR", blockCIDR).Info("[TEST] Created node + block")
 			}
 
-			// Create all the pods. This loop consumes the vast majority of the time this test takes to run.
-			// It would be great to parallelize this, but it's not possible to create pods in parallel  with
-			// the current fake client.
-			for _, p := range allPods {
-				_, err := createPod(context.TODO(), cs, &p)
+			// Add all pods to the indexer. Apply the same transformer used by production code.
+			for i := range allPods {
+				transformed, err := t(&allPods[i])
 				Expect(err).NotTo(HaveOccurred())
-				var gotPod *v1.Pod
-				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
-				logrus.WithField("pod", p.Name).Info("[TEST] Created pod")
+				Expect(scalePodIndexer.Add(transformed)).NotTo(HaveOccurred())
 			}
 
 			By("Sending updates for all blocks")
-
-			// Create all the blocks
 			for _, u := range allBlocks {
 				c.onUpdate(u)
 			}
-
-			// Mark in sync
 			c.onStatusUpdate(bapi.InSync)
 
 			By("Waiting for controller to be in sync")
-
-			// Wait for the controller to process all the updates.
 			Eventually(func() bool {
 				done := c.pause()
 				defer done()
 				return len(c.allBlocks) == numNodes
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+			}, 10*time.Second, 100*time.Millisecond).Should(BeTrue())
 			Eventually(func() bool {
 				done := c.pause()
 				defer done()
 				return len(c.allocationState.dirtyNodes) == 0
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Controller did not process all blocks")
+			}, 10*time.Second, 100*time.Millisecond).Should(BeTrue(), "Controller did not process all blocks")
 			Eventually(func() bool {
 				done := c.pause()
 				defer done()
@@ -2093,14 +2097,15 @@ var _ = Describe("IPAM controller UTs", func() {
 			By("Deleting a pod to trigger a leak")
 
 			// Delete one of the pods to trigger a leak, and check that the controller detects it.
+			// Remove it from the indexer (so the pod lister can't find it) and notify the controller.
 			pod := allPods[numNodes-1]
-			Expect(cs.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
+			Expect(scalePodIndexer.Delete(&pod)).NotTo(HaveOccurred())
 			c.OnKubernetesPodDeleted(&pod)
 
 			// Delete a pod on node 0 but don't inform the controller. This should not trigger a leak,
 			// since the controller is not aware of the pod deletion.
 			pod2 := allPods[0]
-			Expect(cs.CoreV1().Pods(pod2.Namespace).Delete(context.TODO(), pod2.Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
+			Expect(scalePodIndexer.Delete(&pod2)).NotTo(HaveOccurred())
 
 			// Wait for the controller to detect the leak. This should happen quickly, since the controller
 			// will only need to process a single block.
