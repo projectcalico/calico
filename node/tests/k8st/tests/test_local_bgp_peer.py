@@ -462,10 +462,10 @@ protocol bgp from_workload_to_local_host from bgp_template {
 
         # Assert bgp sessions has been established to the following local workloads.
         # red pods on kind-worker and kind-worker2. blue pod on kind-worker2.
-        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_0_0], retries=60)
-        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_1_0], retries=60)
+        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_0_0], timeout=90)
+        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_1_0], timeout=90)
         self.assert_bgp_not_established(self.blue_pod_0_0)
-        retry_until_success(self.assert_bgp_established, function_args=[self.blue_pod_1_0], retries=60)
+        retry_until_success(self.assert_bgp_established, function_args=[self.blue_pod_1_0], timeout=90)
 
         # Check the export filter is applied.  Child nodes shouldn't see routes
         # from the parent.
