@@ -1498,6 +1498,7 @@ kind-cluster-destroy kind-down: $(KIND) $(KUBECTL)
 	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
 	# This requires we execute CNI del on pods with pod networking.
 	-$(KIND) delete cluster --name $(KIND_NAME)
+	-docker rm -f $(KIND_REGISTRY_NAME) 2>/dev/null
 	rm -f $(KIND_KUBECONFIG)
 	rm -f $(REPO_ROOT)/.$(KIND_NAME).created
 
