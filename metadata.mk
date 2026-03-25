@@ -3,10 +3,10 @@
 #################################################################################################
 
 # Calico toolchain versions and the calico/base image to use.
-GO_BUILD_VER=1.26.1-llvm20.1.8-k8s1.35.2
+GO_BUILD_VER=1.26.1-llvm20.1.8-k8s1.35.3
 RUST_BUILD_VER=1.93.1
 
-CALICO_BASE_VER=ubi9-1774048615
+CALICO_BASE_VER=ubi9-1774386983
 
 # Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
 K8S_VERSION=v1.35.2

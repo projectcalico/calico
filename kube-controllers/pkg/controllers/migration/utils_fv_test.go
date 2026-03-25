@@ -123,7 +123,7 @@ func startController(
 	gate *phaseGate,
 ) *fakeapiregclient.Clientset {
 	t.Helper()
-	fakeAPIReg := fakeapiregclient.NewSimpleClientset(newAggregatedAPIServiceObj()) //nolint:staticcheck // NewClientset not available for kube-aggregator
+	fakeAPIReg := fakeapiregclient.NewSimpleClientset(newAggregatedAPIServiceObj())
 
 	rt := rtclient.WithWatch(fvRTClient)
 	if gate != nil {
