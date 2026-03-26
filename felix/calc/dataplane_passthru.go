@@ -18,6 +18,7 @@ import (
 	"maps"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 
@@ -113,9 +114,9 @@ func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.U
 	ip := update.Value.(*net.IP)
 	log.WithField("update", update).Debug("Passing-through HostIP update")
 	hostUpdate := &HostInfo{
-		ip4Addr: ip.Network(),
-		ip6Addr: &net.IPNet{}, // required for print in event sequencer
-		labels:  nil,
+		ip4Addr: ip.String(),
+		//ip6Addr: "", //TODO remove // required for print in event sequencer
+		labels: nil,
 	}
 	h.processNodeUpdate(hostname, hostUpdate, true)
 }
@@ -135,22 +136,27 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	node, _ := update.Value.(*internalapi.Node)
 	log.WithField("update", update).Debug("Passing-through Node update")
 	data := &HostInfo{
-		ip4Addr: &net.IPNet{}, // required for print in event sequencer
-		ip6Addr: &net.IPNet{}, // required for print in event sequencer
-		labels:  node.Labels,
+		//ip4Addr: &net.IPNet{}, // required for print in event sequencer
+		//ip6Addr: &net.IPNet{}, // required for print in event sequencer
+		labels: node.Labels,
 	}
 
 	if node.Spec.BGP != nil {
-		ip4, ip4net, _ := net.ParseCIDR(node.Spec.BGP.IPv4Address)
-		ip6, ip6net, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
-		if ip4net != nil {
+		logrus.Infof("tofu0 %v", node.Spec.BGP.IPv4Address)
+		//ip4, ip4net, _ := net.ParseCIDROrIP(node.Spec.BGP.IPv4Address)
+		//ip6, ip6net, _ := net.ParseCIDROrIP(node.Spec.BGP.IPv6Address)
+		data.ip4Addr = node.Spec.BGP.IPv4Address
+		data.ip6Addr = node.Spec.BGP.IPv6Address
+		logrus.Infof("tofu1 %v", data.ip4Addr)
+		/* ip4net != nil {
 			ip4net.IP = ip4.IP
 			data.ip4Addr = ip4net
+			logrus.Infof("tofu2 %v", data.ip4Addr)
 		}
 		if ip6net != nil {
 			ip6net.IP = ip6.IP
 			data.ip6Addr = ip6net
-		}
+		}*/
 		if node.Spec.BGP.ASNumber != nil {
 			data.asnumber = node.Spec.BGP.ASNumber.String()
 		}
@@ -166,7 +172,7 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 			_, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
 		}
 		if ipnet != nil {
-			data.ip6Addr = ipnet
+			data.ip6Addr = ipnet.String()
 		}
 	}
 
@@ -174,7 +180,7 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 }
 
 func (h *DataplanePassthru) processNodeUpdate(hostname string, hostUpdate *HostInfo, fromHostIP bool) {
-	updateIsNil := hostUpdate.ip4Addr == nil && hostUpdate.ip6Addr == nil &&
+	updateIsNil := len(hostUpdate.ip4Addr) == 0 && len(hostUpdate.ip6Addr) == 0 &&
 		len(hostUpdate.asnumber) == 0 && len(hostUpdate.labels) == 0
 
 	if updateIsNil {
@@ -188,21 +194,26 @@ func (h *DataplanePassthru) processNodeUpdate(hostname string, hostUpdate *HostI
 		return
 	}
 
+	// hostInfo in not nil.
+
 	var nodeChanged bool
-	if hostUpdate.ip4Addr != nil && hostInfo.ip4Addr != nil && hostUpdate.ip4Addr.String() != hostInfo.ip4Addr.String() {
+
+	if hostUpdate.ip4Addr != hostInfo.ip4Addr {
+		logrus.Infof("pepper10 %v", hostUpdate.ip4Addr)
+		//if hostUpdate.ip4Addr.IP.String() != hostInfo.ip4Addr.IP.String() {
 		// A HostIP-sourced /32 should not overwrite a more specific BGP-sourced prefix
 		// (e.g., /24 from a Node resource). Node resource updates always take precedence.
-		if !fromHostIP || !isHostRoute(hostUpdate.ip4Addr) || isHostRoute(hostInfo.ip4Addr) || hostInfo.ip4Addr.IP == nil {
-			hostInfo.ip4Addr = hostUpdate.ip4Addr
-			nodeChanged = true
-		}
+		//if !fromHostIP || !isHostRoute(hostUpdate.ip4Addr) || isHostRoute(hostInfo.ip4Addr) || hostInfo.ip4Addr.IP == nil {
+		hostInfo.ip4Addr = hostUpdate.ip4Addr
+		nodeChanged = true
+		//}
 	}
 
-	if hostUpdate.ip6Addr != nil && hostInfo.ip6Addr != nil && hostUpdate.ip6Addr.String() != hostInfo.ip6Addr.String() {
-		if !fromHostIP || !isHostRoute(hostUpdate.ip6Addr) || isHostRoute(hostInfo.ip6Addr) || hostInfo.ip6Addr.IP == nil {
-			hostInfo.ip6Addr = hostUpdate.ip6Addr
-			nodeChanged = true
-		}
+	if hostUpdate.ip6Addr != hostInfo.ip6Addr {
+		//if !fromHostIP || !isHostRoute(hostUpdate.ip6Addr) || isHostRoute(hostInfo.ip6Addr) || hostInfo.ip6Addr.IP == nil {
+		hostInfo.ip6Addr = hostUpdate.ip6Addr
+		nodeChanged = true
+		//}
 	}
 
 	if hostUpdate.asnumber != hostInfo.asnumber {
