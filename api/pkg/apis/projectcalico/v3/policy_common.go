@@ -137,8 +137,12 @@ type ICMPFields struct {
 // A source EntityRule matches the source endpoint and originating traffic.
 // A destination EntityRule matches the destination endpoint and terminating traffic.
 //
+// +kubebuilder:validation:XValidation:rule="!has(self.selector) || !self.selector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || !has(self.namespaceSelector) || size(self.namespaceSelector) == 0",message="cannot specify NamespaceSelector and Services on the same rule",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.services) || !has(self.serviceAccounts)",message="cannot specify ServiceAccounts and Services on the same rule",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.services) || size(self.services.name) > 0",message="services must specify a service name",reason=FieldValueRequired
+// +kubebuilder:validation:XValidation:rule="!has(self.services) || (!has(self.selector) || size(self.selector) == 0) && (!has(self.notSelector) || size(self.notSelector) == 0)",message="cannot specify Selector/NotSelector and Services on the same rule",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.services) || (!has(self.nets) || size(self.nets) == 0) && (!has(self.notNets) || size(self.notNets) == 0)",message="cannot specify Nets/NotNets and Services on the same rule",reason=FieldValueForbidden
 type EntityRule struct {
 	// Nets is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) IP addresses in any of the given subnets.

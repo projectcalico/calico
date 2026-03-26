@@ -1966,16 +1966,26 @@ func init() {
 				},
 			}, false),
 		Entry("should reject rule with an IPv6 protocol and an IPVersion=4",
-			api.Rule{
-				Action:    "Allow",
-				Protocol:  protocolFromString("ICMPv6"),
-				IPVersion: &V4,
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:    "Allow",
+						Protocol:  protocolFromString("ICMPv6"),
+						IPVersion: &V4,
+					}},
+				},
 			}, false),
 		Entry("should reject rule with an IPv4 protocol and an IPVersion=6",
-			api.Rule{
-				Action:    "Allow",
-				Protocol:  protocolFromString("ICMP"),
-				IPVersion: &V6,
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "test"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{
+						Action:    "Allow",
+						Protocol:  protocolFromString("ICMP"),
+						IPVersion: &V6,
+					}},
+				},
 			}, false),
 		Entry("should accept Allow rule with HTTP clause",
 			&api.GlobalNetworkPolicy{
@@ -3938,16 +3948,28 @@ func init() {
 			false,
 		),
 		Entry("should not accept an invalid IP address",
-			api.FelixConfigurationSpec{NATOutgoingAddress: bad_ipv4_1}, false,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{NATOutgoingAddress: bad_ipv4_1},
+			}, false,
 		),
 		Entry("should not accept a masked IP",
-			api.FelixConfigurationSpec{NATOutgoingAddress: netv4_1}, false,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{NATOutgoingAddress: netv4_1},
+			}, false,
 		),
 		Entry("should not accept an IPV6 address",
-			api.FelixConfigurationSpec{NATOutgoingAddress: ipv6_1}, false,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{NATOutgoingAddress: ipv6_1},
+			}, false,
 		),
 		Entry("should accept a valid IP address",
-			api.FelixConfigurationSpec{NATOutgoingAddress: ipv4_1}, true,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{NATOutgoingAddress: ipv4_1},
+			}, true,
 		),
 		Entry("should accept a valid prometheusMetricsHost value 'localhost'", api.FelixConfigurationSpec{PrometheusMetricsHost: "localhost"}, true),
 		Entry("should accept a valid prometheusMetricsHost value '10.0.0.1'", api.FelixConfigurationSpec{PrometheusMetricsHost: "10.0.0.1"}, true),
@@ -3956,29 +3978,53 @@ func init() {
 		Entry("should reject an invalid prometheusMetricsHost value '0: 1::1'", api.FelixConfigurationSpec{PrometheusMetricsHost: "0: 1::1"}, false),
 		// Testcases for DeviceRouteSourceAddress address
 		Entry("should accept a valid IPv4 address",
-			api.FelixConfigurationSpec{DeviceRouteSourceAddress: ipv4_1}, true,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{DeviceRouteSourceAddress: ipv4_1},
+			}, true,
 		),
 		Entry("should not accept a valid IPv6 address",
-			api.FelixConfigurationSpec{DeviceRouteSourceAddress: ipv6_1}, false,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{DeviceRouteSourceAddress: ipv6_1},
+			}, false,
 		),
 		Entry("should not accept an invalid IP address",
-			api.FelixConfigurationSpec{DeviceRouteSourceAddress: bad_ipv4_1}, false,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{DeviceRouteSourceAddress: bad_ipv4_1},
+			}, false,
 		),
 		Entry("should not accept a masked IP address",
-			api.FelixConfigurationSpec{DeviceRouteSourceAddress: netv4_1}, false,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{DeviceRouteSourceAddress: netv4_1},
+			}, false,
 		),
 		// Testcases for DeviceRouteSourceAddressIPv6 address
 		Entry("should accept a valid IPv6 address",
-			api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: ipv6_1}, true,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: ipv6_1},
+			}, true,
 		),
 		Entry("should not accept a valid IPv4 address",
-			api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: ipv4_1}, false,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: ipv4_1},
+			}, false,
 		),
 		Entry("should not accept an invalid IPv4 address",
-			api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: bad_ipv6_1}, false,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: bad_ipv6_1},
+			}, false,
 		),
 		Entry("should not accept a masked IPv6 address",
-			api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: netv6_1}, false,
+			&api.FelixConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "default"},
+				Spec:       api.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: netv6_1},
+			}, false,
 		),
 		Entry("should accept a valid listening port",
 			api.FelixConfigurationSpec{WireguardListeningPort: &validWireguardPortOrRulePriority}, true,
@@ -4137,8 +4183,11 @@ func init() {
 		),
 
 		// BGP Communities validation in BGPConfigurationSpec
-		Entry("should not accept community when PrefixAdvertisement is empty", api.BGPConfigurationSpec{
-			Communities: []api.Community{{Name: "community-test", Value: "101:5695"}},
+		Entry("should not accept community when PrefixAdvertisement is empty", &api.BGPConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec: api.BGPConfigurationSpec{
+				Communities: []api.Community{{Name: "community-test", Value: "101:5695"}},
+			},
 		}, false),
 		Entry("should not accept communities with value and without name", api.BGPConfigurationSpec{
 			Communities:          []api.Community{{Value: "536:785"}},

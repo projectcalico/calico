@@ -114,6 +114,9 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
+                          - message: global() can only be used in an EntityRule namespaceSelector
+                            reason: FieldValueInvalid
+                            rule: "!has(self.selector) || !self.selector.contains('global(')"
                           - message:
                               cannot specify NamespaceSelector and Services on
                               the same rule
@@ -126,6 +129,24 @@ spec:
                               same rule
                             reason: FieldValueForbidden
                             rule: "!has(self.services) || !has(self.serviceAccounts)"
+                          - message: services must specify a service name
+                            reason: FieldValueRequired
+                            rule: "!has(self.services) || size(self.services.name) > 0"
+                          - message:
+                              cannot specify Selector/NotSelector and Services
+                              on the same rule
+                            reason: FieldValueForbidden
+                            rule:
+                              "!has(self.services) || (!has(self.selector) || size(self.selector)
+                              == 0) && (!has(self.notSelector) || size(self.notSelector)
+                              == 0)"
+                          - message:
+                              cannot specify Nets/NotNets and Services on the same
+                              rule
+                            reason: FieldValueForbidden
+                            rule:
+                              "!has(self.services) || (!has(self.nets) || size(self.nets)
+                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -261,6 +282,9 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
+                          - message: global() can only be used in an EntityRule namespaceSelector
+                            reason: FieldValueInvalid
+                            rule: "!has(self.selector) || !self.selector.contains('global(')"
                           - message:
                               cannot specify NamespaceSelector and Services on
                               the same rule
@@ -273,6 +297,24 @@ spec:
                               same rule
                             reason: FieldValueForbidden
                             rule: "!has(self.services) || !has(self.serviceAccounts)"
+                          - message: services must specify a service name
+                            reason: FieldValueRequired
+                            rule: "!has(self.services) || size(self.services.name) > 0"
+                          - message:
+                              cannot specify Selector/NotSelector and Services
+                              on the same rule
+                            reason: FieldValueForbidden
+                            rule:
+                              "!has(self.services) || (!has(self.selector) || size(self.selector)
+                              == 0) && (!has(self.notSelector) || size(self.notSelector)
+                              == 0)"
+                          - message:
+                              cannot specify Nets/NotNets and Services on the same
+                              rule
+                            reason: FieldValueForbidden
+                            rule:
+                              "!has(self.services) || (!has(self.nets) || size(self.nets)
+                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
@@ -380,6 +422,9 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
+                          - message: global() can only be used in an EntityRule namespaceSelector
+                            reason: FieldValueInvalid
+                            rule: "!has(self.selector) || !self.selector.contains('global(')"
                           - message:
                               cannot specify NamespaceSelector and Services on
                               the same rule
@@ -392,6 +437,24 @@ spec:
                               same rule
                             reason: FieldValueForbidden
                             rule: "!has(self.services) || !has(self.serviceAccounts)"
+                          - message: services must specify a service name
+                            reason: FieldValueRequired
+                            rule: "!has(self.services) || size(self.services.name) > 0"
+                          - message:
+                              cannot specify Selector/NotSelector and Services
+                              on the same rule
+                            reason: FieldValueForbidden
+                            rule:
+                              "!has(self.services) || (!has(self.selector) || size(self.selector)
+                              == 0) && (!has(self.notSelector) || size(self.notSelector)
+                              == 0)"
+                          - message:
+                              cannot specify Nets/NotNets and Services on the same
+                              rule
+                            reason: FieldValueForbidden
+                            rule:
+                              "!has(self.services) || (!has(self.nets) || size(self.nets)
+                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -527,6 +590,9 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
+                          - message: global() can only be used in an EntityRule namespaceSelector
+                            reason: FieldValueInvalid
+                            rule: "!has(self.selector) || !self.selector.contains('global(')"
                           - message:
                               cannot specify NamespaceSelector and Services on
                               the same rule
@@ -539,6 +605,24 @@ spec:
                               same rule
                             reason: FieldValueForbidden
                             rule: "!has(self.services) || !has(self.serviceAccounts)"
+                          - message: services must specify a service name
+                            reason: FieldValueRequired
+                            rule: "!has(self.services) || size(self.services.name) > 0"
+                          - message:
+                              cannot specify Selector/NotSelector and Services
+                              on the same rule
+                            reason: FieldValueForbidden
+                            rule:
+                              "!has(self.services) || (!has(self.selector) || size(self.selector)
+                              == 0) && (!has(self.notSelector) || size(self.notSelector)
+                              == 0)"
+                          - message:
+                              cannot specify Nets/NotNets and Services on the same
+                              rule
+                            reason: FieldValueForbidden
+                            rule:
+                              "!has(self.services) || (!has(self.nets) || size(self.nets)
+                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
