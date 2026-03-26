@@ -18,7 +18,7 @@ import (
 	"maps"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 
@@ -31,13 +31,6 @@ import (
 	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
-type nodeData struct {
-	IPv4     *net.IPNet
-	IPv6     *net.IPNet
-	ASNumber *numorstring.ASNumber
-	Labels   map[string]string
-}
-
 // DataplanePassthru passes through some datamodel updates to the dataplane layer, removing some
 // duplicates along the way.  It maps OnUpdate() calls to dedicated method calls for consistency
 // with the rest of the dataplane API.
@@ -45,14 +38,14 @@ type DataplanePassthru struct {
 	ipv6Support bool
 	callbacks   passthruCallbacks
 
-	hosts map[string]*nodeData
+	hosts map[string]*HostInfo
 }
 
 func NewDataplanePassthru(callbacks passthruCallbacks, ipv6Support bool) *DataplanePassthru {
 	return &DataplanePassthru{
 		ipv6Support: ipv6Support,
 		callbacks:   callbacks,
-		hosts:       map[string]*nodeData{},
+		hosts:       map[string]*HostInfo{},
 	}
 }
 
@@ -86,24 +79,162 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			h.callbacks.OnWireguardUpdate(key.NodeName, wg)
 		}
 	case model.ResourceKey:
-		if key.Kind == v3.KindBGPConfiguration && key.Name == "default" {
-			log.WithField("update", update).Debug("Passing through global BGPConfiguration")
-			bgpConfig, _ := update.Value.(*v3.BGPConfiguration)
-			h.callbacks.OnGlobalBGPConfigUpdate(bgpConfig)
-		} else if key.Kind == model.KindKubernetesService {
+		switch key.Kind {
+		case v3.KindBGPConfiguration:
+			if key.Name == "default" {
+				log.WithField("update", update).Debug("Passing through global BGPConfiguration")
+				bgpConfig, _ := update.Value.(*v3.BGPConfiguration)
+				h.callbacks.OnGlobalBGPConfigUpdate(bgpConfig)
+			}
+		case model.KindKubernetesService:
 			log.WithField("update", update).Debug("Passing through a Service")
 			if update.Value == nil {
 				h.callbacks.OnServiceRemove(&proto.ServiceRemove{Name: key.Name, Namespace: key.Namespace})
 			} else {
 				h.callbacks.OnServiceUpdate(kubernetesServiceToProto(update.Value.(*kapiv1.Service)))
 			}
-		} else if key.Kind == internalapi.KindNode {
+		case internalapi.KindNode:
 			h.processKindNode(key, update)
-		} else {
+		default:
 			log.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
 		}
 	}
 	return
+}
+
+func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.Update) {
+	hostname := key.Hostname
+	if update.Value == nil {
+		log.WithField("update", update).Debug("Passing-through HostIP deletion")
+		delete(h.hosts, hostname)
+		h.callbacks.OnHostMetadataRemove(hostname)
+		return
+	}
+
+	ip := update.Value.(*net.IP)
+	// libcalico-go's IP struct wraps a standard library IP struct.  To
+	// compare two IPs, we need to unwrap them and use Equal() since standard
+	// library IPs have multiple, equivalent, representations.
+	/*if oldHost != nil && oldHost.ip4Addr != nil && ip.Equal(oldHost.ip4Addr.IP) {
+		log.WithField("update", update).Debug("Ignoring duplicate HostIP update")
+		return
+	}*/
+	log.WithField("update", update).Debug("Passing-through HostIP update")
+	hostUpdate := &HostInfo{
+		ip4Addr: ip.Network(),
+		ip6Addr: &net.IPNet{}, // required for print in event sequencer
+		labels:  nil,
+	}
+	h.processNodeUpdate(hostname, hostUpdate)
+}
+
+func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Update) {
+	// Handle node resource to pass-through HostMetadataV6Update/HostMetadataV6Remove messages
+	// with IPv6 node address updates. IPv4 updates are handled above with model.HostIPKey updates.
+	log.WithField("update", update).Debug("Passing-through a Node update")
+	hostname := key.Name
+	if update.Value == nil {
+		log.WithField("update", update).Debug("Passing-through Node remove")
+		delete(h.hosts, hostname)
+		h.callbacks.OnHostMetadataRemove(hostname)
+		return
+	}
+
+	node, _ := update.Value.(*internalapi.Node)
+	log.WithField("update", update).Debug("Passing-through Node update")
+	data := &HostInfo{
+		ip4Addr: &net.IPNet{}, // required for print in event sequencer
+		ip6Addr: &net.IPNet{}, // required for print in event sequencer
+		labels:  node.Labels,
+	}
+
+	if node.Spec.BGP != nil {
+		ip4, ip4net, _ := net.ParseCIDR(node.Spec.BGP.IPv4Address)
+		ip6, ip6net, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
+		if ip4net != nil {
+			ip4net.IP = ip4.IP
+			data.ip4Addr = ip4net
+		}
+		if ip6net != nil {
+			ip6net.IP = ip6.IP
+			data.ip6Addr = ip6net
+		}
+		if node.Spec.BGP.ASNumber != nil {
+			data.asnumber = node.Spec.BGP.ASNumber.String()
+		}
+	}
+
+	if h.ipv6Support && node.Spec.BGP == nil {
+		// BGP is turned off, try to get one from the node resource. This is a
+		// similar fallback as for IPv4, see how HostIPKey is generated in
+		// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go
+		var ipnet *net.IPNet
+		_, ipnet = cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
+		if ipnet == nil {
+			_, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
+		}
+		data.ip6Addr = ipnet
+	}
+
+	h.processNodeUpdate(hostname, data)
+}
+
+func (h *DataplanePassthru) processNodeUpdate(hostname string, hostUpdate *HostInfo) {
+	logrus.Info("pepper0")
+	updateIsNil := hostUpdate.ip4Addr == nil && hostUpdate.ip6Addr == nil &&
+		len(hostUpdate.asnumber) == 0 && len(hostUpdate.labels) == 0
+
+	if updateIsNil {
+		return
+	}
+
+	/*if oldNode != nil && updateIsNil {
+		log.WithField("hostname", hostname).Debug("Passing-through Node remove")
+		delete(h.hosts, hostname)
+		h.callbacks.OnHostMetadataRemove(hostname)
+		return
+	}*/
+
+	/*var newNode HostInfo
+	if oldNode != nil {
+		newNode = *oldNode // Do we need to deep copy?
+	}*/
+	logrus.Info("pepper1")
+	hostInfo := h.hosts[hostname]
+	if hostInfo == nil {
+		h.hosts[hostname] = hostUpdate
+		logrus.Infof("pepper2 %#v", hostUpdate)
+		h.callbacks.OnHostMetadataUpdate(hostname, hostUpdate)
+		return
+	}
+
+	var nodeChanged bool
+	if hostUpdate.ip4Addr != nil && hostInfo.ip4Addr != nil && hostUpdate.ip4Addr.String() != hostInfo.ip4Addr.String() {
+		hostInfo.ip4Addr = hostUpdate.ip4Addr
+		nodeChanged = true
+	}
+
+	if hostUpdate.ip6Addr != nil && hostInfo.ip6Addr != nil && hostUpdate.ip6Addr.String() != hostInfo.ip6Addr.String() {
+		hostInfo.ip6Addr = hostUpdate.ip6Addr
+		nodeChanged = true
+	}
+
+	if hostUpdate.asnumber != hostInfo.asnumber {
+		hostInfo.asnumber = hostUpdate.asnumber
+		nodeChanged = true
+	}
+
+	if !maps.Equal(hostUpdate.labels, hostInfo.labels) {
+		hostInfo.labels = hostUpdate.labels
+		nodeChanged = true
+	}
+
+	if nodeChanged {
+		logrus.Info("pepper10")
+		log.WithField("new node", hostInfo).Debug("Passing-through Node update")
+		h.hosts[hostname] = hostInfo
+		h.callbacks.OnHostMetadataUpdate(hostname, hostInfo)
+	}
 }
 
 func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
@@ -125,7 +256,6 @@ func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
 		case kapiv1.ProtocolSCTP:
 			return "SCTP"
 		}
-
 		return "TCP"
 	}
 
@@ -138,124 +268,5 @@ func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
 	}
 
 	up.Ports = ports
-
 	return up
-}
-
-func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.Update) {
-	hostname := key.Hostname
-	if update.Value == nil {
-		log.WithField("update", update).Debug("Passing-through HostIP deletion")
-		delete(h.hosts, hostname)
-		h.callbacks.OnHostMetadataRemove(hostname)
-	} else {
-		ip := update.Value.(*net.IP)
-		oldHost := h.hosts[hostname]
-		// libcalico-go's IP struct wraps a standard library IP struct.  To
-		// compare two IPs, we need to unwrap them and use Equal() since standard
-		// library IPs have multiple, equivalent, representations.
-		if oldHost != nil && oldHost.IPv4 != nil && ip.Equal(oldHost.IPv4.IP) {
-			log.WithField("update", update).Debug("Ignoring duplicate HostIP update")
-			return
-		}
-		log.WithField("update", update).Debug("Passing-through HostIP update")
-		h.hosts[hostname].IPv4 = ip.Network()
-		h.callbacks.OnHostMetadataUpdate(hostname, ip.Network(), oldHost.IPv6, oldHost.ASNumber.String(), oldHost.Labels)
-	}
-}
-
-func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Update) {
-	// Handle node resource to pass-through HostMetadataV6Update/HostMetadataV6Remove messages
-	// with IPv6 node address updates. IPv4 updates are handled above with model.HostIPKey updates.
-	log.WithField("update", update).Debug("Passing-through a Node IPv6 address update")
-	log.WithField("update", update).Debug("Passing-through a Node update")
-	hostname := key.Name
-	if update.Value == nil {
-		log.WithField("update", update).Debug("Passing-through Node remove")
-		delete(h.hosts, hostname)
-		h.callbacks.OnHostMetadataRemove(hostname)
-	} else {
-		node, _ := update.Value.(*internalapi.Node)
-		log.WithField("update", update).Debug("Passing-through Node update")
-		bgpIp4net := &net.IPNet{} // required for print in event sequencer
-		bgpIp6net := &net.IPNet{} // required for print in event sequencer
-		asnumber := ""
-		if node.Spec.BGP != nil {
-			ip4, ip4net, _ := net.ParseCIDR(node.Spec.BGP.IPv4Address)
-			ip6, ip6net, _ := net.ParseCIDR(node.Spec.BGP.IPv6Address)
-			if ip4net != nil {
-				ip4net.IP = ip4.IP
-				bgpIp4net = ip4net
-			}
-			if ip6net != nil {
-				ip6net.IP = ip6.IP
-				bgpIp6net = ip6net
-			}
-			if node.Spec.BGP.ASNumber != nil {
-				asnumber = node.Spec.BGP.ASNumber.String()
-			}
-		}
-		h.callbacks.OnHostMetadataUpdate(hostname, bgpIp4net, bgpIp6net, asnumber, node.Labels)
-
-		if h.ipv6Support && node.Spec.BGP == nil {
-			// BGP is turned off, try to get one from the node resource. This is a
-			// similar fallback as for IPv4, see how HostIPKey is generated in
-			// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go
-			var ipnet *net.IPNet
-			_, ipnet = cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
-			if ipnet == nil {
-				_, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
-			}
-			nodeUpdate := nodeData{
-				IPv6: ipnet,
-			}
-			h.processNodeUpdate(hostname, nodeUpdate)
-		}
-	}
-}
-
-func (h DataplanePassthru) processNodeUpdate(hostname string, nodeUpdate nodeData) {
-	var newNode nodeData
-	oldNode := h.hosts[hostname]
-	if oldNode != nil {
-		newNode = *oldNode // Do we need to deep copy?
-	}
-
-	updateIsNil := nodeUpdate.IPv4 == nil && nodeUpdate.IPv6 == nil &&
-		nodeUpdate.ASNumber == nil && len(nodeUpdate.Labels) == 0
-
-	if oldNode == nil && updateIsNil {
-		return
-	}
-
-	if oldNode != nil && updateIsNil {
-		log.WithField("hostname", hostname).Debug("Passing-through Node remove")
-		delete(h.hosts, hostname)
-		h.callbacks.OnHostMetadataRemove(hostname)
-		return
-	}
-
-	var nodeChanged bool
-	if nodeUpdate.IPv4 != nil && newNode.IPv4 != nil && nodeUpdate.IPv4.String() != newNode.IPv4.String() {
-		nodeChanged = true
-		newNode.IPv4 = nodeUpdate.IPv4
-	}
-	if nodeUpdate.IPv6 != nil && newNode.IPv6 != nil && nodeUpdate.IPv6.String() != newNode.IPv6.String() {
-		nodeChanged = true
-		newNode.IPv6 = nodeUpdate.IPv6
-	}
-	if nodeUpdate.ASNumber != nil && newNode.ASNumber != nil && nodeUpdate.ASNumber.String() != newNode.ASNumber.String() {
-		nodeChanged = true
-		newNode.ASNumber = nodeUpdate.ASNumber
-	}
-	if !maps.Equal(nodeUpdate.Labels, newNode.Labels) {
-		nodeChanged = true
-		newNode.Labels = nodeUpdate.Labels
-	}
-
-	if nodeChanged {
-		log.WithField("new node", newNode).Debug("Passing-through Node update")
-		h.hosts[hostname] = &newNode
-		h.callbacks.OnHostMetadataUpdate(hostname, newNode.IPv4, newNode.IPv6, newNode.ASNumber.String(), newNode.Labels)
-	}
 }

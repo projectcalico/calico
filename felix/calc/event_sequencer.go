@@ -74,7 +74,7 @@ type EventSequencer struct {
 	pendingEncapUpdate           *config.Encapsulation
 	pendingEndpointUpdates       map[model.Key]endpointUpdate
 	pendingEndpointDeletes       set.Set[model.Key]
-	pendingHostMetadataUpdates   map[string]*hostInfo
+	pendingHostMetadataUpdates   map[string]*HostInfo
 	pendingHostMetadataDeletes   set.Set[string]
 	pendingIPPoolUpdates         map[ip.CIDR]*model.IPPool
 	pendingIPPoolDeletes         set.Set[ip.CIDR]
@@ -115,7 +115,7 @@ type EventSequencer struct {
 	Callback EventHandler
 }
 
-type hostInfo struct {
+type HostInfo struct {
 	ip4Addr  *net.IPNet
 	ip6Addr  *net.IPNet
 	labels   map[string]string
@@ -141,7 +141,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingProfileDeletes:        set.New[model.ProfileRulesKey](),
 		pendingEndpointUpdates:       map[model.Key]endpointUpdate{},
 		pendingEndpointDeletes:       set.New[model.Key](),
-		pendingHostMetadataUpdates:   map[string]*hostInfo{},
+		pendingHostMetadataUpdates:   map[string]*HostInfo{},
 		pendingHostMetadataDeletes:   set.New[string](),
 		pendingIPPoolUpdates:         map[ip.CIDR]*model.IPPool{},
 		pendingIPPoolDeletes:         set.New[ip.CIDR](),
@@ -595,16 +595,13 @@ func (buf *EventSequencer) flushEncapUpdate() {
 	}
 }
 
-func (buf *EventSequencer) OnHostMetadataUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string) {
+func (buf *EventSequencer) OnHostMetadataUpdate(hostname string, info *HostInfo) {
 	log.WithFields(log.Fields{
 		"hostname": hostname,
-		"ip4":      ip4,
-		"ip6":      ip6,
-		"labels":   labels,
-		"asnumber": asnumber,
+		"update":   info,
 	}).Debug("Host update")
 	buf.pendingHostMetadataDeletes.Discard(hostname)
-	buf.pendingHostMetadataUpdates[hostname] = &hostInfo{ip4Addr: ip4, ip6Addr: ip6, labels: labels, asnumber: asnumber}
+	buf.pendingHostMetadataUpdates[hostname] = info
 }
 
 func (buf *EventSequencer) flushHostUpdates() {

@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 	kapiv1 "k8s.io/api/core/v1"
@@ -70,6 +71,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		case *proto.IPAMPoolUpdate:
 			Expect(googleproto.Equal(messageReceived.(*proto.IPAMPoolUpdate), expUpdate.(*proto.IPAMPoolUpdate))).To(BeTrue())
 		case *proto.HostMetadataV4V6Update:
+			logrus.Infof("tofu \n%#v\n%#v", messageReceived, expUpdate)
 			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataV4V6Update), expUpdate.(*proto.HostMetadataV4V6Update))).To(BeTrue())
 		case *proto.GlobalBGPConfigUpdate:
 			Expect(googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expUpdate.(*proto.GlobalBGPConfigUpdate))).To(BeTrue())
@@ -143,7 +145,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		&testIP,
 		&proto.HostMetadataV4V6Update{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		},
 		&proto.HostMetadataV4V6Remove{
 			Hostname: "foo",

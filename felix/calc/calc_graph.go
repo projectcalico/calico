@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var gaugeNumActiveSelectors = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -72,7 +71,7 @@ type encapCallbacks interface {
 }
 
 type passthruCallbacks interface {
-	OnHostMetadataUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string)
+	OnHostMetadataUpdate(hostname string, info *HostInfo)
 	OnHostMetadataRemove(hostname string)
 	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
 	OnIPPoolRemove(model.IPPoolKey)

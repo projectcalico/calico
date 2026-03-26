@@ -1625,7 +1625,7 @@ var routeUpdateRemoteHostV6 = types.RouteUpdate{
 var vxlanWithWEPIPs = empty.withKVUpdates(
 	KVPair{Key: GlobalConfigKey{Name: "RouteSource"}, Value: &workloadIPs},
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
-	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IP},
+	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IPNet},
 	KVPair{Key: remoteHost2VXLANTunnelConfigKey, Value: remoteHost2VXLANTunnelIP},
 ).withName("VXLAN using WorkloadIPs").withVTEPs(
 	types.VXLANTunnelEndpointUpdate{
@@ -1661,7 +1661,7 @@ var vxlanWithWEPIPsAndWEP = vxlanWithWEPIPs.withKVUpdates(
 // Since this new host sorts lower than the original, its should mask the route of the
 // WEP on the other node.
 var vxlanWithWEPIPsAndWEPDuplicate = vxlanWithWEPIPsAndWEP.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 	KVPair{Key: remoteWlEpKey1, Value: &remoteWlEp1},
 ).withName("VXLAN using WorkloadIPs and overlapping WEPs").withVTEPs(
@@ -1695,7 +1695,7 @@ var vxlanWithWEPIPsAndWEPDuplicate = vxlanWithWEPIPsAndWEP.withKVUpdates(
 var vxlanWithBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlock},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN").withVTEPs(
 	// VTEP for the remote node.
@@ -1730,7 +1730,7 @@ var (
 
 // As vxlanWithBlock but with a host sharing the same IP.  No route update because we tie-break on host name.
 var vxlanWithBlockDupNodeIP = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteHost2IPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHost2IPKey, Value: &remoteHostIPNet},
 ).withName("VXLAN with dup node IP")
 
 var vxlanWithDupNodeIPRemoved = vxlanWithBlockDupNodeIP.withKVUpdates(
@@ -1812,7 +1812,7 @@ var vxlanWithMAC = vxlanWithBlock.withKVUpdates(
 // other node.
 var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlockWithBorrows},
-	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IP},
+	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IPNet},
 	KVPair{Key: remoteHost2VXLANTunnelConfigKey, Value: remoteHost2VXLANTunnelIP},
 ).withName("VXLAN borrow").withVTEPs(
 	types.VXLANTunnelEndpointUpdate{
@@ -1866,7 +1866,7 @@ var vxlanWithBlockAndDifferentTunnelIP = vxlanWithBlock.withKVUpdates(
 
 // vxlanWithBlock but with a different node IP.
 var vxlanWithBlockAndDifferentNodeIP = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: &remoteHost2IP},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHost2IPNet},
 ).withName("VXLAN different node IP").withVTEPs(
 	// VTEP for the remote node.
 	types.VXLANTunnelEndpointUpdate{
@@ -1926,10 +1926,10 @@ var vxlanBlockOwnerSwitch = vxlanWithBlockAndBorrows.withKVUpdates(
 var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
 
-	KVPair{Key: localHostIPKey, Value: &localHostIP},
+	KVPair{Key: localHostIPKey, Value: &localHostIPNet},
 	KVPair{Key: localHostVXLANTunnelConfigKey, Value: localHostVXLANTunnelIP},
 
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 
 	KVPair{Key: localIPAMBlockKey, Value: &localIPAMBlockWithBorrows},
@@ -2253,7 +2253,7 @@ var vxlanTunnelIPDelete = vxlanWithBlock.withKVUpdates(
 var vxlanSlash32 = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLANSlash32},
 	KVPair{Key: remoteIPAMSlash32BlockKey, Value: &remoteIPAMBlockSlash32},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN /32").withVTEPs(
 	// VTEP for the remote node.
@@ -2281,7 +2281,7 @@ var vxlanSlash32 = empty.withKVUpdates(
 
 var vxlanSlash32NoBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLANSlash32},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN /32 no block").withVTEPs(
 	// VTEP for the remote node.
@@ -2300,7 +2300,7 @@ var vxlanSlash32NoBlock = empty.withKVUpdates(
 
 var vxlanSlash32NoPool = empty.withKVUpdates(
 	KVPair{Key: remoteIPAMSlash32BlockKey, Value: &remoteIPAMBlockSlash32},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN /32 no pool").withVTEPs(
 	// VTEP for the remote node.
