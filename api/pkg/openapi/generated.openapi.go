@@ -646,7 +646,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationList(ref common.ReferenceC
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -1063,7 +1063,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -1623,7 +1623,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerList(ref common.ReferenceCallback) 
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -1928,7 +1928,7 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinityList(ref common.ReferenceCall
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -2343,7 +2343,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusList(ref common.ReferenceC
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -2517,7 +2517,7 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformationList(ref common.Referenc
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -2887,7 +2887,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationList(ref common.Referenc
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -4302,7 +4302,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicyList(ref common.Referen
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -4525,7 +4525,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetList(ref common.ReferenceC
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -4744,7 +4744,7 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointList(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -4944,7 +4944,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockList(ref common.ReferenceCallback
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -5155,7 +5155,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref common.Reference
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -5289,7 +5289,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandleList(ref common.ReferenceCallbac
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -5453,7 +5453,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolList(ref common.ReferenceCallback) c
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -5676,7 +5676,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservationList(ref common.ReferenceCall
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -5805,7 +5805,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref commo
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -6048,7 +6048,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref common.ReferenceCall
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -6243,7 +6243,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSetList(ref common.ReferenceCallbac
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -6467,7 +6467,7 @@ func schema_pkg_apis_projectcalico_v3_ProfileList(ref common.ReferenceCallback) 
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -6970,7 +6970,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref common.R
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -7201,7 +7201,7 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref comm
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -7369,7 +7369,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicyList(ref common.Referen
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -7647,7 +7647,7 @@ func schema_pkg_apis_projectcalico_v3_TierList(ref common.ReferenceCallback) com
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
