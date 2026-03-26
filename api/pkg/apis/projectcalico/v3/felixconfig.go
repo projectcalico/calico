@@ -27,7 +27,7 @@ import (
 // FelixConfigurationList contains a list of FelixConfiguration object.
 type FelixConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []FelixConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -458,6 +458,7 @@ type FelixConfigurationSpec struct {
 	// overridden.  This is useful for working around "false positive" liveness timeouts that can occur
 	// in particularly stressful workloads or if CPU is constrained.  For a list of active
 	// subcomponents, see Felix's logs.
+	// +listType=atomic
 	HealthTimeoutOverrides []HealthTimeoutOverride `json:"healthTimeoutOverrides,omitempty" validate:"omitempty,dive"`
 
 	// PrometheusMetricsEnabled enables the Prometheus metrics server in Felix if set to true. [Default: false]
