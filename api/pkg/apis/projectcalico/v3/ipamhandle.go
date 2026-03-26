@@ -42,6 +42,6 @@ type IPAMHandleSpec struct {
 // IPAMHandleList contains a list of IPAMHandle resources.
 type IPAMHandleList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
+	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []IPAMHandle `json:"items"`
 }

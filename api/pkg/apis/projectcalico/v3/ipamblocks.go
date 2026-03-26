@@ -98,6 +98,6 @@ type AllocationAttribute struct {
 // IPAMBlockList contains a list of IPAMBlock resources.
 type IPAMBlockList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
+	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []IPAMBlock `json:"items"`
 }
