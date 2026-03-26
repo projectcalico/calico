@@ -13,7 +13,7 @@ import (
 type MigrationControllerConfigApplyConfiguration struct {
 	// PolicyNameMigrator enables or disables the Policy Name Migrator, which migrates
 	// old-style Calico backend policy names to use v3 style names.
-	PolicyNameMigrator *projectcalicov3.ControllerMode `json:"enabled,omitempty"`
+	PolicyNameMigrator *projectcalicov3.ControllerMode `json:"policyNameMigrator,omitempty"`
 }
 
 // MigrationControllerConfigApplyConfiguration constructs a declarative configuration of the MigrationControllerConfig type for use with

@@ -97,6 +97,7 @@ type HTTPMatch struct {
 	// HTTP Methods (e.g. GET, PUT, etc.)
 	// Multiple methods are OR'd together.
 	// +kubebuilder:validation:MaxItems=20
+	// +listType=atomic
 	Methods []string `json:"methods,omitempty" validate:"omitempty"`
 	// Paths is an optional field that restricts the rule to apply to HTTP requests that use one of the listed
 	// HTTP Paths.
@@ -106,6 +107,7 @@ type HTTPMatch struct {
 	// - prefix: /bar
 	// NOTE: Each entry may ONLY specify either a `exact` or a `prefix` match. The validator will check for it.
 	// +kubebuilder:validation:MaxItems=20
+	// +listType=atomic
 	Paths []HTTPPath `json:"paths,omitempty" validate:"omitempty"`
 }
 
@@ -188,10 +190,11 @@ type EntityRule struct {
 	//
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "TCP" or "UDP".
+	// +listType=atomic
 	Ports []numorstring.Port `json:"ports,omitempty" validate:"omitempty,dive"`
 
 	// NotNets is the negated version of the Nets field.
-	// listType=set
+	// +listType=set
 	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,net"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
@@ -201,6 +204,7 @@ type EntityRule struct {
 	// NotPorts is the negated version of the Ports field.
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "TCP" or "UDP".
+	// +listType=atomic
 	NotPorts []numorstring.Port `json:"notPorts,omitempty" validate:"omitempty,dive"`
 
 	// ServiceAccounts is an optional field that restricts the rule to only apply to traffic that originates from (or

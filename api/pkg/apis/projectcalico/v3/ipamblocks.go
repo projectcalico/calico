@@ -52,14 +52,17 @@ type IPAMBlockSpec struct {
 	// Array of allocations in-use within this block. nil entries mean the allocation is free.
 	// For non-nil entries at index i, the index is the ordinal of the allocation within this block
 	// and the value is the index of the associated attributes in the Attributes array.
+	// +listType=atomic
 	Allocations []*int `json:"allocations"`
 
 	// Unallocated is an ordered list of allocations which are free in the block.
+	// +listType=atomic
 	Unallocated []int `json:"unallocated"`
 
 	// Attributes is an array of arbitrary metadata associated with allocations in the block. To find
 	// attributes for a given allocation, use the value of the allocation's entry in the Allocations array
 	// as the index of the element in this array.
+	// +listType=atomic
 	Attributes []AllocationAttribute `json:"attributes"`
 
 	// We store a sequence number that is updated each time the block is written.
@@ -90,7 +93,7 @@ type IPAMBlockSpec struct {
 type AllocationAttribute struct {
 	HandleID            *string           `json:"handle_id,omitempty"`
 	ActiveOwnerAttrs    map[string]string `json:"secondary,omitempty"`
-	AlternateOwnerAttrs map[string]string `json:"alternate,omitempty"`
+	AlternateOwnerAttrs map[string]string `json:"alternateOwnerAttrs,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -98,6 +101,6 @@ type AllocationAttribute struct {
 // IPAMBlockList contains a list of IPAMBlock resources.
 type IPAMBlockList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []IPAMBlock `json:"items"`
 }

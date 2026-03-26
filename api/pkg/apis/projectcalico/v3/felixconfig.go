@@ -458,6 +458,7 @@ type FelixConfigurationSpec struct {
 	// overridden.  This is useful for working around "false positive" liveness timeouts that can occur
 	// in particularly stressful workloads or if CPU is constrained.  For a list of active
 	// subcomponents, see Felix's logs.
+	// +listType=atomic
 	HealthTimeoutOverrides []HealthTimeoutOverride `json:"healthTimeoutOverrides,omitempty" validate:"omitempty,dive"`
 
 	// PrometheusMetricsEnabled enables the Prometheus metrics server in Felix if set to true. [Default: false]

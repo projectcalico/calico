@@ -751,6 +751,7 @@ spec:
                       - timeout
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 interfaceExclude:
                   description: |-
                     InterfaceExclude A comma-separated list of interface names that should be excluded when Felix is resolving
