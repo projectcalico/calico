@@ -276,5 +276,5 @@ type AllocationAttribute struct {
 	ActiveOwnerAttrs map[string]string `json:"secondary,omitempty"`
 	// AlternateOwnerAttrs contains attributes of the previous or potential owner
 	// (used during live migration to track the source or target pod).
-	AlternateOwnerAttrs map[string]string `json:"alternate,omitempty"`
+	AlternateOwnerAttrs map[string]string `json:"alternateOwnerAttrs,omitempty"`
 }
