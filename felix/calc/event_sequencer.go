@@ -607,10 +607,10 @@ func (buf *EventSequencer) OnHostMetadataUpdate(hostname string, info *HostInfo)
 func (buf *EventSequencer) flushHostUpdates() {
 	for hostname, hostInfo := range buf.pendingHostMetadataUpdates {
 		var ip4str, ip6str string
-		if hostInfo.ip4Addr.IP != nil {
+		if hostInfo.ip4Addr != nil && hostInfo.ip4Addr.IP != nil {
 			ip4str = hostInfo.ip4Addr.String()
 		}
-		if hostInfo.ip6Addr.IP != nil {
+		if hostInfo.ip6Addr != nil && hostInfo.ip6Addr.IP != nil {
 			ip6str = hostInfo.ip6Addr.String()
 		}
 		buf.Callback(&proto.HostMetadataV4V6Update{

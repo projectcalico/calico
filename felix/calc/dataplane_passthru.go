@@ -18,7 +18,6 @@ import (
 	"maps"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 
@@ -112,20 +111,13 @@ func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.U
 	}
 
 	ip := update.Value.(*net.IP)
-	// libcalico-go's IP struct wraps a standard library IP struct.  To
-	// compare two IPs, we need to unwrap them and use Equal() since standard
-	// library IPs have multiple, equivalent, representations.
-	/*if oldHost != nil && oldHost.ip4Addr != nil && ip.Equal(oldHost.ip4Addr.IP) {
-		log.WithField("update", update).Debug("Ignoring duplicate HostIP update")
-		return
-	}*/
 	log.WithField("update", update).Debug("Passing-through HostIP update")
 	hostUpdate := &HostInfo{
 		ip4Addr: ip.Network(),
 		ip6Addr: &net.IPNet{}, // required for print in event sequencer
 		labels:  nil,
 	}
-	h.processNodeUpdate(hostname, hostUpdate)
+	h.processNodeUpdate(hostname, hostUpdate, true)
 }
 
 func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Update) {
@@ -173,14 +165,15 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 		if ipnet == nil {
 			_, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
 		}
-		data.ip6Addr = ipnet
+		if ipnet != nil {
+			data.ip6Addr = ipnet
+		}
 	}
 
-	h.processNodeUpdate(hostname, data)
+	h.processNodeUpdate(hostname, data, false)
 }
 
-func (h *DataplanePassthru) processNodeUpdate(hostname string, hostUpdate *HostInfo) {
-	logrus.Info("pepper0")
+func (h *DataplanePassthru) processNodeUpdate(hostname string, hostUpdate *HostInfo, fromHostIP bool) {
 	updateIsNil := hostUpdate.ip4Addr == nil && hostUpdate.ip6Addr == nil &&
 		len(hostUpdate.asnumber) == 0 && len(hostUpdate.labels) == 0
 
@@ -188,35 +181,28 @@ func (h *DataplanePassthru) processNodeUpdate(hostname string, hostUpdate *HostI
 		return
 	}
 
-	/*if oldNode != nil && updateIsNil {
-		log.WithField("hostname", hostname).Debug("Passing-through Node remove")
-		delete(h.hosts, hostname)
-		h.callbacks.OnHostMetadataRemove(hostname)
-		return
-	}*/
-
-	/*var newNode HostInfo
-	if oldNode != nil {
-		newNode = *oldNode // Do we need to deep copy?
-	}*/
-	logrus.Info("pepper1")
 	hostInfo := h.hosts[hostname]
 	if hostInfo == nil {
 		h.hosts[hostname] = hostUpdate
-		logrus.Infof("pepper2 %#v", hostUpdate)
 		h.callbacks.OnHostMetadataUpdate(hostname, hostUpdate)
 		return
 	}
 
 	var nodeChanged bool
 	if hostUpdate.ip4Addr != nil && hostInfo.ip4Addr != nil && hostUpdate.ip4Addr.String() != hostInfo.ip4Addr.String() {
-		hostInfo.ip4Addr = hostUpdate.ip4Addr
-		nodeChanged = true
+		// A HostIP-sourced /32 should not overwrite a more specific BGP-sourced prefix
+		// (e.g., /24 from a Node resource). Node resource updates always take precedence.
+		if !fromHostIP || !isHostRoute(hostUpdate.ip4Addr) || isHostRoute(hostInfo.ip4Addr) || hostInfo.ip4Addr.IP == nil {
+			hostInfo.ip4Addr = hostUpdate.ip4Addr
+			nodeChanged = true
+		}
 	}
 
 	if hostUpdate.ip6Addr != nil && hostInfo.ip6Addr != nil && hostUpdate.ip6Addr.String() != hostInfo.ip6Addr.String() {
-		hostInfo.ip6Addr = hostUpdate.ip6Addr
-		nodeChanged = true
+		if !fromHostIP || !isHostRoute(hostUpdate.ip6Addr) || isHostRoute(hostInfo.ip6Addr) || hostInfo.ip6Addr.IP == nil {
+			hostInfo.ip6Addr = hostUpdate.ip6Addr
+			nodeChanged = true
+		}
 	}
 
 	if hostUpdate.asnumber != hostInfo.asnumber {
@@ -230,11 +216,20 @@ func (h *DataplanePassthru) processNodeUpdate(hostname string, hostUpdate *HostI
 	}
 
 	if nodeChanged {
-		logrus.Info("pepper10")
 		log.WithField("new node", hostInfo).Debug("Passing-through Node update")
 		h.hosts[hostname] = hostInfo
 		h.callbacks.OnHostMetadataUpdate(hostname, hostInfo)
 	}
+}
+
+// isHostRoute returns true if the IPNet represents a host route (/32 for IPv4, /128 for IPv6).
+// Returns false for empty/nil IPNets.
+func isHostRoute(n *net.IPNet) bool {
+	if n == nil || n.IP == nil {
+		return false
+	}
+	ones, bits := n.Mask.Size()
+	return ones == bits && bits > 0
 }
 
 func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {

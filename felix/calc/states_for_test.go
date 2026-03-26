@@ -1625,7 +1625,7 @@ var routeUpdateRemoteHostV6 = types.RouteUpdate{
 var vxlanWithWEPIPs = empty.withKVUpdates(
 	KVPair{Key: GlobalConfigKey{Name: "RouteSource"}, Value: &workloadIPs},
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
-	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IPNet},
+	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IP},
 	KVPair{Key: remoteHost2VXLANTunnelConfigKey, Value: remoteHost2VXLANTunnelIP},
 ).withName("VXLAN using WorkloadIPs").withVTEPs(
 	types.VXLANTunnelEndpointUpdate{
@@ -1639,6 +1639,11 @@ var vxlanWithWEPIPs = empty.withKVUpdates(
 	routeUpdateRemoteHost2,
 ).withExpectedEncapsulation(
 	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false},
+).withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname2,
+		Ipv4Addr: remoteHost2IP.String() + "/32",
+	},
 )
 
 // Adds in an workload on remoteHost2 and expected route.
@@ -1661,7 +1666,7 @@ var vxlanWithWEPIPsAndWEP = vxlanWithWEPIPs.withKVUpdates(
 // Since this new host sorts lower than the original, its should mask the route of the
 // WEP on the other node.
 var vxlanWithWEPIPsAndWEPDuplicate = vxlanWithWEPIPsAndWEP.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 	KVPair{Key: remoteWlEpKey1, Value: &remoteWlEp1},
 ).withName("VXLAN using WorkloadIPs and overlapping WEPs").withVTEPs(
@@ -1689,13 +1694,22 @@ var vxlanWithWEPIPsAndWEPDuplicate = vxlanWithWEPIPsAndWEP.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
+).withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname2,
+		Ipv4Addr: remoteHost2IP.String() + "/32",
+	},
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/32",
+	},
 )
 
 // Minimal VXLAN set-up using Calico IPAM, all the data needed for a remote VTEP, a pool and a block.
 var vxlanWithBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlock},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN").withVTEPs(
 	// VTEP for the remote node.
@@ -1707,7 +1721,12 @@ var vxlanWithBlock = empty.withKVUpdates(
 	},
 ).withExpectedEncapsulation(
 	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false},
-).withRoutes(vxlanWithBlockRoutes...)
+).withRoutes(vxlanWithBlockRoutes...).withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/32",
+	},
+)
 
 var vxlanWithBlockRoutes = []types.RouteUpdate{
 	routeUpdateIPPoolVXLAN,
@@ -1730,12 +1749,26 @@ var (
 
 // As vxlanWithBlock but with a host sharing the same IP.  No route update because we tie-break on host name.
 var vxlanWithBlockDupNodeIP = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteHost2IPKey, Value: &remoteHostIPNet},
-).withName("VXLAN with dup node IP")
+	KVPair{Key: remoteHost2IPKey, Value: &remoteHostIP},
+).withName("VXLAN with dup node IP").withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/32",
+	},
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname2,
+		Ipv4Addr: remoteHostIP.String() + "/32",
+	},
+)
 
 var vxlanWithDupNodeIPRemoved = vxlanWithBlockDupNodeIP.withKVUpdates(
 	KVPair{Key: remoteHostIPKey, Value: nil},
-).withName("VXLAN with dup node IP removed").withVTEPs().withRoutes(
+).withName("VXLAN with dup node IP removed").withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname2,
+		Ipv4Addr: remoteHostIP.String() + "/32",
+	},
+).withVTEPs().withRoutes(
 	routeUpdateIPPoolVXLAN,
 	// Remote host 2 but with remotehost's IP:
 	types.RouteUpdate{
@@ -1812,7 +1845,7 @@ var vxlanWithMAC = vxlanWithBlock.withKVUpdates(
 // other node.
 var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlockWithBorrows},
-	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IPNet},
+	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IP},
 	KVPair{Key: remoteHost2VXLANTunnelConfigKey, Value: remoteHost2VXLANTunnelIP},
 ).withName("VXLAN borrow").withVTEPs(
 	types.VXLANTunnelEndpointUpdate{
@@ -1849,6 +1882,15 @@ var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
 		NatOutgoing: true,
 		Borrowed:    true,
 	},
+).withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/32",
+	},
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname2,
+		Ipv4Addr: remoteHost2IP.String() + "/32",
+	},
 )
 
 // vxlanWithBlock but with a different tunnel IP.
@@ -1866,7 +1908,7 @@ var vxlanWithBlockAndDifferentTunnelIP = vxlanWithBlock.withKVUpdates(
 
 // vxlanWithBlock but with a different node IP.
 var vxlanWithBlockAndDifferentNodeIP = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: &remoteHost2IPNet},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHost2IP},
 ).withName("VXLAN different node IP").withVTEPs(
 	// VTEP for the remote node.
 	types.VXLANTunnelEndpointUpdate{
@@ -1892,6 +1934,11 @@ var vxlanWithBlockAndDifferentNodeIP = vxlanWithBlock.withKVUpdates(
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHost2IP.String(),
 		NatOutgoing: true,
+	},
+).withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHost2IP.String() + "/32",
 	},
 )
 
@@ -1926,10 +1973,10 @@ var vxlanBlockOwnerSwitch = vxlanWithBlockAndBorrows.withKVUpdates(
 var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
 
-	KVPair{Key: localHostIPKey, Value: &localHostIPNet},
+	KVPair{Key: localHostIPKey, Value: &localHostIP},
 	KVPair{Key: localHostVXLANTunnelConfigKey, Value: localHostVXLANTunnelIP},
 
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 
 	KVPair{Key: localIPAMBlockKey, Value: &localIPAMBlockWithBorrows},
@@ -1978,6 +2025,15 @@ var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 	},
 ).withExpectedEncapsulation(
 	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false},
+).withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: localHostname,
+		Ipv4Addr: localHostIP.String() + "/32",
+	},
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/32",
+	},
 )
 
 var localVXLANWep1Route1 = types.RouteUpdate{
@@ -2167,7 +2223,12 @@ var vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes = vxlanLocalBlockWithBorrow
 // vxlanWithBlockAndBorrows but missing the VTEP information for the first host.
 var vxlanWithBlockAndBorrowsAndMissingFirstVTEP = vxlanWithBlockAndBorrows.withKVUpdates(
 	KVPair{Key: remoteHostIPKey, Value: nil},
-).withName("VXLAN borrow missing VTEP").withVTEPs(
+).withName("VXLAN borrow missing VTEP").withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname2,
+		Ipv4Addr: remoteHost2IP.String() + "/32",
+	},
+).withVTEPs(
 	types.VXLANTunnelEndpointUpdate{
 		Node:           remoteHostname2,
 		Mac:            "66:40:18:59:1f:16",
@@ -2232,7 +2293,7 @@ var vxlanBlockDelete = vxlanWithBlock.withKVUpdates(
 
 var vxlanHostIPDelete = vxlanWithBlock.withKVUpdates(
 	KVPair{Key: remoteHostIPKey, Value: nil},
-).withName("VXLAN host IP removed").withRoutes(
+).withName("VXLAN host IP removed").withHostMetadataV4V6().withRoutes(
 	routeUpdateIPPoolVXLAN,
 	// Host removed but keep the route without the node IP.
 	types.RouteUpdate{
@@ -2253,7 +2314,7 @@ var vxlanTunnelIPDelete = vxlanWithBlock.withKVUpdates(
 var vxlanSlash32 = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLANSlash32},
 	KVPair{Key: remoteIPAMSlash32BlockKey, Value: &remoteIPAMBlockSlash32},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN /32").withVTEPs(
 	// VTEP for the remote node.
@@ -2277,11 +2338,16 @@ var vxlanSlash32 = empty.withKVUpdates(
 	},
 ).withExpectedEncapsulation(
 	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false},
+).withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/32",
+	},
 )
 
 var vxlanSlash32NoBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLANSlash32},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN /32 no block").withVTEPs(
 	// VTEP for the remote node.
@@ -2296,11 +2362,16 @@ var vxlanSlash32NoBlock = empty.withKVUpdates(
 	routeUpdateRemoteHost,
 ).withExpectedEncapsulation(
 	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false},
+).withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/32",
+	},
 )
 
 var vxlanSlash32NoPool = empty.withKVUpdates(
 	KVPair{Key: remoteIPAMSlash32BlockKey, Value: &remoteIPAMBlockSlash32},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIPNet},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN /32 no pool").withVTEPs(
 	// VTEP for the remote node.
@@ -2319,6 +2390,11 @@ var vxlanSlash32NoPool = empty.withKVUpdates(
 		Dst:         "10.0.0.0/32",
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHostIP.String(),
+	},
+).withHostMetadataV4V6(
+	&proto.HostMetadataV4V6Update{
+		Hostname: remoteHostname,
+		Ipv4Addr: remoteHostIP.String() + "/32",
 	},
 )
 

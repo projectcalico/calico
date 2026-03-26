@@ -794,14 +794,11 @@ var (
 )
 
 var (
-	localHostIP      = mustParseIP("192.168.0.1")
-	localHostIPNet   = mustParseIP("192.168.0.1/32")
-	remoteHostIP     = mustParseIP("192.168.0.2")
-	remoteHostIPNet  = mustParseIP("192.168.0.2/32")
-	remoteHostIPv6   = mustParseIP("dead:beef:0001::2")
-	remoteHost2IP    = mustParseIP("192.168.0.3")
-	remoteHost2IPNet = mustParseIP("192.168.0.3")
-	remoteHost2IPv6  = mustParseIP("dead:beef:0001::3")
+	localHostIP     = mustParseIP("192.168.0.1")
+	remoteHostIP    = mustParseIP("192.168.0.2")
+	remoteHostIPv6  = mustParseIP("dead:beef:0001::2")
+	remoteHost2IP   = mustParseIP("192.168.0.3")
+	remoteHost2IPv6 = mustParseIP("dead:beef:0001::3")
 )
 
 var (
