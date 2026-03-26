@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +39,11 @@ import (
 var (
 	testClient client.Client
 	testEnvObj *envtest.Environment
+
+	// admissionPoliciesEnabled is true when the envtest API server supports
+	// MutatingAdmissionPolicy (K8s >= 1.32). Admission tests should skip
+	// when this is false.
+	admissionPoliciesEnabled bool
 )
 
 // crdDir returns the path to api/config/crd/ containing Calico CRD YAML files.
@@ -50,6 +57,33 @@ func crdDir() string {
 // admissionDir returns the path to api/admission/ containing MutatingAdmissionPolicy YAML files.
 func admissionDir() string {
 	return filepath.Join(testutils.FindRepoRoot(), "api", "admission")
+}
+
+// envtestSupportsMAP checks if the envtest kube-apiserver binary supports
+// MutatingAdmissionPolicy (requires K8s >= 1.32).
+func envtestSupportsMAP() bool {
+	assets := os.Getenv("KUBEBUILDER_ASSETS")
+	if assets == "" {
+		return false
+	}
+	bin := filepath.Join(assets, "kube-apiserver")
+	out, err := exec.Command(bin, "--version").Output()
+	if err != nil {
+		return false
+	}
+	// Output: "Kubernetes v1.35.0"
+	ver := strings.TrimSpace(string(out))
+	// Extract minor version. Format: "Kubernetes vMAJOR.MINOR.PATCH"
+	parts := strings.Split(ver, ".")
+	if len(parts) < 2 {
+		return false
+	}
+	// parts[0] ends with the major version after "v", parts[1] is the minor.
+	var minor int
+	if _, err := fmt.Sscanf(parts[1], "%d", &minor); err != nil {
+		return false
+	}
+	return minor >= 32
 }
 
 // installAdmissionPolicies applies all YAML files in the admission directory to the envtest cluster.
@@ -112,10 +146,16 @@ func TestMain(m *testing.M) {
 	testEnvObj = &envtest.Environment{
 		CRDDirectoryPaths: []string{crdDir()},
 	}
-	testEnvObj.ControlPlane.GetAPIServer().Configure().
-		Set("feature-gates", "MutatingAdmissionPolicy=true").
-		Set("runtime-config", "admissionregistration.k8s.io/v1beta1=true").
-		Append("enable-admission-plugins", "MutatingAdmissionPolicy")
+
+	// MutatingAdmissionPolicy requires K8s >= 1.32. Only enable on supported versions
+	// so the test suite still works on older envtest binaries (e.g., ut-validation-min-k8s).
+	admissionPoliciesEnabled = envtestSupportsMAP()
+	if admissionPoliciesEnabled {
+		testEnvObj.ControlPlane.GetAPIServer().Configure().
+			Set("feature-gates", "MutatingAdmissionPolicy=true").
+			Set("runtime-config", "admissionregistration.k8s.io/v1beta1=true").
+			Append("enable-admission-plugins", "MutatingAdmissionPolicy")
+	}
 
 	cfg, err := testEnvObj.Start()
 	if err != nil {
@@ -147,16 +187,18 @@ func TestMain(m *testing.M) {
 		return
 	}
 
-	if err := installAdmissionPolicies(testClient); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to install admission policies: %v\n", err)
-		return
-	}
+	if admissionPoliciesEnabled {
+		if err := installAdmissionPolicies(testClient); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to install admission policies: %v\n", err)
+			return
+		}
 
-	// After installing admission policies, the API server may briefly make CRDs
-	// unavailable while reloading. Wait for a known CRD to be usable.
-	if err := waitForCRDsReady(testClient); err != nil {
-		fmt.Fprintf(os.Stderr, "CRDs not ready after admission policy install: %v\n", err)
-		return
+		// After installing admission policies, the API server may briefly make CRDs
+		// unavailable while reloading. Wait for a known CRD to be usable.
+		if err := waitForCRDsReady(testClient); err != nil {
+			fmt.Fprintf(os.Stderr, "CRDs not ready after admission policy install: %v\n", err)
+			return
+		}
 	}
 
 	code = m.Run()

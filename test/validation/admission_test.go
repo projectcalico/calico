@@ -25,6 +25,9 @@ import (
 )
 
 func TestNetworkPolicy_TierDefaulting(t *testing.T) {
+	if !admissionPoliciesEnabled {
+		t.Skip("MutatingAdmissionPolicy not supported on this K8s version")
+	}
 	ns := "default"
 
 	t.Run("omitted tier is defaulted", func(t *testing.T) {
@@ -98,6 +101,9 @@ func TestNetworkPolicy_TierDefaulting(t *testing.T) {
 }
 
 func TestNetworkPolicy_TierLabel(t *testing.T) {
+	if !admissionPoliciesEnabled {
+		t.Skip("MutatingAdmissionPolicy not supported on this K8s version")
+	}
 	ns := "default"
 	name := uniqueName("np-label")
 	np := &v3.NetworkPolicy{
