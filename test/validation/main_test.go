@@ -106,7 +106,8 @@ func TestMain(m *testing.M) {
 	}
 	testEnvObj.ControlPlane.GetAPIServer().Configure().
 		Set("feature-gates", "MutatingAdmissionPolicy=true").
-		Set("runtime-config", "admissionregistration.k8s.io/v1beta1=true")
+		Set("runtime-config", "admissionregistration.k8s.io/v1beta1=true").
+		Append("enable-admission-plugins", "MutatingAdmissionPolicy")
 
 	cfg, err := testEnvObj.Start()
 	if err != nil {
