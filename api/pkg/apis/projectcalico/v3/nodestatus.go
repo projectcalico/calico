@@ -59,6 +59,7 @@ type CalicoNodeStatusSpec struct {
 
 	// Classes declares the types of information to monitor for this calico/node,
 	// and allows for selective status reporting about certain subsets of information.
+	// +listType=set
 	Classes []NodeStatusClassType `json:"classes,omitempty" validate:"required,unique"`
 
 	// UpdatePeriodSeconds is the period at which CalicoNodeStatus should be updated.
@@ -114,18 +115,22 @@ type CalicoNodeBGPStatus struct {
 	NumberNotEstablishedV6 int `json:"numberNotEstablishedV6"`
 
 	// PeersV4 represents IPv4 BGP peers status on the node.
+	// +listType=atomic
 	PeersV4 []CalicoNodePeer `json:"peersV4,omitempty"`
 
 	// PeersV6 represents IPv6 BGP peers status on the node.
+	// +listType=atomic
 	PeersV6 []CalicoNodePeer `json:"peersV6,omitempty"`
 }
 
 // CalicoNodeBGPRouteStatus defines the observed state of routes status on the node.
 type CalicoNodeBGPRouteStatus struct {
 	// RoutesV4 represents IPv4 routes on the node.
+	// +listType=atomic
 	RoutesV4 []CalicoNodeRoute `json:"routesV4,omitempty"`
 
 	// RoutesV6 represents IPv6 routes on the node.
+	// +listType=atomic
 	RoutesV6 []CalicoNodeRoute `json:"routesV6,omitempty"`
 }
 

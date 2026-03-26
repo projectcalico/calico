@@ -93,6 +93,7 @@ type HostEndpointSpec struct {
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
+	// +listType=atomic
 	Ports []EndpointPort `json:"ports,omitempty" validate:"dive"`
 }
 

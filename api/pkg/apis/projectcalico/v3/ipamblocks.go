@@ -52,14 +52,17 @@ type IPAMBlockSpec struct {
 	// Array of allocations in-use within this block. nil entries mean the allocation is free.
 	// For non-nil entries at index i, the index is the ordinal of the allocation within this block
 	// and the value is the index of the associated attributes in the Attributes array.
+	// +listType=atomic
 	Allocations []*int `json:"allocations"`
 
 	// Unallocated is an ordered list of allocations which are free in the block.
+	// +listType=atomic
 	Unallocated []int `json:"unallocated"`
 
 	// Attributes is an array of arbitrary metadata associated with allocations in the block. To find
 	// attributes for a given allocation, use the value of the allocation's entry in the Allocations array
 	// as the index of the element in this array.
+	// +listType=atomic
 	Attributes []AllocationAttribute `json:"attributes"`
 
 	// We store a sequence number that is updated each time the block is written.
