@@ -57,6 +57,84 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "natOutgoingAddress with IPv6 is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{NATOutgoingAddress: "fd00::1"},
+			},
+			wantErr: "natOutgoingAddress must be a valid IPv4 address",
+		},
+		{
+			name: "natOutgoingAddress with IPv4 is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{NATOutgoingAddress: "10.0.0.1"},
+			},
+		},
+		{
+			name: "deviceRouteSourceAddress with IPv6 is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{DeviceRouteSourceAddress: "fd00::1"},
+			},
+			wantErr: "deviceRouteSourceAddress must be a valid IPv4 address",
+		},
+		{
+			name: "deviceRouteSourceAddressIPv6 with IPv4 is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: "10.0.0.1"},
+			},
+			wantErr: "deviceRouteSourceAddressIPv6 must be a valid IPv6 address",
+		},
+		{
+			name: "deviceRouteSourceAddressIPv6 with IPv6 is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: "fd00::1"},
+			},
+		},
+		{
+			name: "routeTableRange min=0 is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRange: &v3.RouteTableRange{Min: 0, Max: 250}},
+			},
+			wantErr: "must be a range of route table indices within 1..250",
+		},
+		{
+			name: "routeTableRange max > 250 is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRange: &v3.RouteTableRange{Min: 1, Max: 251}},
+			},
+			wantErr: "must be a range of route table indices within 1..250",
+		},
+		{
+			name: "routeTableRange min > max is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRange: &v3.RouteTableRange{Min: 200, Max: 100}},
+			},
+			wantErr: "must be a range of route table indices within 1..250",
+		},
+		{
+			name: "routeTableIDRange min=0 is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRanges: &v3.RouteTableRanges{{Min: 0, Max: 100}}},
+			},
+			wantErr: "min must be >= 1",
+		},
+		{
+			name: "routeTableIDRange min > max is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRanges: &v3.RouteTableRanges{{Min: 200, Max: 100}}},
+			},
+			wantErr: "min must not be greater than max",
+		},
 	}
 
 	for _, tt := range tests {

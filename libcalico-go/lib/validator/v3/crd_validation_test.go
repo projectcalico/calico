@@ -128,6 +128,30 @@ func TestCRDValidation_Tier(t *testing.T) {
 			},
 			errSubstr: "default",
 		},
+		{
+			name: "default tier with wrong order fails",
+			obj: &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.TierSpec{Order: &customOrder, DefaultAction: &deny},
+			},
+			errSubstr: "default tier order must be 1000000",
+		},
+		{
+			name: "kube-admin tier with wrong order fails",
+			obj: &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "kube-admin"},
+				Spec:       apiv3.TierSpec{Order: &customOrder, DefaultAction: &pass},
+			},
+			errSubstr: "kube-admin tier order must be 1000",
+		},
+		{
+			name: "kube-baseline tier with wrong order fails",
+			obj: &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "kube-baseline"},
+				Spec:       apiv3.TierSpec{Order: &customOrder, DefaultAction: &pass},
+			},
+			errSubstr: "kube-baseline tier order must be 10000000",
+		},
 	})
 }
 
@@ -753,6 +777,63 @@ func TestCRDValidation_BGPPeer_CrossField(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "reachableBy without peerIP fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerSelector: "all()",
+					ReachableBy:  "10.0.0.254",
+				},
+			},
+			errSubstr: "reachableBy must be empty when peerIP is empty",
+		},
+		{
+			name: "reachableBy with peerIP passes",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerIP:      "10.0.0.1",
+					ASNumber:    numorstring.ASNumber(64512),
+					ReachableBy: "10.0.0.254",
+				},
+			},
+		},
+		{
+			name: "keepOriginalNextHop with nextHopMode fails",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerIP:              "10.0.0.1",
+					ASNumber:            numorstring.ASNumber(64512),
+					KeepOriginalNextHop: true,
+					NextHopMode:         ptr.To(apiv3.NextHopMode(apiv3.NextHopModeSelf)),
+				},
+			},
+			errSubstr: "keepOriginalNextHop and nextHopMode cannot both be set",
+		},
+		{
+			name: "keepOriginalNextHop alone passes",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerIP:              "10.0.0.1",
+					ASNumber:            numorstring.ASNumber(64512),
+					KeepOriginalNextHop: true,
+				},
+			},
+		},
+		{
+			name: "nextHopMode alone passes",
+			obj: &apiv3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-peer"},
+				Spec: apiv3.BGPPeerSpec{
+					PeerIP:      "10.0.0.1",
+					ASNumber:    numorstring.ASNumber(64512),
+					NextHopMode: ptr.To(apiv3.NextHopMode(apiv3.NextHopModeKeep)),
+				},
+			},
+		},
 	})
 }
 
@@ -823,6 +904,63 @@ func TestCRDValidation_GlobalNetworkPolicy(t *testing.T) {
 					Ingress: []apiv3.Rule{
 						{Action: apiv3.Allow},
 					},
+				},
+			},
+		},
+		{
+			name: "GNP selector with global() fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					Selector: "global()",
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "GNP namespaceSelector with global() fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				TypeMeta:   metav1.TypeMeta{Kind: "GlobalNetworkPolicy", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					NamespaceSelector: "global()",
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+	})
+}
+
+// TestCRDValidation_NetworkPolicy_GlobalSelector tests CEL rules on NetworkPolicySpec.
+func TestCRDValidation_NetworkPolicy_GlobalSelector(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "NP selector with global() fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-np", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Selector: "global()",
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "NP serviceAccountSelector with global() fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-np", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					ServiceAccountSelector: "global()",
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "NP with normal selector passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-np", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Selector: "all()",
 				},
 			},
 		},
@@ -958,6 +1096,76 @@ func TestCRDValidation_IPPool_CrossField(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "LB pool with disableBGPExport fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:             "10.0.0.0/24",
+					AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+					DisableBGPExport: true,
+					NodeSelector:     "all()",
+				},
+			},
+			errSubstr: "LoadBalancer IP pools cannot disable BGP export",
+		},
+		{
+			name: "LB pool with wrong nodeSelector fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:         "10.0.0.0/24",
+					AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+					NodeSelector: "has(node-role)",
+				},
+			},
+			errSubstr: "IP Pool with AllowedUse LoadBalancer must have nodeSelector set to all()",
+		},
+		{
+			name: "LB pool with correct config passes",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:         "10.0.0.0/24",
+					AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+					NodeSelector: "all()",
+				},
+			},
+		},
+		{
+			name: "Tunnel pool with namespaceSelector fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:              "10.0.0.0/24",
+					AllowedUses:       []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseTunnel},
+					NamespaceSelector: "has(ns-label)",
+				},
+			},
+			errSubstr: "IP Pool with AllowedUse Tunnel cannot have namespaceSelector",
+		},
+		{
+			name: "nodeSelector with global() fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:         "10.0.0.0/24",
+					NodeSelector: "global()",
+				},
+			},
+			errSubstr: "global() selector is not valid for IPPool nodeSelector",
+		},
+		{
+			name: "namespaceSelector with global() fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:              "10.0.0.0/24",
+					NamespaceSelector: "global()",
+				},
+			},
+			errSubstr: "global() selector is not valid for IPPool namespaceSelector",
+		},
 	})
 }
 
@@ -1029,6 +1237,383 @@ func TestCRDValidation_Rule(t *testing.T) {
 							Protocol: &tcpProto,
 							HTTP:     &apiv3.HTTPMatch{Methods: []string{"GET"}},
 						},
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_Rule_ICMP tests CEL rules for ICMP protocol/ipVersion constraints.
+func TestCRDValidation_Rule_ICMP(t *testing.T) {
+	icmpProto := numorstring.ProtocolFromString("ICMP")
+	icmpv6Proto := numorstring.ProtocolFromString("ICMPv6")
+	tcpProto := numorstring.ProtocolFromString("TCP")
+	icmpType := 8
+
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "ICMP fields without ICMP protocol fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Allow,
+							Protocol: &tcpProto,
+							ICMP:     &apiv3.ICMPFields{Type: &icmpType},
+						},
+					},
+				},
+			},
+			errSubstr: "ICMP fields require protocol to be ICMP or ICMPv6",
+		},
+		{
+			name: "ICMP fields with ICMP protocol passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:   apiv3.Allow,
+							Protocol: &icmpProto,
+							ICMP:     &apiv3.ICMPFields{Type: &icmpType},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ICMP protocol with ipVersion 6 fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:    apiv3.Allow,
+							Protocol:  &icmpProto,
+							IPVersion: ptr.To(6),
+						},
+					},
+				},
+			},
+			errSubstr: "protocol ICMP requires ipVersion 4",
+		},
+		{
+			name: "ICMPv6 protocol with ipVersion 4 fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:    apiv3.Allow,
+							Protocol:  &icmpv6Proto,
+							IPVersion: ptr.To(4),
+						},
+					},
+				},
+			},
+			errSubstr: "protocol ICMPv6 requires ipVersion 6",
+		},
+		{
+			name: "ICMP protocol with ipVersion 4 passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action:    apiv3.Allow,
+							Protocol:  &icmpProto,
+							IPVersion: ptr.To(4),
+						},
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_EntityRule tests CEL rules on the EntityRule type.
+func TestCRDValidation_EntityRule(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "services with namespaceSelector fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services:          &apiv3.ServiceMatch{Name: "svc1"},
+								NamespaceSelector: "all()",
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "cannot specify NamespaceSelector and Services on the same rule",
+		},
+		{
+			name: "services with selector fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services: &apiv3.ServiceMatch{Name: "svc1"},
+								Selector: "all()",
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "cannot specify Selector/NotSelector and Services on the same rule",
+		},
+		{
+			name: "services with serviceAccounts fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services:        &apiv3.ServiceMatch{Name: "svc1"},
+								ServiceAccounts: &apiv3.ServiceAccountMatch{Names: []string{"sa1"}},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "cannot specify ServiceAccounts and Services on the same rule",
+		},
+		{
+			name: "services with nets fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services: &apiv3.ServiceMatch{Name: "svc1"},
+								Nets:     []string{"10.0.0.0/8"},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "cannot specify Nets/NotNets and Services on the same rule",
+		},
+		{
+			name: "services without name fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services: &apiv3.ServiceMatch{},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "must specify a service name",
+		},
+		{
+			name: "selector with global() fails",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Selector: "global()",
+							},
+						},
+					},
+				},
+			},
+			errSubstr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "services with name alone passes",
+			obj: &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
+				Spec: apiv3.NetworkPolicySpec{
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Services: &apiv3.ServiceMatch{Name: "svc1"},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_FelixConfig_Addresses tests IPv4/IPv6 address heuristic CEL rules.
+func TestCRDValidation_FelixConfig_Addresses(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "natOutgoingAddress with IPv6 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{NATOutgoingAddress: "fd00::1"},
+			},
+			errSubstr: "natOutgoingAddress must be a valid IPv4 address",
+		},
+		{
+			name: "natOutgoingAddress with IPv4 passes",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{NATOutgoingAddress: "10.0.0.1"},
+			},
+		},
+		{
+			name: "deviceRouteSourceAddressIPv6 with IPv4 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: "10.0.0.1"},
+			},
+			errSubstr: "deviceRouteSourceAddressIPv6 must be a valid IPv6 address",
+		},
+		{
+			name: "deviceRouteSourceAddressIPv6 with IPv6 passes",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: "fd00::1"},
+			},
+		},
+	})
+}
+
+// TestCRDValidation_RouteTableRange tests CEL rules on RouteTableRange.
+func TestCRDValidation_RouteTableRange(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "valid range passes",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRange: &apiv3.RouteTableRange{Min: 1, Max: 250}},
+			},
+		},
+		{
+			name: "min=0 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRange: &apiv3.RouteTableRange{Min: 0, Max: 250}},
+			},
+			errSubstr: "must be a range of route table indices within 1..250",
+		},
+		{
+			name: "max > 250 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRange: &apiv3.RouteTableRange{Min: 1, Max: 251}},
+			},
+			errSubstr: "must be a range of route table indices within 1..250",
+		},
+		{
+			name: "min > max fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRange: &apiv3.RouteTableRange{Min: 200, Max: 100}},
+			},
+			errSubstr: "must be a range of route table indices within 1..250",
+		},
+	})
+}
+
+// TestCRDValidation_RouteTableIDRange tests CEL rules on RouteTableIDRange.
+func TestCRDValidation_RouteTableIDRange(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "valid range passes",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRanges: &apiv3.RouteTableRanges{{Min: 1, Max: 100}}},
+			},
+		},
+		{
+			name: "min=0 fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRanges: &apiv3.RouteTableRanges{{Min: 0, Max: 100}}},
+			},
+			errSubstr: "min must be >= 1",
+		},
+		{
+			name: "min > max fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{RouteTableRanges: &apiv3.RouteTableRanges{{Min: 200, Max: 100}}},
+			},
+			errSubstr: "min must not be greater than max",
+		},
+	})
+}
+
+// TestCRDValidation_BGPConfiguration_Communities tests CEL rules for BGP community cross-references.
+func TestCRDValidation_BGPConfiguration_Communities(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "communities without prefixAdvertisements fails",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					Communities: []apiv3.Community{
+						{Name: "my-community", Value: "65001:100"},
+					},
+				},
+			},
+			errSubstr: "communities are defined but not used in prefixAdvertisements",
+		},
+		{
+			name: "communities with prefixAdvertisements passes",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					Communities: []apiv3.Community{
+						{Name: "my-community", Value: "65001:100"},
+					},
+					PrefixAdvertisements: []apiv3.PrefixAdvertisement{
+						{CIDR: "10.0.0.0/24", Communities: []string{"my-community"}},
+					},
+				},
+			},
+		},
+		{
+			name: "prefixAdvertisement referencing undefined community fails",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					Communities: []apiv3.Community{
+						{Name: "my-community", Value: "65001:100"},
+					},
+					PrefixAdvertisements: []apiv3.PrefixAdvertisement{
+						{CIDR: "10.0.0.0/24", Communities: []string{"nonexistent"}},
+					},
+				},
+			},
+			errSubstr: "community used is invalid or not defined",
+		},
+		{
+			name: "prefixAdvertisement using inline community value passes",
+			obj: &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv3.BGPConfigurationSpec{
+					PrefixAdvertisements: []apiv3.PrefixAdvertisement{
+						{CIDR: "10.0.0.0/24", Communities: []string{"65001:100"}},
 					},
 				},
 			},
