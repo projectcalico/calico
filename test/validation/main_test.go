@@ -23,6 +23,7 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -76,21 +77,28 @@ func installAdmissionPolicies(c client.Client) error {
 	return nil
 }
 
-// waitForCRDsReady polls until Calico CRDs are usable after admission policy installation.
-// Installing admission policies causes the API server to briefly reload, making CRDs unavailable.
+// waitForCRDsReady polls until Calico CRDs are fully usable after admission policy
+// installation. The MAPs target NetworkPolicy, so we verify by doing a create+delete
+// round-trip rather than just a List (which can succeed before the admission chain is ready).
 func waitForCRDsReady(c client.Client) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	for {
-		// Check NetworkPolicy since MAPs target it, so it takes longer to recover.
-		list := &v3.NetworkPolicyList{}
-		if err := c.List(ctx, list, client.InNamespace("default")); err == nil {
+		probe := &v3.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "readiness-probe",
+				Namespace: "default",
+			},
+			Spec: v3.NetworkPolicySpec{Selector: "all()"},
+		}
+		if err := c.Create(ctx, probe); err == nil {
+			_ = c.Delete(ctx, probe)
 			return nil
 		}
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("timed out waiting for CRDs to become ready")
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(500 * time.Millisecond):
 		}
 	}
 }
