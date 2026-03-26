@@ -28,7 +28,7 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.AllocationAttribute
   map:
     fields:
-    - name: alternate
+    - name: alternateOwnerAttrs
       type:
         map:
           elementType:

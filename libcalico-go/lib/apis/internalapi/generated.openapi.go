@@ -138,7 +138,7 @@ func schema_libcalico_go_lib_apis_internalapi_AllocationAttribute(ref common.Ref
 							},
 						},
 					},
-					"alternate": {
+					"alternateOwnerAttrs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "AlternateOwnerAttrs contains attributes of the previous or potential owner (used during live migration to track the source or target pod).",
 							Type:        []string{"object"},
