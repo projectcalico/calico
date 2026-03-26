@@ -47,6 +47,8 @@ type NetworkPolicy struct {
 	Spec NetworkPolicySpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.selector) || !self.selector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 type NetworkPolicySpec struct {
 	// The name of the tier that this policy belongs to.  If this is omitted, the default
 	// tier (name is "default") is assumed.  The specified tier must exist in order to create
@@ -96,6 +98,7 @@ type NetworkPolicySpec struct {
 	// 	type in {"frontend", "backend"}
 	// 	deployment != "dev"
 	// 	! has(label_name)
+	// +kubebuilder:validation:MaxLength=4096
 	Selector string `json:"selector,omitempty" validate:"selector"`
 
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
@@ -118,6 +121,7 @@ type NetworkPolicySpec struct {
 	Types []PolicyType `json:"types,omitempty"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
+	// +kubebuilder:validation:MaxLength=4096
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
 
 	// PerformanceHints contains a list of hints to Calico's policy engine to

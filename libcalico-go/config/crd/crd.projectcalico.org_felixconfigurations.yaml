@@ -537,11 +537,13 @@ spec:
                   description: |-
                     DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set
                     the source address for local traffic from host to workload will be determined by the kernel.
+                  maxLength: 45
                   type: string
                 deviceRouteSourceAddressIPv6:
                   description: |-
                     DeviceRouteSourceAddressIPv6 IPv6 address to set as the source hint for routes programmed by Felix. When not set
                     the source address for local traffic from host to workload will be determined by the kernel.
+                  maxLength: 45
                   type: string
                 disableConntrackInvalidCheck:
                   description: |-
@@ -925,6 +927,7 @@ spec:
                       - type: string
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
+                  maxItems: 7
                   type: array
                 liveMigrationRouteConvergenceTime:
                   description: |-
@@ -1017,6 +1020,7 @@ spec:
                     NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that
                     is leaving the network. By default the address used is an address on the interface the traffic is leaving on
                     (i.e. it uses the iptables MASQUERADE target).
+                  maxLength: 45
                   type: string
                 natOutgoingExclusions:
                   description: |-
@@ -1214,6 +1218,10 @@ spec:
                     - max
                     - min
                   type: object
+                  x-kubernetes-validations:
+                    - message: must be a range of route table indices within 1..250
+                      reason: FieldValueInvalid
+                      rule: self.min >= 1 && self.max >= self.min && self.max <= 250
                 routeTableRanges:
                   description: |-
                     Calico programs additional Linux route tables for various purposes.
@@ -1229,6 +1237,13 @@ spec:
                       - max
                       - min
                     type: object
+                    x-kubernetes-validations:
+                      - message: min must be >= 1
+                        reason: FieldValueInvalid
+                        rule: self.min >= 1
+                      - message: min must not be greater than max
+                        reason: FieldValueInvalid
+                        rule: self.min <= self.max
                   type: array
                 serviceLoopPrevention:
                   description: |-
@@ -1389,6 +1404,21 @@ spec:
                 - message: routeTableRange and routeTableRanges cannot both be set
                   reason: FieldValueForbidden
                   rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
+                - message: natOutgoingAddress must be a valid IPv4 address
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.natOutgoingAddress) || size(self.natOutgoingAddress)
+                    == 0 || !self.natOutgoingAddress.contains(':')"
+                - message: deviceRouteSourceAddress must be a valid IPv4 address
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress)
+                    == 0 || !self.deviceRouteSourceAddress.contains(':')"
+                - message: deviceRouteSourceAddressIPv6 must be a valid IPv6 address
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6)
+                    == 0 || self.deviceRouteSourceAddressIPv6.contains(':')"
           type: object
       served: true
       storage: true
