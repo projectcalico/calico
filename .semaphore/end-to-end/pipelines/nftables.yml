@@ -102,6 +102,8 @@ blocks:
               value: "stable"
             - name: USE_API_SERVER
               value: "false"
+            - name: CLUSTER_ROUTING_MODE
+              value: Felix
 
         - name: Native v3 CRDs (AWS)
           execution_time_limit:
