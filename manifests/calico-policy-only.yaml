@@ -3333,7 +3333,7 @@ spec:
                 attributes:
                   items:
                     properties:
-                      alternate:
+                      alternateOwnerAttrs:
                         additionalProperties:
                           type: string
                         type: object
