@@ -2733,7 +2733,7 @@ func schema_pkg_apis_projectcalico_v3_ControllersConfig(ref common.ReferenceCall
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.LoadBalancerControllerConfig"),
 						},
 					},
-					"policyMigration": {
+					"migration": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Migration enables and configures migration controllers.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.MigrationControllerConfig"),
@@ -6090,7 +6090,7 @@ func schema_pkg_apis_projectcalico_v3_MigrationControllerConfig(ref common.Refer
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"enabled": {
+					"policyNameMigrator": {
 						SchemaProps: spec.SchemaProps{
 							Description: "PolicyNameMigrator enables or disables the Policy Name Migrator, which migrates old-style Calico backend policy names to use v3 style names.",
 							Type:        []string{"string"},
