@@ -72,6 +72,7 @@ spec:
                       - protocol
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 profiles:
                   items:
                     type: string

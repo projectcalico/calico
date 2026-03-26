@@ -38,7 +38,7 @@ const (
 // BGPConfigurationList is a list of BGPConfiguration resources.
 type BGPConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []BGPConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -226,6 +226,7 @@ type PrefixAdvertisement struct {
 	// For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.
 	// Where,`aa` is an AS Number, `nn` and `mm` are per-AS identifier.
 	// +kubebuilder:validation:MaxItems=50
+	// +listType=atomic
 	Communities []string `json:"communities,omitempty" validate:"required"`
 }
 

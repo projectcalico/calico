@@ -34,6 +34,7 @@ spec:
                       - Routes
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 node:
                   type: string
                 updatePeriodSeconds:
@@ -112,6 +113,7 @@ spec:
                             type: string
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                     peersV6:
                       items:
                         properties:
@@ -137,6 +139,7 @@ spec:
                             type: string
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                   required:
                     - numberEstablishedV4
                     - numberEstablishedV6
@@ -178,6 +181,7 @@ spec:
                             type: string
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                     routesV6:
                       items:
                         properties:
@@ -207,6 +211,7 @@ spec:
                             type: string
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                   type: object
               type: object
           type: object

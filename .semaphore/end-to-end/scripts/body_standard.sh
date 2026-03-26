@@ -94,6 +94,8 @@ else
       pushd "${HOME}/calico"
       make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
       GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+      # Disable shellcheck double quote validation for ${K8S_E2E_FLAGS} as this var can contain multiple args and should be word split
+      #shellcheck disable=SC2086
       docker run --rm --init --net=host \
         -e LOCAL_USER_ID="$(id -u)" \
         -e GOCACHE=/go-cache \
@@ -114,7 +116,7 @@ else
         -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
         -w /go/src/github.com/projectcalico/calico \
         "calico/go-build:${GO_BUILD_VER}" \
-        go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" ./e2e/bin/k8s/e2e.test -- "${K8S_E2E_FLAGS}" |& tee -a >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
+        go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} |& tee -a >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
       popd
     else
       echo "[INFO] starting bz testing..."

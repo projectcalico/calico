@@ -56,6 +56,7 @@ spec:
                               type: string
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -65,6 +66,7 @@ spec:
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             maxLength: 4096
                             type: string
@@ -77,6 +79,7 @@ spec:
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             maxLength: 4096
                             type: string
@@ -141,6 +144,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -153,6 +157,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -224,6 +229,7 @@ spec:
                               type: string
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -233,6 +239,7 @@ spec:
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             maxLength: 4096
                             type: string
@@ -245,6 +252,7 @@ spec:
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             maxLength: 4096
                             type: string
@@ -338,6 +346,7 @@ spec:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
                   type: array
+                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -364,6 +373,7 @@ spec:
                               type: string
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -373,6 +383,7 @@ spec:
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             maxLength: 4096
                             type: string
@@ -385,6 +396,7 @@ spec:
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             maxLength: 4096
                             type: string
@@ -449,6 +461,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -461,6 +474,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -532,6 +546,7 @@ spec:
                               type: string
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -541,6 +556,7 @@ spec:
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             maxLength: 4096
                             type: string
@@ -553,6 +569,7 @@ spec:
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             maxLength: 4096
                             type: string
@@ -646,6 +663,7 @@ spec:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
                   type: array
+                  x-kubernetes-list-type: atomic
                 namespaceSelector:
                   maxLength: 4096
                   type: string
@@ -657,6 +675,7 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 preDNAT:
                   type: boolean
                 selector:
