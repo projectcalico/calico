@@ -30,7 +30,7 @@ const (
 // KubeControllersConfigurationList contains a list of KubeControllersConfiguration object.
 type KubeControllersConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []KubeControllersConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -154,6 +154,7 @@ type AutoHostEndpointConfig struct {
 	CreateDefaultHostEndpoint DefaultHostEndpointMode `json:"createDefaultHostEndpoint,omitempty" validate:"omitempty,createDefaultHostEndpoint"`
 
 	// Templates contains definition for creating AutoHostEndpoints
+	// +listType=atomic
 	Templates []Template `json:"templates,omitempty" validate:"omitempty"`
 }
 

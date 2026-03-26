@@ -1,0 +1,22 @@
+# Known openapi-gen API rule violations for Calico types.
+# These are names_match violations where the Go field name intentionally
+# differs from the JSON tag for backwards compatibility reasons.
+# New entries should not be added without justification.
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,AllocationAttribute,ActiveOwnerAttrs
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,AllocationAttribute,AlternateOwnerAttrs
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,AllocationAttribute,HandleID
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,BGPConfigurationSpec,IPv4NormalRoutePriority
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,BGPConfigurationSpec,IPv6NormalRoutePriority
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,ControllersConfig,Migration
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,BPFConntrackCleanupMode
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,BPFMapSizePerCPUConntrack
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,ExternalNodesCIDRList
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,IPv4ElevatedRoutePriority
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,IPv4NormalRoutePriority
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,IPv6ElevatedRoutePriority
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,IPv6NormalRoutePriority
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,IPv6Support
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,NFTablesMode
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,WireguardPersistentKeepAlive
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,IPAMBlockSpec,DeprecatedStrictAffinity
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,MigrationControllerConfig,PolicyNameMigrator

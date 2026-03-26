@@ -87,6 +87,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
 
 	# generate openapi (must run before client-gen, which uses it for --openapi-schema)
+	# Fail on any API rule violations in Calico types (upstream k8s violations are ignored).
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) openapi-gen \
 		--v 1 --logtostderr \
@@ -100,7 +101,17 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		"k8s.io/apimachinery/pkg/runtime" \
 		"k8s.io/apimachinery/pkg/util/intstr" \
 		"k8s.io/apimachinery/pkg/version" \
-		"$(PACKAGE_NAME)/pkg/lib/numorstring"'
+		"$(PACKAGE_NAME)/pkg/lib/numorstring" 2>&1 | tee /tmp/openapi-gen.log; \
+		grep "API rule violation" /tmp/openapi-gen.log | grep "projectcalico" > /tmp/openapi-violations.log || true; \
+		if [ -s /tmp/openapi-violations.log ]; then \
+			grep -v -F -f /go/src/$(PACKAGE_NAME)/hack/openapi-violations-known.list /tmp/openapi-violations.log > /tmp/openapi-new-violations.log || true; \
+			if [ -s /tmp/openapi-new-violations.log ]; then \
+				echo "ERROR: openapi-gen reported new API rule violations in Calico types:"; \
+				cat /tmp/openapi-new-violations.log; \
+				echo "If these are intentional, add them to hack/openapi-violations-known.list"; \
+				exit 1; \
+			fi; \
+		fi'
 
 	# generate all pkg/client contents
 	$(DOCKER_RUN) $(CALICO_BUILD) \
