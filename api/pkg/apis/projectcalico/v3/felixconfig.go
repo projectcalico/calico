@@ -164,9 +164,9 @@ const (
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
 // +kubebuilder:validation:XValidation:rule="!has(self.routeTableRange) || !has(self.routeTableRanges)",message="routeTableRange and routeTableRanges cannot both be set",reason=FieldValueForbidden
-// +kubebuilder:validation:XValidation:rule="!has(self.natOutgoingAddress) || size(self.natOutgoingAddress) == 0 || !self.natOutgoingAddress.contains(':')",message="natOutgoingAddress must be a valid IPv4 address",reason=FieldValueInvalid
-// +kubebuilder:validation:XValidation:rule="!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress) == 0 || !self.deviceRouteSourceAddress.contains(':')",message="deviceRouteSourceAddress must be a valid IPv4 address",reason=FieldValueInvalid
-// +kubebuilder:validation:XValidation:rule="!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6) == 0 || self.deviceRouteSourceAddressIPv6.contains(':')",message="deviceRouteSourceAddressIPv6 must be a valid IPv6 address",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.natOutgoingAddress) || size(self.natOutgoingAddress) == 0 || (isIP(self.natOutgoingAddress) && ip(self.natOutgoingAddress).family() == 4)",message="natOutgoingAddress must be a valid IPv4 address",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress) == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family() == 4)",message="deviceRouteSourceAddress must be a valid IPv4 address",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6) == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family() == 6)",message="deviceRouteSourceAddressIPv6 must be a valid IPv6 address",reason=FieldValueInvalid
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.

@@ -1473,11 +1473,27 @@ func TestCRDValidation_FelixConfig_Addresses(t *testing.T) {
 			errSubstr: "natOutgoingAddress must be a valid IPv4 address",
 		},
 		{
+			name: "natOutgoingAddress with invalid string fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{NATOutgoingAddress: "not-an-ip"},
+			},
+			errSubstr: "natOutgoingAddress must be a valid IPv4 address",
+		},
+		{
 			name: "natOutgoingAddress with IPv4 passes",
 			obj: &apiv3.FelixConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: "default"},
 				Spec:       apiv3.FelixConfigurationSpec{NATOutgoingAddress: "10.0.0.1"},
 			},
+		},
+		{
+			name: "deviceRouteSourceAddressIPv6 with invalid string fails",
+			obj: &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: "not-an-ip"},
+			},
+			errSubstr: "deviceRouteSourceAddressIPv6 must be a valid IPv6 address",
 		},
 		{
 			name: "deviceRouteSourceAddressIPv6 with IPv4 fails",

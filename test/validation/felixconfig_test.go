@@ -66,6 +66,14 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 			wantErr: "natOutgoingAddress must be a valid IPv4 address",
 		},
 		{
+			name: "natOutgoingAddress with invalid string is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{NATOutgoingAddress: "not-an-ip"},
+			},
+			wantErr: "natOutgoingAddress must be a valid IPv4 address",
+		},
+		{
 			name: "natOutgoingAddress with IPv4 is accepted",
 			obj: &v3.FelixConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
@@ -81,10 +89,26 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 			wantErr: "deviceRouteSourceAddress must be a valid IPv4 address",
 		},
 		{
+			name: "deviceRouteSourceAddress with invalid string is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{DeviceRouteSourceAddress: "not-an-ip"},
+			},
+			wantErr: "deviceRouteSourceAddress must be a valid IPv4 address",
+		},
+		{
 			name: "deviceRouteSourceAddressIPv6 with IPv4 is rejected",
 			obj: &v3.FelixConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
 				Spec:       v3.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: "10.0.0.1"},
+			},
+			wantErr: "deviceRouteSourceAddressIPv6 must be a valid IPv6 address",
+		},
+		{
+			name: "deviceRouteSourceAddressIPv6 with invalid string is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{DeviceRouteSourceAddressIPv6: "not-an-ip"},
 			},
 			wantErr: "deviceRouteSourceAddressIPv6 must be a valid IPv6 address",
 		},

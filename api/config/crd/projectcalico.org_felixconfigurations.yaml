@@ -627,17 +627,20 @@ spec:
                   reason: FieldValueInvalid
                   rule:
                     "!has(self.natOutgoingAddress) || size(self.natOutgoingAddress)
-                    == 0 || !self.natOutgoingAddress.contains(':')"
+                    == 0 || (isIP(self.natOutgoingAddress) && ip(self.natOutgoingAddress).family()
+                    == 4)"
                 - message: deviceRouteSourceAddress must be a valid IPv4 address
                   reason: FieldValueInvalid
                   rule:
                     "!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress)
-                    == 0 || !self.deviceRouteSourceAddress.contains(':')"
+                    == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family()
+                    == 4)"
                 - message: deviceRouteSourceAddressIPv6 must be a valid IPv6 address
                   reason: FieldValueInvalid
                   rule:
                     "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6)
-                    == 0 || self.deviceRouteSourceAddressIPv6.contains(':')"
+                    == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
+                    == 6)"
           required:
             - metadata
             - spec
