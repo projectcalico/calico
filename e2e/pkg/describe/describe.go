@@ -75,6 +75,7 @@ var features = map[string]bool{
 	"QoS":             true,
 	"Datapath":        true,
 	"Istio":           true,
+	"KubeVirt":        true,
 }
 
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
