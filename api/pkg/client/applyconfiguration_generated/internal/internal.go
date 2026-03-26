@@ -1767,7 +1767,9 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
-          elementRelationship: atomic
+          elementRelationship: associative
+          keys:
+          - type
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPReservation
   map:
     fields:
@@ -2382,7 +2384,9 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
-          elementRelationship: atomic
+          elementRelationship: associative
+          keys:
+          - type
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.WorkloadEndpointControllerConfig
   map:
     fields:
