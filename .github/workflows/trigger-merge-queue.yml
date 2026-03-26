@@ -1,24 +1,37 @@
 name: Trigger Merge Cat
 
 on:
-  pull_request_target:
-    types: [closed]
+  push:
+    branches: [master]
+
+permissions: {}
 
 jobs:
   trigger-merge-queue-bot:
-    if: >
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.base.ref == 'master'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Print information about the PR
+      - name: Find merged PR number
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.TIGERA_BOT_PAT }}
         run: |
-          echo "PR number:        ${{ github.event.pull_request.number }}"
-          echo "Merge commit SHA: ${{ github.event.pull_request.merge_commit_sha }}"
-          echo "Base branch:      ${{ github.event.pull_request.base.ref }}"
+          PR_NUMBER=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '.[0].number // empty') || true
+          if [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No associated PR found for ${{ github.sha }} -- skipping merge-queue dispatch"
+          fi
+
+      - name: Print information about the push
+        run: |
+          echo "PR number:        ${{ steps.pr.outputs.number }}"
+          echo "Merge commit SHA: ${{ github.sha }}"
+          echo "Branch:           ${{ github.ref_name }}"
 
       - name: Trigger Merge Cat
+        if: steps.pr.outputs.number != ''
         run: |
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
@@ -28,8 +41,8 @@ jobs:
           {
             "ref": "master",
             "inputs": {
-              "trigger_pr_number": "${{ github.event.pull_request.number }}",
-              "trigger_merge_sha": "${{ github.event.pull_request.merge_commit_sha }}",
+              "trigger_pr_number": "${{ steps.pr.outputs.number }}",
+              "trigger_merge_sha": "${{ github.sha }}",
               "triggered_by_action": "OSS_MERGE"
             }
           }
