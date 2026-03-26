@@ -147,7 +147,7 @@ type StagedGlobalNetworkPolicySpec struct {
 // StagedGlobalNetworkPolicyList contains a list of GlobalNetworkPolicy resources.
 type StagedGlobalNetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []StagedGlobalNetworkPolicy `json:"items"`
 }
 
