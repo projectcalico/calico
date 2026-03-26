@@ -83,6 +83,7 @@ spec:
                   maxLength: 4096
                   type: string
                 reachableBy:
+                  maxLength: 64
                   type: string
                 reversePeering:
                   allOf:
@@ -132,6 +133,18 @@ spec:
                   rule:
                     (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
                     == 0) || (has(self.asNumber) && self.asNumber != 0)
+                - message: reachableBy must be empty when peerIP is empty
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.reachableBy) || size(self.reachableBy) == 0 || (has(self.peerIP)
+                    && size(self.peerIP) > 0)"
+                - message:
+                    keepOriginalNextHop and nextHopMode cannot both be set; keepOriginalNextHop
+                    is deprecated, use nextHopMode instead
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.keepOriginalNextHop) || !self.keepOriginalNextHop ||
+                    !has(self.nextHopMode)"
           type: object
       served: true
       storage: true
