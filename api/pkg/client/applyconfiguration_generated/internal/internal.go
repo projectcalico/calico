@@ -646,7 +646,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             scalar: string
-          elementRelationship: atomic
+          elementRelationship: associative
     - name: node
       type:
         scalar: string
@@ -722,6 +722,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: loadBalancer
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.LoadBalancerControllerConfig
+    - name: migration
+      type:
+        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.MigrationControllerConfig
     - name: namespace
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NamespaceControllerConfig
@@ -731,9 +734,6 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: policy
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyControllerConfig
-    - name: policyMigration
-      type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.MigrationControllerConfig
     - name: serviceAccount
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceAccountControllerConfig
@@ -771,7 +771,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             scalar: string
-          elementRelationship: atomic
+          elementRelationship: associative
     - name: notPorts
       type:
         list:
@@ -1435,7 +1435,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             scalar: string
-          elementRelationship: atomic
+          elementRelationship: associative
     - name: preDNAT
       type:
         scalar: boolean
@@ -1767,7 +1767,9 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
-          elementRelationship: atomic
+          elementRelationship: associative
+          keys:
+          - type
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPReservation
   map:
     fields:
@@ -1857,7 +1859,7 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.MigrationControllerConfig
   map:
     fields:
-    - name: enabled
+    - name: policyNameMigrator
       type:
         scalar: string
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NamespaceControllerConfig
@@ -1906,7 +1908,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             scalar: string
-          elementRelationship: atomic
+          elementRelationship: associative
     - name: selector
       type:
         scalar: string
@@ -2195,7 +2197,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             scalar: string
-          elementRelationship: atomic
+          elementRelationship: associative
     - name: preDNAT
       type:
         scalar: boolean
@@ -2302,7 +2304,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             scalar: string
-          elementRelationship: atomic
+          elementRelationship: associative
     - name: selector
       type:
         scalar: string
@@ -2382,7 +2384,9 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
-          elementRelationship: atomic
+          elementRelationship: associative
+          keys:
+          - type
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.WorkloadEndpointControllerConfig
   map:
     fields:
