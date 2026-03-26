@@ -693,6 +693,9 @@ blocks:
                 ]
             - env_var: PROVISIONER
               values: ["gcp-kubeadm"]
+          env_vars:
+            - name: CLUSTER_ROUTING_MODE
+              value: Felix
 
   # This is the old every-other-day tests
   - name: datastore k8s-e2e
