@@ -15,16 +15,20 @@
 package validation_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -42,6 +46,55 @@ func crdDir() string {
 	return filepath.Join(testutils.FindRepoRoot(), "api", "config", "crd")
 }
 
+// admissionDir returns the path to api/admission/ containing MutatingAdmissionPolicy YAML files.
+func admissionDir() string {
+	return filepath.Join(testutils.FindRepoRoot(), "api", "admission")
+}
+
+// installAdmissionPolicies applies all YAML files in the admission directory to the envtest cluster.
+func installAdmissionPolicies(c client.Client) error {
+	entries, err := os.ReadDir(admissionDir())
+	if err != nil {
+		return fmt.Errorf("reading admission dir: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(admissionDir(), entry.Name()))
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", entry.Name(), err)
+		}
+		obj := &unstructured.Unstructured{}
+		if err := sigsyaml.Unmarshal(data, &obj.Object); err != nil {
+			return fmt.Errorf("unmarshaling %s: %w", entry.Name(), err)
+		}
+		if err := c.Create(context.Background(), obj); err != nil {
+			return fmt.Errorf("creating %s: %w", entry.Name(), err)
+		}
+	}
+	return nil
+}
+
+// waitForCRDsReady polls until Calico CRDs are usable after admission policy installation.
+// Installing admission policies causes the API server to briefly reload, making CRDs unavailable.
+func waitForCRDsReady(c client.Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for {
+		// Check NetworkPolicy since MAPs target it, so it takes longer to recover.
+		list := &v3.NetworkPolicyList{}
+		if err := c.List(ctx, list, client.InNamespace("default")); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for CRDs to become ready")
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
 // TestMain spins up a real kube-apiserver process (via controller-runtime's
 // envtest package) with our CRDs installed, then runs the tests against it.
 // This lets us validate CRD-level validation (CEL rules, OpenAPI schemas, etc.)
@@ -51,6 +104,9 @@ func TestMain(m *testing.M) {
 	testEnvObj = &envtest.Environment{
 		CRDDirectoryPaths: []string{crdDir()},
 	}
+	testEnvObj.ControlPlane.GetAPIServer().Configure().
+		Set("feature-gates", "MutatingAdmissionPolicy=true").
+		Set("runtime-config", "admissionregistration.k8s.io/v1beta1=true")
 
 	cfg, err := testEnvObj.Start()
 	if err != nil {
@@ -79,6 +135,18 @@ func TestMain(m *testing.M) {
 	testClient, err = client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
+		return
+	}
+
+	if err := installAdmissionPolicies(testClient); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to install admission policies: %v\n", err)
+		return
+	}
+
+	// After installing admission policies, the API server may briefly make CRDs
+	// unavailable while reloading. Wait for a known CRD to be usable.
+	if err := waitForCRDsReady(testClient); err != nil {
+		fmt.Fprintf(os.Stderr, "CRDs not ready after admission policy install: %v\n", err)
 		return
 	}
 
