@@ -9,7 +9,7 @@ package v3
 type AllocationAttributeApplyConfiguration struct {
 	HandleID            *string           `json:"handle_id,omitempty"`
 	ActiveOwnerAttrs    map[string]string `json:"secondary,omitempty"`
-	AlternateOwnerAttrs map[string]string `json:"alternate,omitempty"`
+	AlternateOwnerAttrs map[string]string `json:"alternateOwnerAttrs,omitempty"`
 }
 
 // AllocationAttributeApplyConfiguration constructs a declarative configuration of the AllocationAttribute type for use with
