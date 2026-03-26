@@ -60,6 +60,8 @@ type BGPPeer struct {
 // +kubebuilder:validation:XValidation:rule="(!has(self.localWorkloadSelector) || size(self.localWorkloadSelector) == 0) || (!has(self.peerIP) || size(self.peerIP) == 0)",message="peerIP must be empty when localWorkloadSelector is set",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="(!has(self.localWorkloadSelector) || size(self.localWorkloadSelector) == 0) || (!has(self.peerSelector) || size(self.peerSelector) == 0)",message="peerSelector must be empty when localWorkloadSelector is set",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="(!has(self.localWorkloadSelector) || size(self.localWorkloadSelector) == 0) || (has(self.asNumber) && self.asNumber != 0)",message="asNumber is required when localWorkloadSelector is set",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.reachableBy) || size(self.reachableBy) == 0 || (has(self.peerIP) && size(self.peerIP) > 0)",message="reachableBy must be empty when peerIP is empty",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.keepOriginalNextHop) || !self.keepOriginalNextHop || !has(self.nextHopMode)",message="keepOriginalNextHop and nextHopMode cannot both be set; keepOriginalNextHop is deprecated, use nextHopMode instead",reason=FieldValueForbidden
 type BGPPeerSpec struct {
 	// The node name identifying the Calico node instance that is targeted by this peer.
 	// If this is not set, and no nodeSelector is specified, then this BGP peer selects all
@@ -150,6 +152,7 @@ type BGPPeerSpec struct {
 	// Add an exact, i.e. /32, static route toward peer IP in order to prevent route flapping.
 	// ReachableBy contains the address of the gateway which peer can be reached by.
 	// +optional
+	// +kubebuilder:validation:MaxLength=64
 	ReachableBy string `json:"reachableBy,omitempty" validate:"omitempty,reachableBy"`
 
 	// The ordered set of BGPFilters applied on this BGP peer.

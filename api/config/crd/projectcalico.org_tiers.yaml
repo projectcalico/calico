@@ -116,6 +116,21 @@ spec:
               rule:
                 "self.metadata.name == 'default' ? (has(self.spec.defaultAction)
                 && self.spec.defaultAction == 'Deny') : true"
+            - message: default tier order must be 1000000
+              reason: FieldValueInvalid
+              rule:
+                self.metadata.name != 'default' || (has(self.spec.order) && self.spec.order
+                == 1000000.0)
+            - message: kube-admin tier order must be 1000
+              reason: FieldValueInvalid
+              rule:
+                self.metadata.name != 'kube-admin' || (has(self.spec.order) && self.spec.order
+                == 1000.0)
+            - message: kube-baseline tier order must be 10000000
+              reason: FieldValueInvalid
+              rule:
+                self.metadata.name != 'kube-baseline' || (has(self.spec.order) &&
+                self.spec.order == 10000000.0)
       served: true
       storage: true
       subresources:
