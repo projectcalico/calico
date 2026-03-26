@@ -33373,6 +33373,7 @@ spec:
                         items:
                           type: string
                         type: array
+                        x-kubernetes-list-type: atomic
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
@@ -33480,6 +33481,7 @@ spec:
                           format: int32
                           type: integer
                         type: array
+                        x-kubernetes-list-type: atomic
                       cidr:
                         format: cidr
                         maxLength: 18
@@ -33494,6 +33496,7 @@ spec:
                             maxItems: 1
                             minItems: 1
                             type: array
+                            x-kubernetes-list-type: atomic
                         required:
                           - values
                         type: object
@@ -33531,6 +33534,7 @@ spec:
                                   maxItems: 10
                                   minItems: 1
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               required:
                                 - prefix
                               type: object
@@ -33550,6 +33554,7 @@ spec:
                         maxItems: 10
                         minItems: 1
                         type: array
+                        x-kubernetes-list-type: atomic
                       peerType:
                         enum:
                           - eBGP
@@ -33597,6 +33602,7 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
+                  x-kubernetes-list-type: atomic
                 exportV6:
                   items:
                     properties:
@@ -33610,6 +33616,7 @@ spec:
                           format: int32
                           type: integer
                         type: array
+                        x-kubernetes-list-type: atomic
                       cidr:
                         format: cidr
                         maxLength: 43
@@ -33624,6 +33631,7 @@ spec:
                             maxItems: 1
                             minItems: 1
                             type: array
+                            x-kubernetes-list-type: atomic
                         required:
                           - values
                         type: object
@@ -33661,6 +33669,7 @@ spec:
                                   maxItems: 10
                                   minItems: 1
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               required:
                                 - prefix
                               type: object
@@ -33680,6 +33689,7 @@ spec:
                         maxItems: 10
                         minItems: 1
                         type: array
+                        x-kubernetes-list-type: atomic
                       peerType:
                         enum:
                           - eBGP
@@ -33727,6 +33737,7 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
+                  x-kubernetes-list-type: atomic
                 importV4:
                   items:
                     properties:
@@ -33740,6 +33751,7 @@ spec:
                           format: int32
                           type: integer
                         type: array
+                        x-kubernetes-list-type: atomic
                       cidr:
                         format: cidr
                         maxLength: 18
@@ -33754,6 +33766,7 @@ spec:
                             maxItems: 1
                             minItems: 1
                             type: array
+                            x-kubernetes-list-type: atomic
                         required:
                           - values
                         type: object
@@ -33791,6 +33804,7 @@ spec:
                                   maxItems: 10
                                   minItems: 1
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               required:
                                 - prefix
                               type: object
@@ -33810,6 +33824,7 @@ spec:
                         maxItems: 10
                         minItems: 1
                         type: array
+                        x-kubernetes-list-type: atomic
                       peerType:
                         enum:
                           - eBGP
@@ -33857,6 +33872,7 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
+                  x-kubernetes-list-type: atomic
                 importV6:
                   items:
                     properties:
@@ -33870,6 +33886,7 @@ spec:
                           format: int32
                           type: integer
                         type: array
+                        x-kubernetes-list-type: atomic
                       cidr:
                         format: cidr
                         maxLength: 43
@@ -33884,6 +33901,7 @@ spec:
                             maxItems: 1
                             minItems: 1
                             type: array
+                            x-kubernetes-list-type: atomic
                         required:
                           - values
                         type: object
@@ -33921,6 +33939,7 @@ spec:
                                   maxItems: 10
                                   minItems: 1
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               required:
                                 - prefix
                               type: object
@@ -33940,6 +33959,7 @@ spec:
                         maxItems: 10
                         minItems: 1
                         type: array
+                        x-kubernetes-list-type: atomic
                       peerType:
                         enum:
                           - eBGP
@@ -33987,6 +34007,7 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
+                  x-kubernetes-list-type: atomic
               type: object
           type: object
       served: true
@@ -34028,6 +34049,7 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: atomic
                 keepOriginalNextHop:
                   type: boolean
                 keepaliveTime:
@@ -34217,6 +34239,7 @@ spec:
                       - Routes
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 node:
                   type: string
                 updatePeriodSeconds:
@@ -34295,6 +34318,7 @@ spec:
                             type: string
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                     peersV6:
                       items:
                         properties:
@@ -34320,6 +34344,7 @@ spec:
                             type: string
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                   required:
                     - numberEstablishedV4
                     - numberEstablishedV6
@@ -34361,6 +34386,7 @@ spec:
                             type: string
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                     routesV6:
                       items:
                         properties:
@@ -34390,6 +34416,7 @@ spec:
                             type: string
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                   type: object
               type: object
           type: object
@@ -35194,6 +35221,7 @@ spec:
                       - timeout
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 interfaceExclude:
                   description: |-
                     InterfaceExclude A comma-separated list of interface names that should be excluded when Felix is resolving
@@ -35892,6 +35920,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -35900,6 +35929,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -35910,6 +35940,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -35937,6 +35968,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -35949,6 +35981,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -36017,6 +36050,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -36025,6 +36059,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -36035,6 +36070,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -36075,6 +36111,7 @@ spec:
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -36098,6 +36135,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -36106,6 +36144,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -36116,6 +36155,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -36143,6 +36183,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -36155,6 +36196,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -36223,6 +36265,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -36231,6 +36274,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -36241,6 +36285,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -36281,6 +36326,7 @@ spec:
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 namespaceSelector:
                   type: string
                 order:
@@ -36291,6 +36337,7 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 preDNAT:
                   type: boolean
                 selector:
@@ -36438,6 +36485,7 @@ spec:
                       - protocol
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 profiles:
                   items:
                     type: string
@@ -36838,6 +36886,15 @@ spec:
                             - RequestedServicesOnly
                           type: string
                       type: object
+                    migration:
+                      properties:
+                        policyNameMigrator:
+                          default: Enabled
+                          enum:
+                            - Disabled
+                            - Enabled
+                          type: string
+                      type: object
                     namespace:
                       properties:
                         reconcilerPeriod:
@@ -36875,6 +36932,7 @@ spec:
                                     type: string
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                           type: object
                         leakGracePeriod:
                           type: string
@@ -36889,15 +36947,6 @@ spec:
                     policy:
                       properties:
                         reconcilerPeriod:
-                          type: string
-                      type: object
-                    policyMigration:
-                      properties:
-                        enabled:
-                          default: Enabled
-                          enum:
-                            - Disabled
-                            - Enabled
                           type: string
                       type: object
                     serviceAccount:
@@ -36960,6 +37009,15 @@ spec:
                                 - RequestedServicesOnly
                               type: string
                           type: object
+                        migration:
+                          properties:
+                            policyNameMigrator:
+                              default: Enabled
+                              enum:
+                                - Disabled
+                                - Enabled
+                              type: string
+                          type: object
                         namespace:
                           properties:
                             reconcilerPeriod:
@@ -36997,6 +37055,7 @@ spec:
                                         type: string
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               type: object
                             leakGracePeriod:
                               type: string
@@ -37011,15 +37070,6 @@ spec:
                         policy:
                           properties:
                             reconcilerPeriod:
-                              type: string
-                          type: object
-                        policyMigration:
-                          properties:
-                            enabled:
-                              default: Enabled
-                              enum:
-                                - Disabled
-                                - Enabled
                               type: string
                           type: object
                         serviceAccount:
@@ -37122,6 +37172,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -37130,6 +37181,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -37140,6 +37192,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -37167,6 +37220,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -37179,6 +37233,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -37247,6 +37302,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -37255,6 +37311,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -37265,6 +37322,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -37305,6 +37363,7 @@ spec:
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -37328,6 +37387,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -37336,6 +37396,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -37346,6 +37407,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -37373,6 +37435,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -37385,6 +37448,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -37453,6 +37517,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -37461,6 +37526,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -37471,6 +37537,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -37511,6 +37578,7 @@ spec:
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 order:
                   type: number
                 performanceHints:
@@ -37519,6 +37587,7 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 selector:
                   type: string
                 serviceAccountSelector:
@@ -37636,6 +37705,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -37644,6 +37714,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -37654,6 +37725,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -37681,6 +37753,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -37693,6 +37766,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -37761,6 +37835,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -37769,6 +37844,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -37779,6 +37855,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -37819,6 +37896,7 @@ spec:
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -37842,6 +37920,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -37850,6 +37929,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -37860,6 +37940,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -37887,6 +37968,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -37899,6 +37981,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -37967,6 +38050,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -37975,6 +38059,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -37985,6 +38070,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -38025,6 +38111,7 @@ spec:
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 namespaceSelector:
                   type: string
                 order:
@@ -38035,6 +38122,7 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 preDNAT:
                   type: boolean
                 selector:
@@ -38210,6 +38298,7 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -38301,6 +38390,7 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 podSelector:
                   properties:
                     matchExpressions:
@@ -38399,6 +38489,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -38407,6 +38498,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -38417,6 +38509,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -38444,6 +38537,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -38456,6 +38550,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -38524,6 +38619,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -38532,6 +38628,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -38542,6 +38639,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -38582,6 +38680,7 @@ spec:
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -38605,6 +38704,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -38613,6 +38713,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -38623,6 +38724,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -38650,6 +38752,7 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -38662,6 +38765,7 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -38730,6 +38834,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -38738,6 +38843,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -38748,6 +38854,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -38788,6 +38895,7 @@ spec:
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 order:
                   type: number
                 performanceHints:
@@ -38796,6 +38904,7 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 selector:
                   type: string
                 serviceAccountSelector:
@@ -38889,1189 +38998,3 @@ spec:
                 : true"
       served: true
       storage: true
----
-# Source: crd.projectcalico.org.v1/templates/calico/policy.networking.k8s.io_clusternetworkpolicies.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/300
-    policy.networking.k8s.io/bundle-version: v0.1.7
-    policy.networking.k8s.io/channel: standard
-  name: clusternetworkpolicies.policy.networking.k8s.io
-spec:
-  group: policy.networking.k8s.io
-  names:
-    kind: ClusterNetworkPolicy
-    listKind: ClusterNetworkPolicyList
-    plural: clusternetworkpolicies
-    shortNames:
-      - cnp
-    singular: clusternetworkpolicy
-  scope: Cluster
-  versions:
-    - additionalPrinterColumns:
-        - jsonPath: .spec.tier
-          name: Tier
-          type: string
-        - jsonPath: .spec.priority
-          name: Priority
-          type: string
-        - jsonPath: .metadata.creationTimestamp
-          name: Age
-          type: date
-      name: v1alpha2
-      schema:
-        openAPIV3Schema:
-          description: ClusterNetworkPolicy is a cluster-wide network policy resource.
-          properties:
-            apiVersion:
-              description: |-
-                APIVersion defines the versioned schema of this representation of an object.
-                Servers should convert recognized schemas to the latest internal value, and
-                may reject unrecognized values.
-                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
-              type: string
-            kind:
-              description: |-
-                Kind is a string value representing the REST resource this object represents.
-                Servers may infer this from the endpoint the client submits requests to.
-                Cannot be updated.
-                In CamelCase.
-                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
-              type: string
-            metadata:
-              type: object
-            spec:
-              description: Spec defines the desired behavior of ClusterNetworkPolicy.
-              properties:
-                egress:
-                  description: |-
-                    Egress is the list of Egress rules to be applied to the selected pods.
-
-                    A maximum of 25 rules is allowed in this block.
-
-                    The relative precedence of egress rules within a single CNP object
-                    (all of which share the priority) will be determined by the order
-                    in which the rule is written.
-                    Thus, a rule that appears at the top of the egress rules
-                    would take the highest precedence.
-                    CNPs with no egress rules do not affect egress traffic.
-                  items:
-                    description: |-
-                      ClusterNetworkPolicyEgressRule describes an action to take on a particular
-                      set of traffic originating from pods selected by a ClusterNetworkPolicy's
-                      Subject field.
-
-                      <network-policy-api:experimental:validation>
-                    properties:
-                      action:
-                        description: |-
-                          Action specifies the effect this rule will have on matching
-                          traffic.  Currently the following actions are supported:
-
-                          - Accept: Accepts the selected traffic, allowing it to
-                            egress. No further ClusterNetworkPolicy or NetworkPolicy
-                            rules will be processed.
-
-                          - Deny: Drops the selected traffic. No further
-                            ClusterNetworkPolicy or NetworkPolicy rules will be
-                            processed.
-
-                          - Pass: Skips all further ClusterNetworkPolicy rules in the
-                            current tier for the selected traffic, and passes
-                            evaluation to the next tier.
-                        enum:
-                          - Accept
-                          - Deny
-                          - Pass
-                        type: string
-                      name:
-                        description: |-
-                          Name is an identifier for this rule, that may be no more than
-                          100 characters in length. This field should be used by the implementation
-                          to help improve observability, readability and error-reporting
-                          for any applied policies.
-                        maxLength: 100
-                        type: string
-                      protocols:
-                        description: |-
-                          Protocols allows for more fine-grain matching of traffic on
-                          protocol-specific attributes such as the port. If
-                          unspecified, protocol-specific attributes will not be used
-                          to match traffic.
-                        items:
-                          description: |-
-                            ClusterNetworkPolicyProtocol describes additional protocol-specific match rules.
-                            Exactly one field must be set.
-                          maxProperties: 1
-                          minProperties: 1
-                          properties:
-                            destinationNamedPort:
-                              description: |-
-                                DestinationNamedPort selects a destination port on a pod based on the
-                                ContainerPort name. You can't use this in a rule that targets resources
-                                without named ports (e.g. Nodes or Networks).
-                              type: string
-                            sctp:
-                              description: SCTP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                            tcp:
-                              description: TCP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                            udp:
-                              description: UDP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                          type: object
-                        maxItems: 25
-                        minItems: 1
-                        type: array
-                      to:
-                        description: |-
-                          To is the list of destinations whose traffic this rule applies to. If any
-                          element matches the destination of outgoing traffic then the specified
-                          action is applied. This field must be defined and contain at least one
-                          item.
-                        items:
-                          description: |-
-                            ClusterNetworkPolicyEgressPeer defines a peer to allow traffic to.
-
-                            Exactly one of the fields must be set for a given peer and this is enforced
-                            by the validation rules on the CRD. If an implementation sees no fields are
-                            set then it can infer that the deployed CRD is of an incompatible version
-                            with an unknown field.  In that case it should fail closed.
-
-                            For "Accept" rules, "fail closed" means: "treat the rule as matching no
-                            traffic". For "Deny" and "Pass" rules, "fail closed" means: "treat the rule
-                            as a 'Deny all' rule".
-                          maxProperties: 1
-                          minProperties: 1
-                          properties:
-                            namespaces:
-                              description: |-
-                                Namespaces defines a way to select all pods within a set of Namespaces.
-                                Note that host-networked pods are not included in this type of peer.
-                              properties:
-                                matchExpressions:
-                                  description:
-                                    matchExpressions is a list of label selector
-                                    requirements. The requirements are ANDed.
-                                  items:
-                                    description: |-
-                                      A label selector requirement is a selector that contains values, a key, and an operator that
-                                      relates the key and values.
-                                    properties:
-                                      key:
-                                        description:
-                                          key is the label key that the selector
-                                          applies to.
-                                        type: string
-                                      operator:
-                                        description: |-
-                                          operator represents a key's relationship to a set of values.
-                                          Valid operators are In, NotIn, Exists and DoesNotExist.
-                                        type: string
-                                      values:
-                                        description: |-
-                                          values is an array of string values. If the operator is In or NotIn,
-                                          the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                          the values array must be empty. This array is replaced during a strategic
-                                          merge patch.
-                                        items:
-                                          type: string
-                                        type: array
-                                        x-kubernetes-list-type: atomic
-                                    required:
-                                      - key
-                                      - operator
-                                    type: object
-                                  type: array
-                                  x-kubernetes-list-type: atomic
-                                matchLabels:
-                                  additionalProperties:
-                                    type: string
-                                  description: |-
-                                    matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                    map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                    operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                  type: object
-                              type: object
-                              x-kubernetes-map-type: atomic
-                            networks:
-                              description: |-
-                                Networks defines a way to select peers via CIDR blocks.
-                                This is intended for representing entities that live outside the cluster,
-                                which can't be selected by pods, namespaces and nodes peers, but note
-                                that cluster-internal traffic will be checked against the rule as
-                                well. So if you Accept or Deny traffic to `"0.0.0.0/0"`, that will allow
-                                or deny all IPv4 pod-to-pod traffic as well. If you don't want that,
-                                add a rule that Passes all pod traffic before the Networks rule.
-
-                                Each item in Networks should be provided in the CIDR format and should be
-                                IPv4 or IPv6, for example "10.0.0.0/8" or "fd00::/8".
-
-                                Networks can have up to 25 CIDRs specified.
-                              items:
-                                description: |-
-                                  CIDR is an IP address range in CIDR notation
-                                  (for example, "10.0.0.0/8" or "fd00::/8").
-                                maxLength: 43
-                                type: string
-                                x-kubernetes-validations:
-                                  - message: Invalid CIDR format provided
-                                    rule: isCIDR(self)
-                              maxItems: 25
-                              minItems: 1
-                              type: array
-                              x-kubernetes-list-type: set
-                            pods:
-                              description: |-
-                                Pods defines a way to select a set of pods in
-                                a set of namespaces. Note that host-networked pods
-                                are not included in this type of peer.
-                              properties:
-                                namespaceSelector:
-                                  description: |-
-                                    NamespaceSelector follows standard label selector
-                                    semantics; if empty, it selects all Namespaces.
-                                  properties:
-                                    matchExpressions:
-                                      description:
-                                        matchExpressions is a list of label
-                                        selector requirements. The requirements are
-                                        ANDed.
-                                      items:
-                                        description: |-
-                                          A label selector requirement is a selector that contains values, a key, and an operator that
-                                          relates the key and values.
-                                        properties:
-                                          key:
-                                            description:
-                                              key is the label key that the
-                                              selector applies to.
-                                            type: string
-                                          operator:
-                                            description: |-
-                                              operator represents a key's relationship to a set of values.
-                                              Valid operators are In, NotIn, Exists and DoesNotExist.
-                                            type: string
-                                          values:
-                                            description: |-
-                                              values is an array of string values. If the operator is In or NotIn,
-                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                              the values array must be empty. This array is replaced during a strategic
-                                              merge patch.
-                                            items:
-                                              type: string
-                                            type: array
-                                            x-kubernetes-list-type: atomic
-                                        required:
-                                          - key
-                                          - operator
-                                        type: object
-                                      type: array
-                                      x-kubernetes-list-type: atomic
-                                    matchLabels:
-                                      additionalProperties:
-                                        type: string
-                                      description: |-
-                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                      type: object
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                                podSelector:
-                                  description: |-
-                                    PodSelector is used to explicitly select pods within a namespace;
-                                    if empty, it selects all Pods.
-                                  properties:
-                                    matchExpressions:
-                                      description:
-                                        matchExpressions is a list of label
-                                        selector requirements. The requirements are
-                                        ANDed.
-                                      items:
-                                        description: |-
-                                          A label selector requirement is a selector that contains values, a key, and an operator that
-                                          relates the key and values.
-                                        properties:
-                                          key:
-                                            description:
-                                              key is the label key that the
-                                              selector applies to.
-                                            type: string
-                                          operator:
-                                            description: |-
-                                              operator represents a key's relationship to a set of values.
-                                              Valid operators are In, NotIn, Exists and DoesNotExist.
-                                            type: string
-                                          values:
-                                            description: |-
-                                              values is an array of string values. If the operator is In or NotIn,
-                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                              the values array must be empty. This array is replaced during a strategic
-                                              merge patch.
-                                            items:
-                                              type: string
-                                            type: array
-                                            x-kubernetes-list-type: atomic
-                                        required:
-                                          - key
-                                          - operator
-                                        type: object
-                                      type: array
-                                      x-kubernetes-list-type: atomic
-                                    matchLabels:
-                                      additionalProperties:
-                                        type: string
-                                      description: |-
-                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                      type: object
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                              required:
-                                - podSelector
-                              type: object
-                          type: object
-                        maxItems: 25
-                        minItems: 1
-                        type: array
-                    required:
-                      - action
-                      - to
-                    type: object
-                  maxItems: 25
-                  type: array
-                ingress:
-                  description: |-
-                    Ingress is the list of Ingress rules to be applied to the selected pods.
-
-                    A maximum of 25 rules is allowed in this block.
-
-                    The relative precedence of ingress rules within a single CNP object
-                    (all of which share the priority) will be determined by the order
-                    in which the rule is written.
-                    Thus, a rule that appears at the top of the ingress rules
-                    would take the highest precedence.
-                    CNPs with no ingress rules do not affect ingress traffic.
-                  items:
-                    description: |-
-                      ClusterNetworkPolicyIngressRule describes an action to take on a particular
-                      set of traffic destined for pods selected by a ClusterNetworkPolicy's
-                      Subject field.
-                    properties:
-                      action:
-                        description: |-
-                          Action specifies the effect this rule will have on matching
-                          traffic. Currently the following actions are supported:
-
-                          - Accept: Accepts the selected traffic, allowing it into
-                            the destination. No further ClusterNetworkPolicy or
-                            NetworkPolicy rules will be processed.
-
-                            Note: while Accept ensures traffic is accepted by
-                            Kubernetes network policy, it is still possible that the
-                            packet is blocked in other ways: custom nftable rules,
-                            high-layers e.g. service mesh.
-
-                          - Deny: Drops the selected traffic. No further
-                            ClusterNetworkPolicy or NetworkPolicy rules will be
-                            processed.
-
-                          - Pass: Skips all further ClusterNetworkPolicy rules in the
-                            current tier for the selected traffic, and passes
-                            evaluation to the next tier.
-                        enum:
-                          - Accept
-                          - Deny
-                          - Pass
-                        type: string
-                      from:
-                        description: |-
-                          From is the list of sources whose traffic this rule applies to.
-                          If any element matches the source of incoming
-                          traffic then the specified action is applied.
-                          This field must be defined and contain at least one item.
-                        items:
-                          description: |-
-                            ClusterNetworkPolicyIngressPeer defines a peer to allow traffic from.
-
-                            Exactly one of the fields must be set for a given peer and this is enforced
-                            by the validation rules on the CRD. If an implementation sees no fields are
-                            set then it can infer that the deployed CRD is of an incompatible version
-                            with an unknown field.  In that case it should fail closed.
-
-                            For "Accept" rules, "fail closed" means: "treat the rule as matching no
-                            traffic". For "Deny" and "Pass" rules, "fail closed" means: "treat the rule
-                            as a 'Deny all' rule".
-                          maxProperties: 1
-                          minProperties: 1
-                          properties:
-                            namespaces:
-                              description: |-
-                                Namespaces defines a way to select all pods within a set of Namespaces.
-                                Note that host-networked pods are not included in this type of peer.
-                              properties:
-                                matchExpressions:
-                                  description:
-                                    matchExpressions is a list of label selector
-                                    requirements. The requirements are ANDed.
-                                  items:
-                                    description: |-
-                                      A label selector requirement is a selector that contains values, a key, and an operator that
-                                      relates the key and values.
-                                    properties:
-                                      key:
-                                        description:
-                                          key is the label key that the selector
-                                          applies to.
-                                        type: string
-                                      operator:
-                                        description: |-
-                                          operator represents a key's relationship to a set of values.
-                                          Valid operators are In, NotIn, Exists and DoesNotExist.
-                                        type: string
-                                      values:
-                                        description: |-
-                                          values is an array of string values. If the operator is In or NotIn,
-                                          the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                          the values array must be empty. This array is replaced during a strategic
-                                          merge patch.
-                                        items:
-                                          type: string
-                                        type: array
-                                        x-kubernetes-list-type: atomic
-                                    required:
-                                      - key
-                                      - operator
-                                    type: object
-                                  type: array
-                                  x-kubernetes-list-type: atomic
-                                matchLabels:
-                                  additionalProperties:
-                                    type: string
-                                  description: |-
-                                    matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                    map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                    operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                  type: object
-                              type: object
-                              x-kubernetes-map-type: atomic
-                            pods:
-                              description: |-
-                                Pods defines a way to select a set of pods in
-                                a set of namespaces. Note that host-networked pods
-                                are not included in this type of peer.
-                              properties:
-                                namespaceSelector:
-                                  description: |-
-                                    NamespaceSelector follows standard label selector
-                                    semantics; if empty, it selects all Namespaces.
-                                  properties:
-                                    matchExpressions:
-                                      description:
-                                        matchExpressions is a list of label
-                                        selector requirements. The requirements are
-                                        ANDed.
-                                      items:
-                                        description: |-
-                                          A label selector requirement is a selector that contains values, a key, and an operator that
-                                          relates the key and values.
-                                        properties:
-                                          key:
-                                            description:
-                                              key is the label key that the
-                                              selector applies to.
-                                            type: string
-                                          operator:
-                                            description: |-
-                                              operator represents a key's relationship to a set of values.
-                                              Valid operators are In, NotIn, Exists and DoesNotExist.
-                                            type: string
-                                          values:
-                                            description: |-
-                                              values is an array of string values. If the operator is In or NotIn,
-                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                              the values array must be empty. This array is replaced during a strategic
-                                              merge patch.
-                                            items:
-                                              type: string
-                                            type: array
-                                            x-kubernetes-list-type: atomic
-                                        required:
-                                          - key
-                                          - operator
-                                        type: object
-                                      type: array
-                                      x-kubernetes-list-type: atomic
-                                    matchLabels:
-                                      additionalProperties:
-                                        type: string
-                                      description: |-
-                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                      type: object
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                                podSelector:
-                                  description: |-
-                                    PodSelector is used to explicitly select pods within a namespace;
-                                    if empty, it selects all Pods.
-                                  properties:
-                                    matchExpressions:
-                                      description:
-                                        matchExpressions is a list of label
-                                        selector requirements. The requirements are
-                                        ANDed.
-                                      items:
-                                        description: |-
-                                          A label selector requirement is a selector that contains values, a key, and an operator that
-                                          relates the key and values.
-                                        properties:
-                                          key:
-                                            description:
-                                              key is the label key that the
-                                              selector applies to.
-                                            type: string
-                                          operator:
-                                            description: |-
-                                              operator represents a key's relationship to a set of values.
-                                              Valid operators are In, NotIn, Exists and DoesNotExist.
-                                            type: string
-                                          values:
-                                            description: |-
-                                              values is an array of string values. If the operator is In or NotIn,
-                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                              the values array must be empty. This array is replaced during a strategic
-                                              merge patch.
-                                            items:
-                                              type: string
-                                            type: array
-                                            x-kubernetes-list-type: atomic
-                                        required:
-                                          - key
-                                          - operator
-                                        type: object
-                                      type: array
-                                      x-kubernetes-list-type: atomic
-                                    matchLabels:
-                                      additionalProperties:
-                                        type: string
-                                      description: |-
-                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                      type: object
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                              required:
-                                - podSelector
-                              type: object
-                          type: object
-                        maxItems: 25
-                        minItems: 1
-                        type: array
-                      name:
-                        description: |-
-                          Name is an identifier for this rule, that may be no more than
-                          100 characters in length. This field should be used by the implementation
-                          to help improve observability, readability and error-reporting
-                          for any applied policies.
-                        maxLength: 100
-                        type: string
-                      protocols:
-                        description: |-
-                          Protocols allows for more fine-grain matching of traffic on
-                          protocol-specific attributes such as the port. If
-                          unspecified, protocol-specific attributes will not be used
-                          to match traffic.
-                        items:
-                          description: |-
-                            ClusterNetworkPolicyProtocol describes additional protocol-specific match rules.
-                            Exactly one field must be set.
-                          maxProperties: 1
-                          minProperties: 1
-                          properties:
-                            destinationNamedPort:
-                              description: |-
-                                DestinationNamedPort selects a destination port on a pod based on the
-                                ContainerPort name. You can't use this in a rule that targets resources
-                                without named ports (e.g. Nodes or Networks).
-                              type: string
-                            sctp:
-                              description: SCTP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                            tcp:
-                              description: TCP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                            udp:
-                              description: UDP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                          type: object
-                        maxItems: 25
-                        minItems: 1
-                        type: array
-                    required:
-                      - action
-                      - from
-                    type: object
-                  maxItems: 25
-                  type: array
-                priority:
-                  description: |-
-                    Priority is a value from 0 to 1000 indicating the precedence of
-                    the policy within its tier. Policies with lower priority values have
-                    higher precedence, and are checked before policies with higher priority
-                    values in the same tier. All Admin tier rules have higher precedence than
-                    NetworkPolicy or Baseline tier rules.
-                    If two (or more) policies in the same tier with the same priority
-                    could match a connection, then the implementation can apply any of the
-                    matching policies to the connection, and there is no way for the user to
-                    reliably determine which one it will choose. Administrators must be
-                    careful about assigning the priorities for policies with rules that will
-                    match many connections, and ensure that policies have unique priority
-                    values in cases where ambiguity would be unacceptable.
-                  format: int32
-                  maximum: 1000
-                  minimum: 0
-                  type: integer
-                subject:
-                  description:
-                    Subject defines the pods to which this ClusterNetworkPolicy
-                    applies.
-                  maxProperties: 1
-                  minProperties: 1
-                  properties:
-                    namespaces:
-                      description: Namespaces is used to select pods via namespace selectors.
-                      properties:
-                        matchExpressions:
-                          description:
-                            matchExpressions is a list of label selector
-                            requirements. The requirements are ANDed.
-                          items:
-                            description: |-
-                              A label selector requirement is a selector that contains values, a key, and an operator that
-                              relates the key and values.
-                            properties:
-                              key:
-                                description:
-                                  key is the label key that the selector
-                                  applies to.
-                                type: string
-                              operator:
-                                description: |-
-                                  operator represents a key's relationship to a set of values.
-                                  Valid operators are In, NotIn, Exists and DoesNotExist.
-                                type: string
-                              values:
-                                description: |-
-                                  values is an array of string values. If the operator is In or NotIn,
-                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                  the values array must be empty. This array is replaced during a strategic
-                                  merge patch.
-                                items:
-                                  type: string
-                                type: array
-                                x-kubernetes-list-type: atomic
-                            required:
-                              - key
-                              - operator
-                            type: object
-                          type: array
-                          x-kubernetes-list-type: atomic
-                        matchLabels:
-                          additionalProperties:
-                            type: string
-                          description: |-
-                            matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                            map is equivalent to an element of matchExpressions, whose key field is "key", the
-                            operator is "In", and the values array contains only "value". The requirements are ANDed.
-                          type: object
-                      type: object
-                      x-kubernetes-map-type: atomic
-                    pods:
-                      description:
-                        Pods is used to select pods via namespace AND pod
-                        selectors.
-                      properties:
-                        namespaceSelector:
-                          description: |-
-                            NamespaceSelector follows standard label selector
-                            semantics; if empty, it selects all Namespaces.
-                          properties:
-                            matchExpressions:
-                              description:
-                                matchExpressions is a list of label selector
-                                requirements. The requirements are ANDed.
-                              items:
-                                description: |-
-                                  A label selector requirement is a selector that contains values, a key, and an operator that
-                                  relates the key and values.
-                                properties:
-                                  key:
-                                    description:
-                                      key is the label key that the selector
-                                      applies to.
-                                    type: string
-                                  operator:
-                                    description: |-
-                                      operator represents a key's relationship to a set of values.
-                                      Valid operators are In, NotIn, Exists and DoesNotExist.
-                                    type: string
-                                  values:
-                                    description: |-
-                                      values is an array of string values. If the operator is In or NotIn,
-                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                      the values array must be empty. This array is replaced during a strategic
-                                      merge patch.
-                                    items:
-                                      type: string
-                                    type: array
-                                    x-kubernetes-list-type: atomic
-                                required:
-                                  - key
-                                  - operator
-                                type: object
-                              type: array
-                              x-kubernetes-list-type: atomic
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: |-
-                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                operator is "In", and the values array contains only "value". The requirements are ANDed.
-                              type: object
-                          type: object
-                          x-kubernetes-map-type: atomic
-                        podSelector:
-                          description: |-
-                            PodSelector is used to explicitly select pods within a namespace;
-                            if empty, it selects all Pods.
-                          properties:
-                            matchExpressions:
-                              description:
-                                matchExpressions is a list of label selector
-                                requirements. The requirements are ANDed.
-                              items:
-                                description: |-
-                                  A label selector requirement is a selector that contains values, a key, and an operator that
-                                  relates the key and values.
-                                properties:
-                                  key:
-                                    description:
-                                      key is the label key that the selector
-                                      applies to.
-                                    type: string
-                                  operator:
-                                    description: |-
-                                      operator represents a key's relationship to a set of values.
-                                      Valid operators are In, NotIn, Exists and DoesNotExist.
-                                    type: string
-                                  values:
-                                    description: |-
-                                      values is an array of string values. If the operator is In or NotIn,
-                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                      the values array must be empty. This array is replaced during a strategic
-                                      merge patch.
-                                    items:
-                                      type: string
-                                    type: array
-                                    x-kubernetes-list-type: atomic
-                                required:
-                                  - key
-                                  - operator
-                                type: object
-                              type: array
-                              x-kubernetes-list-type: atomic
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: |-
-                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                operator is "In", and the values array contains only "value". The requirements are ANDed.
-                              type: object
-                          type: object
-                          x-kubernetes-map-type: atomic
-                      required:
-                        - podSelector
-                      type: object
-                  type: object
-                tier:
-                  description: |-
-                    Tier is used as the top-level grouping for network policy prioritization.
-
-                    Policy tiers are evaluated in the following order:
-                    * Admin tier
-                    * NetworkPolicy tier
-                    * Baseline tier
-
-                    ClusterNetworkPolicy can use 2 of these tiers: Admin and Baseline.
-
-                    The Admin tier takes precedence over all other policies. Policies
-                    defined in this tier are used to set cluster-wide security rules
-                    that cannot be overridden in the other tiers. If Admin tier has
-                    made a final decision (Accept or Deny) on a connection, then no
-                    further evaluation is done.
-
-                    NetworkPolicy tier is the tier for the namespaced v1.NetworkPolicy.
-                    These policies are intended for the application developer to describe
-                    the security policy associated with their deployments inside their
-                    namespace. v1.NetworkPolicy always makes a final decision for selected
-                    pods. Further evaluation only happens for Pods not selected by a
-                    v1.NetworkPolicy.
-
-                    Baseline tier is a cluster-wide policy that can be overridden by the
-                    v1.NetworkPolicy. If Baseline tier has made a final decision (Accept or
-                    Deny) on a connection, then no further evaluation is done.
-
-                    If a given connection wasn't allowed or denied by any of the tiers,
-                    the default kubernetes policy is applied, which says that
-                    all pods can communicate with each other.
-                  enum:
-                    - Admin
-                    - Baseline
-                  type: string
-              required:
-                - priority
-                - subject
-                - tier
-              type: object
-            status:
-              description: Status is the status to be reported by the implementation.
-              properties:
-                conditions:
-                  items:
-                    description:
-                      Condition contains details for one aspect of the current
-                      state of this API Resource.
-                    properties:
-                      lastTransitionTime:
-                        description: |-
-                          lastTransitionTime is the last time the condition transitioned from one status to another.
-                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
-                        format: date-time
-                        type: string
-                      message:
-                        description: |-
-                          message is a human readable message indicating details about the transition.
-                          This may be an empty string.
-                        maxLength: 32768
-                        type: string
-                      observedGeneration:
-                        description: |-
-                          observedGeneration represents the .metadata.generation that the condition was set based upon.
-                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                          with respect to the current state of the instance.
-                        format: int64
-                        minimum: 0
-                        type: integer
-                      reason:
-                        description: |-
-                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                          Producers of specific condition types may define expected values and meanings for this field,
-                          and whether the values are considered a guaranteed API.
-                          The value should be a CamelCase string.
-                          This field may not be empty.
-                        maxLength: 1024
-                        minLength: 1
-                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                        type: string
-                      status:
-                        description: status of the condition, one of True, False, Unknown.
-                        enum:
-                          - "True"
-                          - "False"
-                          - Unknown
-                        type: string
-                      type:
-                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                        maxLength: 316
-                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                        type: string
-                    required:
-                      - lastTransitionTime
-                      - message
-                      - reason
-                      - status
-                      - type
-                    type: object
-                  type: array
-                  x-kubernetes-list-map-keys:
-                    - type
-                  x-kubernetes-list-type: map
-              required:
-                - conditions
-              type: object
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
-      subresources:
-        status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null

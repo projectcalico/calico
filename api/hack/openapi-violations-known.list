@@ -7,7 +7,6 @@ API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcal
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,AllocationAttribute,HandleID
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,BGPConfigurationSpec,IPv4NormalRoutePriority
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,BGPConfigurationSpec,IPv6NormalRoutePriority
-API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,ControllersConfig,Migration
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,BPFConntrackCleanupMode
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,BPFMapSizePerCPUConntrack
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,ExternalNodesCIDRList
@@ -19,4 +18,3 @@ API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcal
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,NFTablesMode
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,WireguardPersistentKeepAlive
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,IPAMBlockSpec,DeprecatedStrictAffinity
-API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,MigrationControllerConfig,PolicyNameMigrator

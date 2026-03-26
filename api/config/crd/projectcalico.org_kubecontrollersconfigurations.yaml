@@ -40,6 +40,15 @@ spec:
                             - RequestedServicesOnly
                           type: string
                       type: object
+                    migration:
+                      properties:
+                        policyNameMigrator:
+                          default: Enabled
+                          enum:
+                            - Disabled
+                            - Enabled
+                          type: string
+                      type: object
                     namespace:
                       properties:
                         reconcilerPeriod:
@@ -92,15 +101,6 @@ spec:
                     policy:
                       properties:
                         reconcilerPeriod:
-                          type: string
-                      type: object
-                    policyMigration:
-                      properties:
-                        enabled:
-                          default: Enabled
-                          enum:
-                            - Disabled
-                            - Enabled
                           type: string
                       type: object
                     serviceAccount:
@@ -163,6 +163,15 @@ spec:
                                 - RequestedServicesOnly
                               type: string
                           type: object
+                        migration:
+                          properties:
+                            policyNameMigrator:
+                              default: Enabled
+                              enum:
+                                - Disabled
+                                - Enabled
+                              type: string
+                          type: object
                         namespace:
                           properties:
                             reconcilerPeriod:
@@ -215,15 +224,6 @@ spec:
                         policy:
                           properties:
                             reconcilerPeriod:
-                              type: string
-                          type: object
-                        policyMigration:
-                          properties:
-                            enabled:
-                              default: Enabled
-                              enum:
-                                - Disabled
-                                - Enabled
                               type: string
                           type: object
                         serviceAccount:
