@@ -57,6 +57,7 @@ const (
 type TierStatus struct {
 	// Conditions represents the latest observed set of conditions for the resource. A tier with a
 	// "Ready" condition set to "True" is operating as expected.
+	// +listType=atomic
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

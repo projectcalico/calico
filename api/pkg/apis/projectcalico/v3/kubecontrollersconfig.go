@@ -154,6 +154,7 @@ type AutoHostEndpointConfig struct {
 	CreateDefaultHostEndpoint DefaultHostEndpointMode `json:"createDefaultHostEndpoint,omitempty" validate:"omitempty,createDefaultHostEndpoint"`
 
 	// Templates contains definition for creating AutoHostEndpoints
+	// +listType=atomic
 	Templates []Template `json:"templates,omitempty" validate:"omitempty"`
 }
 
