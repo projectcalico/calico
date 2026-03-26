@@ -28,7 +28,7 @@ const (
 // ProfileList is a list of Profile objects.
 type ProfileList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []Profile `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -49,9 +49,11 @@ type Profile struct {
 type ProfileSpec struct {
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +listType=atomic
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +listType=atomic
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 	// An option set of labels to apply to each endpoint (in addition to their own labels)
 	// referencing this profile.  If labels configured on the endpoint have keys matching those
