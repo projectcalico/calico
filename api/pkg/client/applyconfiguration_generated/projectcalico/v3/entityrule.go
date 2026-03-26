@@ -68,7 +68,6 @@ type EntityRuleApplyConfiguration struct {
 	// Protocol match in the Rule to be set to "TCP" or "UDP".
 	Ports []numorstring.Port `json:"ports,omitempty"`
 	// NotNets is the negated version of the Nets field.
-	// listType=set
 	NotNets []string `json:"notNets,omitempty"`
 	// NotSelector is the negated version of the Selector field.  See Selector field for
 	// subtleties with negated selectors.

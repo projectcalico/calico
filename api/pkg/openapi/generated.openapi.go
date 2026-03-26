@@ -543,6 +543,11 @@ func schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref common.Referenc
 						},
 					},
 					"templates": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Templates contains definition for creating AutoHostEndpoints",
 							Type:        []string{"array"},
@@ -996,6 +1001,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref common.Referen
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"values": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Values is a list of BGP community values to match against.",
 							Type:        []string{"array"},
@@ -1175,6 +1185,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterPrependASPath(ref common.Referenc
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"prefix": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Prefix is the sequence of AS numbers to prepend to the route's AS path. The resulting path starts with these AS numbers in the order listed; e.g. [65000, 65001] produces the path \"65000 65001 <original>\".",
 							Type:        []string{"array"},
@@ -1256,6 +1271,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 						},
 					},
 					"asPathPrefix": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "If non-empty, this filter rule will only apply to routes whose AS path begins with the specified sequence of AS numbers.",
 							Type:        []string{"array"},
@@ -1285,6 +1305,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 						},
 					},
 					"operations": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Operations is an ordered list of route modifications to apply to matching routes before accepting them.  Only valid when Action is \"Accept\"; specifying operations with \"Reject\" is rejected by validation.  Each entry must set exactly one operation field.",
 							Type:        []string{"array"},
@@ -1367,6 +1392,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 						},
 					},
 					"asPathPrefix": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "If non-empty, this filter rule will only apply to routes whose AS path begins with the specified sequence of AS numbers.",
 							Type:        []string{"array"},
@@ -1396,6 +1426,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 						},
 					},
 					"operations": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Operations is an ordered list of route modifications to apply to matching routes before accepting them.  Only valid when Action is \"Accept\"; specifying operations with \"Reject\" is rejected by validation.  Each entry must set exactly one operation field.",
 							Type:        []string{"array"},
@@ -1457,6 +1492,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"exportV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -1471,6 +1511,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 						},
 					},
 					"importV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
@@ -1485,6 +1530,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 						},
 					},
 					"exportV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -1499,6 +1549,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 						},
 					},
 					"importV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
@@ -1741,6 +1796,11 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 						},
 					},
 					"filters": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of BGPFilters applied on this BGP peer.",
 							Type:        []string{"array"},
@@ -2026,6 +2086,11 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref common.Refere
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"routesV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "RoutesV4 represents IPv4 routes on the node.",
 							Type:        []string{"array"},
@@ -2040,6 +2105,11 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref common.Refere
 						},
 					},
 					"routesV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "RoutesV6 represents IPv6 routes on the node.",
 							Type:        []string{"array"},
@@ -2101,6 +2171,11 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref common.ReferenceCa
 						},
 					},
 					"peersV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PeersV4 represents IPv4 BGP peers status on the node.",
 							Type:        []string{"array"},
@@ -2115,6 +2190,11 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref common.ReferenceCa
 						},
 					},
 					"peersV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PeersV6 represents IPv6 BGP peers status on the node.",
 							Type:        []string{"array"},
@@ -2366,6 +2446,11 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusSpec(ref common.ReferenceC
 						},
 					},
 					"classes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Classes declares the types of information to monitor for this calico/node, and allows for selective status reporting about certain subsets of information.",
 							Type:        []string{"array"},
@@ -2744,6 +2829,11 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 						},
 					},
 					"ports": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a source (destination) port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\" or \"UDP\".",
 							Type:        []string{"array"},
@@ -2757,8 +2847,13 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 						},
 					},
 					"notNets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "NotNets is the negated version of the Nets field. listType=set",
+							Description: "NotNets is the negated version of the Nets field.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -2779,6 +2874,11 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 						},
 					},
 					"notPorts": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "NotPorts is the negated version of the Ports field. Since only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\" or \"UDP\".",
 							Type:        []string{"array"},
@@ -3262,6 +3362,11 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						},
 					},
 					"healthTimeoutOverrides": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overridden.  This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.",
 							Type:        []string{"array"},
@@ -4331,6 +4436,11 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -4345,6 +4455,11 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -4421,6 +4536,11 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"performanceHints": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy.\n\nCurrently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted.",
 							Type:        []string{"array"},
@@ -4574,6 +4694,11 @@ func schema_pkg_apis_projectcalico_v3_HTTPMatch(ref common.ReferenceCallback) co
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"methods": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Methods is an optional field that restricts the rule to apply only to HTTP requests that use one of the listed HTTP Methods (e.g. GET, PUT, etc.) Multiple methods are OR'd together.",
 							Type:        []string{"array"},
@@ -4589,6 +4714,11 @@ func schema_pkg_apis_projectcalico_v3_HTTPMatch(ref common.ReferenceCallback) co
 						},
 					},
 					"paths": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Paths is an optional field that restricts the rule to apply to HTTP requests that use one of the listed HTTP Paths. Multiple paths are OR'd together. e.g: - exact: /foo - prefix: /bar NOTE: Each entry may ONLY specify either a `exact` or a `prefix` match. The validator will check for it.",
 							Type:        []string{"array"},
@@ -4814,6 +4944,11 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref common.ReferenceCallb
 						},
 					},
 					"ports": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Ports contains the endpoint's named ports, which may be referenced in security policy rules.",
 							Type:        []string{"array"},
@@ -4981,6 +5116,11 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 						},
 					},
 					"allocations": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Array of allocations in-use within this block. nil entries mean the allocation is free. For non-nil entries at index i, the index is the ordinal of the allocation within this block and the value is the index of the associated attributes in the Attributes array.",
 							Type:        []string{"array"},
@@ -4995,6 +5135,11 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 						},
 					},
 					"unallocated": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Unallocated is an ordered list of allocations which are free in the block.",
 							Type:        []string{"array"},
@@ -5010,6 +5155,11 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 						},
 					},
 					"attributes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Attributes is an array of arbitrary metadata associated with allocations in the block. To find attributes for a given allocation, use the value of the allocation's entry in the Allocations array as the index of the element in this array.",
 							Type:        []string{"array"},
@@ -5573,6 +5723,11 @@ func schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref common.ReferenceCallback)
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
 					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
 							Items: &spec.SchemaOrArray{
@@ -6077,6 +6232,11 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -6091,6 +6251,11 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -6139,6 +6304,11 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 						},
 					},
 					"performanceHints": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy.\n\nCurrently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted.",
 							Type:        []string{"array"},
@@ -6360,6 +6530,11 @@ func schema_pkg_apis_projectcalico_v3_PrefixAdvertisement(ref common.ReferenceCa
 						},
 					},
 					"communities": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Communities can be list of either community names already defined in `Specs.Communities` or community value of format `aa:nn` or `aa:nn:mm`. For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number. For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number. Where,`aa` is an AS Number, `nn` and `mm` are per-AS identifier.",
 							Type:        []string{"array"},
@@ -6483,6 +6658,11 @@ func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) 
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -6497,6 +6677,11 @@ func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) 
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -7006,6 +7191,11 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -7020,6 +7210,11 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -7096,6 +7291,11 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 						},
 					},
 					"performanceHints": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy.\n\nCurrently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted.",
 							Type:        []string{"array"},
@@ -7230,6 +7430,11 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref comm
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "List of ingress rules to be applied to the selected pods. Traffic is allowed to a pod if there are no NetworkPolicies selecting the pod (and cluster policy otherwise allows the traffic), OR if the traffic source is the pod's local node, OR if the traffic matches at least one ingress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy does not allow any traffic (and serves solely to ensure that the pods it selects are isolated by default)",
 							Type:        []string{"array"},
@@ -7244,6 +7449,11 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref comm
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "List of egress rules to be applied to the selected pods. Outgoing traffic is allowed if there are no NetworkPolicies selecting the pod (and cluster policy otherwise allows the traffic), OR if the traffic matches at least one egress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy limits all outgoing traffic (and serves solely to ensure that the pods it selects are isolated by default). This field is beta-level in 1.8",
 							Type:        []string{"array"},
@@ -7405,6 +7615,11 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -7419,6 +7634,11 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
 							Type:        []string{"array"},
@@ -7467,6 +7687,11 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"performanceHints": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy.\n\nCurrently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted.",
 							Type:        []string{"array"},
@@ -7690,6 +7915,11 @@ func schema_pkg_apis_projectcalico_v3_TierStatus(ref common.ReferenceCallback) c
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Conditions represents the latest observed set of conditions for the resource. A tier with a \"Ready\" condition set to \"True\" is operating as expected.",
 							Type:        []string{"array"},

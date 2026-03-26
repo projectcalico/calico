@@ -49,15 +49,19 @@ type BGPFilter struct {
 // BGPFilterSpec contains the IPv4 and IPv6 filter rules of the BGP Filter.
 type BGPFilterSpec struct {
 	// The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.
+	// +listType=atomic
 	ExportV4 []BGPFilterRuleV4 `json:"exportV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.
+	// +listType=atomic
 	ImportV4 []BGPFilterRuleV4 `json:"importV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.
+	// +listType=atomic
 	ExportV6 []BGPFilterRuleV6 `json:"exportV6,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.
+	// +listType=atomic
 	ImportV6 []BGPFilterRuleV6 `json:"importV6,omitempty" validate:"omitempty,dive"`
 }
 
@@ -117,6 +121,7 @@ type BGPFilterRuleV4 struct {
 	// If non-empty, this filter rule will only apply to routes whose AS path begins with the
 	// specified sequence of AS numbers.
 	// +optional
+	// +listType=atomic
 	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty"`
 
 	// If set, this filter rule will only apply to routes with the given priority, in the
@@ -134,6 +139,7 @@ type BGPFilterRuleV4 struct {
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=10
+	// +listType=atomic
 	Operations []BGPFilterOperation `json:"operations,omitempty" validate:"omitempty,dive"`
 }
 
@@ -193,6 +199,7 @@ type BGPFilterRuleV6 struct {
 	// If non-empty, this filter rule will only apply to routes whose AS path begins with the
 	// specified sequence of AS numbers.
 	// +optional
+	// +listType=atomic
 	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty"`
 
 	// If set, this filter rule will only apply to routes with the given priority, in the
@@ -210,6 +217,7 @@ type BGPFilterRuleV6 struct {
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=10
+	// +listType=atomic
 	Operations []BGPFilterOperation `json:"operations,omitempty" validate:"omitempty,dive"`
 }
 
@@ -282,6 +290,7 @@ type BGPFilterCommunityMatch struct {
 	// Values is a list of BGP community values to match against.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=1
+	// +listType=atomic
 	Values []BGPCommunityValue `json:"values" validate:"required"`
 }
 
@@ -320,6 +329,7 @@ type BGPFilterPrependASPath struct {
 	// e.g. [65000, 65001] produces the path "65000 65001 <original>".
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=10
+	// +listType=atomic
 	Prefix []numorstring.ASNumber `json:"prefix" validate:"required"`
 }
 
