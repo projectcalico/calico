@@ -30,7 +30,7 @@ const (
 // BGPFilterList is a list of BGPFilter resources.
 type BGPFilterList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []BGPFilter `json:"items" protobuf:"bytes,2,rep,name=items"`
 }

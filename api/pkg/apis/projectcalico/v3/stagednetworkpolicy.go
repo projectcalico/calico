@@ -129,7 +129,7 @@ type StagedNetworkPolicySpec struct {
 // StagedNetworkPolicyList contains a list of StagedNetworkPolicy resources.
 type StagedNetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
+	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []StagedNetworkPolicy `json:"items"`
 }
 
