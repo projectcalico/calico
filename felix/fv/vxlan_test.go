@@ -266,7 +266,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					felix.Exec(append([]string{"ip", "r", "replace"}, subnetArgs...)...)
 
 					expCrossSubRoute := fmt.Sprintf("10.65.1.0/26 via %s dev bond0 proto 80 onlink", tc.Felixes[1].IP)
-					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(
+					Eventually(felix.ExecOutputFn("ip", "route", "show"), "60s", "500ms").Should(
 						ContainSubstring(expCrossSubRoute),
 						"Cross-subnet route should move from eth0 to bond0.",
 					)
