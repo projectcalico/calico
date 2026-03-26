@@ -22,7 +22,7 @@ type ControllersConfigApplyConfiguration struct {
 	// LoadBalancer enables and configures the LoadBalancer controller. Enabled by default, set to nil to disable.
 	LoadBalancer *LoadBalancerControllerConfigApplyConfiguration `json:"loadBalancer,omitempty"`
 	// Migration enables and configures migration controllers.
-	Migration *MigrationControllerConfigApplyConfiguration `json:"policyMigration,omitempty"`
+	Migration *MigrationControllerConfigApplyConfiguration `json:"migration,omitempty"`
 }
 
 // ControllersConfigApplyConfiguration constructs a declarative configuration of the ControllersConfig type for use with

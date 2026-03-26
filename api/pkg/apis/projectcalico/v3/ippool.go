@@ -30,7 +30,7 @@ const (
 // IPPoolList contains a list of IPPool resources.
 type IPPoolList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []IPPool `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -77,6 +77,8 @@ const (
 )
 
 type IPPoolStatus struct {
+	// +listType=map
+	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty" protobuf:"bytes,1,rep,name=conditions"`
 }
 

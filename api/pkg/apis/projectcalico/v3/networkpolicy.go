@@ -28,7 +28,7 @@ const (
 // NetworkPolicyList is a list of Policy objects.
 type NetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []NetworkPolicy `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -65,10 +65,12 @@ type NetworkPolicySpec struct {
 
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +listType=atomic
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +listType=atomic
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 
 	// The selector is an expression used to pick out the endpoints that the policy should
@@ -130,6 +132,7 @@ type NetworkPolicySpec struct {
 	// any large static policies that are known to be used on every node.
 	// If the policy is _not_ used on a particular node then the work
 	// done to preload the policy (and to maintain it) is wasted.
+	// +listType=set
 	PerformanceHints []PolicyPerformanceHint `json:"performanceHints,omitempty" validate:"omitempty,unique,dive,oneof=AssumeNeededOnEveryNode"`
 }
 
