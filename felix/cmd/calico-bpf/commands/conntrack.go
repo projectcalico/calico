@@ -865,17 +865,17 @@ func (cmd *conntrackStatsCmd) Run(c *cobra.Command, _ []string) {
 
 	if *jsonOutput {
 		type ctStatsJSON struct {
-			MapSize         int `json:"map_size"`
-			TotalConns      int `json:"total_connections"`
-			TotalEntries    int `json:"total_entries"`
-			NATConns        int `json:"nat_connections"`
-			TCP             int `json:"tcp"`
-			UDP             int `json:"udp"`
-			Others          int `json:"others"`
-			TCPEstablished  int `json:"tcp_established"`
-			TCPClosed       int `json:"tcp_closed"`
-			TCPReset        int `json:"tcp_reset"`
-			TCPSynSent      int `json:"tcp_syn_sent"`
+			MapSize        int `json:"map_size"`
+			TotalConns     int `json:"total_connections"`
+			TotalEntries   int `json:"total_entries"`
+			NATConns       int `json:"nat_connections"`
+			TCP            int `json:"tcp"`
+			UDP            int `json:"udp"`
+			Others         int `json:"others"`
+			TCPEstablished int `json:"tcp_established"`
+			TCPClosed      int `json:"tcp_closed"`
+			TCPReset       int `json:"tcp_reset"`
+			TCPSynSent     int `json:"tcp_syn_sent"`
 		}
 		stats := ctStatsJSON{
 			MapSize:        maps.Size(ctMap.GetName()),
