@@ -21,6 +21,7 @@ type StagedGlobalNetworkPolicyApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *StagedGlobalNetworkPolicySpecApplyConfiguration `json:"spec,omitempty"`
+	Status                           *PolicyStatusApplyConfiguration                  `json:"status,omitempty"`
 }
 
 // StagedGlobalNetworkPolicy constructs a declarative configuration of the StagedGlobalNetworkPolicy type for use with
@@ -65,6 +66,12 @@ func ExtractStagedGlobalNetworkPolicyFrom(stagedGlobalNetworkPolicy *projectcali
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractStagedGlobalNetworkPolicy(stagedGlobalNetworkPolicy *projectcalicov3.StagedGlobalNetworkPolicy, fieldManager string) (*StagedGlobalNetworkPolicyApplyConfiguration, error) {
 	return ExtractStagedGlobalNetworkPolicyFrom(stagedGlobalNetworkPolicy, fieldManager, "")
+}
+
+// ExtractStagedGlobalNetworkPolicyStatus extracts the applied configuration owned by fieldManager from
+// stagedGlobalNetworkPolicy for the status subresource.
+func ExtractStagedGlobalNetworkPolicyStatus(stagedGlobalNetworkPolicy *projectcalicov3.StagedGlobalNetworkPolicy, fieldManager string) (*StagedGlobalNetworkPolicyApplyConfiguration, error) {
+	return ExtractStagedGlobalNetworkPolicyFrom(stagedGlobalNetworkPolicy, fieldManager, "status")
 }
 
 func (b StagedGlobalNetworkPolicyApplyConfiguration) IsApplyConfiguration() {}
@@ -232,6 +239,14 @@ func (b *StagedGlobalNetworkPolicyApplyConfiguration) ensureObjectMetaApplyConfi
 // If called multiple times, the Spec field is set to the value of the last call.
 func (b *StagedGlobalNetworkPolicyApplyConfiguration) WithSpec(value *StagedGlobalNetworkPolicySpecApplyConfiguration) *StagedGlobalNetworkPolicyApplyConfiguration {
 	b.Spec = value
+	return b
+}
+
+// WithStatus sets the Status field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Status field is set to the value of the last call.
+func (b *StagedGlobalNetworkPolicyApplyConfiguration) WithStatus(value *PolicyStatusApplyConfiguration) *StagedGlobalNetworkPolicyApplyConfiguration {
+	b.Status = value
 	return b
 }
 

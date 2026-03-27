@@ -36,13 +36,14 @@ rules:
     verbs:
       - watch
       - list
-  # Needed for policy name migrator.
+  # Needed for policy name migrator and policy validation controller.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - networkpolicies
       - stagednetworkpolicies
       - globalnetworkpolicies
       - stagedglobalnetworkpolicies
+      - stagedkubernetesnetworkpolicies
     verbs:
       - watch
       - list
@@ -50,6 +51,17 @@ rules:
       - create
       - update
       - delete
+  # Needed for the policy validation controller to update status conditions.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - networkpolicies/status
+      - stagednetworkpolicies/status
+      - globalnetworkpolicies/status
+      - stagedglobalnetworkpolicies/status
+      - stagedkubernetesnetworkpolicies/status
+    verbs:
+      - get
+      - update
   # Needed for policy name migrator to check calico/node daemonset status.
   - apiGroups: ["apps"]
     resources:
@@ -182,13 +194,14 @@ rules:
     verbs:
       - get
       - update
-  # Needed for policy name migrator.
+  # Needed for policy name migrator and policy validation controller.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - networkpolicies
       - stagednetworkpolicies
       - globalnetworkpolicies
       - stagedglobalnetworkpolicies
+      - stagedkubernetesnetworkpolicies
     verbs:
       - watch
       - list
@@ -196,6 +209,17 @@ rules:
       - create
       - update
       - delete
+  # Needed for the policy validation controller to update status conditions.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - networkpolicies/status
+      - stagednetworkpolicies/status
+      - globalnetworkpolicies/status
+      - stagedglobalnetworkpolicies/status
+      - stagedkubernetesnetworkpolicies/status
+    verbs:
+      - get
+      - update
   # Needed for policy name migrator to check calico/node daemonset status.
   - apiGroups: ["apps"]
     resources:
