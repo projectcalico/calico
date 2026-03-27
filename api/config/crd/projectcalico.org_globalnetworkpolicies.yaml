@@ -24,6 +24,10 @@ spec:
         - jsonPath: .spec.order
           name: Order
           type: number
+        - description: Whether the policy passes validation
+          jsonPath: .status.conditions[?(@.type=='Valid')].status
+          name: Valid
+          type: string
         - jsonPath: .metadata.creationTimestamp
           name: Age
           type: date
@@ -527,6 +531,48 @@ spec:
                   rule:
                     (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
                     || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
+            status:
+              properties:
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+              type: object
           required:
             - metadata
             - spec
@@ -535,4 +581,5 @@ spec:
         - jsonPath: .spec.tier
       served: true
       storage: true
-      subresources: {}
+      subresources:
+        status: {}

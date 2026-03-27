@@ -16,11 +16,12 @@ import (
 // StagedKubernetesNetworkPolicyApplyConfiguration represents a declarative configuration of the StagedKubernetesNetworkPolicy type for use
 // with apply.
 //
-// StagedKubernetesNetworkPolicy is a staged GlobalNetworkPolicy.
+// StagedKubernetesNetworkPolicy is a staged KubernetesNetworkPolicy.
 type StagedKubernetesNetworkPolicyApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *StagedKubernetesNetworkPolicySpecApplyConfiguration `json:"spec,omitempty"`
+	Status                           *PolicyStatusApplyConfiguration                      `json:"status,omitempty"`
 }
 
 // StagedKubernetesNetworkPolicy constructs a declarative configuration of the StagedKubernetesNetworkPolicy type for use with
@@ -67,6 +68,12 @@ func ExtractStagedKubernetesNetworkPolicyFrom(stagedKubernetesNetworkPolicy *pro
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractStagedKubernetesNetworkPolicy(stagedKubernetesNetworkPolicy *projectcalicov3.StagedKubernetesNetworkPolicy, fieldManager string) (*StagedKubernetesNetworkPolicyApplyConfiguration, error) {
 	return ExtractStagedKubernetesNetworkPolicyFrom(stagedKubernetesNetworkPolicy, fieldManager, "")
+}
+
+// ExtractStagedKubernetesNetworkPolicyStatus extracts the applied configuration owned by fieldManager from
+// stagedKubernetesNetworkPolicy for the status subresource.
+func ExtractStagedKubernetesNetworkPolicyStatus(stagedKubernetesNetworkPolicy *projectcalicov3.StagedKubernetesNetworkPolicy, fieldManager string) (*StagedKubernetesNetworkPolicyApplyConfiguration, error) {
+	return ExtractStagedKubernetesNetworkPolicyFrom(stagedKubernetesNetworkPolicy, fieldManager, "status")
 }
 
 func (b StagedKubernetesNetworkPolicyApplyConfiguration) IsApplyConfiguration() {}
@@ -234,6 +241,14 @@ func (b *StagedKubernetesNetworkPolicyApplyConfiguration) ensureObjectMetaApplyC
 // If called multiple times, the Spec field is set to the value of the last call.
 func (b *StagedKubernetesNetworkPolicyApplyConfiguration) WithSpec(value *StagedKubernetesNetworkPolicySpecApplyConfiguration) *StagedKubernetesNetworkPolicyApplyConfiguration {
 	b.Spec = value
+	return b
+}
+
+// WithStatus sets the Status field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Status field is set to the value of the last call.
+func (b *StagedKubernetesNetworkPolicyApplyConfiguration) WithStatus(value *PolicyStatusApplyConfiguration) *StagedKubernetesNetworkPolicyApplyConfiguration {
+	b.Status = value
 	return b
 }
 

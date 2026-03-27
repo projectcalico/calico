@@ -162,6 +162,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &projectcalicov3.NodeControllerConfigApplyConfiguration{}
 	case v3.SchemeGroupVersion.WithKind("PolicyControllerConfig"):
 		return &projectcalicov3.PolicyControllerConfigApplyConfiguration{}
+	case v3.SchemeGroupVersion.WithKind("PolicyStatus"):
+		return &projectcalicov3.PolicyStatusApplyConfiguration{}
 	case v3.SchemeGroupVersion.WithKind("PrefixAdvertisement"):
 		return &projectcalicov3.PrefixAdvertisementApplyConfiguration{}
 	case v3.SchemeGroupVersion.WithKind("Profile"):

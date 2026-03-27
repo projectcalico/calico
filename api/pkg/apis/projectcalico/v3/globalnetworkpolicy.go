@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,10 +38,12 @@ type GlobalNetworkPolicyList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,shortName={gnp,cgnp}
 // +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
+// +kubebuilder:printcolumn:name="Valid",type=string,JSONPath=".status.conditions[?(@.type=='Valid')].status",description="Whether the policy passes validation"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 type GlobalNetworkPolicy struct {
@@ -49,6 +51,9 @@ type GlobalNetworkPolicy struct {
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Spec GlobalNetworkPolicySpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
+
+	// +optional
+	Status *PolicyStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
 // +kubebuilder:validation:XValidation:rule="!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT) && self.preDNAT))",message="preDNAT and doNotTrack cannot both be true",reason=FieldValueForbidden
