@@ -16,6 +16,9 @@
 #define RPF_RES_LOOSE		2
 #define RPF_RES_DISABLED	3
 
+#define DHCPV4_SERVER_PORT	67
+#define DHCPV4_CLIENT_PORT	68
+
 static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt *r)
 {
         CALI_DEBUG("Workload RPF check src=" IP_FMT " skb iface=%d.",
@@ -121,7 +124,13 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 			}
 			break;
 		case BPF_FIB_LKUP_RET_NOT_FWDED:
-			if (ip_link_local(ctx->state->ip_src)) {
+			if (ip_link_local(ctx->state->ip_src)
+#ifndef IPVER6
+				|| (ctx->state->ip_proto == IPPROTO_UDP &&
+				    ((ctx->state->sport == DHCPV4_CLIENT_PORT && ctx->state->dport == DHCPV4_SERVER_PORT) ||
+				     (ctx->state->sport == DHCPV4_SERVER_PORT && ctx->state->dport == DHCPV4_CLIENT_PORT)))
+#endif
+			) {
 #ifdef IPVER6
 				if (ip_link_local(ctx->state->ip_dst)){
 #else
