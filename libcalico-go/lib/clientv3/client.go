@@ -56,11 +56,18 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 	if err != nil {
 		return nil, err
 	}
+	c := NewFromBackend(be).(client)
+	c.config = config
+	return c, nil
+}
+
+// NewFromBackend creates a new client from a pre-built backend client. This allows
+// injecting a backend backed by fake k8s clients for testing.
+func NewFromBackend(be bapi.Client) Interface {
 	return client{
-		config:    config,
 		backend:   be,
 		resources: &resources{backend: be},
-	}, nil
+	}
 }
 
 // NewFromEnv loads the config from ENV variables and returns a connected client.

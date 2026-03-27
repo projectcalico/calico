@@ -176,7 +176,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			pools        *ipamtestutils.IPPoolAccessor
 			rw           blockReaderWriter
 			ic           *ipamClient
-			kc           *kubernetes.Clientset
+			kc           kubernetes.Interface
 		)
 
 		BeforeEach(func() {
@@ -1186,7 +1186,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			ctx      context.Context
 			host     string
 			net      *cnet.IPNet
-			kc       *kubernetes.Clientset
+			kc       kubernetes.Interface
 			rsvdAttr *HostReservedAttr
 		)
 
