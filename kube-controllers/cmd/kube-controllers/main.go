@@ -54,6 +54,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/pod"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/policyvalidation"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/tier"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
@@ -511,6 +512,13 @@ func (cc *controllerControl) InitControllers(
 			tierController := tier.NewController(ctx, v3c, tierInformer, gnpInformer, npInformer, sgnpInformer, snpInformer)
 			cc.controllers["Tier"] = tierController
 			cc.registerInformers(tierInformer, gnpInformer, npInformer, sgnpInformer, snpInformer)
+
+			// Enable the PolicyValidation controller, which validates all policy resources
+			// asynchronously and updates a "Valid" status condition.
+			sknpInformer := calicoFactory.Projectcalico().V3().StagedKubernetesNetworkPolicies().Informer()
+			pvController := policyvalidation.NewController(ctx, v3c, npInformer, gnpInformer, snpInformer, sgnpInformer, sknpInformer)
+			cc.controllers["PolicyValidation"] = pvController
+			cc.registerInformers(sknpInformer)
 		}
 	}
 

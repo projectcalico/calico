@@ -19,6 +19,7 @@ type NetworkPolicyApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *NetworkPolicySpecApplyConfiguration `json:"spec,omitempty"`
+	Status                           *PolicyStatusApplyConfiguration      `json:"status,omitempty"`
 }
 
 // NetworkPolicy constructs a declarative configuration of the NetworkPolicy type for use with
@@ -65,6 +66,12 @@ func ExtractNetworkPolicyFrom(networkPolicy *projectcalicov3.NetworkPolicy, fiel
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractNetworkPolicy(networkPolicy *projectcalicov3.NetworkPolicy, fieldManager string) (*NetworkPolicyApplyConfiguration, error) {
 	return ExtractNetworkPolicyFrom(networkPolicy, fieldManager, "")
+}
+
+// ExtractNetworkPolicyStatus extracts the applied configuration owned by fieldManager from
+// networkPolicy for the status subresource.
+func ExtractNetworkPolicyStatus(networkPolicy *projectcalicov3.NetworkPolicy, fieldManager string) (*NetworkPolicyApplyConfiguration, error) {
+	return ExtractNetworkPolicyFrom(networkPolicy, fieldManager, "status")
 }
 
 func (b NetworkPolicyApplyConfiguration) IsApplyConfiguration() {}
@@ -232,6 +239,14 @@ func (b *NetworkPolicyApplyConfiguration) ensureObjectMetaApplyConfigurationExis
 // If called multiple times, the Spec field is set to the value of the last call.
 func (b *NetworkPolicyApplyConfiguration) WithSpec(value *NetworkPolicySpecApplyConfiguration) *NetworkPolicyApplyConfiguration {
 	b.Spec = value
+	return b
+}
+
+// WithStatus sets the Status field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Status field is set to the value of the last call.
+func (b *NetworkPolicyApplyConfiguration) WithStatus(value *PolicyStatusApplyConfiguration) *NetworkPolicyApplyConfiguration {
+	b.Status = value
 	return b
 }
 

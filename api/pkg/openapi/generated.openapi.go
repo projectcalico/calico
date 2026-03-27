@@ -112,6 +112,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkSetSpec":                     schema_pkg_apis_projectcalico_v3_NetworkSetSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NodeControllerConfig":               schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyControllerConfig":             schema_pkg_apis_projectcalico_v3_PolicyControllerConfig(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus":                       schema_pkg_apis_projectcalico_v3_PolicyStatus(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.PrefixAdvertisement":                schema_pkg_apis_projectcalico_v3_PrefixAdvertisement(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Profile":                            schema_pkg_apis_projectcalico_v3_Profile(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileList":                        schema_pkg_apis_projectcalico_v3_ProfileList(ref),
@@ -4357,12 +4358,17 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicy(ref common.ReferenceCa
 							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicySpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus"),
+						},
+					},
 				},
 				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicySpec", metav1.ObjectMeta{}.OpenAPIModelName()},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicySpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6156,12 +6162,17 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref common.ReferenceCallback
 							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicySpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus"),
+						},
+					},
 				},
 				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicySpec", metav1.ObjectMeta{}.OpenAPIModelName()},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicySpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6515,6 +6526,42 @@ func schema_pkg_apis_projectcalico_v3_PolicyControllerConfig(ref common.Referenc
 		},
 		Dependencies: []string{
 			metav1.Duration{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_PolicyStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PolicyStatus contains the status of a Calico policy resource.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -7108,12 +7155,17 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref common.Refer
 							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicySpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus"),
+						},
+					},
 				},
 				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicySpec", metav1.ObjectMeta{}.OpenAPIModelName()},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicySpec", metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -7325,7 +7377,7 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref common.R
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "StagedKubernetesNetworkPolicy is a staged GlobalNetworkPolicy.",
+				Description: "StagedKubernetesNetworkPolicy is a staged KubernetesNetworkPolicy.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -7354,12 +7406,17 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref common.R
 							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicySpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus"),
+						},
+					},
 				},
 				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicySpec", metav1.ObjectMeta{}.OpenAPIModelName()},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicySpec", metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -7532,12 +7589,17 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicy(ref common.ReferenceCa
 							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicySpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus"),
+						},
+					},
 				},
 				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicySpec", metav1.ObjectMeta{}.OpenAPIModelName()},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyStatus", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicySpec", metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 

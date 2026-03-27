@@ -22,6 +22,7 @@ type StagedNetworkPolicyApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *StagedNetworkPolicySpecApplyConfiguration `json:"spec,omitempty"`
+	Status                           *PolicyStatusApplyConfiguration            `json:"status,omitempty"`
 }
 
 // StagedNetworkPolicy constructs a declarative configuration of the StagedNetworkPolicy type for use with
@@ -68,6 +69,12 @@ func ExtractStagedNetworkPolicyFrom(stagedNetworkPolicy *projectcalicov3.StagedN
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractStagedNetworkPolicy(stagedNetworkPolicy *projectcalicov3.StagedNetworkPolicy, fieldManager string) (*StagedNetworkPolicyApplyConfiguration, error) {
 	return ExtractStagedNetworkPolicyFrom(stagedNetworkPolicy, fieldManager, "")
+}
+
+// ExtractStagedNetworkPolicyStatus extracts the applied configuration owned by fieldManager from
+// stagedNetworkPolicy for the status subresource.
+func ExtractStagedNetworkPolicyStatus(stagedNetworkPolicy *projectcalicov3.StagedNetworkPolicy, fieldManager string) (*StagedNetworkPolicyApplyConfiguration, error) {
+	return ExtractStagedNetworkPolicyFrom(stagedNetworkPolicy, fieldManager, "status")
 }
 
 func (b StagedNetworkPolicyApplyConfiguration) IsApplyConfiguration() {}
@@ -235,6 +242,14 @@ func (b *StagedNetworkPolicyApplyConfiguration) ensureObjectMetaApplyConfigurati
 // If called multiple times, the Spec field is set to the value of the last call.
 func (b *StagedNetworkPolicyApplyConfiguration) WithSpec(value *StagedNetworkPolicySpecApplyConfiguration) *StagedNetworkPolicyApplyConfiguration {
 	b.Spec = value
+	return b
+}
+
+// WithStatus sets the Status field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Status field is set to the value of the last call.
+func (b *StagedNetworkPolicyApplyConfiguration) WithStatus(value *PolicyStatusApplyConfiguration) *StagedNetworkPolicyApplyConfiguration {
+	b.Status = value
 	return b
 }
 
