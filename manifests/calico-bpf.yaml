@@ -334,6 +334,7 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
+                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -469,6 +470,7 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
+                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -604,6 +606,7 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
+                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -739,6 +742,7 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
+                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -890,7 +894,7 @@ spec:
                   format: int32
                   type: integer
                 localWorkloadSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 maxRestartTime:
                   type: string
@@ -904,7 +908,7 @@ spec:
                   maxLength: 253
                   type: string
                 nodeSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 numAllowedLocalASNumbers:
                   format: int32
@@ -929,7 +933,7 @@ spec:
                   maxLength: 64
                   type: string
                 peerSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 reachableBy:
                   maxLength: 64
@@ -2724,17 +2728,20 @@ spec:
                   reason: FieldValueInvalid
                   rule:
                     "!has(self.natOutgoingAddress) || size(self.natOutgoingAddress)
-                    == 0 || !self.natOutgoingAddress.contains(':')"
+                    == 0 || (isIP(self.natOutgoingAddress) && ip(self.natOutgoingAddress).family()
+                    == 4)"
                 - message: deviceRouteSourceAddress must be a valid IPv4 address
                   reason: FieldValueInvalid
                   rule:
                     "!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress)
-                    == 0 || !self.deviceRouteSourceAddress.contains(':')"
+                    == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family()
+                    == 4)"
                 - message: deviceRouteSourceAddressIPv6 must be a valid IPv6 address
                   reason: FieldValueInvalid
                   rule:
                     "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6)
-                    == 0 || self.deviceRouteSourceAddressIPv6.contains(':')"
+                    == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
+                    == 6)"
           type: object
       served: true
       storage: true
@@ -2785,7 +2792,7 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -2810,7 +2817,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -2823,7 +2830,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -2958,7 +2965,7 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -2983,7 +2990,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -2996,7 +3003,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -3087,6 +3094,7 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                  maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
                 ingress:
@@ -3102,7 +3110,7 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -3127,7 +3135,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -3140,7 +3148,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -3275,7 +3283,7 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -3300,7 +3308,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -3313,7 +3321,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -3404,10 +3412,11 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                  maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
                 namespaceSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 order:
                   type: number
@@ -3421,10 +3430,10 @@ spec:
                 preDNAT:
                   type: boolean
                 selector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 serviceAccountSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 tier:
                   default: default
@@ -3853,12 +3862,12 @@ spec:
                     - CrossSubnet
                   type: string
                 namespaceSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 natOutgoing:
                   type: boolean
                 nodeSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 vxlanMode:
                   enum:
@@ -3893,8 +3902,8 @@ spec:
                 - message: IPIP is not supported on IPv6 pools
                   reason: FieldValueForbidden
                   rule:
-                    "!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode
-                    == 'Never' || size(self.ipipMode) == 0"
+                    cidr(self.cidr).ip().family() != 6 || !has(self.ipipMode) || self.ipipMode
+                    == 'Never' || size(self.ipipMode) == 0
                 - message: LoadBalancer IP pools cannot disable BGP export
                   reason: FieldValueForbidden
                   rule:
@@ -4279,7 +4288,7 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -4304,7 +4313,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -4317,7 +4326,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -4452,7 +4461,7 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -4477,7 +4486,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -4490,7 +4499,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -4581,6 +4590,7 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                  maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
                 ingress:
@@ -4596,7 +4606,7 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -4621,7 +4631,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -4634,7 +4644,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -4769,7 +4779,7 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -4794,7 +4804,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -4807,7 +4817,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -4898,6 +4908,7 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                  maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
                 order:
@@ -4910,10 +4921,10 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 selector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 serviceAccountSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 tier:
                   default: default
@@ -5025,7 +5036,7 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -5050,7 +5061,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -5063,7 +5074,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -5198,7 +5209,7 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -5223,7 +5234,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -5236,7 +5247,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -5327,6 +5338,7 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                  maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
                 ingress:
@@ -5342,7 +5354,7 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -5367,7 +5379,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -5380,7 +5392,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -5515,7 +5527,7 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -5540,7 +5552,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -5553,7 +5565,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -5644,10 +5656,11 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                  maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
                 namespaceSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 order:
                   type: number
@@ -5661,10 +5674,10 @@ spec:
                 preDNAT:
                   type: boolean
                 selector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 serviceAccountSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 stagedAction:
                   default: Set
@@ -6025,7 +6038,7 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -6050,7 +6063,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -6063,7 +6076,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -6198,7 +6211,7 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -6223,7 +6236,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -6236,7 +6249,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -6327,6 +6340,7 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                  maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
                 ingress:
@@ -6342,7 +6356,7 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -6367,7 +6381,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -6380,7 +6394,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -6515,7 +6529,7 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           nets:
                             items:
@@ -6540,7 +6554,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -6553,7 +6567,7 @@ spec:
                             type: array
                             x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 4096
+                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -6644,6 +6658,7 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                  maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
                 order:
@@ -6656,10 +6671,10 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
                 selector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 serviceAccountSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 stagedAction:
                   default: Set
