@@ -50,6 +50,7 @@ type TcGlobalData struct {
 	DSCP          int8
 	IstioDSCP     int8
 	MaglevLUTSize uint32
+	HostIfindex   uint32
 }
 
 type XDPGlobalData struct {
