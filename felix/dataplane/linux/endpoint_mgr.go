@@ -155,6 +155,8 @@ type endpointManager struct {
 	actions      generictables.ActionFactory
 	filterMaps   nftables.MapsDataplane
 
+	ifceHandler nftables.InterfaceHandler
+
 	// ARP proxy suppression table (nftables ARP family). nil for IPv6.
 	arpTable Table
 	arpMaps  nftables.MapsDataplane
@@ -256,6 +258,7 @@ func newEndpointManager(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
+	ifces nftables.InterfaceHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
@@ -276,6 +279,7 @@ func newEndpointManager(
 		os.Stat,
 		defaultRPFilter,
 		filterMaps,
+		ifces,
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsMgr,
@@ -298,6 +302,7 @@ func newEndpointManagerWithShims(
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
+	ifces nftables.InterfaceHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
@@ -319,6 +324,7 @@ func newEndpointManagerWithShims(
 		ipVersion:          ipVersion,
 		wlIfacesRegexp:     wlIfacesRegexp,
 		filterMaps:         filterMaps,
+		ifceHandler:        ifces,
 		bpfEndpointManager: bpfEndpointManager,
 
 		arpTable: arpTable,
@@ -909,6 +915,15 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+
+			if m.ifceHandler != nil {
+				// Update the flowtable handler with the current set of workload interfaces.
+				wlIfces := make([]string, 0, len(fromMappings))
+				for i := range fromMappings {
+					wlIfces = append(wlIfces, i)
+				}
+				m.ifceHandler.SetWorkloadInterfaces(wlIfces)
+			}
 		}
 
 		// Rewrite the dispatch chains if they've changed.

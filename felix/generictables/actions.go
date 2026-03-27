@@ -36,6 +36,7 @@ type ActionFactory interface {
 	LimitPacketRate(rate int64, burst int64, mark uint32) Action
 	LimitNumConnections(num int64, rejectWith RejectWith) Action
 	DSCP(value uint8) Action
+	FlowOffload(table string) Action
 }
 
 type RejectWith string

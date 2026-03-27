@@ -464,8 +464,9 @@ type Config struct {
 	BPFForceTrackPacketsFromIfaces []string
 	ServiceLoopPrevention          string
 
-	NFTablesMode    string
-	FlowLogsEnabled bool
+	NFTablesMode             string
+	NFTablesFlowTableOffload string
+	FlowLogsEnabled          bool
 
 	IstioAmbientModeEnabled bool
 	IstioDSCPMark           uint8
