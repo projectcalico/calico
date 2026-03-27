@@ -98,12 +98,12 @@ spec:
                     - CrossSubnet
                   type: string
                 namespaceSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 natOutgoing:
                   type: boolean
                 nodeSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 vxlanMode:
                   enum:

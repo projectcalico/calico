@@ -67,11 +67,13 @@ type NetworkPolicySpec struct {
 
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 
@@ -100,7 +102,7 @@ type NetworkPolicySpec struct {
 	// 	type in {"frontend", "backend"}
 	// 	deployment != "dev"
 	// 	! has(label_name)
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	Selector string `json:"selector,omitempty" validate:"selector"`
 
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
@@ -123,7 +125,7 @@ type NetworkPolicySpec struct {
 	Types []PolicyType `json:"types,omitempty"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
 
 	// PerformanceHints contains a list of hints to Calico's policy engine to

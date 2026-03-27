@@ -73,7 +73,7 @@ type BGPPeerSpec struct {
 	// Selector for the nodes that should have this peering.  When this is set, the Node
 	// field must be empty.
 	// +optional
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
 
 	// The IP address of the peer followed by an optional port number to peer with.
@@ -100,7 +100,7 @@ type BGPPeerSpec struct {
 	// NodeBGPSpec.IPv6Address specified.  The remote AS number comes from the remote
 	// node's NodeBGPSpec.ASNumber, or the global default if that is not set.
 	// +optional
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	PeerSelector string `json:"peerSelector,omitempty" validate:"omitempty,selector"`
 
 	// Option to keep the original nexthop field when routes are sent to a BGP Peer.
@@ -163,7 +163,7 @@ type BGPPeerSpec struct {
 	// Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty,
 	// and the ASNumber must not be empty.
 	// +optional
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	LocalWorkloadSelector string `json:"localWorkloadSelector,omitempty" validate:"omitempty,selector"`
 
 	// ReversePeering, for peerings between Calico nodes controls whether

@@ -168,7 +168,7 @@ type EntityRule struct {
 	//
 	// The effect is that the latter will accept packets from non-Calico sources whereas the
 	// former is limited to packets from Calico-controlled endpoints.
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	Selector string `json:"selector,omitempty" validate:"omitempty,selector"`
 
 	// NamespaceSelector is an optional field that contains a selector expression. Only traffic
@@ -184,7 +184,7 @@ type EntityRule struct {
 	//
 	// For GlobalNetworkPolicy, an empty NamespaceSelector implies the Selector applies to workload
 	// endpoints across all namespaces.
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`
 
 	// Services is an optional field that contains options for matching Kubernetes Services.
@@ -214,7 +214,7 @@ type EntityRule struct {
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
 	// subtleties with negated selectors.
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	NotSelector string `json:"notSelector,omitempty" validate:"omitempty,selector"`
 
 	// NotPorts is the negated version of the Ports field.

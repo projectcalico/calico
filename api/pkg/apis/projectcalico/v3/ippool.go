@@ -126,12 +126,12 @@ type IPPoolSpec struct {
 	BlockSize int `json:"blockSize,omitempty"`
 
 	// Allows IPPool to allocate for a specific node by label selector.
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
 
 	// Allows IPPool to allocate for a specific namespace by label selector.
 	// If specified, both namespaceSelector and nodeSelector must match for the pool to be used.
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`
 
 	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
