@@ -49,10 +49,12 @@ type Profile struct {
 type ProfileSpec struct {
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 	// An option set of labels to apply to each endpoint (in addition to their own labels)

@@ -97,6 +97,7 @@ type BGPFilterRuleV4 struct {
 
 	// If non-empty, this filter rule will only apply to routes with an outgoing interface that
 	// matches Interface.
+	// +kubebuilder:validation:MaxLength=15
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
 
 	// MatchOperator defines how the route's prefix is compared against CIDR.  "Equal" requires
@@ -175,6 +176,7 @@ type BGPFilterRuleV6 struct {
 
 	// If non-empty, this filter rule will only apply to routes with an outgoing interface that
 	// matches Interface.
+	// +kubebuilder:validation:MaxLength=15
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
 
 	// MatchOperator defines how the route's prefix is compared against CIDR.  "Equal" requires
