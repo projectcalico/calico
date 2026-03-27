@@ -417,6 +417,21 @@ func (c *loadBalancerController) ensureDatastoreUpgraded() error {
 // - Updates the controllers internal state tracking of which IP addresses are allocated.
 // - Updates the IP addresses in the Service Status to match the IPAM DB.
 func (c *loadBalancerController) syncService(svcKey serviceKey) {
+	// If the service has spec.externalIPs, reflect them directly in status without Calico IPAM.
+	if externalSvc, err := c.serviceLister.Services(svcKey.namespace).Get(svcKey.name); err == nil && len(externalSvc.Spec.ExternalIPs) > 0 {
+		var ingress []v1.LoadBalancerIngress
+		for _, ip := range externalSvc.Spec.ExternalIPs {
+			ingress = append(ingress, v1.LoadBalancerIngress{IP: ip})
+		}
+		externalSvc.Status.LoadBalancer.Ingress = ingress
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, updateErr := c.clientSet.CoreV1().Services(externalSvc.Namespace).UpdateStatus(ctx, externalSvc, metav1.UpdateOptions{}); updateErr != nil {
+			log.WithError(updateErr).Errorf("Failed to update service status for externalIPs %s/%s", externalSvc.Namespace, externalSvc.Name)
+		}
+		return
+	}
+
 	if len(c.ipPools) == 0 {
 		if _, ok := c.allocationTracker.ipsByService[svcKey]; ok {
 			// Last LoadBalancer IPPool was deleted, and we have previously assigned IPs to this service. We need to release the IPs now and update the service status
@@ -660,6 +675,15 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 		return nil, err
 	}
 
+	// Fall back to spec.loadBalancerIP when no specific IP was requested via annotation.
+	if loadBalancerIPs == nil && svc.Spec.LoadBalancerIP != "" {
+		ip := cnet.ParseIP(svc.Spec.LoadBalancerIP)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid IP in spec.loadBalancerIP: %s", svc.Spec.LoadBalancerIP)
+		}
+		loadBalancerIPs = []cnet.IP{*ip}
+	}
+
 	var assignedIPs []string
 
 	metadataAttrs := map[string]string{
@@ -871,7 +895,8 @@ func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs) bool 
 
 		if svc.Annotations[annotationIPv4Pools] != "" ||
 			svc.Annotations[annotationIPv6Pools] != "" ||
-			svc.Annotations[annotationLoadBalancerIP] != "" {
+			svc.Annotations[annotationLoadBalancerIP] != "" ||
+			svc.Spec.LoadBalancerIP != "" {
 
 			if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass != calicoLoadBalancerClass {
 				log.WithFields(log.Fields{"svc": svc.Name, "ns": svc.Namespace}).Warn("calico LoadBalancer annotation set with spec.LoadBalancerClass != calico is not supported")
