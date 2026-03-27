@@ -35216,9 +35216,9 @@ spec:
         - jsonPath: .spec.order
           name: Order
           type: number
-        - description: Whether the policy passes validation
-          jsonPath: .status.conditions[?(@.type=='Valid')].status
-          name: Valid
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
           type: string
         - jsonPath: .metadata.creationTimestamp
           name: Age
@@ -36702,9 +36702,9 @@ spec:
         - jsonPath: .spec.order
           name: Order
           type: number
-        - description: Whether the policy passes validation
-          jsonPath: .status.conditions[?(@.type=='Valid')].status
-          name: Valid
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
           type: string
       name: v3
       schema:
@@ -37296,9 +37296,9 @@ spec:
         - jsonPath: .spec.order
           name: Order
           type: number
-        - description: Whether the policy passes validation
-          jsonPath: .status.conditions[?(@.type=='Valid')].status
-          name: Valid
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
           type: string
       name: v3
       schema:
@@ -37881,9 +37881,9 @@ spec:
   scope: Namespaced
   versions:
     - additionalPrinterColumns:
-        - description: Whether the policy passes validation
-          jsonPath: .status.conditions[?(@.type=='Valid')].status
-          name: Valid
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
           type: string
       name: v3
       schema:
@@ -38201,9 +38201,9 @@ spec:
         - jsonPath: .spec.order
           name: Order
           type: number
-        - description: Whether the policy passes validation
-          jsonPath: .status.conditions[?(@.type=='Valid')].status
-          name: Valid
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
           type: string
       name: v3
       schema:

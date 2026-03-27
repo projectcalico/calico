@@ -43,7 +43,7 @@ type GlobalNetworkPolicyList struct {
 // +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
-// +kubebuilder:printcolumn:name="Valid",type=string,JSONPath=".status.conditions[?(@.type=='Valid')].status",description="Whether the policy passes validation"
+// +kubebuilder:printcolumn:name="Validation",type=string,JSONPath=".status.conditions[?(@.type=='Valid')].message",description="Policy validation status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 type GlobalNetworkPolicy struct {

@@ -17,9 +17,9 @@ spec:
   scope: Namespaced
   versions:
     - additionalPrinterColumns:
-        - description: Whether the policy passes validation
-          jsonPath: .status.conditions[?(@.type=='Valid')].status
-          name: Valid
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
           type: string
       name: v3
       schema:

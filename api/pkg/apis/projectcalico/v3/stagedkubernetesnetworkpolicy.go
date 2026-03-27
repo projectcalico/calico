@@ -29,7 +29,7 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName={sknp}
-// +kubebuilder:printcolumn:name="Valid",type=string,JSONPath=".status.conditions[?(@.type=='Valid')].status",description="Whether the policy passes validation"
+// +kubebuilder:printcolumn:name="Validation",type=string,JSONPath=".status.conditions[?(@.type=='Valid')].message",description="Policy validation status"
 
 // StagedKubernetesNetworkPolicy is a staged KubernetesNetworkPolicy.
 type StagedKubernetesNetworkPolicy struct {
