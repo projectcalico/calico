@@ -16,6 +16,7 @@ package commands
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -134,6 +135,11 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 		valFromBytes = conntrack.ValueV6FromBytes
 	}
 
+	if *jsonOutput {
+		cmd.dumpJSON(ctMap, keyFromBytes, valFromBytes)
+		return
+	}
+
 	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := keyFromBytes(k)
 		ctVal := valFromBytes(v)
@@ -213,6 +219,211 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 	}
 
 	cmd.Printf("\n")
+}
+
+// ctEntryJSON is a conntrack entry in raw JSON mode — one object per map entry.
+type ctEntryJSON struct {
+	Proto     string `json:"proto"`
+	AddrA     string `json:"addr_a"`
+	PortA     uint16 `json:"port_a"`
+	AddrB     string `json:"addr_b"`
+	PortB     uint16 `json:"port_b"`
+	Type      string `json:"type"`
+	Flags     uint32 `json:"flags"`
+	ActiveAgo string `json:"active_ago"`
+	TCPState  string `json:"tcp_state,omitempty"`
+}
+
+// ctConnectionJSON is a logical connection in pretty JSON mode.
+// For NAT connections, forward and reverse entries are grouped.
+type ctConnectionJSON struct {
+	Type          string `json:"type"`
+	Proto         string `json:"proto"`
+	Src           string `json:"src"`
+	Dst           string `json:"dst"`
+	OrigDst       string `json:"orig_dst,omitempty"`
+	TunnelIP      string `json:"tunnel_ip,omitempty"`
+	OrigSrcPort   uint16 `json:"orig_src_port,omitempty"`
+	ActiveAgo     string `json:"active_ago"`
+	TCPState      string `json:"tcp_state,omitempty"`
+	ForwardKey    string `json:"forward_key,omitempty"`
+}
+
+func ctTypeStr(t uint8) string {
+	switch t {
+	case conntrack.TypeNormal:
+		return "normal"
+	case conntrack.TypeNATForward:
+		return "nat-forward"
+	case conntrack.TypeNATReverse:
+		return "nat-reverse"
+	}
+	return fmt.Sprintf("unknown(%d)", t)
+}
+
+func tcpStateStr(k conntrack.KeyInterface, v conntrack.ValueInterface) string {
+	if k.Proto() != 6 {
+		return ""
+	}
+	d := v.Data()
+	if (v.IsForwardDSR() && d.FINsSeenDSR()) || d.FINsSeen() {
+		return "CLOSED"
+	}
+	if d.RSTSeen() {
+		return "RESET"
+	}
+	if d.Established() {
+		return "ESTABLISHED"
+	}
+	return "SYN-SENT"
+}
+
+func (cmd *conntrackDumpCmd) dumpJSON(
+	ctMap maps.Map,
+	keyFromBytes func([]byte) conntrack.KeyInterface,
+	valFromBytes func([]byte) conntrack.ValueInterface,
+) {
+	now := bpf.KTimeNanos()
+
+	if cmd.raw {
+		cmd.dumpRawJSON(ctMap, keyFromBytes, valFromBytes, now)
+	} else {
+		cmd.dumpPrettyJSON(ctMap, keyFromBytes, valFromBytes, now)
+	}
+}
+
+func (cmd *conntrackDumpCmd) dumpRawJSON(
+	ctMap maps.Map,
+	keyFromBytes func([]byte) conntrack.KeyInterface,
+	valFromBytes func([]byte) conntrack.ValueInterface,
+	now int64,
+) {
+	var entries []ctEntryJSON
+	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
+		ctKey := keyFromBytes(k)
+		ctVal := valFromBytes(v)
+		entries = append(entries, ctEntryJSON{
+			Proto:     protoStr(ctKey.Proto()),
+			AddrA:     ctKey.AddrA().String(),
+			PortA:     ctKey.PortA(),
+			AddrB:     ctKey.AddrB().String(),
+			PortB:     ctKey.PortB(),
+			Type:      ctTypeStr(ctVal.Type()),
+			Flags:     ctVal.Flags(),
+			ActiveAgo: time.Duration(now - ctVal.LastSeen()).String(),
+			TCPState:  tcpStateStr(ctKey, ctVal),
+		})
+		return maps.IterNone
+	})
+	if err != nil {
+		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(entries); err != nil {
+		log.WithError(err).Fatal("Failed to encode JSON")
+	}
+}
+
+func (cmd *conntrackDumpCmd) dumpPrettyJSON(
+	ctMap maps.Map,
+	keyFromBytes func([]byte) conntrack.KeyInterface,
+	valFromBytes func([]byte) conntrack.ValueInterface,
+	now int64,
+) {
+	type ctEntry struct {
+		key conntrack.KeyInterface
+		val conntrack.ValueInterface
+	}
+
+	// Collect all entries, indexed by key string for NAT pairing.
+	var normals []ctEntry
+	reverses := make(map[string]ctEntry)   // keyStr -> reverse entry
+	forwards := make(map[string]string)    // reverseKeyStr -> forwardKeyStr
+
+	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
+		ctKey := keyFromBytes(k)
+		ctVal := valFromBytes(v)
+		e := ctEntry{key: ctKey, val: ctVal}
+
+		switch ctVal.Type() {
+		case conntrack.TypeNormal:
+			normals = append(normals, e)
+		case conntrack.TypeNATForward:
+			revKey := ctVal.ReverseNATKey()
+			forwards[revKey.String()] = ctKey.String()
+		case conntrack.TypeNATReverse:
+			reverses[ctKey.String()] = e
+		}
+		return maps.IterNone
+	})
+	if err != nil {
+		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
+	}
+
+	var connections []ctConnectionJSON
+
+	// Emit normal connections.
+	for _, e := range normals {
+		k, v := e.key, e.val
+		src, dst := orientedAddrs(k, v)
+		connections = append(connections, ctConnectionJSON{
+			Type:      "normal",
+			Proto:     protoStr(k.Proto()),
+			Src:       src,
+			Dst:       dst,
+			ActiveAgo: time.Duration(now - v.LastSeen()).String(),
+			TCPState:  tcpStateStr(k, v),
+		})
+	}
+
+	// Emit NAT connections (reverse entries paired with their forward key).
+	for keyStr, e := range reverses {
+		k, v := e.key, e.val
+		d := v.Data()
+		src, dst := orientedAddrs(k, v)
+		origDst := net.JoinHostPort(d.OrigDst.String(), fmt.Sprint(d.OrigPort))
+
+		conn := ctConnectionJSON{
+			Type:       "nat",
+			Proto:      protoStr(k.Proto()),
+			Src:        src,
+			OrigDst:    origDst,
+			Dst:        dst,
+			ActiveAgo:  time.Duration(now - v.LastSeen()).String(),
+			TCPState:   tcpStateStr(k, v),
+			ForwardKey: forwards[keyStr],
+		}
+
+		if (cmd.ipv6 && !d.TunIP.Equal(voidIP6)) || (!cmd.ipv6 && !d.TunIP.Equal(voidIP4)) {
+			conn.TunnelIP = d.TunIP.String()
+		}
+		if v.Flags()&v4.FlagHostPSNAT != 0 {
+			conn.OrigSrcPort = d.OrigSPort
+		}
+
+		connections = append(connections, conn)
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(connections); err != nil {
+		log.WithError(err).Fatal("Failed to encode JSON")
+	}
+}
+
+// orientedAddrs returns src and dst as "ip:port" strings, respecting
+// the FlagSrcDstBA direction flag.
+func orientedAddrs(k conntrack.KeyInterface, v conntrack.ValueInterface) (src, dst string) {
+	if v.Flags()&v4.FlagSrcDstBA != 0 {
+		src = net.JoinHostPort(k.AddrB().String(), fmt.Sprint(k.PortB()))
+		dst = net.JoinHostPort(k.AddrA().String(), fmt.Sprint(k.PortA()))
+	} else {
+		src = net.JoinHostPort(k.AddrA().String(), fmt.Sprint(k.PortA()))
+		dst = net.JoinHostPort(k.AddrB().String(), fmt.Sprint(k.PortB()))
+	}
+	return
 }
 
 func dumpExtrav2(k v2.Key, v v2.Value) {
