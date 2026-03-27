@@ -96,6 +96,43 @@ const (
 	_ = FlagsUnknown
 )
 
+// FlagNames returns the human-readable names for the set bits in f.
+// The result mirrors the logic in Value.String() but returns a slice
+// instead of a single formatted string.
+func (f Flags) FlagNames() []string {
+	var names []string
+
+	if f&FlagLocal != 0 {
+		names = append(names, "local")
+	} else if f&FlagBlackHoleDrop == 0 && f&FlagBlackHoleReject == 0 {
+		names = append(names, "remote")
+	}
+	if f&FlagHost != 0 {
+		names = append(names, "host")
+	} else if f&FlagWorkload != 0 {
+		names = append(names, "workload")
+	}
+	for _, pair := range []struct {
+		flag Flags
+		name string
+	}{
+		{FlagInIPAMPool, "in-pool"},
+		{FlagNATOutgoing, "nat-out"},
+		{FlagSameSubnet, "same-subnet"},
+		{FlagNoDSR, "no-dsr"},
+		{FlagTunneled, "tunneled"},
+		{FlagVXLAN, "vxlan"},
+		{FlagSkipIngressRedir, "skip-ingress-redir"},
+		{FlagBlackHoleDrop, "blackhole-drop"},
+		{FlagBlackHoleReject, "blackhole-reject"},
+	} {
+		if f&pair.flag != 0 {
+			names = append(names, pair.name)
+		}
+	}
+	return names
+}
+
 //	struct cali_rt_value {
 //	  __u32 flags;
 //	  union {

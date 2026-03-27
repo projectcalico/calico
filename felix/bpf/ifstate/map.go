@@ -67,6 +67,19 @@ var flagsToStr = map[uint32]string{
 	FlgNotManaged: "notmanaged",
 }
 
+// FlagNames returns the human-readable names for the set bits in flags.
+func FlagNames(flags uint32) []string {
+	var names []string
+	for k := FlgWEP; k <= FlgMax; k *= 2 {
+		if flags&k != 0 {
+			if name, ok := flagsToStr[k]; ok {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
 var MapParams = maps.MapParameters{
 	Type:         "hash",
 	KeySize:      KeySize,
