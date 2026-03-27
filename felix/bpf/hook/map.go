@@ -15,12 +15,14 @@
 package hook
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	log "github.com/sirupsen/logrus"
 
@@ -28,6 +30,25 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 )
+
+// ErrPermanentLoadFailure indicates a BPF program load failure that will not
+// resolve on retry (e.g. kernel verifier rejection due to missing features).
+var ErrPermanentLoadFailure = errors.New("BPF program load failed permanently")
+
+// IsPermanentLoadFailure returns true if the error from obj.Load() indicates
+// a non-transient condition. Only ENOMEM, EAGAIN, and EBUSY are considered
+// transient; everything else (EINVAL, ENOTSUP, EPERM, etc.) is permanent.
+func IsPermanentLoadFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ENOMEM) ||
+		errors.Is(err, syscall.EAGAIN) ||
+		errors.Is(err, syscall.EBUSY) {
+		return false
+	}
+	return true
+}
 
 const maxPrograms = 400
 
@@ -157,8 +178,9 @@ type ProgramsMap struct {
 }
 
 type program struct {
-	lock   sync.Mutex
-	layout Layout
+	lock         sync.Mutex
+	layout       Layout
+	permanentErr error // non-nil if loading failed permanently; prevents retries
 }
 
 var IngressProgramsMapParameters = bpfmaps.MapParameters{
@@ -232,19 +254,19 @@ func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
 	pi.lock.Lock()
 	defer pi.lock.Unlock()
 
+	if pi.permanentErr != nil {
+		return nil, pi.permanentErr
+	}
+
 	var err error
 	if pi.layout == nil {
 		la, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType)
-		if err != nil && strings.Contains(file, "_co-re") {
-			log.WithError(err).Warn("Failed to load CO-RE object, kernel too old? Falling back to non-CO-RE.")
-			file := strings.ReplaceAll(file, "_co-re", "")
-			// Skip trying the same file again, as it will fail with the same error.
-			SetObjectFile(at, file)
-			la, err = pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType)
-		}
 		if err == nil {
 			log.WithField("layout", la).Debugf("Loaded generic object file %s", file)
 			pi.layout = la
+		} else if IsPermanentLoadFailure(err) {
+			err = fmt.Errorf("%w: %w", ErrPermanentLoadFailure, err)
+			pi.permanentErr = err
 		}
 	} else {
 		log.WithField("layout", pi.layout).Debugf("Using cached layout for %s", file)
@@ -302,12 +324,12 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 
 			// Try loading again
 			if err := obj.Load(); err != nil {
-				return nil, fmt.Errorf("error loading program: %w", err)
+				return nil, fmt.Errorf("error loading program %s: %w", file, err)
 			}
 			log.WithField("attach type", at).
 				Warn("Object loaded without IP defrag - processing of fragmented packets will not be supported")
 		} else {
-			return nil, fmt.Errorf("error loading program: %w", err)
+			return nil, fmt.Errorf("error loading program %s: %w", file, err)
 		}
 	}
 
