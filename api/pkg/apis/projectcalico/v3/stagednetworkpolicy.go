@@ -39,6 +39,8 @@ type StagedNetworkPolicy struct {
 	Spec              StagedNetworkPolicySpec `json:"spec"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.selector) || !self.selector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 type StagedNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
@@ -59,10 +61,12 @@ type StagedNetworkPolicySpec struct {
 	Order *float64 `json:"order,omitempty"`
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
+	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 	// The selector is an expression used to pick pick out the endpoints that the policy should
@@ -90,6 +94,7 @@ type StagedNetworkPolicySpec struct {
 	// 	type in {"frontend", "backend"}
 	// 	deployment != "dev"
 	// 	! has(label_name)
+	// +kubebuilder:validation:MaxLength=1024
 	Selector string `json:"selector,omitempty" validate:"selector"`
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
@@ -111,6 +116,7 @@ type StagedNetworkPolicySpec struct {
 	Types []PolicyType `json:"types,omitempty"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
+	// +kubebuilder:validation:MaxLength=1024
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
 
 	// PerformanceHints contains a list of hints to Calico's policy engine to
