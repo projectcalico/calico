@@ -51,6 +51,8 @@ ifeq ($(findstring x86_64,$(TRIPLET)),x86_64)
 	CFLAGS += -D__TARGET_ARCH_x86 -D__x86_64__
 else ifeq ($(findstring aarch64,$(TRIPLET)),aarch64)
 	CFLAGS += -D__TARGET_ARCH_arm64
+else ifeq ($(findstring s390x,$(TRIPLET)),s390x)
+	CFLAGS += -D__TARGET_ARCH_s390x
 endif
 CC := clang
 LD := llc
