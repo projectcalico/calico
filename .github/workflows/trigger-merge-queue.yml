@@ -16,9 +16,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.TIGERA_BOT_PAT }}
         run: |
-          PR_NUMBER=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
-            --jq '.[0].number // empty') || true
-          if [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+          if ! PR_NUMBER=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq 'map(select(.merged_at != null and .base.ref == "master")) | .[0].number // empty'); then
+            echo "::warning::Failed to query GitHub API for commit ${{ github.sha }} -- skipping merge-queue dispatch due to API error"
+            exit 0
+          fi
+          if [[ -n "$PR_NUMBER" && "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::No associated PR found for ${{ github.sha }} -- skipping merge-queue dispatch"
