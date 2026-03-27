@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -50,8 +51,153 @@ const (
 	rbacResourcePrefix = "e2e-tiered-rbac-"
 )
 
+// tieredRBACTestContext holds the common state and helpers for tiered RBAC tests.
+type tieredRBACTestContext struct {
+	f        *framework.Framework
+	adminCli ctrlclient.Client
+	ctx      context.Context
+	cancel   context.CancelFunc
+}
+
+func newTieredRBACTestContext() *tieredRBACTestContext {
+	return &tieredRBACTestContext{
+		f: utils.NewDefaultFramework("tiered-rbac"),
+	}
+}
+
+// newImpersonatedClient creates a controller-runtime client that impersonates the given user.
+func (tc *tieredRBACTestContext) newImpersonatedClient(username string) ctrlclient.Client {
+	cfg := rest.CopyConfig(tc.f.ClientConfig())
+	cfg.Impersonate = rest.ImpersonationConfig{
+		UserName: username,
+	}
+	c, err := client.NewAPIClient(cfg)
+	Expect(err).NotTo(HaveOccurred())
+	return c
+}
+
+func (tc *tieredRBACTestContext) setupBeforeEach() {
+	var err error
+	tc.ctx, tc.cancel = context.WithCancel(context.Background())
+
+	tc.adminCli, err = client.New(tc.f.ClientConfig())
+	Expect(err).NotTo(HaveOccurred())
+
+	By("Creating test tiers")
+	for _, t := range []struct {
+		name  string
+		order float64
+	}{
+		{rbacTestTier, 500},
+		{rbacOtherTier, 501},
+	} {
+		tier := v3.NewTier()
+		tier.Name = t.name
+		tier.Spec.Order = ptr.To(t.order)
+		tier.Labels = map[string]string{utils.TestResourceLabel: "true"}
+		Expect(tc.adminCli.Create(tc.ctx, tier)).To(Succeed())
+	}
+
+	By("Creating RBAC resources for test users")
+	setup := buildTieredRBACResources()
+	for i := range setup.roles {
+		_, err := tc.f.ClientSet.RbacV1().ClusterRoles().Create(tc.ctx, &setup.roles[i], metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
+	for i := range setup.bindings {
+		_, err := tc.f.ClientSet.RbacV1().ClusterRoleBindings().Create(tc.ctx, &setup.bindings[i], metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+func (tc *tieredRBACTestContext) teardownAfterEach() {
+	defer tc.cancel()
+	var errOccurred bool
+
+	By("Cleaning up RBAC resources")
+	setup := buildTieredRBACResources()
+	for _, binding := range setup.bindings {
+		if err := tc.f.ClientSet.RbacV1().ClusterRoleBindings().Delete(tc.ctx, binding.Name, metav1.DeleteOptions{}); err != nil {
+			logrus.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
+			errOccurred = true
+		}
+	}
+	for _, role := range setup.roles {
+		if err := tc.f.ClientSet.RbacV1().ClusterRoles().Delete(tc.ctx, role.Name, metav1.DeleteOptions{}); err != nil {
+			logrus.WithError(err).WithField("name", role.Name).Error("Failed to delete ClusterRole")
+			errOccurred = true
+		}
+	}
+
+	By("Cleaning up test tiers")
+	for _, name := range []string{rbacTestTier, rbacOtherTier} {
+		tier := v3.NewTier()
+		tier.Name = name
+		if err := tc.adminCli.Delete(tc.ctx, tier); err != nil {
+			logrus.WithError(err).WithField("name", name).Error("Failed to delete Tier")
+			errOccurred = true
+		}
+	}
+
+	Expect(errOccurred).To(BeFalse(), "errors occurred during teardown")
+}
+
+// DESCRIPTION: Verify tiered RBAC using tier-prefixed policy names (e.g., "tier.policyname"),
+// which is supported on all Calico versions. This provides basic tiered RBAC coverage on
+// older branches that don't support bare policy names.
+//
+// PRECONDITIONS: The tiered RBAC webhook or Calico API server must be installed.
+var _ = describe.CalicoDescribe(
+	describe.WithTeam(describe.Core),
+	describe.WithCategory(describe.Policy),
+	describe.WithFeature("Tiered-RBAC"),
+	describe.WithSerial(),
+	"Tiered RBAC with tier-prefixed names",
+	func() {
+		tc := newTieredRBACTestContext()
+
+		BeforeEach(func() { tc.setupBeforeEach() })
+		AfterEach(func() { tc.teardownAfterEach() })
+
+		It("should allow create and deny based on tier RBAC with prefixed names", func() {
+			By("Creating a policy as the tier admin using tier-prefixed name")
+			cli := tc.newImpersonatedClient(rbacTierAdminUser)
+
+			np := v3.NewNetworkPolicy()
+			np.Name = rbacTestTier + "." + "rbac-test-prefixed-allow"
+			np.Namespace = tc.f.Namespace.Name
+			np.Spec.Tier = rbacTestTier
+			np.Spec.Order = ptr.To(100.0)
+			np.Spec.Selector = "all()"
+			np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+			err := cli.Create(tc.ctx, np)
+			Expect(err).NotTo(HaveOccurred(), "tier admin should be able to create policy with prefixed name")
+			Expect(tc.adminCli.Delete(tc.ctx, np)).To(Succeed())
+
+			By("Verifying a user without tier GET is denied with prefixed name")
+			noCli := tc.newImpersonatedClient(rbacNoTierGetUser)
+
+			np2 := v3.NewNetworkPolicy()
+			np2.Name = rbacTestTier + "." + "rbac-test-prefixed-deny"
+			np2.Namespace = tc.f.Namespace.Name
+			np2.Spec.Tier = rbacTestTier
+			np2.Spec.Order = ptr.To(100.0)
+			np2.Spec.Selector = "all()"
+			np2.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+			err = noCli.Create(tc.ctx, np2)
+			Expect(err).To(HaveOccurred())
+			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+			Expect(err.Error()).To(ContainSubstring("tier"))
+		})
+	},
+)
+
 // DESCRIPTION: Verify tiered RBAC correctly enforces tier-based access control
-// for policy create, update, and delete operations.
+// for policy create, update, and delete operations using bare policy names
+// (without tier prefix). This naming style is only supported in v3.32+.
+// Older branches should skip these tests via -skip=NoTierPrefix.
 //
 // The tiered RBAC implementation requires that users have:
 //  1. GET access to the tier (resource: "tiers")
@@ -64,141 +210,62 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
 	describe.WithFeature("Tiered-RBAC"),
+	describe.WithNoTierPrefix(),
 	describe.WithSerial(),
 	"Tiered RBAC",
 	func() {
-		f := utils.NewDefaultFramework("tiered-rbac")
+		tc := newTieredRBACTestContext()
 
-		var (
-			adminCli ctrlclient.Client
-			ctx      context.Context
-			cancel   context.CancelFunc
-		)
-
-		// newImpersonatedClient creates a controller-runtime client that impersonates the given user.
-		newImpersonatedClient := func(username string) ctrlclient.Client {
-			cfg := rest.CopyConfig(f.ClientConfig())
-			cfg.Impersonate = rest.ImpersonationConfig{
-				UserName: username,
-			}
-			c, err := client.NewAPIClient(cfg)
-			Expect(err).NotTo(HaveOccurred())
-			return c
-		}
-
-		BeforeEach(func() {
-			var err error
-			ctx, cancel = context.WithCancel(context.Background())
-
-			adminCli, err = client.New(f.ClientConfig())
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Creating test tiers")
-			for _, t := range []struct {
-				name  string
-				order float64
-			}{
-				{rbacTestTier, 500},
-				{rbacOtherTier, 501},
-			} {
-				tier := v3.NewTier()
-				tier.Name = t.name
-				tier.Spec.Order = ptr.To(t.order)
-				tier.Labels = map[string]string{utils.TestResourceLabel: "true"}
-				Expect(adminCli.Create(ctx, tier)).To(Succeed())
-			}
-
-			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources()
-			for i := range setup.roles {
-				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-			}
-			for i := range setup.bindings {
-				_, err := f.ClientSet.RbacV1().ClusterRoleBindings().Create(ctx, &setup.bindings[i], metav1.CreateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-			}
-		})
-
-		AfterEach(func() {
-			defer cancel()
-			var errOccurred bool
-
-			By("Cleaning up RBAC resources")
-			setup := buildTieredRBACResources()
-			for _, binding := range setup.bindings {
-				if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil {
-					logrus.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
-					errOccurred = true
-				}
-			}
-			for _, role := range setup.roles {
-				if err := f.ClientSet.RbacV1().ClusterRoles().Delete(ctx, role.Name, metav1.DeleteOptions{}); err != nil {
-					logrus.WithError(err).WithField("name", role.Name).Error("Failed to delete ClusterRole")
-					errOccurred = true
-				}
-			}
-
-			By("Cleaning up test tiers")
-			for _, name := range []string{rbacTestTier, rbacOtherTier} {
-				tier := v3.NewTier()
-				tier.Name = name
-				if err := adminCli.Delete(ctx, tier); err != nil {
-					logrus.WithError(err).WithField("name", name).Error("Failed to delete Tier")
-					errOccurred = true
-				}
-			}
-
-			Expect(errOccurred).To(BeFalse(), "errors occurred during teardown")
-		})
+		BeforeEach(func() { tc.setupBeforeEach() })
+		AfterEach(func() { tc.teardownAfterEach() })
 
 		Context("NetworkPolicy", func() {
 			It("should allow creation by a user with full tier RBAC", func() {
-				cli := newImpersonatedClient(rbacTierAdminUser)
+				cli := tc.newImpersonatedClient(rbacTierAdminUser)
 
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-allow-create"
-				np.Namespace = f.Namespace.Name
+				np.Namespace = tc.f.Namespace.Name
 				np.Spec.Tier = rbacTestTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
-				err := cli.Create(ctx, np)
+				err := cli.Create(tc.ctx, np)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(adminCli.Delete(ctx, np)).To(Succeed())
+				Expect(tc.adminCli.Delete(tc.ctx, np)).To(Succeed())
 			})
 
 			It("should deny creation by a user without tier GET access", func() {
-				cli := newImpersonatedClient(rbacNoTierGetUser)
+				cli := tc.newImpersonatedClient(rbacNoTierGetUser)
 
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-deny-no-get"
-				np.Namespace = f.Namespace.Name
+				np.Namespace = tc.f.Namespace.Name
 				np.Spec.Tier = rbacTestTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
-				err := cli.Create(ctx, np)
+				err := cli.Create(tc.ctx, np)
 				Expect(err).To(HaveOccurred())
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
 				Expect(err.Error()).To(ContainSubstring("tier"))
 			})
 
 			It("should deny creation by a user without tier policy access", func() {
-				cli := newImpersonatedClient(rbacNoPolicyUser)
+				cli := tc.newImpersonatedClient(rbacNoPolicyUser)
 
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-deny-no-policy"
-				np.Namespace = f.Namespace.Name
+				np.Namespace = tc.f.Namespace.Name
 				np.Spec.Tier = rbacTestTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
-				err := cli.Create(ctx, np)
+				err := cli.Create(tc.ctx, np)
 				Expect(err).To(HaveOccurred())
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
 				Expect(err.Error()).To(ContainSubstring("tier"))
@@ -208,16 +275,16 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy with the admin client")
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-allow-delete"
-				np.Namespace = f.Namespace.Name
+				np.Namespace = tc.f.Namespace.Name
 				np.Spec.Tier = rbacTestTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				Expect(adminCli.Create(ctx, np)).To(Succeed())
+				Expect(tc.adminCli.Create(tc.ctx, np)).To(Succeed())
 
 				By("Deleting the policy as the tier admin user")
-				cli := newImpersonatedClient(rbacTierAdminUser)
-				Expect(cli.Delete(ctx, np)).To(Succeed())
+				cli := tc.newImpersonatedClient(rbacTierAdminUser)
+				Expect(cli.Delete(tc.ctx, np)).To(Succeed())
 			})
 
 			// Verifies that the update verb is checked through the same tier RBAC
@@ -226,22 +293,22 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy with the admin client")
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-allow-update"
-				np.Namespace = f.Namespace.Name
+				np.Namespace = tc.f.Namespace.Name
 				np.Spec.Tier = rbacTestTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				Expect(adminCli.Create(ctx, np)).To(Succeed(), "admin failed to create policy for update test")
+				Expect(tc.adminCli.Create(tc.ctx, np)).To(Succeed(), "admin failed to create policy for update test")
 
 				By("Updating the policy as the tier admin user")
-				cli := newImpersonatedClient(rbacTierAdminUser)
-				Expect(cli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), np)).To(
+				cli := tc.newImpersonatedClient(rbacTierAdminUser)
+				Expect(cli.Get(tc.ctx, ctrlclient.ObjectKeyFromObject(np), np)).To(
 					Succeed(), "tier admin failed to get policy",
 				)
 				np.Spec.Order = ptr.To(200.0)
-				Expect(cli.Update(ctx, np)).To(Succeed(), "tier admin should be able to update policy")
+				Expect(cli.Update(tc.ctx, np)).To(Succeed(), "tier admin should be able to update policy")
 
-				Expect(adminCli.Delete(ctx, np)).To(Succeed())
+				Expect(tc.adminCli.Delete(tc.ctx, np)).To(Succeed())
 			})
 
 			// Verifies that update is denied when the user lacks tier GET access,
@@ -250,32 +317,32 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy with the admin client")
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-deny-update"
-				np.Namespace = f.Namespace.Name
+				np.Namespace = tc.f.Namespace.Name
 				np.Spec.Tier = rbacTestTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				Expect(adminCli.Create(ctx, np)).To(Succeed(), "admin failed to create policy for update test")
+				Expect(tc.adminCli.Create(tc.ctx, np)).To(Succeed(), "admin failed to create policy for update test")
 
 				By("Fetching the policy as admin to get the resource version")
-				Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), np)).To(
+				Expect(tc.adminCli.Get(tc.ctx, ctrlclient.ObjectKeyFromObject(np), np)).To(
 					Succeed(), "admin failed to get policy",
 				)
 
 				By("Attempting to update the policy without tier GET access")
 				np.Spec.Order = ptr.To(200.0)
-				cli := newImpersonatedClient(rbacNoTierGetUser)
-				err := cli.Update(ctx, np)
+				cli := tc.newImpersonatedClient(rbacNoTierGetUser)
+				err := cli.Update(tc.ctx, np)
 				Expect(err).To(HaveOccurred(), "update should be denied without tier GET access")
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
 
-				Expect(adminCli.Delete(ctx, np)).To(Succeed())
+				Expect(tc.adminCli.Delete(tc.ctx, np)).To(Succeed())
 			})
 		})
 
 		Context("GlobalNetworkPolicy", func() {
 			It("should allow creation by a user with full tier RBAC", func() {
-				cli := newImpersonatedClient(rbacTierAdminUser)
+				cli := tc.newImpersonatedClient(rbacTierAdminUser)
 
 				gnp := v3.NewGlobalNetworkPolicy()
 				gnp.Name = "rbac-test-allow-gnp"
@@ -284,14 +351,14 @@ var _ = describe.CalicoDescribe(
 				gnp.Spec.Selector = "all()"
 				gnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
-				err := cli.Create(ctx, gnp)
+				err := cli.Create(tc.ctx, gnp)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(adminCli.Delete(ctx, gnp)).To(Succeed())
+				Expect(tc.adminCli.Delete(tc.ctx, gnp)).To(Succeed())
 			})
 
 			It("should deny creation by a user without tier access", func() {
-				cli := newImpersonatedClient(rbacNoTierGetUser)
+				cli := tc.newImpersonatedClient(rbacNoTierGetUser)
 
 				gnp := v3.NewGlobalNetworkPolicy()
 				gnp.Name = "rbac-test-deny-gnp"
@@ -300,7 +367,7 @@ var _ = describe.CalicoDescribe(
 				gnp.Spec.Selector = "all()"
 				gnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
-				err := cli.Create(ctx, gnp)
+				err := cli.Create(tc.ctx, gnp)
 				Expect(err).To(HaveOccurred())
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
 				Expect(err.Error()).To(ContainSubstring("tier"))
@@ -309,7 +376,7 @@ var _ = describe.CalicoDescribe(
 
 		Context("tier isolation", func() {
 			It("should restrict a user to only their permitted tier", func() {
-				cli := newImpersonatedClient(rbacOtherTierUser)
+				cli := tc.newImpersonatedClient(rbacOtherTierUser)
 
 				By("Creating a policy in the permitted tier should succeed")
 				gnp := v3.NewGlobalNetworkPolicy()
@@ -319,9 +386,9 @@ var _ = describe.CalicoDescribe(
 				gnp.Spec.Selector = "all()"
 				gnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
-				err := cli.Create(ctx, gnp)
+				err := cli.Create(tc.ctx, gnp)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(adminCli.Delete(ctx, gnp)).To(Succeed())
+				Expect(tc.adminCli.Delete(tc.ctx, gnp)).To(Succeed())
 
 				By("Creating a policy in a non-permitted tier should be denied")
 				gnp2 := v3.NewGlobalNetworkPolicy()
@@ -331,7 +398,7 @@ var _ = describe.CalicoDescribe(
 				gnp2.Spec.Selector = "all()"
 				gnp2.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 
-				err = cli.Create(ctx, gnp2)
+				err = cli.Create(tc.ctx, gnp2)
 				Expect(err).To(HaveOccurred())
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
 				Expect(err.Error()).To(ContainSubstring("tier"))
@@ -349,19 +416,19 @@ var _ = describe.CalicoDescribe(
 			restoreDefaultTier := func(saved *v3.Tier) {
 				current := v3.NewTier()
 				current.Name = "default"
-				if err := adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(current), current); err != nil {
+				if err := tc.adminCli.Get(tc.ctx, ctrlclient.ObjectKeyFromObject(current), current); err != nil {
 					// Tier was deleted, recreate it.
 					restore := v3.NewTier()
 					restore.Name = "default"
 					restore.Spec = saved.Spec
-					if err := adminCli.Create(ctx, restore); err != nil {
+					if err := tc.adminCli.Create(tc.ctx, restore); err != nil {
 						logrus.WithError(err).Error("CRITICAL: failed to recreate deleted default tier")
 					}
 					return
 				}
 				if current.ResourceVersion != saved.ResourceVersion {
 					current.Spec = saved.Spec
-					if err := adminCli.Update(ctx, current); err != nil {
+					if err := tc.adminCli.Update(tc.ctx, current); err != nil {
 						logrus.WithError(err).Warn("Failed to restore default tier")
 					}
 				}
@@ -370,7 +437,7 @@ var _ = describe.CalicoDescribe(
 			It("should not allow updating the default tier", func() {
 				tier := v3.NewTier()
 				tier.Name = "default"
-				Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(tier), tier)).To(
+				Expect(tc.adminCli.Get(tc.ctx, ctrlclient.ObjectKeyFromObject(tier), tier)).To(
 					Succeed(), "failed to get default tier",
 				)
 
@@ -378,21 +445,21 @@ var _ = describe.CalicoDescribe(
 				DeferCleanup(func() { restoreDefaultTier(savedTier) })
 
 				tier.Spec.Order = ptr.To(999.0)
-				err := adminCli.Update(ctx, tier)
+				err := tc.adminCli.Update(tc.ctx, tier)
 				Expect(err).To(HaveOccurred(), "default tier should not be updatable")
 			})
 
 			It("should not allow deleting the default tier", func() {
 				tier := v3.NewTier()
 				tier.Name = "default"
-				Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(tier), tier)).To(
+				Expect(tc.adminCli.Get(tc.ctx, ctrlclient.ObjectKeyFromObject(tier), tier)).To(
 					Succeed(), "failed to get default tier",
 				)
 
 				savedTier := tier.DeepCopy()
 				DeferCleanup(func() { restoreDefaultTier(savedTier) })
 
-				err := adminCli.Delete(ctx, tier)
+				err := tc.adminCli.Delete(tc.ctx, tier)
 				Expect(err).To(HaveOccurred(), "default tier should not be deletable")
 			})
 		})
@@ -405,45 +472,45 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy with the admin client")
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-read-only"
-				np.Namespace = f.Namespace.Name
+				np.Namespace = tc.f.Namespace.Name
 				np.Spec.Tier = rbacTestTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				Expect(adminCli.Create(ctx, np)).To(Succeed(), "admin failed to create policy for read-only test")
+				Expect(tc.adminCli.Create(tc.ctx, np)).To(Succeed(), "admin failed to create policy for read-only test")
 
-				cli := newImpersonatedClient(rbacReadOnlyUser)
+				cli := tc.newImpersonatedClient(rbacReadOnlyUser)
 
 				By("Verifying the read-only user can get the policy")
 				readNP := v3.NewNetworkPolicy()
-				Expect(cli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), readNP)).To(
+				Expect(cli.Get(tc.ctx, ctrlclient.ObjectKeyFromObject(np), readNP)).To(
 					Succeed(), "read-only user should be able to get policy",
 				)
 
 				By("Verifying the read-only user cannot create a policy")
 				newNP := v3.NewNetworkPolicy()
 				newNP.Name = "rbac-test-read-only-create"
-				newNP.Namespace = f.Namespace.Name
+				newNP.Namespace = tc.f.Namespace.Name
 				newNP.Spec.Tier = rbacTestTier
 				newNP.Spec.Order = ptr.To(100.0)
 				newNP.Spec.Selector = "all()"
 				newNP.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				err := cli.Create(ctx, newNP)
+				err := cli.Create(tc.ctx, newNP)
 				Expect(err).To(HaveOccurred(), "read-only user should not be able to create policy")
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
 
 				By("Verifying the read-only user cannot update the policy")
 				readNP.Spec.Order = ptr.To(200.0)
-				err = cli.Update(ctx, readNP)
+				err = cli.Update(tc.ctx, readNP)
 				Expect(err).To(HaveOccurred(), "read-only user should not be able to update policy")
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
 
 				By("Verifying the read-only user cannot delete the policy")
-				err = cli.Delete(ctx, np)
+				err = cli.Delete(tc.ctx, np)
 				Expect(err).To(HaveOccurred(), "read-only user should not be able to delete policy")
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
 
-				Expect(adminCli.Delete(ctx, np)).To(Succeed())
+				Expect(tc.adminCli.Delete(tc.ctx, np)).To(Succeed())
 			})
 		})
 	},
