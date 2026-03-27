@@ -224,30 +224,36 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 
 // ctEntryJSON is a conntrack entry in raw JSON mode — one object per map entry.
 type ctEntryJSON struct {
-	Proto     string `json:"proto"`
-	AddrA     string `json:"addr_a"`
-	PortA     uint16 `json:"port_a"`
-	AddrB     string `json:"addr_b"`
-	PortB     uint16 `json:"port_b"`
-	Type      string `json:"type"`
-	Flags     uint32 `json:"flags"`
-	ActiveAgo string `json:"active_ago"`
-	TCPState  string `json:"tcp_state,omitempty"`
+	Proto     string   `json:"proto"`
+	AddrA     string   `json:"addr_a"`
+	PortA     uint16   `json:"port_a"`
+	AddrB     string   `json:"addr_b"`
+	PortB     uint16   `json:"port_b"`
+	Type      string   `json:"type"`
+	Flags     []string `json:"flags"`
+	ActiveAgo string   `json:"active_ago"`
+	TCPState  string   `json:"tcp_state,omitempty"`
+	// For nat-forward entries: the key of the reverse entry this points to.
+	RevProto string `json:"rev_proto,omitempty"`
+	RevAddrA string `json:"rev_addr_a,omitempty"`
+	RevPortA uint16 `json:"rev_port_a,omitempty"`
+	RevAddrB string `json:"rev_addr_b,omitempty"`
+	RevPortB uint16 `json:"rev_port_b,omitempty"`
 }
 
 // ctConnectionJSON is a logical connection in pretty JSON mode.
 // For NAT connections, forward and reverse entries are grouped.
 type ctConnectionJSON struct {
-	Type          string `json:"type"`
-	Proto         string `json:"proto"`
-	Src           string `json:"src"`
-	Dst           string `json:"dst"`
-	OrigDst       string `json:"orig_dst,omitempty"`
-	TunnelIP      string `json:"tunnel_ip,omitempty"`
-	OrigSrcPort   uint16 `json:"orig_src_port,omitempty"`
-	ActiveAgo     string `json:"active_ago"`
-	TCPState      string `json:"tcp_state,omitempty"`
-	ForwardKey    string `json:"forward_key,omitempty"`
+	Type        string   `json:"type"`
+	Proto       string   `json:"proto"`
+	Src         string   `json:"src"`
+	Dst         string   `json:"dst"`
+	OrigDst     string   `json:"orig_dst,omitempty"`
+	TunnelIP    string   `json:"tunnel_ip,omitempty"`
+	OrigSrcPort uint16   `json:"orig_src_port,omitempty"`
+	Flags       []string `json:"flags"`
+	ActiveAgo   string   `json:"active_ago"`
+	TCPState    string   `json:"tcp_state,omitempty"`
 }
 
 func ctTypeStr(t uint8) string {
@@ -303,17 +309,26 @@ func (cmd *conntrackDumpCmd) dumpRawJSON(
 	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := keyFromBytes(k)
 		ctVal := valFromBytes(v)
-		entries = append(entries, ctEntryJSON{
+		entry := ctEntryJSON{
 			Proto:     protoStr(ctKey.Proto()),
 			AddrA:     ctKey.AddrA().String(),
 			PortA:     ctKey.PortA(),
 			AddrB:     ctKey.AddrB().String(),
 			PortB:     ctKey.PortB(),
 			Type:      ctTypeStr(ctVal.Type()),
-			Flags:     ctVal.Flags(),
+			Flags:     v4.FlagNames(ctVal.Flags()),
 			ActiveAgo: time.Duration(now - ctVal.LastSeen()).String(),
 			TCPState:  tcpStateStr(ctKey, ctVal),
-		})
+		}
+		if ctVal.Type() == conntrack.TypeNATForward {
+			rk := ctVal.ReverseNATKey()
+			entry.RevProto = protoStr(rk.Proto())
+			entry.RevAddrA = rk.AddrA().String()
+			entry.RevPortA = rk.PortA()
+			entry.RevAddrB = rk.AddrB().String()
+			entry.RevPortB = rk.PortB()
+		}
+		entries = append(entries, entry)
 		return maps.IterNone
 	})
 	if err != nil {
@@ -338,10 +353,10 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 		val conntrack.ValueInterface
 	}
 
-	// Collect all entries, indexed by key string for NAT pairing.
+	// Collect all entries; skip NAT forward entries since the reverse
+	// entry already contains the full connection information.
 	var normals []ctEntry
-	reverses := make(map[string]ctEntry)   // keyStr -> reverse entry
-	forwards := make(map[string]string)    // reverseKeyStr -> forwardKeyStr
+	var natReverses []ctEntry
 
 	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := keyFromBytes(k)
@@ -351,11 +366,8 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 		switch ctVal.Type() {
 		case conntrack.TypeNormal:
 			normals = append(normals, e)
-		case conntrack.TypeNATForward:
-			revKey := ctVal.ReverseNATKey()
-			forwards[revKey.String()] = ctKey.String()
 		case conntrack.TypeNATReverse:
-			reverses[ctKey.String()] = e
+			natReverses = append(natReverses, e)
 		}
 		return maps.IterNone
 	})
@@ -374,27 +386,28 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 			Proto:     protoStr(k.Proto()),
 			Src:       src,
 			Dst:       dst,
+			Flags:     v4.FlagNames(v.Flags()),
 			ActiveAgo: time.Duration(now - v.LastSeen()).String(),
 			TCPState:  tcpStateStr(k, v),
 		})
 	}
 
-	// Emit NAT connections (reverse entries paired with their forward key).
-	for keyStr, e := range reverses {
+	// Emit NAT connections from reverse entries.
+	for _, e := range natReverses {
 		k, v := e.key, e.val
 		d := v.Data()
 		src, dst := orientedAddrs(k, v)
 		origDst := net.JoinHostPort(d.OrigDst.String(), fmt.Sprint(d.OrigPort))
 
 		conn := ctConnectionJSON{
-			Type:       "nat",
-			Proto:      protoStr(k.Proto()),
-			Src:        src,
-			OrigDst:    origDst,
-			Dst:        dst,
-			ActiveAgo:  time.Duration(now - v.LastSeen()).String(),
-			TCPState:   tcpStateStr(k, v),
-			ForwardKey: forwards[keyStr],
+			Type:      "nat",
+			Proto:     protoStr(k.Proto()),
+			Src:       src,
+			OrigDst:   origDst,
+			Dst:       dst,
+			Flags:     v4.FlagNames(v.Flags()),
+			ActiveAgo: time.Duration(now - v.LastSeen()).String(),
+			TCPState:  tcpStateStr(k, v),
 		}
 
 		if (cmd.ipv6 && !d.TunIP.Equal(voidIP6)) || (!cmd.ipv6 && !d.TunIP.Equal(voidIP4)) {

@@ -47,9 +47,9 @@ var ifstateCmd = &cobra.Command{
 }
 
 type ifstateJSON struct {
-	IfIndex          uint32 `json:"ifindex"`
-	Name             string `json:"name"`
-	Flags            uint32 `json:"flags"`
+	IfIndex          uint32   `json:"ifindex"`
+	Name             string   `json:"name"`
+	Flags            []string `json:"flags"`
 	IngressPolicyV4  int    `json:"ingress_policy_v4"`
 	EgressPolicyV4   int    `json:"egress_policy_v4"`
 	XDPPolicyV4      int    `json:"xdp_policy_v4"`
@@ -82,7 +82,7 @@ func dumpIfState(cmd *cobra.Command) error {
 			jsonEntries = append(jsonEntries, ifstateJSON{
 				IfIndex:         key.IfIndex(),
 				Name:            val.IfName(),
-				Flags:           val.Flags(),
+				Flags:           ifstate.FlagNames(val.Flags()),
 				IngressPolicyV4: val.IngressPolicyV4(),
 				EgressPolicyV4:  val.EgressPolicyV4(),
 				XDPPolicyV4:     val.XDPPolicyV4(),
