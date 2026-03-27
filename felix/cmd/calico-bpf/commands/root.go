@@ -57,7 +57,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "warn", "Set log level")
 
 	ipv6 = rootCmd.PersistentFlags().BoolP("ipv6", "6", false, "Use IPv6 instead of IPv4")
-	jsonOutput = rootCmd.PersistentFlags().BoolP("json", "j", false, "Output in JSON format (supported by: conntrack dump, counters dump, nat dump)")
+	jsonOutput = rootCmd.PersistentFlags().BoolP("json", "j", false, "Output in JSON format")
 	rootCmd.SetOut(os.Stdout)
 }
 
