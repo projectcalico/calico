@@ -846,20 +846,54 @@ func (cmd *conntrackStatsCmd) Run(c *cobra.Command, _ []string) {
 		return maps.IterNone
 	})
 
-	cmd.Printf("Conntrack map size: %d\n", maps.Size(ctMap.GetName()))
+	if *jsonOutput {
+		type ctStatsJSON struct {
+			MapSize         int `json:"map_size"`
+			TotalConns      int `json:"total_connections"`
+			TotalEntries    int `json:"total_entries"`
+			NATConns        int `json:"nat_connections"`
+			TCP             int `json:"tcp"`
+			UDP             int `json:"udp"`
+			Others          int `json:"others"`
+			TCPEstablished  int `json:"tcp_established"`
+			TCPClosed       int `json:"tcp_closed"`
+			TCPReset        int `json:"tcp_reset"`
+			TCPSynSent      int `json:"tcp_syn_sent"`
+		}
+		stats := ctStatsJSON{
+			MapSize:        maps.Size(ctMap.GetName()),
+			TotalConns:     cmd.total,
+			TotalEntries:   cmd.total + cmd.nat,
+			NATConns:       cmd.nat,
+			TCP:            cmd.protos[6],
+			UDP:            cmd.protos[17],
+			Others:         cmd.total - cmd.protos[6] - cmd.protos[17],
+			TCPEstablished: cmd.established,
+			TCPClosed:      cmd.closed,
+			TCPReset:       cmd.reset,
+			TCPSynSent:     cmd.synSent,
+		}
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		if encErr := enc.Encode(stats); encErr != nil {
+			log.WithError(encErr).Fatal("Failed to encode JSON")
+		}
+	} else {
+		cmd.Printf("Conntrack map size: %d\n", maps.Size(ctMap.GetName()))
 
-	cmd.Printf("Total connections: %d\n", cmd.total)
-	cmd.Printf("Total entries: %d\n", cmd.total+cmd.nat)
-	cmd.Printf("NAT connections: %d\n\n", cmd.nat)
+		cmd.Printf("Total connections: %d\n", cmd.total)
+		cmd.Printf("Total entries: %d\n", cmd.total+cmd.nat)
+		cmd.Printf("NAT connections: %d\n\n", cmd.nat)
 
-	cmd.Printf("TCP : %d\n", cmd.protos[6])
-	cmd.Printf("UDP : %d\n", cmd.protos[17])
-	cmd.Printf("Others : %d\n\n", cmd.total-cmd.protos[6]-cmd.protos[17])
+		cmd.Printf("TCP : %d\n", cmd.protos[6])
+		cmd.Printf("UDP : %d\n", cmd.protos[17])
+		cmd.Printf("Others : %d\n\n", cmd.total-cmd.protos[6]-cmd.protos[17])
 
-	cmd.Printf("TCP Established: %d\n", cmd.established)
-	cmd.Printf("TCP Closed: %d\n", cmd.closed)
-	cmd.Printf("TCP Reset: %d\n", cmd.reset)
-	cmd.Printf("TCP Syn-sent: %d\n", cmd.synSent)
+		cmd.Printf("TCP Established: %d\n", cmd.established)
+		cmd.Printf("TCP Closed: %d\n", cmd.closed)
+		cmd.Printf("TCP Reset: %d\n", cmd.reset)
+		cmd.Printf("TCP Syn-sent: %d\n", cmd.synSent)
+	}
 
 	if err != nil {
 		log.WithError(err).Fatal("Failed to iterate over conntrack entries")

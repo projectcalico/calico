@@ -15,6 +15,8 @@
 package commands
 
 import (
+	"encoding/json"
+
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -44,12 +46,28 @@ var ifstateCmd = &cobra.Command{
 	Short: "Manipulates ifstate",
 }
 
+type ifstateJSON struct {
+	IfIndex          uint32 `json:"ifindex"`
+	Name             string `json:"name"`
+	Flags            uint32 `json:"flags"`
+	IngressPolicyV4  int    `json:"ingress_policy_v4"`
+	EgressPolicyV4   int    `json:"egress_policy_v4"`
+	XDPPolicyV4      int    `json:"xdp_policy_v4"`
+	IngressPolicyV6  int    `json:"ingress_policy_v6"`
+	EgressPolicyV6   int    `json:"egress_policy_v6"`
+	XDPPolicyV6      int    `json:"xdp_policy_v6"`
+	TcIngressFilter  int    `json:"tc_ingress_filter"`
+	TcEgressFilter   int    `json:"tc_egress_filter"`
+}
+
 func dumpIfState(cmd *cobra.Command) error {
 	ifstateMap := ifstate.Map()
 
 	if err := ifstateMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
 	}
+
+	var jsonEntries []ifstateJSON
 
 	err := ifstateMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var (
@@ -60,10 +78,35 @@ func dumpIfState(cmd *cobra.Command) error {
 		copy(key[:], k[:])
 		copy(val[:], v[:])
 
-		cmd.Printf("%5d : %s\n", key.IfIndex(), val)
+		if *jsonOutput {
+			jsonEntries = append(jsonEntries, ifstateJSON{
+				IfIndex:         key.IfIndex(),
+				Name:            val.IfName(),
+				Flags:           val.Flags(),
+				IngressPolicyV4: val.IngressPolicyV4(),
+				EgressPolicyV4:  val.EgressPolicyV4(),
+				XDPPolicyV4:     val.XDPPolicyV4(),
+				IngressPolicyV6: val.IngressPolicyV6(),
+				EgressPolicyV6:  val.EgressPolicyV6(),
+				XDPPolicyV6:     val.XDPPolicyV6(),
+				TcIngressFilter: val.TcIngressFilter(),
+				TcEgressFilter:  val.TcEgressFilter(),
+			})
+		} else {
+			cmd.Printf("%5d : %s\n", key.IfIndex(), val)
+		}
 
 		return maps.IterNone
 	})
+	if err != nil {
+		return err
+	}
+
+	if *jsonOutput {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(jsonEntries)
+	}
 
 	return err
 }

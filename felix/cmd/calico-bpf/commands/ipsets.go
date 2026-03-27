@@ -15,7 +15,9 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"sort"
 
@@ -83,6 +85,24 @@ func dumpIPSets() error {
 		sort.Strings(v)
 	}
 	slices.Sort(setIDs)
+
+	if *jsonOutput {
+		type ipsetJSON struct {
+			SetID   string   `json:"set_id"`
+			Members []string `json:"members"`
+		}
+		var sets []ipsetJSON
+		for _, setID := range setIDs {
+			sets = append(sets, ipsetJSON{
+				SetID:   fmt.Sprintf("%#x", setID),
+				Members: membersBySet[setID],
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(sets)
+	}
+
 	for _, setID := range setIDs {
 		fmt.Printf("IP set %#x\n", setID)
 		for _, member := range membersBySet[setID] {
