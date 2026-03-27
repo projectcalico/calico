@@ -364,7 +364,7 @@ type natServiceJSON struct {
 
 // natServiceGroupJSON is used in --group-by-service mode.
 type natServiceGroupJSON struct {
-	ID        uint32           `json:"id"`
+	ID        uint32            `json:"id"`
 	Frontends []natFrontendJSON `json:"frontends"`
 	Backends  []natBackendJSON  `json:"backends"`
 }
