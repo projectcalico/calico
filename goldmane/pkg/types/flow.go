@@ -17,12 +17,46 @@ package types
 import (
 	"slices"
 	"strings"
+	"sync"
 	"unique"
 
 	"github.com/sirupsen/logrus"
 	goproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/proto"
+)
+
+// FlowConfig contains configuration options for flow aggregation
+type FlowConfig struct {
+	// MaxSourceIPs is the maximum number of source IPs to store per flow
+	// A value of 0 means no limit
+	MaxSourceIPs int
+
+	// MaxSourcePorts is the maximum number of source ports to store per flow
+	// A value of 0 means no limit
+	MaxSourcePorts int
+}
+
+// DefaultFlowConfig returns the default configuration for flows
+func DefaultFlowConfig() *FlowConfig {
+	return &FlowConfig{
+		MaxSourceIPs:   100, // Default limit of 100 IPs per flow
+		MaxSourcePorts: 100, // Default limit of 100 ports per flow
+	}
+}
+
+var (
+	// Object pools to reduce GC pressure during high-throughput merging
+	stringMapPool = sync.Pool{
+		New: func() interface{} {
+			return make(map[string]bool, 128)
+		},
+	}
+	int64MapPool = sync.Pool{
+		New: func() interface{} {
+			return make(map[int64]bool, 128)
+		},
+	}
 )
 
 type FlowKeySource struct {
@@ -35,6 +69,7 @@ type FlowKeyDestination struct {
 	DestName             string
 	DestNamespace        string
 	DestType             proto.EndpointType
+	DestIP               string
 	DestPort             int64
 	DestServiceName      string
 	DestServiceNamespace string
@@ -138,6 +173,10 @@ func (k *FlowKey) DestServicePort() int64 {
 	return k.dest.Value().DestServicePort
 }
 
+func (k *FlowKey) DestIP() string {
+	return k.dest.Value().DestIP
+}
+
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
 type Flow struct {
 	Key                     *FlowKey
@@ -145,6 +184,8 @@ type Flow struct {
 	EndTime                 int64
 	SourceLabels            unique.Handle[string]
 	DestLabels              unique.Handle[string]
+	SourceIPs               []string
+	SourcePorts             []int64
 	PacketsIn               int64
 	PacketsOut              int64
 	BytesIn                 int64
@@ -200,6 +241,8 @@ func ProtoToFlow(p *proto.Flow) *Flow {
 		EndTime:                 p.EndTime,
 		SourceLabels:            toHandles(p.SourceLabels),
 		DestLabels:              toHandles(p.DestLabels),
+		SourceIPs:               p.SourceIps,
+		SourcePorts:             p.SourcePorts,
 		PacketsIn:               p.PacketsIn,
 		PacketsOut:              p.PacketsOut,
 		BytesIn:                 p.BytesIn,
@@ -224,6 +267,7 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 			DestName:             p.DestName,
 			DestNamespace:        p.DestNamespace,
 			DestType:             p.DestType,
+			DestIP:               p.DestIp,
 			DestPort:             p.DestPort,
 			DestServiceName:      p.DestServiceName,
 			DestServiceNamespace: p.DestServiceNamespace,
@@ -275,6 +319,8 @@ func FlowIntoProto(f *Flow, pf *proto.Flow) {
 	pf.EndTime = f.EndTime
 	pf.SourceLabels = fromHandles(f.SourceLabels)
 	pf.DestLabels = fromHandles(f.DestLabels)
+	pf.SourceIps = f.SourceIPs
+	pf.SourcePorts = f.SourcePorts
 	pf.PacketsIn = f.PacketsIn
 	pf.PacketsOut = f.PacketsOut
 	pf.BytesIn = f.BytesIn
@@ -298,6 +344,7 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 	pfk.DestName = destination.DestName
 	pfk.DestNamespace = destination.DestNamespace
 	pfk.DestType = destination.DestType
+	pfk.DestIp = destination.DestIP
 	pfk.DestPort = destination.DestPort
 	pfk.DestServiceName = destination.DestServiceName
 	pfk.DestServiceNamespace = destination.DestServiceNamespace
@@ -320,6 +367,8 @@ func FlowToProto(f *Flow) *proto.Flow {
 		EndTime:                 f.EndTime,
 		SourceLabels:            fromHandles(f.SourceLabels),
 		DestLabels:              fromHandles(f.DestLabels),
+		SourceIps:               f.SourceIPs,
+		SourcePorts:             f.SourcePorts,
 		PacketsIn:               f.PacketsIn,
 		PacketsOut:              f.PacketsOut,
 		BytesIn:                 f.BytesIn,
@@ -344,6 +393,7 @@ func flowKeyToProto(f *FlowKey) *proto.FlowKey {
 		DestName:             destination.DestName,
 		DestNamespace:        destination.DestNamespace,
 		DestType:             destination.DestType,
+		DestIp:               destination.DestIP,
 		DestPort:             destination.DestPort,
 		DestServiceName:      destination.DestServiceName,
 		DestServiceNamespace: destination.DestServiceNamespace,
@@ -377,4 +427,157 @@ func fromHandles(handles unique.Handle[string]) []string {
 		return nil
 	}
 	return strings.Split(handles.Value(), ",")
+}
+
+// MergeFlows combines two flows with the same FlowKey, merging their source IP and port arrays
+// while respecting the provided limits. When merging, duplicate IPs/ports are removed and
+// arrays are truncated to the specified limits if needed.
+// This implementation is optimized for high-scale performance.
+func MergeFlows(f1, f2 *Flow, maxIPs, maxPorts int) *Flow {
+	if f1 == nil {
+		return f2
+	}
+	if f2 == nil {
+		return f1
+	}
+
+	// Fast path: if either flow already exceeds limits, just take the first one
+	// This avoids expensive merging when we're already at capacity
+	if maxIPs > 0 && len(f1.SourceIPs) >= maxIPs {
+		maxIPs = len(f1.SourceIPs) // Don't expand beyond current size
+	}
+	if maxPorts > 0 && len(f1.SourcePorts) >= maxPorts {
+		maxPorts = len(f1.SourcePorts) // Don't expand beyond current size
+	}
+
+	sourceIPs := mergeUniqueStrings(f1.SourceIPs, f2.SourceIPs, maxIPs)
+	sourcePorts := mergeUniqueInt64s(f1.SourcePorts, f2.SourcePorts, maxPorts)
+
+	// Create merged flow with aggregated statistics
+	return &Flow{
+		Key:                     f1.Key, // Same key for both flows
+		StartTime:               min(f1.StartTime, f2.StartTime),
+		EndTime:                 max(f1.EndTime, f2.EndTime),
+		SourceLabels:            f1.SourceLabels, // Assuming same labels for same key
+		DestLabels:              f1.DestLabels,   // Assuming same labels for same key
+		SourceIPs:               sourceIPs,
+		SourcePorts:             sourcePorts,
+		PacketsIn:               f1.PacketsIn + f2.PacketsIn,
+		PacketsOut:              f1.PacketsOut + f2.PacketsOut,
+		BytesIn:                 f1.BytesIn + f2.BytesIn,
+		BytesOut:                f1.BytesOut + f2.BytesOut,
+		NumConnectionsStarted:   f1.NumConnectionsStarted + f2.NumConnectionsStarted,
+		NumConnectionsCompleted: f1.NumConnectionsCompleted + f2.NumConnectionsCompleted,
+		NumConnectionsLive:      f1.NumConnectionsLive + f2.NumConnectionsLive,
+	}
+}
+
+// mergeUniqueStrings efficiently merges two string slices, removing duplicates.
+// Optimized for high performance at scale using object pooling.
+func mergeUniqueStrings(s1, s2 []string, maxSize int) []string {
+	if maxSize == 0 {
+		maxSize = len(s1) + len(s2) // No limit
+	}
+
+	// Pre-allocate result slice with known capacity to avoid reallocations
+	result := make([]string, 0, min(maxSize, len(s1)+len(s2)))
+
+	// Get a map from the pool and reset it
+	seen := stringMapPool.Get().(map[string]bool)
+	defer func() {
+		// Clear the map and return to pool
+		for k := range seen {
+			delete(seen, k)
+		}
+		stringMapPool.Put(seen)
+	}()
+
+	// Add from first slice
+	for _, s := range s1 {
+		if len(result) >= maxSize {
+			break // Early termination when limit reached
+		}
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+
+	// Add from second slice
+	for _, s := range s2 {
+		if len(result) >= maxSize {
+			break // Early termination when limit reached
+		}
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+
+	// Only sort if we have a reasonable number of elements
+	// For very large arrays, the cost of sorting may outweigh benefits
+	if len(result) <= 1000 {
+		slices.Sort(result)
+	}
+
+	return result
+}
+
+// mergeUniqueInt64s efficiently merges two int64 slices, removing duplicates.
+// Optimized for high performance at scale using object pooling.
+func mergeUniqueInt64s(s1, s2 []int64, maxSize int) []int64 {
+	if maxSize == 0 {
+		maxSize = len(s1) + len(s2) // No limit
+	}
+
+	// Pre-allocate result slice with known capacity to avoid reallocations
+	result := make([]int64, 0, min(maxSize, len(s1)+len(s2)))
+
+	// Get a map from the pool and reset it
+	seen := int64MapPool.Get().(map[int64]bool)
+	defer func() {
+		// Clear the map and return to pool
+		for k := range seen {
+			delete(seen, k)
+		}
+		int64MapPool.Put(seen)
+	}()
+
+	// Add from first slice
+	for _, p := range s1 {
+		if len(result) >= maxSize {
+			break // Early termination when limit reached
+		}
+		if !seen[p] {
+			seen[p] = true
+			result = append(result, p)
+		}
+	}
+
+	// Add from second slice
+	for _, p := range s2 {
+		if len(result) >= maxSize {
+			break // Early termination when limit reached
+		}
+		if !seen[p] {
+			seen[p] = true
+			result = append(result, p)
+		}
+	}
+
+	// Only sort if we have a reasonable number of elements
+	// For very large arrays, the cost of sorting may outweigh benefits
+	if len(result) <= 1000 {
+		slices.Sort(result)
+	}
+
+	return result
+}
+
+// MergeFlowsWithConfig is a convenience function that merges flows using the provided configuration
+func MergeFlowsWithConfig(f1, f2 *Flow, config *FlowConfig) *Flow {
+	if config == nil {
+		config = DefaultFlowConfig()
+	}
+	return MergeFlows(f1, f2, config.MaxSourceIPs, config.MaxSourcePorts)
 }
