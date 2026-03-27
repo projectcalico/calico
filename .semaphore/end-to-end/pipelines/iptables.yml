@@ -209,6 +209,10 @@ blocks:
           matrix:
             - env_var: MANIFEST_FILE
               values: ["calico.yaml", "calico-typha.yaml"]
+          env_vars:
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
         - name: etcd
           execution_time_limit:
             hours: 7
@@ -336,6 +340,9 @@ blocks:
               value: "true"
             - name: PROVISIONER
               value: "gcp-kubeadm"
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
 
   - name: k8s distros
     dependencies: []
@@ -742,6 +749,9 @@ blocks:
       env_vars:
         - name: PROVISIONER
           value: gcp-kubeadm
+        # Install the Calico API server via manifest (needed for tiered RBAC tests).
+        - name: ENABLE_CALICOCTL_APISERVER
+          value: "true"
 
   - name: "Migration"
     dependencies: []
