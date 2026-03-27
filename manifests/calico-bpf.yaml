@@ -3867,6 +3867,7 @@ spec:
                 natOutgoing:
                   type: boolean
                 nodeSelector:
+                  default: all()
                   maxLength: 1024
                   type: string
                 vxlanMode:
