@@ -14,7 +14,7 @@
 import logging
 import yaml
 
-from nose.plugins.attrib import attr
+import pytest
 from multiprocessing.dummy import Pool as ThreadPool
 from unittest import skip
 
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 class TestSwitchRouteReflector(TestBase):
 
-    @attr('slow')
+    @pytest.mark.slow
     def _test_switch_route_reflector(self, backend='bird', bgpconfig_as_num=64514, peer_as_num=64514):
         """
         Test that switching from node-to-node full mesh to route reflectors doesn't disrupt dataplane traffic if done as per
@@ -134,11 +134,11 @@ class TestSwitchRouteReflector(TestBase):
                                                       workload_host2.ip],
                                         retries=5)
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_switch_route_reflector(self):
         self._test_switch_route_reflector(backend='bird')
 
-    @attr('slow')
+    @pytest.mark.slow
     def test_bird_switch_route_reflector_default_as(self):
         self._test_switch_route_reflector(backend='bird', bgpconfig_as_num=None, peer_as_num=64512)
 

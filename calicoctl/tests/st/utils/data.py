@@ -26,11 +26,11 @@
 # resource).
 import netaddr
 
-from utils import API_VERSION
+from .utils import API_VERSION
 
 # Large list of CIDRs for testing truncation of certain fields.
 many_nets = []
-for i in xrange(10000):
+for i in range(10000):
     many_nets.append("10.%s.%s.0/28" % (i >> 8, i % 256))
 
 
@@ -1246,7 +1246,7 @@ networkset_name2_rev1 = {
 # - Kubernetes' gRPC API has a 4MB message size limit.
 # - etcdv3 has a 1MB value size limit.
 many_nets = []
-for i in xrange(10000):
+for i in range(10000):
     many_nets.append("10.%s.%s.0/28" % (i >> 8, i % 256))
 networkset_name1_rev1_large = {
     'apiVersion': API_VERSION,

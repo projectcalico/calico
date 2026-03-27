@@ -17,7 +17,6 @@ import random
 import netaddr
 import time
 import yaml
-from nose_parameterized import parameterized
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -166,7 +165,7 @@ class MultiHostIpam(TestBase):
                                             network=self.network)
             workload_ips.append(workload.ip)
 
-        print workload_ips
+        print(workload_ips)
 
         for ip in ipv4_subnet:
             response = self.hosts[0].calicoctl("ipam show --ip=%s" % ip)
@@ -179,11 +178,12 @@ class MultiHostIpam(TestBase):
                 assert str(ip) not in workload_ips, \
                     "ipam show says IP %s is not assigned when it is!" % ip
 
-    @parameterized.expand([
-        (False,),
-        (True,),
-    ])
-    def test_pool_wrap(self, make_static_workload):
+    def test_pool_wrap(self):
+        for make_static_workload in [False, True]:
+            with self.subTest(make_static_workload=make_static_workload):
+                self._test_pool_wrap(make_static_workload)
+
+    def _test_pool_wrap(self, make_static_workload):
         """
         Repeatedly create and delete workloads until the system re-assigns an IP.
         """

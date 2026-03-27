@@ -23,13 +23,13 @@ import yaml
 from functools import partial
 from subprocess import CalledProcessError, check_output
 
-from log_analyzer import LogAnalyzer, FELIX_LOG_FORMAT, TIMESTAMP_FORMAT
-from network import DummyNetwork
+from .log_analyzer import LogAnalyzer, FELIX_LOG_FORMAT, TIMESTAMP_FORMAT
+from .network import DummyNetwork
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
 from tests.st.utils.exceptions import CommandExecError
-from utils import get_ip, log_and_run, retry_until_success, ETCD_SCHEME, \
+from tests.st.utils.utils import get_ip, log_and_run, retry_until_success, ETCD_SCHEME, \
     ETCD_CA, ETCD_KEY, ETCD_CERT, ETCD_HOSTNAME_SSL
-from workload import Workload
+from .workload import Workload
 
 logger = logging.getLogger(__name__)
 # We want to default CHECKOUT_DIR if either the ENV var is unset
@@ -218,7 +218,7 @@ class DockerHost(object):
         whitespace removed.
         """
         if self.dind:
-            option = "-d" if daemon_mode else "-it"
+            option = "-d" if daemon_mode else "-i"
             command = self.escape_shell_single_quotes(command)
             command = "docker exec %s %s sh -c '%s'" % (option, self.name, command)
 
@@ -262,7 +262,7 @@ class DockerHost(object):
             command = command % filename
 
         logger.debug("Final command: %s", command.split(" "))
-        out = check_output(command.split(" "))
+        out = check_output(command.split(" ")).decode()
         return out.split("\n")
 
     def calicoctl(self, command, version=None, raise_exception_on_failure=True):
@@ -375,7 +375,7 @@ class DockerHost(object):
         pools_output = self.calicoctl("get ippool -o yaml")
         pools_dict = yaml.safe_load(pools_output)
         for pool in pools_dict['items']:
-            print "Pool is %s" % pool
+            print("Pool is %s" % pool)
             if ':' not in pool['spec']['cidr']:
                 pool['spec']['ipipMode'] = 'Always' if enabled else 'Never'
             if 'creationTimestamp' in pool['metadata']:
@@ -496,7 +496,7 @@ class DockerHost(object):
         try:
             if self.log_analyzer is not None:
                 self.log_analyzer.check_logs_for_exceptions(err_words, ignore_list)
-        except Exception, e:
+        except Exception as e:
             log_exception = e
             log_extra_diags = True
 
@@ -600,7 +600,7 @@ class DockerHost(object):
         :return: Return code of execute operation.
         """
         if self.dind:
-            with tempfile.NamedTemporaryFile() as tmp:
+            with tempfile.NamedTemporaryFile(mode='w') as tmp:
                 tmp.write(data)
                 tmp.flush()
                 log_and_run("docker cp %s %s:%s" % (tmp.name, self.name, filename))
