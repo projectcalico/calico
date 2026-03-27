@@ -4,11 +4,17 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "typha"
     prologue:
       commands:
         - cd typha
     jobs:
       - name: "Typha: UT and FV tests"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
       - name: "Typha: UT and FV tests on UBI-minimal"
