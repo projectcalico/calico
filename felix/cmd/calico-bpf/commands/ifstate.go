@@ -47,17 +47,17 @@ var ifstateCmd = &cobra.Command{
 }
 
 type ifstateJSON struct {
-	IfIndex          uint32   `json:"ifindex"`
-	Name             string   `json:"name"`
-	Flags            []string `json:"flags"`
-	IngressPolicyV4  int    `json:"ingress_policy_v4"`
-	EgressPolicyV4   int    `json:"egress_policy_v4"`
-	XDPPolicyV4      int    `json:"xdp_policy_v4"`
-	IngressPolicyV6  int    `json:"ingress_policy_v6"`
-	EgressPolicyV6   int    `json:"egress_policy_v6"`
-	XDPPolicyV6      int    `json:"xdp_policy_v6"`
-	TcIngressFilter  int    `json:"tc_ingress_filter"`
-	TcEgressFilter   int    `json:"tc_egress_filter"`
+	IfIndex         uint32   `json:"ifindex"`
+	Name            string   `json:"name"`
+	Flags           []string `json:"flags"`
+	IngressPolicyV4 int      `json:"ingress_policy_v4"`
+	EgressPolicyV4  int      `json:"egress_policy_v4"`
+	XDPPolicyV4     int      `json:"xdp_policy_v4"`
+	IngressPolicyV6 int      `json:"ingress_policy_v6"`
+	EgressPolicyV6  int      `json:"egress_policy_v6"`
+	XDPPolicyV6     int      `json:"xdp_policy_v6"`
+	TcIngressFilter int      `json:"tc_ingress_filter"`
+	TcEgressFilter  int      `json:"tc_egress_filter"`
 }
 
 func dumpIfState(cmd *cobra.Command) error {
