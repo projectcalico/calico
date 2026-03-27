@@ -20,12 +20,16 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func tierAction(a v3.Action) *v3.Action { return &a }
-
 func TestTier_Validation(t *testing.T) {
+	kubeAdminOrder := v3.KubeAdminTierOrder
+	defaultOrder := v3.DefaultTierOrder
+	kubeBaselineOrder := v3.KubeBaselineTierOrder
+	wrongOrder := float64(999)
+
 	tests := []struct {
 		name    string
 		obj     client.Object
@@ -35,7 +39,7 @@ func TestTier_Validation(t *testing.T) {
 			name: "kube-admin with Deny is rejected",
 			obj: &v3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "kube-admin"},
-				Spec:       v3.TierSpec{DefaultAction: tierAction(v3.Deny)},
+				Spec:       v3.TierSpec{DefaultAction: ptr.To(v3.Deny), Order: &kubeAdminOrder},
 			},
 			wantErr: "The 'kube-admin' tier must have default action 'Pass'",
 		},
@@ -43,14 +47,22 @@ func TestTier_Validation(t *testing.T) {
 			name: "kube-admin with Pass is accepted",
 			obj: &v3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "kube-admin"},
-				Spec:       v3.TierSpec{DefaultAction: tierAction(v3.Pass)},
+				Spec:       v3.TierSpec{DefaultAction: ptr.To(v3.Pass), Order: &kubeAdminOrder},
 			},
+		},
+		{
+			name: "kube-admin with wrong order is rejected",
+			obj: &v3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "kube-admin"},
+				Spec:       v3.TierSpec{DefaultAction: ptr.To(v3.Pass), Order: &wrongOrder},
+			},
+			wantErr: "kube-admin tier order must be 1000",
 		},
 		{
 			name: "kube-baseline with Deny is rejected",
 			obj: &v3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "kube-baseline"},
-				Spec:       v3.TierSpec{DefaultAction: tierAction(v3.Deny)},
+				Spec:       v3.TierSpec{DefaultAction: ptr.To(v3.Deny), Order: &kubeBaselineOrder},
 			},
 			wantErr: "The 'kube-baseline' tier must have default action 'Pass'",
 		},
@@ -58,14 +70,22 @@ func TestTier_Validation(t *testing.T) {
 			name: "kube-baseline with Pass is accepted",
 			obj: &v3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "kube-baseline"},
-				Spec:       v3.TierSpec{DefaultAction: tierAction(v3.Pass)},
+				Spec:       v3.TierSpec{DefaultAction: ptr.To(v3.Pass), Order: &kubeBaselineOrder},
 			},
+		},
+		{
+			name: "kube-baseline with wrong order is rejected",
+			obj: &v3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "kube-baseline"},
+				Spec:       v3.TierSpec{DefaultAction: ptr.To(v3.Pass), Order: &wrongOrder},
+			},
+			wantErr: "kube-baseline tier order must be 10000000",
 		},
 		{
 			name: "default with Pass is rejected",
 			obj: &v3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Spec:       v3.TierSpec{DefaultAction: tierAction(v3.Pass)},
+				Spec:       v3.TierSpec{DefaultAction: ptr.To(v3.Pass), Order: &defaultOrder},
 			},
 			wantErr: "The 'default' tier must have default action 'Deny'",
 		},
@@ -73,8 +93,16 @@ func TestTier_Validation(t *testing.T) {
 			name: "default with Deny is accepted",
 			obj: &v3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Spec:       v3.TierSpec{DefaultAction: tierAction(v3.Deny)},
+				Spec:       v3.TierSpec{DefaultAction: ptr.To(v3.Deny), Order: &defaultOrder},
 			},
+		},
+		{
+			name: "default with wrong order is rejected",
+			obj: &v3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       v3.TierSpec{DefaultAction: ptr.To(v3.Deny), Order: &wrongOrder},
+			},
+			wantErr: "default tier order must be 1000000",
 		},
 		{
 			name: "arbitrary tier without defaultAction defaults to Deny",
