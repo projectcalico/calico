@@ -1580,7 +1580,7 @@ $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
 
-$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd/calico)
+$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd)
 	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
 
 # Operator is built from a separate repo/branch and depends on all other
