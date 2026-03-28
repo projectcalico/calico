@@ -18,6 +18,9 @@ COPY --from=builder /profiles /profiles/
 COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calico
 COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver-registrar
 
+# Provide calicoctl for backward compatibility with scripts that exec into the container.
+COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calicoctl
+
 # CNI plugin install expects binaries at /opt/cni/bin/.
 # The base image has no shell, so we copy the binary to the expected paths.
 COPY ${BIN_DIR}/calico-${TARGETARCH} /opt/cni/bin/calico

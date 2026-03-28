@@ -85,6 +85,9 @@ func main() {
 	case "calico-ipam", "calico-ipam.exe":
 		ipamplugin.Main(buildinfo.Version)
 		return
+	case "calicoctl", "calicoctl.exe":
+		// Dispatch to ctl subcommand when invoked as calicoctl.
+		os.Args = append([]string{"calico", "ctl"}, os.Args[1:]...)
 	}
 	if os.Getenv("CNI_COMMAND") != "" {
 		plugin.Main(buildinfo.Version)

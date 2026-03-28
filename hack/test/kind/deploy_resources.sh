@@ -174,10 +174,6 @@ if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
   ${kubectl} patch installation default --type='merge' -p '{"spec": {"calicoNetwork": {"clusterRoutingMode":"Felix"}}}'
 fi
 
-echo "Install calicoctl as a pod"
-${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
-echo
-
 echo "Wait for tigera status to be ready"
 if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
        ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/calico ); then
