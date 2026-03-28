@@ -1,0 +1,136 @@
+# Traffic generators that produce continuous flow logs across namespaces.
+# Each pod hits multiple services every ~3s, generating flows with diverse
+# source/dest namespaces, ports (80, 8080, 5432, 9090, 53), and protocols (TCP, UDP).
+
+# Frontend traffic-gen: hits backend, monitoring, database, does DNS lookups
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-gen
+  namespace: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-gen
+  template:
+    metadata:
+      labels:
+        app: traffic-gen
+        role: client
+    spec:
+      containers:
+      - name: curl
+        image: curlimages/curl:latest
+        command:
+        - sh
+        - -c
+        - |
+          while true; do
+            curl -s -o /dev/null -m 2 http://api.backend.svc.cluster.local:8080/ &
+            curl -s -o /dev/null -m 2 http://web.frontend.svc.cluster.local/ &
+            curl -s -o /dev/null -m 2 http://metrics.monitoring.svc.cluster.local:9090/ &
+            nslookup api.backend.svc.cluster.local > /dev/null 2>&1 &
+            nslookup postgres.database.svc.cluster.local > /dev/null 2>&1 &
+            nc -z -w 2 postgres.database.svc.cluster.local 5432 &
+            wait
+            sleep 3
+          done
+---
+# Backend traffic-gen: hits frontend, monitoring, database
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-gen
+  namespace: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-gen
+  template:
+    metadata:
+      labels:
+        app: traffic-gen
+        role: client
+    spec:
+      containers:
+      - name: curl
+        image: curlimages/curl:latest
+        command:
+        - sh
+        - -c
+        - |
+          while true; do
+            curl -s -o /dev/null -m 2 http://web.frontend.svc.cluster.local/ &
+            curl -s -o /dev/null -m 2 http://metrics.monitoring.svc.cluster.local:9090/ &
+            nc -z -w 2 postgres.database.svc.cluster.local 5432 &
+            nslookup web.frontend.svc.cluster.local > /dev/null 2>&1 &
+            wait
+            sleep 3
+          done
+---
+# Monitoring traffic-gen: hits frontend, backend, database
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-gen
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-gen
+  template:
+    metadata:
+      labels:
+        app: traffic-gen
+        role: client
+    spec:
+      containers:
+      - name: curl
+        image: curlimages/curl:latest
+        command:
+        - sh
+        - -c
+        - |
+          while true; do
+            curl -s -o /dev/null -m 2 http://web.frontend.svc.cluster.local/ &
+            curl -s -o /dev/null -m 2 http://api.backend.svc.cluster.local:8080/ &
+            nc -z -w 2 postgres.database.svc.cluster.local 5432 &
+            nslookup metrics.monitoring.svc.cluster.local > /dev/null 2>&1 &
+            wait
+            sleep 3
+          done
+---
+# Database traffic-gen: tries to reach frontend and backend (will be denied by policies)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-gen
+  namespace: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-gen
+  template:
+    metadata:
+      labels:
+        app: traffic-gen
+        role: client
+    spec:
+      containers:
+      - name: curl
+        image: curlimages/curl:latest
+        command:
+        - sh
+        - -c
+        - |
+          while true; do
+            curl -s -o /dev/null -m 2 http://web.frontend.svc.cluster.local/ &
+            curl -s -o /dev/null -m 2 http://api.backend.svc.cluster.local:8080/ &
+            nslookup web.frontend.svc.cluster.local > /dev/null 2>&1 &
+            wait
+            sleep 3
+          done
