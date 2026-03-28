@@ -76,7 +76,7 @@ func (r *NFLogReader) Start() error {
 		// started before a later one failed), ensure we signal shutdown so
 		// any started goroutines are cleaned up instead of leaking.
 		r.Stop()
-		return err
+		return fmt.Errorf("NFLogReader failed to subscribe: %w", err)
 	}
 
 	r.wg.Go(func() {
