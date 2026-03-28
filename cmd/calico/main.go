@@ -28,6 +28,7 @@ import (
 	guardian "github.com/projectcalico/calico/guardian/pkg/daemon"
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/keycert"
 	"github.com/projectcalico/calico/kube-controllers/pkg/kubecontrollers"
+	"github.com/projectcalico/calico/node/pkg/node"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
 	"github.com/projectcalico/calico/pod2daemon/pkg/flexvol"
@@ -56,6 +57,7 @@ func newRootCommand() *cobra.Command {
 		csi.NewCommand(),
 		flexvol.NewCommand(),
 		webhook.NewCommand(),
+		node.NewCommand(),
 	)
 
 	// Components with their own CLI framework that need shims.
