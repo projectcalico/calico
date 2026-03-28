@@ -130,15 +130,16 @@ ut-cover:
 	./run-uts
 
 WHAT?=.
-GINKGO_FOCUS?=.*
-GINKGO_SKIP?=
+FOCUS?=.*
+SKIP?=
+GINKGO_ARGS?=
 
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
 ut:
 	mkdir -p report
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_ut.xml --output-dir=report/ -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_ut.xml --output-dir=report/ -skip "\[Datastore\]$(if $(SKIP),|$(SKIP))" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
@@ -162,7 +163,7 @@ fv-fast:
 		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_fv.xml --output-dir=report/ -skip "$(GINKGO_SKIP)" -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_fv.xml --output-dir=report/ -skip "$(SKIP)" -focus "$(FOCUS).*\[Datastore\]|\[Datastore\].*$(FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 # Create a kind cluster, and deploy some resources required for the libcalico-go tests.
 # TODO: Remove the need for this extra target, these should be created by the tests that need them.

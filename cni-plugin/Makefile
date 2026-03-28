@@ -201,6 +201,10 @@ build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 ###############################################################################
 # Unit Tests
 ###############################################################################
+WHAT?=.
+FOCUS?=.*
+SKIP?=
+GINKGO_ARGS?=
 
 fv:
 	@echo "No FV tests for CNI plugin"
@@ -267,7 +271,7 @@ ut-datastore:
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
 			mkdir -p report && \
-			ginkgo -cover -r --junit-report=$(JUNIT_REPORT_NAME) --output-dir=report/ -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
+			ginkgo -cover -r --junit-report=$(JUNIT_REPORT_NAME) --output-dir=report/ -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 ###############################################################################
 # Install test

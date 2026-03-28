@@ -93,15 +93,15 @@ Key file: `dataplane/linux/int_dataplane.go`
 make ut
 ```
 
-Runs all Go unit tests (via Ginkgo with coverage). Skips `fv/`, `k8sfv/`, and `bpf/ut/` packages. Pass `GINKGO_ARGS` for extra flags (e.g., `GINKGO_ARGS="-focus=TestName"`).
+Runs all Go unit tests (via Ginkgo with coverage). Skips `fv/`, `k8sfv/`, and `bpf/ut/` packages. Use `FOCUS="regex"` to target specific tests, `SKIP="regex"` to skip, and `GINKGO_ARGS` for extra flags.
 
 ### Functional Tests
 
 ```bash
-make fv GINKGO_FOCUS="TestName"
+make fv FOCUS="TestName"
 ```
 
-Runs functional tests from `fv/`. Requires container images to be built first. `GINKGO_FOCUS` filters by test name (supports regex). Can be parallelized with `FV_NUM_BATCHES` and `FV_BATCHES_TO_RUN`.
+Runs functional tests from `fv/`. Requires container images to be built first. `FOCUS` filters by test name (supports regex). Can be parallelized with `FV_NUM_BATCHES` and `FV_BATCHES_TO_RUN`.
 
 ### BPF-Specific Tests
 
@@ -137,7 +137,7 @@ make FOCUS="TestPrecompiledBinariesAreLoadable" ut-bpf
 BPF functional tests run the standard FV suite with the BPF dataplane enabled:
 
 ```bash
-make fv-bpf GINKGO_FOCUS="TestName"
+make fv-bpf FOCUS="TestName"
 ```
 
 Tests in `fv/bpf_*_test.go` are focused on the BPF dataplane itself. Tests prefixed with `_BPF-SAFE_` in other FV files test Calico's general behavior and are largely the same across all dataplanes. The dataplane tests in `fv/bpf_*_test.go` can be refined with a matrix prefix:
@@ -158,13 +158,13 @@ Tests in `fv/bpf_*_test.go` are focused on the BPF dataplane itself. Tests prefi
 Example: run a specific BPF FV test only for IPv4 UDP with no tunnel:
 
 ```bash
-make fv-bpf GINKGO_FOCUS="ipv4 udp, ct=true, log=debug, tunnel=none, dsr=false.*MyTestName"
+make fv-bpf FOCUS="ipv4 udp, ct=true, log=debug, tunnel=none, dsr=false.*MyTestName"
 ```
 
 ### Nftables Functional Tests
 
 ```bash
-make fv-nft GINKGO_FOCUS="TestName"
+make fv-nft FOCUS="TestName"
 ```
 
 Runs FV tests with the nftables backend enabled (`FELIX_FV_NFTABLES=Enabled`).
