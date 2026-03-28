@@ -73,7 +73,7 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 		.family = 2, /* AF_INET */
 #endif
 		.tot_len = 0,
-		.ifindex = ctx->skb->ingress_ifindex,
+		.ifindex = skb_ingress_ifindex(ctx->skb),
 		.l4_protocol = ctx->state->ip_proto,
 		.sport = bpf_htons(ctx->state->dport),
 		.dport = bpf_htons(ctx->state->sport),
@@ -124,13 +124,7 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 			}
 			break;
 		case BPF_FIB_LKUP_RET_NOT_FWDED:
-			if (ip_link_local(ctx->state->ip_src)
-#ifndef IPVER6
-				|| (ctx->state->ip_proto == IPPROTO_UDP &&
-				    ((ctx->state->sport == DHCPV4_CLIENT_PORT && ctx->state->dport == DHCPV4_SERVER_PORT) ||
-				     (ctx->state->sport == DHCPV4_SERVER_PORT && ctx->state->dport == DHCPV4_CLIENT_PORT)))
-#endif
-			) {
+			if (ip_link_local(ctx->state->ip_src)) {
 #ifdef IPVER6
 				if (ip_link_local(ctx->state->ip_dst)){
 #else
@@ -139,6 +133,15 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 					ret = RPF_RES_STRICT;
 				}
 			}
+#ifndef IPVER6
+			else if (ctx->state->ip_proto == IPPROTO_UDP &&
+				    ((ctx->state->sport == DHCPV4_CLIENT_PORT && ctx->state->dport == DHCPV4_SERVER_PORT) ||
+				     (ctx->state->sport == DHCPV4_SERVER_PORT && ctx->state->dport == DHCPV4_CLIENT_PORT))) {
+				CALI_DEBUG("Host RPF bypass: DHCPv4 packet (sport=%d, dport=%d)",
+						ctx->state->sport, ctx->state->dport);
+				ret = RPF_RES_LOOSE;
+			}
+#endif
 			break;
 
 	}
