@@ -382,6 +382,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v $(KIND_KUBECONFIG):/root/.kube/config \
 	    -v $(KUBECTL):/bin/kubectl \
+	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
