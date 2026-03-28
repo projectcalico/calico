@@ -105,7 +105,8 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 		struct calico_ct_value *ct_value = cali_ct_lookup_elem(k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!");
-			if (WORKLOAD_SRC_SPOOFING_CONFIGURED && cali_allowsource_lookup(&ctx->state->ip_src, skb_ingress_ifindex(ctx->skb))) {
+			if (WORKLOAD_SRC_SPOOFING_CONFIGURED && cali_allowsource_lookup(&ctx->state->ip_src,
+				ctx->globals->data.host_ifindex ? ctx->globals->data.host_ifindex : skb_ingress_ifindex(ctx->skb))) {
 				CALI_DEBUG("CT-ALL src IP " IP_FMT " is allowed, skipping CT creation", debug_ip(ctx->state->ip_src));
 				return 0;
 			}
@@ -195,7 +196,10 @@ create:
 	src_to_dst->packets = 1;
 	src_to_dst->bytes = ctx->skb->len;
 	if (CALI_F_TO_HOST) {
-		src_to_dst->ifindex = skb_ingress_ifindex(ctx->skb);
+		/* For netkit, ingress_ifindex is 0 in xmit context.
+		 * Use host_ifindex from globals when available. */
+		src_to_dst->ifindex = ctx->globals->data.host_ifindex ?
+			ctx->globals->data.host_ifindex : skb_ingress_ifindex(ctx->skb);
 	} else {
 		src_to_dst->ifindex = CT_INVALID_IFINDEX;
 	}
@@ -999,7 +1003,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
 	}
 
-	__u32 ifindex = skb_ingress_ifindex(ctx->skb);
+	/* For netkit, ingress_ifindex is 0 in xmit context so all workloads
+	 * look the same. Use host_ifindex from globals when available. */
+	__u32 ifindex = ctx->globals->data.host_ifindex ?
+		ctx->globals->data.host_ifindex : skb_ingress_ifindex(ctx->skb);
 
 	if (src_to_dst->ifindex != ifindex) {
 		// Conntrack entry records a different ingress interface than the one the
