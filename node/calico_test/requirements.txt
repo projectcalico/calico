@@ -15,7 +15,7 @@ oauthlib==3.3.1
 #packaging - already provided by Alpine
 pluggy==1.6.0
 pyasn1-modules==0.4.2
-pyasn1==0.6.2
+pyasn1==0.6.3
 #pyparsing - already provided by Alpine
 pytest==9.0.2
 pytest-timeout
