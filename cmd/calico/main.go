@@ -37,6 +37,7 @@ func newRootCommand() *cobra.Command {
 
 	cmd.AddCommand(
 		newGoldmaneCommand(),
+		newGoldmaneHealthCommand(),
 		newGuardianCommand(),
 		newWhiskerBackendCommand(),
 		newKeyCertCommand(),
