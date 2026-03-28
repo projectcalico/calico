@@ -33,7 +33,7 @@ import (
 
 // NewNodeDeletionController creates a new controller responsible for garbage collection Calico node objects
 // in etcd mode when their corresponding Kubernetes node is deleted.
-func NewNodeDeletionController(client client.Interface, cs *kubernetes.Clientset) *nodeDeleter {
+func NewNodeDeletionController(client client.Interface, cs kubernetes.Interface) *nodeDeleter {
 	d := &nodeDeleter{
 		clientset: cs,
 		client:    client,
@@ -46,7 +46,7 @@ func NewNodeDeletionController(client client.Interface, cs *kubernetes.Clientset
 
 type nodeDeleter struct {
 	rl        workqueue.TypedRateLimiter[any]
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 	client    client.Interface
 	syncChan  chan struct{}
 }
