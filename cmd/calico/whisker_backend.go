@@ -15,26 +15,11 @@
 package main
 
 import (
-	"context"
-
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/whisker-backend/cmd/app"
-	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 )
 
 func newWhiskerBackendCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "whisker-backend",
-		Short: "Run the Whisker flow log UI backend",
-		Run: func(cmd *cobra.Command, args []string) {
-			cfg, err := config.NewConfig()
-			if err != nil {
-				logrus.WithError(err).Fatal("Failed to parse configuration")
-			}
-
-			app.Run(context.Background(), cfg)
-		},
-	}
+	return app.NewCommand()
 }

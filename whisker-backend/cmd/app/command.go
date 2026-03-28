@@ -12,14 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package app
 
 import (
+	"context"
+
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/kubecontrollers"
+	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 )
 
-func newKubeControllersCommand() *cobra.Command {
-	return kubecontrollers.NewCommand()
+// NewCommand returns a cobra command that runs the Whisker flow log UI backend.
+func NewCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "whisker-backend",
+		Short: "Run the Whisker flow log UI backend",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg, err := config.NewConfig()
+			if err != nil {
+				logrus.WithError(err).Fatal("Failed to parse configuration")
+			}
+			Run(context.Background(), cfg)
+		},
+	}
 }

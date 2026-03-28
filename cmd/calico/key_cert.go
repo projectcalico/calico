@@ -15,19 +15,11 @@
 package main
 
 import (
-	"context"
-
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/keycert"
 )
 
 func newKeyCertCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "key-cert",
-		Short: "Run the TLS certificate provisioner",
-		Run: func(cmd *cobra.Command, args []string) {
-			keycert.Run(context.Background())
-		},
-	}
+	return keycert.NewCommand()
 }

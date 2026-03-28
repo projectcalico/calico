@@ -15,20 +15,11 @@
 package main
 
 import (
-	"context"
-
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/goldmane/pkg/daemon"
 )
 
 func newGoldmaneCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "goldmane",
-		Short: "Run the Goldmane flow aggregation service",
-		Run: func(cmd *cobra.Command, args []string) {
-			ctx := context.Background()
-			daemon.Run(ctx, daemon.ConfigFromEnv())
-		},
-	}
+	return daemon.NewCommand()
 }

@@ -15,16 +15,15 @@
 package main
 
 import (
-	"flag"
+	"fmt"
+	"os"
 
 	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
 )
 
 func main() {
-	logLevel := flag.String("loglevel", "", "Log level for the driver to report on")
-	endpoint := flag.String("endpoint", "", "location of the unix domain socket the Kubelet communicates with the CSI plugin on")
-	nodeID := flag.String("nodeid", "", "Node ID unique to the node")
-	flag.Parse()
-
-	csi.Run(*logLevel, *endpoint, *nodeID)
+	if err := csi.NewCommand().Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }

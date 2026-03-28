@@ -15,27 +15,15 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"os"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/kubecontrollers"
-	"github.com/projectcalico/calico/kube-controllers/pkg/status"
-	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 func main() {
-	var (
-		version    bool
-		statusFile string
-	)
-	flag.BoolVar(&version, "version", false, "Display version")
-	flag.StringVar(&statusFile, "status-file", status.DefaultStatusFile, "File to write status information to")
-	flag.Parse()
-
-	if version {
-		buildinfo.PrintVersion()
-		os.Exit(0)
+	if err := kubecontrollers.NewCommand().Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
-
-	kubecontrollers.Run(statusFile)
 }

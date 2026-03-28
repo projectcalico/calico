@@ -23,14 +23,14 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 )
 
-func newCheckStatusCommand() *cobra.Command {
+func newKubeControllersHealthCommand() *cobra.Command {
 	var file string
 	var checkReady bool
 	var checkLive bool
 
 	cmd := &cobra.Command{
-		Use:   "check-status",
-		Short: "Check kube-controllers health status",
+		Use:   "kube-controllers-health",
+		Short: "Check kube-controllers health via status file",
 		Run: func(cmd *cobra.Command, args []string) {
 			if !checkReady && !checkLive {
 				fmt.Println("No command specified to check-status")

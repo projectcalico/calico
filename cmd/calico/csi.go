@@ -21,21 +21,5 @@ import (
 )
 
 func newCSICommand() *cobra.Command {
-	var logLevel string
-	var endpoint string
-	var nodeID string
-
-	cmd := &cobra.Command{
-		Use:   "csi",
-		Short: "Run the Calico CSI node driver",
-		Run: func(cmd *cobra.Command, args []string) {
-			csi.Run(logLevel, endpoint, nodeID)
-		},
-	}
-
-	cmd.Flags().StringVar(&logLevel, "loglevel", "", "Log level for the driver")
-	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Unix domain socket path for Kubelet communication")
-	cmd.Flags().StringVar(&nodeID, "nodeid", "", "Node ID unique to the node")
-
-	return cmd
+	return csi.NewCommand()
 }

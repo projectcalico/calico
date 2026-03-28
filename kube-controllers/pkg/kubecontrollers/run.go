@@ -64,18 +64,25 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/pkg/cmdwrapper"
 )
 
+// Config holds the CLI-provided configuration for kube-controllers.
+type Config struct {
+	StatusFile string
+	HealthPort int
+}
+
 // Run is the main entry point for the kube-controllers daemon. It configures klog,
 // loads configuration, initializes the datastore, starts all configured controllers,
 // and blocks until a config change triggers a restart (exit code 129).
-func Run(statusFile string) {
+func Run(ctx context.Context, cfg Config) {
 	initKlog()
-	run(statusFile)
+	run(ctx, cfg)
 }
 
 func initKlog() {
@@ -86,7 +93,7 @@ func initKlog() {
 	}
 }
 
-func run(statusFile string) {
+func run(parentCtx context.Context, cliCfg Config) {
 	logutils.ConfigureFormatter("kube-controllers")
 
 	cfg := new(config.Config)
@@ -108,9 +115,21 @@ func run(statusFile string) {
 	}
 
 	stop := make(chan struct{})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parentCtx)
 
-	s := status.New(statusFile)
+	s := status.New(cliCfg.StatusFile)
+
+	// Start the HTTP health aggregator alongside the file-based status.
+	healthAggregator := health.NewHealthAggregator()
+	healthAggregator.RegisterReporter("Startup", &health.HealthReport{Live: true, Ready: true}, 0)
+	healthAggregator.RegisterReporter("CalicoDatastore", &health.HealthReport{Live: true, Ready: true}, 0)
+	healthAggregator.RegisterReporter("KubeAPIServer", &health.HealthReport{Live: true, Ready: true}, 0)
+	healthAggregator.Report("Startup", &health.HealthReport{Live: true, Ready: false})
+	healthAggregator.Report("CalicoDatastore", &health.HealthReport{Live: true, Ready: false})
+	healthAggregator.Report("KubeAPIServer", &health.HealthReport{Live: true, Ready: false})
+	if cliCfg.HealthPort != 0 {
+		healthAggregator.ServeHTTP(true, "", cliCfg.HealthPort)
+	}
 
 	logrus.Info("Ensuring Calico datastore is initialized")
 	s.SetReady("Startup", false, "initialized to false")
@@ -132,6 +151,7 @@ func run(statusFile string) {
 	}
 	logrus.Info("Calico datastore is initialized")
 	s.SetReady("Startup", true, "")
+	healthAggregator.Report("Startup", &health.HealthReport{Live: true, Ready: true})
 	cancelInit()
 
 	controllerCtrl := &controllerControl{
@@ -178,7 +198,7 @@ func run(statusFile string) {
 
 	if runCfg.HealthEnabled {
 		logrus.Info("Starting status report routine")
-		go runHealthChecks(ctx, s, k8sClientset, libcalicoClient)
+		go runHealthChecks(ctx, s, healthAggregator, k8sClientset, libcalicoClient)
 	}
 
 	logrus.SetLevel(runCfg.LogLevelScreen)
@@ -205,7 +225,7 @@ func run(statusFile string) {
 	os.Exit(cmdwrapper.RestartReturnCode)
 }
 
-func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) {
+func runHealthChecks(ctx context.Context, s *status.Status, ha *health.HealthAggregator, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) {
 	s.SetReady("CalicoDatastore", false, "initialized to false")
 	s.SetReady("KubeAPIServer", false, "initialized to false")
 
@@ -225,8 +245,10 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to verify datastore")
 			s.SetReady("CalicoDatastore", false, fmt.Sprintf("Error verifying datastore: %v", err))
+			ha.Report("CalicoDatastore", &health.HealthReport{Live: true, Ready: false, Detail: err.Error()})
 		} else {
 			s.SetReady("CalicoDatastore", true, "")
+			ha.Report("CalicoDatastore", &health.HealthReport{Live: true, Ready: true})
 		}
 		cancel()
 
@@ -237,8 +259,10 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 		if healthStatus != http.StatusOK {
 			logrus.WithError(result.Error()).WithField("status", healthStatus).Errorf("Received bad status code from apiserver")
 			s.SetReady("KubeAPIServer", false, fmt.Sprintf("Error reaching apiserver: %v with http status code: %d", err, healthStatus))
+			ha.Report("KubeAPIServer", &health.HealthReport{Live: true, Ready: false, Detail: fmt.Sprintf("status %d", healthStatus)})
 		} else {
 			s.SetReady("KubeAPIServer", true, "")
+			ha.Report("KubeAPIServer", &health.HealthReport{Live: true, Ready: true})
 		}
 
 		if !s.GetReadiness() {

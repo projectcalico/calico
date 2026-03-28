@@ -12,35 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package csi
 
-import (
-	"fmt"
-	"os"
+import "github.com/spf13/cobra"
 
-	"github.com/spf13/cobra"
-
-	"github.com/projectcalico/calico/app-policy/pkg/healthz"
-)
-
-func newHealthzCommand() *cobra.Command {
-	var dialPath string
+// NewCommand returns a cobra command that runs the Calico CSI node driver.
+func NewCommand() *cobra.Command {
+	var cfg Config
 
 	cmd := &cobra.Command{
-		Use:   "healthz (liveness|readiness)",
-		Short: "Check Dikastes health status",
-		Args:  cobra.ExactArgs(1),
+		Use:   "csi",
+		Short: "Run the Calico CSI node driver",
 		Run: func(cmd *cobra.Command, args []string) {
-			check := args[0]
-			if check != "liveness" && check != "readiness" {
-				fmt.Fprintf(os.Stderr, "Invalid check type %q, expected \"liveness\" or \"readiness\"\n", check)
-				os.Exit(1)
-			}
-			healthz.Run(dialPath, check)
+			Run(cfg)
 		},
 	}
 
-	cmd.Flags().StringVar(&dialPath, "dialPath", healthz.DefaultDialPath, "Path to health check gRPC service")
+	cmd.Flags().StringVar(&cfg.LogLevel, "loglevel", "", "Log level for the driver")
+	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "Unix domain socket path for Kubelet communication")
+	cmd.Flags().StringVar(&cfg.NodeID, "nodeid", "", "Node ID unique to the node")
 
 	return cmd
 }

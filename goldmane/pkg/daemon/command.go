@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package daemon
 
 import (
-	"github.com/spf13/cobra"
+	"context"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/kubecontrollers"
+	"github.com/spf13/cobra"
 )
 
-func newKubeControllersCommand() *cobra.Command {
-	return kubecontrollers.NewCommand()
+// NewCommand returns a cobra command that runs the Goldmane flow aggregation service.
+func NewCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "goldmane",
+		Short: "Run the Goldmane flow aggregation service",
+		Run: func(cmd *cobra.Command, args []string) {
+			Run(context.Background(), ConfigFromEnv())
+		},
+	}
 }
