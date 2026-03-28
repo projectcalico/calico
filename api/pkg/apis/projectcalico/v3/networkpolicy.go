@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,16 +35,21 @@ type NetworkPolicyList struct {
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:subresource:status
 // +kubebuilder:selectablefield:JSONPath=`.spec.tier`
 // +kubebuilder:resource:shortName={cnp,caliconetworkpolicy}
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
+// +kubebuilder:printcolumn:name="Validation",type=string,JSONPath=".status.conditions[?(@.type=='Valid')].message",description="Policy validation status"
 
 type NetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Spec NetworkPolicySpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
+
+	// +optional
+	Status *PolicyStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
 type NetworkPolicySpec struct {
