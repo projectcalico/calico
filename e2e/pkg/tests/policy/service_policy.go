@@ -194,10 +194,6 @@ var _ = describe.CalicoDescribe(
 					defaultDeny := newDefaultDenyIngressPolicy(f.Namespace.Name)
 					err := cli.Create(context.Background(), defaultDeny)
 					Expect(err).NotTo(HaveOccurred())
-					defer func() {
-						err := cli.Delete(context.Background(), defaultDeny)
-						Expect(err).NotTo(HaveOccurred())
-					}()
 
 					By("Creating allow-kube-dns policy, so that services can be contacted by name.")
 
@@ -233,10 +229,6 @@ var _ = describe.CalicoDescribe(
 					}
 					err = cli.Create(context.Background(), allowDNSPolicy)
 					Expect(err).NotTo(HaveOccurred())
-					defer func() {
-						err := cli.Delete(context.Background(), allowDNSPolicy)
-						Expect(err).NotTo(HaveOccurred())
-					}()
 
 					By("Expecting the client will not be able to contact the server.")
 					checker.ExpectFailure(client1, server.ClusterIP().Port(80))
@@ -247,19 +239,11 @@ var _ = describe.CalicoDescribe(
 					allowClientPolicy := getAllowClientPolicy()
 					err = cli.Create(context.Background(), allowClientPolicy)
 					Expect(err).NotTo(HaveOccurred())
-					defer func() {
-						err := cli.Delete(context.Background(), allowClientPolicy)
-						Expect(err).NotTo(HaveOccurred())
-					}()
 
 					By("Creating allow-server-ingress policy.")
 					allowServerPolicy := getAllowServerPolicy()
 					err = cli.Create(context.Background(), allowServerPolicy)
 					Expect(err).NotTo(HaveOccurred())
-					defer func() {
-						err := cli.Delete(context.Background(), allowServerPolicy)
-						Expect(err).NotTo(HaveOccurred())
-					}()
 
 					if createClientService {
 						By("Creating service for client so that a ServiceMatch policy can be used to allow ingress traffic from the client.")

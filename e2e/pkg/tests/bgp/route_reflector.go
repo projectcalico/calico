@@ -151,10 +151,6 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
-			ginkgo.DeferCleanup(func() {
-				err := cli.Delete(context.Background(), peer)
-				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
-			})
 
 			// Verify connectivity is restored.
 			checker.ResetExpectations()
@@ -196,10 +192,6 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
-			ginkgo.DeferCleanup(func() {
-				err := cli.Delete(context.Background(), peer)
-				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
-			})
 
 			// Wait for BGP to converge.
 			waitForBGPEstablished(cli, nodes.Items...)
@@ -272,10 +264,6 @@ var _ = describe.CalicoDescribe(
 			}
 			err = cli.Create(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error creating BGPPeer resource")
-			ginkgo.DeferCleanup(func() {
-				err := cli.Delete(context.Background(), peer)
-				Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource during cleanup")
-			})
 
 			// Wait until BGP has converged.
 			waitForBGPEstablished(cli, nodes.Items...)

@@ -126,11 +126,6 @@ var _ = describe.CalicoDescribe(
 			}
 			err := cli.Create(ctx, peer)
 			Expect(err).NotTo(HaveOccurred(), "failed to create password-protected BGPPeer")
-			ginkgo.DeferCleanup(func() {
-				if err := cli.Delete(context.Background(), peer); err != nil && !errors.IsNotFound(err) {
-					framework.Logf("WARNING: failed to delete BGPPeer %s: %v", peer.Name, err)
-				}
-			})
 
 			// Disable full mesh so only the password-protected peers are active.
 			disableFullMesh(cli)
@@ -275,11 +270,6 @@ func createBGPPeerWithPassword(cli ctrlclient.Client, name, node, peerIP, secret
 	}
 	err := cli.Create(context.Background(), peer)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create BGPPeer %s", name)
-	ginkgo.DeferCleanup(func() {
-		if err := cli.Delete(context.Background(), peer); err != nil && !errors.IsNotFound(err) {
-			framework.Logf("WARNING: failed to delete BGPPeer %s: %v", name, err)
-		}
-	})
 }
 
 // expectBGPPeerNotEstablished verifies via CalicoNodeStatus that the BGP session
@@ -295,12 +285,6 @@ func expectBGPPeerNotEstablished(cli ctrlclient.Client, nodeName, peerIP string)
 	}
 	err := cli.Create(context.Background(), status)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create CalicoNodeStatus for node %s", nodeName)
-	defer func() {
-		err := cli.Delete(context.Background(), status)
-		if err != nil && !errors.IsNotFound(err) {
-			framework.Logf("WARNING: failed to delete CalicoNodeStatus for node %s: %v", nodeName, err)
-		}
-	}()
 
 	// Wait for the specific peer to appear in the status report as non-established.
 	EventuallyWithOffset(1, func() error {
