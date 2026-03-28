@@ -50,7 +50,10 @@ func newDikastesCommand() *cobra.Command {
 			if debug {
 				logrus.SetLevel(logrus.DebugLevel)
 			}
-			method, _ := cmd.Flags().GetString("method")
+			method, err := cmd.Flags().GetString("method")
+			if err != nil {
+				logrus.WithError(err).Fatal("Failed to get method flag")
+			}
 			dikastes.RunClient(dial, args[0], args[1], method)
 		},
 	}

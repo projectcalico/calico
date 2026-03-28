@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -30,12 +31,17 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage/etcd3"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	apiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
@@ -43,6 +49,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/ippool"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
+	dsmigration "github.com/projectcalico/calico/kube-controllers/pkg/controllers/migration"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
@@ -53,6 +60,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
@@ -449,6 +457,49 @@ func (cc *controllerControl) initControllers(
 	if cfg.Controllers.Migration != nil && cfg.Controllers.Migration.PolicyNameMigrator == "Enabled" {
 		policyMigrator := networkpolicy.NewMigratorController(ctx, k8sClientset, calicoClient, dataFeed)
 		cc.controllers["NetworkPolicyMigrator"] = policyMigrator
+	}
+
+	// Register the datastore migration controller. This controller watches for
+	// DatastoreMigration CRs and drives the v1-to-v3 CRD migration.
+	if v3c != nil {
+		bc := calicoClient.(bapi.BackendAccessor).Backend()
+
+		dynClient, err := dynamic.NewForConfig(k8sconfig)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create dynamic client for migration controller")
+		}
+		apiregCS, err := apiregclient.NewForConfig(k8sconfig)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create apiregistration client for migration controller")
+		}
+
+		migrationScheme := k8sruntime.NewScheme()
+		if err := apiv3.AddToScheme(migrationScheme); err != nil {
+			logrus.WithError(err).Fatal("Failed to add Calico v3 types to scheme for migration controller")
+		}
+		if err := dsmigration.AddToScheme(migrationScheme); err != nil {
+			logrus.WithError(err).Fatal("Failed to add migration types to scheme for migration controller")
+		}
+		rtClient, err := rtclient.NewWithWatch(k8sconfig, rtclient.Options{Scheme: migrationScheme})
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create controller-runtime client for migration controller")
+		}
+		crdClient, err := apiextclient.NewForConfig(k8sconfig)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create apiextensions client for migration controller")
+		}
+
+		migrationController := dsmigration.NewController(dsmigration.ControllerConfig{
+			Ctx:           ctx,
+			K8sClient:     k8sClientset,
+			BackendClient: bc,
+			RTClient:      rtClient,
+			DynamicClient: dynClient,
+			APIRegClient:  apiregCS.ApiregistrationV1(),
+			CRDClient:     crdClient,
+			Migrators:     dsmigration.NewMigrators(bc, rtClient),
+		})
+		cc.controllers["DatastoreMigration"] = migrationController
 	}
 
 	if err := podInformer.SetTransform(converter.PodTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {

@@ -54,6 +54,7 @@ func newGoldmaneHealthCommand() *cobra.Command {
 				fmt.Printf("Error making health check request: %v\n", err)
 				os.Exit(1)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
 				fmt.Printf("Health check failed with status code: %d\n", resp.StatusCode)
 				os.Exit(1)

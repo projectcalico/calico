@@ -1577,35 +1577,8 @@ KIND_IMAGE_MARKERS = \
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
 
-$(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
-	$(MAKE) -C $(REPO_ROOT)/typha image
-
-$(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
-	$(MAKE) -C $(REPO_ROOT)/apiserver image
-
-$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
-	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
-
-$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
-	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
-
-$(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
-	$(MAKE) -C $(REPO_ROOT)/calicoctl image
-
-$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
-	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
-
-$(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
-	$(MAKE) -C $(REPO_ROOT)/goldmane image
-
-$(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
-	$(MAKE) -C $(REPO_ROOT)/webhooks image
-
 $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
-
-$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
-	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
 
 $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd/calico)
 	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
