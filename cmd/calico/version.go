@@ -1,5 +1,5 @@
-// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,22 +15,17 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"os"
+	"github.com/spf13/cobra"
 
-	"github.com/projectcalico/calico/app-policy/pkg/healthz"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-func main() {
-	var dialPath string
-	flag.StringVar(&dialPath, "dialPath", healthz.DefaultDialPath, "Path to health check gRPC service")
-	flag.Parse()
-
-	if len(flag.Args()) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: %s (liveness|readiness)\n", os.Args[0])
-		os.Exit(1)
+func newVersionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			buildinfo.PrintVersion()
+		},
 	}
-
-	healthz.Run(dialPath, flag.Arg(0))
 }
