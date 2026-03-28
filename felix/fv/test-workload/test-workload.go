@@ -489,6 +489,7 @@ func doNetkitSetUp(
 	}
 	nk.SetPeerAttrs(&netlink.LinkAttrs{
 		Name:      contIfName,
+		MTU:       mtu,
 		Namespace: netlink.NsFd(int(workloadNS.Fd())),
 	})
 	if err := netlink.LinkAdd(nk); err != nil {
