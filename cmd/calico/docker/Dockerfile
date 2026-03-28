@@ -3,9 +3,8 @@ ARG UBI_IMAGE
 
 FROM ${UBI_IMAGE} AS builder
 
-# kube-controllers needs /status and /profiles directories.
-RUN mkdir /status /profiles
-RUN touch /status/status.json && chown 999 /status/status.json
+# pprof profile dumps for kube-controllers.
+RUN mkdir /profiles
 RUN touch /profiles/mem.pprof && chown 999 /profiles/mem.pprof
 RUN touch /profiles/cpu.pprof && chown 999 /profiles/cpu.pprof
 
@@ -15,7 +14,6 @@ ARG TARGETARCH
 ARG GIT_VERSION
 ARG BIN_DIR
 
-COPY --from=builder /status /status/
 COPY --from=builder /profiles /profiles/
 COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calico
 COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver-registrar

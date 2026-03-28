@@ -21,36 +21,53 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/projectcalico/calico/app-policy/pkg/dikastes"
 	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
+	goldmane "github.com/projectcalico/calico/goldmane/pkg/daemon"
+	guardian "github.com/projectcalico/calico/guardian/pkg/daemon"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/keycert"
+	"github.com/projectcalico/calico/kube-controllers/pkg/kubecontrollers"
 	"github.com/projectcalico/calico/pkg/buildinfo"
+	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
+	"github.com/projectcalico/calico/pod2daemon/pkg/flexvol"
+	"github.com/projectcalico/calico/webhooks/pkg/webhook"
+	whiskerbackend "github.com/projectcalico/calico/whisker-backend/cmd/app"
 )
 
 func newRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "calico",
-		Short: "Calico networking and security",
-		Long:  "Calico is an open source networking and network security solution for containers, virtual machines, and native host-based workloads.",
-		// Don't show usage on errors from subcommands.
+		Use:          "calico",
+		Short:        "Calico networking and security",
+		Long:         "Calico is an open source networking and network security solution for containers, virtual machines, and native host-based workloads.",
 		SilenceUsage: true,
 	}
 
+	// Components with NewCommand() in their package.
 	cmd.AddCommand(
-		newGoldmaneCommand(),
-		newGuardianCommand(),
-		newWhiskerBackendCommand(),
-		newKeyCertCommand(),
+		goldmane.NewCommand(),
+		guardian.NewCommand(),
+		whiskerbackend.NewCommand(),
+		keycert.NewCommand(),
+		kubecontrollers.NewCommand(),
+		dikastes.NewCommand(),
+		csi.NewCommand(),
+		flexvol.NewCommand(),
+		webhook.NewCommand(),
+	)
+
+	// Components with their own CLI framework that need shims.
+	cmd.AddCommand(
 		newTyphaCommand(),
-		newKubeControllersCommand(),
-		newKubeControllersHealthCommand(),
 		newAPIServerCommand(),
-		newWebhooksCommand(),
-		newDikastesCommand(),
-		newHealthCommand(),
-		newCSICommand(),
-		newFlexvolCommand(),
 		newCtlCommand(),
 		newCNICommand(),
+	)
+
+	// Health and utility commands.
+	cmd.AddCommand(
+		newHealthCommand(),
+		newKubeControllersHealthCommand(),
 		newVersionCommand(),
 	)
 
