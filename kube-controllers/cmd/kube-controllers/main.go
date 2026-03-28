@@ -90,6 +90,9 @@ func init() {
 	if err != nil {
 		log.WithError(err).Fatal("Failed to set klog logging configuration")
 	}
+	// Opt into fixed stderrthreshold behavior (kubernetes/klog#212).
+	_ = flags.Set("legacy_stderr_threshold_behavior", "false")
+	_ = flags.Set("stderrthreshold", "INFO")
 }
 
 func main() {
