@@ -72,6 +72,10 @@ func NewNFLogReader(lookupsCache *calc.LookupsCache, inGrp, eGrp, bufSize int, s
 
 func (r *NFLogReader) Start() error {
 	if err := r.subscribe(); err != nil {
+		// If subscribe() partially succeeded (e.g., one NFLOG subscription
+		// started before a later one failed), ensure we signal shutdown so
+		// any started goroutines are cleaned up instead of leaking.
+		r.Stop()
 		return err
 	}
 
