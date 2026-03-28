@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
 	"github.com/projectcalico/calico/pod2daemon/pkg/flexvol"
+	typha "github.com/projectcalico/calico/typha/pkg/daemon"
 	"github.com/projectcalico/calico/webhooks/pkg/webhook"
 	whiskerbackend "github.com/projectcalico/calico/whisker-backend/cmd/app"
 )
@@ -49,6 +50,7 @@ func newRootCommand() *cobra.Command {
 		guardian.NewCommand(),
 		whiskerbackend.NewCommand(),
 		keycert.NewCommand(),
+		typha.NewCommand(),
 		kubecontrollers.NewCommand(),
 		dikastes.NewCommand(),
 		csi.NewCommand(),
@@ -58,7 +60,6 @@ func newRootCommand() *cobra.Command {
 
 	// Components with their own CLI framework that need shims.
 	cmd.AddCommand(
-		newTyphaCommand(),
 		newAPIServerCommand(),
 		newCtlCommand(),
 		newCNICommand(),
