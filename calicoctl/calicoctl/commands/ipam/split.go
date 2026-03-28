@@ -204,6 +204,99 @@ Examples:
 	return nil
 }
 
+// SplitPool splits an IP pool identified by CIDR or name into the given number of smaller pools.
+func SplitPool(ctx context.Context, config, cidr, poolName string, splitNum int) error {
+	if cidr == "" && poolName == "" {
+		return fmt.Errorf("no name or CIDR provided. Provide a name or CIDR to denote the IP pool to split")
+	}
+
+	client, err := clientmgr.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	locked, err := common.CheckLocked(ctx, client)
+	if err != nil {
+		return fmt.Errorf("error while checking if datastore was locked: %s", err)
+	} else if !locked {
+		return fmt.Errorf("datastore is not locked. Run the `calicoctl datastore migrate lock` command in order split the IP pools")
+	}
+
+	var oldPool *apiv3.IPPool
+	if poolName != "" {
+		oldPool, err = client.IPPools().Get(ctx, poolName, options.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to find IP pool with name %s: %v", poolName, err)
+		}
+	} else if cidr != "" {
+		poolList, err := client.IPPools().List(ctx, options.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to list IP pools to find the pool specified by %s", cidr)
+		}
+		for _, pool := range poolList.Items {
+			if pool.Spec.CIDR == cidr {
+				oldPool = &pool
+			}
+		}
+	}
+
+	if oldPool == nil {
+		return fmt.Errorf("unable to find IP pool %s covering the specified CIDR %s", poolName, cidr)
+	}
+
+	oldPool.Spec.Disabled = true
+	oldPool, err = client.IPPools().Update(ctx, oldPool, options.SetOptions{})
+	if err != nil {
+		return fmt.Errorf("error disabling IP pool %s", cidr)
+	}
+
+	splitCIDRs, err := splitCIDR(oldPool.Spec.CIDR, splitNum)
+	if err != nil {
+		return fmt.Errorf("error splitting the CIDR %s into %d CIDRs: %v", oldPool.Spec.CIDR, splitNum, err)
+	}
+
+	poolsCreated := make([]*apiv3.IPPool, splitNum)
+	for i, c := range splitCIDRs {
+		poolCopy := oldPool.DeepCopyObject()
+		splitPool, ok := poolCopy.(*apiv3.IPPool)
+		if !ok {
+			return fmt.Errorf("error copying metadata out from old IP pool: %s", oldPool.GetObjectMeta().GetName())
+		}
+		splitPool.GetObjectMeta().SetUID("")
+		splitPool.GetObjectMeta().SetResourceVersion("")
+		splitPool.GetObjectMeta().SetGeneration(0)
+		splitPool.GetObjectMeta().SetSelfLink("")
+		splitPool.GetObjectMeta().SetCreationTimestamp(metav1.Time{})
+
+		newName := fmt.Sprintf("split-%s-%d", oldPool.GetObjectMeta().GetName(), i)
+		if len(newName) > 253 {
+			newName = fmt.Sprintf("split-%s-%d", oldPool.GetObjectMeta().GetName()[:245], i)
+		}
+		splitPool.GetObjectMeta().SetName(newName)
+		splitPool.GetObjectMeta().SetGenerateName("")
+		splitPool.Spec.CIDR = c
+		splitPool.Spec.Disabled = false
+
+		_, err = client.IPPools().UnsafeCreate(ctx, splitPool, options.SetOptions{})
+		if err != nil {
+			return fmt.Errorf("error using unsafe create to make split pool with cidr %s: %v", c, err)
+		}
+		poolsCreated[i] = splitPool
+	}
+
+	_, err = client.IPPools().UnsafeDelete(ctx, oldPool.GetObjectMeta().GetName(), options.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("error removing the IP pool that was split %s: %v", oldPool.GetObjectMeta().GetName(), err)
+	}
+
+	fmt.Printf("IP Pool %s was successfully split into %d smaller pools.", oldPool.GetObjectMeta().GetName(), splitNum)
+	for _, splitPool := range poolsCreated {
+		fmt.Printf("Created %s with CIDR %s.\n", splitPool.GetObjectMeta().GetName(), splitPool.Spec.CIDR)
+	}
+	fmt.Print("Please refer to the documentation for final steps.")
+	return nil
+}
+
 func splitCIDR(oldCIDR string, parts int) ([]string, error) {
 	// Validate that we are trying to split the CIDR into a valid number of child CIDRs.
 	power := math.Log2(float64(parts))

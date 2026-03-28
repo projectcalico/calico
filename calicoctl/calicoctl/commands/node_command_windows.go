@@ -12,14 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package commands
 
 import (
-	"github.com/spf13/cobra"
+	"fmt"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands"
+	"github.com/spf13/cobra"
 )
 
-func newCtlCommand() *cobra.Command {
-	return commands.NewCommand()
+func newNodeCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "node",
+		Short: "Calico node management",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return fmt.Errorf("'calicoctl node' commands are not available on this OS")
+		},
+	}
 }
