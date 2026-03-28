@@ -1,4 +1,4 @@
-// Copyright (c) 2017, 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,15 +16,19 @@ package clientv3
 
 import (
 	"context"
+	"fmt"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
 const (
+	DefaultFelixConfigurationName = "default"
+
 	DefaultFelixRouteTableRangeMin = 1
 	DefaultFelixRouteTableRangeMax = 250
 )
@@ -79,6 +83,14 @@ func (r felixConfigurations) Update(ctx context.Context, res *apiv3.FelixConfigu
 // Delete takes name of the FelixConfiguration and deletes it. Returns an
 // error if one occurs.
 func (r felixConfigurations) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.FelixConfiguration, error) {
+	if name == DefaultFelixConfigurationName {
+		return nil, cerrors.ErrorOperationNotSupported{
+			Identifier: name,
+			Operation:  "Delete",
+			Reason:     fmt.Sprintf("Cannot delete %v felixconfiguration", name),
+		}
+	}
+
 	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindFelixConfiguration, noNamespace, name)
 	if out != nil {
 		return out.(*apiv3.FelixConfiguration), err
