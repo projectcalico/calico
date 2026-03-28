@@ -393,19 +393,7 @@ func logError(caller, inp, msg string, syslogOnly bool) {
 	}
 }
 
-// genericUnsupported is to print a un-supported response to the kubelet.
-func genericUnsupported(caller, inp, msg string) error {
-	resp, err := json.Marshal(&Response{Status: "Not supported", Message: msg})
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(string(resp))
-	logToSys(caller, inp, string(resp))
-	return nil
-}
-
-// logToSys is a helper routine to genericSuccess(), logError() and genericUnsupported().
+// logToSys is a helper routine to genericSuccess() and logError().
 // Routines needing to log messages should call those functions and NOT logToSys() or logWriter methods directly.
 func logToSys(caller, inp, opts string) {
 	if logWriter == nil {
