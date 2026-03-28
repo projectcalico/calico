@@ -29,6 +29,8 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
+// newAPIServerCommand is a shim — the apiserver uses the Kubernetes component-base
+// CLI framework, so we use DisableFlagParsing and pass args through.
 func newAPIServerCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:                "apiserver",

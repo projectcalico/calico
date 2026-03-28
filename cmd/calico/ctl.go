@@ -27,6 +27,8 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands"
 )
 
+// newCtlCommand is a shim — calicoctl uses docopt internally for its 3-level
+// command hierarchy. Planned for full Cobra migration in a future PR.
 func newCtlCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:                "ctl",

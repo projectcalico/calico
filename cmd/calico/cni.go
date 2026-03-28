@@ -24,6 +24,10 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
+// newCNICommand is defined here rather than in the CNI package because the CNI
+// plugin/IPAM entry points are simple function calls, not full CLI frameworks.
+// The container runtime also invokes the binary directly (detected in main.go
+// via CNI_COMMAND env var or binary name), bypassing this subcommand entirely.
 func newCNICommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cni",

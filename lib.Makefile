@@ -1550,9 +1550,9 @@ KIND_TEST_BUILD_TAG = test-build
 
 # Calico images built locally with latest-$(ARCH) tags. kind-build-images
 # re-tags each as :test-build for the kind cluster.
-# Most components are provided by the uber calico/calico image, which
-# uses "calico <subcommand>" as the container command. Only node (not yet
-# migrated) and whisker (TypeScript/nginx, not a Go binary) remain separate.
+# Most components are provided by the combined calico/calico image, which
+# uses "calico <subcommand>" as the container command. Only node and
+# whisker (TypeScript/nginx, not a Go binary) remain as separate images.
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \

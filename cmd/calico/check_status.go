@@ -23,6 +23,10 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 )
 
+// newKubeControllersHealthCommand checks kube-controllers health via its status
+// file on disk. This is a legacy mechanism for the standalone kube-controllers
+// image. The combined image uses the generic "calico health" command with
+// HealthAggregator HTTP endpoints instead.
 func newKubeControllersHealthCommand() *cobra.Command {
 	var file string
 	var checkReady bool
