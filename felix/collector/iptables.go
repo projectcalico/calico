@@ -72,7 +72,7 @@ func NewNFLogReader(lookupsCache *calc.LookupsCache, inGrp, eGrp, bufSize int, s
 
 func (r *NFLogReader) Start() error {
 	if err := r.subscribe(); err != nil {
-		return nil
+		return err
 	}
 
 	r.wg.Go(func() {
