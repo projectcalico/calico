@@ -48,7 +48,7 @@ func Run(cfg Config) {
 
 	level, err := logrus.ParseLevel(driverCfg.LogLevel)
 	if err != nil {
-		logrus.WithError(err).Fatalf("Could not parse the log level")
+		logrus.WithError(err).WithField("logLevel", driverCfg.LogLevel).Fatal("Could not parse the log level")
 	}
 	logrus.SetLevel(level)
 

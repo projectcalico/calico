@@ -258,7 +258,7 @@ func runHealthChecks(ctx context.Context, s *status.Status, ha *health.HealthAgg
 		cancel()
 		if healthStatus != http.StatusOK {
 			logrus.WithError(result.Error()).WithField("status", healthStatus).Errorf("Received bad status code from apiserver")
-			s.SetReady("KubeAPIServer", false, fmt.Sprintf("Error reaching apiserver: %v with http status code: %d", err, healthStatus))
+			s.SetReady("KubeAPIServer", false, fmt.Sprintf("Error reaching apiserver: %v with http status code: %d", result.Error(), healthStatus))
 			ha.Report("KubeAPIServer", &health.HealthReport{Live: true, Ready: false, Detail: fmt.Sprintf("status %d", healthStatus)})
 		} else {
 			s.SetReady("KubeAPIServer", true, "")
