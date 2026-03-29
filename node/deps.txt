@@ -382,6 +382,7 @@ local:node/pkg/lifecycle/startup
 local:node/pkg/lifecycle/startup/autodetection
 local:node/pkg/lifecycle/startup/autodetection/ipv4
 local:node/pkg/lifecycle/utils
+local:node/pkg/node
 local:node/pkg/nodeinit
 local:node/pkg/status
 local:node/pkg/status/populators
