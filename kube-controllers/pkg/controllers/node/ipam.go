@@ -596,9 +596,12 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	blockCIDR := key.CIDR.String()
 	log.WithField("block", blockCIDR).Info("Received block delete")
 
-	// Remove allocations that were contributed by this block.
+	// Remove allocations that were contributed by this block. Clean up all
+	// internal maps that reference these allocations to avoid leaking memory.
 	allocations := c.allocationsByBlock[blockCIDR]
 	for _, alloc := range allocations {
+		c.handleTracker.removeAllocation(alloc)
+		delete(c.confirmedLeaks, alloc.id())
 		node := alloc.node()
 		if node != "" {
 			c.allocationState.release(alloc)
@@ -1265,9 +1268,10 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		}
 		logc := log.WithFields(a.fields())
 
-		// No longer a leak. Remove it here so we're not dependent on receiving
-		// the update from the syncer (which we will do eventually, this is just cleaner).
+		// No longer a leak. Remove from all internal maps so we're not dependent on
+		// receiving the update from the syncer (which we will do eventually, this is just cleaner).
 		c.allocationState.release(a)
+		c.handleTracker.removeAllocation(a)
 		c.incrementReclamationMetric(a.block, a.node())
 		delete(c.confirmedLeaks, a.id())
 

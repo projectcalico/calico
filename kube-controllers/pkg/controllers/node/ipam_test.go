@@ -1365,15 +1365,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		})
 
 		By("Verifying final state", func() {
-			// The handle should now be marked as a leak. This may take some time, as the IPv4 address needs to go
-			// through the grace period.
-			Eventually(func() bool {
-				done := c.pause()
-				defer done()
-				return c.handleTracker.isConfirmedLeak(handle)
-			}, assertionTimeout, 1*time.Second).Should(BeTrue())
-
-			// Confirm the IPs were released.
+			// After the pod is deleted, all IPs sharing the handle become leaks and
+			// GC releases them. Once released, the handle is cleaned up from the tracker.
 			Eventually(func() bool {
 				return fakeClient.handlesReleased[handle]
 			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
