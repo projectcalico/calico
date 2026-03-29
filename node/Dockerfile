@@ -133,8 +133,9 @@ COPY --from=bpftool /bpftool /bin/bpftool
 ARG BIN_DIR
 ARG TARGETARCH
 
-# Copy in the calico-node binary
+# Copy in the calico-node binary and the combined calico binary.
 COPY ${BIN_DIR}/calico-node-${TARGETARCH} /bin/calico-node
+COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calico
 
 # Copy in the mountns binary
 COPY ${BIN_DIR}/mountns-${TARGETARCH} /bin/mountns
