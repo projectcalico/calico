@@ -270,6 +270,17 @@ type IPAMController struct {
 	retryController *utils.RetryController
 }
 
+// releaseAllocation removes an allocation from all internal tracking maps.
+// Every code path that removes an allocation should call this to ensure
+// consistent cleanup and avoid leaking entries in any map.
+func (c *IPAMController) releaseAllocation(a *allocation) {
+	c.handleTracker.removeAllocation(a)
+	delete(c.confirmedLeaks, a.id())
+	if a.node() != "" {
+		c.allocationState.release(a)
+	}
+}
+
 func (c *IPAMController) Start(stop chan struct{}) {
 	go c.acceptScheduleRequests(stop)
 }
@@ -571,18 +582,8 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 	// Remove any previously assigned allocations that have since been released.
 	for id, alloc := range c.allocationsByBlock[blockCIDR] {
 		if _, ok := currentAllocations[id]; !ok {
-			// Needs release.
-			c.handleTracker.removeAllocation(alloc)
+			c.releaseAllocation(alloc)
 			delete(c.allocationsByBlock[blockCIDR], id)
-
-			// Also remove from the node view.
-			node := alloc.node()
-			if node != "" {
-				c.allocationState.release(alloc)
-			}
-
-			// And to be safe, remove from confirmed leaks just in case.
-			delete(c.confirmedLeaks, id)
 		}
 	}
 
@@ -596,16 +597,10 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	blockCIDR := key.CIDR.String()
 	log.WithField("block", blockCIDR).Info("Received block delete")
 
-	// Remove allocations that were contributed by this block. Clean up all
-	// internal maps that reference these allocations to avoid leaking memory.
+	// Remove allocations that were contributed by this block.
 	allocations := c.allocationsByBlock[blockCIDR]
 	for _, alloc := range allocations {
-		c.handleTracker.removeAllocation(alloc)
-		delete(c.confirmedLeaks, alloc.id())
-		node := alloc.node()
-		if node != "" {
-			c.allocationState.release(alloc)
-		}
+		c.releaseAllocation(alloc)
 	}
 	delete(c.allocationsByBlock, blockCIDR)
 
@@ -1270,10 +1265,8 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 
 		// No longer a leak. Update in-memory allocation tracking so we're not dependent on
 		// receiving the update from the syncer (which we will do eventually; this is just cleaner).
-		c.allocationState.release(a)
-		c.handleTracker.removeAllocation(a)
+		c.releaseAllocation(a)
 		c.incrementReclamationMetric(a.block, a.node())
-		delete(c.confirmedLeaks, a.id())
 
 		logc.Info("Successfully garbage collected leaked IP address")
 		delete(leaks, opt.Address)
