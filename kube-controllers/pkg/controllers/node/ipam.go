@@ -1268,8 +1268,8 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		}
 		logc := log.WithFields(a.fields())
 
-		// No longer a leak. Remove from all internal maps so we're not dependent on
-		// receiving the update from the syncer (which we will do eventually, this is just cleaner).
+		// No longer a leak. Update in-memory allocation tracking so we're not dependent on
+		// receiving the update from the syncer (which we will do eventually; this is just cleaner).
 		c.allocationState.release(a)
 		c.handleTracker.removeAllocation(a)
 		c.incrementReclamationMetric(a.block, a.node())

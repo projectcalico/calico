@@ -1368,7 +1368,16 @@ var _ = Describe("IPAM controller UTs", func() {
 			// After the pod is deleted, all IPs sharing the handle become leaks and
 			// GC releases them. Once released, the handle is cleaned up from the tracker.
 			Eventually(func() bool {
-				return fakeClient.handlesReleased[handle]
+				done := c.pause()
+				defer done()
+
+				if !fakeClient.handlesReleased[handle] {
+					return false
+				}
+
+				// Verify that the handle has been removed from the handle tracker.
+				_, ok := c.handleTracker.allocationsByHandle[handle]
+				return !ok
 			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 		})
 	})
