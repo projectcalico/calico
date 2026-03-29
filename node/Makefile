@@ -231,6 +231,13 @@ endif
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
+# The combined calico binary is included in the node image so the operator
+# can use "calico node" subcommands for probes and lifecycle hooks.
+CALICO_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
+$(CALICO_BINARY):
+	$(MAKE) -C ../cmd/calico build ARCH=$(ARCH)
+	cp ../cmd/calico/bin/calico-$(ARCH) $@
+
 $(WINDOWS_BINARY): $(SRC_FILES)
 	$(call build_windows_binary, ./cmd/calico-node/main.go, $@)
 
@@ -264,7 +271,7 @@ dist/LICENSE: ../LICENSE.md
 
 # register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
 image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER) | register
-$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(CALICO_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
