@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,15 +39,17 @@ func NewFakeCalicoClient() *FakeCalicoClient {
 		handlesReleased:    make(map[string]bool),
 	}
 	return &FakeCalicoClient{
-		nodeClient: &nc,
-		ipamClient: &ipamClient,
+		nodeClient:    &nc,
+		ipamClient:    &ipamClient,
+		backendClient: &fakeBackendClient{deletedKeys: make(map[string]bool)},
 	}
 }
 
 // FakeCalicoClient is a fake client for use in the IPAM tests.
 type FakeCalicoClient struct {
-	nodeClient clientv3.NodeInterface
-	ipamClient ipam.Interface
+	nodeClient    clientv3.NodeInterface
+	ipamClient    ipam.Interface
+	backendClient *fakeBackendClient
 }
 
 // Expose helpers for tests to introspect/drive the fake IPAM client.
@@ -118,6 +120,61 @@ func (f *FakeCalicoClient) Tiers() clientv3.TierInterface {
 }
 
 func (f *FakeCalicoClient) Backend() bapi.Client {
+	return f.backendClient
+}
+
+// fakeBackendClient implements the subset of bapi.Client needed by the IPAM controller.
+type fakeBackendClient struct {
+	sync.Mutex
+	deletedKeys map[string]bool
+}
+
+func (f *fakeBackendClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	f.Lock()
+	defer f.Unlock()
+	key, _ := model.KeyToDefaultPath(kvp.Key)
+	f.deletedKeys[key] = true
+	return kvp, nil
+}
+
+// Stub methods to satisfy bapi.Client.
+func (f *fakeBackendClient) Create(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeBackendClient) Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeBackendClient) Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeBackendClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeBackendClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeBackendClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeBackendClient) Watch(ctx context.Context, list model.ListInterface, options bapi.WatchOptions) (bapi.WatchInterface, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *fakeBackendClient) EnsureInitialized() error {
+	return nil
+}
+
+func (f *fakeBackendClient) Clean() error {
+	return nil
+}
+
+func (f *fakeBackendClient) Close() error {
 	return nil
 }
 
