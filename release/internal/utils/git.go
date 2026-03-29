@@ -60,3 +60,8 @@ func GitIsDirty(dir string) (bool, error) {
 	}
 	return strings.HasSuffix(version, "-dirty"), nil
 }
+
+// GitStatus returns the current git status of the repository.
+func GitStatus(dir string) (string, error) {
+	return command.GitInDir(dir, "status")
+}
