@@ -2388,6 +2388,98 @@ var _ = Describe("IPAM controller UTs", func() {
 			return fakeClient.affinityReleased("node-y")
 		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "node-y should be released after error is cleared")
 	})
+
+	It("should garbage collect orphaned IPAMHandle CRDs", func() {
+		c.Start(stopChan)
+
+		// Simulate an orphaned handle arriving via the syncer — a handle with
+		// no corresponding block allocations. This happens when the IPAM release
+		// process is interrupted (CNI plugin killed, kube-controllers crash).
+		orphanedHandleID := "k8s-pod-network.orphaned-handle-abc123"
+		c.onUpdate(bapi.Update{
+			KVPair: model.KVPair{
+				Key:   model.IPAMHandleKey{HandleID: orphanedHandleID},
+				Value: &model.IPAMHandle{HandleID: orphanedHandleID, Block: map[string]int{}},
+			},
+			UpdateType: bapi.UpdateTypeKVNew,
+		})
+
+		// Also add a handle that HAS a matching allocation — it should NOT be GC'd.
+		activeHandleID := "k8s-pod-network.active-handle-def456"
+		c.onUpdate(bapi.Update{
+			KVPair: model.KVPair{
+				Key:   model.IPAMHandleKey{HandleID: activeHandleID},
+				Value: &model.IPAMHandle{HandleID: activeHandleID, Block: map[string]int{"10.0.50.0/30": 1}},
+			},
+			UpdateType: bapi.UpdateTypeKVNew,
+		})
+
+		// Create a block allocation referencing the active handle.
+		idx := 0
+		cidr := net.MustParseCIDR("10.0.50.0/30")
+		aff := "host:some-node"
+		c.onUpdate(bapi.Update{
+			KVPair: model.KVPair{
+				Key: model.BlockKey{CIDR: cidr},
+				Value: &model.AllocationBlock{
+					CIDR:        cidr,
+					Affinity:    &aff,
+					Allocations: []*int{&idx, nil, nil, nil},
+					Unallocated: []int{1, 2, 3},
+					Attributes: []model.AllocationAttribute{
+						{
+							HandleID: &activeHandleID,
+							ActiveOwnerAttrs: map[string]string{
+								ipam.AttributeNode:      "some-node",
+								ipam.AttributePod:       "active-pod",
+								ipam.AttributeNamespace: "default",
+							},
+						},
+					},
+				},
+			},
+			UpdateType: bapi.UpdateTypeKVNew,
+		})
+
+		// Wait for the block to be processed.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allBlocks["10.0.50.0/30"]
+			return ok
+		}, 1*time.Second, 50*time.Millisecond).Should(BeTrue())
+
+		// Verify orphan tracking state.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, orphaned := c.orphanHandleTracker.candidates[orphanedHandleID]
+			_, activeOrphaned := c.orphanHandleTracker.candidates[activeHandleID]
+			return orphaned && !activeOrphaned
+		}, 1*time.Second, 50*time.Millisecond).Should(BeTrue(),
+			"orphaned handle should be a candidate, active handle should not")
+
+		// Trigger a sync so the GC runs.
+		c.fullScanNextSync("test: orphan handle gc")
+		c.onStatusUpdate(bapi.InSync)
+
+		// The orphaned handle should be deleted after the grace period.
+		fakeBackend := cli.(*FakeCalicoClient).backendClient
+		Eventually(func() bool {
+			fakeBackend.Lock()
+			defer fakeBackend.Unlock()
+			key, _ := model.KeyToDefaultPath(model.IPAMHandleKey{HandleID: orphanedHandleID})
+			return fakeBackend.deletedKeys[key]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(),
+			"orphaned IPAMHandle should be deleted after grace period")
+
+		// The active handle should NOT be deleted.
+		fakeBackend.Lock()
+		activeKey, _ := model.KeyToDefaultPath(model.IPAMHandleKey{HandleID: activeHandleID})
+		Expect(fakeBackend.deletedKeys[activeKey]).To(BeFalse(),
+			"active IPAMHandle must not be deleted")
+		fakeBackend.Unlock()
+	})
 })
 
 // createBlock creates a block based on the given pods and CIDR, and sends it as an update to the controller.
