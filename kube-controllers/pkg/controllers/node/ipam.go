@@ -270,6 +270,20 @@ type IPAMController struct {
 	retryController *utils.RetryController
 }
 
+// assignAllocation registers a new allocation in all internal tracking maps.
+// This is the counterpart to releaseAllocation — both must be kept in sync
+// so that every map updated on assign is also cleaned up on release.
+func (c *IPAMController) assignAllocation(blockCIDR string, a *allocation) {
+	if _, ok := c.allocationsByBlock[blockCIDR]; !ok {
+		c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
+	}
+	c.allocationsByBlock[blockCIDR][a.id()] = a
+	if a.node() != "" {
+		c.allocationState.allocate(a)
+	}
+	c.handleTracker.setAllocation(a)
+}
+
 // releaseAllocation removes an allocation from all internal tracking maps.
 // Every code path that removes an allocation should call this to ensure
 // consistent cleanup and avoid leaking entries in any map.
@@ -278,6 +292,12 @@ func (c *IPAMController) releaseAllocation(a *allocation) {
 	delete(c.confirmedLeaks, a.id())
 	if a.node() != "" {
 		c.allocationState.release(a)
+	}
+
+	// Remove from allocationsByBlock. The block-level map entry itself is
+	// cleaned up by callers when the entire block is deleted.
+	if allocs, ok := c.allocationsByBlock[a.block]; ok {
+		delete(allocs, a.id())
 	}
 }
 
@@ -552,16 +572,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		}
 
 		// This is a new allocation.
-		if _, ok := c.allocationsByBlock[blockCIDR]; !ok {
-			c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
-		}
-		c.allocationsByBlock[blockCIDR][alloc.id()] = &alloc
-
-		// Update the allocations-by-node view.
-		if node := alloc.node(); node != "" {
-			c.allocationState.allocate(&alloc)
-		}
-		c.handleTracker.setAllocation(&alloc)
+		c.assignAllocation(blockCIDR, &alloc)
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
 	}
 
@@ -583,7 +594,6 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 	for id, alloc := range c.allocationsByBlock[blockCIDR] {
 		if _, ok := currentAllocations[id]; !ok {
 			c.releaseAllocation(alloc)
-			delete(c.allocationsByBlock[blockCIDR], id)
 		}
 	}
 
