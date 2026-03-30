@@ -297,13 +297,19 @@ fi
 
 echo "analyze-test-failures: Found $batch_count failed batch(es), running fv-tests-guru-sem-integration..."
 
+job_url="${SEMAPHORE_ORGANIZATION_URL}/jobs/${SEMAPHORE_JOB_ID}"
+
 printf '{
   "calico_repo": %s,
   "ut_mode": %s,
   "max_parallel": 4,
   "max_timeout": "6m",
+  "job_url": %s,
+  "git_branch": %s,
+  "git_repo_url": %s,
   "batches": [%s]
-}' "$(json_escape "$CALICO_REPO")" "$UT_MODE" "$batches_json" \
+}' "$(json_escape "$CALICO_REPO")" "$UT_MODE" "$(json_escape "$job_url")" \
+  "$(json_escape "$SEMAPHORE_GIT_BRANCH")" "$(json_escape "$SEMAPHORE_GIT_URL")" "$batches_json" \
   | timeout 660 fv-tests-guru-sem-integration || true
 
 echo "analyze-test-failures: Done."
