@@ -15,7 +15,7 @@
 package model
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	net2 "net"
 	"reflect"

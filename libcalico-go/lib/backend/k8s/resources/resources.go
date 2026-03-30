@@ -15,7 +15,7 @@
 package resources
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
