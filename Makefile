@@ -56,6 +56,9 @@ CALICO_PACKAGE = github.com/projectcalico/calico/cmd/calico
 CALICO_IMAGE ?= calico
 CALICO_BINDIR ?= bin
 
+# Source files for the uber binary, derived from cmd/deps.txt.
+CALICO_SRC_FILES := $(call local-deps-go-files,cmd)
+
 # Paths within the build container for BPF source (needed for CGO builds).
 LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src/
 BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
@@ -69,7 +72,7 @@ endif
 .PHONY: calico-build
 calico-build: $(CALICO_BINDIR)/calico-$(ARCH)
 
-$(CALICO_BINDIR)/calico-$(ARCH): $(SRC_FILES)
+$(CALICO_BINDIR)/calico-$(ARCH): $(CALICO_SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(CALICO_PACKAGE), $@)
 else
@@ -79,7 +82,7 @@ endif
 .PHONY: calico-build-cgo
 calico-build-cgo: $(CALICO_BINDIR)/calico-cgo-$(ARCH)
 
-$(CALICO_BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
+$(CALICO_BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(CALICO_SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(CALICO_PACKAGE), $@)
 else
