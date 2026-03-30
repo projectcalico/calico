@@ -16,7 +16,7 @@ package azure
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"os"
 
 	"github.com/natefinch/atomic"

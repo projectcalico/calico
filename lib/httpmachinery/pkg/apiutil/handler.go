@@ -44,7 +44,7 @@
 package apiutil
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
@@ -110,7 +110,7 @@ func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterCon
 
 func writeJSONResponse(w http.ResponseWriter, src any) {
 	w.Header().Set(header.ContentType, header.ApplicationJSON)
-	if err := json.NewEncoder(w).Encode(src); err != nil {
+	if err := json.MarshalWrite(w, src); err != nil {
 		logrus.WithError(err).Error("Failed to encode response.")
 	}
 }

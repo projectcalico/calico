@@ -18,7 +18,8 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"strings"
@@ -82,7 +83,7 @@ func main() {
 		},
 	}
 
-	data, err := json.MarshalIndent(swagger, "", "  ")
+	data, err := json.Marshal(swagger, jsontext.WithIndentPrefix(""), jsontext.WithIndent("  "))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to marshal schema: %v\n", err)
 		os.Exit(1)
