@@ -15,7 +15,8 @@
 package testutils
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"maps"
@@ -708,7 +709,7 @@ func kvpsEqual(actual, expected model.KVPair) bool {
 
 // updateAsDebugString converts the update into a debug friendly string.
 func updateAsDebugString(update api.Update) string {
-	val, err := json.MarshalIndent(update, "    ", "  ")
+	val, err := json.Marshal(update, jsontext.WithIndentPrefix("    "), jsontext.WithIndent("  "))
 	Expect(err).NotTo(HaveOccurred())
 	path, err := model.KeyToDefaultPath(update.Key)
 	Expect(err).NotTo(HaveOccurred())
@@ -717,7 +718,7 @@ func updateAsDebugString(update api.Update) string {
 
 // kvpAsDebugString converts the KVPair into a debug friendly string.
 func kvpAsDebugString(kv model.KVPair) string {
-	val, err := json.MarshalIndent(kv, "    ", "  ")
+	val, err := json.Marshal(kv, jsontext.WithIndentPrefix("    "), jsontext.WithIndent("  "))
 	Expect(err).NotTo(HaveOccurred())
 	path, err := model.KeyToDefaultPath(kv.Key)
 	Expect(err).NotTo(HaveOccurred())
