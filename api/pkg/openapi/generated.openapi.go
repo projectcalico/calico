@@ -1102,7 +1102,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterOperation(ref common.ReferenceCal
 					},
 					"setPriority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SetPriority sets the route's priority (metric), in the same units as the ...RoutePriority fields in FelixConfiguration.",
+							Description: "SetPriority sets the route's priority (metric), in the same units as the ...RoutePriority fields in FelixConfiguration.\n\nOn import rules, SetPriority controls the kernel routing table metric for the imported route, affecting local route selection on this node.\n\nOn export rules, SetPriority only has an effect for iBGP peers: it modifies the BGP LOCAL_PREF attribute sent in the UPDATE message.  Calico on the receiving peer converts LOCAL_PREF back to a kernel routing table metric, so SetPriority in export rules influences route selection on the receiving node.  For eBGP peers, SetPriority in export rules has no effect because LOCAL_PREF is a non-transitive attribute that is not sent to external peers.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSetPriority"),
 						},
 					},

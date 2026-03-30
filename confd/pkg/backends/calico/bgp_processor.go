@@ -739,10 +739,12 @@ func (c *client) buildImportFilter(
 		fmt.Sprintf("krt_metric = %d;", normalRoutePriority),
 	)
 
+	sameAS := peerAS == nodeAS
+
 	// For iBGP peers, convert from LOCAL_PREF to krt_metric.  Higher LOCAL_PREF = higher
 	// priority, but lower krt_metric = higher priority, so we invert: krt_metric = INT_MAX -
 	// bgp_local_pref.
-	if peerAS == nodeAS {
+	if sameAS {
 		filterLines = append(filterLines,
 			"if (defined(bgp_local_pref)) then {",
 			fmt.Sprintf("  krt_metric = %d - bgp_local_pref;", birdIntMaxValue),
@@ -755,8 +757,6 @@ func (c *client) buildImportFilter(
 	if ipVersion == 6 {
 		filterSuffix = "V6"
 	}
-
-	sameAS := peerAS == nodeAS
 
 	// Process BGP filters
 	hasSetPriority := false
@@ -829,7 +829,6 @@ func (c *client) buildExportFilter(
 	sameAS := peerAS == nodeAS
 
 	// Process BGP filters
-	hasExportSetPriority := false
 	for _, filterName := range filters {
 		filterKey := fmt.Sprintf("/calico/resources/v3/projectcalico.org/bgpfilters/%s", filterName)
 		if filterValue, err := c.GetValue(filterKey); err == nil {
@@ -837,9 +836,6 @@ func (c *client) buildExportFilter(
 			if json.Unmarshal([]byte(filterValue), &filter) == nil {
 				// Check if export rules exist based on IP version
 				if (ipVersion == 4 && len(filter.Spec.ExportV4) > 0) || (ipVersion == 6 && len(filter.Spec.ExportV6) > 0) {
-					if filterHasSetPriority(&filter, "export", ipVersion) {
-						hasExportSetPriority = true
-					}
 					truncatedName := truncateBGPFilterName(filterName)
 					if filterHasPeerType(&filter, "export", ipVersion) {
 						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'(%v);", truncatedName, filterSuffix, sameAS))
@@ -851,10 +847,15 @@ func (c *client) buildExportFilter(
 		}
 	}
 
-	// For iBGP peers with BGPFilter SetPriority operations, convert from krt_metric to
-	// LOCAL_PREF after filter processing so the modified krt_metric is reflected in the
-	// LOCAL_PREF value sent to iBGP peers.
-	if peerAS == nodeAS && hasExportSetPriority {
+	// For iBGP peers, convert from krt_metric to LOCAL_PREF.  Higher LOCAL_PREF = higher
+	// priority, but lower krt_metric = higher priority, so we invert: bgp_local_pref =
+	// INT_MAX - krt_metric.  This is needed unconditionally for iBGP because the receiving
+	// peer's Calico import filter converts LOCAL_PREF back to kernel metric — essential for
+	// live migration route priority propagation.
+	//
+	// Placed after BGPFilter processing so that any SetPriority actions in export rules
+	// are reflected in the LOCAL_PREF value sent to iBGP peers.
+	if sameAS {
 		filterLines = append(filterLines,
 			fmt.Sprintf("bgp_local_pref = %d - krt_metric;", birdIntMaxValue),
 		)
