@@ -11423,6 +11423,15 @@ spec:
                             the given regex.
                           type: string
                       type: object
+                      x-kubernetes-map-type: atomic
+                      x-kubernetes-validations:
+                        - message: no more than one autodetection method can be specified
+                          rule:
+                            "[has(self.firstFound) && self.firstFound == true, has(self.kubernetes),
+                            has(self.interface) && size(self.interface) > 0, has(self.skipInterface)
+                            && size(self.skipInterface) > 0, has(self.canReach) && size(self.canReach)
+                            > 0, has(self.cidrs) && size(self.cidrs) > 0].filter(x, x).size()
+                            <= 1"
                     nodeAddressAutodetectionV6:
                       description: |-
                         NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv6 addresses. If not specified,
@@ -11463,6 +11472,15 @@ spec:
                             the given regex.
                           type: string
                       type: object
+                      x-kubernetes-map-type: atomic
+                      x-kubernetes-validations:
+                        - message: no more than one autodetection method can be specified
+                          rule:
+                            "[has(self.firstFound) && self.firstFound == true, has(self.kubernetes),
+                            has(self.interface) && size(self.interface) > 0, has(self.skipInterface)
+                            && size(self.skipInterface) > 0, has(self.canReach) && size(self.canReach)
+                            > 0, has(self.cidrs) && size(self.cidrs) > 0].filter(x, x).size()
+                            <= 1"
                     sysctl:
                       description: Sysctl configures sysctl parameters for tuning plugin
                       items:
@@ -20246,6 +20264,15 @@ spec:
                                 the given regex.
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
+                          x-kubernetes-validations:
+                            - message: no more than one autodetection method can be specified
+                              rule:
+                                "[has(self.firstFound) && self.firstFound == true,
+                                has(self.kubernetes), has(self.interface) && size(self.interface)
+                                > 0, has(self.skipInterface) && size(self.skipInterface)
+                                > 0, has(self.canReach) && size(self.canReach) > 0, has(self.cidrs)
+                                && size(self.cidrs) > 0].filter(x, x).size() <= 1"
                         nodeAddressAutodetectionV6:
                           description: |-
                             NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv6 addresses. If not specified,
@@ -20286,6 +20313,15 @@ spec:
                                 the given regex.
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
+                          x-kubernetes-validations:
+                            - message: no more than one autodetection method can be specified
+                              rule:
+                                "[has(self.firstFound) && self.firstFound == true,
+                                has(self.kubernetes), has(self.interface) && size(self.interface)
+                                > 0, has(self.skipInterface) && size(self.skipInterface)
+                                > 0, has(self.canReach) && size(self.canReach) > 0, has(self.cidrs)
+                                && size(self.cidrs) > 0].filter(x, x).size() <= 1"
                         sysctl:
                           description:
                             Sysctl configures sysctl parameters for tuning
@@ -34754,6 +34790,14 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfIPFragmentReassemblyEnabled:
+                  description: |-
+                    BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
+                    reassembles out-of-order IP fragments from external networks. This program requires
+                    a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+                    Felix reports not-ready until the user sets this to false. When false, fragmented
+                    packets from external sources are dropped. [Default: true]
+                  type: boolean
                 bpfJITHardening:
                   allOf:
                     - enum:
