@@ -73,7 +73,7 @@ type IPAMConfigurationSpec struct {
 	// +kubebuilder:validation:Maximum=1000000
 	// +kubebuilder:default=0
 	// +optional
-	MaxBlocksPerHost int32 `json:"maxBlocksPerHost,omitempty"`
+	MaxBlocksPerHost int32 `json:"maxBlocksPerHost,omitempty,omitzero"`
 
 	// Whether or not to auto allocate blocks to hosts.
 	// +kubebuilder:default=true

@@ -17,7 +17,8 @@ package commands
 import (
 	"bytes"
 	"cmp"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"slices"
@@ -434,9 +435,7 @@ func dumpNATFlatJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface]
 		})
 	}
 
-	enc := json.NewEncoder(cmd.OutOrStdout())
-	enc.SetIndent("", "  ")
-	return enc.Encode(services)
+	return json.MarshalWrite(cmd.OutOrStdout(), services, jsontext.WithIndent("  "))
 }
 
 func dumpNATGroupedJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
@@ -481,9 +480,7 @@ func dumpNATGroupedJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterfa
 		})
 	}
 
-	enc := json.NewEncoder(cmd.OutOrStdout())
-	enc.SetIndent("", "  ")
-	return enc.Encode(groups)
+	return json.MarshalWrite(cmd.OutOrStdout(), groups, jsontext.WithIndent("  "))
 }
 
 type natFrontend struct {
