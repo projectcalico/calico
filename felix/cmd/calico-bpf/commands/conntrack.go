@@ -120,6 +120,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Fatal("Failed to access ConntrackMap")
 	}
+	defer ctMap.Close()
 	if cmd.version == 2 {
 		err := dumpCtMapV2(ctMap)
 		if err != nil {
@@ -136,7 +137,9 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	}
 
 	if *jsonOutput {
-		cmd.dumpJSON(ctMap, keyFromBytes, valFromBytes)
+		if err := cmd.dumpJSON(ctMap, keyFromBytes, valFromBytes); err != nil {
+			log.WithError(err).Error("Failed to dump conntrack as JSON")
+		}
 		return
 	}
 
@@ -288,14 +291,13 @@ func (cmd *conntrackDumpCmd) dumpJSON(
 	ctMap maps.Map,
 	keyFromBytes func([]byte) conntrack.KeyInterface,
 	valFromBytes func([]byte) conntrack.ValueInterface,
-) {
+) error {
 	now := bpf.KTimeNanos()
 
 	if cmd.raw {
-		cmd.dumpRawJSON(ctMap, keyFromBytes, valFromBytes, now)
-	} else {
-		cmd.dumpPrettyJSON(ctMap, keyFromBytes, valFromBytes, now)
+		return cmd.dumpRawJSON(ctMap, keyFromBytes, valFromBytes, now)
 	}
+	return cmd.dumpPrettyJSON(ctMap, keyFromBytes, valFromBytes, now)
 }
 
 func (cmd *conntrackDumpCmd) dumpRawJSON(
@@ -303,7 +305,7 @@ func (cmd *conntrackDumpCmd) dumpRawJSON(
 	keyFromBytes func([]byte) conntrack.KeyInterface,
 	valFromBytes func([]byte) conntrack.ValueInterface,
 	now int64,
-) {
+) error {
 	var entries []ctEntryJSON
 	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := keyFromBytes(k)
@@ -331,14 +333,12 @@ func (cmd *conntrackDumpCmd) dumpRawJSON(
 		return maps.IterNone
 	})
 	if err != nil {
-		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
+		return fmt.Errorf("failed to iterate over conntrack entries: %w", err)
 	}
 
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(entries); err != nil {
-		log.WithError(err).Fatal("Failed to encode JSON")
-	}
+	return enc.Encode(entries)
 }
 
 func (cmd *conntrackDumpCmd) dumpPrettyJSON(
@@ -346,7 +346,7 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 	keyFromBytes func([]byte) conntrack.KeyInterface,
 	valFromBytes func([]byte) conntrack.ValueInterface,
 	now int64,
-) {
+) error {
 	type ctEntry struct {
 		key conntrack.KeyInterface
 		val conntrack.ValueInterface
@@ -371,7 +371,7 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 		return maps.IterNone
 	})
 	if err != nil {
-		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
+		return fmt.Errorf("failed to iterate over conntrack entries: %w", err)
 	}
 
 	var connections []ctConnectionJSON
@@ -421,9 +421,7 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(connections); err != nil {
-		log.WithError(err).Fatal("Failed to encode JSON")
-	}
+	return enc.Encode(connections)
 }
 
 // orientedAddrs returns src and dst as "ip:port" strings, respecting
@@ -889,7 +887,7 @@ func (cmd *conntrackStatsCmd) Run(c *cobra.Command, _ []string) {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		if encErr := enc.Encode(stats); encErr != nil {
-			log.WithError(encErr).Fatal("Failed to encode JSON")
+			log.WithError(encErr).Error("Failed to encode JSON")
 		}
 	} else {
 		cmd.Printf("Conntrack map size: %d\n", maps.Size(ctMap.GetName()))

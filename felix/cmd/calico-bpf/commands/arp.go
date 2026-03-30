@@ -81,6 +81,7 @@ func dumpARP() error {
 	if err := arpMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
 	}
+	defer arpMap.Close()
 
 	var jsonEntries []arpEntryJSON
 
