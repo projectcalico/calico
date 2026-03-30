@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,6 +111,26 @@ var _ = Describe("Test the NetworkSet update processor", func() {
 				Key: v1NetworkSetKey1,
 			},
 		}))
+	})
+
+	It("should skip invalid CIDRs without panicking", func() {
+		up := updateprocessors.NewNetworkSetUpdateProcessor()
+
+		res := apiv3.NewNetworkSet()
+		res.Name = name1
+		res.Namespace = ns1
+		res.Spec.Nets = []string{"10.2402.0.0/16", cidr1str}
+
+		kvps, err := up.Process(&model.KVPair{
+			Key:      v3NetworkSetKey1,
+			Value:    res,
+			Revision: "abcde",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvps).To(HaveLen(1))
+
+		ns := kvps[0].Value.(*model.NetworkSet)
+		Expect(ns.Nets).To(Equal([]net.IPNet{*cidr1IPNet}))
 	})
 
 	It("should fail to convert an invalid resource", func() {
