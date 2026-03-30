@@ -15,7 +15,7 @@
 package proxy_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"net/http"
@@ -128,8 +128,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 
 			var status map[string]any
 
-			decoder := json.NewDecoder(result.Body)
-			err = decoder.Decode(&status)
+			err = json.UnmarshalRead(result.Body, &status)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(status).To(HaveKey("localEndpoints"))
@@ -182,8 +181,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 
 				var status map[string]any
 
-				decoder := json.NewDecoder(result.Body)
-				err = decoder.Decode(&status)
+				err = json.UnmarshalRead(result.Body, &status)
 				if err != nil {
 					return err
 				}
@@ -241,8 +239,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 
 					var status map[string]any
 
-					decoder := json.NewDecoder(result.Body)
-					err = decoder.Decode(&status)
+					err = json.UnmarshalRead(result.Body, &status)
 					if err != nil {
 						return err
 					}

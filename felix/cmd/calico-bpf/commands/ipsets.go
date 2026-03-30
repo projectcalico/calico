@@ -15,7 +15,8 @@
 package commands
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"slices"
@@ -99,9 +100,7 @@ func dumpIPSets() error {
 				Members: membersBySet[setID],
 			})
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(sets)
+		return json.MarshalWrite(os.Stdout, sets, jsontext.WithIndent("  "))
 	}
 
 	for _, setID := range setIDs {

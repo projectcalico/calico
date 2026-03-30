@@ -12,6 +12,31 @@ These build instructions assume you have a Linux build environment with:
 -  git
 -  make
 
+## GOEXPERIMENT=jsonv2
+
+This project uses `encoding/json/v2` (experimental in Go 1.26). All builds require:
+
+```
+export GOEXPERIMENT=jsonv2
+```
+
+The Makefile build system sets this automatically. For local `go build` or `go test`
+commands outside of Make, set the environment variable or prefix your commands:
+
+```
+GOEXPERIMENT=jsonv2 go test ./...
+```
+
+### IDE setup
+
+For VS Code, copy the example settings to get working intellisense:
+
+```
+cp .vscode/settings.json.example .vscode/settings.json
+```
+
+For GoLand, add `GOEXPERIMENT=jsonv2` under **Settings > Go > Build Tags & Vendoring > Environment**.
+
 ## Building Calico
 
 ### Building all of Calico
