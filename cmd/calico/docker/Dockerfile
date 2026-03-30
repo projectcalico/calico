@@ -21,11 +21,6 @@ COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver
 # Provide calicoctl for backward compatibility with scripts that exec into the container.
 COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calicoctl
 
-# CNI plugin install expects binaries at /opt/cni/bin/.
-# The base image has no shell, so we copy the binary to the expected paths.
-COPY ${BIN_DIR}/calico-${TARGETARCH} /opt/cni/bin/calico
-COPY ${BIN_DIR}/calico-${TARGETARCH} /opt/cni/bin/calico-ipam
-
 COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
 LABEL org.opencontainers.image.description="Calico combined binary containing all Calico components."

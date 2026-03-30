@@ -45,14 +45,15 @@ FIPS ?= false
 
 ifeq ($(FIPS),true)
 NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
 else
 NODE_CONTAINER_BIN_DIR=dist/bin
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
+
+# The node image uses the uber calico binary built with CGO for BPF support.
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 
 # Set the platform correctly for building docker images.
 ifeq ($(ARCH),arm64)
@@ -205,8 +206,7 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 
-# We need CGO when compiling in Felix for BPF support.
-# Currently CGO can be enabled in ARM64 and AMD64 builds.
+# CGO is needed on amd64/arm64 for the mountns binary.
 ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
@@ -217,29 +217,18 @@ CGO_LDFLAGS=""
 CGO_CFLAGS=""
 endif
 
+# The node image uses the uber calico binary built with CGO for BPF support.
+# The CGO build is handled by cmd/calico/Makefile's build-cgo target.
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
-else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
-	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
-else
-	$(call build_binary, ./cmd/calico-node/main.go, $@)
-endif
-endif
+	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH)
+	mkdir -p $(NODE_CONTAINER_BIN_DIR)
+	cp ../cmd/calico/bin/calico-cgo-$(ARCH) $@
 
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
-# The combined calico binary is included in the node image so the operator
-# can use "calico node" subcommands for probes and lifecycle hooks.
-CALICO_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
-$(CALICO_BINARY):
-	$(MAKE) -C ../cmd/calico build ARCH=$(ARCH)
-	cp ../cmd/calico/bin/calico-$(ARCH) $@
-
 $(WINDOWS_BINARY): $(SRC_FILES)
-	$(call build_windows_binary, ./cmd/calico-node/main.go, $@)
+	$(call build_windows_binary, ../cmd/calico, $@)
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
 	$(call build_windows_binary, ./cmd/calico, $@)
@@ -271,7 +260,7 @@ dist/LICENSE: ../LICENSE.md
 
 # register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
 image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER) | register
-$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(CALICO_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \

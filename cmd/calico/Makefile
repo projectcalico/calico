@@ -16,6 +16,17 @@ BINDIR ?= bin
 
 BINARIES = $(BINDIR)/calico-$(ARCH)
 
+# Paths within the build container for BPF source (needed for CGO builds).
+LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src/
+BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
+LIBBPF_A=../../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
+
+# CGO is needed for Felix BPF support on amd64/arm64.
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+endif
+
 .PHONY: build
 build: $(BINARIES)
 
@@ -25,6 +36,24 @@ ifeq ($(FIPS),true)
 else
 	$(call build_binary, $(PACKAGE_NAME), $@)
 endif
+
+# CGO build for the node image, which needs libbpf for BPF dataplane support.
+.PHONY: build-cgo
+build-cgo: $(BINDIR)/calico-cgo-$(ARCH)
+
+$(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME), $@)
+else
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+	$(call build_cgo_binary, $(PACKAGE_NAME), $@)
+else
+	$(call build_binary, $(PACKAGE_NAME), $@)
+endif
+endif
+
+$(LIBBPF_A):
+	$(MAKE) -C ../../felix libbpf ARCH=$(ARCH)
 
 $(BINDIR)/LICENSE: ../../LICENSE.md
 	mkdir -p $(BINDIR)

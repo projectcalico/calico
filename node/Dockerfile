@@ -133,8 +133,7 @@ COPY --from=bpftool /bpftool /bin/bpftool
 ARG BIN_DIR
 ARG TARGETARCH
 
-# Copy in the calico-node binary and the combined calico binary.
-COPY ${BIN_DIR}/calico-node-${TARGETARCH} /bin/calico-node
+# Copy in the uber calico binary (built with CGO for BPF support).
 COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calico
 
 # Copy in the mountns binary
