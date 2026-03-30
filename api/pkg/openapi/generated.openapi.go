@@ -3949,6 +3949,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfIPFragmentReassemblyEnabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that reassembles out-of-order IP fragments from external networks. This program requires a kernel newer than 5.10. When enabled (the default) and the program fails to load, Felix reports not-ready until the user sets this to false. When false, fragmented packets from external sources are dropped. [Default: true]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"bpfEnforceRPF": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of what is the per-interfaces or global setting. Possible values are Disabled, Strict or Loose. [Default: Loose]",
