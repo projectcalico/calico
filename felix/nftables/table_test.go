@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/logutils"
-	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 )
@@ -133,7 +132,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 		// Remove a non-existent chain. It should not trigger any new updates.
 		table.RemoveChains([]*generictables.Chain{
-			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: Match(), Action: AcceptAction{}}}},
 		})
 		table.Apply()
 		Expect(f.transactions).To(HaveLen(1))
@@ -141,10 +140,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 	It("Should defer updates until Apply is called", func() {
 		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-			{Match: nftables.Match(), Action: DropAction{}},
+			{Match: Match(), Action: DropAction{}},
 		})
 		table.UpdateChains([]*generictables.Chain{
-			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: Match(), Action: AcceptAction{}}}},
 		})
 		Expect(f.transactions).To(BeEmpty())
 		table.Apply()
@@ -154,7 +153,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	It("Should panic on nft failures", func() {
 		// Insert rules into a non-existent chain.
 		table.InsertOrAppendRules("badchain", []generictables.Rule{
-			{Match: nftables.Match(), Action: DropAction{}},
+			{Match: Match(), Action: DropAction{}},
 		})
 		Expect(func() {
 			table.Apply()
@@ -164,7 +163,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	Describe("after inserting a rule", func() {
 		BeforeEach(func() {
 			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				{Match: nftables.Match(), Action: DropAction{}},
+				{Match: Match(), Action: DropAction{}},
 			})
 			table.Apply()
 			Expect(f.transactions).To(HaveLen(1))
@@ -182,7 +181,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 		It("further inserts should be idempotent", func() {
 			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				{Match: nftables.Match(), Action: DropAction{}},
+				{Match: Match(), Action: DropAction{}},
 			})
 			table.Apply()
 
@@ -198,10 +197,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Describe("after inserting a rule then updating the insertions", func() {
 			BeforeEach(func() {
 				table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-					{Match: nftables.Match(), Action: DropAction{}},
-					{Match: nftables.Match(), Action: AcceptAction{}},
-					{Match: nftables.Match(), Action: DropAction{}},
-					{Match: nftables.Match(), Action: AcceptAction{}},
+					{Match: Match(), Action: DropAction{}},
+					{Match: Match(), Action: AcceptAction{}},
+					{Match: Match(), Action: DropAction{}},
+					{Match: Match(), Action: AcceptAction{}},
 				})
 				table.Apply()
 				Expect(f.transactions).To(HaveLen(2))
@@ -254,7 +253,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			BeforeEach(func() {
 				// Append a rule to the filter-FORWARD base chain, and trigger programming.
 				table.AppendRules("filter-FORWARD", []generictables.Rule{
-					{Match: nftables.Match(), Action: AcceptAction{}},
+					{Match: Match(), Action: AcceptAction{}},
 				})
 				table.Apply()
 
@@ -813,7 +812,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			})
 
 			// Send the map add.
-			meta := nftables.MapMetadata{Name: "cali-tw-dispatch", Type: nftables.MapTypeInterfaceMatch}
+			meta := MapMetadata{Name: "cali-tw-dispatch", Type: MapTypeInterfaceMatch}
 			members := map[string][]string{"cali1234": {"jump cali-tw-1234"}, "cali5678": {"jump cali-tw-5678"}}
 			table.AddOrReplaceMap(meta, members)
 

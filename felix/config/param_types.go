@@ -66,7 +66,7 @@ func (m *Metadata) GetMetadata() *Metadata {
 }
 
 func (m *Metadata) parseFailed(raw, msg string) error {
-	return fmt.Errorf("Failed to parse config parameter %v; value %#v: %v", m.Name, raw, msg)
+	return fmt.Errorf("failed to parse config parameter %v; value %#v: %v", m.Name, raw, msg)
 }
 
 func (m *Metadata) setDefault(config *Config) {
@@ -881,12 +881,12 @@ const maxRegionLength int = validation.DNS1123LabelMaxLength - len(regionNamespa
 func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 	log.WithField("raw", raw).Info("Region")
 	if len(raw) > maxRegionLength {
-		err = fmt.Errorf("The value of OpenstackRegion must be %v chars or fewer", maxRegionLength)
+		err = fmt.Errorf("the value of OpenstackRegion must be %v chars or fewer", maxRegionLength)
 		return
 	}
 	errs := validation.IsDNS1123Label(raw)
 	if len(errs) != 0 {
-		msg := "The value of OpenstackRegion must be a valid DNS label"
+		msg := "the value of OpenstackRegion must be a valid DNS label"
 		for _, err := range errs {
 			msg = msg + "; " + err
 		}

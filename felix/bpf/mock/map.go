@@ -90,7 +90,7 @@ func (m *Map) Iter(f maps.IterCallback) error {
 }
 
 func (m *Map) Size() int {
-	return m.MapParameters.MaxEntries
+	return m.MaxEntries
 }
 
 func (m *Map) copyContents() map[string]string {
