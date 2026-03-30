@@ -19,7 +19,7 @@ BUILD_IMAGES ?= $(CI_BUILD_IMAGES) $(ISTIO_ZTUNNEL_IMAGE)
 ISTIO_VERSION ?= 1.28.1
 ISTIO_ZTUNNEL_VERSION ?= $(shell grep -E '^ZTUNNEL_VERSION[[:space:]]*=' $(REPO_ROOT)/third_party/istio-ztunnel/Makefile | cut -d '=' -f2 | tr -d ' ')
 BRANCH_NAME ?= $(PIN_BRANCH)
-ISTIO_ZTUNNEL_BASE_IMAGE ?= quay.io/calico/istio-ztunnel:v$(ISTIO_ZTUNNEL_VERSION)-$(BRANCH_NAME)
+ISTIO_ZTUNNEL_BASE_IMAGE ?= quay.io/$(DEV_REGISTRY)/istio-ztunnel:v$(ISTIO_ZTUNNEL_VERSION)-$(BRANCH_NAME)
 
 ##############################################################################
 # Include lib.Makefile before anything else
