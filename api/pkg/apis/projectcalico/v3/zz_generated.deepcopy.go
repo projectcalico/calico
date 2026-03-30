@@ -1864,6 +1864,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFIPFragmentReassemblyEnabled != nil {
+		in, out := &in.BPFIPFragmentReassemblyEnabled, &out.BPFIPFragmentReassemblyEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.BPFPolicyDebugEnabled != nil {
 		in, out := &in.BPFPolicyDebugEnabled, &out.BPFPolicyDebugEnabled
 		*out = new(bool)

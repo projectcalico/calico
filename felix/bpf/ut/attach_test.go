@@ -99,7 +99,7 @@ func newBPFTestEpMgr(
 // countSubPrograms counts the number of sub-programs that would be loaded for a given AttachType.
 // This uses the GetApplicableSubProgs API from the hook package.
 func countSubPrograms(at hook.AttachType) int {
-	applicableProgs := hook.GetApplicableSubProgs(at, false)
+	applicableProgs := hook.GetApplicableSubProgs(at, nil)
 	return len(applicableProgs)
 }
 
