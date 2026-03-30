@@ -241,7 +241,7 @@ func BenchmarkMarshalJSON(b *testing.B) {
 	m := Make(input)
 	b.ResetTimer()
 	b.ReportAllocs()
-	for range b.N {
+	for b.Loop() {
 		_, err := m.MarshalJSON()
 		if err != nil {
 			b.Fatal(err)
