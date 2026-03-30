@@ -74,9 +74,9 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 func TestBuildExportFilter_SameAS(t *testing.T) {
 	c := &client{}
 
-	// Same AS = iBGP, no BGPFilter — should NOT include LOCAL_PREF conversion (no-op without filter)
+	// Same AS = iBGP — should include LOCAL_PREF conversion for all iBGP peers
 	result := c.buildExportFilter(nil, "64512", "64512", 4, 1024)
-	assert.NotContains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
 	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
 	assert.Contains(t, result, "reject;")
 }
@@ -2641,9 +2641,9 @@ func TestBuildImportFilter_CustomPriority(t *testing.T) {
 func TestBuildExportFilter_iBGP_CustomPriority(t *testing.T) {
 	c := &client{}
 
-	// iBGP with custom priority, no BGPFilter — LOCAL_PREF conversion should NOT appear
+	// iBGP with custom priority — LOCAL_PREF conversion should still appear
 	result := c.buildExportFilter(nil, "64512", "64512", 4, 2000)
-	assert.NotContains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
 	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
 }
 
@@ -2684,8 +2684,9 @@ func TestBuildExportFilter_iBGP_LocalPrefAfterBGPFilter(t *testing.T) {
 		"bgp_local_pref conversion must appear after BGPFilter call so SetPriority takes effect")
 }
 
-func TestBuildExportFilter_iBGP_NoLocalPrefWithoutSetPriority(t *testing.T) {
-	// BGPFilter without SetPriority — bgp_local_pref fixup should NOT appear
+func TestBuildExportFilter_iBGP_LocalPrefWithoutSetPriority(t *testing.T) {
+	// iBGP with BGPFilter but no SetPriority — bgp_local_pref should still appear
+	// because iBGP always needs LOCAL_PREF conversion for live migration route priority.
 	bgpFilter := map[string]any{
 		"spec": map[string]any{
 			"exportV4": []any{
@@ -2706,7 +2707,7 @@ func TestBuildExportFilter_iBGP_NoLocalPrefWithoutSetPriority(t *testing.T) {
 
 	result := c.buildExportFilter([]string{"no-prio"}, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "'bgp_no-prio_exportFilterV4'();")
-	assert.NotContains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
 }
 
 func TestBuildExportFilter_iBGP_LocalPrefAfterBGPFilter_V6(t *testing.T) {
