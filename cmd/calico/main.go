@@ -21,20 +21,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/projectcalico/calico/app-policy/pkg/dikastes"
 	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
-	goldmane "github.com/projectcalico/calico/goldmane/pkg/daemon"
-	guardian "github.com/projectcalico/calico/guardian/pkg/daemon"
-	"github.com/projectcalico/calico/key-cert-provisioner/pkg/keycert"
-	"github.com/projectcalico/calico/kube-controllers/pkg/kubecontrollers"
-	"github.com/projectcalico/calico/node/pkg/node"
 	"github.com/projectcalico/calico/pkg/buildinfo"
-	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
-	"github.com/projectcalico/calico/pod2daemon/pkg/flexvol"
-	typha "github.com/projectcalico/calico/typha/pkg/daemon"
-	"github.com/projectcalico/calico/webhooks/pkg/webhook"
-	whiskerbackend "github.com/projectcalico/calico/whisker-backend/cmd/app"
 )
 
 func newRootCommand() *cobra.Command {
@@ -45,32 +34,13 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage: true,
 	}
 
-	// Components with NewCommand() in their package.
-	cmd.AddCommand(
-		goldmane.NewCommand(),
-		guardian.NewCommand(),
-		whiskerbackend.NewCommand(),
-		keycert.NewCommand(),
-		typha.NewCommand(),
-		kubecontrollers.NewCommand(),
-		dikastes.NewCommand(),
-		csi.NewCommand(),
-		flexvol.NewCommand(),
-		webhook.NewCommand(),
-		node.NewCommand(),
-	)
+	// Component subcommands (internal use by the operator).
+	cmd.AddCommand(newComponentCommand())
 
-	// Components with their own CLI framework that need shims.
+	// User-facing commands.
 	cmd.AddCommand(
-		newAPIServerCommand(),
 		newCtlCommand(),
-		newCNICommand(),
-	)
-
-	// Health and utility commands.
-	cmd.AddCommand(
 		newHealthCommand(),
-		newKubeControllersHealthCommand(),
 		newVersionCommand(),
 	)
 

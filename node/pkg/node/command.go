@@ -41,16 +41,14 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-// NewCommand returns a cobra command tree for calico-node operations.
+// NewCommand returns a cobra command tree for node lifecycle operations.
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "node",
-		Short: "Calico node agent operations",
+		Short: "Calico node lifecycle operations",
 	}
 
 	cmd.AddCommand(
-		newFelixCommand(),
-		newConfdCommand(),
 		newInitCommand(),
 		newStartupCommand(),
 		newShutdownCommand(),
@@ -67,6 +65,16 @@ func NewCommand() *cobra.Command {
 	)
 
 	return cmd
+}
+
+// NewFelixCommand returns the command to run the Felix policy agent.
+func NewFelixCommand() *cobra.Command {
+	return newFelixCommand()
+}
+
+// NewConfdCommand returns the command to run the confd configuration daemon.
+func NewConfdCommand() *cobra.Command {
+	return newConfdCommand()
 }
 
 func newFelixCommand() *cobra.Command {

@@ -23,7 +23,7 @@ import (
 // NewCommand returns a cobra command that runs the TLS certificate provisioner.
 func NewCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "key-cert",
+		Use:   "key-cert-provisioner",
 		Short: "Run the TLS certificate provisioner",
 		Run: func(cmd *cobra.Command, args []string) {
 			Run(context.Background())
