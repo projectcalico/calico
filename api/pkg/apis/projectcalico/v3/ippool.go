@@ -144,7 +144,7 @@ type IPPoolSpec struct {
 	// Determines the mode how IP addresses should be assigned from this pool
 	// +optional
 	// +kubebuilder:default=Automatic
-	AssignmentMode *AssignmentMode `json:"assignmentMode,omitempty"`
+	AssignmentMode *AssignmentMode `json:"assignmentMode,omitzero"`
 }
 
 // IPPoolAllowedUse defines the allowed uses for an IP pool.

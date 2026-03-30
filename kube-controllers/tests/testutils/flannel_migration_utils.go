@@ -19,7 +19,7 @@ package testutils
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"os"

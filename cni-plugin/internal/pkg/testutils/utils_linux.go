@@ -17,7 +17,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net"

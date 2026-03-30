@@ -17,7 +17,8 @@ package common
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"os"
@@ -57,7 +58,7 @@ func (r ResourcePrinterJSON) FPrint(w io.Writer, client client.Interface, resour
 	} else {
 		rs = resources
 	}
-	if output, err := json.MarshalIndent(rs, "", "  "); err != nil {
+	if output, err := json.Marshal(rs, jsontext.WithIndent("  ")); err != nil {
 		return err
 	} else {
 		_, err := w.Write(output)
