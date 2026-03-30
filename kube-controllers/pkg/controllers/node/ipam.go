@@ -255,11 +255,11 @@ type IPAMController struct {
 // assignAllocation registers a new allocation in all internal tracking maps.
 // This is the counterpart to releaseAllocation — both must be kept in sync
 // so that every map updated on assign is also cleaned up on release.
-func (c *IPAMController) assignAllocation(blockCIDR string, a *allocation) {
-	if _, ok := c.allocationsByBlock[blockCIDR]; !ok {
-		c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
+func (c *IPAMController) assignAllocation(a *allocation) {
+	if _, ok := c.allocationsByBlock[a.block]; !ok {
+		c.allocationsByBlock[a.block] = map[string]*allocation{}
 	}
-	c.allocationsByBlock[blockCIDR][a.id()] = a
+	c.allocationsByBlock[a.block][a.id()] = a
 	if a.node() != "" {
 		c.allocationState.allocate(a)
 	}
@@ -551,7 +551,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		}
 
 		// This is a new allocation.
-		c.assignAllocation(blockCIDR, &alloc)
+		c.assignAllocation(&alloc)
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
 	}
 
