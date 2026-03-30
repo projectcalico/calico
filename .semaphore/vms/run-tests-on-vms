@@ -81,7 +81,7 @@ gcloud --quiet compute instances bulk create \
        --predefined-names="$names" \
        --zone=${zone} \
        --machine-type=${VM_MACHINE_TYPE} \
-       --image-family=${IMAGE_FAMILY} \
+       ${IMAGE_NAME:+--image=${IMAGE_NAME}} ${IMAGE_NAME:-"--image-family=${IMAGE_FAMILY}"} \
        --image-project=ubuntu-os-cloud \
        --boot-disk-size=$disk_size \
        --boot-disk-type=hyperdisk-balanced \

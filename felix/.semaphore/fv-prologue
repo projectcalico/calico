@@ -36,7 +36,9 @@ if [[ $FELIX_TEST_GROUP =~ 22.04 ]]; then
   JOB_TAG+="2204"
   TEST_REPORT_NAME+="Ubuntu-22.04/"
 elif [[ $FELIX_TEST_GROUP =~ 24.04 ]]; then
-  export IMAGE_FAMILY=ubuntu-2404-lts-amd64
+  # Pin to a specific image to avoid picking up kernel changes that need
+  # code-fix backports.
+  export IMAGE_NAME=ubuntu-2404-noble-amd64-v20250502a
   JOB_TAG+="2404"
   TEST_REPORT_NAME+="Ubuntu-24.04/"
 else
