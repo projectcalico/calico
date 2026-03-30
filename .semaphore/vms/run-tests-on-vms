@@ -75,13 +75,18 @@ fi
 
 # Do a bulk create; this is faster and it saves API quota.
 echo "Creating test VMs in bulk..."
+if [[ -n "${IMAGE_NAME:-}" ]]; then
+  image_args=(--image="${IMAGE_NAME}")
+else
+  image_args=(--image-family="${IMAGE_FAMILY}")
+fi
 gcloud --quiet compute instances bulk create \
        --service-account="semaphore-v2-gcr@unique-caldron-775.iam.gserviceaccount.com" \
        --scopes="https://www.googleapis.com/auth/cloud-platform" \
        --predefined-names="$names" \
        --zone=${zone} \
        --machine-type=${VM_MACHINE_TYPE} \
-       ${IMAGE_NAME:+--image=${IMAGE_NAME}} ${IMAGE_NAME:-"--image-family=${IMAGE_FAMILY}"} \
+       "${image_args[@]}" \
        --image-project=ubuntu-os-cloud \
        --boot-disk-size=$disk_size \
        --boot-disk-type=hyperdisk-balanced \
