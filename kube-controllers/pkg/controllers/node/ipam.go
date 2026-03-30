@@ -174,6 +174,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		allocationsByBlock:          make(map[string]map[string]*allocation),
 		allocationState:             newAllocationState(),
 		handleTracker:               newHandleTracker(),
+		orphanHandleTracker:         newOrphanHandleTracker(leakGracePeriod),
 		kubernetesNodesByCalicoName: make(map[string]string),
 		confirmedLeaks:              make(map[string]*allocation),
 		nodesByBlock:                make(map[string]string),
@@ -231,6 +232,9 @@ type IPAMController struct {
 	// handleTracker is used to track which handles are in use, which are potentially leaked, and which are confirmed as leaks.
 	handleTracker *handleTracker
 
+	// orphanHandleTracker tracks IPAMHandle CRDs that have no matching allocations in any block.
+	orphanHandleTracker *orphanHandleTracker
+
 	// confirmedLeaks indexes allocations that are confirmed to be leaks and are awaiting cleanup.
 	confirmedLeaks map[string]*allocation
 
@@ -277,6 +281,7 @@ func (c *IPAMController) Start(stop chan struct{}) {
 func (c *IPAMController) RegisterWith(f *utils.DataFeed) {
 	f.RegisterForNotification(model.BlockKey{}, c.onUpdate)
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
+	f.RegisterForNotification(model.IPAMHandleKey{}, c.onUpdate)
 	f.RegisterForSyncStatus(c.onStatusUpdate)
 }
 
@@ -292,6 +297,8 @@ func (c *IPAMController) onUpdate(update bapi.Update) {
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
+		c.syncerUpdates <- update.KVPair
+	case model.IPAMHandleKey:
 		c.syncerUpdates <- update.KVPair
 	}
 }
@@ -415,6 +422,9 @@ func (c *IPAMController) handleUpdate(upd any) {
 		case model.BlockKey:
 			c.handleBlockUpdate(upd)
 			return
+		case model.IPAMHandleKey:
+			c.handleIPAMHandleUpdate(upd)
+			return
 		}
 	}
 	log.WithField("update", upd).Warn("Unexpected update received")
@@ -466,6 +476,24 @@ func (c *IPAMController) handlePoolUpdate(kvp model.KVPair) {
 	} else {
 		poolName := kvp.Key.(model.ResourceKey).Name
 		c.onPoolDeleted(poolName)
+	}
+}
+
+// handleIPAMHandleUpdate processes create/update/delete events for IPAMHandle CRDs.
+func (c *IPAMController) handleIPAMHandleUpdate(kvp model.KVPair) {
+	handleID := kvp.Key.(model.IPAMHandleKey).HandleID
+	if kvp.Value != nil {
+		h := kvp.Value.(*model.IPAMHandle)
+		c.orphanHandleTracker.onHandleUpdate(handleID, h.Deleted)
+
+		// Check if this handle has any allocations. If not, mark as orphaned.
+		if _, ok := c.handleTracker.allocationsByHandle[handleID]; !ok {
+			c.orphanHandleTracker.markOrphaned(handleID)
+		} else {
+			c.orphanHandleTracker.markActive(handleID)
+		}
+	} else {
+		c.orphanHandleTracker.onHandleDeleted(handleID)
 	}
 }
 
@@ -551,6 +579,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 			c.allocationState.allocate(&alloc)
 		}
 		c.handleTracker.setAllocation(&alloc)
+		c.orphanHandleTracker.markActive(handle)
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
 	}
 
@@ -574,6 +603,13 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 			// Needs release.
 			c.handleTracker.removeAllocation(alloc)
 			delete(c.allocationsByBlock[blockCIDR], id)
+
+			// If this handle has no more allocations, it may be orphaned.
+			if _, ok := c.handleTracker.allocationsByHandle[alloc.handle]; !ok {
+				if _, known := c.orphanHandleTracker.allHandles[alloc.handle]; known {
+					c.orphanHandleTracker.markOrphaned(alloc.handle)
+				}
+			}
 
 			// Also remove from the node view.
 			node := alloc.node()
@@ -599,6 +635,16 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	// Remove allocations that were contributed by this block.
 	allocations := c.allocationsByBlock[blockCIDR]
 	for _, alloc := range allocations {
+		c.handleTracker.removeAllocation(alloc)
+		delete(c.confirmedLeaks, alloc.id())
+
+		// If this handle has no more allocations, it may be orphaned.
+		if _, ok := c.handleTracker.allocationsByHandle[alloc.handle]; !ok {
+			if _, known := c.orphanHandleTracker.allHandles[alloc.handle]; known {
+				c.orphanHandleTracker.markOrphaned(alloc.handle)
+			}
+		}
+
 		node := alloc.node()
 		if node != "" {
 			c.allocationState.release(alloc)
@@ -1193,6 +1239,12 @@ func (c *IPAMController) syncIPAM() error {
 		return err
 	}
 
+	// Clean up orphaned IPAMHandle CRDs that have no matching allocations in any block.
+	err = c.garbageCollectOrphanedHandles()
+	if err != nil {
+		return err
+	}
+
 	// Delete any nodes that we determined can be removed in checkAllocations. These
 	// nodes are no longer in the Kubernetes API, and have no valid allocations, so can be cleaned up entirely
 	// from Calico IPAM. Successfully released nodes are marked clean inside releaseNodes;
@@ -1287,6 +1339,40 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 			log.WithError(err).Warn("Failed to garbage collect one or more leaked IP addresses")
 			return err
 		}
+	}
+	return nil
+}
+
+// garbageCollectOrphanedHandles deletes IPAMHandle CRDs that have no matching
+// allocations in any block and have been orphaned for longer than the grace period.
+func (c *IPAMController) garbageCollectOrphanedHandles() error {
+	orphans := c.orphanHandleTracker.confirmedOrphans()
+	if len(orphans) == 0 {
+		return nil
+	}
+
+	type accessor interface {
+		Backend() bapi.Client
+	}
+	bc := c.client.(accessor).Backend()
+
+	log.WithField("num", len(orphans)).Info("Garbage collecting orphaned IPAMHandle CRDs")
+	for _, handleID := range orphans {
+		logc := log.WithField("handle", handleID)
+		logc.Info("Deleting orphaned IPAMHandle")
+		_, err := bc.DeleteKVP(context.TODO(), &model.KVPair{
+			Key: model.IPAMHandleKey{HandleID: handleID},
+		})
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				logc.Debug("Handle already deleted")
+			} else {
+				logc.WithError(err).Warn("Failed to delete orphaned IPAMHandle")
+				return err
+			}
+		}
+		// The syncer will deliver a delete event, which will call
+		// orphanHandleTracker.onHandleDeleted to clean up our tracking state.
 	}
 	return nil
 }

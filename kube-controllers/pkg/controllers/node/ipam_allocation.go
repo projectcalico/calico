@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,6 +109,75 @@ func newHandleTracker() *handleTracker {
 	return &handleTracker{
 		allocationsByHandle: map[string]map[string]*allocation{},
 	}
+}
+
+// orphanHandleTracker tracks IPAMHandle CRDs that have no matching allocations
+// in any block. Handles are candidates for deletion after a grace period.
+type orphanHandleTracker struct {
+	// allHandles stores every IPAMHandle CRD received from the syncer, keyed by handle ID.
+	allHandles map[string]handleInfo
+
+	// candidates tracks handles that appear to be orphaned, keyed by handle ID.
+	// The value is the time the handle was first observed with no allocations.
+	candidates map[string]time.Time
+
+	leakGracePeriod *time.Duration
+}
+
+type handleInfo struct {
+	handleID string
+	deleted  bool
+}
+
+func newOrphanHandleTracker(leakGracePeriod *time.Duration) *orphanHandleTracker {
+	return &orphanHandleTracker{
+		allHandles:      map[string]handleInfo{},
+		candidates:      map[string]time.Time{},
+		leakGracePeriod: leakGracePeriod,
+	}
+}
+
+// onHandleUpdate records a handle CRD from the syncer.
+func (t *orphanHandleTracker) onHandleUpdate(handleID string, deleted bool) {
+	t.allHandles[handleID] = handleInfo{handleID: handleID, deleted: deleted}
+}
+
+// onHandleDeleted removes a handle from all tracking state.
+func (t *orphanHandleTracker) onHandleDeleted(handleID string) {
+	delete(t.allHandles, handleID)
+	delete(t.candidates, handleID)
+}
+
+// markOrphaned records a handle as having no allocations. If it was already
+// tracked, the original timestamp is preserved.
+func (t *orphanHandleTracker) markOrphaned(handleID string) {
+	if _, ok := t.candidates[handleID]; !ok {
+		log.WithField("handle", handleID).Info("IPAMHandle has no allocations, candidate for GC")
+		t.candidates[handleID] = time.Now()
+	}
+}
+
+// markActive removes a handle from the orphan candidate set.
+func (t *orphanHandleTracker) markActive(handleID string) {
+	if _, ok := t.candidates[handleID]; ok {
+		log.WithField("handle", handleID).Debug("IPAMHandle is active again, removing from orphan candidates")
+		delete(t.candidates, handleID)
+	}
+}
+
+// confirmedOrphans returns handle IDs that have been orphaned for longer than
+// the grace period and are safe to delete.
+func (t *orphanHandleTracker) confirmedOrphans() []string {
+	if t.leakGracePeriod == nil || *t.leakGracePeriod <= 0 {
+		return nil
+	}
+	var result []string
+	for handleID, firstSeen := range t.candidates {
+		if time.Since(firstSeen) > *t.leakGracePeriod {
+			result = append(result, handleID)
+		}
+	}
+	return result
 }
 
 // allocation is an internal structure used by the IPAM garbage collector to track IPAM
