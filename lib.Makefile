@@ -1572,7 +1572,7 @@ KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
 KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
-	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+	$(REPO_ROOT)/.calico.created-$(ARCH)
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
@@ -1580,8 +1580,8 @@ $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
 
-$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd)
-	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
+$(REPO_ROOT)/.calico.created-$(ARCH): $(call local-deps-go-files,cmd)
+	$(MAKE) -C $(REPO_ROOT) calico-image
 
 # Operator is built from a separate repo/branch and depends on all other
 # images being built first.

@@ -218,11 +218,10 @@ CGO_CFLAGS=""
 endif
 
 # The node image uses the uber calico binary built with CGO for BPF support.
-# The CGO build is handled by cmd/calico/Makefile's build-cgo target.
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH)
+	$(MAKE) -C .. calico-build-cgo ARCH=$(ARCH)
 	mkdir -p $(NODE_CONTAINER_BIN_DIR)
-	cp ../cmd/calico/bin/calico-cgo-$(ARCH) $@
+	cp ../bin/calico-cgo-$(ARCH) $@
 
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
@@ -378,7 +377,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v $(KIND_KUBECONFIG):/root/.kube/config \
 	    -v $(KUBECTL):/bin/kubectl \
-	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
+	    -v $(REPO_ROOT)/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
