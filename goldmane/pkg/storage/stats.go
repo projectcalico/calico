@@ -163,16 +163,16 @@ func matches(q *proto.StatisticsRequest, hit *types.PolicyHit) bool {
 		return true
 	}
 
-	if q.PolicyMatch.Namespace != "" && q.PolicyMatch.Namespace != hit.Namespace {
+	if !types.StringMatchMatches(q.PolicyMatch.Namespace, hit.Namespace) {
 		return false
 	}
-	if q.PolicyMatch.Name != "" && q.PolicyMatch.Name != hit.Name {
+	if !types.StringMatchMatches(q.PolicyMatch.Name, hit.Name) {
 		return false
 	}
 	if q.PolicyMatch.Kind != proto.PolicyKind_KindUnspecified && q.PolicyMatch.Kind != hit.Kind {
 		return false
 	}
-	if q.PolicyMatch.Tier != "" && q.PolicyMatch.Tier != hit.Tier {
+	if !types.StringMatchMatches(q.PolicyMatch.Tier, hit.Tier) {
 		return false
 	}
 	if q.PolicyMatch.Action != proto.Action_ActionUnspecified && q.PolicyMatch.Action != hit.Action {

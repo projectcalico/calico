@@ -30,7 +30,7 @@ const (
 // IPPoolList contains a list of IPPool resources.
 type IPPoolList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []IPPool `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -77,22 +77,30 @@ const (
 )
 
 type IPPoolStatus struct {
+	// +listType=map
+	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty" protobuf:"bytes,1,rep,name=conditions"`
 }
 
 // IPPoolSpec contains the specification for an IPPool resource.
+// +kubebuilder:validation:XValidation:rule="!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode) == 0 || size(self.vxlanMode) == 0",message="ipipMode and vxlanMode cannot both be enabled",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) == 0 || self.vxlanMode == 'Never')",message="LoadBalancer IP pool cannot have IPIP or VXLAN enabled",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer') || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')",message="LoadBalancer cannot be combined with Workload or Tunnel allowed uses",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode == 'Never' || size(self.ipipMode) == 0",message="IPIP is not supported on IPv6 pools",reason=FieldValueForbidden
 type IPPoolSpec struct {
 	// The pool CIDR.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:MaxLength=48
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="CIDR cannot be changed; follow IP pool migration guide to avoid corruption.",reason=FieldValueInvalid
 	CIDR string `json:"cidr" validate:"net"`
 
 	// Contains configuration for VXLAN tunneling for this pool.
-	VXLANMode VXLANMode `json:"vxlanMode,omitempty" validate:"omitempty,vxlanMode"`
+	VXLANMode VXLANMode `json:"vxlanMode,omitempty"`
 
 	// Contains configuration for IPIP tunneling for this pool.
 	// For IPv6 pools, IPIP tunneling must be disabled.
-	IPIPMode IPIPMode `json:"ipipMode,omitempty" validate:"omitempty,ipIpMode"`
+	IPIPMode IPIPMode `json:"ipipMode,omitempty"`
 
 	// When natOutgoing is true, packets sent from Calico networked containers in
 	// this pool to destinations outside of this pool will be masqueraded.
@@ -109,6 +117,7 @@ type IPPoolSpec struct {
 	// or equal to the size of the pool CIDR.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=128
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Block size cannot be changed; follow IP pool migration guide to avoid corruption.",reason=FieldValueInvalid
 	BlockSize int `json:"blockSize,omitempty"`
 
 	// Allows IPPool to allocate for a specific node by label selector.
@@ -120,13 +129,14 @@ type IPPoolSpec struct {
 
 	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
 	// ["Tunnel", "Workload"] for back-compatibility
+	// +kubebuilder:validation:MaxItems=10
 	// +listType=set
 	AllowedUses []IPPoolAllowedUse `json:"allowedUses,omitempty" validate:"omitempty"`
 
 	// Determines the mode how IP addresses should be assigned from this pool
 	// +optional
 	// +kubebuilder:default=Automatic
-	AssignmentMode *AssignmentMode `json:"assignmentMode,omitempty" validate:"omitempty,assignmentMode"`
+	AssignmentMode *AssignmentMode `json:"assignmentMode,omitempty"`
 }
 
 // IPPoolAllowedUse defines the allowed uses for an IP pool.
@@ -204,7 +214,7 @@ type IPIPConfiguration struct {
 	// addresses within this pool.  A mode of "cross-subnet" will only use IPIP
 	// tunneling when the destination node is on a different subnet to the
 	// originating node.  The default value (if not specified) is "always".
-	Mode EncapMode `json:"mode,omitempty" validate:"ipIpMode"`
+	Mode EncapMode `json:"mode,omitempty"`
 }
 
 // NewIPPool creates a new (zeroed) IPPool struct with the TypeMetadata initialised to the current

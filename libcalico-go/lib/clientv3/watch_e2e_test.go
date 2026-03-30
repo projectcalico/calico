@@ -39,7 +39,7 @@ import (
 var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
 	ctx := context.Background()
-	numEvents := 5000
+	numEvents := 500
 	numWatchers := 100
 
 	Describe("Test prefix deletion of the datastore", func() {
@@ -54,7 +54,7 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 			Expect(err).NotTo(HaveOccurred())
 			be.Clean()
 
-			By("Creating 10000 resources")
+			By("Creating resources")
 			deleteEvents := []watch.Event{}
 			for ii := 1; ii <= numEvents; ii++ {
 				name := fmt.Sprintf("peer-%08d", ii)

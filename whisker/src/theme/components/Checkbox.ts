@@ -1,50 +1,36 @@
 export default {
     baseStyle: {
         control: {
+            borderColor: 'experimental-token-border-bold',
+            bg: 'experimental-token-bg-empty',
             _disabled: {
-                bg: 'tigeraGrey.400',
-                borderColor: 'tigeraGrey.400',
+                borderColor: 'experimental-token-border-bold',
+                bg: 'experimental-token-bg-empty',
+                opacity: 0.5,
             },
             _checked: {
-                bg: 'tigera-color-primary',
-                borderColor: 'tigera-color-primary',
-                _focus: {
-                    borderColor: 'tigera-color-primary',
+                bg: 'experimental-token-bg-brand',
+                border: 'none',
+                _hover: {
+                    bg: 'experimental-token-bg-brand',
+                },
+                _disabled: {
+                    bg: 'experimental-token-bg-brand',
+                },
+                _before: {
+                    bg: 'experimental-token-on-bg-brand',
                 },
             },
             _indeterminate: {
-                bg: 'tigera-color-primary',
-                borderColor: 'tigera-color-primary',
-                _focus: {
-                    borderColor: 'tigera-color-primary',
-                },
-            },
-            borderColor: 'tigeraGrey.600',
-            bg: 'transparent',
-            _dark: {
-                borderColor: 'tigeraGrey.400',
-                color: 'tigeraBlack',
-                _checked: {
-                    border: 'none',
-                    bg: 'tigeraBlueMedium40',
-                    borderColor: 'tigeraBlueMedium40',
-                    _hover: {
-                        bg: 'tigeraBlueMedium80',
-                        border: 'none',
-                    },
-                    _disabled: {
-                        bg: 'tigeraGrey.800',
-                        borderColor: 'tigeraGrey.800',
-                    },
-                },
-                _disabled: {
-                    bg: 'tigeraGrey.800',
-                    borderColor: 'tigeraGrey.800',
-                },
+                bg: 'experimental-token-bg-brand',
+                border: 'none',
             },
         },
         label: {
-            color: 'tigeraGrey',
+            color: 'experimental-token-fg-default',
+        },
+        icon: {
+            color: 'experimental-token-on-bg-brand',
         },
     },
     sizes: {

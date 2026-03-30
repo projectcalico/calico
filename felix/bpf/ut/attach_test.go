@@ -45,6 +45,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/calc"
 	linux "github.com/projectcalico/calico/felix/dataplane/linux"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -88,7 +89,7 @@ func newBPFTestEpMgr(
 		&routetable.DummyTable{},
 		calc.NewLookupsCache(),
 		nil,
-		nil,
+		&environment.Features{},
 		1500,
 		nil,
 		nil,
@@ -1018,81 +1019,6 @@ func TestRepeatedAttach(t *testing.T) {
 	Expect(ingProg[0].Handle).To(Equal(ingressProg[0].Handle))
 	Expect(egrProg[0].Pref).To(Equal(ingressProg[0].Pref))
 	Expect(egrProg[0].Handle).To(Equal(ingressProg[0].Handle))
-}
-
-func TestCTLBAttachLegacy(t *testing.T) {
-	RegisterTestingT(t)
-
-	testCtlbAttachLegacy := func(v4, v6 bool) {
-		bpfmaps, err := bpfmap.CreateBPFMaps(false)
-		Expect(err).NotTo(HaveOccurred())
-
-		commonMaps := bpfmaps.CommonMaps
-		err = nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMaps)
-		Expect(err).NotTo(HaveOccurred())
-
-		checkPinPath := func(pinPath string, mustExist bool) {
-			_, err := os.Stat(pinPath)
-			if mustExist {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
-		}
-
-		checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v4", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v46", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v4", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v46", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v4", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v46", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v6", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v6", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v6", false)
-
-		cmd := exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
-		out, err := cmd.Output()
-		Expect(err).NotTo(HaveOccurred())
-		if v4 {
-			Expect(string(out)).Should(ContainSubstring("calico_connect_v4"))
-			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v4"))
-			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v4"))
-			Expect(string(out)).Should(ContainSubstring("calico_connect_v46"))
-			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v46"))
-			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v46"))
-		} else if v6 {
-			Expect(string(out)).Should(ContainSubstring("calico_connect_v6"))
-			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v6"))
-			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v6"))
-		}
-		err = nat.RemoveConnectTimeLoadBalancer(v4, "")
-		Expect(err).NotTo(HaveOccurred())
-
-		cmd = exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
-		out, err = cmd.Output()
-		Expect(err).NotTo(HaveOccurred())
-		if v4 {
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v4"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v4"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v4"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v46"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v46"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v46"))
-		} else if v6 {
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v6"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v6"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v6"))
-		}
-		cmd = exec.Command("bpftool", "prog", "show")
-		out, err = cmd.Output()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(out)).ShouldNot(ContainSubstring("calico_connect"))
-		Expect(string(out)).ShouldNot(ContainSubstring("calico_send"))
-		Expect(string(out)).ShouldNot(ContainSubstring("calico_recv"))
-	}
-	testCtlbAttachLegacy(true, false)
-	testCtlbAttachLegacy(false, true)
-	testCtlbAttachLegacy(true, true)
 }
 
 func TestCTLBAttach(t *testing.T) {

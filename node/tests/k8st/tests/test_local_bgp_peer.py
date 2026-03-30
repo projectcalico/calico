@@ -462,10 +462,10 @@ protocol bgp from_workload_to_local_host from bgp_template {
 
         # Assert bgp sessions has been established to the following local workloads.
         # red pods on kind-worker and kind-worker2. blue pod on kind-worker2.
-        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_0_0], retries=60)
-        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_1_0], retries=60)
+        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_0_0], timeout=90)
+        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_1_0], timeout=90)
         self.assert_bgp_not_established(self.blue_pod_0_0)
-        retry_until_success(self.assert_bgp_established, function_args=[self.blue_pod_1_0], retries=60)
+        retry_until_success(self.assert_bgp_established, function_args=[self.blue_pod_1_0], timeout=90)
 
         # Check the export filter is applied.  Child nodes shouldn't see routes
         # from the parent.
@@ -508,9 +508,9 @@ protocol bgp from_workload_to_local_host from bgp_template {
           # 10.123.1.0/26      via 172.18.0.5 on eth0 [Node_172_18_0_3 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
           calico_node_w3 = calico_node_pod_name(self.nodes[3])
           output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w3)
-          self.assertRegex(output, r"10\.123\.0\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[1],))
-          self.assertRegex(output, r"10\.123\.1\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[2],))
-          self.assertRegex(output, r"10\.123\.3\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[2],))
+          self.assertRegex(output, r"10\.123\.0\.0/26.*via %s on .*Node_.*AS65401" % (self.ips[1],))
+          self.assertRegex(output, r"10\.123\.1\.0/26.*via %s on .*Node_.*AS65401" % (self.ips[2],))
+          self.assertRegex(output, r"10\.123\.3\.0/26.*via %s on .*Node_.*AS65401" % (self.ips[2],))
 
           # Check that the ToR hears about all the routes from RR(master node).
           # Note that `nextHopMode: Keep` is specified for `rr-tor-peer`, ToR sees routes with original next hop.

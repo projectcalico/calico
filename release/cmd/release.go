@@ -182,9 +182,6 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 			orgFlag,
 			repoFlag,
 			repoRemoteFlag,
-			operatorOrgFlag,
-			operatorRepoFlag,
-			operatorRepoRemoteFlag,
 		},
 		Action: func(_ context.Context, c *cli.Command) error {
 			configureLogging("release-public.log")
@@ -207,9 +204,6 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 			opOpts := []operator.Option{
 				operator.WithVersion(operatorVer.FormattedString()),
 				operator.WithCalicoDirectory(cfg.RepoRootDir),
-				operator.WithGithubOrg(c.String(operatorOrgFlag.Name)),
-				operator.WithRepoName(c.String(operatorRepoFlag.Name)),
-				operator.WithRepoRemote(c.String(operatorRepoRemoteFlag.Name)),
 			}
 			o := operator.NewManager(opOpts...)
 			return o.ReleasePublic()

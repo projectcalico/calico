@@ -220,28 +220,28 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 						ExportV4: []apiv3.BGPFilterRuleV4{
 							{
 								CIDR:          "10.10.10.0/24",
-								MatchOperator: apiv3.In,
+								MatchOperator: apiv3.MatchOperatorIn,
 								Action:        apiv3.Accept,
 							},
 						},
 						ImportV4: []apiv3.BGPFilterRuleV4{
 							{
 								CIDR:          "11.11.11.0/24",
-								MatchOperator: apiv3.NotIn,
+								MatchOperator: apiv3.MatchOperatorNotIn,
 								Action:        apiv3.Reject,
 							},
 						},
 						ExportV6: []apiv3.BGPFilterRuleV6{
 							{
 								CIDR:          "dead:beef:1::/64",
-								MatchOperator: apiv3.Equal,
+								MatchOperator: apiv3.MatchOperatorEqual,
 								Action:        apiv3.Accept,
 							},
 						},
 						ImportV6: []apiv3.BGPFilterRuleV6{
 							{
 								CIDR:          "dead:beef:2::/64",
-								MatchOperator: apiv3.NotEqual,
+								MatchOperator: apiv3.MatchOperatorNotEqual,
 								Action:        apiv3.Reject,
 							},
 						},

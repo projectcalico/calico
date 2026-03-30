@@ -40,20 +40,6 @@ import (
 )
 
 var memLockOnce sync.Once
-var BTFEnabled bool
-
-func init() {
-	BTFEnabled = SupportsBTF()
-}
-
-func SupportsBTF() bool {
-	_, err := os.Stat("/sys/kernel/btf/vmlinux")
-	if err != nil {
-		log.WithError(err).Debug("BTF not supported")
-		return false
-	}
-	return true
-}
 
 func IncreaseLockedMemoryQuota() {
 	memLockOnce.Do(func() {
@@ -180,6 +166,24 @@ func isMount(path string) (bool, error) {
 
 	return false, nil
 }
+
+// FVLogPrefix returns a short host-identifying prefix (e.g. "f0-") when running
+// inside a Felix FV test container (hostname ends with "-felixfv"). Returns ""
+// in production so there is no impact on non-test deployments.
+var FVLogPrefix = sync.OnceValue(func() string {
+	hostname, err := os.Hostname()
+	if err != nil || !strings.HasSuffix(hostname, "-felixfv") {
+		return ""
+	}
+	// Hostname format: felix-<id>-<pid>-<counter>-felixfv
+	// Extract the <id> part after "felix-".
+	if !strings.HasPrefix(hostname, "felix-") {
+		return ""
+	}
+	rest := hostname[len("felix-"):]
+	idx, _, _ := strings.Cut(rest, "-")
+	return "f" + idx + "-"
+})
 
 func RemoveBPFSpecialDevices() {
 	bpfin, err := netlink.LinkByName(dataplanedefs.BPFInDev)

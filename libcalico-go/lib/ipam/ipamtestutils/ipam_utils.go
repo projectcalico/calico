@@ -26,6 +26,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -137,9 +138,15 @@ func TryApplyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels m
 		_, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
 		if err != nil {
 			if kerrors.IsAlreadyExists(err) {
-				oldNode, _ := kc.CoreV1().Nodes().Get(context.Background(), host, metav1.GetOptions{})
-				oldNode.Labels = labels
-				_, err = kc.CoreV1().Nodes().Update(context.Background(), oldNode, metav1.UpdateOptions{})
+				err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					oldNode, getErr := kc.CoreV1().Nodes().Get(context.Background(), host, metav1.GetOptions{})
+					if getErr != nil {
+						return getErr
+					}
+					oldNode.Labels = labels
+					_, updateErr := kc.CoreV1().Nodes().Update(context.Background(), oldNode, metav1.UpdateOptions{})
+					return updateErr
+				})
 				if err != nil {
 					return err
 				}

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export LC_ALL=C
+
 # This script updates the manifests in this directory using helm.
 # Values files for the manifests in this directory can be found in
 # ../calico/charts/values.

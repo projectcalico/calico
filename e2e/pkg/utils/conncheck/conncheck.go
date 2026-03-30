@@ -27,6 +27,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
@@ -41,17 +42,19 @@ import (
 )
 
 const (
-	roleLabel  = "e2e.projectcalico.org/role"
-	roleClient = "client"
-	roleServer = "server"
+	roleLabel             = "e2e.projectcalico.org/role"
+	roleClient            = "client"
+	roleServer            = "server"
+	defaultExecuteTimeout = 30 * time.Second
 )
 
 type connectionTester struct {
-	f            *framework.Framework
-	servers      map[string]*Server
-	clients      map[string]*Client
-	expectations map[string]*Expectation
-	deployed     bool
+	f              *framework.Framework
+	servers        map[string]*Server
+	clients        map[string]*Client
+	expectations   map[string]*Expectation
+	deployed       bool
+	executeTimeout time.Duration
 }
 
 type ConnectionTester interface {
@@ -60,15 +63,26 @@ type ConnectionTester interface {
 	AddServer(server *Server)
 	Deploy()
 	Stop()
+	StopClient(client *Client)
 
 	// Methods for one-shot execution.
 	ExpectSuccess(client *Client, targets ...Target)
 	ExpectFailure(client *Client, targets ...Target)
 	Execute()
 	ResetExpectations()
+	WithTimeout(d time.Duration)
 
 	// Methods for continuous execution.
 	ExpectContinuously(client *Client, targets ...Target) Checkpointer
+
+	// Connect executes a connection attempt from the client to the target and returns the output.
+	// This is useful for traffic generation where you don't need success/failure semantics.
+	Connect(client *Client, target Target) (string, error)
+
+	// Methods for encryption verification. The client must have NET_RAW and NET_ADMIN
+	// capabilities for tcpdump (use WithCapture() client option).
+	ExpectEncrypted(client *Client, target Target)
+	ExpectPlaintext(client *Client, target Target)
 }
 
 // Checkpointer provides a way to checkpoint continuous connection tests at specific points in time
@@ -95,6 +109,15 @@ func (c *connectionTester) ResetExpectations() {
 		framework.Fail(fmt.Sprintf("ResetExpectations() called before all expectations were tested: %v", err), 1)
 	}
 	c.expectations = make(map[string]*Expectation)
+	c.executeTimeout = 0
+}
+
+// WithTimeout sets the timeout for the next Execute() call. The timeout
+// resets to the default after each ResetExpectations(). This is useful when
+// a particular connectivity check needs more time, e.g. waiting for Windows
+// HNS policy programming.
+func (c *connectionTester) WithTimeout(d time.Duration) {
+	c.executeTimeout = d
 }
 
 func (c *connectionTester) Deploy() {
@@ -187,7 +210,7 @@ func (c *connectionTester) stop() error {
 	for _, client := range c.clients {
 		By(fmt.Sprintf("Deleting client pod %s", client.pod.Name))
 		err := c.f.ClientSet.CoreV1().Pods(client.namespace.Name).Delete(ctx, client.pod.Name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -195,13 +218,13 @@ func (c *connectionTester) stop() error {
 	for _, server := range c.servers {
 		By(fmt.Sprintf("Deleting server pod %s", server.pod.Name))
 		err := c.f.ClientSet.CoreV1().Pods(server.namespace.Name).Delete(ctx, server.pod.Name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 		if server.service != nil {
 			By(fmt.Sprintf("Deleting server service %s", server.service.Name))
 			err = c.f.ClientSet.CoreV1().Services(server.namespace.Name).Delete(ctx, server.service.Name, metav1.DeleteOptions{})
-			if err != nil {
+			if err != nil && !apierrors.IsNotFound(err) {
 				return err
 			}
 		}
@@ -241,6 +264,33 @@ func (c *connectionTester) AddClient(client *Client) {
 		framework.Failf("Client with ID %s already exists", client.ID())
 	}
 	c.clients[client.ID()] = client
+}
+
+func (c *connectionTester) StopClient(client *Client) {
+	framework.ExpectNoErrorWithOffset(1, c.stopClient(client))
+}
+
+func (c *connectionTester) stopClient(client *Client) error {
+	id := client.ID()
+	if _, ok := c.clients[id]; !ok {
+		return fmt.Errorf("client %s not found", id)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	if client.pod != nil {
+		By(fmt.Sprintf("Stopping client pod %s", client.pod.Name))
+		err := c.f.ClientSet.CoreV1().Pods(client.namespace.Name).Delete(ctx, client.pod.Name, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		if err := e2epod.WaitForPodNotFoundInNamespace(
+			ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, 1*time.Minute,
+		); err != nil {
+			return err
+		}
+	}
+	delete(c.clients, id)
+	return nil
 }
 
 func (c *connectionTester) AddServer(server *Server) {
@@ -361,7 +411,11 @@ func (c *connectionTester) Execute() {
 	// Context to control overall timeout for all connections. After it times out, we'll forcefully
 	// terminate any remaining connections. This avoids deadlocking the test waiting for results if
 	// something goes wrong.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeout := c.executeTimeout
+	if timeout == 0 {
+		timeout = defaultExecuteTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Launch all of the connections in parallel. We'll wait for them all to finish at the end and report on success / failure.

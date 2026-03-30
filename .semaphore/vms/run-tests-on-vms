@@ -96,6 +96,7 @@ gcloud --quiet compute instances bulk create \
 log_monitor_regexps=(
   "(?<!Decode)Failure"
   "SUCCESS"
+  "PASSED"
   "Parallel test node"
   "Test batch"
   "FV-TEST-START"

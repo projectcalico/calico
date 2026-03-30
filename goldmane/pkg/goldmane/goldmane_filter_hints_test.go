@@ -82,7 +82,7 @@ func TestFilterHints(t *testing.T) {
 					Policies: []*proto.PolicyMatch{
 						{
 							Kind: proto.PolicyKind_CalicoNetworkPolicy,
-							Tier: "tier-5",
+							Tier: &proto.StringMatch{Value: "tier-5"},
 						},
 					},
 				},
@@ -114,8 +114,8 @@ func TestFilterHints(t *testing.T) {
 				Type: proto.FilterType_FilterTypePolicyTier,
 				Filter: &proto.Filter{
 					Policies: []*proto.PolicyMatch{
-						{Name: "name-4"},
-						{Name: "name-5"},
+						{Name: &proto.StringMatch{Value: "name-4"}},
+						{Name: &proto.StringMatch{Value: "name-5"}},
 					},
 				},
 			},
@@ -137,8 +137,8 @@ func TestFilterHints(t *testing.T) {
 				Filter: &proto.Filter{
 					SourceNamespaces: []*proto.StringMatch{{Value: "source-ns-2"}},
 					Policies: []*proto.PolicyMatch{{
-						Tier:      "tier-2",
-						Namespace: "policy-namespace-2",
+						Tier:      &proto.StringMatch{Value: "tier-2"},
+						Namespace: &proto.StringMatch{Value: "policy-namespace-2"},
 					}},
 				},
 			},

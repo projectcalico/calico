@@ -29,7 +29,8 @@ sub-image-%:
 
 # Build webhook image.
 webhooks calico/webhooks: $(IMAGE_BUILD_MARKER)
-$(IMAGE_BUILD_MARKER): $(BINARIES) bin/LICENSE
+IMAGE_DEPS = docker/Dockerfile
+$(IMAGE_BUILD_MARKER): $(IMAGE_DEPS) $(BINARIES) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) --build-arg GIT_VERSION=$(GIT_VERSION) -t webhooks:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
@@ -45,7 +46,8 @@ bin/LICENSE: ../LICENSE.md
 ###############################################################################
 ci: static-checks ut
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -coverprofile coverage.profile -race -count 1
+	mkdir -p report
+	$(DOCKER_GO_BUILD) gotestsum --junitfile report/webhooks_ut.xml -- ./... -coverprofile coverage.profile -race -count 1
 
 gen-mocks:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'

@@ -66,6 +66,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -74,6 +75,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -84,6 +86,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -109,16 +112,22 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -127,10 +136,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -150,10 +163,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -179,6 +196,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -187,6 +205,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -197,6 +216,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -220,7 +240,24 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -244,6 +281,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -252,6 +290,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -262,6 +301,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -287,16 +327,22 @@ spec:
                           methods:
                             items:
                               type: string
+                            maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
                                 exact:
+                                  maxLength: 1024
                                   type: string
                                 prefix:
+                                  maxLength: 1024
                                   type: string
                               type: object
+                            maxItems: 20
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -305,10 +351,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       ipVersion:
                         enum:
                           - 4
@@ -328,10 +378,14 @@ spec:
                             minimum: 0
                             type: integer
                           type:
-                            maximum: 255
+                            maximum: 254
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-validations:
+                          - message: ICMP code specified without an ICMP type
+                            reason: FieldValueInvalid
+                            rule: "!has(self.code) || has(self.type)"
                       notProtocol:
                         anyOf:
                           - type: integer
@@ -357,6 +411,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -365,6 +420,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           notSelector:
                             type: string
                           ports:
@@ -375,6 +431,7 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
+                            x-kubernetes-list-type: atomic
                           selector:
                             type: string
                           serviceAccounts:
@@ -398,7 +455,24 @@ spec:
                     required:
                       - action
                     type: object
+                    x-kubernetes-validations:
+                      - message: rules with HTTP match must have protocol TCP or unset
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.http) || !has(self.protocol) || self.protocol
+                          == 'TCP' || self.protocol == 6"
+                      - message: HTTP match is only valid on Allow rules
+                        reason: FieldValueForbidden
+                        rule: self.action == 'Allow' || !has(self.http)
+                      - message: ports and notPorts cannot be specified with services
+                        reason: FieldValueForbidden
+                        rule:
+                          "!has(self.destination) || !has(self.destination.services)
+                          || (!has(self.destination.ports) || size(self.destination.ports)
+                          == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
+                          == 0)"
                   type: array
+                  x-kubernetes-list-type: atomic
                 namespaceSelector:
                   type: string
                 order:
@@ -409,6 +483,7 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 preDNAT:
                   type: boolean
                 selector:
@@ -429,10 +504,35 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+              x-kubernetes-validations:
+                - message: preDNAT and doNotTrack cannot both be true
+                  reason: FieldValueForbidden
+                  rule:
+                    "!((has(self.doNotTrack) && self.doNotTrack) && (has(self.preDNAT)
+                    && self.preDNAT))"
+                - message: preDNAT policy cannot have any egress rules
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) ||
+                    size(self.egress) == 0
+                - message: preDNAT policy cannot have 'Egress' type
+                  reason: FieldValueForbidden
+                  rule:
+                    (!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t,
+                    t == 'Egress')
+                - message:
+                    applyOnForward must be true if either preDNAT or doNotTrack
+                    is true
+                  reason: FieldValueInvalid
+                  rule:
+                    (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
+                    || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
           required:
             - metadata
             - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
       subresources: {}

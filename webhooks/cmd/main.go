@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/admission/v1"
@@ -36,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
+	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
@@ -102,11 +104,15 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	}
 	cs, err := kubernetes.NewForConfig(rc)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create clientset")
+		logrus.WithError(err).Fatal("Failed to create Kubernetes clientset")
+	}
+	calicoCS, err := calicoclient.NewForConfig(rc)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create Calico clientset")
 	}
 
 	// Register webhook handlers.
-	registerHooks(cs)
+	registerHooks(cs, calicoCS)
 
 	// Create and run the server.
 	cfg, err := tls.NewTLSConfig()
@@ -125,8 +131,9 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	}
 }
 
-func registerHooks(cs kubernetes.Interface) {
-	rbac.RegisterHook(cs, utils.HandleFn(handleFn))
+func registerHooks(cs kubernetes.Interface, calicoCS calicoclient.Interface) {
+	rbac.RegisterHook(cs, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handleFn))
+	clusterinfo.RegisterHook(utils.HandleFn(handleFn))
 
 	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
 	http.HandleFunc("/readyz", readyFn())

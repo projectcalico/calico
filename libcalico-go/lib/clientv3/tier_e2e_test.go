@@ -427,7 +427,6 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			dgnp, outError := c.GlobalNetworkPolicies().Delete(ctx, gnpName1, options.DeleteOptions{ResourceVersion: rv_gnp})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(dgnp).To(MatchResource(apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, gnpName1, gnpSpec1))
-			time.Sleep(1 * time.Second)
 
 			By("Deleting Tier (name1) with the new resource version")
 			// Make sure that policies on other tiers are not associated with other tiers
@@ -448,19 +447,18 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			dgnp, outError = c.GlobalNetworkPolicies().Delete(ctx, gnpName2, options.DeleteOptions{ResourceVersion: rv_gnp2})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(dgnp).To(MatchResource(apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, gnpName2, gnpSpec2))
-			time.Sleep(1 * time.Second)
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Updating Tier name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.Tiers().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.Tiers().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.Tiers().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: Tier(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.Tiers().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: Tier(" + name2 + ") with error:"))
 
 				By("Creating Tier name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.Tiers().Create(ctx, &apiv3.Tier{
@@ -468,13 +466,13 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 					Spec:       spec2,
 				}, options.SetOptions{TTL: 2 * time.Second})
 				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-				_, outError = c.Tiers().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).NotTo(HaveOccurred())
-				time.Sleep(2 * time.Second)
-				_, outError = c.Tiers().Get(ctx, name2, options.GetOptions{})
-				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("resource does not exist: Tier(" + name2 + ") with error:"))
+				Eventually(func() string {
+					_, err := c.Tiers().Get(ctx, name2, options.GetOptions{})
+					if err != nil {
+						return err.Error()
+					}
+					return ""
+				}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: Tier(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -550,7 +548,6 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Deleting res1")
 			_, err = c.Tiers().Delete(ctx, name1, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
 
 			By("Checking for two events, create res2 and delete re1")
 			testWatcher1.ExpectEvents(apiv3.KindTier, []watch.Event{

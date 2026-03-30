@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,6 @@ func TestTunnelOpenConnection(t *testing.T) {
 	tt := []struct {
 		description string
 		setSession  func(*tunmocks.Session)
-		expectedErr error
 	}{
 		{
 			description: "session opens immediately",
@@ -56,13 +55,13 @@ func TestTunnelOpenConnection(t *testing.T) {
 			},
 		},
 		{
-			description: "session to open with non EOF error and returns an error",
+			description: "session fails to open with non-EOF error then succeeds after reconnect",
 			setSession: func(session *tunmocks.Session) {
 				session.
 					On("Close").Return(nil).Once().
-					On("Open").Return(nil, errors.New("some error")).Once()
+					On("Open").Return(nil, errors.New("some error")).Once().
+					On("Open").Return(netmocks.NewConn(t), nil).Once()
 			},
-			expectedErr: errors.New("some error"),
 		},
 	}
 
@@ -85,13 +84,8 @@ func TestTunnelOpenConnection(t *testing.T) {
 
 			Expect(tun.Connect(ctx)).ShouldNot(HaveOccurred())
 			con, err := tun.Open()
-			if tc.expectedErr != nil {
-				Expect(err).Should(HaveOccurred())
-				Expect(con).Should(BeNil())
-			} else {
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(con).ShouldNot(BeNil())
-			}
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(con).ShouldNot(BeNil())
 		})
 	}
 }
@@ -102,7 +96,6 @@ func TestTunnelAcceptConnection(t *testing.T) {
 	tt := []struct {
 		description string
 		setSession  func(*tunmocks.Session)
-		expectedErr error
 	}{
 		{
 			description: "listener accepts connection initially",
@@ -122,13 +115,13 @@ func TestTunnelAcceptConnection(t *testing.T) {
 			},
 		},
 		{
-			description: "listener fails to accept connection with non EOF error and returns an error",
+			description: "listener fails to accept connection with non-EOF error then succeeds after reconnect",
 			setSession: func(session *tunmocks.Session) {
 				session.
 					On("Close").Return(nil).Once().
-					On("Accept").Return(nil, errors.New("some error")).Once()
+					On("Accept").Return(nil, errors.New("some error")).Once().
+					On("Accept").Return(netmocks.NewConn(t), nil)
 			},
-			expectedErr: errors.New("some error"),
 		},
 	}
 
@@ -155,13 +148,8 @@ func TestTunnelAcceptConnection(t *testing.T) {
 			Expect(listener).NotTo(BeNil())
 
 			conn, err := listener.Accept()
-			if tc.expectedErr != nil {
-				Expect(err).Should(HaveOccurred())
-				Expect(conn).Should(BeNil())
-			} else {
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(conn).ShouldNot(BeNil())
-			}
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(conn).ShouldNot(BeNil())
 		})
 	}
 }

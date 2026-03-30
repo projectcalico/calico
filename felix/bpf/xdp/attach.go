@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 )
 
 const DetachedID = 0
@@ -107,8 +108,12 @@ func (ap *AttachPoint) Configuration() *libbpf.XDPGlobalData {
 		}
 		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
 	}
+	logIface := ap.Iface
+	if prefix := bpfutils.FVLogPrefix(); prefix != "" {
+		logIface = prefix + logIface
+	}
 	in := []byte("---------------")
-	copy(in, ap.Iface)
+	copy(in, logIface)
 	globalData.IfaceName = string(in)
 
 	return globalData

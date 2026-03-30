@@ -19,7 +19,6 @@ func TestForwardConnections(t *testing.T) {
 	RegisterTestingT(t)
 	t.Run("Forward sends connection data back and forth between the connections", func(t *testing.T) {
 		var dst1, dst2 net.Conn
-		var err error
 
 		t.Log("Creating two localhost listeners")
 		lst1, err := net.Listen("tcp", "localhost:0")
@@ -32,13 +31,15 @@ func TestForwardConnections(t *testing.T) {
 
 		var wg sync.WaitGroup
 		wg.Go(func() {
-			dst1, err = lst1.Accept()
-			Expect(err).ShouldNot(HaveOccurred())
+			var acceptErr error
+			dst1, acceptErr = lst1.Accept()
+			Expect(acceptErr).ShouldNot(HaveOccurred())
 		})
 
 		wg.Go(func() {
-			dst2, err = lst2.Accept()
-			Expect(err).ShouldNot(HaveOccurred())
+			var acceptErr error
+			dst2, acceptErr = lst2.Accept()
+			Expect(acceptErr).ShouldNot(HaveOccurred())
 		})
 
 		t.Log("Connecting to the localhost listeners")

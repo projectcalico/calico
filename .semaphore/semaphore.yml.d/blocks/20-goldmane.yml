@@ -32,3 +32,7 @@
               - s390x
         commands:
           - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+    epilogue:
+      always:
+        commands:
+          - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'

@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,18 +32,19 @@ type BlockAffinityInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.BlockAffinityList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.BlockAffinity, err error)
+	Apply(ctx context.Context, blockAffinity *applyconfigurationgeneratedprojectcalicov3.BlockAffinityApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.BlockAffinity, err error)
 	BlockAffinityExpansion
 }
 
 // blockAffinities implements BlockAffinityInterface
 type blockAffinities struct {
-	*gentype.ClientWithList[*projectcalicov3.BlockAffinity, *projectcalicov3.BlockAffinityList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.BlockAffinity, *projectcalicov3.BlockAffinityList, *applyconfigurationgeneratedprojectcalicov3.BlockAffinityApplyConfiguration]
 }
 
 // newBlockAffinities returns a BlockAffinities
 func newBlockAffinities(c *ProjectcalicoV3Client) *blockAffinities {
 	return &blockAffinities{
-		gentype.NewClientWithList[*projectcalicov3.BlockAffinity, *projectcalicov3.BlockAffinityList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.BlockAffinity, *projectcalicov3.BlockAffinityList, *applyconfigurationgeneratedprojectcalicov3.BlockAffinityApplyConfiguration](
 			"blockaffinities",
 			c.RESTClient(),
 			scheme.ParameterCodec,

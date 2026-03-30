@@ -29,7 +29,8 @@ sub-image-%:
 
 # Build goldmane image.
 goldmane calico/goldmane: $(IMAGE_BUILD_MARKER)
-$(IMAGE_BUILD_MARKER): $(BINARIES) bin/LICENSE
+IMAGE_DEPS = docker/Dockerfile
+$(IMAGE_BUILD_MARKER): $(IMAGE_DEPS) $(BINARIES) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t goldmane:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
@@ -75,7 +76,8 @@ gen-files: $(GENERATED_FILES) gen-mocks
 ###############################################################################
 ci: static-checks ut
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -coverprofile coverage.profile -race -count 1
+	mkdir -p report
+	$(DOCKER_GO_BUILD) gotestsum --junitfile report/goldmane_ut.xml -- ./... -coverprofile coverage.profile -race -count 1
 
 gen-mocks:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'

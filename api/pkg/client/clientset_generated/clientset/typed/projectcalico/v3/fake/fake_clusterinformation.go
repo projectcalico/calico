@@ -6,19 +6,20 @@ package fake
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
+	typedprojectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeClusterInformations implements ClusterInformationInterface
 type fakeClusterInformations struct {
-	*gentype.FakeClientWithList[*v3.ClusterInformation, *v3.ClusterInformationList]
+	*gentype.FakeClientWithListAndApply[*v3.ClusterInformation, *v3.ClusterInformationList, *projectcalicov3.ClusterInformationApplyConfiguration]
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeClusterInformations(fake *FakeProjectcalicoV3) projectcalicov3.ClusterInformationInterface {
+func newFakeClusterInformations(fake *FakeProjectcalicoV3) typedprojectcalicov3.ClusterInformationInterface {
 	return &fakeClusterInformations{
-		gentype.NewFakeClientWithList[*v3.ClusterInformation, *v3.ClusterInformationList](
+		gentype.NewFakeClientWithListAndApply[*v3.ClusterInformation, *v3.ClusterInformationList, *projectcalicov3.ClusterInformationApplyConfiguration](
 			fake.Fake,
 			"",
 			v3.SchemeGroupVersion.WithResource("clusterinformations"),
