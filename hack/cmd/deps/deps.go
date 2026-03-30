@@ -3,9 +3,10 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -551,10 +552,13 @@ func loadGoToolJSON[Item any](args ...string) ([]Item, error) {
 		return nil, fmt.Errorf("%w, %s", err, string(errOut))
 	}
 	var items []Item
-	decoder := json.NewDecoder(bytes.NewReader(out))
-	for decoder.More() {
+	reader := bytes.NewReader(out)
+	for {
 		var item Item
-		if err := decoder.Decode(&item); err != nil {
+		if err := json.UnmarshalRead(reader, &item); err != nil {
+			if err == io.EOF {
+				break
+			}
 			return nil, err
 		}
 		items = append(items, item)

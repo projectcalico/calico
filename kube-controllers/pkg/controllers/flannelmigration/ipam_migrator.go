@@ -16,7 +16,7 @@ package flannelmigration
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
