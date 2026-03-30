@@ -17,7 +17,7 @@ package fv_test
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"os"

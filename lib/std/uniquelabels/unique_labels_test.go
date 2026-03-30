@@ -16,7 +16,7 @@ package uniquelabels
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"reflect"
 	"sync"
@@ -32,13 +32,15 @@ func TestInternedLabelsJSONRoundTrip(t *testing.T) {
 		{"foo": "bar", "bar": "baz"},
 	} {
 		t.Run(fmt.Sprint(m), func(t *testing.T) {
-			j, err := json.Marshal(m)
+			// FormatNilMapAsNull matches our Map.MarshalJSON() which encodes
+			// nil as "null". Deterministic gives sorted keys for comparison.
+			j, err := json.Marshal(m, json.Deterministic(true), json.FormatNilMapAsNull(true))
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			in := Make(m)
-			j2, err := json.Marshal(in)
+			j2, err := json.Marshal(in, json.Deterministic(true))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -184,7 +186,7 @@ func TestMarshalJSONSortsKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := json.Marshal(input)
+	want, err := json.Marshal(input, json.Deterministic(true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +217,7 @@ func TestMarshalJSONManyKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := json.Marshal(input)
+	want, err := json.Marshal(input, json.Deterministic(true))
 	if err != nil {
 		t.Fatal(err)
 	}

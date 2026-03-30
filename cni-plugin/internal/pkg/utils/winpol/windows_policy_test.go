@@ -15,7 +15,7 @@
 package winpol
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"net"
 	"testing"
 
@@ -52,31 +52,31 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 	t.Log("With NAT disabled, OutBoundNAT should be filtered out")
 	pols, hcnPols, err := CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(pols).To(Equal([]json.RawMessage{
-		json.RawMessage(`{"Type": "SomethingElse"}`),
+	Expect(pols).To(Equal([]jsontext.Value{
+		jsontext.Value(`{"Type": "SomethingElse"}`),
 	}), "OutBoundNAT should have been filtered out")
 	Expect(hcnPols).To(Equal([]hcn.EndpointPolicy{
 		hcn.EndpointPolicy{
 			Type:     "SomethingElse",
-			Settings: json.RawMessage(`{}`),
+			Settings: jsontext.Value(`{}`),
 		},
 	}), "OutBoundNAT should have been filtered out")
 
 	t.Log("With NAT enabled, OutBoundNAT should be augmented")
 	pols, hcnPols, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(pols).To(Equal([]json.RawMessage{
-		json.RawMessage(`{"ExceptionList":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
-		json.RawMessage(`{"Type": "SomethingElse"}`),
+	Expect(pols).To(Equal([]jsontext.Value{
+		jsontext.Value(`{"ExceptionList":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
+		jsontext.Value(`{"Type": "SomethingElse"}`),
 	}))
 	Expect(hcnPols).To(Equal([]hcn.EndpointPolicy{
 		hcn.EndpointPolicy{
 			Type:     "OutBoundNAT",
-			Settings: json.RawMessage(`{"Exceptions":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
+			Settings: jsontext.Value(`{"Exceptions":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
 		},
 		hcn.EndpointPolicy{
 			Type:     "SomethingElse",
-			Settings: json.RawMessage(`{}`),
+			Settings: jsontext.Value(`{}`),
 		},
 	}))
 
@@ -86,31 +86,31 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 	)
 	pols, hcnPols, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(pols).To(Equal([]json.RawMessage{
-		json.RawMessage(`{"Type": "SomethingElse"}`),
-		json.RawMessage(`{"ExceptionList":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
+	Expect(pols).To(Equal([]jsontext.Value{
+		jsontext.Value(`{"Type": "SomethingElse"}`),
+		jsontext.Value(`{"ExceptionList":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
 	}))
 	Expect(hcnPols).To(Equal([]hcn.EndpointPolicy{
 		hcn.EndpointPolicy{
 			Type:     "SomethingElse",
-			Settings: json.RawMessage(`{}`),
+			Settings: jsontext.Value(`{}`),
 		},
 		hcn.EndpointPolicy{
 			Type:     "OutBoundNAT",
-			Settings: json.RawMessage(`{"Exceptions":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
+			Settings: jsontext.Value(`{"Exceptions":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
 		},
 	}))
 
 	t.Log("With NAT disabled, and no OutBoundNAT stanza, OutBoundNAT should not be added")
 	pols, hcnPols, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(pols).To(Equal([]json.RawMessage{
-		json.RawMessage(`{"Type": "SomethingElse"}`),
+	Expect(pols).To(Equal([]jsontext.Value{
+		jsontext.Value(`{"Type": "SomethingElse"}`),
 	}))
 	Expect(hcnPols).To(Equal([]hcn.EndpointPolicy{
 		hcn.EndpointPolicy{
 			Type:     "SomethingElse",
-			Settings: json.RawMessage(`{}`),
+			Settings: jsontext.Value(`{}`),
 		},
 	}), "OutBoundNAT should have been filtered out")
 }
@@ -121,9 +121,9 @@ func newMockPolMarshaller(pols ...string) mockPolMarshaller {
 
 type mockPolMarshaller []string
 
-func (m mockPolMarshaller) GetHNSEndpointPolicies() (out []json.RawMessage) {
+func (m mockPolMarshaller) GetHNSEndpointPolicies() (out []jsontext.Value) {
 	for _, p := range m {
-		out = append(out, json.RawMessage(p))
+		out = append(out, jsontext.Value(p))
 	}
 	return
 }
