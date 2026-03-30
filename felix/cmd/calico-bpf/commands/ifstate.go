@@ -66,6 +66,7 @@ func dumpIfState(cmd *cobra.Command) error {
 	if err := ifstateMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
 	}
+	defer ifstateMap.Close()
 
 	var jsonEntries []ifstateJSON
 
