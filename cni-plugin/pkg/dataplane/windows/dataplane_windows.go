@@ -16,7 +16,8 @@ package windows
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"strconv"
@@ -246,7 +247,7 @@ func (d *windowsDataplane) DoNetworking(
 				Policies: []hcn.EndpointPolicy{
 					{
 						Type:     hcn.ACL,
-						Settings: json.RawMessage(policyJSON),
+						Settings: jsontext.Value(policyJSON),
 					},
 				},
 			}
@@ -344,7 +345,7 @@ func ensureVxlanNetworkExists(networkName string, subNet *net.IPNet, vni uint64,
 		expectedNetwork.Subnets = append(expectedNetwork.Subnets, hcsshim.Subnet{
 			AddressPrefix:  expectedAddressPrefix,
 			GatewayAddress: expectedGW.String(),
-			Policies: []json.RawMessage{
+			Policies: []jsontext.Value{
 				[]byte(fmt.Sprintf(`{"Type":"VSID","VSID":%d}`, expectedVNI)),
 			},
 		})
@@ -543,7 +544,7 @@ func createAndAttachVxlanHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, s
 		MacAddress:       macAddr,
 		VirtualNetwork:   hnsNetwork.Id,
 		IsRemoteEndpoint: true,
-		Policies: []json.RawMessage{
+		Policies: []jsontext.Value{
 			[]byte(fmt.Sprintf(`{"Type":"PA","PA":"%s"}`, hnsNetwork.ManagementIP)),
 		},
 	}
@@ -722,13 +723,13 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		// conjure a MAC based on the IP for Overlay
 		macAddr = fmt.Sprintf("%v-%02x-%02x-%02x-%02x", vxlanMACPrefix, epIPBytes[0], epIPBytes[1], epIPBytes[2], epIPBytes[3])
 
-		v1pols = append(v1pols, []json.RawMessage{
+		v1pols = append(v1pols, []jsontext.Value{
 			[]byte(fmt.Sprintf(`{"Type":"PA","PA":"%s"}`, hnsNetwork.ManagementIP)),
 		}...)
 
 		hcnPol := hcn.EndpointPolicy{
 			Type: hcn.NetworkProviderAddress,
-			Settings: json.RawMessage(
+			Settings: jsontext.Value(
 				fmt.Sprintf(`{"ProviderAddress":"%s"}`, hnsNetwork.ManagementIP),
 			),
 		}
@@ -746,11 +747,11 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 			return nil, nil, fmt.Errorf("failed to add route encap policy")
 		}
 
-		v1pols = append(v1pols, json.RawMessage(encoded))
+		v1pols = append(v1pols, jsontext.Value(encoded))
 
 		hcnPol := hcn.EndpointPolicy{
 			Type: hcn.SDNRoute,
-			Settings: json.RawMessage(
+			Settings: jsontext.Value(
 				fmt.Sprintf(`{"DestinationPrefix": "%s", "NeedEncap": true}`, mgmtIP.String()+"/32"),
 			),
 		}
@@ -760,14 +761,14 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	// if supported add loopback DSR
 	if d.conf.WindowsLoopbackDSR {
 		// v1
-		v1pols = append(v1pols, []json.RawMessage{
+		v1pols = append(v1pols, []jsontext.Value{
 			[]byte(fmt.Sprintf(`{"Type":"OutBoundNAT","Destinations":["%s"]}`, epIP.String())),
 		}...)
 
 		// v2
 		loopBackPol := hcn.EndpointPolicy{
 			Type: hcn.OutBoundNAT,
-			Settings: json.RawMessage(
+			Settings: jsontext.Value(
 				fmt.Sprintf(`{"Destinations":["%s"]}`, epIP.String()),
 			),
 		}

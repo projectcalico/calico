@@ -15,7 +15,7 @@
 // Dummy version of the HCN API for compilation on Linux.
 package hcn
 
-import "encoding/json"
+import "encoding/json/jsontext"
 
 type EndpointPolicyType string
 
@@ -36,5 +36,5 @@ const (
 
 type EndpointPolicy struct {
 	Type     EndpointPolicyType `json:""`
-	Settings json.RawMessage    `json:",omitempty"`
+	Settings jsontext.Value     `json:",omitempty"`
 }

@@ -123,7 +123,9 @@ var _ = Describe("Config mutation tests (DEL)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect the subnet and IP address to be populated in the args.
-		exp := []byte(`{"ipam":{"ipAddress":"192.168.5.5","subnet":"192.168.0.0/12"}}`)
-		Expect(args.StdinData).To(Equal(exp))
+		// Use MatchJSON so the assertion is order-independent — JSON object
+		// key order is not guaranteed under encoding/json/v2.
+		exp := `{"ipam":{"ipAddress":"192.168.5.5","subnet":"192.168.0.0/12"}}`
+		Expect(args.StdinData).To(MatchJSON(exp))
 	})
 })
