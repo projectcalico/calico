@@ -103,6 +103,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: listenPort
       type:
         scalar: numeric
+      default: 0
     - name: localWorkloadPeeringIPV4
       type:
         scalar: string

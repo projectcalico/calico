@@ -17,7 +17,8 @@
 package winpol
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"strings"
@@ -28,7 +29,7 @@ import (
 )
 
 type PolicyMarshaller interface {
-	GetHNSEndpointPolicies() []json.RawMessage
+	GetHNSEndpointPolicies() []jsontext.Value
 }
 
 // CalculateEndpointPolicies augments the hns.Netconf policies with NAT exceptions for our IPAM blocks.
@@ -38,9 +39,9 @@ func CalculateEndpointPolicies(
 	natOutgoing bool,
 	mgmtIP net.IP,
 	logger *logrus.Entry,
-) ([]json.RawMessage, []hcn.EndpointPolicy, error) {
+) ([]jsontext.Value, []hcn.EndpointPolicy, error) {
 	inputPols := n.GetHNSEndpointPolicies()
-	var outputV1Pols []json.RawMessage
+	var outputV1Pols []jsontext.Value
 	var outputV2Pols []hcn.EndpointPolicy
 
 	found := false
@@ -110,7 +111,7 @@ func CalculateEndpointPolicies(
 			return nil, nil, err
 		}
 
-		outputV1Pols = append(outputV1Pols, json.RawMessage(encoded))
+		outputV1Pols = append(outputV1Pols, jsontext.Value(encoded))
 
 		// Convert v2 policy. If the conversion to V2 policy fails just log and continue.
 		// OutBoundNAT "ExceptionList" field is "Exceptions" in v2.
@@ -165,7 +166,7 @@ func convertToHcnEndpointPolicy(policy map[string]any) (hcn.EndpointPolicy, erro
 		return hcnPolicy, fmt.Errorf("failed to marshal policy settings")
 	}
 	hcnPolicy.Type = hcn.EndpointPolicyType(policyType)
-	hcnPolicy.Settings = json.RawMessage(policySettings)
+	hcnPolicy.Settings = jsontext.Value(policySettings)
 	return hcnPolicy, nil
 }
 

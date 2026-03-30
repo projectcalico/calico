@@ -16,7 +16,7 @@ package resources_test
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 
 	. "github.com/onsi/ginkgo/v2"

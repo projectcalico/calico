@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/gob"
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 
 	. "github.com/onsi/gomega"
