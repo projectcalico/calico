@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -73,7 +74,7 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 func TestBuildExportFilter_SameAS(t *testing.T) {
 	c := &client{}
 
-	// Same AS = iBGP — should include LOCAL_PREF conversion and calico_export_to_bgp_peers(true)
+	// Same AS = iBGP — should include LOCAL_PREF conversion for all iBGP peers
 	result := c.buildExportFilter(nil, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
 	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
@@ -1863,6 +1864,8 @@ func TestBuildImportFilter_WithBGPFilter(t *testing.T) {
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-filter_importFilterV4'();")
+	// No SetPriority operation, so bgp_local_pref fixup should NOT be present
+	assert.NotContains(t, result, "bgp_local_pref = 2147483647 - krt_metric")
 	// Should still have default accept
 	assert.Contains(t, result, "accept;")
 }
@@ -2601,10 +2604,12 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 func TestBuildImportFilter_iBGP(t *testing.T) {
 	c := &client{}
 
-	// Same AS = iBGP — should default krt_metric, convert from bgp_local_pref, and set preference
+	// Same AS = iBGP, no BGPFilter — should default krt_metric, convert from bgp_local_pref,
+	// but NOT write back bgp_local_pref (no-op without filter)
 	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "krt_metric = 1024;")
 	assert.Contains(t, result, "krt_metric = 2147483647 - bgp_local_pref")
+	assert.NotContains(t, result, "bgp_local_pref = 2147483647 - krt_metric")
 	assert.Contains(t, result, "if (krt_metric < 1024) then")
 	assert.Contains(t, result, "preference = 200;")
 	assert.Contains(t, result, "accept;")
@@ -2613,10 +2618,12 @@ func TestBuildImportFilter_iBGP(t *testing.T) {
 func TestBuildImportFilter_eBGP(t *testing.T) {
 	c := &client{}
 
-	// Different AS = eBGP — should default krt_metric and set preference, but no LOCAL_PREF conversion
+	// Different AS = eBGP, no BGPFilter — should default krt_metric and set preference,
+	// no LOCAL_PREF conversion in either direction
 	result := c.buildImportFilter(nil, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "krt_metric = 1024;")
 	assert.NotContains(t, result, "krt_metric = 2147483647 - bgp_local_pref")
+	assert.NotContains(t, result, "bgp_local_pref = 2147483647 - krt_metric")
 	assert.Contains(t, result, "if (krt_metric < 1024) then")
 	assert.Contains(t, result, "preference = 200;")
 	assert.Contains(t, result, "accept;")
@@ -2638,4 +2645,98 @@ func TestBuildExportFilter_iBGP_CustomPriority(t *testing.T) {
 	result := c.buildExportFilter(nil, "64512", "64512", 4, 2000)
 	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
 	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
+}
+
+func TestBuildExportFilter_iBGP_LocalPrefAfterBGPFilter(t *testing.T) {
+	// Verify that for iBGP export with a BGPFilter containing SetPriority,
+	// bgp_local_pref conversion appears AFTER the filter function call so that
+	// SetPriority (which modifies krt_metric) is reflected in the LOCAL_PREF.
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action": "Accept",
+					"cidr":   "10.0.0.0/8",
+					"operations": []any{
+						map[string]any{"setPriority": map[string]any{"value": 500}},
+					},
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/prio-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Same AS = iBGP — both filter call and bgp_local_pref should be present
+	result := c.buildExportFilter([]string{"prio-filter"}, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_prio-filter_exportFilterV4'();")
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
+
+	// Verify ordering: filter call must come BEFORE bgp_local_pref conversion
+	filterIdx := strings.Index(result, "'bgp_prio-filter_exportFilterV4'();")
+	localPrefIdx := strings.Index(result, "bgp_local_pref = 2147483647 - krt_metric;")
+	assert.Greater(t, localPrefIdx, filterIdx,
+		"bgp_local_pref conversion must appear after BGPFilter call so SetPriority takes effect")
+}
+
+func TestBuildExportFilter_iBGP_LocalPrefWithoutSetPriority(t *testing.T) {
+	// iBGP with BGPFilter but no SetPriority — bgp_local_pref should still appear
+	// because iBGP always needs LOCAL_PREF conversion for live migration route priority.
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action": "Accept",
+					"cidr":   "10.0.0.0/8",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/no-prio": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	result := c.buildExportFilter([]string{"no-prio"}, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_no-prio_exportFilterV4'();")
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
+}
+
+func TestBuildExportFilter_iBGP_LocalPrefAfterBGPFilter_V6(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV6": []any{
+				map[string]any{
+					"action": "Accept",
+					"operations": []any{
+						map[string]any{"setPriority": map[string]any{"value": 500}},
+					},
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/v6-prio": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	result := c.buildExportFilter([]string{"v6-prio"}, "64512", "64512", 6, 1024)
+	assert.Contains(t, result, "'bgp_v6-prio_exportFilterV6'();")
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
+
+	filterIdx := strings.Index(result, "'bgp_v6-prio_exportFilterV6'();")
+	localPrefIdx := strings.Index(result, "bgp_local_pref = 2147483647 - krt_metric;")
+	assert.Greater(t, localPrefIdx, filterIdx,
+		"bgp_local_pref conversion must appear after BGPFilter call for IPv6")
 }
