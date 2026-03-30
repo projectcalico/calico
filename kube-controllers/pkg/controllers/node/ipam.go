@@ -1170,8 +1170,6 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		// receiving the update from the syncer (which we will do eventually; this is just cleaner).
 		c.releaseAllocation(a)
 		c.incrementReclamationMetric(a.block, a.node())
-
-		delete(c.confirmedLeaks, id)
 	}
 	return nil
 }
