@@ -35819,8 +35819,6 @@ spec:
           type: object
       served: true
       storage: true
-      subresources:
-        status: {}
 ---
 # Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_clusterinformations.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -36153,16 +36151,14 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
-                bpfIPFragTimeout:
+                bpfIPFragmentReassemblyEnabled:
                   description: |-
-                    BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly.
-                    This is the maximum time that the BPF dataplane will wait for all fragments of a
-                    fragmented IP packet to arrive before discarding them.  If left unset, the value
-                    is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
-                    seconds).
-                    [Default: unset - read from net.ipv4.ipfrag_time]
-                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
-                  type: string
+                    BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
+                    reassembles out-of-order IP fragments from external networks. This program requires
+                    a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+                    Felix reports not-ready until the user sets this to false. When false, fragmented
+                    packets from external sources are dropped. [Default: true]
+                  type: boolean
                 bpfJITHardening:
                   allOf:
                     - enum:
@@ -38513,53 +38509,9 @@ spec:
                 - message: global() selector is not valid for IPPool namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
-            status:
-              properties:
-                conditions:
-                  items:
-                    properties:
-                      lastTransitionTime:
-                        format: date-time
-                        type: string
-                      message:
-                        maxLength: 32768
-                        type: string
-                      observedGeneration:
-                        format: int64
-                        minimum: 0
-                        type: integer
-                      reason:
-                        maxLength: 1024
-                        minLength: 1
-                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                        type: string
-                      status:
-                        enum:
-                          - "True"
-                          - "False"
-                          - Unknown
-                        type: string
-                      type:
-                        maxLength: 316
-                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                        type: string
-                    required:
-                      - lastTransitionTime
-                      - message
-                      - reason
-                      - status
-                      - type
-                    type: object
-                  type: array
-                  x-kubernetes-list-map-keys:
-                    - type
-                  x-kubernetes-list-type: map
-              type: object
           type: object
       served: true
       storage: true
-      subresources:
-        status: {}
 ---
 # Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_ipreservations.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -41454,48 +41406,6 @@ spec:
                 order:
                   type: number
               type: object
-            status:
-              properties:
-                conditions:
-                  items:
-                    properties:
-                      lastTransitionTime:
-                        format: date-time
-                        type: string
-                      message:
-                        maxLength: 32768
-                        type: string
-                      observedGeneration:
-                        format: int64
-                        minimum: 0
-                        type: integer
-                      reason:
-                        maxLength: 1024
-                        minLength: 1
-                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                        type: string
-                      status:
-                        enum:
-                          - "True"
-                          - "False"
-                          - Unknown
-                        type: string
-                      type:
-                        maxLength: 316
-                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                        type: string
-                    required:
-                      - lastTransitionTime
-                      - message
-                      - reason
-                      - status
-                      - type
-                    type: object
-                  type: array
-                  x-kubernetes-list-map-keys:
-                    - type
-                  x-kubernetes-list-type: map
-              type: object
           required:
             - metadata
             - spec
@@ -41515,8 +41425,6 @@ spec:
                 : true"
       served: true
       storage: true
-      subresources:
-        status: {}
 ---
 # Source: crd.projectcalico.org.v1/templates/calico/policy.networking.k8s.io_clusternetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1

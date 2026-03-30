@@ -894,9 +894,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfHostNetworkedNATWithoutCTLB
       type:
         scalar: string
-    - name: bpfIPFragTimeout
+    - name: bpfIPFragmentReassemblyEnabled
       type:
-        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+        scalar: boolean
     - name: bpfJITHardening
       type:
         scalar: string

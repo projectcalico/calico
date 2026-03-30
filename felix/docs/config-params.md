@@ -1932,22 +1932,22 @@ determines the CTLB behavior.
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
-### `BPFIPFragTimeout` (config file) / `bpfIPFragTimeout` (YAML)
+### `BPFIPFragmentReassemblyEnabled` (config file) / `bpfIPFragmentReassemblyEnabled` (YAML)
 
-In BPF mode, controls the timeout for IP fragment reassembly.
-This is the maximum time that the BPF dataplane will wait for all fragments of a
-fragmented IP packet to arrive before discarding them. If left unset, the value
-is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
-seconds).
+Controls whether Felix loads the BPF program that
+reassembles out-of-order IP fragments from external networks. This program requires
+a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+Felix reports not-ready until the user sets this to false. When false, fragmented
+packets from external sources are dropped.
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_BPFIPFragTimeout` |
-| Encoding (env var/config file) | Seconds (floating point) |
-| Default value (above encoding) | `0` (0s) |
-| `FelixConfiguration` field | `bpfIPFragTimeout` (YAML) `BPFIPFragTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
-| Default value (YAML) | `0s` |
+| Environment variable | `FELIX_BPFIPFragmentReassemblyEnabled` |
+| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `true` |
+| `FelixConfiguration` field | `bpfIPFragmentReassemblyEnabled` (YAML) `BPFIPFragmentReassemblyEnabled` (Go API) |
+| `FelixConfiguration` schema | Boolean. |
+| Default value (YAML) | `true` |
 
 ### `BPFJITHardening` (config file) / `bpfJITHardening` (YAML)
 
