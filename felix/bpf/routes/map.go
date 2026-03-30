@@ -97,8 +97,8 @@ const (
 )
 
 // FlagNames returns the human-readable names for the set bits in f.
-// The result mirrors the logic in Value.String() but returns a slice
-// instead of a single formatted string.
+// The result is similar to Value.String() but returns a slice instead
+// of a single formatted string, and additionally includes FlagVXLAN.
 func (f Flags) FlagNames() []string {
 	var names []string
 

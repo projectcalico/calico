@@ -62,6 +62,7 @@ func dumpIPSets() error {
 	if err := ipsetMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
 	}
+	defer ipsetMap.Close()
 
 	membersBySet := map[uint64][]string{}
 	err := ipsetMap.Iter(func(k, v []byte) maps.IteratorAction {

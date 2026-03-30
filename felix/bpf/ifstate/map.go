@@ -68,7 +68,11 @@ var flagsToStr = map[uint32]string{
 }
 
 // FlagNames returns the human-readable names for the set bits in flags.
+// When no flags are set, returns ["host"] to match Value.String() semantics.
 func FlagNames(flags uint32) []string {
+	if flags == 0 {
+		return []string{"host"}
+	}
 	var names []string
 	for k := FlgWEP; k <= FlgMax; k *= 2 {
 		if flags&k != 0 {

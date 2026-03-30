@@ -134,10 +134,9 @@ func dump(cmd *cobra.Command, args []string) error {
 		}
 
 		if *jsonOutput {
-			dumpNATJSON(cmd, filtered, back, natDumpGroupByService)
-		} else {
-			dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
+			return dumpNATJSON(cmd, filtered, back, natDumpGroupByService)
 		}
+		dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
 	} else {
 		natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
 		if err != nil {
@@ -162,10 +161,9 @@ func dump(cmd *cobra.Command, args []string) error {
 		}
 
 		if *jsonOutput {
-			dumpNATJSON(cmd, filtered, back, natDumpGroupByService)
-		} else {
-			dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
+			return dumpNATJSON(cmd, filtered, back, natDumpGroupByService)
 		}
+		dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
 	}
 	return nil
 }
@@ -374,12 +372,11 @@ func dumpNATJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
 	natMap map[FK]nat.FrontendValue,
 	back map[nat.BackendKey]BV,
 	groupByService bool,
-) {
+) error {
 	if groupByService {
-		dumpNATGroupedJSON(cmd, natMap, back)
-	} else {
-		dumpNATFlatJSON(cmd, natMap, back)
+		return dumpNATGroupedJSON(cmd, natMap, back)
 	}
+	return dumpNATFlatJSON(cmd, natMap, back)
 }
 
 func makeFrontendJSON[FK nat.FrontendKeyComparable](nk FK, nv nat.FrontendValue) natFrontendJSON {
@@ -423,7 +420,7 @@ func dumpNATFlatJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface]
 	cmd *cobra.Command,
 	natMap map[FK]nat.FrontendValue,
 	back map[nat.BackendKey]BV,
-) {
+) error {
 	var services []natServiceJSON
 	for nk, nv := range natMap {
 		fe := makeFrontendJSON(nk, nv)
@@ -439,16 +436,14 @@ func dumpNATFlatJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface]
 
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(services); err != nil {
-		log.WithError(err).Fatal("Failed to encode JSON")
-	}
+	return enc.Encode(services)
 }
 
 func dumpNATGroupedJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
 	cmd *cobra.Command,
 	natMap map[FK]nat.FrontendValue,
 	back map[nat.BackendKey]BV,
-) {
+) error {
 	byID := make(map[uint32][]FK)
 	for nk := range natMap {
 		id := natMap[nk].ID()
@@ -488,9 +483,7 @@ func dumpNATGroupedJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterfa
 
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(groups); err != nil {
-		log.WithError(err).Fatal("Failed to encode JSON")
-	}
+	return enc.Encode(groups)
 }
 
 type natFrontend struct {
