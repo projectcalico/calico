@@ -504,6 +504,9 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		if n, ok := c.nodesByBlock[blockCIDR]; ok {
 			delete(c.nodesByBlock, blockCIDR)
 			delete(c.blocksByNode[n], blockCIDR)
+			if len(c.blocksByNode[n]) == 0 {
+				delete(c.blocksByNode, n)
+			}
 		}
 	}
 
@@ -610,6 +613,9 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	if n := c.nodesByBlock[blockCIDR]; n != "" {
 		// The block was assigned to a node, make sure to update internal cache.
 		delete(c.blocksByNode[n], blockCIDR)
+		if len(c.blocksByNode[n]) == 0 {
+			delete(c.blocksByNode, n)
+		}
 	}
 	delete(c.allBlocks, blockCIDR)
 	delete(c.nodesByBlock, blockCIDR)
@@ -779,6 +785,9 @@ func (c *IPAMController) releaseUnusedBlocks() error {
 		// accidentally release all of the node's blocks.
 		delete(c.emptyBlocks, blockCIDR)
 		delete(c.blocksByNode[node], blockCIDR)
+		if len(c.blocksByNode[node]) == 0 {
+			delete(c.blocksByNode, node)
+		}
 		delete(c.nodesByBlock, blockCIDR)
 		delete(c.allBlocks, blockCIDR)
 
