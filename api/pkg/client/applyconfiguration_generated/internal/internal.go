@@ -894,6 +894,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfHostNetworkedNATWithoutCTLB
       type:
         scalar: string
+    - name: bpfIPFragmentReassemblyEnabled
+      type:
+        scalar: boolean
     - name: bpfJITHardening
       type:
         scalar: string
