@@ -61,8 +61,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/legacy"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
-	"github.com/projectcalico/calico/felix/bpf/maps"
-	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
+	bpfmapspkg "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -192,8 +191,8 @@ type hasLoadPolicyProgram interface {
 		progName string,
 		ipFamily proto.IPVersion,
 		rules polprog.Rules,
-		staticProgsMap maps.Map,
-		polProgsMap maps.Map,
+		staticProgsMap bpfmapspkg.Map,
+		polProgsMap bpfmapspkg.Map,
 		attachType uint32,
 		opts ...polprog.Option,
 	) ([]fileDescriptor, []asm.Insns, error)
@@ -337,8 +336,8 @@ type bpfEndpointManager struct {
 		progName string,
 		ipFamily proto.IPVersion,
 		rules polprog.Rules,
-		staticProgsMap maps.Map,
-		polProgsMap maps.Map,
+		staticProgsMap bpfmapspkg.Map,
+		polProgsMap bpfmapspkg.Map,
 		attachType uint32,
 		opts ...polprog.Option,
 	) ([]fileDescriptor, []asm.Insns, error)
@@ -405,7 +404,7 @@ type bpfEndpointManager struct {
 	healthAggregator     *health.HealthAggregator
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
-	QoSMap bpfmaps.MapWithUpdateWithFlags
+	QoSMap bpfmapspkg.MapWithUpdateWithFlags
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -491,8 +490,8 @@ func NewBPFEndpointManager(
 		psnatPorts:              config.BPFPSNATPorts,
 		commonMaps:              bpfmaps.CommonMaps,
 		ifStateMap: cachingmap.New[ifstate.Key, ifstate.Value](ifstate.MapParams.Name,
-			maps.NewTypedMap[ifstate.Key, ifstate.Value](
-				bpfmaps.CommonMaps.IfStateMap.(maps.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
+			bpfmapspkg.NewTypedMap[ifstate.Key, ifstate.Value](
+				bpfmaps.CommonMaps.IfStateMap.(bpfmapspkg.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
 			)),
 
 		// Note: the allocators only allocate a fraction of the map, the
@@ -646,8 +645,8 @@ func NewBPFEndpointManager(
 	}
 
 	if m.bpfPolicyDebugEnabled {
-		err := m.commonMaps.RuleCountersMap.Iter(func(k, v []byte) maps.IteratorAction {
-			return maps.IterDelete
+		err := m.commonMaps.RuleCountersMap.Iter(func(k, v []byte) bpfmapspkg.IteratorAction {
+			return bpfmapspkg.IterDelete
 		})
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to iterate over policy counters map")
@@ -721,7 +720,7 @@ func (m *bpfEndpointManager) repinJumpMaps() error {
 		return fmt.Errorf("cannot create temp dir in %s: %w", oldBase, err)
 	}
 
-	mps := []maps.Map{
+	mps := []bpfmapspkg.Map{
 		m.commonMaps.XDPProgramsMap,
 		m.commonMaps.XDPJumpMap,
 	}
@@ -1080,15 +1079,15 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 
 func (m *bpfEndpointManager) deleteIfaceCounters(name string, ifindex int) {
 	err := m.commonMaps.CountersMap.Delete(counters.NewKey(ifindex, hook.Ingress).AsBytes())
-	if err != nil && !maps.IsNotExists(err) {
+	if err != nil && !bpfmapspkg.IsNotExists(err) {
 		logrus.WithError(err).Warnf("Failed to remove  ingress counters for dev %s ifindex %d.", name, ifindex)
 	}
 	err = m.commonMaps.CountersMap.Delete(counters.NewKey(ifindex, hook.Egress).AsBytes())
-	if err != nil && !maps.IsNotExists(err) {
+	if err != nil && !bpfmapspkg.IsNotExists(err) {
 		logrus.WithError(err).Warnf("Failed to remove  egress counters for dev %s ifindex %d.", name, ifindex)
 	}
 	err = m.commonMaps.CountersMap.Delete(counters.NewKey(ifindex, hook.XDP).AsBytes())
-	if err != nil && !maps.IsNotExists(err) {
+	if err != nil && !bpfmapspkg.IsNotExists(err) {
 		logrus.WithError(err).Warnf("Failed to remove  XDP counters for dev %s ifindex %d.", name, ifindex)
 	}
 	logrus.Debugf("Deleted counters for dev %s ifindex %d.", name, ifindex)
@@ -1378,7 +1377,7 @@ func (m *bpfEndpointManager) removeDirtyPolicies() {
 		binary.LittleEndian.PutUint64(b, item)
 		logrus.WithField("ruleId", item).Debug("deleting entry")
 		err := m.commonMaps.RuleCountersMap.Delete(b)
-		if err != nil && !maps.IsNotExists(err) {
+		if err != nil && !bpfmapspkg.IsNotExists(err) {
 			logrus.WithField("ruleId", item).Info("error deleting entry")
 		}
 
@@ -1423,10 +1422,10 @@ func (m *bpfEndpointManager) markExistingWEPDirty(wlID types.WorkloadEndpointID,
 	}
 }
 
-func jumpMapDeleteSubProgs(m maps.Map, idx, stride int) error {
+func jumpMapDeleteSubProgs(m bpfmapspkg.Map, idx, stride int) error {
 	for subProg := 0; subProg < jump.MaxSubPrograms; subProg++ {
 		if err := m.Delete(jump.Key(polprog.SubProgramJumpIdx(idx, subProg, stride))); err != nil {
-			if maps.IsNotExists(err) {
+			if bpfmapspkg.IsNotExists(err) {
 				if subProg == 0 {
 					logrus.WithField("idx", idx).Debug(
 						"First policy program already gone from map.")
@@ -1607,15 +1606,15 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 		exists.Add(ifaces[i].Index)
 	}
 
-	err = m.commonMaps.CountersMap.Iter(func(k, v []byte) maps.IteratorAction {
+	err = m.commonMaps.CountersMap.Iter(func(k, v []byte) bpfmapspkg.IteratorAction {
 		var key counters.Key
 		copy(key[:], k)
 
 		if !exists.Contains(key.IfIndex()) {
-			return maps.IterDelete
+			return bpfmapspkg.IterDelete
 		}
 
-		return maps.IterNone
+		return bpfmapspkg.IterNone
 	})
 	if err != nil {
 		return fmt.Errorf("iterating over counters map failed")
@@ -1638,7 +1637,7 @@ func (m *bpfEndpointManager) loadDefaultPolicies(hk hook.Hook) error {
 		if strings.HasPrefix(mapName, ".rodata") {
 			continue
 		}
-		if size := maps.Size(mapName); size != 0 {
+		if size := bpfmapspkg.Size(mapName); size != 0 {
 			if err := m.SetSize(size); err != nil {
 				return fmt.Errorf("error resizing map %s: %w", mapName, err)
 			}
@@ -3866,10 +3865,10 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 		// Load default policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
-			err = maps.UpdateMapEntry(jmpMap.MapFD(),
+			err = bpfmapspkg.UpdateMapEntry(jmpMap.MapFD(),
 				jump.Key(policyIdx), jump.Value(m.policyTcAllowFDs[aptc.Hook].FD()))
 		case hook.DefPolicyDeny:
-			err = maps.UpdateMapEntry(jmpMap.MapFD(),
+			err = bpfmapspkg.UpdateMapEntry(jmpMap.MapFD(),
 				jump.Key(policyIdx), jump.Value(m.policyTcDenyFDs[aptc.Hook].FD()))
 		}
 
@@ -4097,8 +4096,8 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 	progName string,
 	ipFamily proto.IPVersion,
 	rules polprog.Rules,
-	staticProgsMap maps.Map,
-	polProgsMap maps.Map,
+	staticProgsMap bpfmapspkg.Map,
+	polProgsMap bpfmapspkg.Map,
 	attachType uint32,
 	opts ...polprog.Option,
 ) (
@@ -4318,7 +4317,7 @@ func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint, ipFamily proto.
 		return fmt.Errorf("invalid policy jump map idx %d", idx)
 	}
 
-	var pm maps.Map
+	var pm bpfmapspkg.Map
 	var stride int
 	if ap.HookName() == hook.XDP {
 		stride = jump.XDPMaxEntryPoints
@@ -4336,7 +4335,7 @@ func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint, ipFamily proto.
 	return nil
 }
 
-func FindJumpMap(progID int, ifaceName string) (mapFD maps.FD, err error) {
+func FindJumpMap(progID int, ifaceName string) (mapFD bpfmapspkg.FD, err error) {
 	logCtx := logrus.WithField("progID", progID).WithField("iface", ifaceName)
 	logCtx.Debugf("Looking up jump map")
 	bpftool := exec.Command("bpftool", "prog", "show", "id",
@@ -4358,11 +4357,11 @@ func FindJumpMap(progID int, ifaceName string) (mapFD maps.FD, err error) {
 	}
 
 	for _, mapID := range prog.MapIDs {
-		mapFD, err := maps.GetMapFDByID(mapID)
+		mapFD, err := bpfmapspkg.GetMapFDByID(mapID)
 		if err != nil {
 			return 0, fmt.Errorf("failed to get map FD from ID: %w", err)
 		}
-		mapInfo, err := maps.GetMapInfo(mapFD)
+		mapInfo, err := bpfmapspkg.GetMapInfo(mapFD)
 		if err != nil {
 			err = mapFD.Close()
 			if err != nil {

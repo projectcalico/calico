@@ -74,6 +74,13 @@ class DiagsCollector(object):
             kubectl("exec -n calico-system %s -- cat /etc/calico/confd/config/bird6_aggr.cfg" % calicoPod)
             kubectl("exec -n calico-system %s -- cat /etc/calico/confd/config/bird6_ipam.cfg" % calicoPod)
 
+def exec_in_calico_node(node, command):
+    calicoPod = kubectl("-n calico-system get pods -o wide | grep calico-node | grep '%s '| cut -d' ' -f1" % node)
+    if calicoPod is None:
+        raise Exception("No calico-node pod found on node %s" % node)
+    calicoPod = calicoPod.strip()
+    return kubectl("exec -n calico-system %s -- %s" % (calicoPod, command))
+
 def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=None):
     # Check how much disk space we have.
     run("df -h")
