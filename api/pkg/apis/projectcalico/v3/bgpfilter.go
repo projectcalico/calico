@@ -310,6 +310,16 @@ type BGPFilterOperation struct {
 
 	// SetPriority sets the route's priority (metric), in the same units as the
 	// ...RoutePriority fields in FelixConfiguration.
+	//
+	// On import rules, SetPriority controls the kernel routing table metric for the
+	// imported route, affecting local route selection on this node.
+	//
+	// On export rules, SetPriority only has an effect for iBGP peers: it modifies the
+	// BGP LOCAL_PREF attribute sent in the UPDATE message.  Calico on the receiving peer
+	// converts LOCAL_PREF back to a kernel routing table metric, so SetPriority in export
+	// rules influences route selection on the receiving node.  For eBGP peers, SetPriority
+	// in export rules has no effect because LOCAL_PREF is a non-transitive attribute that
+	// is not sent to external peers.
 	// +optional
 	SetPriority *BGPFilterSetPriority `json:"setPriority,omitempty" validate:"omitempty"`
 }
