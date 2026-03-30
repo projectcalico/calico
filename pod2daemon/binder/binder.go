@@ -15,7 +15,7 @@
 package binder
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log"
 	"net"
 	"os"

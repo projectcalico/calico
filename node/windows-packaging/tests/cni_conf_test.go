@@ -16,7 +16,7 @@ package main_test
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"os"
 
 	. "github.com/onsi/ginkgo/v2"
