@@ -1,5 +1,9 @@
 export default {
     variants: {
+        solid: {
+            backgroundColor: 'experimental-token-bg-neutral',
+            color: 'experimental-token-fg-default',
+        },
         rounded: {
             color: 'tigeraWhite',
             backgroundColor: 'tigeraBlueDark',

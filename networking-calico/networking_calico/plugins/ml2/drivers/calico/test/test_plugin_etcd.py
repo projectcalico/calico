@@ -1756,6 +1756,405 @@ class TestPluginEtcd(TestPluginEtcdBase):
         )
 
 
+class TestLiveMigration(TestPluginEtcdBase):
+    """Tests for OpenStack live migration handling."""
+
+    # Port data used by these tests.  Deep-copied from lib.port1 to
+    # avoid mutating the shared module-level dict.
+    SOURCE_HOST = "felix-host-1"
+    DEST_HOST = "dest-host"
+
+    def _do_initial_resync(self):
+        """Run initial resync to set up the driver state."""
+        self.port = copy.deepcopy(lib.port1)
+        self.osdb_networks = [lib.network1]
+        self.osdb_ports = [self.port]
+        with lib.FixedUUID("uuid-lm-test"):
+            self.give_way()
+            self.simulated_time_advance(31)
+        # Clear initial writes.
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+    def _ep_key(self, host):
+        """Build WEP etcd key for port1 on the given host."""
+
+        def escape_dashes(s):
+            return s.replace("-", "--")
+
+        return (
+            "/calico/resources/v3/projectcalico.org/workloadendpoints/"
+            + self.namespace
+            + "/"
+            + escape_dashes(host)
+            + "-openstack-"
+            + escape_dashes(lib.port1["device_id"])
+            + "-"
+            + escape_dashes(lib.port1["id"])
+        )
+
+    def _lm_key(self, host):
+        """Build LiveMigration etcd key for port1 migrating to host."""
+
+        def escape_dashes(s):
+            return s.replace("-", "--")
+
+        name = (
+            escape_dashes(host)
+            + "-openstack-"
+            + escape_dashes(lib.port1["device_id"])
+            + "-"
+            + escape_dashes(lib.port1["id"])
+        )
+        return (
+            "/calico/resources/v3/projectcalico.org/livemigrations/"
+            + self.namespace
+            + "/"
+            + name
+        )
+
+    def _ep_value(self, host):
+        """Build expected WEP value for port1 on the given host."""
+        return {
+            "apiVersion": "projectcalico.org/v3",
+            "kind": "WorkloadEndpoint",
+            "metadata": {
+                "annotations": {
+                    "openstack.projectcalico.org/network-id": "calico-network-id",
+                },
+                "name": self._ep_name(host),
+                "namespace": self.namespace,
+                "labels": {
+                    "sg.projectcalico.org/openstack-SGID-default": "My_default_SG",
+                    "sg-name.projectcalico.org/openstack-My_default_SG": "SGID-default",
+                    "projectcalico.org/namespace": self.namespace,
+                    "projectcalico.org/openstack-project-id": "jane3",
+                    "projectcalico.org/openstack-project-name": "pname_jane3",
+                    "projectcalico.org/openstack-project-parent-id": "gibson",
+                    "projectcalico.org/orchestrator": "openstack",
+                    "projectcalico.org/openstack-network-name": "calico-network-name",
+                },
+            },
+            "spec": {
+                "endpoint": lib.port1["id"],
+                "interfaceName": "tap" + lib.port1["id"][:11],
+                "ipNATs": [
+                    {
+                        "externalIP": "192.168.0.1",
+                        "internalIP": "10.65.0.2",
+                    }
+                ],
+                "ipNetworks": ["10.65.0.2/32", "23.23.23.2/32"],
+                "allowedIps": ["23.23.23.2/32"],
+                "ipv4Gateway": "10.65.0.1",
+                "mac": lib.port1["mac_address"],
+                "node": host,
+                "orchestrator": "openstack",
+                "workload": lib.port1["device_id"],
+            },
+        }
+
+    def _ep_name(self, host):
+        def escape_dashes(s):
+            return s.replace("-", "--")
+
+        return (
+            escape_dashes(host)
+            + "-openstack-"
+            + escape_dashes(lib.port1["device_id"])
+            + "-"
+            + escape_dashes(lib.port1["id"])
+        )
+
+    def _lm_value(self, source_host, dest_host):
+        """Build expected LiveMigration value."""
+        return {
+            "apiVersion": "projectcalico.org/v3",
+            "kind": "LiveMigration",
+            "metadata": {
+                "name": self._ep_name(dest_host),
+                "namespace": self.namespace,
+            },
+            "spec": {
+                "source": {
+                    "workloadEndpoint": {
+                        "hostname": source_host,
+                        "orchestratorID": "openstack",
+                        "workloadID": self.namespace + "/" + lib.port1["device_id"],
+                        "endpointID": lib.port1["id"],
+                    },
+                },
+                "target": {
+                    "workloadEndpoint": {
+                        "hostname": dest_host,
+                        "orchestratorID": "openstack",
+                        "workloadID": self.namespace + "/" + lib.port1["device_id"],
+                        "endpointID": lib.port1["id"],
+                    },
+                },
+            },
+        }
+
+    def _make_port_context(self):
+        """Create a context with DB query mocking wired up."""
+        context = self.make_context()
+        context._plugin_context.session.query.side_effect = self.db_query
+        return context
+
+    def _pre_migrate(self, dest_host=None):
+        """Simulate a pre-live-migration update.
+
+        Sets binding:profile.migrating_to on the port and calls
+        update_port_postcommit.
+        """
+        if dest_host is None:
+            dest_host = self.DEST_HOST
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:profile"] = {"migrating_to": dest_host}
+        # The DB port should also reflect the new binding:profile.
+        self.osdb_ports[0]["binding:profile"] = {"migrating_to": dest_host}
+        self.driver.update_port_postcommit(context)
+        return context
+
+    def test_pre_live_migration(self):
+        """Pre-live-migration creates destination WEP and LiveMigration."""
+        self._do_initial_resync()
+
+        self._pre_migrate()
+
+        # Destination WEP and LiveMigration should be written.
+        # Security group policy is also rewritten by write_endpoint.
+        expected_writes = {
+            self._ep_key(self.DEST_HOST): self._ep_value(self.DEST_HOST),
+            self._lm_key(self.DEST_HOST): self._lm_value(
+                self.SOURCE_HOST, self.DEST_HOST
+            ),
+            self.sg_default_key_v3: self.sg_default_value_v3,
+        }
+        self.assertEtcdWrites(expected_writes)
+        # Source WEP should NOT be deleted.
+        self.assertEtcdDeletes(set())
+
+    def test_live_migration_succeeded(self):
+        """After migration succeeds, source WEP deleted, dest WEP kept."""
+        self._do_initial_resync()
+
+        self._pre_migrate()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        # Now simulate migration complete: migrating_to removed, host changed.
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        # original retains migrating_to from pre-migration.
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:host_id"] = self.DEST_HOST
+        context._port.pop("binding:profile", None)
+        # DB state: port now on dest host, no migrating_to.
+        self.osdb_ports[0]["binding:host_id"] = self.DEST_HOST
+        self.osdb_ports[0].pop("binding:profile", None)
+
+        self.driver.update_port_postcommit(context)
+
+        # Source WEP deleted; LiveMigration deleted.
+        self.assertEtcdDeletes(
+            set(
+                [
+                    self._ep_key(self.SOURCE_HOST),
+                    self._lm_key(self.DEST_HOST),
+                ]
+            )
+        )
+        # The destination WEP may be rewritten (harmlessly) as the
+        # update falls through to normal port-bound processing.
+
+    def test_live_migration_failed(self):
+        """After migration fails, dest WEP deleted, source WEP unchanged."""
+        self._do_initial_resync()
+
+        self._pre_migrate()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        # Simulate migration failed: migrating_to removed, host unchanged.
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        # original retains migrating_to from pre-migration.
+        context._port = copy.deepcopy(self.port)
+        context._port.pop("binding:profile", None)
+        # host stays as source, no binding:profile.
+        self.osdb_ports[0].pop("binding:profile", None)
+
+        self.driver.update_port_postcommit(context)
+
+        # Destination WEP deleted; LiveMigration deleted.
+        self.assertEtcdDeletes(
+            set(
+                [
+                    self._ep_key(self.DEST_HOST),
+                    self._lm_key(self.DEST_HOST),
+                ]
+            )
+        )
+        # The source WEP may be rewritten (harmlessly) as the
+        # update falls through to normal port-bound processing.
+
+    def test_port_delete_during_migration(self):
+        """Deleting port during migration cleans up both WEPs and LM."""
+        self._do_initial_resync()
+
+        self._pre_migrate()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        # Delete port while migration is in progress.
+        context = self.make_context()
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:profile"] = {
+            "migrating_to": self.DEST_HOST,
+        }
+        context._plugin_context.session.query.side_effect = self.db_query
+
+        self.driver.delete_port_postcommit(context)
+
+        # Both source and destination WEPs deleted, plus LiveMigration.
+        self.assertEtcdDeletes(
+            set(
+                [
+                    self._ep_key(self.SOURCE_HOST),
+                    self._ep_key(self.DEST_HOST),
+                    self._lm_key(self.DEST_HOST),
+                ]
+            )
+        )
+        self.assertEtcdWrites({})
+
+    def _call_try_to_update_port_status(self, hostname, port_id):
+        """Helper: call _try_to_update_port_status with proper mock setup.
+
+        Follows the same pattern as TestStatusWatcherBase tests.
+        """
+        self.driver._get_db()
+        self.db.update_port_status = mock.Mock()
+        context = mock.Mock()
+        self.driver._port_status_cache[(hostname, port_id)] = (
+            datamodel_v1.ENDPOINT_STATUS_UP
+        )
+        with mock.patch("eventlet.spawn_after", autospec=True):
+            self.driver._try_to_update_port_status(context, (hostname, port_id))
+
+    def test_vif_plug_notification(self):
+        """Felix status 'up' on migration dest triggers Nova notification."""
+        self._do_initial_resync()
+
+        self._pre_migrate()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        port_id = self.port["id"]
+        mock_db_port = mock.Mock()
+        mock_db_port.id = port_id
+        with mock.patch(
+            "networking_calico.plugins.ml2.drivers.calico.mech_calico.ml2_db"
+        ) as mock_ml2_db:
+            mock_ml2_db.get_port.return_value = mock_db_port
+            self._call_try_to_update_port_status(self.DEST_HOST, port_id)
+
+        # Verify that notify_port_active_direct was called with the
+        # db model port returned by ml2_db.get_port().
+        self.db.nova_notifier.notify_port_active_direct.assert_called_once_with(
+            mock_db_port
+        )
+
+    def test_vif_plug_no_notification_for_non_migration(self):
+        """Felix 'up' on source host does NOT trigger Nova notification."""
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        port_id = self.port["id"]
+        self._call_try_to_update_port_status(self.SOURCE_HOST, port_id)
+
+        # Should NOT have called notify_port_active_direct.
+        self.db.nova_notifier.notify_port_active_direct.assert_not_called()
+
+    def _trigger_resync(self):
+        """Trigger a periodic resync by advancing simulated time.
+
+        The resync thread sleeps for RESYNC_INTERVAL_SECS (default 60s)
+        between resyncs.  We advance by 61s to ensure the next resync
+        fires, and give_way to let eventlet threads run.
+        """
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        with lib.FixedUUID("uuid-resync"):
+            self.simulated_time_advance(61)
+            self.give_way()
+
+    def test_resync_creates_missing_live_migration(self):
+        """Resync creates LiveMigration and dest WEP for migrating port."""
+        self._do_initial_resync()
+
+        # Set up the port as mid-migration in the Neutron DB (migrating_to
+        # set), but with no LiveMigration or dest WEP in etcd.
+        self.osdb_ports[0]["binding:profile"] = {
+            "migrating_to": self.DEST_HOST,
+        }
+
+        self._trigger_resync()
+
+        # The resync should have created the LiveMigration and dest WEP.
+        self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
+        self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
+
+    def test_resync_deletes_stale_live_migration(self):
+        """Resync deletes orphaned LiveMigration with no migrating port."""
+        self._do_initial_resync()
+
+        # Inject a stale LiveMigration into etcd as if a migration was in
+        # progress but has since been cleaned up in Neutron (no migrating_to).
+        stale_lm_key = (
+            "/calico/resources/v3/projectcalico.org/livemigrations/"
+            + self.namespace
+            + "/stale--lm--name"
+        )
+        self.etcd_data[stale_lm_key] = json.dumps(
+            {
+                "apiVersion": "projectcalico.org/v3",
+                "kind": "LiveMigration",
+                "metadata": {
+                    "name": "stale--lm--name",
+                    "namespace": self.namespace,
+                },
+                "spec": {
+                    "source": {
+                        "workloadEndpoint": {
+                            "hostname": "old-host",
+                            "orchestratorID": "openstack",
+                            "workloadID": self.namespace + "/old-vm",
+                            "endpointID": "old-port-id",
+                        }
+                    },
+                    "target": {
+                        "workloadEndpoint": {
+                            "hostname": "new-host",
+                            "orchestratorID": "openstack",
+                            "workloadID": self.namespace + "/old-vm",
+                            "endpointID": "old-port-id",
+                        }
+                    },
+                },
+            }
+        )
+
+        self._trigger_resync()
+
+        # The stale LiveMigration should have been deleted.
+        self.assertIn(stale_lm_key, self.recent_deletes)
+
+
 class TestPluginEtcdRegion(TestPluginEtcdBase):
 
     def setUp_region(self):

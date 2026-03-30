@@ -1071,3 +1071,27 @@ func (p *StringSliceParam) SchemaDescription() string {
 	}
 	return fmt.Sprintf("Comma-delimited list of strings, each matching the regex `%s`", p.ValidationRegex.String())
 }
+
+type DSCPParam struct {
+	Metadata
+}
+
+func (p *DSCPParam) Parse(raw string) (result interface{}, err error) {
+	log.WithField("DSCPParam raw", raw).Info("DSCPParam")
+	var intVal uint64
+	intVal, err = strconv.ParseUint(raw, 10, 6)
+	if err == nil {
+		// No need to validate because we used bitsize 6 before
+		result = numorstring.DSCPFromInt(uint8(intVal))
+		return
+	}
+
+	// try string
+	dscp := numorstring.DSCPFromString(raw)
+	err = dscp.Validate()
+	return dscp, err
+}
+
+func (p *DSCPParam) SchemaDescription() string {
+	return `Numeric value: An integer from 0 to 63, representing the 6-bit DSCP code directly; Named value: A case-insensitive string corresponding to a standardized DSCP name (e.g., "CS0", "AF11", "AF21", "EF", etc.) as defined in the IANA registry for Differentiated Services Field Codepoints.`
+}

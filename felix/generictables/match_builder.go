@@ -76,6 +76,10 @@ type MatchCriteria interface {
 	// Only supported in nftables.
 	InInterfaceVMAP(mapname string) MatchCriteria
 	OutInterfaceVMAP(mapname string) MatchCriteria
+
+	// ARP family matches (only supported in nftables ARP table).
+	ARPOperation(op string) MatchCriteria
+	ARPSrcIP(ip string) MatchCriteria
 }
 
 type AddrType string

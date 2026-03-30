@@ -30,7 +30,7 @@ const (
 // KubeControllersConfigurationList contains a list of KubeControllersConfiguration object.
 type KubeControllersConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []KubeControllersConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -65,7 +65,7 @@ type KubeControllersConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
 	// Valid values are: "None", "Debug", "Info", "Warning", "Error", "Fatal", "Panic".
 	// +kubebuilder:validation:Enum=None;Debug;Info;Warning;Error;Fatal;Panic
-	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
+	LogSeverityScreen string `json:"logSeverityScreen,omitempty"`
 
 	// HealthChecks enables or disables support for health checks [Default: Enabled]
 	// Valid values are: "Enabled", "Disabled".
@@ -115,14 +115,14 @@ type ControllersConfig struct {
 	LoadBalancer *LoadBalancerControllerConfig `json:"loadBalancer,omitempty"`
 
 	// Migration enables and configures migration controllers.
-	Migration *MigrationControllerConfig `json:"policyMigration,omitempty"`
+	Migration *MigrationControllerConfig `json:"migration,omitempty"`
 }
 
 type MigrationControllerConfig struct {
 	// PolicyNameMigrator enables or disables the Policy Name Migrator, which migrates
 	// old-style Calico backend policy names to use v3 style names.
 	// +kubebuilder:default=Enabled
-	PolicyNameMigrator ControllerMode `json:"enabled,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
+	PolicyNameMigrator ControllerMode `json:"policyNameMigrator,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 }
 
 // NodeControllerConfig configures the node controller, which automatically cleans up configuration
@@ -154,6 +154,7 @@ type AutoHostEndpointConfig struct {
 	CreateDefaultHostEndpoint DefaultHostEndpointMode `json:"createDefaultHostEndpoint,omitempty" validate:"omitempty,createDefaultHostEndpoint"`
 
 	// Templates contains definition for creating AutoHostEndpoints
+	// +listType=atomic
 	Templates []Template `json:"templates,omitempty" validate:"omitempty"`
 }
 
@@ -219,7 +220,7 @@ type NamespaceControllerConfig struct {
 type LoadBalancerControllerConfig struct {
 	// AssignIPs controls which LoadBalancer Service gets IP assigned from Calico IPAM.
 	// +kubebuilder:default=AllServices
-	AssignIPs AssignIPs `json:"assignIPs,omitempty" validate:"omitempty,assignIPs"`
+	AssignIPs AssignIPs `json:"assignIPs,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=AllServices;RequestedServicesOnly

@@ -46,14 +46,15 @@ const JsonPrettier: React.FC<JsonPrettierProps> = ({
         ...style,
     };
 
+    const shouldExpandNode = React.useMemo(
+        () => (defaultExpandedNodes ? (node: any) => node <= 2 : allExpanded),
+        [],
+    );
+
     return (
         <JsonView
             data={data}
-            shouldExpandNode={
-                defaultExpandedNodes
-                    ? (node) => node <= defaultExpandedNodes
-                    : allExpanded
-            }
+            shouldExpandNode={shouldExpandNode}
             style={styles}
         />
     );

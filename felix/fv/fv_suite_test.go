@@ -84,10 +84,6 @@ func TestFv(t *testing.T) {
 	RunSpecs(t, "FV: Felix "+descSuffix, suiteConfig, reporterConfig)
 }
 
-var _ = BeforeEach(func() {
-	_, _ = fmt.Fprintf(realStdout, "\nFV-TEST-START: %s", CurrentSpecReport().FullText())
-})
-
 var _ = JustAfterEach(func() {
 	if CurrentSpecReport().Failed() {
 		_, _ = fmt.Fprintf(realStdout, "\n")
@@ -151,9 +147,13 @@ func configureManualSharding() error {
 		assignedBatch := (hash % uint32(totalBatches)) + 1
 		if int(assignedBatch) != currentBatch {
 			Skip(fmt.Sprintf("️[SHARD-SKIP] Test assigned to batch %d (Current: %d)", assignedBatch, currentBatch))
-		} else {
-			fmt.Printf("️[SHARD-RUN] Batch %d executing: %s\n", currentBatch, specReport.LeafNodeText)
 		}
+	})
+
+	// Register the FV-TEST-START log _after_ the shard-skip BeforeEach
+	// so it only fires for tests this batch actually runs.
+	BeforeEach(func() {
+		_, _ = fmt.Fprintf(realStdout, "\nFV-TEST-START: %s", CurrentSpecReport().FullText())
 	})
 
 	return nil

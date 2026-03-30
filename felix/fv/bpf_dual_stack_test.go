@@ -48,6 +48,7 @@ var (
 	_ = describeBPFDualStackTests(false, false)
 
 	_ = describeBPFDualStackProxyHealthTests()
+	_ = describeBPFProxyHealthDisabledTests()
 )
 
 func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
@@ -552,6 +553,56 @@ func describeBPFDualStackProxyHealthTests() bool {
 			w0.Stop()
 			err = k8sClient.CoreV1().Services("default").Delete(context.Background(), "test-np-health", metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+}
+
+func describeBPFProxyHealthDisabledTests() bool {
+	if !BPFMode() {
+		return true
+	}
+	desc := "_BPF_ _BPF-SAFE_ BPF kube-proxy health check disabled when port is 0"
+	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+		var (
+			infra infrastructure.DatastoreInfra
+			tc    infrastructure.TopologyContainers
+		)
+
+		BeforeEach(func() {
+			iOpts := []infrastructure.CreateOption{
+				infrastructure.K8sWithDualStack(),
+				infrastructure.K8sWithAPIServerBindAddress("::"),
+				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16"),
+			}
+			infra = getInfra(iOpts...)
+			opts := infrastructure.DefaultTopologyOptions()
+			opts.EnableIPv6 = true
+			opts.IPIPMode = api.IPIPModeNever
+			opts.NATOutgoingEnabled = true
+			opts.BPFProxyHealthzPort = 0
+
+			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+		})
+
+		AfterEach(func() {
+			tc.Stop()
+			infra.Stop()
+		})
+
+		It("should not listen on the kube-proxy health check port", func() {
+			felix := tc.Felixes[0]
+
+			// Felix should be running and healthy on its own health port.
+			Eventually(func() int {
+				return healthStatus(felix.IP, "9099", "readiness")
+			}, "10s", "330ms").Should(BeGood())
+
+			// Verify no socket is listening on port 10256 inside the Felix container.
+			Consistently(func() string {
+				out, err := felix.ExecOutput("ss", "-tln", "sport", "=", "10256")
+				Expect(err).NotTo(HaveOccurred())
+				return out
+			}, "5s", "500ms").ShouldNot(ContainSubstring("LISTEN"))
 		})
 	})
 }

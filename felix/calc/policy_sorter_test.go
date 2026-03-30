@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -167,6 +167,120 @@ func TestPolicySorter_UpdatePolicy(t *testing.T) {
 	dirty = poc.UpdatePolicy(polKey, nil)
 	if dirty {
 		t.Error("Deleting nonexistent policy - expected dirty to be false but it was true")
+	}
+}
+
+func TestPolicySorter_UpdatePolicy_TierChange(t *testing.T) {
+	poc := NewPolicySorter()
+
+	polKey := model.PolicyKey{
+		Name: "test-policy",
+		Kind: v3.KindGlobalNetworkPolicy,
+	}
+
+	// Add a policy to tier-1.
+	pol := policyMetadata{Tier: "tier-1"}
+	dirty := poc.UpdatePolicy(polKey, &pol)
+	if !dirty {
+		t.Error("Adding new policy - expected dirty to be true")
+	}
+	if _, ti := poc.tierForPolicy(polKey, &pol); ti == nil {
+		t.Fatal("Expected policy to be in tier-1 but tier not found")
+	} else if ti.Name != "tier-1" {
+		t.Errorf("Expected tier name tier-1, got %s", ti.Name)
+	}
+
+	// Move the policy to tier-2 via update.
+	polNewTier := policyMetadata{Tier: "tier-2"}
+	dirty = poc.UpdatePolicy(polKey, &polNewTier)
+	if !dirty {
+		t.Error("Changing policy tier - expected dirty to be true")
+	}
+
+	// Verify the policy is in tier-2.
+	if _, ti := poc.tierForPolicy(polKey, &polNewTier); ti == nil {
+		t.Fatal("Expected policy to be in tier-2 but tier not found")
+	} else if ti.Name != "tier-2" {
+		t.Errorf("Expected tier name tier-2, got %s", ti.Name)
+	}
+
+	// Verify the policy is NOT in tier-1 anymore.
+	if _, found := poc.tiers["tier-1"]; found {
+		// tier-1 should have been cleaned up since it had no valid Tier resource and no policies.
+		if _, polFound := poc.tiers["tier-1"].Policies[polKey]; polFound {
+			t.Error("Policy should have been removed from tier-1 but is still present")
+		}
+	}
+
+	// Move back to tier-1, verify it works.
+	dirty = poc.UpdatePolicy(polKey, &pol)
+	if !dirty {
+		t.Error("Changing policy tier back - expected dirty to be true")
+	}
+	if _, ti := poc.tierForPolicy(polKey, &pol); ti == nil || ti.Name != "tier-1" {
+		t.Error("Expected policy to be back in tier-1")
+	}
+}
+
+func TestPolicySorter_OnUpdate_TierChange(t *testing.T) {
+	poc := NewPolicySorter()
+
+	// Add tier resources so they're valid.
+	poc.OnUpdate(api.Update{
+		KVPair: model.KVPair{Key: model.TierKey{Name: "tier-a"}, Value: &model.Tier{}},
+	})
+	poc.OnUpdate(api.Update{
+		KVPair: model.KVPair{Key: model.TierKey{Name: "tier-b"}, Value: &model.Tier{}},
+	})
+
+	polKey := model.PolicyKey{Name: "my-policy", Kind: v3.KindGlobalNetworkPolicy}
+
+	// Add policy in tier-a.
+	poc.OnUpdate(api.Update{
+		KVPair: model.KVPair{Key: polKey, Value: &model.Policy{Tier: "tier-a"}},
+	})
+	if _, found := poc.tiers["tier-a"].Policies[polKey]; !found {
+		t.Fatal("Expected policy in tier-a")
+	}
+
+	// Move policy to tier-b via an update (same key, different tier value).
+	dirty := poc.OnUpdate(api.Update{
+		KVPair: model.KVPair{Key: polKey, Value: &model.Policy{Tier: "tier-b"}},
+	})
+	if !dirty {
+		t.Error("Changing policy tier via OnUpdate - expected dirty")
+	}
+
+	// Policy should be in tier-b, not tier-a.
+	if _, found := poc.tiers["tier-a"].Policies[polKey]; found {
+		t.Error("Policy should have been removed from tier-a")
+	}
+	if _, found := poc.tiers["tier-b"].Policies[polKey]; !found {
+		t.Error("Policy should be in tier-b")
+	}
+
+	// Sorted output should include tier-b with the policy, but tier-a should still be valid
+	// (it has a Tier resource) even though it has no policies.
+	sorted := poc.Sorted()
+	if len(sorted) != 2 {
+		t.Fatalf("Expected 2 tiers in sorted output, got %d", len(sorted))
+	}
+	foundInTierB := false
+	for _, ti := range sorted {
+		if ti.Name == "tier-b" {
+			if _, found := ti.Policies[polKey]; !found {
+				t.Error("Expected policy in tier-b in sorted output")
+			}
+			foundInTierB = true
+		}
+		if ti.Name == "tier-a" {
+			if len(ti.Policies) != 0 {
+				t.Error("Expected tier-a to have no policies in sorted output")
+			}
+		}
+	}
+	if !foundInTierB {
+		t.Error("tier-b not found in sorted output")
 	}
 }
 

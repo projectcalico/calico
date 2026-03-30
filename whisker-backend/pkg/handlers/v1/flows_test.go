@@ -232,9 +232,9 @@ func TestWatchFlowsParameterConversion(t *testing.T) {
 					Reporter:         proto.Reporter_Src,
 					Policies: []*proto.PolicyMatch{{
 						Kind:      proto.PolicyKind_CalicoNetworkPolicy,
-						Tier:      "default-tier",
-						Name:      "name",
-						Namespace: "namespace",
+						Tier:      &proto.StringMatch{Value: "default-tier"},
+						Name:      &proto.StringMatch{Value: "name"},
+						Namespace: &proto.StringMatch{Value: "namespace"},
 						Action:    proto.Action_Deny,
 					}},
 				},
@@ -312,9 +312,9 @@ func TestListFlowsParameterConversion(t *testing.T) {
 				Filter: &proto.Filter{
 					Policies: []*proto.PolicyMatch{{
 						Kind:      proto.PolicyKind_CalicoNetworkPolicy,
-						Tier:      "default-tier",
-						Name:      "name",
-						Namespace: "namespace",
+						Tier:      &proto.StringMatch{Value: "default-tier"},
+						Name:      &proto.StringMatch{Value: "name"},
+						Namespace: &proto.StringMatch{Value: "namespace"},
 					}},
 					SourceNamespaces: []*proto.StringMatch{{Value: "src-ns"}},
 					SourceNames:      []*proto.StringMatch{{Value: "src-name"}},

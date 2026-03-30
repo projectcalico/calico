@@ -113,9 +113,8 @@ static CALI_BPF_INLINE bool qos_dscp_needs_update(struct cali_tc_ctx *ctx)
 	return ((ctx->state->flags & CALI_ST_SET_DSCP) && EGRESS_DSCP >= 0);
 }
 
-static CALI_BPF_INLINE bool qos_dscp_set(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE bool qos_dscp_set(struct cali_tc_ctx *ctx, __s8 dscp)
 {
-	__s8 dscp = EGRESS_DSCP;
 	CALI_DEBUG("setting dscp to %d", dscp);
 
 #ifdef IPVER6

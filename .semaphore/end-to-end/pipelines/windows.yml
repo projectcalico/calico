@@ -35,19 +35,20 @@ global_job_config:
       value: "operator"
     - name: RUN_LOCAL_TESTS # run e2e tests from locally built binary
       value: "true"
+    - name: E2E_PROCS
+      value: "1"
 
 # Dimensions
 # Provisioners: azr-aso, azr-aks
 # Installer: operator
 # Windows OS: Windows Server 2022
 # k8s Versions: stable-1, stable
-# linux dataplane: bpf, iptables, nftables
+# linux dataplane: iptables, nftables
 # encapsulation: vxlan, no-encap
 # CNI: Calico, Azure CNI
 
 # Runs:
-# azr-aso, 2022, stable, bpf, vxlan
-# azr-aso, 2022, stable-1, nftables, vxlan
+# azr-aso, 2022, stable, nftables, vxlan
 # azr-aks, 2022, stable-1, iptables, no-encap, azure CNI
 
 blocks:
@@ -55,7 +56,7 @@ blocks:
     dependencies: []
     task:
       jobs:
-        - name: "azr-aso, 2022, stable, bpf, vxlan"
+        - name: "azr-aso, 2022, stable, nftables, vxlan"
           execution_time_limit:
             hours: 5
           commands:
@@ -64,24 +65,7 @@ blocks:
             - name: PROVISIONER
               value: azr-aso
             - name: K8S_VERSION
-              value: stable-1
-            - name: DATAPLANE
-              value: CalicoBPF
-            - name: ENCAPSULATION_TYPE
-              value: VXLAN
-            - name: WINDOWS_OS
-              value: "2022"
-
-        - name: "azr-aso, 2022, stable-1, nftables, vxlan"
-          execution_time_limit:
-            hours: 5
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          env_vars:
-            - name: PROVISIONER
-              value: azr-aso
-            - name: K8S_VERSION
-              value: stable-1
+              value: stable
             - name: DATAPLANE
               value: CalicoNftables
             - name: ENCAPSULATION_TYPE

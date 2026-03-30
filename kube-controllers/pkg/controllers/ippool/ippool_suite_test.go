@@ -32,6 +32,5 @@ func init() {
 func Test(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/ippool_controller_suite.xml"
 	ginkgo.RunSpecs(t, "IPPool controller suite", suiteConfig, reporterConfig)
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -314,6 +314,58 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 		Expect(rid).To(BeNil(), pc.Dump())
 		rid = pc.GetRuleIDFromNFLOGPrefix(prefix_nomatch_t1_e)
 		Expect(rid).To(BeNil(), pc.Dump())
+	})
+
+	It("should handle a policy changing tiers", func() {
+		// Use a fresh cache to avoid interference from other tests.
+		tc := NewPolicyLookupsCache()
+
+		By("Creating policy GNP1 in tier-1 with 1 ingress and 1 egress rule")
+		tc.OnPolicyActive(gnp1_t1_1i1e_key, gnp1_t1_1i1e)
+
+		By("Checking the tier-1 rules and end-of-tier drops are cached")
+		rid := tc.GetRuleIDFromNFLOGPrefix(prefix_gnp1_t1_i0A)
+		Expect(rid).NotTo(BeNil(), tc.Dump())
+		Expect(*rid).To(Equal(*ruleID_gnp1_t1_i0A))
+		rid = tc.GetRuleIDFromNFLOGPrefix(prefix_nomatch_t1_i)
+		Expect(rid).NotTo(BeNil(), tc.Dump())
+
+		By("Moving policy GNP1 to tier-2 via update")
+		gnp1InTier2 := &model.Policy{
+			Tier: "tier-2",
+			InboundRules: []model.Rule{
+				{Action: "allow"},
+			},
+			OutboundRules: []model.Rule{
+				{Action: "deny"},
+			},
+		}
+		tc.OnPolicyActive(gnp1_t1_1i1e_key, gnp1InTier2)
+
+		By("Checking the old tier-1 end-of-tier drops are removed (no more policies in tier-1)")
+		rid = tc.GetRuleIDFromNFLOGPrefix(prefix_nomatch_t1_i)
+		Expect(rid).To(BeNil(), tc.Dump())
+		rid = tc.GetRuleIDFromNFLOGPrefix(prefix_nomatch_t1_e)
+		Expect(rid).To(BeNil(), tc.Dump())
+
+		By("Checking the new tier-2 end-of-tier drops are present")
+		prefix_nomatch_t2_i := toprefix("DPI|tier-2")
+		ruleID_nomatch_t2_i := NewRuleID("", "tier-2", "", "", 0, rules.RuleDirIngress, rules.RuleActionDeny)
+		rid = tc.GetRuleIDFromNFLOGPrefix(prefix_nomatch_t2_i)
+		Expect(rid).NotTo(BeNil(), tc.Dump())
+		Expect(*rid).To(Equal(*ruleID_nomatch_t2_i))
+
+		By("Checking the policy rules are cached with tier-2 NFLOG prefixes")
+		prefix_gnp1_t2_i0A := toprefix("API0|gnp/policy-1.2.3")
+		ruleID_gnp1_t2_i0A := NewRuleID(v3.KindGlobalNetworkPolicy, "tier-2", "policy-1.2.3", "", 0, rules.RuleDirIngress, rules.RuleActionAllow)
+		rid = tc.GetRuleIDFromNFLOGPrefix(prefix_gnp1_t2_i0A)
+		Expect(rid).NotTo(BeNil(), tc.Dump())
+		Expect(*rid).To(Equal(*ruleID_gnp1_t2_i0A))
+
+		By("Removing the policy and verifying tier-2 drops are cleaned up")
+		tc.OnPolicyInactive(gnp1_t1_1i1e_key)
+		rid = tc.GetRuleIDFromNFLOGPrefix(prefix_nomatch_t2_i)
+		Expect(rid).To(BeNil(), tc.Dump())
 	})
 
 	It("should handle a policy being updated", func() {

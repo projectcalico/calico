@@ -32,6 +32,5 @@ func init() {
 func Test(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/namespace_controller_suite.xml"
 	ginkgo.RunSpecs(t, "Namespace controller suite", suiteConfig, reporterConfig)
 }

@@ -364,8 +364,8 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 			// BPF
 			out0 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "ingress")
 			out1 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "egress")
-			return strings.Contains(out0, "End of tier tier1: deny") &&
-				strings.Contains(out1, "End of tier tier1: deny")
+			return strings.Contains(out0, "End Tier: tier1  (action: deny)") &&
+				strings.Contains(out1, "End Tier: tier1  (action: deny)")
 		}
 		if BPFMode() {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)

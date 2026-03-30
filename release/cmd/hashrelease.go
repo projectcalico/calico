@@ -117,13 +117,14 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithOperatorDirectory(operatorDir),
 					operator.WithReleaseBranchPrefix(c.String(operatorReleaseBranchPrefixFlag.Name)),
 					operator.IsHashRelease(),
-					operator.WithImage(c.String(operatorImageFlag.Name)),
+					operator.WithImage(pinned.OperatorCfg.Image),
+					operator.WithRegistry(pinned.OperatorCfg.Registry),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 					operator.WithVersion(data.OperatorVersion()),
 					operator.WithCalicoDirectory(cfg.RepoRootDir),
-					operator.WithTempDirectory(cfg.TmpDir),
+					operator.WithCalicoVersion(data.ProductVersion()),
 				}
 				if reg := c.String(operatorRegistryFlag.Name); reg != "" {
 					operatorOpts = append(operatorOpts, operator.WithRegistry(reg))
@@ -229,9 +230,12 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				o := operator.NewManager(
 					operator.WithOperatorDirectory(filepath.Join(cfg.TmpDir, operator.DefaultRepoName)),
 					operator.IsHashRelease(),
+					operator.WithImage(hashrel.Operator.Image),
+					operator.WithRegistry(hashrel.Operator.Registry),
+					operator.WithVersion(hashrel.Operator.Version),
+					operator.WithCalicoVersion(hashrel.ProductVersion),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					operator.WithTempDirectory(cfg.TmpDir),
 				)
 				if !c.Bool(skipOperatorFlag.Name) {
 					if err := o.Publish(); err != nil {
@@ -243,7 +247,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.IsHashRelease(),
 					calico.WithVersion(hashrel.ProductVersion),
-					calico.WithOperatorVersion(hashrel.OperatorVersion),
+					calico.WithOperatorVersion(hashrel.Operator.Version),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),

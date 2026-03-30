@@ -286,7 +286,7 @@ func StartNNodeTopology(
 		typhaIP = tc.Typha.IP
 	}
 
-	opts.ExtraEnvVars["FELIX_BPFKUBEPROXYHEALTZPORT"] = fmt.Sprintf("%d", opts.BPFProxyHealthzPort)
+	opts.ExtraEnvVars["FELIX_BPFKUBEPROXYHEALTHZPORT"] = fmt.Sprintf("%d", opts.BPFProxyHealthzPort)
 
 	tc.Felixes = make([]*Felix, n)
 	var wg sync.WaitGroup

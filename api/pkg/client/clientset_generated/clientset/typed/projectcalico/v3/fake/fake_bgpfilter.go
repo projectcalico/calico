@@ -6,19 +6,20 @@ package fake
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
+	typedprojectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeBGPFilters implements BGPFilterInterface
 type fakeBGPFilters struct {
-	*gentype.FakeClientWithList[*v3.BGPFilter, *v3.BGPFilterList]
+	*gentype.FakeClientWithListAndApply[*v3.BGPFilter, *v3.BGPFilterList, *projectcalicov3.BGPFilterApplyConfiguration]
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeBGPFilters(fake *FakeProjectcalicoV3) projectcalicov3.BGPFilterInterface {
+func newFakeBGPFilters(fake *FakeProjectcalicoV3) typedprojectcalicov3.BGPFilterInterface {
 	return &fakeBGPFilters{
-		gentype.NewFakeClientWithList[*v3.BGPFilter, *v3.BGPFilterList](
+		gentype.NewFakeClientWithListAndApply[*v3.BGPFilter, *v3.BGPFilterList, *projectcalicov3.BGPFilterApplyConfiguration](
 			fake.Fake,
 			"",
 			v3.SchemeGroupVersion.WithResource("bgpfilters"),

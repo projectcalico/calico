@@ -219,6 +219,10 @@ promotions:
     pipeline_file: push-images/e2e-test.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
+  - name: Push istio images
+    pipeline_file: push-images/istio.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
 blocks:
   - name: Check images availability
     run:
@@ -309,9 +313,10 @@ blocks:
       jobs:
         - name: Check language/Dockerfiles
           commands:
-            # Both of these are very quick grep checks so we combine them into one job.
+            # These are very quick grep checks so we combine them into one job.
             - make check-language
             - make check-dockerfiles
+            - make check-mockery-config
   - name: Check protobufs
     run:
       when: >-
@@ -379,20 +384,24 @@ blocks:
   - name: API
     run:
       when: >-
-        false or change_in(['/metadata.mk', '/lib.Makefile', '/api/'],
+        false or change_in(['/metadata.mk', '/lib.Makefile', '/api/', '/test/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
       - Prerequisites
     task:
-      prologue:
-        commands:
-          - cd api
       jobs:
         - name: "API: CI"
           commands:
-            - ../.semaphore/run-and-monitor make-ci.log make ci
+            - cd api && ../.semaphore/run-and-monitor make-ci.log make ci
+        - name: "API: Validation"
+          commands:
+            - cd test && ../.semaphore/run-and-monitor make-validation.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: API Server
     run:
       when: >-
@@ -403,6 +412,8 @@ blocks:
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-apiserver.yml',
         '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/client/applyconfiguration_generated/internal/*.go',
+        '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
         '/api/pkg/client/clientset_generated/clientset/*.go',
         '/api/pkg/client/clientset_generated/clientset/scheme/*.go',
         '/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3/*.go',
@@ -430,7 +441,6 @@ blocks:
         '/libcalico-go/lib/clientv3/*.go',
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/names/*.go',
         '/libcalico-go/lib/namespace/*.go',
@@ -486,6 +496,10 @@ blocks:
                 - s390x
           commands:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Application Layer Policy
     run:
       when: >-
@@ -552,7 +566,6 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/names/*.go',
         '/libcalico-go/lib/namespace/*.go',
@@ -598,6 +611,10 @@ blocks:
         - name: "Application Layer Policy: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: calicoctl
     run:
       when: >-
@@ -639,7 +656,6 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/names/*.go',
         '/libcalico-go/lib/namespace/*.go',
         '/libcalico-go/lib/net/*.go',
@@ -686,6 +702,10 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: CNI Plugin
     run:
       when: >-
@@ -720,7 +740,6 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/names/*.go',
@@ -772,6 +791,11 @@ blocks:
         - name: "CNI Plugin: build windows images"
           commands:
             - ../.semaphore/run-and-monitor ci.log make image-windows
+      epilogue:
+        always:
+          commands:
+            - 'python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true'
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "CNI Plugin: Windows"
     run:
       when: >-
@@ -806,7 +830,6 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/names/*.go',
@@ -929,7 +952,6 @@ blocks:
         '/libcalico-go/lib/epstatusfile/*.go',
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/names/*.go',
         '/libcalico-go/lib/namespace/*.go',
@@ -983,6 +1005,61 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "E2E tests on GCP kubeadm (local binary)"
+    run:
+      when: >-
+        false or change_in(['/e2e/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    dependencies:
+      - Prerequisites
+    task:
+      secrets:
+        - name: marvin-github-ssh-private-key
+        - name: banzai-secrets
+      prologue:
+        commands:
+          - checkout
+          - source .semaphore/end-to-end/scripts/global_prologue.sh
+      epilogue:
+        always:
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+      env_vars:
+        - name: TEST_TYPE
+          value: k8s-e2e
+        - name: PRODUCT
+          value: calico
+        - name: FUNCTIONAL_AREA
+          value: "e2e-gcp.yml"
+        - name: RUN_LOCAL_TESTS
+          value: "true"
+        - name: USE_PRIVATE_REGISTRY
+          value: "true"
+        - name: PRIVATE_REGISTRY
+          value: "quay.io/"
+        - name: K8S_E2E_FLAGS
+          value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+        - name: USE_API_SERVER
+          value: "false"
+      jobs:
+        - name: gcp-kubeadm - e2e local binary
+          execution_time_limit:
+            hours: 3
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values: ["gcp-kubeadm"]
+            - env_var: K8S_VERSION
+              values: ["stable"]
+            - env_var: INSTALLER
+              values: ["operator"]
+            - env_var: DATAPLANE
+              values: ["CalicoBPF"]
   - name: E2E script & pipeline validations
     run:
       when: >-
@@ -1008,6 +1085,8 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-e2e.yml',
         '/Makefile',
         '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/client/applyconfiguration_generated/internal/*.go',
+        '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
         '/api/pkg/client/clientset_generated/clientset/*.go',
         '/api/pkg/client/clientset_generated/clientset/scheme/*.go',
         '/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3/*.go',
@@ -1101,6 +1180,7 @@ blocks:
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
+        '/felix/bpf/allowsources/*.go',
         '/felix/bpf/arp/*.go',
         '/felix/bpf/asm/*.go',
         '/felix/bpf/bpfdefs/*.go',
@@ -1125,11 +1205,11 @@ blocks:
         '/felix/bpf/libbpf/*.go',
         '/felix/bpf/maps/*.go',
         '/felix/bpf/nat/*.go',
-        '/felix/bpf/perf/*.go',
         '/felix/bpf/polprog/*.go',
         '/felix/bpf/profiling/*.go',
         '/felix/bpf/proxy/*.go',
         '/felix/bpf/qos/*.go',
+        '/felix/bpf/ringbuf/*.go',
         '/felix/bpf/routes/*.go',
         '/felix/bpf/state/*.go',
         '/felix/bpf/tc/*.go',
@@ -1220,6 +1300,7 @@ blocks:
         '/goldmane/pkg/types/*.go',
         '/goldmane/proto/*.go',
         '/hack/test/certs/',
+        '/hack/test/kind',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
         '/kube-controllers/cmd/wrapper/*.go',
@@ -1229,13 +1310,17 @@ blocks:
         '/kube-controllers/pkg/controllers/flannelmigration/*.go',
         '/kube-controllers/pkg/controllers/ippool/*.go',
         '/kube-controllers/pkg/controllers/loadbalancer/*.go',
+        '/kube-controllers/pkg/controllers/migration/*.go',
+        '/kube-controllers/pkg/controllers/migration/migrators/*.go',
         '/kube-controllers/pkg/controllers/namespace/*.go',
         '/kube-controllers/pkg/controllers/networkpolicy/*.go',
         '/kube-controllers/pkg/controllers/node/*.go',
         '/kube-controllers/pkg/controllers/pod/*.go',
         '/kube-controllers/pkg/controllers/serviceaccount/*.go',
+        '/kube-controllers/pkg/controllers/tier/*.go',
         '/kube-controllers/pkg/controllers/utils/*.go',
         '/kube-controllers/pkg/converter/*.go',
+        '/kube-controllers/pkg/discovery/*.go',
         '/kube-controllers/pkg/status/*.go',
         '/lib.Makefile',
         '/lib/httpmachinery/pkg/apiutil/*.go',
@@ -1279,7 +1364,6 @@ blocks:
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
@@ -1431,6 +1515,10 @@ blocks:
               value: "BIRD"
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "E2E tests (cluster routing: Felix)"
     run:
       when: >-
@@ -1442,6 +1530,8 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-e2e.yml',
         '/Makefile',
         '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/client/applyconfiguration_generated/internal/*.go',
+        '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
         '/api/pkg/client/clientset_generated/clientset/*.go',
         '/api/pkg/client/clientset_generated/clientset/scheme/*.go',
         '/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3/*.go',
@@ -1535,6 +1625,7 @@ blocks:
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
+        '/felix/bpf/allowsources/*.go',
         '/felix/bpf/arp/*.go',
         '/felix/bpf/asm/*.go',
         '/felix/bpf/bpfdefs/*.go',
@@ -1559,11 +1650,11 @@ blocks:
         '/felix/bpf/libbpf/*.go',
         '/felix/bpf/maps/*.go',
         '/felix/bpf/nat/*.go',
-        '/felix/bpf/perf/*.go',
         '/felix/bpf/polprog/*.go',
         '/felix/bpf/profiling/*.go',
         '/felix/bpf/proxy/*.go',
         '/felix/bpf/qos/*.go',
+        '/felix/bpf/ringbuf/*.go',
         '/felix/bpf/routes/*.go',
         '/felix/bpf/state/*.go',
         '/felix/bpf/tc/*.go',
@@ -1654,6 +1745,7 @@ blocks:
         '/goldmane/pkg/types/*.go',
         '/goldmane/proto/*.go',
         '/hack/test/certs/',
+        '/hack/test/kind',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
         '/kube-controllers/cmd/wrapper/*.go',
@@ -1663,13 +1755,17 @@ blocks:
         '/kube-controllers/pkg/controllers/flannelmigration/*.go',
         '/kube-controllers/pkg/controllers/ippool/*.go',
         '/kube-controllers/pkg/controllers/loadbalancer/*.go',
+        '/kube-controllers/pkg/controllers/migration/*.go',
+        '/kube-controllers/pkg/controllers/migration/migrators/*.go',
         '/kube-controllers/pkg/controllers/namespace/*.go',
         '/kube-controllers/pkg/controllers/networkpolicy/*.go',
         '/kube-controllers/pkg/controllers/node/*.go',
         '/kube-controllers/pkg/controllers/pod/*.go',
         '/kube-controllers/pkg/controllers/serviceaccount/*.go',
+        '/kube-controllers/pkg/controllers/tier/*.go',
         '/kube-controllers/pkg/controllers/utils/*.go',
         '/kube-controllers/pkg/converter/*.go',
+        '/kube-controllers/pkg/discovery/*.go',
         '/kube-controllers/pkg/status/*.go',
         '/lib.Makefile',
         '/lib/httpmachinery/pkg/apiutil/*.go',
@@ -1713,7 +1809,6 @@ blocks:
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
@@ -1867,6 +1962,10 @@ blocks:
               value: "BGP"
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Envoy Gateway
     run:
       when: >-
@@ -2009,7 +2108,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/multireadbuf/*.go',
@@ -2196,7 +2295,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/names/*.go',
@@ -2322,7 +2421,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/names/*.go',
@@ -2444,7 +2543,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/names/*.go',
@@ -2564,7 +2663,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/names/*.go',
@@ -2718,7 +2817,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/multireadbuf/*.go',
@@ -2869,7 +2968,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/multireadbuf/*.go',
@@ -3020,7 +3119,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/multireadbuf/*.go',
@@ -3171,7 +3270,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/multireadbuf/*.go',
@@ -3326,7 +3425,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/multireadbuf/*.go',
@@ -3480,7 +3579,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/multireadbuf/*.go',
@@ -3598,7 +3697,6 @@ blocks:
         '/libcalico-go/lib/debugserver/*.go',
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/health/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/namespace/*.go',
         '/libcalico-go/lib/net/*.go',
@@ -3649,6 +3747,10 @@ blocks:
                 - s390x
           commands:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Guardian
     run:
       when: >-
@@ -3710,6 +3812,117 @@ blocks:
                 - s390x
           commands:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: Istio Ztunnel
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/metadata.mk',
+        '/third_party/istio-ztunnel/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md']})
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+          - cd third_party/istio-ztunnel
+      jobs:
+        - name: "Linux amd64"
+          commands:
+            - ../../.semaphore/run-and-monitor build.log make build
+  - name: Istio Ztunnel - native arm64 runner
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/metadata.mk',
+        '/third_party/istio-ztunnel/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md']})
+    dependencies:
+      - Prerequisites
+    task:
+      agent:
+        machine:
+          type: s1-aws-arm64-2
+      prologue:
+        commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+          - cd third_party/istio-ztunnel
+      jobs:
+        - name: "Linux arm64"
+          commands:
+            - ../../.semaphore/run-and-monitor build-arm64.log make build
+  - name: Istio
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
+        '/hack/test/certs/',
+        '/istio/**',
+        '/lib.Makefile',
+        '/metadata.mk'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md']})
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+          - cd istio
+      jobs:
+        - name: "Istio: CI"
+          commands:
+            # build all images except ztunnel, which is built in the previous step
+            - ../.semaphore/run-and-monitor ci.log make clean istio-install-cni istio-pilot istio-proxyv2
+        - name: "Istio: build arm64"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+          commands:
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
       when: >-
@@ -3720,6 +3933,8 @@ blocks:
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kube-controllers.yml',
         '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/client/applyconfiguration_generated/internal/*.go',
+        '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
         '/api/pkg/client/clientset_generated/clientset/*.go',
         '/api/pkg/client/clientset_generated/clientset/scheme/*.go',
         '/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3/*.go',
@@ -3767,6 +3982,8 @@ blocks:
         '/hack/test/certs/',
         '/kube-controllers/**',
         '/lib.Makefile',
+        '/lib/std/chanutil/*.go',
+        '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/config/*.go',
@@ -3791,7 +4008,6 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/names/*.go',
@@ -3858,6 +4074,10 @@ blocks:
               value: "projectcalico.org/v3"
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Libraries (lib)
     run:
       when: >-
@@ -3875,6 +4095,10 @@ blocks:
         - name: "Libraries: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: libcalico-go
     run:
       when: >-
@@ -3937,6 +4161,11 @@ blocks:
               value: projectcalico.org/v3
             - name: GINKGO_SKIP
               value: "etcdv3 backend"
+      epilogue:
+        always:
+          commands:
+            - 'python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true'
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "Node: Build"
     run:
       when: >-
@@ -3979,6 +4208,7 @@ blocks:
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
+        '/felix/bpf/allowsources/*.go',
         '/felix/bpf/arp/*.go',
         '/felix/bpf/asm/*.go',
         '/felix/bpf/bpfdefs/*.go',
@@ -4003,11 +4233,11 @@ blocks:
         '/felix/bpf/libbpf/*.go',
         '/felix/bpf/maps/*.go',
         '/felix/bpf/nat/*.go',
-        '/felix/bpf/perf/*.go',
         '/felix/bpf/polprog/*.go',
         '/felix/bpf/profiling/*.go',
         '/felix/bpf/proxy/*.go',
         '/felix/bpf/qos/*.go',
+        '/felix/bpf/ringbuf/*.go',
         '/felix/bpf/routes/*.go',
         '/felix/bpf/state/*.go',
         '/felix/bpf/tc/*.go',
@@ -4090,6 +4320,7 @@ blocks:
         '/goldmane/pkg/types/*.go',
         '/goldmane/proto/*.go',
         '/hack/test/certs/',
+        '/hack/test/kind',
         '/lib.Makefile',
         '/lib/std/chanutil/*.go',
         '/lib/std/time/*.go',
@@ -4126,7 +4357,6 @@ blocks:
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
@@ -4201,6 +4431,10 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "Node: multi-arch build"
     run:
       when: >-
@@ -4243,6 +4477,7 @@ blocks:
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
+        '/felix/bpf/allowsources/*.go',
         '/felix/bpf/arp/*.go',
         '/felix/bpf/asm/*.go',
         '/felix/bpf/bpfdefs/*.go',
@@ -4267,11 +4502,11 @@ blocks:
         '/felix/bpf/libbpf/*.go',
         '/felix/bpf/maps/*.go',
         '/felix/bpf/nat/*.go',
-        '/felix/bpf/perf/*.go',
         '/felix/bpf/polprog/*.go',
         '/felix/bpf/profiling/*.go',
         '/felix/bpf/proxy/*.go',
         '/felix/bpf/qos/*.go',
+        '/felix/bpf/ringbuf/*.go',
         '/felix/bpf/routes/*.go',
         '/felix/bpf/state/*.go',
         '/felix/bpf/tc/*.go',
@@ -4354,6 +4589,7 @@ blocks:
         '/goldmane/pkg/types/*.go',
         '/goldmane/proto/*.go',
         '/hack/test/certs/',
+        '/hack/test/kind',
         '/lib.Makefile',
         '/lib/std/chanutil/*.go',
         '/lib/std/time/*.go',
@@ -4390,7 +4626,6 @@ blocks:
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
@@ -4504,6 +4739,7 @@ blocks:
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
+        '/felix/bpf/allowsources/*.go',
         '/felix/bpf/arp/*.go',
         '/felix/bpf/asm/*.go',
         '/felix/bpf/bpfdefs/*.go',
@@ -4528,11 +4764,11 @@ blocks:
         '/felix/bpf/libbpf/*.go',
         '/felix/bpf/maps/*.go',
         '/felix/bpf/nat/*.go',
-        '/felix/bpf/perf/*.go',
         '/felix/bpf/polprog/*.go',
         '/felix/bpf/profiling/*.go',
         '/felix/bpf/proxy/*.go',
         '/felix/bpf/qos/*.go',
+        '/felix/bpf/ringbuf/*.go',
         '/felix/bpf/routes/*.go',
         '/felix/bpf/state/*.go',
         '/felix/bpf/tc/*.go',
@@ -4615,6 +4851,7 @@ blocks:
         '/goldmane/pkg/types/*.go',
         '/goldmane/proto/*.go',
         '/hack/test/certs/',
+        '/hack/test/kind',
         '/lib.Makefile',
         '/lib/std/chanutil/*.go',
         '/lib/std/time/*.go',
@@ -4651,7 +4888,6 @@ blocks:
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
@@ -4707,7 +4943,7 @@ blocks:
     task:
       agent:
         machine:
-          type: s1-aws-arm64-2
+          type: s1-aws-arm64-4
       prologue:
         commands:
           - cd node
@@ -4728,6 +4964,8 @@ blocks:
         '/.semaphore/vms/',
         '/Makefile',
         '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/client/applyconfiguration_generated/internal/*.go',
+        '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
         '/api/pkg/client/clientset_generated/clientset/*.go',
         '/api/pkg/client/clientset_generated/clientset/scheme/*.go',
         '/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3/*.go',
@@ -4820,6 +5058,7 @@ blocks:
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
+        '/felix/bpf/allowsources/*.go',
         '/felix/bpf/arp/*.go',
         '/felix/bpf/asm/*.go',
         '/felix/bpf/bpfdefs/*.go',
@@ -4844,11 +5083,11 @@ blocks:
         '/felix/bpf/libbpf/*.go',
         '/felix/bpf/maps/*.go',
         '/felix/bpf/nat/*.go',
-        '/felix/bpf/perf/*.go',
         '/felix/bpf/polprog/*.go',
         '/felix/bpf/profiling/*.go',
         '/felix/bpf/proxy/*.go',
         '/felix/bpf/qos/*.go',
+        '/felix/bpf/ringbuf/*.go',
         '/felix/bpf/routes/*.go',
         '/felix/bpf/state/*.go',
         '/felix/bpf/tc/*.go',
@@ -4939,6 +5178,7 @@ blocks:
         '/goldmane/pkg/types/*.go',
         '/goldmane/proto/*.go',
         '/hack/test/certs/',
+        '/hack/test/kind',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
         '/kube-controllers/cmd/wrapper/*.go',
@@ -4948,13 +5188,17 @@ blocks:
         '/kube-controllers/pkg/controllers/flannelmigration/*.go',
         '/kube-controllers/pkg/controllers/ippool/*.go',
         '/kube-controllers/pkg/controllers/loadbalancer/*.go',
+        '/kube-controllers/pkg/controllers/migration/*.go',
+        '/kube-controllers/pkg/controllers/migration/migrators/*.go',
         '/kube-controllers/pkg/controllers/namespace/*.go',
         '/kube-controllers/pkg/controllers/networkpolicy/*.go',
         '/kube-controllers/pkg/controllers/node/*.go',
         '/kube-controllers/pkg/controllers/pod/*.go',
         '/kube-controllers/pkg/controllers/serviceaccount/*.go',
+        '/kube-controllers/pkg/controllers/tier/*.go',
         '/kube-controllers/pkg/controllers/utils/*.go',
         '/kube-controllers/pkg/converter/*.go',
+        '/kube-controllers/pkg/discovery/*.go',
         '/kube-controllers/pkg/status/*.go',
         '/lib.Makefile',
         '/lib/httpmachinery/pkg/apiutil/*.go',
@@ -4998,7 +5242,6 @@ blocks:
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
@@ -5237,7 +5480,6 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
         '/libcalico-go/lib/multireadbuf/*.go',
@@ -5312,7 +5554,10 @@ blocks:
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-webhooks.yml',
         '/api/examples/list-gnp/*.go',
+        '/api/hack/openapi-schema/*.go',
         '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/client/applyconfiguration_generated/internal/*.go',
+        '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
         '/api/pkg/client/clientset_generated/clientset/*.go',
         '/api/pkg/client/clientset_generated/clientset/scheme/*.go',
         '/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3/*.go',
@@ -5371,7 +5616,6 @@ blocks:
         '/libcalico-go/lib/clientv3/*.go',
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/names/*.go',
         '/libcalico-go/lib/namespace/*.go',
@@ -5424,6 +5668,10 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Whisker backend
     run:
       when: >-
@@ -5459,7 +5707,6 @@ blocks:
         '/libcalico-go/lib/backend/encap/*.go',
         '/libcalico-go/lib/backend/model/*.go',
         '/libcalico-go/lib/errors/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/namespace/*.go',
         '/libcalico-go/lib/net/*.go',
@@ -5500,6 +5747,10 @@ blocks:
                 - s390x
           commands:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Whisker
     run:
       when: >-
@@ -5569,6 +5820,10 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "OpenStack integration (Caracal)"
     run:
       when: >-
@@ -5633,7 +5888,6 @@ blocks:
         '/libcalico-go/lib/backend/encap/*.go',
         '/libcalico-go/lib/backend/model/*.go',
         '/libcalico-go/lib/errors/*.go',
-        '/libcalico-go/lib/json/*.go',
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/names/*.go',
         '/libcalico-go/lib/namespace/*.go',

@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
 )
 
 var _ = describe.CalicoDescribe(
@@ -210,6 +211,11 @@ var _ = describe.CalicoDescribe(
 
 			By("Checking clients can only communicate within their own Namespace")
 			checker.ResetExpectations()
+			if windows.ClusterIsWindows() {
+				// Windows HNS dataplane can take longer to program newly created
+				// allow policies, so extend the retry timeout.
+				checker.WithTimeout(60 * time.Second)
+			}
 			checker.ExpectSuccess(client1, server1.ClusterIP())
 			checker.ExpectFailure(client1, server2.ClusterIP())
 			checker.ExpectSuccess(client2, server2.ClusterIP())

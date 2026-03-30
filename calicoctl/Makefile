@@ -24,7 +24,7 @@ include ../lib.Makefile
 
 CALICOCTL_DIR=calicoctl
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
-SRC_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go') $(shell find ../libcalico-go -name '*.go')
+## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
@@ -73,7 +73,7 @@ bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 .PHONY: image $(CALICOCTL_IMAGE)
 image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
-$(CTL_CONTAINER_CREATED): Dockerfile bin/calicoctl-linux-$(ARCH)
+$(CTL_CONTAINER_CREATED): $(IMAGE_DEPS) bin/calicoctl-linux-$(ARCH)
 	cp ../LICENSE.md bin/LICENSE
 	$(DOCKER_BUILD) -t $(CALICOCTL_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
@@ -100,7 +100,8 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev.
 ut: bin/calicoctl-linux-$(ARCH)
-	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r $(GINKGO_ARGS) calicoctl/*'
+	mkdir -p report
+	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --junit-report=calicoctl_ut.xml --output-dir=report/ $(GINKGO_ARGS) calicoctl/*'
 
 ###############################################################################
 # FVs
@@ -118,7 +119,8 @@ fv: bin/calicoctl-linux-$(ARCH) version-helper
 	while ! docker exec st-apiserver-6443 kubectl --server=https://127.0.0.1:6443 create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do sleep 2; done
 
 	# Run the tests
-	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test $(GO_TEST_ARGS) -count=1 ./tests/fv'
+	mkdir -p report
+	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && gotestsum --junitfile report/calicoctl_fv.xml -- $(GO_TEST_ARGS) -count=1 ./tests/fv'
 	# Cleanup
 	$(MAKE) stop-etcd
 	$(MAKE) stop-kubernetes-control-plane KUBE_APISERVER_PORT=6443

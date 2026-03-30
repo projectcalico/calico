@@ -120,10 +120,6 @@ func (o *Obj) AttachCGroup(_, _ string) (*Link, error) {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachCGroupLegacy(_, _ string) error {
-	panic("LIBBPF syscall stub")
-}
-
 func (o *Obj) UpdateLink(_, _ string) error {
 	panic("LIBBPF syscall stub")
 }
@@ -176,10 +172,6 @@ func (l *Link) Detach() error {
 	panic("LIBBPF syscall stub")
 }
 
-func DetachCTLBProgramsLegacy(_ bool, _ string) error {
-	panic("LIBBPF syscall stub")
-}
-
 func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	panic("LIBBPF syscall stub")
 }
@@ -193,19 +185,21 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
-	GlobalsRPFOptionEnabled            uint32 = 16
-	GlobalsRPFOptionStrict             uint32 = 32
-	GlobalsNoDSRCidrs                  uint32 = 12345
-	GlobalsLoUDPOnly                   uint32 = 12345
-	GlobalsRedirectPeer                uint32 = 12345
-	GlobalsFlowLogsEnabled             uint32 = 12345
-	GlobalsNATOutgoingExcludeHosts     uint32 = 12345
-	GlobalsSkipEgressRedirect          uint32 = 12345
-	GlobalsIngressPacketRateConfigured uint32 = 12345
-	GlobalsEgressPacketRateConfigured  uint32 = 12345
-	AttachTypeTcxIngress               uint32 = 12345
-	AttachTypeTcxEgress                uint32 = 12345
-	AttachTypeXDP                      uint32 = 12345
+	GlobalsRPFOptionEnabled              uint32 = 16
+	GlobalsRPFOptionStrict               uint32 = 32
+	GlobalsNoDSRCidrs                    uint32 = 12345
+	GlobalsLoUDPOnly                     uint32 = 12345
+	GlobalsRedirectPeer                  uint32 = 12345
+	GlobalsFlowLogsEnabled               uint32 = 12345
+	GlobalsNATOutgoingExcludeHosts       uint32 = 12345
+	GlobalsSkipEgressRedirect            uint32 = 12345
+	GlobalsIngressPacketRateConfigured   uint32 = 12345
+	GlobalsEgressPacketRateConfigured    uint32 = 12345
+	GlobalsWorkloadSrcSpoofingConfigured uint32 = 12345
+	GlobalsUDPGSOLinearize               uint32 = 12345
+	AttachTypeTcxIngress                 uint32 = 12345
+	AttachTypeTcxEgress                  uint32 = 12345
+	AttachTypeXDP                        uint32 = 12345
 )
 
 func (m *Map) SetSize(size int) error {

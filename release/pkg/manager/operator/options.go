@@ -14,6 +14,12 @@
 
 package operator
 
+import (
+	"fmt"
+
+	"github.com/projectcalico/calico/release/internal/utils"
+)
+
 type Option func(*OperatorManager) error
 
 func WithOperatorDirectory(root string) Option {
@@ -30,51 +36,9 @@ func WithCalicoDirectory(dir string) Option {
 	}
 }
 
-func WithTempDirectory(dir string) Option {
+func WithCalicoVersion(version string) Option {
 	return func(o *OperatorManager) error {
-		o.tmpDir = dir
-		return nil
-	}
-}
-
-func WithOutputDirectory(dir string) Option {
-	return func(o *OperatorManager) error {
-		o.outputDir = dir
-		return nil
-	}
-}
-
-func WithRepoRemote(remote string) Option {
-	return func(o *OperatorManager) error {
-		o.remote = remote
-		return nil
-	}
-}
-
-func WithGithubOrg(org string) Option {
-	return func(o *OperatorManager) error {
-		o.githubOrg = org
-		return nil
-	}
-}
-
-func WithRepoName(name string) Option {
-	return func(o *OperatorManager) error {
-		o.repoName = name
-		return nil
-	}
-}
-
-func WithBranch(branch string) Option {
-	return func(o *OperatorManager) error {
-		o.branch = branch
-		return nil
-	}
-}
-
-func WithDevTagIdentifier(devTag string) Option {
-	return func(o *OperatorManager) error {
-		o.devTagIdentifier = devTag
+		o.calicoVersion = version
 		return nil
 	}
 }
@@ -145,6 +109,20 @@ func WithProductRegistry(registry string) Option {
 func WithImage(image string) Option {
 	return func(o *OperatorManager) error {
 		o.image = image
+		return nil
+	}
+}
+
+func WithPinnedComponents(filePath string) Option {
+	return func(o *OperatorManager) error {
+		exists, err := utils.FileExists(filePath)
+		if err != nil {
+			return fmt.Errorf("check pinned components file exists: %w", err)
+		}
+		if !exists {
+			return fmt.Errorf("pinned components file does not exist at path: %s", filePath)
+		}
+		o.pinnedComponentsFile = filePath
 		return nil
 	}
 }

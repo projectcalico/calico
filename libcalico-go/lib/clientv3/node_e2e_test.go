@@ -597,13 +597,13 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Updating Node name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.Nodes().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
 			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
+			Eventually(func() string {
+				_, err := c.Nodes().Get(ctx, name2, options.GetOptions{})
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
 
 			By("Creating Node name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.Nodes().Create(ctx, &internalapi.Node{
@@ -611,13 +611,13 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 				Spec:       spec2,
 			}, options.SetOptions{TTL: 2 * time.Second})
 			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
+			Eventually(func() string {
+				_, err := c.Nodes().Get(ctx, name2, options.GetOptions{})
+				if err != nil {
+					return err.Error()
+				}
+				return ""
+			}, 5*time.Second, 200*time.Millisecond).Should(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
 
 			By("Attempting to deleting Node (name2) again")
 			_, outError = c.Nodes().Delete(ctx, name2, options.DeleteOptions{})

@@ -32,7 +32,7 @@ func AnnounceHashrelease(cfg *slack.Config, hashrel *hashreleaseserver.Hashrelea
 		Product:            product,
 		Stream:             hashrel.Stream,
 		ProductVersion:     hashrel.ProductVersion,
-		OperatorVersion:    hashrel.OperatorVersion,
+		OperatorVersion:    hashrel.Operator.Version,
 		ReleaseType:        "hashrelease",
 		CIURL:              ciURL,
 		DocsURL:            hashrel.URL(),

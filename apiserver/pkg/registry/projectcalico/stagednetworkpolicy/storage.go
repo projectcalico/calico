@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -126,14 +126,27 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, val rest.Validate
 
 func (r *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc,
 	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
-	obj, err := r.Store.Get(ctx, name, &metav1.GetOptions{})
+	oldObj, err := r.Store.Get(ctx, name, &metav1.GetOptions{})
 	if err != nil {
 		return nil, false, err
 	}
-	tierName := names.TierOrDefault(obj.(*calico.StagedNetworkPolicy).Spec.Tier)
-	err = r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
+	oldTier := names.TierOrDefault(oldObj.(*calico.StagedNetworkPolicy).Spec.Tier)
+	err = r.authorizer.AuthorizeTierOperation(ctx, name, oldTier)
 	if err != nil {
 		return nil, false, err
+	}
+
+	// Also authorize the new tier, in case the update changes the policy's tier.
+	newObj, err := objInfo.UpdatedObject(ctx, oldObj)
+	if err != nil {
+		return nil, false, err
+	}
+	newTier := names.TierOrDefault(newObj.(*calico.StagedNetworkPolicy).Spec.Tier)
+	if newTier != oldTier {
+		err = r.authorizer.AuthorizeTierOperation(ctx, name, newTier)
+		if err != nil {
+			return nil, false, err
+		}
 	}
 
 	return r.Store.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)

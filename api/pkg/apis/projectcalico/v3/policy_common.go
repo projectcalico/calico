@@ -34,14 +34,17 @@ const (
 // Each positive match criteria has a negated version, prefixed with "Not". All the match
 // criteria within a rule must be satisfied for a packet to match. A single rule can contain
 // the positive and negative version of a match and both must be satisfied for the rule to match.
+// +kubebuilder:validation:XValidation:rule="!has(self.http) || !has(self.protocol) || self.protocol == 'TCP' || self.protocol == 6",message="rules with HTTP match must have protocol TCP or unset",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.action == 'Allow' || !has(self.http)",message="HTTP match is only valid on Allow rules",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.destination) || !has(self.destination.services) || (!has(self.destination.ports) || size(self.destination.ports) == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts) == 0)",message="ports and notPorts cannot be specified with services",reason=FieldValueForbidden
 type Rule struct {
-	Action Action `json:"action" validate:"action"`
+	Action Action `json:"action"`
 
 	// IPVersion is an optional field that restricts the rule to only match a specific IP
 	// version.
 	// +kubebuilder:validation:Enum=4;6
 	// +optional
-	IPVersion *int `json:"ipVersion,omitempty" validate:"omitempty,ipVersion"`
+	IPVersion *int `json:"ipVersion,omitempty"`
 
 	// Protocol is an optional field that restricts the rule to only apply to traffic of
 	// a specific IP protocol. Required if any of the EntityRules contain Ports
@@ -81,7 +84,9 @@ type Rule struct {
 // exact: <path>: which matches the path exactly or
 // prefix: <path-prefix>: which matches the path prefix
 type HTTPPath struct {
-	Exact  string `json:"exact,omitempty" validate:"omitempty"`
+	// +kubebuilder:validation:MaxLength=1024
+	Exact string `json:"exact,omitempty" validate:"omitempty"`
+	// +kubebuilder:validation:MaxLength=1024
 	Prefix string `json:"prefix,omitempty" validate:"omitempty"`
 }
 
@@ -91,6 +96,8 @@ type HTTPMatch struct {
 	// Methods is an optional field that restricts the rule to apply only to HTTP requests that use one of the listed
 	// HTTP Methods (e.g. GET, PUT, etc.)
 	// Multiple methods are OR'd together.
+	// +kubebuilder:validation:MaxItems=20
+	// +listType=atomic
 	Methods []string `json:"methods,omitempty" validate:"omitempty"`
 	// Paths is an optional field that restricts the rule to apply to HTTP requests that use one of the listed
 	// HTTP Paths.
@@ -99,15 +106,18 @@ type HTTPMatch struct {
 	// - exact: /foo
 	// - prefix: /bar
 	// NOTE: Each entry may ONLY specify either a `exact` or a `prefix` match. The validator will check for it.
+	// +kubebuilder:validation:MaxItems=20
+	// +listType=atomic
 	Paths []HTTPPath `json:"paths,omitempty" validate:"omitempty"`
 }
 
 // ICMPFields defines structure for ICMP and NotICMP sub-struct for ICMP code and type
+// +kubebuilder:validation:XValidation:rule="!has(self.code) || has(self.type)",message="ICMP code specified without an ICMP type",reason=FieldValueInvalid
 type ICMPFields struct {
 	// Match on a specific ICMP type.  For example a value of 8 refers to ICMP Echo Request
 	// (i.e. pings).
 	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=255
+	// +kubebuilder:validation:Maximum=254
 	// +optional
 	Type *int `json:"type,omitempty" validate:"omitempty,gte=0,lte=254"`
 
@@ -180,10 +190,11 @@ type EntityRule struct {
 	//
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "TCP" or "UDP".
+	// +listType=atomic
 	Ports []numorstring.Port `json:"ports,omitempty" validate:"omitempty,dive"`
 
 	// NotNets is the negated version of the Nets field.
-	// listType=set
+	// +listType=set
 	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,net"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
@@ -193,6 +204,7 @@ type EntityRule struct {
 	// NotPorts is the negated version of the Ports field.
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "TCP" or "UDP".
+	// +listType=atomic
 	NotPorts []numorstring.Port `json:"notPorts,omitempty" validate:"omitempty,dive"`
 
 	// ServiceAccounts is an optional field that restricts the rule to only apply to traffic that originates from (or

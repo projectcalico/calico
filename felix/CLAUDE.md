@@ -169,6 +169,18 @@ make fv-nft GINKGO_FOCUS="TestName"
 
 Runs FV tests with the nftables backend enabled (`FELIX_FV_NFTABLES=Enabled`).
 
+### Diagnosing Test Failures with fv-tests-guru
+
+[fv-tests-guru](https://github.com/tigera/fv-tests-guru) is an AI-powered tool that parses Felix FV/UT failure logs and runs AI analysis to diagnose root causes. It reads its Gemini API key from `~/.fv-tests-guru/gemini-key`.
+
+**When asked to analyze a test failure log file, always run fv-tests-guru FIRST** (if available — check with `which fv-tests-guru`) — it is the most efficient way to identify the failing test(s), extract relevant context, and get an initial diagnosis. Use its output to guide subsequent investigation (reading test code, checking source changes, etc.). If fv-tests-guru is not installed, skip it and proceed with manual analysis.
+
+```bash
+fv-tests-guru -debug-logfile <log-path> -ai-provider gemini -calico-repo <path-to-calico-repo-root> -max-timeout 1m40s
+```
+
+Add `-ut` for unit test logs. Use `-extra-context "..."` to provide hints about the branch under test.
+
 ## BPF Dataplane
 
 ### BPF Code Structure
@@ -197,7 +209,7 @@ GPL-licensed BPF programs compiled to eBPF bytecode with clang/LLVM.
 - **NAT**: `nat.h`, `nat4.h`, `nat6.h`, `nat_types.h`, `nat_lookup.h`
 - **Conntrack**: `conntrack.h`, `conntrack_types.h` — connection tracking state
 - **Policy**: `policy.h`, `failsafe.h` — policy evaluation, failsafe rules
-- **Routing**: `routes.h`, `fib.h`, `fib_common.h`, `fib_co_re.h`, `fib_legacy.h`
+- **Routing**: `routes.h`, `fib.h`, `fib_common.h`, `fib_co_re.h`
 - **Protocol**: `tcp4.h`, `tcp6.h`, `icmp.h`, `icmp4.h`, `icmp6.h`, `arp.h`
 - **Load Balancing**: `jenkins_hash.h`, `maglev.h`, `ctlb.h`
 - **Utilities**: `jump.h` (tail calls), `log.h`, `events.h`, `counters.h`
