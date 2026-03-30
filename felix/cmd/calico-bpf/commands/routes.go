@@ -15,7 +15,8 @@
 package commands
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"sort"
@@ -134,9 +135,7 @@ func dumpRoutes() error {
 			}
 			entries = append(entries, entry)
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(entries)
+		return json.MarshalWrite(os.Stdout, entries, jsontext.WithIndent("  "))
 	}
 
 	for _, dest := range dests {

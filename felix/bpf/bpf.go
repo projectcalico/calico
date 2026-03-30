@@ -22,7 +22,8 @@ package bpf
 
 import (
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net"
@@ -383,6 +384,20 @@ type getnextEntry struct {
 	Err     string   `json:"error"`
 }
 
+// mapEntry represents one entry in the output of `bpftool --json --pretty map dump`.
+// We only consume the "key" and "value" hex-string arrays; bpftool also emits a
+// BTF-derived "formatted" block (when BTF is available for the map type) which
+// we do not read.
+//
+// Under encoding/json/v2 the unmarshaler must be invoked with
+// jsontext.AllowDuplicateNames(true). bpftool emits anonymous C unions as ""
+// keys, and value types with multiple anonymous unions at the same nesting
+// level (notably the conntrack value struct) produce duplicate "" keys within
+// formatted.value. v1 tolerated duplicates silently; v2 rejects them per RFC
+// 7493. Because we never read the formatted field and bpftool is the sole
+// input source for this parser, relaxing the duplicate-name check here only
+// affects bpftool's own output — every other JSON path in Calico remains
+// strict.
 type mapEntry struct {
 	Key   []string `json:"key"`
 	Value []string `json:"value"`
@@ -399,7 +414,8 @@ func (me *mapEntry) UnmarshalJSON(data []byte) error {
 	}
 
 	var e entry
-	err := json.Unmarshal(data, &e)
+	// AllowDuplicateNames: see mapEntry doc for rationale.
+	err := json.Unmarshal(data, &e, jsontext.AllowDuplicateNames(true))
 	if err != nil {
 		// bad json
 		return err
@@ -434,7 +450,8 @@ func (hm *hexMap) UnmarshalJSON(data []byte) error {
 	}
 
 	var m []mapEntry
-	err := json.Unmarshal(data, &m)
+	// AllowDuplicateNames: see mapEntry doc for rationale.
+	err := json.Unmarshal(data, &m, jsontext.AllowDuplicateNames(true))
 	if err != nil {
 		return err
 	}
@@ -2304,7 +2321,8 @@ func ListTcXDPAttachedProgs(dev ...string) (TcList, XDPList, error) {
 // IterMapCmdOutput iterates over the output of a command obtained by DumpMapCmd
 func IterMapCmdOutput(output []byte, f func(k, v []byte)) error {
 	var mp hexMap
-	err := json.Unmarshal(output, &mp)
+	// AllowDuplicateNames: see mapEntry doc for rationale.
+	err := json.Unmarshal(output, &mp, jsontext.AllowDuplicateNames(true))
 	if err != nil {
 		return fmt.Errorf("cannot parse json output: %w\n%s", err, output)
 	}
@@ -2328,7 +2346,11 @@ func IterMapCmdOutput(output []byte, f func(k, v []byte)) error {
 func IterPerCpuMapCmdOutput(output []byte, f func(k, v []byte)) error {
 	var mp perCpuMapEntry
 	var v []byte
-	err := json.Unmarshal(output, &mp)
+	// AllowDuplicateNames: bpftool emits anonymous C unions as "" keys in the
+	// BTF-derived "formatted" block, which can collide within a single object.
+	// We only consume the top-level "key" and "values" arrays; see mapEntry
+	// doc for full rationale.
+	err := json.Unmarshal(output, &mp, jsontext.AllowDuplicateNames(true))
 	if err != nil {
 		return fmt.Errorf("cannot parse json output: %w\n%s", err, output)
 	}

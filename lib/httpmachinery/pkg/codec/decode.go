@@ -15,7 +15,7 @@
 package codec
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -90,10 +90,7 @@ func DecodeAndValidateRequestParams[RequestParam any](ctx apicontext.Context, ur
 	// Don't assume the body is json (or even available) if the json header content type isn't set.
 	content := strings.ToLower(strings.TrimSpace(req.Header.Get(header.ContentType)))
 	if content == header.ApplicationJSON {
-		jsonDec := json.NewDecoder(req.Body)
-		jsonDec.DisallowUnknownFields()
-
-		if err := jsonDec.Decode(reqParams); err != nil {
+		if err := json.UnmarshalRead(req.Body, reqParams, json.RejectUnknownMembers(true)); err != nil {
 			ctx.Logger().WithError(err).Debug("Failed to decode request body.")
 			return nil, fmt.Errorf("malformed request body")
 		}
