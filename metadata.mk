@@ -10,7 +10,7 @@ CALICO_BASE_VER=ubi9-1757635857
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
-K8S_VERSION=v1.33.10
+K8S_VERSION=v1.33.3
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
