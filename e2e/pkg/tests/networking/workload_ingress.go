@@ -129,7 +129,7 @@ var ingressScenarioTable = []ingressScenario{
 		dest:           "clusterIP",
 		bpfExpect:      noSNAT,
 		iptablesExpect: noSNAT,
-		ipvsExpect:     snatNoWorkingPolicy,
+		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      noSNAT,
 	},
 	// Scenario 5: pod on svcNode -> svcNodePort
@@ -173,7 +173,7 @@ var ingressScenarioTable = []ingressScenario{
 		dest:           "svcNodePort",
 		bpfExpect:      noSNAT,
 		iptablesExpect: noSNAT,
-		ipvsExpect:     snatNoWorkingPolicy,
+		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      noSNAT,
 	},
 	// Scenario 9: pod on node1 -> node1NodePort (local NodePort)
@@ -195,7 +195,7 @@ var ingressScenarioTable = []ingressScenario{
 		dest:           "node1NodePort",
 		bpfExpect:      noSNAT,
 		iptablesExpect: noSNAT,
-		ipvsExpect:     snatNoWorkingPolicy,
+		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      noSNAT,
 	},
 	// Scenario 11: pod on node0 -> node1NodePort (remote NodePort)
@@ -216,8 +216,8 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  true,
 		dest:           "node1NodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
-		ipvsExpect:     snatNoWorkingPolicy,
+		iptablesExpect: snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
+		ipvsExpect:     snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      snatNoWorkingPolicy,
 	},
 	// Scenario 13 (localhost NodePort) is intentionally omitted.
