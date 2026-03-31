@@ -8800,10 +8800,12 @@ spec:
                   type: integer
                 variant:
                   description: |-
-                    Variant is the product to install - one of Calico or TigeraSecureEnterprise
+                    Variant is the product to install - one of Calico or CalicoEnterprise.
+                    TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
                     Default: Calico
                   enum:
                     - Calico
+                    - CalicoEnterprise
                     - TigeraSecureEnterprise
                   type: string
                 windowsNodes:
@@ -17771,10 +17773,12 @@ spec:
                       type: integer
                     variant:
                       description: |-
-                        Variant is the product to install - one of Calico or TigeraSecureEnterprise
+                        Variant is the product to install - one of Calico or CalicoEnterprise.
+                        TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
                         Default: Calico
                       enum:
                         - Calico
+                        - CalicoEnterprise
                         - TigeraSecureEnterprise
                       type: string
                     windowsNodes:
@@ -17886,11 +17890,12 @@ spec:
                   format: int32
                   type: integer
                 variant:
-                  description:
-                    Variant is the most recently observed installed variant
-                    - one of Calico or TigeraSecureEnterprise
+                  description: |-
+                    Variant is the most recently observed installed variant - one of Calico or CalicoEnterprise.
+                    TigeraSecureEnterprise is a deprecated alias for CalicoEnterprise.
                   enum:
                     - Calico
+                    - CalicoEnterprise
                     - TigeraSecureEnterprise
                   type: string
               type: object
