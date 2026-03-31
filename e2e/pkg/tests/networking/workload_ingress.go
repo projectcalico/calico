@@ -129,7 +129,7 @@ var ingressScenarioTable = []ingressScenario{
 		dest:           "clusterIP",
 		bpfExpect:      noSNAT,
 		iptablesExpect: noSNAT,
-		ipvsExpect:     snatNoWorkingPolicy,
+		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      noSNAT,
 	},
 	// Scenario 5: pod on svcNode -> svcNodePort
@@ -173,7 +173,7 @@ var ingressScenarioTable = []ingressScenario{
 		dest:           "svcNodePort",
 		bpfExpect:      noSNAT,
 		iptablesExpect: noSNAT,
-		ipvsExpect:     snatNoWorkingPolicy,
+		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      noSNAT,
 	},
 	// Scenario 9: pod on node1 -> node1NodePort (local NodePort)
@@ -195,7 +195,7 @@ var ingressScenarioTable = []ingressScenario{
 		dest:           "node1NodePort",
 		bpfExpect:      noSNAT,
 		iptablesExpect: noSNAT,
-		ipvsExpect:     snatNoWorkingPolicy,
+		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      noSNAT,
 	},
 	// Scenario 11: pod on node0 -> node1NodePort (remote NodePort)
@@ -216,8 +216,8 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  true,
 		dest:           "node1NodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
-		ipvsExpect:     snatNoWorkingPolicy,
+		iptablesExpect: snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
+		ipvsExpect:     snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      snatNoWorkingPolicy,
 	},
 	// Scenario 13 (localhost NodePort) is intentionally omitted.
@@ -350,12 +350,28 @@ var _ = describe.CalicoDescribe(
 			}
 		}
 
+		// srcNodeTunnelIP returns the tunnel IP for the scenario's source node.
+		srcNodeTunnelIP := func(srcNode string) string {
+			switch srcNode {
+			case "node0":
+				return tunnelIPs[0]
+			case "node1":
+				return tunnelIPs[1]
+			case "svcNode":
+				return tunnelIPs[2]
+			default:
+				framework.Failf("unknown srcNode %q", srcNode)
+				return ""
+			}
+		}
+
 		// buildTarget returns the connection target for the given scenario, using the
 		// already-deployed server.
 		buildTarget := func(s ingressScenario, server *conncheck.Server) conncheck.Target {
 			switch s.dest {
 			case "clusterIP":
-				return server.ClusterIP()
+				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
+				return server.ClusterIPv4().Port(80)
 			case "svcNodePort":
 				return server.NodePort(nodeIPs[2])
 			case "node1NodePort":
@@ -448,7 +464,7 @@ var _ = describe.CalicoDescribe(
 				// rather than pod label. Both client-a and client-b will be affected
 				// the same way since they're indistinguishable by source IP.
 				nodeIP := srcNodeIP(s.srcNode)
-				cidrs := ingressNodeCIDRs(nodeIP, tunnelIPs)
+				cidrs := ingressNodeCIDRs(nodeIP, []string{srcNodeTunnelIP(s.srcNode)})
 				By(fmt.Sprintf("Installing allow-by-CIDR policy for node CIDRs %v (host-networked scenario)", cidrs))
 				allowCIDR := ingressCreateAllowByCIDRPolicy(f, cidrs)
 				DeferCleanup(ingressDeletePolicy, f, allowCIDR.Namespace, allowCIDR.Name)

@@ -220,14 +220,20 @@ func (s *Server) NodePortPort() int {
 
 // NodePort returns a target that can be used to connect to the service's NodePort.
 // Callers should pass in the IP of a cluster node.
-func (s *Server) NodePort(nodeIP string) Target {
-	return &target{
+func (s *Server) NodePort(nodeIP string, opts ...TargetOption) Target {
+	t := &target{
 		server:      s,
 		targetType:  TypeNodePort,
 		destination: nodeIP,
 		port:        s.NodePortPort(),
 		protocol:    TCP,
 	}
+	for _, opt := range opts {
+		if err := opt(t); err != nil {
+			framework.ExpectNoError(err)
+		}
+	}
+	return t
 }
 
 // ICMP returns a target that can be used to connect to the pod's IP directly using ICMP.

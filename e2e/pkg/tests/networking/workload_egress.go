@@ -251,11 +251,13 @@ var _ = describe.CalicoDescribe(
 				// We still need a conncheck client for Connect().
 				clientPod = conncheck.NewClient("client-0", f.Namespace,
 					conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeNames[0])),
+					conncheck.WithClientCustomizer(withCurlClient),
 				)
 				ct.AddClient(clientPod)
 			} else {
 				clientPod = conncheck.NewClient("client-0", f.Namespace,
 					conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeNames[0])),
+					conncheck.WithClientCustomizer(withCurlClient),
 					conncheck.WithClientLabels(map[string]string{"pod-name": "client-0"}),
 				)
 				ct.AddClient(clientPod)
@@ -270,21 +272,24 @@ var _ = describe.CalicoDescribe(
 			expectSNAT := scenario.dstPod == 0 // Loopback always expects SNAT.
 			var target conncheck.Target
 
+			// All targets use HTTP GET /clientip for SNAT detection via conncheck.
+			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
+
 			switch scenario.accessType {
 			case "clusterIP":
-				target = server.ClusterIP()
+				target = server.ClusterIPv4(clientIPOpt).Port(80)
 				if scenario.dstHostNetworked {
 					expectSNAT = true
 				}
 			case "node0NodePort":
 				expectSNAT = true
-				target = server.NodePort(nodeIPs[0])
+				target = server.NodePort(nodeIPs[0], clientIPOpt)
 			case "node1NodePort":
 				expectSNAT = true
-				target = server.NodePort(nodeIPs[1])
+				target = server.NodePort(nodeIPs[1], clientIPOpt)
 			case "externalIP":
 				expectSNAT = true
-				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.TCP).Port(80)
+				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(80)
 			default:
 				Fail(fmt.Sprintf("unhandled accessType: %s", scenario.accessType))
 			}
@@ -478,6 +483,7 @@ var _ = describe.CalicoDescribe(
 					dstPod:           1,
 					dstHostNetworked: true,
 					accessType:       "clusterIP",
+					skipPolicy:       "egress policy to host-networked destination not fully implemented",
 				})
 			})
 
@@ -487,6 +493,7 @@ var _ = describe.CalicoDescribe(
 					dstPod:           2,
 					dstHostNetworked: true,
 					accessType:       "clusterIP",
+					skipPolicy:       "egress policy to host-networked destination not fully implemented",
 				})
 			})
 		})

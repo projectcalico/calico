@@ -22,8 +22,10 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 )
 
 // connectionResult represents the expected outcome of a connectivity check,
@@ -36,9 +38,10 @@ const (
 	reachableSNAT   connectionResult = "reachable-snat"
 )
 
-// checkConnection verifies connectivity from client to target and checks SNAT behavior.
-// The target server must be running an agnhost netexec server with /clientip endpoint.
-// Retries for up to 30 seconds to handle transient issues (e.g., kube-proxy programming delays).
+// checkConnection verifies connectivity from client to target and checks SNAT
+// behavior. The target must be an HTTP target pointing to an agnhost netexec
+// /clientip endpoint (created via WithHTTP("GET", "/clientip", nil)).
+// Uses ct.Connect() for all connectivity — never bypasses conncheck.
 func checkConnection(ct conncheck.ConnectionTester, client *conncheck.Client, target conncheck.Target, expected connectionResult) {
 	logrus.WithFields(logrus.Fields{
 		"client":   client.Name(),
@@ -48,24 +51,20 @@ func checkConnection(ct conncheck.ConnectionTester, client *conncheck.Client, ta
 
 	var lastErr error
 	Eventually(func() error {
-		// Hit /clientip on the target to get the source IP seen by the server.
-		cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", target.Destination())
-		out, err := conncheck.ExecInPod(client.Pod(), "sh", "-c", cmd)
+		out, err := ct.Connect(client, target)
 		if expected == unreachable {
 			if err != nil {
-				return nil // Connection failed as expected.
+				return nil
 			}
 			return fmt.Errorf("expected connection to be unreachable, but it succeeded: %s", out)
 		}
 
-		// We expected success.
 		if err != nil {
 			lastErr = err
 			return fmt.Errorf("expected connection to succeed, but it failed: %w", err)
 		}
 
 		if expected == reachableSNAT {
-			// Don't check source IP — just verify the connection succeeded.
 			return nil
 		}
 
@@ -87,6 +86,17 @@ func checkConnection(ct conncheck.ConnectionTester, client *conncheck.Client, ta
 		return nil
 	}, 30*time.Second, 1*time.Second).Should(Succeed(),
 		"connection check failed (last err: %v)", lastErr)
+}
+
+// withCurlClient swaps the conncheck client pod to Netshoot, which has curl
+// and nc. Required when using HTTP protocol targets since the default
+// TestWebserver client image only has wget.
+func withCurlClient(pod *v1.Pod) {
+	for i := range pod.Spec.Containers {
+		pod.Spec.Containers[i].Image = images.Netshoot
+		pod.Spec.Containers[i].Command = []string{"sleep", "3600"}
+		pod.Spec.Containers[i].Args = nil
+	}
 }
 
 // parseClientAddress extracts the client IP from an agnhost /clientip response.
