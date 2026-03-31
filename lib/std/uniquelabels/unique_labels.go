@@ -16,7 +16,7 @@ package uniquelabels
 
 import (
 	"cmp"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"iter"
 	"maps"
@@ -298,12 +298,11 @@ func appendJSONString(buf []byte, s string) []byte {
 
 // jsonSafe reports whether s contains only bytes that are safe to embed
 // in a JSON string without escaping: printable ASCII (0x20..0x7E)
-// excluding '"', '\\', and HTML-sensitive characters '&', '<', '>'
-// (which json.Marshal escapes by default).
+// excluding '"' and '\\'.
 func jsonSafe(s string) bool {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c < 0x20 || c > 0x7E || c == '"' || c == '\\' || c == '&' || c == '<' || c == '>' {
+		if c < 0x20 || c > 0x7E || c == '"' || c == '\\' {
 			return false
 		}
 	}

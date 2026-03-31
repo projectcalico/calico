@@ -15,7 +15,7 @@ package node
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"time"
 
 	"github.com/sirupsen/logrus"

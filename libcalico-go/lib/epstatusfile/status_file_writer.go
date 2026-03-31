@@ -15,7 +15,7 @@
 package epstatusfile
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"io/fs"
 	"os"
