@@ -106,7 +106,7 @@ type BGPPeerSpec struct {
 	// instead of "next hop self;"(default) in the specific branch of the Node on "bird.cfg".
 	// Note: that this field is deprecated. Users should use the NextHopMode field to control
 	// the next hop attribute for a BGP peer.
-	KeepOriginalNextHop bool `json:"keepOriginalNextHop,omitempty"`
+	KeepOriginalNextHop bool `json:"keepOriginalNextHop,omitempty,omitzero"`
 
 	// NextHopMode defines the method of calculating the next hop attribute for received routes.
 	// This replaces and expands the deprecated KeepOriginalNextHop field.

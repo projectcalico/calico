@@ -17,7 +17,7 @@ package imagescanner
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"

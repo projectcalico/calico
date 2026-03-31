@@ -15,7 +15,8 @@
 package windataplane
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"regexp"
 
@@ -53,7 +54,7 @@ var _ = Describe("VXLAN manager tests", func() {
 						{
 							// Wrong type, should be left alone.
 							Type:     "Foo",
-							Settings: json.RawMessage("{}"),
+							Settings: jsontext.Value("{}"),
 						},
 						{
 							// Correct type, should be removed.
@@ -63,7 +64,7 @@ var _ = Describe("VXLAN manager tests", func() {
 						{
 							// Wrong type, should be left alone.
 							Type:     "Bar",
-							Settings: json.RawMessage("{}"),
+							Settings: jsontext.Value("{}"),
 						},
 					},
 				},
@@ -80,11 +81,11 @@ var _ = Describe("VXLAN manager tests", func() {
 				Expect(dataplane.networks[0].Policies).To(Equal([]hcn.NetworkPolicy{
 					{
 						Type:     "Foo",
-						Settings: json.RawMessage("{}"),
+						Settings: jsontext.Value("{}"),
 					},
 					{
 						Type:     "Bar",
-						Settings: json.RawMessage("{}"),
+						Settings: jsontext.Value("{}"),
 					},
 				}))
 			})
@@ -145,11 +146,11 @@ var _ = Describe("VXLAN manager tests", func() {
 							Expect(dataplane.networks[0].Policies).To(Equal([]hcn.NetworkPolicy{
 								{
 									Type:     "Foo",
-									Settings: json.RawMessage("{}"),
+									Settings: jsontext.Value("{}"),
 								},
 								{
 									Type:     "Bar",
-									Settings: json.RawMessage("{}"),
+									Settings: jsontext.Value("{}"),
 								},
 								{
 									Type:     hcn.RemoteSubnetRoute,
@@ -207,11 +208,11 @@ var _ = Describe("VXLAN manager tests", func() {
 								Expect(dataplane.networks[0].Policies).To(Equal([]hcn.NetworkPolicy{
 									{
 										Type:     "Foo",
-										Settings: json.RawMessage("{}"),
+										Settings: jsontext.Value("{}"),
 									},
 									{
 										Type:     "Bar",
-										Settings: json.RawMessage("{}"),
+										Settings: jsontext.Value("{}"),
 									},
 								}))
 							})
@@ -241,11 +242,11 @@ var _ = Describe("VXLAN manager tests", func() {
 								Expect(dataplane.networks[0].Policies).To(Equal([]hcn.NetworkPolicy{
 									{
 										Type:     "Foo",
-										Settings: json.RawMessage("{}"),
+										Settings: jsontext.Value("{}"),
 									},
 									{
 										Type:     "Bar",
-										Settings: json.RawMessage("{}"),
+										Settings: jsontext.Value("{}"),
 									},
 									{
 										Type:     hcn.RemoteSubnetRoute,

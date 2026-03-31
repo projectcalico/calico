@@ -16,7 +16,7 @@
 package hcn
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"reflect"
 
 	"github.com/davecgh/go-spew/spew"
@@ -83,7 +83,7 @@ type PolicyNetworkRequest struct {
 // NetworkPolicy is a collection of Policy settings for a Network.
 type NetworkPolicy struct {
 	Type     NetworkPolicyType
-	Settings json.RawMessage
+	Settings jsontext.Value
 }
 
 // NetworkPolicyType are the potential Policies that apply to Networks.
