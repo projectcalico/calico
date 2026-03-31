@@ -220,14 +220,20 @@ func (s *Server) NodePortPort() int {
 
 // NodePort returns a target that can be used to connect to the service's NodePort.
 // Callers should pass in the IP of a cluster node.
-func (s *Server) NodePort(nodeIP string) Target {
-	return &target{
+func (s *Server) NodePort(nodeIP string, opts ...TargetOption) Target {
+	t := &target{
 		server:      s,
 		targetType:  TypeNodePort,
 		destination: nodeIP,
 		port:        s.NodePortPort(),
 		protocol:    TCP,
 	}
+	for _, opt := range opts {
+		if err := opt(t); err != nil {
+			framework.ExpectNoError(err)
+		}
+	}
+	return t
 }
 
 // ICMP returns a target that can be used to connect to the pod's IP directly using ICMP.
@@ -302,9 +308,9 @@ func WithAutoCreateService(autoCreate bool) ServerOption {
 	}
 }
 
-// WithEchoServer configures the server to use agnhost netexec instead of
-// TestWebserver. The /clientip endpoint returns the client's source address
-// in "IP:port" format, which is useful for SNAT detection in datapath tests.
+// WithEchoServer configures the server to use the EchoServer image instead of
+// TestWebserver. The EchoServer returns client_address=x.x.x.x in its HTTP
+// response, which is useful for SNAT detection in datapath tests.
 func WithEchoServer() ServerOption {
 	return func(c *Server) error {
 		c.echoServer = true
