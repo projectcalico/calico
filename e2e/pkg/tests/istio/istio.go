@@ -71,6 +71,30 @@ var _ = describe.CalicoDescribe(
 			var err error
 			cli, err = client.New(f.ClientConfig())
 			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create controller-runtime client")
+
+			// Disable CTLB (connect-time load balancing) for Istio ambient mode tests.
+			// CTLB intercepts connections at the socket level, which can bypass ztunnel's
+			// traffic interception and break policy enforcement.
+			originalFC := v3.NewFelixConfiguration()
+			gomega.Eventually(func() error {
+				return cli.Get(context.Background(), types.NamespacedName{Name: "default"}, originalFC)
+			}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "failed to get default FelixConfiguration")
+
+			originalCTLB := originalFC.Spec.BPFConnectTimeLoadBalancing
+			ctlbDisabled := v3.BPFConnectTimeLBDisabled
+			gomega.Eventually(func() error {
+				return utils.UpdateFelixConfig(cli, func(spec *v3.FelixConfigurationSpec) {
+					spec.BPFConnectTimeLoadBalancing = &ctlbDisabled
+				})
+			}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "failed to disable CTLB")
+
+			ginkgo.DeferCleanup(func() {
+				gomega.Eventually(func() error {
+					return utils.UpdateFelixConfig(cli, func(spec *v3.FelixConfigurationSpec) {
+						spec.BPFConnectTimeLoadBalancing = originalCTLB
+					})
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "failed to restore CTLB")
+			})
 		})
 
 		// Test: Full Istio Ambient Mode lifecycle with traffic encryption and Calico policy enforcement.
@@ -146,6 +170,13 @@ var _ = describe.CalicoDescribe(
 			ginkgo.DeferCleanup(func() {
 				_ = ctrlclient.IgnoreNotFound(cli.Delete(context.Background(), policy))
 			})
+
+			// TEMPORARY: Flush BPF conntrack entries so the deny policy takes effect.
+			// With Istio ambient mode, ztunnel's persistent HBONE connections may have
+			// CALI_CT_ESTABLISHED_BYPASS entries from before the policy was applied.
+			// TODO: Remove once Felix handles conntrack invalidation on policy change.
+			ginkgo.By("Flushing BPF conntrack entries after policy change")
+			flushBPFConntrack(ctx, f)
 
 			// Phase 7: Verify policy enforcement — allowed server reachable, denied server blocked.
 			ginkgo.By("Verifying policy enforcement: allowed-svc reachable, denied-svc blocked")
@@ -584,6 +615,29 @@ func expectNoUDPInZtunnelLogs(ctx context.Context, f *framework.Framework) {
 		if strings.Contains(line, "direction=") {
 			gomega.Expect(strings.ToUpper(line)).NotTo(gomega.ContainSubstring("UDP"),
 				"ztunnel access log should not contain UDP traffic entries (UDP bypasses ztunnel): %s", line)
+		}
+	}
+}
+
+// flushBPFConntrack runs "calico-bpf conntrack clean" on all calico-node pods to clear
+// established conntrack entries. This is a temporary workaround — see TODO above.
+func flushBPFConntrack(ctx context.Context, f *framework.Framework) {
+	listCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	podList, err := f.ClientSet.CoreV1().Pods("calico-system").List(listCtx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+	})
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to list calico-node pods")
+	gomega.Expect(podList.Items).NotTo(gomega.BeEmpty(), "Expected at least one calico-node pod")
+
+	for i := range podList.Items {
+		pod := &podList.Items[i]
+		output, err := utils.ExecInCalicoNode(pod, "calico-bpf conntrack clean")
+		if err != nil {
+			logrus.WithError(err).WithField("node", pod.Name).Warn("Failed to flush BPF conntrack")
+		} else {
+			logrus.WithField("node", pod.Name).WithField("output", output).Info("Flushed BPF conntrack")
 		}
 	}
 }
