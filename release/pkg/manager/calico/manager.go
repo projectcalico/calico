@@ -52,6 +52,8 @@ var (
 		"cni-plugin",
 	}
 
+	defaultBranch = utils.DefaultBranch
+
 	metadataFileName = "metadata.yaml"
 
 	helmIndexFileName = "index.yaml"
@@ -70,7 +72,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		publishImages:     true,
 		publishCharts:     true,
 		archiveImages:     true,
-		publishTag:        true,
+		publishGitRef:     true,
 		publishGithub:     true,
 		imageRegistries:   defaultRegistries,
 		helmRegistries:    registry.DefaultHelmRegistries,
@@ -158,7 +160,7 @@ type CalicoManager struct {
 	// Fine-tuning configuration for publishing.
 	publishImages bool
 	publishCharts bool
-	publishTag    bool
+	publishGitRef bool
 	publishGithub bool
 	awsProfile    string
 	s3Bucket      string
@@ -200,6 +202,9 @@ type CalicoManager struct {
 
 	// external configuration.
 	githubToken string
+
+	// prepCleanup is called after prep to restore the original branch.
+	prepCleanup func()
 }
 
 func releaseImages(images []string, version, registry, operatorImage, operatorVersion, operatorRegistry string) []string {
@@ -697,7 +702,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	// Check that we're not on the master branch. We never cut releases from master.
 	if branch, err := r.determineBranch(); err != nil {
 		return fmt.Errorf("failed to determine branch: %s", err)
-	} else if branch == "master" {
+	} else if branch == defaultBranch {
 		return fmt.Errorf("cannot cut release from branch: %s", branch)
 	}
 
@@ -1165,7 +1170,7 @@ func (r *CalicoManager) buildContainerImages() error {
 }
 
 func (r *CalicoManager) publishGitTag() error {
-	if !r.publishTag {
+	if !r.publishGitRef {
 		logrus.Info("Skipping git tag")
 		return nil
 	}
@@ -1556,5 +1561,139 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 		return fmt.Errorf("failed to commit changes: %s", err)
 	}
 
+	return nil
+}
+
+// PrepareRelease performs release preparation for Calico.
+// It validates the repo state, creates a build branch, updates version references
+// in charts and manifests, and commits the changes.
+// If publishTag is true, the branch is pushed to the remote.
+func (r *CalicoManager) PrepareRelease() error {
+	if r.validate {
+		if err := r.prepareReleasePrereqs(); err != nil {
+			return err
+		}
+	}
+
+	ver := r.calicoVersion
+	prepBranch := fmt.Sprintf("build-%s", ver)
+
+	if err := r.switchToPrepBranch(prepBranch); err != nil {
+		return err
+	}
+
+	if err := r.updateAndCommitPrep(ver); err != nil {
+		return err
+	}
+
+	return r.pushPrepBranch(prepBranch)
+}
+
+// switchToPrepBranch records the current branch for cleanup, then creates
+// and switches to the prep branch. Safe to re-run (force-creates).
+func (r *CalicoManager) switchToPrepBranch(prepBranch string) error {
+	baseBranch, err := r.determineBranch()
+	if err != nil {
+		return fmt.Errorf("failed to determine current branch: %w", err)
+	}
+	// Register cleanup to return to the base branch.
+	r.prepCleanup = func() {
+		if _, err := r.git("switch", "-f", baseBranch); err != nil {
+			logrus.WithError(err).Errorf("Failed to reset to %q branch", baseBranch)
+		}
+	}
+	if _, err := r.git("switch", "-C", prepBranch); err != nil {
+		return fmt.Errorf("failed to create branch %s: %w", prepBranch, err)
+	}
+	return nil
+}
+
+// updateAndCommitPrep updates charts and manifests, then stages and commits.
+func (r *CalicoManager) updateAndCommitPrep(ver string) error {
+	if err := r.modifyHelmChartsValues(); err != nil {
+		return fmt.Errorf("failed to update chart versions: %w", err)
+	}
+	if err := r.generateManifests(); err != nil {
+		return fmt.Errorf("failed to generate manifests: %w", err)
+	}
+
+	if _, err := r.git("add",
+		filepath.Join(r.repoRoot, "charts"),
+		filepath.Join(r.repoRoot, "manifests"),
+		filepath.Join(r.repoRoot, "release-notes"),
+	); err != nil {
+		return fmt.Errorf("failed to stage files: %w", err)
+	}
+	if _, err := r.git("commit", "-m", fmt.Sprintf("Prepare release %s", ver)); err != nil {
+		return fmt.Errorf("failed to commit changes: %w", err)
+	}
+	return nil
+}
+
+// pushPrepBranch pushes the prep branch to remote and creates a PR if not in local mode.
+// Calls the cleanup function to return to the base branch.
+func (r *CalicoManager) pushPrepBranch(prepBranch string) error {
+	defer func() {
+		if r.prepCleanup != nil {
+			r.prepCleanup()
+		}
+	}()
+
+	if !r.publishGitRef {
+		logrus.WithField("branch", prepBranch).Info("Local mode: skipping push and PR creation")
+		return nil
+	}
+
+	if _, err := r.git("push", "-f", r.remote, prepBranch); err != nil {
+		return fmt.Errorf("failed to push %q branch: %w", prepBranch, err)
+	}
+	logrus.WithField("branch", prepBranch).Info("Pushed preparation branch to remote")
+
+	return r.createPrepPR(prepBranch)
+}
+
+// createPrepPR creates a pull request for the prep branch.
+func (r *CalicoManager) createPrepPR(prepBranch string) error {
+	ver := version.New(r.calicoVersion)
+	baseBranch := fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream())
+	args := []string{
+		"pr", "create", "--fill",
+		"--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
+		"--base", baseBranch,
+		"--head", prepBranch,
+	}
+	logrus.WithField("args", args).Debug("Creating PR for release preparation")
+	pr, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			logrus.Warnf("PR already exists for %s, skipping creation", prepBranch)
+			return nil
+		}
+		return fmt.Errorf("failed to create PR: %w", err)
+	}
+	logrus.WithField("PR", strings.TrimSpace(pr)).Info("Created PR for release preparation")
+	return nil
+}
+
+// prepareReleasePrereqs validates that the repo is in a clean state
+// suitable for release preparation.
+func (r *CalicoManager) prepareReleasePrereqs() error {
+	if dirty, err := utils.GitIsDirty(r.repoRoot); dirty || err != nil {
+		return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before preparing the release")
+	}
+
+	if r.validateBranch {
+		branch, err := r.determineBranch()
+		if err != nil {
+			return fmt.Errorf("failed to determine current git branch: %w", err)
+		}
+		if branch == defaultBranch {
+			return fmt.Errorf("cannot prepare release from branch: %s", branch)
+		}
+	}
+
+	if r.calicoVersion == "" {
+		return fmt.Errorf("no calico version specified")
+	}
 	return nil
 }

@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
@@ -51,6 +52,9 @@ func releaseCommand(cfg *Config) *cli.Command {
 
 func releaseSubCommands(cfg *Config) []*cli.Command {
 	return []*cli.Command{
+		// Prepare for a release.
+		releasePrepCommand(cfg),
+
 		// Build release notes prior to a release.
 		{
 			Name:  "generate-release-notes",
@@ -144,7 +148,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithPublishImages(c.Bool(publishImagesFlag.Name)),
-					calico.WithPublishGitTag(c.Bool(publishGitTagFlag.Name)),
+					calico.WithPublishGitRef(c.Bool(publishGitTagFlag.Name)),
 					calico.WithPublishGithubRelease(c.Bool(publishGitHubReleaseFlag.Name)),
 					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
 					calico.WithPublishCharts(c.Bool(publishChartsFlag.Name)),
@@ -207,6 +211,82 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 			}
 			o := operator.NewManager(opOpts...)
 			return o.ReleasePublic()
+		},
+	}
+}
+
+func releasePrepCommand(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:  "prep",
+		Usage: "Prepare for a Calico release",
+		Flags: []cli.Flag{
+			orgFlag,
+			repoFlag,
+			repoRemoteFlag,
+			releaseBranchPrefixFlag,
+			devTagSuffixFlag,
+			githubTokenFlag,
+			skipValidationFlag,
+			localFlag,
+		},
+		Action: func(_ context.Context, c *cli.Command) error {
+			configureLogging("release-prep.log")
+
+			started := time.Now()
+
+			// Determine the versions to use for the release.
+			ver, err := version.DetermineReleaseVersion(version.GitVersion(), c.String(devTagSuffixFlag.Name))
+			if err != nil {
+				return err
+			}
+			operatorVer, err := version.DetermineOperatorVersion(cfg.RepoRootDir)
+			if err != nil {
+				return err
+			}
+
+			// Configure the manager.
+			opts := []calico.Option{
+				calico.WithRepoRoot(cfg.RepoRootDir),
+				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
+				calico.WithVersion(ver.FormattedString()),
+				calico.WithOperatorVersion(operatorVer.FormattedString()),
+				calico.WithGithubOrg(c.String(orgFlag.Name)),
+				calico.WithRepoName(c.String(repoFlag.Name)),
+				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+				calico.WithTmpDir(cfg.TmpDir),
+				calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
+				calico.WithReleaseBranchValidation(!c.Bool(skipValidationFlag.Name)),
+				calico.WithPublishGitRef(!c.Bool(localFlag.Name)),
+			}
+
+			// Generate release notes before prep so they're included in the commit.
+			releaseNotesPath := filepath.Join(cfg.RepoRootDir, releaseNotesDir)
+			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, releaseNotesPath, ver); err != nil {
+				logrus.WithError(err).Warn("Failed to generate release notes — continuing with prep")
+			}
+
+			r := calico.NewManager(opts...)
+			prepErr := r.PrepareRelease()
+
+			// Write structured summary regardless of success/failure.
+			summary := outputs.StepSummary{
+				Status:    "success",
+				Started:   started,
+				Completed: time.Now(),
+				Outputs: map[string]any{
+					"branch":   fmt.Sprintf("build-%s", ver.FormattedString()),
+					"operator": operatorVer.FormattedString(),
+				},
+			}
+			if prepErr != nil {
+				summary.Status = "failure"
+			}
+			outputDir := outputs.SummaryOutputDir(cfg.RepoRootDir)
+			if err := outputs.WriteSummary(outputDir, ver.FormattedString(), "release-prep", summary); err != nil {
+				logrus.WithError(err).Warn("Failed to write summary file")
+			}
+
+			return prepErr
 		},
 	}
 }
