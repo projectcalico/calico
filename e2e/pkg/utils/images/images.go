@@ -33,6 +33,15 @@ const (
 	// EchoServer is an alias for Agnhost, used as a convention indicator.
 	// Use with `netexec --http-port=PORT` args. Hit /clientip for source IP.
 	EchoServer = Agnhost
+
+	// DataplaneServer is a Flask-based HTTP+UDP server used for packet size
+	// verification tests. Serves GET /length/<N> (returns N bytes), POST /post
+	// (returns posted data length), and UDP echo.
+	// TODO: Consider replacing with agnhost. Agnhost's /echo endpoint can echo
+	// back POST data, and nc can be used for UDP. The main gap is GET /length/N
+	// (configurable response size) which would need a different approach — e.g.,
+	// POST N bytes and verify the echo, or use dd to generate payloads.
+	DataplaneServer = "docker.io/calico/k8s-e2e-dataplane-server:stable"
 )
 
 // Get client image and powershell command based on windows OS version
