@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Memory leak investigation tests for the IPAMController's onBlockDeleted cleanup paths.
-// Tests marked "currently FAILS" document confirmed bugs; they will pass once fixed.
+// Regression tests for the IPAMController's onBlockDeleted cleanup paths.
 //
 // The IPAMController tracks IPAM state across several cross-indexed maps:
 //
@@ -119,14 +118,13 @@ var _ = Describe("IPAMController onBlockDeleted leak investigation", func() {
 	// ── Bug 1: onBlockDeleted skips handleTracker cleanup ───────────────────
 
 	Describe("handleTracker cleanup on block deletion", func() {
-		// These tests currently FAIL — they document a confirmed bug:
-		// onBlockUpdated correctly calls handleTracker.removeAllocation for individual
-		// allocation releases, but onBlockDeleted omits this call entirely. When a block
-		// is deleted with live allocations still tracked, handleTracker.allocationsByHandle
-		// accumulates stale entries indefinitely.
-		// Fix: onBlockDeleted should call handleTracker.removeAllocation for each
-		// allocation in the block before deleting the block from allocationsByBlock.
-		It("removes allocations from handleTracker when a block is deleted (currently FAILS)", func() {
+		// Regression: onBlockUpdated correctly called handleTracker.removeAllocation for
+		// individual allocation releases, but onBlockDeleted omitted this call entirely.
+		// When a block was deleted with live allocations still tracked,
+		// handleTracker.allocationsByHandle accumulated stale entries indefinitely.
+		// Fixed by calling handleTracker.removeAllocation for each allocation in the
+		// block before deleting the block from allocationsByBlock.
+		It("removes allocations from handleTracker when a block is deleted", func() {
 			kvp := makeTestBlock(blockCIDR, nodeName, handle)
 			c.onBlockUpdated(kvp)
 			Expect(c.handleTracker.allocationsByHandle).To(HaveKey(handle),
@@ -138,7 +136,7 @@ var _ = Describe("IPAMController onBlockDeleted leak investigation", func() {
 				"handleTracker should not retain stale handle entries after block deletion")
 		})
 
-		It("removes the handle key when the last allocation for that handle is deleted with the block (currently FAILS)", func() {
+		It("removes the handle key when the last allocation for that handle is deleted with the block", func() {
 			kvp := makeTestBlock(blockCIDR, nodeName, handle)
 			c.onBlockUpdated(kvp)
 			c.onBlockDeleted(kvp.Key.(model.BlockKey))
@@ -151,14 +149,14 @@ var _ = Describe("IPAMController onBlockDeleted leak investigation", func() {
 	// ── Bug 2: onBlockDeleted skips confirmedLeaks cleanup ──────────────────
 
 	Describe("confirmedLeaks cleanup on block deletion", func() {
-		// This test currently FAILS — it documents a confirmed bug:
-		// onBlockUpdated correctly calls delete(c.confirmedLeaks, id) when an allocation
-		// is released, but onBlockDeleted omits this cleanup. A confirmed-leak entry for
-		// an allocation in a deleted block is never removed, so confirmedLeaks accumulates
-		// stale entries that can never be GC'd (the block they referenced no longer exists).
-		// Fix: onBlockDeleted should call delete(c.confirmedLeaks, alloc.id()) for each
-		// allocation in the block.
-		It("removes confirmed leak entries for allocations in a deleted block (currently FAILS)", func() {
+		// Regression: onBlockUpdated correctly called delete(c.confirmedLeaks, id) when
+		// an allocation was released, but onBlockDeleted omitted this cleanup. A
+		// confirmed-leak entry for an allocation in a deleted block was never removed, so
+		// confirmedLeaks accumulated stale entries that could never be GC'd (the block
+		// they referenced no longer exists).
+		// Fixed by calling delete(c.confirmedLeaks, alloc.id()) for each allocation in
+		// the block inside onBlockDeleted.
+		It("removes confirmed leak entries for allocations in a deleted block", func() {
 			kvp := makeTestBlock(blockCIDR, nodeName, handle)
 			c.onBlockUpdated(kvp)
 
@@ -180,15 +178,14 @@ var _ = Describe("IPAMController onBlockDeleted leak investigation", func() {
 	// ── Bug 3: onBlockDeleted leaves empty blocksByNode inner maps ──────────
 
 	Describe("blocksByNode cleanup on block deletion", func() {
-		// This test currently FAILS — it documents a confirmed bug:
-		// onBlockDeleted calls delete(c.blocksByNode[n], blockCIDR) to remove the block
-		// from the node's inner set, but never removes the outer node key when the inner
-		// set becomes empty. Empty map[string]bool{} values accumulate in blocksByNode
-		// for every node whose last block was deleted, growing proportionally to cluster
-		// node churn.
-		// Fix: after deleting the block from the inner set, check if it is empty and
-		// delete the outer node key if so.
-		It("removes the node key from blocksByNode when its last block is deleted (currently FAILS)", func() {
+		// Regression: onBlockDeleted called delete(c.blocksByNode[n], blockCIDR) to
+		// remove the block from the node's inner set, but never removed the outer node
+		// key when the inner set became empty. Empty map[string]bool{} values accumulated
+		// in blocksByNode for every node whose last block was deleted, growing
+		// proportionally to cluster node churn.
+		// Fixed by checking len(c.blocksByNode[n]) == 0 after the delete and removing
+		// the outer key if so.
+		It("removes the node key from blocksByNode when its last block is deleted", func() {
 			kvp := makeTestBlock(blockCIDR, nodeName, handle)
 			c.onBlockUpdated(kvp)
 			Expect(c.blocksByNode).To(HaveKey(nodeName),

@@ -603,6 +603,8 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 		if node != "" {
 			c.allocationState.release(alloc)
 		}
+		c.handleTracker.removeAllocation(alloc)
+		delete(c.confirmedLeaks, alloc.id())
 	}
 	delete(c.allocationsByBlock, blockCIDR)
 
@@ -610,6 +612,9 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	if n := c.nodesByBlock[blockCIDR]; n != "" {
 		// The block was assigned to a node, make sure to update internal cache.
 		delete(c.blocksByNode[n], blockCIDR)
+		if len(c.blocksByNode[n]) == 0 {
+			delete(c.blocksByNode, n)
+		}
 	}
 	delete(c.allBlocks, blockCIDR)
 	delete(c.nodesByBlock, blockCIDR)
