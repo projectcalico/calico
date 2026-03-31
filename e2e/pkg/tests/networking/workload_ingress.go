@@ -370,7 +370,8 @@ var _ = describe.CalicoDescribe(
 		buildTarget := func(s ingressScenario, server *conncheck.Server) conncheck.Target {
 			switch s.dest {
 			case "clusterIP":
-				return server.ClusterIP()
+				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
+				return server.ClusterIPv4().Port(80)
 			case "svcNodePort":
 				return server.NodePort(nodeIPs[2])
 			case "node1NodePort":
