@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/iptables"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
@@ -1108,7 +1107,7 @@ var _ = Describe("Static", func() {
 
 					for _, ifacePrefix := range rr.WorkloadIfacePrefixes {
 						chain.Rules = append(chain.Rules, generictables.Rule{
-							Match:  Match().InInterface(ifacePrefix + iptables.Wildcard),
+							Match:  Match().InInterface(ifacePrefix + Wildcard),
 							Action: SetMarkAction{Mark: markFromWorkload},
 						})
 					}
@@ -1225,7 +1224,7 @@ var _ = Describe("Static", func() {
 
 					for _, ifacePrefix := range rr.WorkloadIfacePrefixes {
 						chain.Rules = append(chain.Rules, generictables.Rule{
-							Match:  Match().InInterface(ifacePrefix + iptables.Wildcard),
+							Match:  Match().InInterface(ifacePrefix + Wildcard),
 							Action: SetMarkAction{Mark: markFromWorkload},
 						})
 					}

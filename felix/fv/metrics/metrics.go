@@ -88,7 +88,7 @@ func GetRawMetrics(ip string, port int, caFile, certFile, keyFile string) (out s
 			ok := transport.TLSClientConfig.RootCAs.AppendCertsFromPEM(caPEMBlock)
 			if !ok {
 				log.Error("Failed to add CA data to pool")
-				return "", errors.New("Failed to add CA data to pool")
+				return "", errors.New("failed to add CA data to pool")
 			}
 			transport.TLSClientConfig.VerifyPeerCertificate = tlsutils.CertificateVerifier(
 				log.WithField("caFile", caFile),
@@ -114,7 +114,7 @@ func GetRawMetrics(ip string, port int, caFile, certFile, keyFile string) (out s
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		err = fmt.Errorf("Bad response (%v) from metrics server", resp.StatusCode)
+		err = fmt.Errorf("bad response (%v) from metrics server", resp.StatusCode)
 		return
 	}
 

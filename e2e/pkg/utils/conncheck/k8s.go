@@ -91,6 +91,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	newLabels := make(map[string]string)
 	maps.Copy(newLabels, labels)
 	newLabels["pod-name"] = podName
+	newLabels[roleLabel] = roleServer
 
 	By(fmt.Sprintf("Creating a server pod %s in namespace %s", podName, namespace.Name))
 	pod := &v1.Pod{

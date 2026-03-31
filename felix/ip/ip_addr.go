@@ -39,7 +39,7 @@ const (
 	IPv6SizeDword = 4
 )
 
-var ErrInvalidIP = errors.New("Failed to parse IP address")
+var ErrInvalidIP = errors.New("failed to parse IP address")
 
 // Addr represents either an IPv4 or IPv6 IP address.
 type Addr interface {
