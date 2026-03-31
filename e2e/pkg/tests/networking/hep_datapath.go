@@ -64,8 +64,8 @@ type hepScenario struct {
 	aofFalsePolicyApplies bool
 	aofTruePolicyApplies  bool
 
-	// Only run on iptables/nftables dataplane.
-	iptablesOnly bool
+	// Only applies to iptables/nftables (xtables-based) dataplanes.
+	xtablesOnly bool
 }
 
 // hepScenarioTable defines all HEP test scenarios.
@@ -103,7 +103,7 @@ var hepScenarioTable = []hepScenario{
 		name: "ingress-2N2", srcPod: 2, dstPod: 2,
 		accessType: "nodePort", policyDirection: "ingress",
 		aofFalsePolicyApplies: false, aofTruePolicyApplies: true,
-		iptablesOnly: true,
+		xtablesOnly: true,
 	},
 
 	// ===== Egress scenarios =====
@@ -166,7 +166,7 @@ var hepScenarioTable = []hepScenario{
 		name: "egress-2N2", srcPod: 2, dstPod: 2,
 		accessType: "nodePort", policyDirection: "egress",
 		aofFalsePolicyApplies: false, aofTruePolicyApplies: true,
-		iptablesOnly: true,
+		xtablesOnly: true,
 	},
 	// pod2 → NodePort → pod1 (forwarded, policy never applies for egress)
 	{
@@ -452,15 +452,15 @@ var _ = describe.CalicoDescribe(
 
 			Context(s.name, func() {
 				It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), func() {
-					if s.iptablesOnly && dp.IsBPF() {
-						Fail("This scenario only applies to iptables/nftables dataplane")
+					if s.xtablesOnly && (dp.IsBPF() || dp.IsVPP()) {
+						Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
 					}
 					runHEPScenario(s, false)
 				})
 
 				It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), func() {
-					if s.iptablesOnly && dp.IsBPF() {
-						Fail("This scenario only applies to iptables/nftables dataplane")
+					if s.xtablesOnly && (dp.IsBPF() || dp.IsVPP()) {
+						Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
 					}
 					runHEPScenario(s, true)
 				})
