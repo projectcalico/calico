@@ -24,6 +24,7 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	numorstring "github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,7 +38,6 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
-	numorstring "github.com/projectcalico/api/pkg/lib/numorstring"
 )
 
 // hepScenario defines a single host endpoint datapath test scenario.
@@ -83,7 +83,7 @@ var hepScenarioTable = []hepScenario{
 	{
 		name: "ingress-2C0", srcPod: 2, dstPod: 0,
 		dstHostNetworked: true,
-		accessType: "clusterIP", policyDirection: "ingress",
+		accessType:       "clusterIP", policyDirection: "ingress",
 		aofFalsePolicyApplies: true, aofTruePolicyApplies: true,
 	},
 	// pod2 → pod IP → pod1 (forwarded traffic)
@@ -130,21 +130,21 @@ var hepScenarioTable = []hepScenario{
 	{
 		name: "egress-0-2", srcPod: 0, dstPod: 2,
 		srcHostNetworked: true,
-		accessType: "podIP", policyDirection: "egress",
+		accessType:       "podIP", policyDirection: "egress",
 		aofFalsePolicyApplies: true, aofTruePolicyApplies: true,
 	},
 	// pod0* → clusterIP → pod2 (host egress via service)
 	{
 		name: "egress-0C2", srcPod: 0, dstPod: 2,
 		srcHostNetworked: true,
-		accessType: "clusterIP", policyDirection: "egress",
+		accessType:       "clusterIP", policyDirection: "egress",
 		aofFalsePolicyApplies: true, aofTruePolicyApplies: true,
 	},
 	// pod0* → NodePort → pod2 (host egress via NodePort)
 	{
 		name: "egress-0N2", srcPod: 0, dstPod: 2,
 		srcHostNetworked: true,
-		accessType: "nodePort", policyDirection: "egress",
+		accessType:       "nodePort", policyDirection: "egress",
 		aofFalsePolicyApplies: true, aofTruePolicyApplies: true,
 	},
 	// pod0* → clusterIP → pod3* (host-to-host via service)
@@ -199,12 +199,12 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("hep-datapath")
 
 		var (
-			cli           ctrlclient.Client
-			dp            clusterDataplane
-			encapIface    string
-			nodeNames     []string
-			nodeIPs       []string
-			calicoNames   []string
+			cli         ctrlclient.Client
+			dp          clusterDataplane
+			encapIface  string
+			nodeNames   []string
+			nodeIPs     []string
+			calicoNames []string
 		)
 
 		// Pod index → node index mapping.
