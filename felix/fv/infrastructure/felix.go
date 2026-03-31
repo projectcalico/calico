@@ -29,8 +29,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
@@ -161,7 +161,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	}
 	// Collect the volumes for this container.
 	wd, err := os.Getwd()
-	Expect(err).NotTo(HaveOccurred(), "failed to get working directory")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get working directory")
 
 	arch := utils.GetSysArch()
 
@@ -172,7 +172,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	if cwLogDir == "" {
 		wDir, err := os.Getwd()
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		cwLogDir = filepath.Join(wDir, "/cwlogs")
 	}
 	volumes := map[string]string{
@@ -208,7 +208,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// It's fine to always create the directory for felix flow logs, if they
 	// aren't enabled the directory will just stay empty.
 	logDir := path.Join(cwLogDir, uniqueName)
-	Expect(os.MkdirAll(logDir, 0o777)).NotTo(HaveOccurred())
+	gomega.Expect(os.MkdirAll(logDir, 0o777)).NotTo(gomega.HaveOccurred())
 	nodeLogDir := "/var/log/calico/flowlogs" // This path is used by file reporter
 
 	var flowServer *local.FlowServer
@@ -328,17 +328,17 @@ func (f *Felix) Stop() {
 	f.FlowServerStop()
 	f.Container.Stop()
 
-	if CurrentGinkgoTestDescription().Failed {
-		Expect(f.DataRaces()).To(BeEmpty(), "Test FAILED and data races were detected in the logs at teardown.")
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		gomega.Expect(f.DataRaces()).To(gomega.BeEmpty(), "Test FAILED and data races were detected in the logs at teardown.")
 	} else {
-		Expect(f.DataRaces()).To(BeEmpty(), "Test PASSED but data races were detected in the logs at teardown.")
+		gomega.Expect(f.DataRaces()).To(gomega.BeEmpty(), "Test PASSED but data races were detected in the logs at teardown.")
 	}
 }
 
 func (f *Felix) Restart() {
 	oldPID := f.GetFelixPID()
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
-	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+	gomega.Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(gomega.Equal(oldPID))
 	f.FlowServerReset()
 	f.WaitForReady()
 }
@@ -355,7 +355,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 	triggerChan := make(chan struct{})
 
 	go func() {
-		defer GinkgoRecover()
+		defer ginkgo.GinkgoRecover()
 		select {
 		case <-time.After(time.Second * 30):
 			logrus.Panic("Restart with delayed startup timed out after 30s")
@@ -368,7 +368,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 		close(triggerChan)
 		f.Exec("rm", "/delay-felix-restart")
 		f.restartDelayed = false
-		Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+		gomega.Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(gomega.Equal(oldPID))
 	}
 }
 
@@ -376,7 +376,7 @@ func (f *Felix) SetEnv(env map[string]string) {
 	fn := "extra-env.sh"
 
 	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o644)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	fw := bufio.NewWriter(file)
 
@@ -388,7 +388,7 @@ func (f *Felix) SetEnv(env map[string]string) {
 	file.Close()
 
 	err = f.CopyFileIntoContainer("./"+fn, "/"+fn)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 }
 
 func (f *Felix) Ready() (bool, error) {
@@ -431,7 +431,7 @@ func (f *Felix) WaitForReady() {
 		// when starting several felix nodes in parallel.
 		timeout = "30s"
 	}
-	EventuallyWithOffset(1, f.Ready, timeout, "100ms").Should(BeTrue(),
+	gomega.EventuallyWithOffset(1, f.Ready, timeout, "100ms").Should(gomega.BeTrue(),
 		"Timed out waiting for Felix to become ready.")
 	logrus.WithField("felix", f.Name).Infof("Felix is ready after %s", time.Since(startTime))
 }
@@ -442,7 +442,7 @@ func BPFMode() bool {
 
 // AttachTCPDump returns tcpdump attached to the container
 func (f *Felix) AttachTCPDump(iface string) *tcpdump.TCPDump {
-	return tcpdump.Attach(f.Container.Name, "", iface)
+	return tcpdump.Attach(f.Name, "", iface)
 }
 
 func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool) {
@@ -533,7 +533,7 @@ func (f *Felix) ProgramNftablesDNAT(serviceIP, targetIP string, chain string, ip
 		hook = "prerouting"
 		prio = "-100"
 	default:
-		Expect(true).To(BeFalse(), "DNAT programming not supoorted for chain %s", chain)
+		gomega.Expect(true).To(gomega.BeFalse(), "DNAT programming not supoorted for chain %s", chain)
 	}
 
 	// Create the table if needed.
@@ -569,7 +569,7 @@ var bpfIfStateRegexp = regexp.MustCompile(`.*([0-9]+) : \{flags: (.*) name: (.*)
 
 func (f *Felix) BPFIfState(family int) map[string]BPFIfState {
 	out, err := f.ExecOutput("calico-bpf", "ifstate", "dump")
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	states := make(map[string]BPFIfState)
 
@@ -696,7 +696,7 @@ func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int, ingressOrEgress
 func (f *Felix) IPTablesChains(table string) map[string][]string {
 	out := map[string][]string{}
 	raw, err := f.ExecOutput("iptables-save", "-t", table)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	lines := strings.Split(raw, "\n")
 	for _, line := range lines {
 		if strings.HasPrefix(line, "#") {
@@ -777,11 +777,11 @@ func UpdateFelixConfiguration(client client.Interface, deltaFn func(*api.FelixCo
 		cfg.Name = "default"
 		deltaFn(cfg)
 		_, err = client.FelixConfigurations().Create(ctx, cfg, options.SetOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	} else {
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		deltaFn(cfg)
 		_, err = client.FelixConfigurations().Update(ctx, cfg, options.SetOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
 }
