@@ -49,8 +49,6 @@ type egressScenario struct {
 	dstHostNetworked bool
 	// accessType is how the client accesses the service.
 	accessType string // "clusterIP", "node0NodePort", "node1NodePort", "externalIP"
-	// svcTweak customizes the destination service.
-	svcTweak func(svc conncheck.ServerOption)
 	// svcOpts are additional server options for the destination service.
 	svcOpts []conncheck.ServerOption
 	// expectPolicyBypass indicates policy won't be applied (e.g., BPF self-connection).
@@ -104,7 +102,9 @@ var _ = describe.CalicoDescribe(
 			nodeIPs = nodesInfo.GetIPv4s()[:2]
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
-			// Detect BPF dataplane mode.
+			// Detect BPF dataplane mode. Reset each run in case the
+			// cluster config changed between tests.
+			bpfMode = false
 			felixCfg := &v3.FelixConfiguration{}
 			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixCfg)
 			if err == nil && felixCfg.Spec.BPFEnabled != nil && *felixCfg.Spec.BPFEnabled {

@@ -302,9 +302,9 @@ func WithAutoCreateService(autoCreate bool) ServerOption {
 	}
 }
 
-// WithEchoServer configures the server to use the EchoServer image instead of
-// TestWebserver. The EchoServer returns client_address=x.x.x.x in its HTTP
-// response, which is useful for SNAT detection in datapath tests.
+// WithEchoServer configures the server to use agnhost netexec instead of
+// TestWebserver. The /clientip endpoint returns the client's source address
+// in "IP:port" format, which is useful for SNAT detection in datapath tests.
 func WithEchoServer() ServerOption {
 	return func(c *Server) error {
 		c.echoServer = true
