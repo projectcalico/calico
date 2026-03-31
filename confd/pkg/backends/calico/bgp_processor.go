@@ -229,7 +229,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 		"  if (defined(source) && (source = RTS_BGP) && !defined(krt_metric)) then {",
 		fmt.Sprintf("      krt_metric = %d;", config.NormalRoutePriority),
 		"      if (defined(bgp_local_pref)) then {",
-		fmt.Sprintf("          krt_metric = %d - bgp_local_pref;", birdIntMaxValue),
+		fmt.Sprintf("          krt_metric = %d - bgp_local_pref;", template.BirdIntMaxValue),
 		"      }",
 		fmt.Sprintf("      if (krt_metric < %d) then {", config.NormalRoutePriority),
 		fmt.Sprintf("          preference = %d;", birdOverridePreference),
@@ -633,22 +633,6 @@ func truncateBGPFilterName(name string) string {
 }
 
 const (
-	// This is a value we use when converting between priority/metric values and bgp_local_pref.
-	// The range of Linux priority/metric values is from 0 to 2^32-1, i.e. a uint32, with lower
-	// values meaning higher priority.  The range of bgp_local_pref is also 0 to 2^32-1, i.e. a
-	// uint32, but with higher values meaning higher priority.  But we also have to consider:
-	//
-	// 1. In FelixConfiguration and BGPConfiguration we use int fields, i.e. signed, to
-	// configure the priority values that we use.
-	//
-	// 2. The "0" value has a special meaning in Linux.  For IPv6 routes it gets "normalized" to
-	// 1024.
-	//
-	// Therefore we restrict the range of priority/metric values that Felix can actually use to
-	// be from 1 to 2^31-2, and we convert between priority/metric and bgp_local_pref with `x =
-	// 2^31-1 - y`.  The following value is 2^31-1.
-	birdIntMaxValue = 2147483647
-
 	// This is the 'preference' value we use when we want an imported route to override a local
 	// workload route - i.e. for the kernel to say "for <IP1> go via remote node <N1>" even
 	// though there might also be a local workload with <IP1>.  This scenario occurs in live
@@ -699,22 +683,6 @@ func (c *client) buildImportFilter(
 ) string {
 	var filterLines []string
 
-	// On import, always default krt_metric to our normal route priority.
-	filterLines = append(filterLines,
-		fmt.Sprintf("krt_metric = %d;", normalRoutePriority),
-	)
-
-	// For iBGP peers, convert from LOCAL_PREF to krt_metric.  Higher LOCAL_PREF = higher
-	// priority, but lower krt_metric = higher priority, so we invert: krt_metric = INT_MAX -
-	// bgp_local_pref.
-	if peerAS == nodeAS {
-		filterLines = append(filterLines,
-			"if (defined(bgp_local_pref)) then {",
-			fmt.Sprintf("  krt_metric = %d - bgp_local_pref;", birdIntMaxValue),
-			"}",
-		)
-	}
-
 	// Determine filter suffix based on IP version
 	filterSuffix := "V4"
 	if ipVersion == 6 {
@@ -742,13 +710,6 @@ func (c *client) buildImportFilter(
 		}
 	}
 
-	// If we now have a higher than normal priority route, set 'preference' attribute to allow
-	// it to override an existing local workload route in the kernel.
-	filterLines = append(filterLines,
-		fmt.Sprintf("if (krt_metric < %d) then", normalRoutePriority),
-		fmt.Sprintf("  preference = %d;", birdOverridePreference),
-	)
-
 	// Prior to the introduction of BGP Filters we used "import all" so use default accept
 	// behaviour on import.
 	filterLines = append(filterLines, "accept;")
@@ -769,14 +730,14 @@ func (c *client) buildExportFilter(
 		fmt.Sprintf("if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
 	)
 
-	// For iBGP peers, convert from krt_metric to LOCAL_PREF.  Higher LOCAL_PREF = higher
-	// priority, but lower krt_metric = higher priority, so we invert: bgp_local_pref = INT_MAX
-	// - krt_metric.
-	if peerAS == nodeAS {
-		filterLines = append(filterLines,
-			fmt.Sprintf("bgp_local_pref = %d - krt_metric;", birdIntMaxValue),
-		)
-	}
+	// Convert from krt_metric to BGP LOCAL_PREF.  Higher LOCAL_PREF = higher priority, but
+	// lower krt_metric = higher priority, so we invert: bgp_local_pref = INT_MAX - krt_metric.
+	// BGP LOCAL_PREF will only be propagated to iBGP peers; however it's helpful for us to set
+	// the bgp_local_pref attribute for both eBGP and iBGP peers, because then we can implement
+	// the Priority field as a match against bgp_local_pref.
+	filterLines = append(filterLines,
+		fmt.Sprintf("bgp_local_pref = %d - krt_metric;", template.BirdIntMaxValue),
+	)
 
 	// Determine filter suffix based on IP version
 	filterSuffix := "V4"
