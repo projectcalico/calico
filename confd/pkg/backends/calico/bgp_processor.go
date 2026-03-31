@@ -710,6 +710,13 @@ func (c *client) buildImportFilter(
 		}
 	}
 
+	// If we now have a higher than normal priority route, set 'preference' attribute to allow
+	// it to override an existing local workload route in the kernel.
+	filterLines = append(filterLines,
+		fmt.Sprintf("if (defined(bgp_local_pref)&&(bgp_local_pref > %d)) then", template.BirdIntMaxValue-normalRoutePriority),
+		fmt.Sprintf("  preference = %d;", birdOverridePreference),
+	)
+
 	// Prior to the introduction of BGP Filters we used "import all" so use default accept
 	// behaviour on import.
 	filterLines = append(filterLines, "accept;")
