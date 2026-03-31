@@ -48,13 +48,13 @@ spec:
                           nets:
                             items:
                               type: string
-                            maxItems: 50
+                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 50
+                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notPorts:
@@ -221,13 +221,13 @@ spec:
                           nets:
                             items:
                               type: string
-                            maxItems: 50
+                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 50
+                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notPorts:
@@ -345,6 +345,18 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                      - message: protocol ICMP requires ipVersion 4
+                        reason: FieldValueInvalid
+                        rule:
+                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
+                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
+                          == 4
+                      - message: protocol ICMPv6 requires ipVersion 6
+                        reason: FieldValueInvalid
+                        rule:
+                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
+                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
+                          == 6
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -366,13 +378,13 @@ spec:
                           nets:
                             items:
                               type: string
-                            maxItems: 50
+                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 50
+                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notPorts:
@@ -539,13 +551,13 @@ spec:
                           nets:
                             items:
                               type: string
-                            maxItems: 50
+                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 50
+                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notPorts:
@@ -663,6 +675,18 @@ spec:
                         rule:
                           (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
                           != 58)) || !has(self.ipVersion) || self.ipVersion == 6
+                      - message: protocol ICMP requires ipVersion 4
+                        reason: FieldValueInvalid
+                        rule:
+                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
+                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
+                          == 4
+                      - message: protocol ICMPv6 requires ipVersion 6
+                        reason: FieldValueInvalid
+                        rule:
+                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
+                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
+                          == 6
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic

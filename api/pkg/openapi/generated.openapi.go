@@ -2651,7 +2651,7 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref common.Referenc
 					},
 					"variant": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Variant declares which variant of Calico should be active.",
+							Description: "Variant declares which variant of Calico is active.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
