@@ -15,7 +15,7 @@
 package numorstring_test
 
 import (
-	"encoding/json/v2"
+	"encoding/json"
 	"fmt"
 	"reflect"
 

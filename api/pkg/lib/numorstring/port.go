@@ -15,7 +15,7 @@
 package numorstring
 
 import (
-	"encoding/json/v2"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
