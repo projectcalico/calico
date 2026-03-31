@@ -24,10 +24,10 @@ type NetworkPolicySpecApplyConfiguration struct {
 	// alphanumerical order based on the Policy "Name" within the tier.
 	Order *float64 `json:"order,omitempty"`
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
 	Ingress []RuleApplyConfiguration `json:"ingress,omitempty"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
 	Egress []RuleApplyConfiguration `json:"egress,omitempty"`
 	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.

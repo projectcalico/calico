@@ -170,7 +170,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			}, options.SetOptions{})
 			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1e+06"))
+			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1000000"))
 
 			By("Cannot delete the default Tier")
 			_, outError = c.Tiers().Delete(ctx, defaultName, options.DeleteOptions{})
@@ -186,7 +186,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			defRes.Spec = spec1
 			_, outError = c.Tiers().Update(ctx, defRes, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1e+06"))
+			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1000000"))
 
 			By("Creating the kube-admin tier with an invalid order")
 			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
@@ -220,7 +220,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			}, options.SetOptions{})
 			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("kube-baseline tier order must be 1e+07"))
+			Expect(outError.Error()).Should(ContainSubstring("kube-baseline tier order must be 10000000"))
 
 			By("Cannot delete the kube-baseline Tier")
 			_, outError = c.Tiers().Delete(ctx, names.KubeBaselineTierName, options.DeleteOptions{})
@@ -236,7 +236,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			defRes.Spec = spec1
 			_, outError = c.Tiers().Update(ctx, defRes, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("kube-baseline tier order must be 1e+07"))
+			Expect(outError.Error()).Should(ContainSubstring("kube-baseline tier order must be 10000000"))
 
 			By("Updating the Tier before it is created")
 			res, outError = c.Tiers().Update(ctx, &apiv3.Tier{
