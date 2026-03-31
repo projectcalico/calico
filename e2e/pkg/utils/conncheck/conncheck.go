@@ -153,6 +153,7 @@ func (c *connectionTester) deploy() error {
 			server.composedPodCustomizer(),
 			server.composedSvcCustomizer(),
 			server.autoCreateSvc,
+			server.echoServer,
 		)
 		server.pod = pod
 		server.service = svc
