@@ -45,7 +45,7 @@ var staticRules string = `
             "Rule": {
                 "Action": "Allow",
                 "Direction": "In",
-                "Id": "block-client",
+                "ID": "block-client",
                 "Priority": 300,
                 "Protocol": 17,
                 "RemoteAddresses": "10.0.0.2/32",
@@ -95,7 +95,7 @@ var secondRuleMissingDirection string = `
             "Name": "EndpointPolicy",
             "Rule": {
                 "Action": "Allow",
-                "Id": "block-client",
+                "ID": "block-client",
                 "Priority": 300,
                 "Protocol": 17,
                 "RemoteAddresses": "10.0.0.2/32",
