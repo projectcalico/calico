@@ -39,7 +39,7 @@ const (
 // checkConnection verifies connectivity from client to target and checks SNAT behavior.
 // The target server must be running an agnhost netexec server with /clientip endpoint.
 // Retries for up to 30 seconds to handle transient issues (e.g., kube-proxy programming delays).
-func checkConnection(ct conncheck.ConnectionTester, client *conncheck.Client, target conncheck.Target, expected connectionResult) {
+func checkConnection(_ conncheck.ConnectionTester, client *conncheck.Client, target conncheck.Target, expected connectionResult) {
 	logrus.WithFields(logrus.Fields{
 		"client":   client.Name(),
 		"target":   target.String(),
