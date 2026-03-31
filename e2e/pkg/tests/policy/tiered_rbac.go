@@ -482,9 +482,9 @@ var _ = describe.CalicoDescribe(
 			})
 		})
 
-		// Verifies Calico's per-tier watch expansion: a user with list/watch
-		// permissions scoped to a tier can list policies within that tier.
-		Context("watch and list via tier RBAC", func() {
+		// Verifies that a user with list permissions scoped to a tier's policies
+		// can list policies within that tier.
+		Context("list via tier RBAC", func() {
 			It("should allow listing policies in the permitted tier", func() {
 				By("Creating a policy in the test tier")
 				np := v3.NewNetworkPolicy()
