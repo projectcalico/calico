@@ -16,7 +16,7 @@ package ut_test
 
 import (
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"os"

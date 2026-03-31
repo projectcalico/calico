@@ -1,7 +1,7 @@
 package ci
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -78,7 +78,7 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 	}
 
 	var promotions []promotion
-	if err := json.NewDecoder(resp.Body).Decode(&promotions); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &promotions); err != nil {
 		return nil, fmt.Errorf("failed to decode response to promotions: %w", err)
 	}
 
@@ -118,7 +118,7 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 	}
 
 	var p pipelineDetails
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &p); err != nil {
 		return nil, fmt.Errorf("failed to decode response to pipeline details: %w", err)
 	}
 

@@ -3,7 +3,7 @@ package fv_test
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
+	"encoding/json/v2"
 	"net"
 	"net/http"
 	url2 "net/url"
@@ -62,7 +62,7 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/foobar", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(obj{Name: "test-server-cert"})
+			_ = json.MarshalWrite(w, obj{Name: "test-server-cert"})
 		})
 		srv := http.Server{
 			Addr:    "localhost:8999",
@@ -118,7 +118,7 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 
 	var rspObj obj
-	Expect(json.NewDecoder(resp.Body).Decode(&rspObj)).ShouldNot(HaveOccurred())
+	Expect(json.UnmarshalRead(resp.Body, &rspObj)).ShouldNot(HaveOccurred())
 	Expect(rspObj).Should(Equal(obj{Name: "test-server-cert"}))
 
 	// Close the mux and allow guardian to try to reconnect, as we want to test that we can still use the tunnel after
@@ -143,7 +143,7 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 
 	rspObj = obj{}
-	Expect(json.NewDecoder(resp.Body).Decode(&rspObj)).ShouldNot(HaveOccurred())
+	Expect(json.UnmarshalRead(resp.Body, &rspObj)).ShouldNot(HaveOccurred())
 	Expect(rspObj).Should(Equal(obj{Name: "test-server-cert"}))
 
 	cancel()

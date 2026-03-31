@@ -15,7 +15,8 @@
 package fv_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"strconv"
@@ -1127,7 +1128,7 @@ func dumpResource(pol interface {
 	GetName() string
 },
 ) string {
-	jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")
+	jsonPol, _ := json.Marshal(pol, jsontext.WithIndentPrefix("\t"), jsontext.WithIndent("  "))
 	polDump := fmt.Sprintf("Active policy:\n\tName: %+v\n\tObject: %+v\n\tJSON:\n\t%s",
 		pol.GetName(), pol, string(jsonPol))
 	return polDump
