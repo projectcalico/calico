@@ -15,7 +15,8 @@
 package nftables
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"reflect"
 
@@ -46,12 +47,12 @@ func (c *containRule) Match(actual any) (success bool, err error) {
 }
 
 func (c *containRule) FailureMessage(actual any) (message string) {
-	j, _ := json.MarshalIndent(actual, "", "  ")
+	j, _ := json.Marshal(actual, jsontext.WithIndent("  "))
 	return fmt.Sprintf("Expected rules to contain %+v.\nRules: %s", c.expected, j)
 }
 
 func (c *containRule) NegatedFailureMessage(actual any) (message string) {
-	j, _ := json.MarshalIndent(actual, "", "  ")
+	j, _ := json.Marshal(actual, jsontext.WithIndent("  "))
 	return fmt.Sprintf("Expected rules to not contain %+v.\nRules: %s", c.expected, j)
 }
 
@@ -107,14 +108,14 @@ func (e *equalRulesMatcher) Match(actual any) (success bool, err error) {
 }
 
 func (e *equalRulesMatcher) FailureMessage(actual any) (message string) {
-	exp, _ := json.MarshalIndent(e.expected, "", "  ")
-	act, _ := json.MarshalIndent(actual, "", "  ")
+	exp, _ := json.Marshal(e.expected, jsontext.WithIndent("  "))
+	act, _ := json.Marshal(actual, jsontext.WithIndent("  "))
 	return fmt.Sprintf("Expected rules to equal %s, but got %s", exp, act)
 }
 
 func (e *equalRulesMatcher) NegatedFailureMessage(actual any) (message string) {
-	exp, _ := json.MarshalIndent(e.expected, "", "  ")
-	act, _ := json.MarshalIndent(actual, "", "  ")
+	exp, _ := json.Marshal(e.expected, jsontext.WithIndent("  "))
+	act, _ := json.Marshal(actual, jsontext.WithIndent("  "))
 
 	return fmt.Sprintf("Expected rules to not equal %s, but got %s", exp, act)
 }

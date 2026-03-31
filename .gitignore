@@ -2,7 +2,8 @@
 *.pyc
 .go-pkg-cache/
 .idea
-.vscode
+.vscode/*
+!.vscode/settings.json.example
 artifacts/
 bin/
 coverprofile.out
