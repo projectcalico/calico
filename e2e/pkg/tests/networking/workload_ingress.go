@@ -350,6 +350,21 @@ var _ = describe.CalicoDescribe(
 			}
 		}
 
+		// srcNodeTunnelIP returns the tunnel IP for the scenario's source node.
+		srcNodeTunnelIP := func(srcNode string) string {
+			switch srcNode {
+			case "node0":
+				return tunnelIPs[0]
+			case "node1":
+				return tunnelIPs[1]
+			case "svcNode":
+				return tunnelIPs[2]
+			default:
+				framework.Failf("unknown srcNode %q", srcNode)
+				return ""
+			}
+		}
+
 		// buildTarget returns the connection target for the given scenario, using the
 		// already-deployed server.
 		buildTarget := func(s ingressScenario, server *conncheck.Server) conncheck.Target {
@@ -448,7 +463,7 @@ var _ = describe.CalicoDescribe(
 				// rather than pod label. Both client-a and client-b will be affected
 				// the same way since they're indistinguishable by source IP.
 				nodeIP := srcNodeIP(s.srcNode)
-				cidrs := ingressNodeCIDRs(nodeIP, tunnelIPs)
+				cidrs := ingressNodeCIDRs(nodeIP, []string{srcNodeTunnelIP(s.srcNode)})
 				By(fmt.Sprintf("Installing allow-by-CIDR policy for node CIDRs %v (host-networked scenario)", cidrs))
 				allowCIDR := ingressCreateAllowByCIDRPolicy(f, cidrs)
 				DeferCleanup(ingressDeletePolicy, f, allowCIDR.Namespace, allowCIDR.Name)
