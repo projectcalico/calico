@@ -452,14 +452,14 @@ var _ = describe.CalicoDescribe(
 
 			Context(s.name, func() {
 				It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), func() {
-					if s.iptablesOnly && dp.IsBPF() {
+					if s.iptablesOnly && (dp.IsBPF() || dp.IsVPP()) {
 						Fail("This scenario only applies to iptables/nftables dataplane")
 					}
 					runHEPScenario(s, false)
 				})
 
 				It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), func() {
-					if s.iptablesOnly && dp.IsBPF() {
+					if s.iptablesOnly && (dp.IsBPF() || dp.IsVPP()) {
 						Fail("This scenario only applies to iptables/nftables dataplane")
 					}
 					runHEPScenario(s, true)
