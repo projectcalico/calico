@@ -204,7 +204,7 @@ type EntityRule struct {
 	// list of integers or strings that represent ranges of ports.
 	//
 	// Since only some protocols have ports, if any ports are specified it requires the
-	// Protocol match in the Rule to be set to "TCP" or "UDP".
+	// Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
 	// +kubebuilder:validation:MaxItems=50
 	// +listType=atomic
 	Ports []numorstring.Port `json:"ports,omitempty" validate:"omitempty,dive"`
@@ -221,7 +221,7 @@ type EntityRule struct {
 
 	// NotPorts is the negated version of the Ports field.
 	// Since only some protocols have ports, if any ports are specified it requires the
-	// Protocol match in the Rule to be set to "TCP" or "UDP".
+	// Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
 	// +kubebuilder:validation:MaxItems=50
 	// +listType=atomic
 	NotPorts []numorstring.Port `json:"notPorts,omitempty" validate:"omitempty,dive"`

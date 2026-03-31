@@ -74,7 +74,7 @@ type StagedGlobalNetworkPolicySpec struct {
 	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
-	// The selector is an expression used to pick pick out the endpoints that the policy should
+	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
 	//
 	// Selector expressions follow this syntax:

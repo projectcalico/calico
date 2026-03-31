@@ -135,8 +135,8 @@ type IPPoolSpec struct {
 	// +kubebuilder:validation:MaxLength=1024
 	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`
 
-	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
-	// ["Tunnel", "Workload"] for back-compatibility
+	// AllowedUses controls what the IP pool will be used for. If not specified or empty, defaults to
+	// ["Tunnel", "Workload"] for back-compatibility. Valid values: "Tunnel", "Workload", "LoadBalancer".
 	// +kubebuilder:validation:MaxItems=10
 	// +listType=set
 	AllowedUses []IPPoolAllowedUse `json:"allowedUses,omitempty" validate:"omitempty"`

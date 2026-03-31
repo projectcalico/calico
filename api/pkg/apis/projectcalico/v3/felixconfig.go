@@ -898,7 +898,7 @@ type FelixConfigurationSpec struct {
 
 	// BPFExportBufferSizeMB in BPF mode, controls the buffer size used for sending BPF events to felix.
 	// [Default: 1]
-	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty,cidrs"`
+	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty"`
 
 	// IstioAmbientMode configures Felix to work together with Tigera's Istio distribution.
 	// [Default: Disabled]
@@ -922,7 +922,7 @@ type FelixConfigurationSpec struct {
 	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
 
 	// BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device.
-	// Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+	// Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled".
 	// Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
 	// which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
 	// As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]

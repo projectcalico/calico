@@ -31,7 +31,7 @@ type StagedNetworkPolicySpecApplyConfiguration struct {
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply. Limited to 1024 rules per policy.
 	Egress []RuleApplyConfiguration `json:"egress,omitempty"`
-	// The selector is an expression used to pick pick out the endpoints that the policy should
+	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
 	//
 	// Selector expressions follow this syntax:

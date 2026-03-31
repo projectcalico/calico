@@ -73,11 +73,14 @@ type GlobalNetworkPolicySpecApplyConfiguration struct {
 	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
 	// this policy are applied before any data plane connection tracking, and packets allowed by
-	// this policy are marked as not to be tracked.
+	// this policy are marked as not to be tracked. Requires ApplyOnForward to be true.
 	DoNotTrack *bool `json:"doNotTrack,omitempty"`
 	// PreDNAT indicates to apply the rules in this policy before any DNAT.
+	// Requires ApplyOnForward to be true. Cannot be used with DoNotTrack, and the
+	// policy must not contain egress rules.
 	PreDNAT *bool `json:"preDNAT,omitempty"`
 	// ApplyOnForward indicates to apply the rules in this policy on forward traffic.
+	// Must be set to true when DoNotTrack or PreDNAT is true.
 	ApplyOnForward *bool `json:"applyOnForward,omitempty"`
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
 	ServiceAccountSelector *string `json:"serviceAccountSelector,omitempty"`
