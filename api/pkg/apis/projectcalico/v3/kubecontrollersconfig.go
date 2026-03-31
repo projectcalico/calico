@@ -210,8 +210,8 @@ type ServiceAccountControllerConfig struct {
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
 
-// NamespaceControllerConfig configures the service account controller, which syncs Kubernetes
-// service accounts to Calico profiles (only used for etcdv3 datastore).
+// NamespaceControllerConfig configures the namespace controller, which syncs Kubernetes
+// namespaces to Calico profiles (only used for etcdv3 datastore).
 type NamespaceControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`

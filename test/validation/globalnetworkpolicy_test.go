@@ -91,6 +91,36 @@ func TestGlobalNetworkPolicy_Validation(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "selector containing global() is rejected",
+			obj: &v3.GlobalNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("gnp")},
+				Spec: v3.GlobalNetworkPolicySpec{
+					Selector: "global()",
+				},
+			},
+			wantErr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "serviceAccountSelector containing global() is rejected",
+			obj: &v3.GlobalNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("gnp")},
+				Spec: v3.GlobalNetworkPolicySpec{
+					ServiceAccountSelector: "global()",
+				},
+			},
+			wantErr: "global() can only be used in an EntityRule namespaceSelector",
+		},
+		{
+			name: "namespaceSelector containing global() is rejected",
+			obj: &v3.GlobalNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("gnp")},
+				Spec: v3.GlobalNetworkPolicySpec{
+					NamespaceSelector: "global()",
+				},
+			},
+			wantErr: "global() can only be used in an EntityRule namespaceSelector",
+		},
 	}
 
 	for _, tt := range tests {

@@ -479,17 +479,20 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "AllocationAttribute holds metadata associated with a single IP allocation within a block.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"handle_id": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "HandleID is the ID of the IPAM handle that owns this allocation.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"secondary": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
+							Description: "ActiveOwnerAttrs stores attributes of the primary owner of this allocation (e.g., pod name, namespace).",
+							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
 								Schema: &spec.Schema{
@@ -504,7 +507,8 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 					},
 					"alternateOwnerAttrs": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
+							Description: "AlternateOwnerAttrs stores attributes of a secondary owner, used during IP address migration.",
+							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
 								Schema: &spec.Schema{
@@ -997,7 +1001,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref common.Referen
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "BGPFilterCommunityMatch specifies community-based match criteria for a BGP filter rule. Currently only a single community value is supported.  A MatchOperator field may be introduced in the future to support anyOf/allOf semantics with multiple values.",
+				Description: "BGPFilterCommunityMatch specifies community-based match criteria for a BGP filter rule. Currently exactly one community value must be specified. A MatchOperator field may be introduced in the future to support anyOf/allOf semantics with multiple values.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"values": {
@@ -1007,7 +1011,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref common.Referen
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Values is a list of BGP community values to match against.",
+							Description: "Values is a list of BGP community values to match against. Exactly one value must be specified.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -2614,26 +2618,26 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref common.Referenc
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ClusterInformationSpec contains the values of describing the cluster.",
+				Description: "ClusterInformationSpec contains the values of describing the cluster. This resource is managed automatically by Calico components and should not be modified manually.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"clusterGUID": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ClusterGUID is the GUID of the cluster",
+							Description: "ClusterGUID is the unique identifier for this cluster, generated automatically at install time.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"clusterType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ClusterType describes the type of the cluster",
+							Description: "ClusterType describes the type of the cluster, e.g., \"k8s,bgp,kubeadm\". Set automatically based on the detected environment.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"calicoVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CalicoVersion is the version of Calico that the cluster is running",
+							Description: "CalicoVersion is the version of Calico running on the cluster, set automatically by calico/node.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2835,7 +2839,7 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a source (destination) port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\" or \"UDP\".",
+							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a source (destination) port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\", \"UDP\", or \"SCTP\".",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -2880,7 +2884,7 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "NotPorts is the negated version of the Ports field. Since only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\" or \"UDP\".",
+							Description: "NotPorts is the negated version of the Ports field. Since only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\", \"UDP\", or \"SCTP\".",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -4036,7 +4040,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfRedirectToPeer": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device. Note that the legacy \"L2Only\" option is now deprecated and if set it is treated like \"Enabled. Setting this option to \"Enabled\" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard), which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path. As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]",
+							Description: "BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device. Note that the legacy \"L2Only\" option is now deprecated and if set it is treated like \"Enabled\". Setting this option to \"Enabled\" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard), which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path. As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4442,7 +4446,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -4461,7 +4465,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -4502,21 +4506,21 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 					},
 					"doNotTrack": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DoNotTrack indicates whether packets matched by the rules in this policy should go through the data plane's connection tracking, such as Linux conntrack.  If True, the rules in this policy are applied before any data plane connection tracking, and packets allowed by this policy are marked as not to be tracked.",
+							Description: "DoNotTrack indicates whether packets matched by the rules in this policy should go through the data plane's connection tracking, such as Linux conntrack.  If True, the rules in this policy are applied before any data plane connection tracking, and packets allowed by this policy are marked as not to be tracked. Requires ApplyOnForward to be true.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
 					"preDNAT": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PreDNAT indicates to apply the rules in this policy before any DNAT.",
+							Description: "PreDNAT indicates to apply the rules in this policy before any DNAT. Requires ApplyOnForward to be true. Cannot be used with DoNotTrack, and the policy must not contain egress rules.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
 					"applyOnForward": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ApplyOnForward indicates to apply the rules in this policy on forward traffic.",
+							Description: "ApplyOnForward indicates to apply the rules in this policy on forward traffic. Must be set to true when DoNotTrack or PreDNAT is true.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -4667,7 +4671,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref common.ReferenceC
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The list of IP networks that belong to this set.",
+							Description: "The list of IP networks that belong to this set. Each entry must be in CIDR notation, e.g. \"192.168.1.0/24\". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -5091,7 +5095,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPAMBlockSpec contains the specification for an IPAMBlock resource.",
+				Description: "IPAMBlockSpec contains the specification for an IPAMBlock resource. This resource is managed internally by Calico IPAM and should not be modified manually.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"cidr": {
@@ -5451,19 +5455,21 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandleSpec(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPAMHandleSpec contains the specification for an IPAMHandle resource.",
+				Description: "IPAMHandleSpec contains the specification for an IPAMHandle resource. This resource is managed internally by Calico IPAM and should not be modified manually.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"handleID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "HandleID is the unique identifier for this allocation handle.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"block": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
+							Description: "Block maps block CIDRs to the number of allocations from that block held by this handle.",
+							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
 								Schema: &spec.Schema{
@@ -5478,9 +5484,10 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandleSpec(ref common.ReferenceCallbac
 					},
 					"deleted": {
 						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
+							Description: "Deleted is an internal flag used to prevent races during handle cleanup. Should not be set manually.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},
@@ -5689,7 +5696,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to [\"Tunnel\", \"Workload\"] for back-compatibility",
+							Description: "AllowedUses controls what the IP pool will be used for. If not specified or empty, defaults to [\"Tunnel\", \"Workload\"] for back-compatibility. Valid values: \"Tunnel\", \"Workload\", \"LoadBalancer\".",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -5856,7 +5863,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref common.ReferenceCall
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "ReservedCIDRs is a list of CIDRs and/or IP addresses that Calico IPAM will exclude from new allocations.",
+							Description: "ReservedCIDRs is a list of CIDRs that Calico IPAM will exclude from new allocations. Each entry must be in CIDR notation (e.g., \"10.0.0.0/24\" or \"10.0.0.1/32\" for a single IP).",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6107,7 +6114,7 @@ func schema_pkg_apis_projectcalico_v3_NamespaceControllerConfig(ref common.Refer
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "NamespaceControllerConfig configures the service account controller, which syncs Kubernetes service accounts to Calico profiles (only used for etcdv3 datastore).",
+				Description: "NamespaceControllerConfig configures the namespace controller, which syncs Kubernetes namespaces to Calico profiles (only used for etcdv3 datastore).",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"reconcilerPeriod": {
@@ -6241,7 +6248,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6260,7 +6267,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6438,7 +6445,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSetSpec(ref common.ReferenceCallbac
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The list of IP networks that belong to this set.",
+							Description: "The list of IP networks that belong to this set. Each entry must be in CIDR notation, e.g. \"192.168.1.0/24\". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6667,7 +6674,7 @@ func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) 
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6686,7 +6693,7 @@ func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) 
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6700,7 +6707,7 @@ func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) 
 					},
 					"labelsToApply": {
 						SchemaProps: spec.SchemaProps{
-							Description: "An option set of labels to apply to each endpoint (in addition to their own labels) referencing this profile.  If labels configured on the endpoint have keys matching those labels inherited from the profile, the endpoint label values take precedence.",
+							Description: "An optional set of labels to apply to each endpoint (in addition to their own labels) referencing this profile. If a label key from the profile conflicts with a label already present on the endpoint, the endpoint's own label value takes precedence.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -7200,7 +7207,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -7219,7 +7226,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -7233,7 +7240,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 					},
 					"selector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The selector is an expression used to pick pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
+							Description: "The selector is an expression used to pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -7624,7 +7631,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -7643,7 +7650,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -7657,7 +7664,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 					},
 					"selector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The selector is an expression used to pick pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
+							Description: "The selector is an expression used to pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -7899,7 +7906,7 @@ func schema_pkg_apis_projectcalico_v3_TierSpec(ref common.ReferenceCallback) com
 					},
 					"defaultAction": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DefaultAction specifies the action applied to workloads selected by a policy in the tier, but not rule matched the workload's traffic. [Default: Deny]",
+							Description: "DefaultAction specifies the action applied to traffic that matches a policy in the tier but does not match any rule within that policy. [Default: Deny]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
