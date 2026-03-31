@@ -104,13 +104,13 @@ type IPPoolSpec struct {
 
 	// When natOutgoing is true, packets sent from Calico networked containers in
 	// this pool to destinations outside of this pool will be masqueraded.
-	NATOutgoing bool `json:"natOutgoing,omitempty"`
+	NATOutgoing bool `json:"natOutgoing,omitempty,omitzero"`
 
 	// When disabled is true, Calico IPAM will not assign addresses from this pool.
-	Disabled bool `json:"disabled,omitempty"`
+	Disabled bool `json:"disabled,omitempty,omitzero"`
 
 	// Disable exporting routes from this IP Pool's CIDR over BGP. [Default: false]
-	DisableBGPExport bool `json:"disableBGPExport,omitempty" validate:"omitempty"`
+	DisableBGPExport bool `json:"disableBGPExport,omitempty,omitzero" validate:"omitempty"`
 
 	// The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.
 	// The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than
@@ -118,7 +118,7 @@ type IPPoolSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=128
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Block size cannot be changed; follow IP pool migration guide to avoid corruption.",reason=FieldValueInvalid
-	BlockSize int `json:"blockSize,omitempty"`
+	BlockSize int `json:"blockSize,omitempty,omitzero"`
 
 	// Allows IPPool to allocate for a specific node by label selector.
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
@@ -136,7 +136,7 @@ type IPPoolSpec struct {
 	// Determines the mode how IP addresses should be assigned from this pool
 	// +optional
 	// +kubebuilder:default=Automatic
-	AssignmentMode *AssignmentMode `json:"assignmentMode,omitzero"`
+	AssignmentMode *AssignmentMode `json:"assignmentMode,omitempty,omitzero"`
 }
 
 // IPPoolAllowedUse defines the allowed uses for an IP pool.
@@ -207,7 +207,7 @@ const DefaultMode = Always
 type IPIPConfiguration struct {
 	// When enabled is true, ipip tunneling will be used to deliver packets to
 	// destinations within this pool.
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled,omitempty,omitzero"`
 
 	// The IPIP mode.  This can be one of "always" or "cross-subnet".  A mode
 	// of "always" will also use IPIP tunneling for routing to destination IP

@@ -144,8 +144,8 @@ var _ = Describe("ResourcePrinterJSON tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// The source/destination fields of apiv3.Rule use omitzero.
-		// Note: v2 omitempty does not omit false/0 for bool/int fields;
-		// it only omits JSON null, empty strings, empty objects, and empty arrays.
+		// Note: v2 omitempty does not omit 0 for int fields in upstream
+		// k8s types (e.g. ObjectMeta.Generation) that we don't control.
 		Expect(buf.String()).To(MatchJSON(
 			`{
   "apiVersion": "projectcalico.org/v3",
@@ -157,10 +157,7 @@ var _ = Describe("ResourcePrinterJSON tests", func() {
   "spec": {
     "ingress":[
       {"action": "Allow"}
-    ],
-    "doNotTrack": false,
-    "preDNAT": false,
-    "applyOnForward": false
+    ]
   }
 }
 `,
