@@ -25,7 +25,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
-	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -64,9 +63,9 @@ var _ = Describe("Maps with empty data plane", func() {
 
 	It("should incref / decref chains correctly", func() {
 		// Create a number of different maps.
-		m1 := nftables.MapMetadata{Name: "m1", Type: nftables.MapTypeInterfaceMatch}
-		m2 := nftables.MapMetadata{Name: "m2", Type: nftables.MapTypeInterfaceMatch}
-		m3 := nftables.MapMetadata{Name: "m3", Type: nftables.MapTypeInterfaceMatch}
+		m1 := MapMetadata{Name: "m1", Type: MapTypeInterfaceMatch}
+		m2 := MapMetadata{Name: "m2", Type: MapTypeInterfaceMatch}
+		m3 := MapMetadata{Name: "m3", Type: MapTypeInterfaceMatch}
 		s.AddOrReplaceMap(m1, map[string][]string{"cali1234": {"jump chain1234"}})
 		s.AddOrReplaceMap(m2, map[string][]string{"caliabcd": {"jump chainabcd"}})
 		s.AddOrReplaceMap(m3, map[string][]string{"caliefgh": {"jump chainefgh"}})
@@ -167,7 +166,7 @@ var _ = Describe("Maps with empty data plane", func() {
 
 	It("should synchronize with the dataplane", func() {
 		// Create a map - both in nftables and in the MapsDataplane.
-		m1 := nftables.MapMetadata{Name: "m1", Type: nftables.MapTypeInterfaceMatch}
+		m1 := MapMetadata{Name: "m1", Type: MapTypeInterfaceMatch}
 		mapElements := map[string][]string{"cali1234": {"jump chain1234"}}
 		s.AddOrReplaceMap(m1, mapElements)
 		s.FinishMapUpdates(s.MapUpdates())
@@ -331,7 +330,7 @@ var _ = Describe("Maps with empty data plane", func() {
 	})
 })
 
-func addMapToTx(tx *knftables.Transaction, m nftables.MapMetadata, elements map[string][]string) {
+func addMapToTx(tx *knftables.Transaction, m MapMetadata, elements map[string][]string) {
 	tx.Add(&knftables.Map{
 		Name: m.Name,
 		Type: "ifname : verdict",

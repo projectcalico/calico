@@ -42,8 +42,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
-	"github.com/projectcalico/calico/felix/bpf/maps"
-	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
+	bpfmapspkg "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/qos"
@@ -326,8 +325,8 @@ type mockProgMapDP struct {
 func (m *mockProgMapDP) loadPolicyProgram(progName string,
 	ipFamily proto.IPVersion,
 	rules polprog.Rules,
-	staticProgsMap maps.Map,
-	polProgsMap maps.Map,
+	staticProgsMap bpfmapspkg.Map,
+	polProgsMap bpfmapspkg.Map,
 	attachType uint32,
 	opts ...polprog.Option,
 ) ([]fileDescriptor, []asm.Insns, error) {
@@ -424,12 +423,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		qosMap = mock.NewMockMap(qos.MapParams)
 		commonMaps.QoSMap = qosMap
 		cparams := counters.MapParameters
-		cparams.ValueSize *= bpfmaps.NumPossibleCPUs()
+		cparams.ValueSize *= bpfmapspkg.NumPossibleCPUs()
 		countersMap = mock.NewMockMap(cparams)
 		commonMaps.CountersMap = countersMap
 		commonMaps.RuleCountersMap = mock.NewMockMap(counters.PolicyMapParameters)
 
-		progsParamsIng := bpfmaps.MapParameters{
+		progsParamsIng := bpfmapspkg.MapParameters{
 			Type:       "prog_array",
 			KeySize:    4,
 			ValueSize:  4,
@@ -438,7 +437,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Version:    2,
 		}
 
-		progsParamsEg := bpfmaps.MapParameters{
+		progsParamsEg := bpfmapspkg.MapParameters{
 			Type:       "prog_array",
 			KeySize:    4,
 			ValueSize:  4,

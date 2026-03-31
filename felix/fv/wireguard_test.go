@@ -572,19 +572,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					// Send packets to and from workloads on each felix.
 					if wireguardEnabledV4 {
 						By("Sending IPv4 packets W1->W2 and W2->W1")
-						if err, _ := wlsV4[0].SendPacketsTo(wlsV4[1].IP, 5, 56); err != nil {
+						if _, err := wlsV4[0].SendPacketsTo(wlsV4[1].IP, 5, 56); err != nil {
 							return err
 						}
-						if err, _ := wlsV4[1].SendPacketsTo(wlsV4[0].IP, 5, 56); err != nil {
+						if _, err := wlsV4[1].SendPacketsTo(wlsV4[0].IP, 5, 56); err != nil {
 							return err
 						}
 					}
 					if wireguardEnabledV6 {
 						By("Sending IPv6 packets W1->W2 and W2->W1")
-						if err, _ := wlsV6[0].SendPacketsTo(wlsV6[1].IP, 5, 56); err != nil {
+						if _, err := wlsV6[0].SendPacketsTo(wlsV6[1].IP, 5, 56); err != nil {
 							return err
 						}
-						if err, _ := wlsV6[1].SendPacketsTo(wlsV6[0].IP, 5, 56); err != nil {
+						if _, err := wlsV6[1].SendPacketsTo(wlsV6[0].IP, 5, 56); err != nil {
 							return err
 						}
 					}

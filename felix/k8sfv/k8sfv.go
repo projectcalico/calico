@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	log "github.com/sirupsen/logrus"
@@ -63,7 +63,7 @@ var (
 	}, []string{"test_name", "code_level"})
 )
 
-var _ = BeforeSuite(func() {
+var _ = ginkgo.BeforeSuite(func() {
 	log.Info(">>> BeforeSuite <<<")
 	log.WithFields(log.Fields{
 		"k8sServerEndpoint": k8sServerEndpoint,
@@ -87,29 +87,29 @@ var (
 	localFelixConfigured bool
 )
 
-var _ = JustBeforeEach(func() {
+var _ = ginkgo.JustBeforeEach(func() {
 	log.Info(">>> JustBeforeEach <<<")
-	testName = CurrentGinkgoTestDescription().FullTestText
+	testName = ginkgo.CurrentGinkgoTestDescription().FullTestText
 })
 
-var _ = AfterEach(func() {
+var _ = ginkgo.AfterEach(func() {
 	log.Info(">>> AfterEach <<<")
 
 	// If we got as far as fully configuring the local Felix, check that the test finishes with
 	// no left-over endpoints.
 	if localFelixConfigured {
-		Eventually(getNumEndpointsDefault(-1), "10s", "1s").Should(BeNumerically("==", 0))
+		gomega.Eventually(getNumEndpointsDefault(-1), "10s", "1s").Should(gomega.BeNumerically("==", 0))
 	}
 
 	// Store the result of each test in a Prometheus metric.
 	result := float64(1)
-	if CurrentGinkgoTestDescription().Failed {
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
 		result = 0
 	}
 	gaugeVecTestResult.WithLabelValues(testName, codeLevel).Set(result)
 })
 
-var _ = AfterSuite(func() {
+var _ = ginkgo.AfterSuite(func() {
 	log.Info(">>> AfterSuite <<<")
 	if prometheusPushURL != "" {
 		// Push metrics to Prometheus push gateway.
@@ -154,7 +154,7 @@ func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 		panic(err)
 	}
 
-	Eventually(func() (err error) {
+	gomega.Eventually(func() (err error) {
 		calicoClient, err := client.New(apiconfig.CalicoAPIConfig{
 			Spec: apiconfig.CalicoAPIConfigSpec{
 				DatastoreType: apiconfig.Kubernetes,
@@ -178,7 +178,7 @@ func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 		)
 
 		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
+	}, "60s", "2s").ShouldNot(gomega.HaveOccurred())
 
 	log.Info("Initialization is Done.")
 	return
@@ -197,8 +197,8 @@ func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
 	}
 	log.Info("Done")
 
-	Eventually(getNumEndpointsDefault(-1), "30s", "1s").Should(
-		BeNumerically("==", 1000),
+	gomega.Eventually(getNumEndpointsDefault(-1), "30s", "1s").Should(
+		gomega.BeNumerically("==", 1000),
 		"Addition of pods wasn't reflected in Felix metrics",
 	)
 
