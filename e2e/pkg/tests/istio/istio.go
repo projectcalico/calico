@@ -171,6 +171,13 @@ var _ = describe.CalicoDescribe(
 				_ = ctrlclient.IgnoreNotFound(cli.Delete(context.Background(), policy))
 			})
 
+			// TEMPORARY: Flush BPF conntrack entries so the deny policy takes effect.
+			// With Istio ambient mode, ztunnel's persistent HBONE connections may have
+			// CALI_CT_ESTABLISHED_BYPASS entries from before the policy was applied.
+			// TODO: Remove once Felix handles conntrack invalidation on policy change.
+			ginkgo.By("Flushing BPF conntrack entries after policy change")
+			flushBPFConntrack(ctx, f)
+
 			// Phase 7: Verify policy enforcement — allowed server reachable, denied server blocked.
 			ginkgo.By("Verifying policy enforcement: allowed-svc reachable, denied-svc blocked")
 			checker.ResetExpectations()
@@ -608,6 +615,29 @@ func expectNoUDPInZtunnelLogs(ctx context.Context, f *framework.Framework) {
 		if strings.Contains(line, "direction=") {
 			gomega.Expect(strings.ToUpper(line)).NotTo(gomega.ContainSubstring("UDP"),
 				"ztunnel access log should not contain UDP traffic entries (UDP bypasses ztunnel): %s", line)
+		}
+	}
+}
+
+// flushBPFConntrack runs "calico-node -bpf conntrack clean" on all calico-node pods to clear
+// established conntrack entries. This is a temporary workaround — see TODO above.
+func flushBPFConntrack(ctx context.Context, f *framework.Framework) {
+	listCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	podList, err := f.ClientSet.CoreV1().Pods("calico-system").List(listCtx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+	})
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to list calico-node pods")
+	gomega.Expect(podList.Items).NotTo(gomega.BeEmpty(), "Expected at least one calico-node pod")
+
+	for i := range podList.Items {
+		pod := &podList.Items[i]
+		output, err := utils.ExecInCalicoNode(pod, "calico-node -bpf conntrack clean")
+		if err != nil {
+			logrus.WithError(err).WithField("node", pod.Name).Warn("Failed to flush BPF conntrack")
+		} else {
+			logrus.WithField("node", pod.Name).WithField("output", output).Info("Flushed BPF conntrack")
 		}
 	}
 }
