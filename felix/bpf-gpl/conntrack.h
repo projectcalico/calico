@@ -195,7 +195,7 @@ create:
 	src_to_dst->packets = 1;
 	src_to_dst->bytes = ctx->skb->len;
 	if (CALI_F_TO_HOST) {
-		src_to_dst->ifindex = skb_ingress_ifindex(ctx->skb);
+		src_to_dst->ifindex = ctx->skb->ifindex;
 	} else {
 		src_to_dst->ifindex = CT_INVALID_IFINDEX;
 	}
@@ -999,7 +999,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
 	}
 
-	__u32 ifindex = skb_ingress_ifindex(ctx->skb);
+	__u32 ifindex = CALI_F_TO_HOST ? ctx->skb->ifindex : skb_ingress_ifindex(ctx->skb);
 
 	if (src_to_dst->ifindex != ifindex) {
 		// Conntrack entry records a different ingress interface than the one the
@@ -1056,7 +1056,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				}
 				break;
 			}
-		} else if (src_to_dst->ifindex != CT_INVALID_IFINDEX) {
+		} else if (src_to_dst->ifindex != CT_INVALID_IFINDEX &&
+				ifindex != CT_INVALID_IFINDEX) {
 			/* if the devices do not match, we got here without bypassing the
 			 * host IP stack and RPF check allowed it, so update our records.
 			 */
