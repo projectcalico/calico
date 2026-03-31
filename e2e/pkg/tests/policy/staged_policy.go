@@ -254,11 +254,11 @@ var _ = describe.CalicoDescribe(
 
 				AfterEach(func() {
 					if knpEnforced != nil {
-						Expect(cli.Delete(context.TODO(), knpEnforced)).ShouldNot(HaveOccurred())
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), knpEnforced))).ShouldNot(HaveOccurred())
 						knpEnforced = nil
 					}
 					if knpPolicy != nil {
-						Expect(cli.Delete(context.TODO(), knpPolicy)).ShouldNot(HaveOccurred())
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), knpPolicy))).ShouldNot(HaveOccurred())
 						knpPolicy = nil
 					}
 				})
@@ -292,11 +292,11 @@ var _ = describe.CalicoDescribe(
 
 				AfterEach(func() {
 					if snpEnforced != nil {
-						Expect(cli.Delete(context.TODO(), snpEnforced)).ShouldNot(HaveOccurred())
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), snpEnforced))).ShouldNot(HaveOccurred())
 						snpEnforced = nil
 					}
 					if snpPolicy != nil {
-						Expect(cli.Delete(context.TODO(), snpPolicy)).ShouldNot(HaveOccurred())
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), snpPolicy))).ShouldNot(HaveOccurred())
 						snpPolicy = nil
 					}
 				})
@@ -332,11 +332,11 @@ var _ = describe.CalicoDescribe(
 
 				AfterEach(func() {
 					if sgnpEnforced != nil {
-						Expect(cli.Delete(context.TODO(), sgnpEnforced)).ShouldNot(HaveOccurred())
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), sgnpEnforced))).ShouldNot(HaveOccurred())
 						sgnpEnforced = nil
 					}
 					if sgnpPolicy != nil {
-						Expect(cli.Delete(context.TODO(), sgnpPolicy)).ShouldNot(HaveOccurred())
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), sgnpPolicy))).ShouldNot(HaveOccurred())
 						sgnpPolicy = nil
 					}
 				})
