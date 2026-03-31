@@ -214,7 +214,7 @@ func calculateAnnotationPatch(revision string, uid *types.UID, annotations map[s
 		metadata["uid"] = uid
 	}
 
-	return json.Marshal(patch)
+	return json.Marshal(patch, json.Deterministic(true))
 }
 
 func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
