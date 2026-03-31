@@ -319,7 +319,8 @@ var _ = describe.CalicoDescribe(
 			case "podIP":
 				target = conncheck.NewTarget(server.Pod().Status.PodIP, conncheck.TypePodIP, conncheck.TCP).Port(80)
 			case "clusterIP":
-				target = server.ClusterIP()
+				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
+				target = server.ClusterIPv4().Port(80)
 				if s.dstHostNetworked {
 					expectSNAT = true
 				}
