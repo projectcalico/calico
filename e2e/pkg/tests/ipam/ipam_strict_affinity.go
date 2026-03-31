@@ -210,7 +210,7 @@ var _ = describe.CalicoDescribe(
 				}
 				Expect(err).NotTo(HaveOccurred(), "failed to delete deployment")
 
-				Eventually(func() int {
+				Eventually(func() (int, error) {
 					return countPodsByLabel(f, strictAffinityLabelKey, strictAffinityLabelValue)
 				}, 2*time.Minute, 5*time.Second).Should(Equal(0), "timed out waiting for pods to be deleted")
 			}
@@ -225,7 +225,7 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "failed to create deployment")
 			DeferCleanup(deleteDeploymentAndWait)
 
-			Eventually(func() int {
+			Eventually(func() (int, error) {
 				return countPodsWithNoIP(f, strictAffinityLabelKey, strictAffinityLabelValue)
 			}, 2*time.Minute, 5*time.Second).Should(Equal(0), "all pods should have IPs with StrictAffinity=false")
 			logrus.Info("Phase 1 passed: all pods have IPs with StrictAffinity=false")
@@ -246,11 +246,11 @@ var _ = describe.CalicoDescribe(
 			// With StrictAffinity=true and a /29 pool (single block), only one node
 			// gets the block. Pods on other nodes can't borrow IPs. First wait for
 			// the expected number of pods to exist, then verify some never got IPs.
-			Eventually(func() int {
+			Eventually(func() (int, error) {
 				return countPodsByLabel(f, strictAffinityLabelKey, strictAffinityLabelValue)
 			}, 2*time.Minute, 5*time.Second).Should(Equal(4), "expected 4 pods to be created")
 
-			Consistently(func() int {
+			Consistently(func() (int, error) {
 				return countPodsWithNoIP(f, strictAffinityLabelKey, strictAffinityLabelValue)
 			}, 30*time.Second, 5*time.Second).Should(BeNumerically(">", 0),
 				"some pods should lack IPs with StrictAffinity=true and a single-block pool")
@@ -261,7 +261,7 @@ var _ = describe.CalicoDescribe(
 			By("Phase 3: Setting StrictAffinity=false again — all pods should get IPs")
 			setStrictAffinity(false)
 
-			Eventually(func() int {
+			Eventually(func() (int, error) {
 				return countPodsWithNoIP(f, strictAffinityLabelKey, strictAffinityLabelValue)
 			}, 2*time.Minute, 5*time.Second).Should(Equal(0),
 				"all pods should have IPs after toggling StrictAffinity back to false")
@@ -270,14 +270,17 @@ var _ = describe.CalicoDescribe(
 	})
 
 // countPodsWithNoIP returns the number of pods matching the given label that
-// don't have a PodIP assigned.
-func countPodsWithNoIP(f *framework.Framework, labelKey, labelValue string) int {
+// don't have a PodIP assigned. Returns an error on transient API failures so
+// that callers using Eventually can retry instead of panicking.
+func countPodsWithNoIP(f *framework.Framework, labelKey, labelValue string) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	pods, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", labelKey, labelValue),
 	})
-	Expect(err).NotTo(HaveOccurred(), "failed to list pods")
+	if err != nil {
+		return -1, fmt.Errorf("failed to list pods: %w", err)
+	}
 
 	count := 0
 	for i := range pods.Items {
@@ -285,18 +288,18 @@ func countPodsWithNoIP(f *framework.Framework, labelKey, labelValue string) int 
 			count++
 		}
 	}
-	return count
+	return count, nil
 }
 
 // countPodsByLabel returns the total number of pods matching the given label.
-func countPodsByLabel(f *framework.Framework, labelKey, labelValue string) int {
+func countPodsByLabel(f *framework.Framework, labelKey, labelValue string) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	pods, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", labelKey, labelValue),
 	})
 	if err != nil {
-		return -1
+		return -1, fmt.Errorf("failed to list pods: %w", err)
 	}
-	return len(pods.Items)
+	return len(pods.Items), nil
 }
