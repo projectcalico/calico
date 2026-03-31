@@ -99,6 +99,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPMode = api.IPIPModeNever
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
+		opts.NATOutgoingEnabled = true
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
@@ -469,7 +470,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				return fmt.Errorf("Flows incorrect on Felix[1]:\n%v", err)
 			}
 
-			return nil
+			// With NATOutgoingEnabled, traffic from a workload to a host endpoint
+			// is SNAT'd. Verify that the src-reported flow log has non-zero
+			// PacketsIn and BytesIn (return counters).
+			flows, err := tc.Felixes[0].FlowLogs()
+			if err != nil {
+				return fmt.Errorf("error reading flow logs for return counter check: %s", err)
+			}
+			for _, fl := range flows {
+				if fl.Reporter != "src" || fl.Tuple.L4Dst != wepPort {
+					continue
+				}
+				if fl.PacketsOut > 0 {
+					if fl.PacketsIn == 0 || fl.BytesIn == 0 {
+						return fmt.Errorf("flow has PacketsOut=%d but no PacketsIn or BytesIn (BytesOut=%d, BytesIn=%d, PacketsIn=%d)",
+							fl.PacketsOut, fl.BytesOut, fl.BytesIn, fl.PacketsIn)
+					}
+					return nil
+				}
+			}
+			return fmt.Errorf("no src-reported flow found with non-zero PacketsOut to port %d", wepPort)
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	}
 
