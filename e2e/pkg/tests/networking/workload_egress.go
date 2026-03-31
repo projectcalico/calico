@@ -49,6 +49,8 @@ type egressScenario struct {
 	dstHostNetworked bool
 	// accessType is how the client accesses the service.
 	accessType string // "clusterIP", "node0NodePort", "node1NodePort", "externalIP"
+	// svcTweak customizes the destination service.
+	svcTweak func(svc conncheck.ServerOption)
 	// svcOpts are additional server options for the destination service.
 	svcOpts []conncheck.ServerOption
 	// expectPolicyBypass indicates policy won't be applied (e.g., BPF self-connection).
@@ -102,9 +104,7 @@ var _ = describe.CalicoDescribe(
 			nodeIPs = nodesInfo.GetIPv4s()[:2]
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
-			// Detect BPF dataplane mode. Reset each run in case the
-			// cluster config changed between tests.
-			bpfMode = false
+			// Detect BPF dataplane mode.
 			felixCfg := &v3.FelixConfiguration{}
 			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixCfg)
 			if err == nil && felixCfg.Spec.BPFEnabled != nil && *felixCfg.Spec.BPFEnabled {
@@ -251,11 +251,13 @@ var _ = describe.CalicoDescribe(
 				// We still need a conncheck client for Connect().
 				clientPod = conncheck.NewClient("client-0", f.Namespace,
 					conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeNames[0])),
+					conncheck.WithClientCustomizer(withCurlClient),
 				)
 				ct.AddClient(clientPod)
 			} else {
 				clientPod = conncheck.NewClient("client-0", f.Namespace,
 					conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeNames[0])),
+					conncheck.WithClientCustomizer(withCurlClient),
 					conncheck.WithClientLabels(map[string]string{"pod-name": "client-0"}),
 				)
 				ct.AddClient(clientPod)
@@ -270,22 +272,24 @@ var _ = describe.CalicoDescribe(
 			expectSNAT := scenario.dstPod == 0 // Loopback always expects SNAT.
 			var target conncheck.Target
 
+			// All targets use HTTP GET /clientip for SNAT detection via conncheck.
+			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
+
 			switch scenario.accessType {
 			case "clusterIP":
-				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
-				target = server.ClusterIPv4().Port(80)
+				target = server.ClusterIPv4(clientIPOpt).Port(80)
 				if scenario.dstHostNetworked {
 					expectSNAT = true
 				}
 			case "node0NodePort":
 				expectSNAT = true
-				target = server.NodePort(nodeIPs[0])
+				target = server.NodePort(nodeIPs[0], clientIPOpt)
 			case "node1NodePort":
 				expectSNAT = true
-				target = server.NodePort(nodeIPs[1])
+				target = server.NodePort(nodeIPs[1], clientIPOpt)
 			case "externalIP":
 				expectSNAT = true
-				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.TCP).Port(80)
+				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(80)
 			default:
 				Fail(fmt.Sprintf("unhandled accessType: %s", scenario.accessType))
 			}
