@@ -33,7 +33,9 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
 )
 
-func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace, podName string, ports []int, labels map[string]string, podCustomizer func(pod *v1.Pod), serviceCustomizer func(svc *v1.Service), autoCreateSvc bool) (*v1.Pod, *v1.Service) {
+func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace, podName string, ports []int, labels map[string]string, podCustomizer func(pod *v1.Pod), serviceCustomizer func(svc *v1.Service), autoCreateSvc bool, echoServer ...bool) (*v1.Pod, *v1.Service) {
+	useEchoServer := len(echoServer) > 0 && echoServer[0]
+
 	// Because we have a variable amount of ports, we'll first loop through and generate our Containers for our pod,
 	// and ServicePorts.for our Service.
 	var image string
@@ -44,6 +46,9 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	if windows.ClusterIsWindows() {
 		image = images.Porter
 		nodeselector["kubernetes.io/os"] = "windows"
+	} else if useEchoServer {
+		image = images.EchoServer
+		nodeselector["kubernetes.io/os"] = "linux"
 	} else {
 		image = images.TestWebserver
 		nodeselector["kubernetes.io/os"] = "linux"
@@ -61,12 +66,20 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 					Value: "value-not-used",
 				},
 			}
+		} else if useEchoServer {
+			// agnhost netexec serves HTTP on the specified port and returns
+			// client IP at /clientip.
+			args = []string{"netexec", fmt.Sprintf("--http-port=%d", port)}
 		} else {
 			args = []string{fmt.Sprintf("--port=%d", port)}
 		}
 
-		// Build the containers for the server pod.
-		containers = append(containers, v1.Container{
+		probePath := "/"
+		if useEchoServer {
+			probePath = "/clientip"
+		}
+
+		container := v1.Container{
 			Name:            fmt.Sprintf("%s-container-%d", podName, port),
 			Image:           image,
 			ImagePullPolicy: v1.PullIfNotPresent,
@@ -81,7 +94,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 			ReadinessProbe: &v1.Probe{
 				ProbeHandler: v1.ProbeHandler{
 					HTTPGet: &v1.HTTPGetAction{
-						Path: "/",
+						Path: probePath,
 						Port: intstr.IntOrString{
 							IntVal: int32(port),
 						},
@@ -89,7 +102,10 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 					},
 				},
 			},
-		})
+		}
+
+		// Build the containers for the server pod.
+		containers = append(containers, container)
 
 		// Build the Service Ports for the service.
 		servicePorts = append(servicePorts, v1.ServicePort{
