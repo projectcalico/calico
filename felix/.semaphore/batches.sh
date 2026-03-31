@@ -28,6 +28,7 @@ run_batch() {
         make
           --directory=${CALICO_DIR_NAME}/felix
           FELIX_FV_NFTABLES="$FELIX_FV_NFTABLES"
+          FELIX_FV_NETKIT="$FELIX_FV_NETKIT"
           FV_EXTRA_REPORT_SUFFIX="$FV_EXTRA_REPORT_SUFFIX"
           FELIX_FV_BPFATTACHTYPE="$FELIX_FV_BPFATTACHTYPE"
           GINKGO_FOCUS="${FV_FOCUS}"
