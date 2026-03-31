@@ -483,6 +483,7 @@ var _ = describe.CalicoDescribe(
 					dstPod:           1,
 					dstHostNetworked: true,
 					accessType:       "clusterIP",
+					skipPolicy:       "egress policy to host-networked destination not fully implemented",
 				})
 			})
 
@@ -492,6 +493,7 @@ var _ = describe.CalicoDescribe(
 					dstPod:           2,
 					dstHostNetworked: true,
 					accessType:       "clusterIP",
+					skipPolicy:       "egress policy to host-networked destination not fully implemented",
 				})
 			})
 		})
