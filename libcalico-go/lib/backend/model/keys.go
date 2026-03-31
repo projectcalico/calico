@@ -116,7 +116,7 @@ type KVPair struct {
 	Value    any
 	Revision string
 	UID      *types.UID
-	TTL      time.Duration // For writes, if non-zero, key has a TTL.
+	TTL      time.Duration `json:",omitzero,format:nano"` // For writes, if non-zero, key has a TTL.
 }
 
 // KVPairList hosts a slice of KVPair structs and a Revision, returned from a Ls
