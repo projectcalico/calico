@@ -99,7 +99,10 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
    ```
 
    This creates a `build-vX.Y.Z` branch, updates version references in charts and manifests,
-   runs `make generate`, and commits the changes. The version is auto-detected from git state.
+   runs `make generate`, generates release notes, and commits the changes.
+   The version is auto-detected from git state.
+
+1. Review the generated release notes in `release-notes/<VERSION>-release-notes.md` for accuracy and format appropriately. Amend the commit if changes are needed.
 
 1. Push the branch to `github.com/projectcalico/calico` and create a pull request. Get it reviewed and ensure it passes CI before moving to the next step.
 
