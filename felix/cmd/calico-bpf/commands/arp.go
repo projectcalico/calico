@@ -15,7 +15,9 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -57,6 +59,13 @@ var arpCmd = &cobra.Command{
 	Short: "Manipulates arp",
 }
 
+type arpEntryJSON struct {
+	IfIndex uint32 `json:"ifindex"`
+	IP      string `json:"ip"`
+	SrcMAC  string `json:"src_mac"`
+	DstMAC  string `json:"dst_mac"`
+}
+
 func dumpARP() error {
 	var arpMap maps.Map
 
@@ -72,6 +81,9 @@ func dumpARP() error {
 	if err := arpMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
 	}
+	defer arpMap.Close()
+
+	var jsonEntries []arpEntryJSON
 
 	err := arpMap.Iter(func(k, v []byte) maps.IteratorAction {
 		if v6 {
@@ -83,7 +95,16 @@ func dumpARP() error {
 			copy(key[:], k[:arp.KeyV6Size])
 			copy(val[:], v[:arp.ValueV6Size])
 
-			fmt.Printf("dev %4d: %15s : %s -> %s\n", key.IfIndex(), key.IP(), val.SrcMAC(), val.DstMAC())
+			if *jsonOutput {
+				jsonEntries = append(jsonEntries, arpEntryJSON{
+					IfIndex: key.IfIndex(),
+					IP:      key.IP().String(),
+					SrcMAC:  val.SrcMAC().String(),
+					DstMAC:  val.DstMAC().String(),
+				})
+			} else {
+				fmt.Printf("dev %4d: %15s : %s -> %s\n", key.IfIndex(), key.IP(), val.SrcMAC(), val.DstMAC())
+			}
 		} else {
 			var (
 				key arp.Key
@@ -93,13 +114,31 @@ func dumpARP() error {
 			copy(key[:], k[:arp.KeySize])
 			copy(val[:], v[:arp.ValueSize])
 
-			fmt.Printf("dev %4d: %15s : %s -> %s\n", key.IfIndex(), key.IP(), val.SrcMAC(), val.DstMAC())
+			if *jsonOutput {
+				jsonEntries = append(jsonEntries, arpEntryJSON{
+					IfIndex: key.IfIndex(),
+					IP:      key.IP().String(),
+					SrcMAC:  val.SrcMAC().String(),
+					DstMAC:  val.DstMAC().String(),
+				})
+			} else {
+				fmt.Printf("dev %4d: %15s : %s -> %s\n", key.IfIndex(), key.IP(), val.SrcMAC(), val.DstMAC())
+			}
 		}
 
 		return maps.IterNone
 	})
+	if err != nil {
+		return err
+	}
 
-	return err
+	if *jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(jsonEntries)
+	}
+
+	return nil
 }
 
 func cleanARP() error {
