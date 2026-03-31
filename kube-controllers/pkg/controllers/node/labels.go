@@ -290,7 +290,7 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 	}
 
 	// Set the annotation to the correct values.
-	bytes, err := json.Marshal(node.Labels)
+	bytes, err := json.Marshal(node.Labels, json.Deterministic(true))
 	if err != nil {
 		logrus.WithError(err).Errorf("Error marshalling node labels")
 		return
