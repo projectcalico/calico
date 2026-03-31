@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -99,6 +100,35 @@ func dumpRoutes() error {
 		sortCIDRsV6(dests)
 	} else {
 		sortCIDRs(dests)
+	}
+
+	if *jsonOutput {
+		type routeJSON struct {
+			Dest    string   `json:"dest"`
+			Flags   []string `json:"flags"`
+			IfIndex *uint32  `json:"ifindex,omitempty"`
+			NextHop string   `json:"next_hop,omitempty"`
+		}
+		var entries []routeJSON
+		for _, dest := range dests {
+			v := valueByDest[dest]
+			f := v.Flags()
+			entry := routeJSON{
+				Dest:  dest.String(),
+				Flags: f.FlagNames(),
+			}
+			if f&routes.FlagLocal != 0 && f&routes.FlagWorkload != 0 {
+				idx := v.IfaceIndex()
+				entry.IfIndex = &idx
+			}
+			if f&routes.FlagLocal == 0 && f&routes.FlagWorkload != 0 {
+				entry.NextHop = v.NextHop().String()
+			}
+			entries = append(entries, entry)
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(entries)
 	}
 
 	for _, dest := range dests {
