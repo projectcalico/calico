@@ -256,6 +256,10 @@ func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) AttachNetkit(secName, ifName string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
+
 func OpenObjectWithLogBuffer(filename string, buf []byte) (*Obj, error) {
 	panic("LIBBPF syscall stub")
 }
