@@ -65,12 +65,12 @@ type StagedGlobalNetworkPolicySpec struct {
 	// alphanumerical order based on the Policy "Name" within the tier.
 	Order *float64 `json:"order,omitempty"`
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
 	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
 	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`

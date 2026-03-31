@@ -274,6 +274,68 @@ func TestRule_ICMP_Validation(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "notProtocol ICMP with ipVersion 6 is rejected",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:      v3.Allow,
+							NotProtocol: ptr.To(numorstring.ProtocolFromString("ICMP")),
+							IPVersion:   ptr.To(6),
+						},
+					},
+				},
+			},
+			wantErr: "protocol ICMP requires ipVersion 4",
+		},
+		{
+			name: "notProtocol ICMPv6 with ipVersion 4 is rejected",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:      v3.Allow,
+							NotProtocol: ptr.To(numorstring.ProtocolFromString("ICMPv6")),
+							IPVersion:   ptr.To(4),
+						},
+					},
+				},
+			},
+			wantErr: "protocol ICMPv6 requires ipVersion 6",
+		},
+		{
+			name: "notProtocol ICMP with ipVersion 4 is accepted",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:      v3.Allow,
+							NotProtocol: ptr.To(numorstring.ProtocolFromString("ICMP")),
+							IPVersion:   ptr.To(4),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "notProtocol ICMPv6 with ipVersion 6 is accepted",
+			obj: &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{
+					Ingress: []v3.Rule{
+						{
+							Action:      v3.Allow,
+							NotProtocol: ptr.To(numorstring.ProtocolFromString("ICMPv6")),
+							IPVersion:   ptr.To(6),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

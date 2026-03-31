@@ -40,6 +40,8 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.icmp) || (has(self.protocol) && (self.protocol == 'ICMP' || self.protocol == 'ICMPv6' || self.protocol == 1 || self.protocol == 58))",message="ICMP fields require protocol to be ICMP or ICMPv6",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="(!has(self.protocol) || (self.protocol != 'ICMP' && self.protocol != 1)) || !has(self.ipVersion) || self.ipVersion == 4",message="protocol ICMP requires ipVersion 4",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="(!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol != 58)) || !has(self.ipVersion) || self.ipVersion == 6",message="protocol ICMPv6 requires ipVersion 6",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="(!has(self.notProtocol) || (self.notProtocol != 'ICMP' && self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion == 4",message="protocol ICMP requires ipVersion 4",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="(!has(self.notProtocol) || (self.notProtocol != 'ICMPv6' && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion == 6",message="protocol ICMPv6 requires ipVersion 6",reason=FieldValueInvalid
 type Rule struct {
 	Action Action `json:"action"`
 
@@ -149,7 +151,7 @@ type EntityRule struct {
 	// Nets is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) IP addresses in any of the given subnets.
 	// +listType=set
-	// +kubebuilder:validation:MaxItems=50
+	// +kubebuilder:validation:MaxItems=256
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,net"`
 
 	// Selector is an optional field that contains a selector expression (see Policy for
@@ -209,7 +211,7 @@ type EntityRule struct {
 
 	// NotNets is the negated version of the Nets field.
 	// +listType=set
-	// +kubebuilder:validation:MaxItems=50
+	// +kubebuilder:validation:MaxItems=256
 	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,net"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
