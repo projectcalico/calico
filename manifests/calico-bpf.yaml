@@ -241,6 +241,8 @@ spec:
                     x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
+              required:
+                - listenPort
               type: object
               x-kubernetes-validations:
                 - message:
