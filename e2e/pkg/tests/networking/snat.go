@@ -49,6 +49,9 @@ func checkConnection(_ conncheck.ConnectionTester, client *conncheck.Client, tar
 	var lastErr error
 	Eventually(func() error {
 		// Hit /clientip on the target to get the source IP seen by the server.
+		// target.Destination() uses net.JoinHostPort when a port is set,
+		// which handles IPv6 bracket notation. Callers must always set a
+		// port on the target (e.g., server.ClusterIPv4().Port(80)).
 		cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", target.Destination())
 		out, err := conncheck.ExecInPod(client.Pod(), "sh", "-c", cmd)
 		if expected == unreachable {

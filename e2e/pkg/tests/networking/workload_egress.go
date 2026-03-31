@@ -272,7 +272,8 @@ var _ = describe.CalicoDescribe(
 
 			switch scenario.accessType {
 			case "clusterIP":
-				target = server.ClusterIP()
+				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
+				target = server.ClusterIPv4().Port(80)
 				if scenario.dstHostNetworked {
 					expectSNAT = true
 				}
