@@ -868,6 +868,14 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
 				}
 
+				switch topts.rpfEnforce {
+				case "strict":
+					globals.Flags |= libbpf.GlobalsRPFOptionEnabled
+					globals.Flags |= libbpf.GlobalsRPFOptionStrict
+				case "loose":
+					globals.Flags |= libbpf.GlobalsRPFOptionEnabled
+				}
+
 				globals.DSCP = -1
 				if topts.dscp >= 0 {
 					globals.DSCP = topts.dscp
@@ -1252,6 +1260,7 @@ type testOpts struct {
 	dscp                          int8
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
+	rpfEnforce                    string // "strict", "loose", or "" (disabled)
 }
 
 type testOption func(opts *testOpts)
@@ -1334,6 +1343,12 @@ func withEgressDSCP(value int8) testOption {
 func withObjName(name string) testOption {
 	return func(o *testOpts) {
 		o.objname = name
+	}
+}
+
+func withRPFEnforce(mode string) testOption {
+	return func(o *testOpts) {
+		o.rpfEnforce = mode
 	}
 }
 
