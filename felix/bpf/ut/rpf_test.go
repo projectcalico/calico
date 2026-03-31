@@ -15,6 +15,7 @@
 package ut_test
 
 import (
+	"encoding/binary"
 	"net"
 	"testing"
 
@@ -64,6 +65,17 @@ func runWithoutDefaultRoutes(family int, fn func()) {
 	fn()
 }
 
+// makeDHCPv4Payload builds a minimal BOOTP/DHCP payload with the magic cookie
+// (0x63825363) at offset 236, which is where the BPF RPF bypass checks for it.
+func makeDHCPv4Payload(op byte) []byte {
+	payload := make([]byte, 240)
+	payload[0] = op                                          // op: 1=BOOTREQUEST, 2=BOOTREPLY
+	payload[1] = 1                                           // htype: Ethernet
+	payload[2] = 6                                           // hlen: 6 (MAC address length)
+	binary.BigEndian.PutUint32(payload[236:240], 0x63825363) // DHCP magic cookie
+	return payload
+}
+
 func TestDHCPv4BypassesHEPRPF(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -89,7 +101,8 @@ func TestDHCPv4BypassesHEPRPF(t *testing.T) {
 		DstPort: 68,
 	}
 
-	_, _, _, _, pktBytes, err := testPacketV4(nil, ipHdr, udpHdr, nil)
+	dhcpPayload := makeDHCPv4Payload(2) // BOOTREPLY (offer/ack)
+	_, _, _, _, pktBytes, err := testPacketV4(nil, ipHdr, udpHdr, dhcpPayload)
 	Expect(err).NotTo(HaveOccurred())
 
 	resetCTMap(ctMap)
@@ -102,6 +115,54 @@ func TestDHCPv4BypassesHEPRPF(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT),
 				"DHCPv4 packet (sport=67, dport=68) should not be dropped by RPF")
+		})
+	}, withRPFEnforce("strict"))
+}
+
+func TestDHCPv4PortsWithoutMagicCookieBlockedByHEPRPF(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "DMrpf"
+	defer func() { bpfIfaceName = "" }()
+	defer cleanUpMaps()
+
+	hostIP = node1ip
+
+	// UDP packet on DHCP ports but WITHOUT the magic cookie — should be dropped.
+	dhcpServerIP := net.IPv4(172, 31, 0, 1).To4()
+	ipHdr := &layers.IPv4{
+		Version:  4,
+		IHL:      5,
+		TTL:      64,
+		SrcIP:    dhcpServerIP,
+		DstIP:    node1ip,
+		Protocol: layers.IPProtocolUDP,
+	}
+	udpHdr := &layers.UDP{
+		SrcPort: 67,
+		DstPort: 68,
+	}
+
+	// Payload with correct size but wrong magic cookie.
+	badPayload := make([]byte, 240)
+	badPayload[0] = 2 // BOOTREPLY
+	badPayload[1] = 1 // Ethernet
+	badPayload[2] = 6
+	// No magic cookie at offset 236 (all zeros).
+
+	_, _, _, _, pktBytes, err := testPacketV4(nil, ipHdr, udpHdr, badPayload)
+	Expect(err).NotTo(HaveOccurred())
+
+	resetCTMap(ctMap)
+	defer resetCTMap(ctMap)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		runWithoutDefaultRoutes(netlink.FAMILY_V4, func() {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_SHOT),
+				"UDP packet on DHCP ports without magic cookie should be dropped by RPF")
 		})
 	}, withRPFEnforce("strict"))
 }
