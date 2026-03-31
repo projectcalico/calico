@@ -797,7 +797,6 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					"listenPort": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ListenPort is the port where BGP protocol should listen. Defaults to 179",
-							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -877,7 +876,6 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 						},
 					},
 				},
-				Required: []string{"listenPort"},
 			},
 		},
 		Dependencies: []string{
