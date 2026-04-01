@@ -268,7 +268,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			r := calico.NewManager(opts...)
 			prepErr := r.PrepareRelease()
 
-			// Write structured summary regardless of success/failure.
+			// Write structured summary for the PrepareRelease step.
 			summary := outputs.StepSummary{
 				Status:    "success",
 				Started:   started,

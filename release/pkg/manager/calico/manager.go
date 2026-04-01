@@ -1711,7 +1711,7 @@ func (r *CalicoManager) prepPrereqs() error {
 	if !versionRegex.MatchString(r.operatorVersion) {
 		return fmt.Errorf("operator version (%s) is not a release version", r.operatorVersion)
 	}
-	versionRegex = regexp.MustCompile(`^v\d+\.\d+\.\d+(-\d+.\d+)?$`)
+	versionRegex = regexp.MustCompile(`^v\d+\.\d+\.\d+(-\d+\.\d+)?$`)
 	if !versionRegex.MatchString(r.calicoVersion) {
 		return fmt.Errorf("version (%s) is not a release version", r.calicoVersion)
 	}
