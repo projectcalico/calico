@@ -64,9 +64,8 @@ func NewTestEnv() (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
-	started := true
 	defer func() {
-		if started {
+		if env != nil {
 			env.Stop()
 		}
 	}()
@@ -97,15 +96,15 @@ func NewTestEnv() (*TestEnv, error) {
 		return nil, err
 	}
 
-	// All clients built successfully, don't tear down on return.
-	started = false
-	return &TestEnv{
+	te := &TestEnv{
 		Env:          env,
 		RestConfig:   cfg,
 		K8sClient:    k8sClient,
 		CalicoClient: calicoClient,
 		Client:       client,
-	}, nil
+	}
+	env = nil // ownership transferred to te; prevent defer from stopping
+	return te, nil
 }
 
 // NewCalicoInformerFactory creates a shared informer factory for Calico resources
