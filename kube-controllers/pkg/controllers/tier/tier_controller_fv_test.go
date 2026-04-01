@@ -50,12 +50,11 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "envtest setup: %v\n", err)
 		os.Exit(1)
 	}
-	defer func() {
-		if err := testEnv.Stop(); err != nil {
-			fmt.Fprintf(os.Stderr, "envtest teardown: %v\n", err)
-		}
-	}()
-	os.Exit(m.Run())
+	code := m.Run()
+	if err := testEnv.Stop(); err != nil {
+		fmt.Fprintf(os.Stderr, "envtest teardown: %v\n", err)
+	}
+	os.Exit(code)
 }
 
 // startTierController creates informers and starts the tier controller in a

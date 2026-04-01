@@ -27,7 +27,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	libtestutils "github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 // TestEnv wraps an envtest.Environment with pre-built clients for Calico
@@ -52,7 +52,7 @@ type TestEnv struct {
 // NewTestEnv creates and starts an envtest environment with all Calico CRDs
 // loaded. The caller must call Stop() when done (typically deferred in TestMain).
 func NewTestEnv() (*TestEnv, error) {
-	repoRoot := testutils.FindRepoRoot()
+	repoRoot := libtestutils.FindRepoRoot()
 	env := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join(repoRoot, "api", "config", "crd"),
