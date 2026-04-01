@@ -42,7 +42,7 @@ endif
 # checking them.
 UPDATE_EXPECTED_DATA?=false
 
-test: ut test-kdd test-etcd
+test: ut fv test-kdd test-etcd
 
 .PHONY: test-kdd
 ## Run template tests against KDD
@@ -101,6 +101,15 @@ test-etcd: bin/confd-$(ARCH) bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/
 ut:
 	mkdir -p report
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -race --junit-report=confd_ut.xml --output-dir=report/ .'
+
+.PHONY: fv
+## Run confd functional verification tests (envtest-based, replaces bash test suite).
+fv: setup-envtest
+	$(DOCKER_RUN) \
+		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
+		-e KUBEBUILDER_ASSETS=/envtest \
+		$(CALICO_BUILD) \
+		go test -count=1 -v -timeout 600s ./confd/tests/...
 
 
 bin/kubectl:
