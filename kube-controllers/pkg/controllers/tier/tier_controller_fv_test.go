@@ -127,7 +127,7 @@ func TestFV_TierDeletionBlockedByPolicy(t *testing.T) {
 
 	// Delete the tier. It should remain because the finalizer blocks it.
 	g.Expect(testEnv.RTClient.Delete(ctx, tierObj)).To(Succeed())
-	expectTierTerminating(g, "test-blocked", "GlobalNetworkPolic")
+	expectTierTerminating(g, "test-blocked", "1 GlobalNetworkPolicy")
 	expectTierHasFinalizer(g, "test-blocked")
 
 	// Delete the policy. The tier should now be fully deleted.
@@ -174,12 +174,12 @@ func TestFV_MultiplePolicyTypes(t *testing.T) {
 
 	// Delete the tier. It should be blocked by both policies.
 	g.Expect(testEnv.RTClient.Delete(ctx, tierObj)).To(Succeed())
-	expectTierTerminating(g, "multi-tier", "GlobalNetworkPolic")
-	expectTierTerminating(g, "multi-tier", "NetworkPolic")
+	expectTierTerminating(g, "multi-tier", "1 GlobalNetworkPolicy")
+	expectTierTerminating(g, "multi-tier", "1 NetworkPolicy")
 
 	// Delete the GNP. Tier should still be blocked by the NP.
 	g.Expect(testEnv.RTClient.Delete(ctx, gnp)).To(Succeed())
-	expectTierTerminating(g, "multi-tier", "NetworkPolic")
+	expectTierTerminating(g, "multi-tier", "1 NetworkPolicy")
 
 	// Delete the NP. Tier should now be fully deleted.
 	g.Expect(testEnv.RTClient.Delete(ctx, np)).To(Succeed())
