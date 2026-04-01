@@ -89,7 +89,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	os.Setenv("NODENAME", "kube-master")
+	must(os.Setenv("NODENAME", "kube-master"), "setting NODENAME")
 	template.NodeName = "kube-master"
 	calico.NodeName = "kube-master"
 
@@ -122,8 +122,8 @@ func TestMain(m *testing.M) {
 		}
 	}
 	if etcdCmd != nil {
-		etcdCmd.Process.Kill()
-		etcdCmd.Wait()
+		_ = etcdCmd.Process.Kill()
+		_ = etcdCmd.Wait()
 	}
 	os.Exit(code)
 }
@@ -151,8 +151,8 @@ func setupKDD() *datastoreBackend {
 	}
 
 	kubeconfigPath := writeKubeconfig(restCfg)
-	os.Setenv("DATASTORE_TYPE", "kubernetes")
-	os.Setenv("KUBECONFIG", kubeconfigPath)
+	must(os.Setenv("DATASTORE_TYPE", "kubernetes"), "setting DATASTORE_TYPE")
+	must(os.Setenv("KUBECONFIG", kubeconfigPath), "setting KUBECONFIG")
 
 	datastoreCfg := apiconfig.CalicoAPIConfigSpec{
 		DatastoreType: apiconfig.Kubernetes,
@@ -205,7 +205,7 @@ func setupEtcd() *datastoreBackend {
 		os.Exit(1)
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
+	_ = listener.Close()
 
 	endpoint := fmt.Sprintf("http://127.0.0.1:%d", port)
 	dataDir, err := os.MkdirTemp("", "confd-test-etcd-*")
@@ -232,7 +232,7 @@ func setupEtcd() *datastoreBackend {
 	for i := 0; i < 50; i++ {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -307,7 +307,7 @@ func writeKubeconfig(cfg *rest.Config) string {
 	if err != nil {
 		panic(fmt.Sprintf("creating kubeconfig temp file: %v", err))
 	}
-	f.Close()
+	_ = f.Close()
 	if err := clientcmd.WriteToFile(*kubeconfig, f.Name()); err != nil {
 		panic(fmt.Sprintf("writing kubeconfig: %v", err))
 	}
@@ -585,7 +585,8 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 	// KDD mode: use the BlockAffinities API.
 	affinities := make([]apiv3.BlockAffinity, 0, len(standardBlockAffinities))
 	for _, a := range standardBlockAffinities {
-		name := "kube-master-" + strings.Replace(strings.Replace(a.cidr, "/", "-", 1), ".", "-", -1)
+		name := "kube-master-" + strings.Replace(a.cidr, "/", "-", 1)
+		name = strings.ReplaceAll(name, ".", "-")
 		affinities = append(affinities, apiv3.BlockAffinity{
 			ObjectMeta: objectMeta(name),
 			Spec:       apiv3.BlockAffinitySpec{Node: a.host, CIDR: a.cidr, State: apiv3.BlockAffinityState(a.state)},
