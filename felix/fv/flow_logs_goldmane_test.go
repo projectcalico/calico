@@ -478,6 +478,75 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 	})
 })
 
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane nat outgoing flow log tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	var (
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
+
+		workload1 *workload.Workload
+		workload2 *workload.Workload
+	)
+
+	BeforeEach(func() {
+		var err error
+
+		infra = getInfra()
+		opts := infrastructure.DefaultTopologyOptions()
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
+
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
+
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
+
+		ctx := context.Background()
+
+		// Create an IPPool and assign an IP from that pool to workload1 so the packets are SNAT'd when a connection is
+		// made from workload1 to workload2.
+		ippool := api.NewIPPool()
+		ippool.Name = "nat-pool"
+		ippool.Spec.CIDR = "10.244.255.0/24"
+		ippool.Spec.NATOutgoing = true
+		ippool, err = client.IPPools().Create(ctx, ippool, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		workload1 = workload.Run(tc.Felixes[0], "w1", "default", "10.244.255.1", "8055", "tcp")
+		workload1.ConfigureInInfra(infra)
+
+		workload2 = workload.Run(tc.Felixes[0], "w2", "default", "10.65.0.2", "8055", "tcp")
+		workload2.ConfigureInInfra(infra)
+	})
+
+	It("Should report non-zero bytes for an SNAT'd flow", func() {
+		cc := &connectivity.Checker{
+			Protocol: "tcp",
+		}
+
+		cc.ExpectSome(workload1, workload2)
+		cc.CheckConnectivity()
+
+		Eventually(func() error {
+			flows, err := tc.Felixes[0].FlowLogs()
+			if err != nil {
+				return err
+			}
+			for _, flow := range flows {
+				if flow.SrcMeta.AggregatedName == workload1.Name &&
+					flow.DstMeta.AggregatedName == workload2.Name {
+					if flow.PacketsIn == 0 || flow.PacketsOut == 0 ||
+						flow.BytesIn == 0 || flow.BytesOut == 0 {
+						return fmt.Errorf("expected non-zero counters for SNAT'd flow, got PacketsIn=%d PacketsOut=%d BytesIn=%d BytesOut=%d",
+							flow.PacketsIn, flow.PacketsOut, flow.BytesIn, flow.BytesOut)
+					}
+					return nil
+				}
+			}
+			return fmt.Errorf("no flows found between %s and %s", workload1.Name, workload2.Name)
+		}, "30s", "3s").ShouldNot(HaveOccurred())
+	})
+})
+
 var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra  infrastructure.DatastoreInfra
