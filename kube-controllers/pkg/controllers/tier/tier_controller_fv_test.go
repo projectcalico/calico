@@ -93,7 +93,9 @@ func TestFV_FinalizerAddedToNewTier(t *testing.T) {
 	}
 	g.Expect(testEnv.Client.Create(ctx, tierObj)).To(Succeed())
 	t.Cleanup(func() {
-		testEnv.Client.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "test-finalizer"}})
+		if err := testEnv.Client.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "test-finalizer"}}); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
 	})
 
 	expectTierHasFinalizer(g, "test-finalizer")

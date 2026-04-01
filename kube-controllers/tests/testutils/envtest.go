@@ -64,6 +64,12 @@ func NewTestEnv() (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
+	started := true
+	defer func() {
+		if started {
+			env.Stop()
+		}
+	}()
 
 	// Raise rate limits so test assertions and controllers don't get throttled.
 	cfg.QPS = 100
@@ -71,37 +77,34 @@ func NewTestEnv() (*TestEnv, error) {
 
 	k8sClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		env.Stop()
 		return nil, err
 	}
 
 	calicoClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		env.Stop()
 		return nil, err
 	}
 
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		env.Stop()
 		return nil, err
 	}
 	if err := v3.AddToScheme(scheme); err != nil {
-		env.Stop()
 		return nil, err
 	}
-	rtClient, err := ctrlclient.NewWithWatch(cfg, ctrlclient.Options{Scheme: scheme})
+	client, err := ctrlclient.NewWithWatch(cfg, ctrlclient.Options{Scheme: scheme})
 	if err != nil {
-		env.Stop()
 		return nil, err
 	}
 
+	// All clients built successfully, don't tear down on return.
+	started = false
 	return &TestEnv{
 		Env:          env,
 		RestConfig:   cfg,
 		K8sClient:    k8sClient,
 		CalicoClient: calicoClient,
-		Client:     rtClient,
+		Client:       client,
 	}, nil
 }
 
