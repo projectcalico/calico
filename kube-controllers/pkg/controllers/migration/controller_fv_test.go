@@ -197,7 +197,7 @@ func TestLifecycle_Mainline(t *testing.T) {
 	// Tiers should exist in v3 with the internal annotation stripped.
 	tier1 := &apiv3.Tier{}
 	h.getV3Resource("default", tier1)
-	g.Expect(tier1.Spec.Order).To(Equal(ptr.To(float64(100))))
+	g.Expect(tier1.Spec.Order).To(Equal(ptr.To(apiv3.DefaultTierOrder)))
 	g.Expect(tier1.Annotations).NotTo(HaveKey("projectcalico.org/metadata"))
 
 	tier2 := &apiv3.Tier{}
@@ -307,16 +307,16 @@ func TestLifecycle_ConflictResolution(t *testing.T) {
 		clusterInfo: mainlineV1ClusterInfo(),
 	}
 
-	// Pre-create a v3 Tier with a different spec than the v1 source.
-	// This triggers conflict detection in handlePending.
-	deny := apiv3.Deny
+	// Pre-create a v3 Tier with a different Order than the v1 source.
+	// This triggers conflict detection in handlePending. We use a non-default
+	// tier because CEL validation locks the default tier's Order and DefaultAction.
 	conflictingTier := &apiv3.Tier{
-		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec:       apiv3.TierSpec{Order: ptr.To(float64(999)), DefaultAction: &deny},
+		ObjectMeta: metav1.ObjectMeta{Name: "custom"},
+		Spec:       apiv3.TierSpec{Order: ptr.To(float64(999)), DefaultAction: actionPtr(apiv3.Deny)},
 	}
 	g.Expect(fvRTClient.Create(ctx, conflictingTier)).To(Succeed())
 	t.Cleanup(func() {
-		if err := fvRTClient.Delete(ctx, &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "default"}}); err != nil {
+		if err := fvRTClient.Delete(ctx, &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "custom"}}); err != nil {
 			t.Logf("cleanup: deleting tier: %v", err)
 		}
 	})
@@ -336,13 +336,13 @@ func TestLifecycle_ConflictResolution(t *testing.T) {
 	g.Expect(dm.Status.Conditions).To(HaveLen(1))
 	g.Expect(dm.Status.Conditions[0].Type).To(Equal(conditionTypeConflict))
 	g.Expect(dm.Status.Conditions[0].Reason).To(Equal(conditionReasonResourceMismatch))
-	g.Expect(dm.Status.Conditions[0].Message).To(ContainSubstring("Tier/default"))
+	g.Expect(dm.Status.Conditions[0].Message).To(ContainSubstring("Tier/custom"))
 
 	gate.release(DatastoreMigrationPhaseWaitingForConflictResolution)
 
-	// Fix the conflict by updating the v3 Tier to match the v1 spec.
+	// Fix the conflict by updating the v3 Tier's Order to match v1.
 	tier := &apiv3.Tier{}
-	h.getV3Resource("default", tier)
+	h.getV3Resource("custom", tier)
 	tier.Spec.Order = ptr.To(float64(100))
 	g.Expect(fvRTClient.Update(ctx, tier)).To(Succeed())
 
