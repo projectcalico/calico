@@ -46,7 +46,8 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 // we can update the tooling to expect the new format.
 // Specifically, we need to do the following:
 // - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
-// - Add a copy of charts without version in its name i.e. tigera-operator-<ver>.tgz to tigera-operator.tgz
+// - Copy all release Helm charts to charts/<chart>.tgz (without the version in the filename)
+// - Additionally keep an unversioned tigera-operator.tgz at the hashrelease root for compatibility
 // - Copy ocp.tgz to manifests/ocp.tgz
 func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
