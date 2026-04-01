@@ -532,7 +532,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	setPhaseMetric(DatastoreMigrationPhaseConverged)
 	logCtx.Info("Migration converged, unlocking datastore")
 
-	// Step 4: Unlock the datastore.
+	// Step 3: Unlock the datastore.
 	if err := m.unlockV3CRDDatastore(logCtx); err != nil {
 		return err
 	}

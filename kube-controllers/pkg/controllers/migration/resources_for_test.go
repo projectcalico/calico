@@ -50,7 +50,7 @@ func mainlineV1Resources() map[string][]*model.KVPair {
 						UID:         v1TierDefaultUID,
 						Annotations: v1InternalAnnotations,
 					},
-					Spec: apiv3.TierSpec{Order: ptr.To(float64(100)), DefaultAction: actionPtr(apiv3.Deny)},
+					Spec: apiv3.TierSpec{Order: ptr.To(apiv3.DefaultTierOrder), DefaultAction: actionPtr(apiv3.Deny)},
 				},
 			},
 			{
@@ -108,7 +108,7 @@ func conflictV1Resources() map[string][]*model.KVPair {
 						Annotations: v1InternalAnnotations,
 					},
 					Spec: apiv3.TierSpec{
-						Order:         ptr.To(float64(100)),
+						Order:         ptr.To(apiv3.DefaultTierOrder),
 						DefaultAction: actionPtr(apiv3.Deny),
 					},
 				},

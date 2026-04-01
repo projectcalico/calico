@@ -197,7 +197,7 @@ func TestLifecycle_Mainline(t *testing.T) {
 	// Tiers should exist in v3 with the internal annotation stripped.
 	tier1 := &apiv3.Tier{}
 	h.getV3Resource("default", tier1)
-	g.Expect(tier1.Spec.Order).To(Equal(ptr.To(float64(100))))
+	g.Expect(tier1.Spec.Order).To(Equal(ptr.To(apiv3.DefaultTierOrder)))
 	g.Expect(tier1.Annotations).NotTo(HaveKey("projectcalico.org/metadata"))
 
 	tier2 := &apiv3.Tier{}
@@ -307,12 +307,12 @@ func TestLifecycle_ConflictResolution(t *testing.T) {
 		clusterInfo: mainlineV1ClusterInfo(),
 	}
 
-	// Pre-create a v3 Tier with a different spec than the v1 source.
+	// Pre-create a v3 Tier with a different DefaultAction than the v1 source.
 	// This triggers conflict detection in handlePending.
-	deny := apiv3.Deny
+	pass := apiv3.Pass
 	conflictingTier := &apiv3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec:       apiv3.TierSpec{Order: ptr.To(float64(999)), DefaultAction: &deny},
+		Spec:       apiv3.TierSpec{Order: ptr.To(apiv3.DefaultTierOrder), DefaultAction: &pass},
 	}
 	g.Expect(fvRTClient.Create(ctx, conflictingTier)).To(Succeed())
 	t.Cleanup(func() {
@@ -340,10 +340,11 @@ func TestLifecycle_ConflictResolution(t *testing.T) {
 
 	gate.release(DatastoreMigrationPhaseWaitingForConflictResolution)
 
-	// Fix the conflict by updating the v3 Tier to match the v1 spec.
+	// Fix the conflict by updating the v3 Tier's DefaultAction to match v1.
 	tier := &apiv3.Tier{}
 	h.getV3Resource("default", tier)
-	tier.Spec.Order = ptr.To(float64(100))
+	deny := apiv3.Deny
+	tier.Spec.DefaultAction = &deny
 	g.Expect(fvRTClient.Update(ctx, tier)).To(Succeed())
 
 	// The controller should re-check, find no conflicts, transition through
