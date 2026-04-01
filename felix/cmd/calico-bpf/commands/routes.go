@@ -17,6 +17,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 
 	"github.com/pkg/errors"
