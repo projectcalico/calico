@@ -449,7 +449,8 @@ type ManagerWithHEPUpdate interface {
 // If configuredTimeout is 0, it reads the value from the Linux kernel sysctl
 // net.ipv4.ipfrag_time. Otherwise, it converts the configured duration to seconds.
 func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
-	// If configured timeout is 0, read from Linux sysctl
+	var timeoutSecs int64
+
 	if configuredTimeout == 0 {
 		// Try to read from /proc/sys/net/ipv4/ipfrag_time
 		data, err := os.ReadFile("/proc/sys/net/ipv4/ipfrag_time")
@@ -465,20 +466,22 @@ func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
 			return 30
 		}
 
-		// Validate range - must be positive and fit in uint32
-		if timeout < 0 || timeout > int(^uint32(0)) {
-			logrus.WithField("timeout", timeout).Warn("Invalid net.ipv4.ipfrag_time value (out of range), using default of 30 seconds")
-			return 30
-		}
-
-		logrus.WithField("timeout", timeout).Info("BPF IP fragment timeout read from net.ipv4.ipfrag_time")
-		return uint32(timeout)
+		timeoutSecs = int64(timeout)
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout read from net.ipv4.ipfrag_time")
+	} else {
+		timeoutSecs = int64(configuredTimeout.Seconds())
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout set from configuration")
 	}
 
-	// Convert duration to seconds
-	timeoutSecs := uint32(configuredTimeout.Seconds())
-	logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout set from configuration")
-	return timeoutSecs
+	if timeoutSecs < 1 {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too low, clamping to 1 second")
+		timeoutSecs = 1
+	} else if timeoutSecs > int64(^uint32(0)) {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too high, clamping to max uint32")
+		timeoutSecs = int64(^uint32(0))
+	}
+
+	return uint32(timeoutSecs)
 }
 
 func NewBPFEndpointManager(

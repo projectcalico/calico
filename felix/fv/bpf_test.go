@@ -1805,9 +1805,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							fmt.Sprintf("%s.* > %s.*", w[1][0].IP, w[0][0].IP)))
 						tcpdump0.Start(infra, "-vvv", "src", "host", w[1][0].IP, "and", "dst", "host", w[0][0].IP)
 
-						// Give tcpdump some time to start up!
-						time.Sleep(time.Second)
-
 						// Send a packet with large payload without the DNF flag
 						// 16,000 bytes is the typical limit on the size of a
 						// single skb, which in turn is the limit on the size
@@ -1832,7 +1829,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(24))
 					})
 
-					_ = testOpts.tunnel == "none" && It("should handle fragmented UDP from external client", func() {
+					if testOpts.tunnel == "none" {
+						It("should handle fragmented UDP from external client", func() {
 						// Create policy allowing ingress from external client
 						allowIngressFromExtClient := api.NewGlobalNetworkPolicy()
 						allowIngressFromExtClient.Namespace = "fv"
@@ -1868,9 +1866,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
 
-						// Give tcpdump some time to start up!
-						time.Sleep(time.Second)
-
 						// Send a packet with large payload without the DNF flag
 						// 16,000 bytes is the typical limit on the size of a
 						// single skb, which in turn is the limit on the size
@@ -1902,6 +1897,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							return frgEnts
 						}, "5s", "500ms").Should(Equal(0), "All fragments should be reassembled and map should be empty")
 					})
+					}
 				}
 
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&

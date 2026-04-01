@@ -75,10 +75,10 @@
 static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool decap)
 {
 #ifndef IPVER6
-	if ((CALI_F_TO_HOST || CALI_F_FROM_HEP) && ip_is_frag(ip_hdr(ctx))) {
+	if (CALI_F_TO_HOST && ip_is_frag(ip_hdr(ctx))) {
 		/* For fragments, we need to skip the FIB lookup as we may not be able to
 		 * forward because of smaller MTU on the next hop. We need to ensure that
-		 * all or none of the gragments fo through Linux stack for correct
+		 * all or none of the fragments go through Linux stack for correct
 		 * reassembly since that is mandated by conntrack.
 		 */
 		if (CALI_F_FROM_HEP) {
@@ -2263,7 +2263,6 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 	case FRAGS4_HANDLE_FIRST_IN_ORDER:
 		/* Carry on as normal packet, do not redirect, it may get
 		 * fragmented again. */
-		// fwd_fib_set(&ctx->fwd, false);
 		break;
 	}
 
