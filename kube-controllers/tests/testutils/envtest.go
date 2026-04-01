@@ -45,8 +45,8 @@ type TestEnv struct {
 	// CalicoClient is the generated Calico API clientset.
 	CalicoClient clientset.Interface
 
-	// RTClient is a controller-runtime client with the Calico scheme registered.
-	RTClient ctrlclient.WithWatch
+	// Client is a controller-runtime client with the Calico and core K8s schemes registered.
+	Client ctrlclient.WithWatch
 }
 
 // NewTestEnv creates and starts an envtest environment with all Calico CRDs
@@ -101,7 +101,7 @@ func NewTestEnv() (*TestEnv, error) {
 		RestConfig:   cfg,
 		K8sClient:    k8sClient,
 		CalicoClient: calicoClient,
-		RTClient:     rtClient,
+		Client:     rtClient,
 	}, nil
 }
 

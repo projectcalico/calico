@@ -91,9 +91,9 @@ func TestFV_FinalizerAddedToNewTier(t *testing.T) {
 			Order: ptr.To(float64(100)),
 		},
 	}
-	g.Expect(testEnv.RTClient.Create(ctx, tierObj)).To(Succeed())
+	g.Expect(testEnv.Client.Create(ctx, tierObj)).To(Succeed())
 	t.Cleanup(func() {
-		testEnv.RTClient.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "test-finalizer"}})
+		testEnv.Client.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "test-finalizer"}})
 	})
 
 	expectTierHasFinalizer(g, "test-finalizer")
@@ -113,7 +113,7 @@ func TestFV_TierDeletionBlockedByPolicy(t *testing.T) {
 			Order: ptr.To(float64(100)),
 		},
 	}
-	g.Expect(testEnv.RTClient.Create(ctx, tierObj)).To(Succeed())
+	g.Expect(testEnv.Client.Create(ctx, tierObj)).To(Succeed())
 	expectTierHasFinalizer(g, "test-blocked")
 
 	gnp := &v3.GlobalNetworkPolicy{
@@ -123,15 +123,15 @@ func TestFV_TierDeletionBlockedByPolicy(t *testing.T) {
 			Selector: "all()",
 		},
 	}
-	g.Expect(testEnv.RTClient.Create(ctx, gnp)).To(Succeed())
+	g.Expect(testEnv.Client.Create(ctx, gnp)).To(Succeed())
 
 	// Delete the tier. It should remain because the finalizer blocks it.
-	g.Expect(testEnv.RTClient.Delete(ctx, tierObj)).To(Succeed())
+	g.Expect(testEnv.Client.Delete(ctx, tierObj)).To(Succeed())
 	expectTierTerminating(g, "test-blocked", "1 GlobalNetworkPolicy")
 	expectTierHasFinalizer(g, "test-blocked")
 
 	// Delete the policy. The tier should now be fully deleted.
-	g.Expect(testEnv.RTClient.Delete(ctx, gnp)).To(Succeed())
+	g.Expect(testEnv.Client.Delete(ctx, gnp)).To(Succeed())
 	expectTierDeleted(g, "test-blocked")
 }
 
@@ -149,7 +149,7 @@ func TestFV_MultiplePolicyTypes(t *testing.T) {
 			Order: ptr.To(float64(200)),
 		},
 	}
-	g.Expect(testEnv.RTClient.Create(ctx, tierObj)).To(Succeed())
+	g.Expect(testEnv.Client.Create(ctx, tierObj)).To(Succeed())
 	expectTierHasFinalizer(g, "multi-tier")
 
 	gnp := &v3.GlobalNetworkPolicy{
@@ -169,25 +169,25 @@ func TestFV_MultiplePolicyTypes(t *testing.T) {
 			Selector: "all()",
 		},
 	}
-	g.Expect(testEnv.RTClient.Create(ctx, gnp)).To(Succeed())
-	g.Expect(testEnv.RTClient.Create(ctx, np)).To(Succeed())
+	g.Expect(testEnv.Client.Create(ctx, gnp)).To(Succeed())
+	g.Expect(testEnv.Client.Create(ctx, np)).To(Succeed())
 
 	// Delete the tier. It should be blocked by both policies.
-	g.Expect(testEnv.RTClient.Delete(ctx, tierObj)).To(Succeed())
+	g.Expect(testEnv.Client.Delete(ctx, tierObj)).To(Succeed())
 	expectTierTerminating(g, "multi-tier", "1 GlobalNetworkPolicy")
 	expectTierTerminating(g, "multi-tier", "1 NetworkPolicy")
 
 	// Delete the GNP. Tier should still be blocked by the NP.
-	g.Expect(testEnv.RTClient.Delete(ctx, gnp)).To(Succeed())
+	g.Expect(testEnv.Client.Delete(ctx, gnp)).To(Succeed())
 	expectTierTerminating(g, "multi-tier", "1 NetworkPolicy")
 
 	// Delete the NP. Tier should now be fully deleted.
-	g.Expect(testEnv.RTClient.Delete(ctx, np)).To(Succeed())
+	g.Expect(testEnv.Client.Delete(ctx, np)).To(Succeed())
 	expectTierDeleted(g, "multi-tier")
 }
 
 func expectTierHasFinalizer(g Gomega, name string) {
-	cli := testEnv.RTClient
+	cli := testEnv.Client
 	tier := &v3.Tier{}
 	g.Eventually(func() error {
 		if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, tier); err != nil {
@@ -201,7 +201,7 @@ func expectTierHasFinalizer(g Gomega, name string) {
 }
 
 func expectTierTerminating(g Gomega, name, messageSubstring string) {
-	cli := testEnv.RTClient
+	cli := testEnv.Client
 	tier := &v3.Tier{}
 	g.Eventually(func() error {
 		if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, tier); err != nil {
@@ -220,7 +220,7 @@ func expectTierTerminating(g Gomega, name, messageSubstring string) {
 }
 
 func expectTierDeleted(g Gomega, name string) {
-	cli := testEnv.RTClient
+	cli := testEnv.Client
 	tier := &v3.Tier{}
 	g.Eventually(func() error {
 		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, tier)
