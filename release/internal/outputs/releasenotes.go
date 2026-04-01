@@ -33,6 +33,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
+const ReleaseNotesDir = "release-notes"
+
 const (
 	releaseNoteRequiredLabel = "release-note-required"
 	closedState              = issueState("closed")
@@ -195,9 +197,14 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		return "", fmt.Errorf("github token not set, set GITHUB_TOKEN environment variable")
 	}
 	if outputDir == "" {
-		logrus.Warn("No directory is set, using current directory")
-		outputDir = "."
+		logrus.Warn("No directory is set, using repo root directory")
+		outputDir = repoRootDir
+		if outputDir == "" {
+			logrus.Warn("No repo dir set, using current dir")
+			outputDir = "."
+		}
 	}
+
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
 	milestone := ver.Milestone(utils.ProductName)
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
@@ -255,4 +262,9 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		return "", err
 	}
 	return releaseNoteFilePath, nil
+}
+
+// ReleaseNoteFilePath returns the file path for the release notes for a given version
+func ReleaseNoteFilePath(repoRootDir, version string) string {
+	return filepath.Join(repoRootDir, ReleaseNotesDir, fmt.Sprintf("%s-release-notes.md", version))
 }

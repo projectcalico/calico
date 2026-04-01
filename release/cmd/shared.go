@@ -32,9 +32,6 @@ var (
 	// debug controls whether or not to emit debug level logging.
 	debug bool
 
-	// releaseNotesDir is the directory where release notes are stored
-	releaseNotesDir = "release-notes"
-
 	// releaseOutputPath is the directory where all outputs are stored
 	// relative to the repo root
 	releaseOutputPath = []string{utils.ReleaseFolderName, "_output"}
@@ -48,7 +45,6 @@ func logPrettifier(f *runtime.Frame) (string, string) {
 
 // configureLogging sets up logging to both stdout and a file.
 func configureLogging(filename string) {
-
 	if debug {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
