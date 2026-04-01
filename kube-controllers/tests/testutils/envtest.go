@@ -15,6 +15,8 @@
 package testutils
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -69,7 +71,9 @@ func NewTestEnv(extraCRDPaths ...string) (*TestEnv, error) {
 	}
 	defer func() {
 		if env != nil {
-			env.Stop()
+			if err := env.Stop(); err != nil {
+				fmt.Fprintf(os.Stderr, "envtest teardown: %v\n", err)
+			}
 		}
 	}()
 

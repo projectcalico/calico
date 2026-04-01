@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/utils/ptr"
@@ -81,6 +82,7 @@ func TestMain(m *testing.M) {
 	// Build a controller-runtime client with the migration scheme registered
 	// in addition to the core and Calico schemes.
 	scheme := runtime.NewScheme()
+	expectNoError(clientgoscheme.AddToScheme(scheme))
 	expectNoError(apiv3.AddToScheme(scheme))
 	expectNoError(AddToScheme(scheme))
 	fvRTClient, err = rtclient.NewWithWatch(fvTestEnv.RestConfig, rtclient.Options{Scheme: scheme})
