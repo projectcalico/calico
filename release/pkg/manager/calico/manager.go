@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -1351,7 +1352,7 @@ func (r *CalicoManager) updateHelmChartIndex() error {
 func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
 	// Validate that the release notes for this version are present,
 	// fail if not.
-	releaseNotesPath := filepath.Join(r.repoRoot, "release-notes", fmt.Sprintf("%s-release-notes.md", ver))
+	releaseNotesPath := outputs.ReleaseNoteFilePath(r.repoRoot, ver)
 	releaseNotesStat, err := os.Stat(releaseNotesPath)
 	if err != nil {
 		return fmt.Errorf("release notes file is invalid: %s", err.Error())
@@ -1563,6 +1564,22 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 	return nil
 }
 
+func (r *CalicoManager) prepareReleaseCleanup(baseBranch, prepBranch string) {
+	curr, err := r.determineBranch()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to determine current branch during cleanup")
+		return
+	}
+	if curr == baseBranch {
+		return
+	}
+	if curr == prepBranch {
+		logrus.Warnf("An error occurred while preparing the %s release, investigate the issue and fix if necessary.\nTo re-run the release preparation, use the following command:\n\n\tgit switch -f %s", prepBranch, baseBranch)
+		return
+	}
+	logrus.WithField("branch", curr).Warn("Unexpected branch during release preparation cleanup, expected to be on base or prep branch")
+}
+
 // PrepareRelease performs release preparation for Calico.
 // It validates the repo state, creates a build branch, updates version references
 // in charts and manifests, and commits the changes.
@@ -1579,14 +1596,9 @@ func (r *CalicoManager) PrepareRelease() error {
 		baseBranch = fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream())
 		logrus.WithField("baseBranch", baseBranch).Info("Using default branch for release preparation")
 	}
-
-	defer func() {
-		if _, err := r.git("switch", "-f", baseBranch); err != nil {
-			logrus.WithError(err).Errorf("Failed to reset to %q branch", baseBranch)
-		}
-	}()
-
 	prepBranch := fmt.Sprintf("build-%s", ver)
+
+	defer r.prepareReleaseCleanup(baseBranch, prepBranch)
 
 	if err := r.switchToPrepBranch(prepBranch); err != nil {
 		return err
@@ -1621,7 +1633,7 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 	if _, err := r.git("add",
 		filepath.Join(r.repoRoot, "charts"),
 		filepath.Join(r.repoRoot, "manifests"),
-		filepath.Join(r.repoRoot, "release-notes"),
+		filepath.Join(r.repoRoot, outputs.ReleaseNotesDir),
 	); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
@@ -1632,7 +1644,6 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 }
 
 // pushPrepBranch pushes the prep branch to remote and creates a PR if not in local mode.
-// Calls the cleanup function to return to the base branch.
 func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 	if !r.publishGitRef {
 		logrus.WithField("branch", prepBranch).Info("Local mode: skipping push and PR creation")
@@ -1649,21 +1660,11 @@ func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 
 // createPrepPR creates a pull request for the prep branch.
 func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
-	out, err := r.git("config", "--get", "remote.origin.url")
-	if err != nil {
-		return fmt.Errorf("failed to get remote origin url: %s", err)
-	}
-	owner := strings.Split(out[strings.Index(out, "git@github.com:")+len("git@github.com:"):strings.LastIndex(out, ".git")], "/")[0]
 	args := []string{
 		"pr", "create", "--fill",
 		"--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
 		"--base", baseBranch,
-	}
-
-	if owner != r.githubOrg {
-		args = append(args, "--head", fmt.Sprintf("%s:%s", owner, prepBranch))
-	} else {
-		args = append(args, "--head", prepBranch)
+		"--head", prepBranch,
 	}
 	if r.githubOrg == defaultOrg && r.repo == defaultRepo {
 		args = append(args, []string{
@@ -1675,13 +1676,27 @@ func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 	pr, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			logrus.Warnf("PR already exists, skipping creation. Find PR at: https://github.com/%s/%s/pulls?q=is%%3Aopen+head%%3A%s", r.githubOrg, r.repo, prepBranch)
-			return nil
+			if m := regexp.MustCompile(`https://github\.com/\S+/pull/\d+`).FindString(err.Error()); m != "" {
+				pr = m
+			} else {
+				pr = fmt.Sprintf("https://github.com/%s/%s/pulls?q=is%%3Aopen+head%%3A%s", r.githubOrg, r.repo, prepBranch)
+			}
+			logrus.Warnf("PR already exists, skipping creation. Find PR at: %s", pr)
+			return r.switchToBaseBranch(baseBranch)
 		}
 		logrus.WithError(err).Error("Failed to create PR for release preparation")
 		return fmt.Errorf("failed to create PR: %s", err)
 	}
 	logrus.WithField("PR", strings.TrimSpace(pr)).Info("Created PR for release preparation")
+	return r.switchToBaseBranch(baseBranch)
+}
+
+func (r *CalicoManager) switchToBaseBranch(baseBranch string) error {
+	if out, err := r.git("switch", "-f", baseBranch); err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("failed to switch back to base branch %s: %w", baseBranch, err)
+	}
+	logrus.WithField("baseBranch", baseBranch).Info("Switched back to base branch after PR creation")
 	return nil
 }
 
@@ -1693,7 +1708,9 @@ func (r *CalicoManager) prepPrereqs() error {
 	}
 
 	// Check that the git repo is clean.
-	if dirty, err := utils.GitIsDirty(r.repoRoot); dirty || err != nil {
+	if dirty, err := utils.GitIsDirty(r.repoRoot); err != nil {
+		return fmt.Errorf("failed to check if git repo is clean: %w", err)
+	} else if dirty {
 		return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before preparing the release")
 	}
 
@@ -1704,6 +1721,22 @@ func (r *CalicoManager) prepPrereqs() error {
 		} else if branch == defaultBranch {
 			return fmt.Errorf("cannot cut release from branch: %s", branch)
 		}
+	}
+
+	// If publishing, check that we are not on a fork branch. We want to ensure releases are always cut from the main repo
+	if r.publishGitRef {
+		owner, err := r.remoteOwner()
+		if err != nil {
+			return err
+		}
+		if owner != r.githubOrg {
+			return fmt.Errorf("current git remote is %s, expected to be from %s. Please switch to a branch from the main repo to cut the release", owner, r.githubOrg)
+		}
+	}
+
+	// Check that the release notes are present for this version.
+	if err := r.assertReleaseNotesPresent(r.calicoVersion); err != nil {
+		return err
 	}
 
 	// Check that the versions are release version.
@@ -1717,4 +1750,39 @@ func (r *CalicoManager) prepPrereqs() error {
 	}
 
 	return nil
+}
+
+// remoteOwner extracts the GitHub owner (org or user) from the configured git remote URL.
+func (r *CalicoManager) remoteOwner() (string, error) {
+	out, err := r.git("config", "--get", fmt.Sprintf("remote.%s.url", r.remote))
+	if err != nil {
+		return "", fmt.Errorf("failed to get remote %s url: %w", r.remote, err)
+	}
+	return ownerFromRemoteURL(strings.TrimSpace(out))
+}
+
+// ownerFromRemoteURL extracts the GitHub owner (org or user) from a git remote URL.
+// Supports SSH (git@github.com:owner/repo.git),
+// HTTPS (https://github.com/owner/repo.git), and variants without .git suffix.
+func ownerFromRemoteURL(raw string) (string, error) {
+	raw = strings.TrimSuffix(raw, ".git")
+
+	// SSH: git@github.com:owner/repo
+	if i := strings.Index(raw, ":"); i >= 0 && !strings.Contains(raw[:i], "/") {
+		parts := strings.Split(raw[i+1:], "/")
+		if len(parts) >= 2 {
+			return parts[len(parts)-2], nil
+		}
+		return "", fmt.Errorf("unable to determine owner from remote URL %q", raw)
+	}
+
+	// HTTPS: https://github.com/owner/repo — require scheme prefix.
+	if strings.Contains(raw, "://") {
+		parts := strings.Split(raw, "/")
+		if len(parts) >= 2 {
+			return parts[len(parts)-2], nil
+		}
+	}
+
+	return "", fmt.Errorf("unable to determine owner from remote URL %q", raw)
 }

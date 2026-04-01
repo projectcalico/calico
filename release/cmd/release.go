@@ -70,7 +70,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				// Generate the release notes.
-				filePath, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
+				filePath, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, "", ver)
 				if err != nil {
 					return fmt.Errorf("failed to generate release notes: %w", err)
 				}
@@ -260,9 +260,8 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			}
 
 			// Generate release notes before prep so they're included in the commit.
-			releaseNotesPath := filepath.Join(cfg.RepoRootDir, releaseNotesDir)
-			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, releaseNotesPath, ver); err != nil {
-				logrus.WithError(err).Warn("Failed to generate release notes — continuing with prep")
+			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
+				return fmt.Errorf("generate release notes: %w", err)
 			}
 
 			r := calico.NewManager(opts...)
