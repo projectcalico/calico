@@ -21,8 +21,8 @@ import (
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
 	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -50,14 +50,17 @@ type TestEnv struct {
 }
 
 // NewTestEnv creates and starts an envtest environment with all Calico CRDs
-// loaded. The caller must call Stop() when done (typically deferred in TestMain).
-func NewTestEnv() (*TestEnv, error) {
+// loaded. Additional CRD directory paths can be passed for test-specific CRDs
+// (e.g., DatastoreMigration). The caller must call Stop() when done.
+func NewTestEnv(extraCRDPaths ...string) (*TestEnv, error) {
 	repoRoot := libtestutils.FindRepoRoot()
+	crdPaths := []string{
+		filepath.Join(repoRoot, "api", "config", "crd"),
+		filepath.Join(repoRoot, "libcalico-go", "config", "crd"),
+	}
+	crdPaths = append(crdPaths, extraCRDPaths...)
 	env := &envtest.Environment{
-		CRDDirectoryPaths: []string{
-			filepath.Join(repoRoot, "api", "config", "crd"),
-			filepath.Join(repoRoot, "libcalico-go", "config", "crd"),
-		},
+		CRDDirectoryPaths: crdPaths,
 	}
 
 	cfg, err := env.Start()
