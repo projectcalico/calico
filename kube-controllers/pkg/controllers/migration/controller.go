@@ -380,6 +380,12 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 		"installType":      installType,
 	}).Info("Detected installation details")
 
+	// Save and delete the APIService to unregister the API server. This will
+	// route future requests to the projectcalico.org/v3 API to CRDs instead.
+	if err := m.saveAndDeleteAPIService(logCtx, dm); err != nil {
+		return err
+	}
+
 	// Pre-check conflicts: detect v3 resources that differ from their v1 source
 	// before starting migration. This avoids locking the datastore only to
 	// discover conflicts mid-migration.
@@ -418,17 +424,18 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	logCtx.Info("Migration in progress")
 	dm.Status.Message = "Migrating resources"
 
-	// Step 1: Save and delete the APIService to route v3 requests to CRDs.
+	// The APIService was already saved and deleted during handlePending
+	// (before conflict detection). Ensure it's gone in case we're resuming.
 	if err := m.saveAndDeleteAPIService(logCtx, dm); err != nil {
 		return err
 	}
 
-	// Step 2: Create v3 ClusterInformation with DatastoreReady=false to lock the datastore.
+	// Step 1: Create v3 ClusterInformation with DatastoreReady=false to lock the datastore.
 	if err := m.lockDatastore(logCtx); err != nil {
 		return err
 	}
 
-	// Step 3: Migrate all resources in order.
+	// Step 2: Migrate all resources in order.
 	allMigrators := m.migrators
 	sort.Slice(allMigrators, func(i, j int) bool {
 		return allMigrators[i].Order() < allMigrators[j].Order()
@@ -525,7 +532,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	setPhaseMetric(DatastoreMigrationPhaseConverged)
 	logCtx.Info("Migration converged, unlocking datastore")
 
-	// Step 4: Unlock the datastore.
+	// Step 3: Unlock the datastore.
 	if err := m.unlockV3CRDDatastore(logCtx); err != nil {
 		return err
 	}
