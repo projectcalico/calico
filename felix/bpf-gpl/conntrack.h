@@ -1077,7 +1077,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 	}
 
-	if ((CALI_F_INGRESS && CALI_F_TUNNEL) || !skb_seen(ctx->skb)) {
+	if ((CALI_F_INGRESS && CALI_F_TUNNEL) || !skb_seen(ctx->skb) ||
+			(result.flags & CALI_CT_FLAG_NAT_OUT)) {
 		/* Account for the src->dst leg if we haven't seen the packet yet.
 		 * Since when the traffic is tunneled, BPF program on the host
 		 * iface sees it first and marks it as seen before another
@@ -1088,6 +1089,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 *
 		 * Needs to be done for tunnels that preserve the packet, like
 		 * IPIP and unlike wireguard.
+		 *
+		 * For NAT-outgoing flows, the workload-side entry (NORMAL with
+		 * NAT_OUT flag) and the host-side entry are different conntrack
+		 * entries. The packet is marked as seen after the host-side
+		 * entry is updated, but the workload-side entry still needs its
+		 * counters updated. Since each entry is only looked up once per
+		 * packet direction, there is no double-counting risk.
 		 */
 		src_to_dst->packets++;
 		src_to_dst->bytes += ctx->skb->len;
