@@ -16,7 +16,7 @@ ut-validation: setup-envtest
 		go test -count=1 -v ./test/validation/...
 
 .PHONY: ut-validation-min-k8s
-## Run CRD validation tests against the minimum supported K8s version (1.29).
+## Run CRD validation tests against the minimum supported K8s version (1.31).
 ut-validation-min-k8s: setup-envtest-min
 	$(DOCKER_RUN) \
 		-v $$(ls -d $(ENVTEST_DIR)/k8s/$(ENVTEST_MIN_K8S_MINOR)*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \

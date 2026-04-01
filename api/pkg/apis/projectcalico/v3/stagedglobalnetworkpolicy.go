@@ -43,6 +43,9 @@ type StagedGlobalNetworkPolicy struct {
 // +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.egress) || size(self.egress) == 0",message="preDNAT policy cannot have any egress rules",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="(!has(self.preDNAT) || !self.preDNAT) || !has(self.types) || !self.types.exists(t, t == 'Egress')",message="preDNAT policy cannot have 'Egress' type",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="(has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack) || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))",message="applyOnForward must be true if either preDNAT or doNotTrack is true",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.selector) || !self.selector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 type StagedGlobalNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
 	// +kubebuilder:default=Set
@@ -62,14 +65,16 @@ type StagedGlobalNetworkPolicySpec struct {
 	// alphanumerical order based on the Policy "Name" within the tier.
 	Order *float64 `json:"order,omitempty"`
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
+	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
+	// +kubebuilder:validation:MaxItems=1024
 	// +listType=atomic
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
-	// The selector is an expression used to pick pick out the endpoints that the policy should
+	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
 	//
 	// Selector expressions follow this syntax:
@@ -94,6 +99,7 @@ type StagedGlobalNetworkPolicySpec struct {
 	// 	type in {"frontend", "backend"}
 	// 	deployment != "dev"
 	// 	! has(label_name)
+	// +kubebuilder:validation:MaxLength=1024
 	Selector string `json:"selector,omitempty" validate:"selector"`
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
@@ -125,9 +131,11 @@ type StagedGlobalNetworkPolicySpec struct {
 	ApplyOnForward bool `json:"applyOnForward,omitempty"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
+	// +kubebuilder:validation:MaxLength=1024
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
 
 	// NamespaceSelector is an optional field for an expression used to select a pod based on namespaces.
+	// +kubebuilder:validation:MaxLength=1024
 	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"selector"`
 
 	// PerformanceHints contains a list of hints to Calico's policy engine to
