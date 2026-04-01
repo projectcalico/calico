@@ -78,6 +78,8 @@ func startTierController(t *testing.T, ctx context.Context) {
 	go ctrl.Run(stop)
 }
 
+// TestFV_FinalizerAddedToNewTier verifies that the tier controller automatically
+// adds the tier finalizer to newly created tiers.
 func TestFV_FinalizerAddedToNewTier(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
@@ -97,6 +99,9 @@ func TestFV_FinalizerAddedToNewTier(t *testing.T) {
 	expectTierHasFinalizer(g, "test-finalizer")
 }
 
+// TestFV_TierDeletionBlockedByPolicy verifies the full tier deletion lifecycle:
+// the tier's finalizer prevents deletion while a policy references it, and the
+// tier is garbage collected once the policy is removed.
 func TestFV_TierDeletionBlockedByPolicy(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
@@ -130,6 +135,9 @@ func TestFV_TierDeletionBlockedByPolicy(t *testing.T) {
 	expectTierDeleted(g, "test-blocked")
 }
 
+// TestFV_MultiplePolicyTypes verifies that the tier controller tracks multiple
+// policy types (GNP and NP) independently. The tier stays in Terminating until
+// all referencing policies across all types are deleted.
 func TestFV_MultiplePolicyTypes(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
