@@ -17,184 +17,181 @@ package tier_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
+	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/tier"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	logutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
-var _ = Describe("Tier lifecycle FV", func() {
-	var (
-		etcd      *containers.Container
-		kubectrl  *containers.Container
-		apiserver *containers.Container
-		k8sClient *kubernetes.Clientset
-		cli       ctrlclient.Client
-		err       error
-	)
+var testEnv *testutils.TestEnv
 
-	BeforeEach(func() {
-		etcd = testutils.RunEtcd()
+func init() {
+	logrus.SetFormatter(&logutils.Formatter{})
+	logrus.SetLevel(logrus.DebugLevel)
+}
 
-		var cfg *apiconfig.CalicoAPIConfig
-		cfg, err = apiconfig.LoadClientConfigFromEnvironment()
-		Expect(err).NotTo(HaveOccurred())
-		if !k8s.UsingV3CRDs(&cfg.Spec) {
-			Skip("Tier controller only runs against v3 CRDs")
+func TestMain(m *testing.M) {
+	var err error
+	testEnv, err = testutils.NewTestEnv()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "envtest setup: %v\n", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := testEnv.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "envtest teardown: %v\n", err)
 		}
+	}()
+	os.Exit(m.Run())
+}
 
-		apiserver = testutils.RunK8sApiserver(etcd.IP)
-		kubeconfig, cleanup := testutils.BuildKubeconfig(apiserver.IP)
-		defer cleanup()
+// startTierController creates informers and starts the tier controller in a
+// background goroutine. The controller is stopped when the test ends.
+func startTierController(t *testing.T, ctx context.Context) {
+	t.Helper()
+	factory := testEnv.NewCalicoInformerFactory()
+	tierInformer := factory.Projectcalico().V3().Tiers().Informer()
+	gnpInformer := factory.Projectcalico().V3().GlobalNetworkPolicies().Informer()
+	npInformer := factory.Projectcalico().V3().NetworkPolicies().Informer()
+	sgnpInformer := factory.Projectcalico().V3().StagedGlobalNetworkPolicies().Informer()
+	snpInformer := factory.Projectcalico().V3().StagedNetworkPolicies().Informer()
 
-		k8sClient, err = testutils.GetK8sClient(kubeconfig)
-		Expect(err).NotTo(HaveOccurred())
+	ctrl := tier.NewController(ctx, testEnv.CalicoClient, tierInformer, gnpInformer, npInformer, sgnpInformer, snpInformer)
 
-		Expect(v3.AddToGlobalScheme()).NotTo(HaveOccurred())
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
 
-		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-		Expect(err).NotTo(HaveOccurred())
-		cli, err = ctrlclient.New(config, ctrlclient.Options{})
-		Expect(err).NotTo(HaveOccurred())
+	factory.Start(stop)
+	go ctrl.Run(stop)
+}
 
-		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
-			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
+// TestFV_FinalizerAddedToNewTier verifies that the tier controller automatically
+// adds the tier finalizer to newly created tiers.
+func TestFV_FinalizerAddedToNewTier(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	startTierController(t, ctx)
 
-		testutils.ApplyCRDs(apiserver)
-
-		mode := apiconfig.Kubernetes
-		kubectrl = testutils.RunKubeControllers(mode, etcd.IP, kubeconfig, "")
+	tierObj := &v3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-finalizer"},
+		Spec: v3.TierSpec{
+			Order: ptr.To(float64(100)),
+		},
+	}
+	g.Expect(testEnv.Client.Create(ctx, tierObj)).To(Succeed())
+	t.Cleanup(func() {
+		if err := testEnv.Client.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "test-finalizer"}}); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
 	})
 
-	AfterEach(func() {
-		kubectrl.Stop()
-		apiserver.Stop()
-		etcd.Stop()
-	})
+	expectTierHasFinalizer(g, "test-finalizer")
+}
 
-	It("should add a finalizer to new tiers", func() {
-		tier := &v3.Tier{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-tier"},
-			Spec: v3.TierSpec{
-				Order: ptr.To(float64(100)),
-			},
-		}
-		Expect(cli.Create(context.Background(), tier)).NotTo(HaveOccurred())
-		expectTierHasFinalizer(cli, "test-tier")
-	})
+// TestFV_TierDeletionBlockedByPolicy verifies the full tier deletion lifecycle:
+// the tier's finalizer prevents deletion while a policy references it, and the
+// tier is garbage collected once the policy is removed.
+func TestFV_TierDeletionBlockedByPolicy(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	startTierController(t, ctx)
 
-	It("should block tier deletion while policies exist and allow it once they're removed", func() {
-		ctx := context.Background()
+	tierObj := &v3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-blocked"},
+		Spec: v3.TierSpec{
+			Order: ptr.To(float64(100)),
+		},
+	}
+	g.Expect(testEnv.Client.Create(ctx, tierObj)).To(Succeed())
+	expectTierHasFinalizer(g, "test-blocked")
 
-		By("creating a tier")
-		tier := &v3.Tier{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-tier"},
-			Spec: v3.TierSpec{
-				Order: ptr.To(float64(100)),
-			},
-		}
-		Expect(cli.Create(ctx, tier)).NotTo(HaveOccurred())
-		expectTierHasFinalizer(cli, "test-tier")
+	gnp := &v3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-blocked.my-policy"},
+		Spec: v3.GlobalNetworkPolicySpec{
+			Tier:     "test-blocked",
+			Selector: "all()",
+		},
+	}
+	g.Expect(testEnv.Client.Create(ctx, gnp)).To(Succeed())
 
-		By("creating a GlobalNetworkPolicy in the tier")
-		gnp := &v3.GlobalNetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-tier.my-policy"},
-			Spec: v3.GlobalNetworkPolicySpec{
-				Tier:     "test-tier",
-				Selector: "all()",
-			},
-		}
-		Expect(cli.Create(ctx, gnp)).NotTo(HaveOccurred())
+	// Delete the tier. It should remain because the finalizer blocks it.
+	g.Expect(testEnv.Client.Delete(ctx, tierObj)).To(Succeed())
+	expectTierTerminating(g, "test-blocked", "1 GlobalNetworkPolicy")
+	expectTierHasFinalizer(g, "test-blocked")
 
-		By("deleting the tier")
-		Expect(cli.Delete(ctx, tier)).NotTo(HaveOccurred())
+	// Delete the policy. The tier should now be fully deleted.
+	g.Expect(testEnv.Client.Delete(ctx, gnp)).To(Succeed())
+	expectTierDeleted(g, "test-blocked")
+}
 
-		By("verifying the tier still exists with a terminating status")
-		expectTierTerminating(cli, "test-tier", "GlobalNetworkPolic")
+// TestFV_MultiplePolicyTypes verifies that the tier controller tracks multiple
+// policy types (GNP and NP) independently. The tier stays in Terminating until
+// all referencing policies across all types are deleted.
+func TestFV_MultiplePolicyTypes(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	startTierController(t, ctx)
 
-		By("verifying the tier still has its finalizer")
-		expectTierHasFinalizer(cli, "test-tier")
+	tierObj := &v3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "multi-tier"},
+		Spec: v3.TierSpec{
+			Order: ptr.To(float64(200)),
+		},
+	}
+	g.Expect(testEnv.Client.Create(ctx, tierObj)).To(Succeed())
+	expectTierHasFinalizer(g, "multi-tier")
 
-		By("deleting the policy")
-		Expect(cli.Delete(ctx, gnp)).NotTo(HaveOccurred())
+	gnp := &v3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "multi-tier.gnp1"},
+		Spec: v3.GlobalNetworkPolicySpec{
+			Tier:     "multi-tier",
+			Selector: "all()",
+		},
+	}
+	np := &v3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "multi-tier.np1",
+			Namespace: "default",
+		},
+		Spec: v3.NetworkPolicySpec{
+			Tier:     "multi-tier",
+			Selector: "all()",
+		},
+	}
+	g.Expect(testEnv.Client.Create(ctx, gnp)).To(Succeed())
+	g.Expect(testEnv.Client.Create(ctx, np)).To(Succeed())
 
-		By("verifying the tier is fully deleted")
-		expectTierDeleted(cli, "test-tier")
-	})
+	// Delete the tier. It should be blocked by both policies.
+	g.Expect(testEnv.Client.Delete(ctx, tierObj)).To(Succeed())
+	expectTierTerminating(g, "multi-tier", "1 GlobalNetworkPolicy")
+	expectTierTerminating(g, "multi-tier", "1 NetworkPolicy")
 
-	It("should track multiple policy types in the status", func() {
-		ctx := context.Background()
+	// Delete the GNP. Tier should still be blocked by the NP.
+	g.Expect(testEnv.Client.Delete(ctx, gnp)).To(Succeed())
+	expectTierTerminating(g, "multi-tier", "1 NetworkPolicy")
 
-		By("creating a tier")
-		tier := &v3.Tier{
-			ObjectMeta: metav1.ObjectMeta{Name: "multi-tier"},
-			Spec: v3.TierSpec{
-				Order: ptr.To(float64(200)),
-			},
-		}
-		Expect(cli.Create(ctx, tier)).NotTo(HaveOccurred())
-		expectTierHasFinalizer(cli, "multi-tier")
+	// Delete the NP. Tier should now be fully deleted.
+	g.Expect(testEnv.Client.Delete(ctx, np)).To(Succeed())
+	expectTierDeleted(g, "multi-tier")
+}
 
-		By("creating a GlobalNetworkPolicy and a NetworkPolicy in the tier")
-		gnp := &v3.GlobalNetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{Name: "multi-tier.gnp1"},
-			Spec: v3.GlobalNetworkPolicySpec{
-				Tier:     "multi-tier",
-				Selector: "all()",
-			},
-		}
-		np := &v3.NetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "multi-tier.np1",
-				Namespace: "default",
-			},
-			Spec: v3.NetworkPolicySpec{
-				Tier:     "multi-tier",
-				Selector: "all()",
-			},
-		}
-		Expect(cli.Create(ctx, gnp)).NotTo(HaveOccurred())
-		Expect(cli.Create(ctx, np)).NotTo(HaveOccurred())
-
-		By("deleting the tier")
-		Expect(cli.Delete(ctx, tier)).NotTo(HaveOccurred())
-
-		By("verifying the status mentions both policy types")
-		expectTierTerminating(cli, "multi-tier", "GlobalNetworkPolic")
-		expectTierTerminating(cli, "multi-tier", "NetworkPolic")
-
-		By("deleting the GNP — tier should still be blocked by the NP")
-		Expect(cli.Delete(ctx, gnp)).NotTo(HaveOccurred())
-
-		// Give the controller time to reconcile after GNP deletion, then
-		// verify the tier still exists because the NP is still there.
-		expectTierTerminating(cli, "multi-tier", "NetworkPolic")
-
-		By("deleting the NP — tier should now be fully deleted")
-		Expect(cli.Delete(ctx, np)).NotTo(HaveOccurred())
-		expectTierDeleted(cli, "multi-tier")
-	})
-})
-
-func expectTierHasFinalizer(cli ctrlclient.Client, name string) {
+func expectTierHasFinalizer(g Gomega, name string) {
+	cli := testEnv.Client
 	tier := &v3.Tier{}
-	EventuallyWithOffset(1, func() error {
+	g.Eventually(func() error {
 		if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, tier); err != nil {
 			return err
 		}
@@ -202,12 +199,13 @@ func expectTierHasFinalizer(cli ctrlclient.Client, name string) {
 			return nil
 		}
 		return fmt.Errorf("finalizer not found on tier %s, finalizers: %v", name, tier.Finalizers)
-	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "tier should have finalizer")
+	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 }
 
-func expectTierTerminating(cli ctrlclient.Client, name, messageSubstring string) {
+func expectTierTerminating(g Gomega, name, messageSubstring string) {
+	cli := testEnv.Client
 	tier := &v3.Tier{}
-	EventuallyWithOffset(1, func() error {
+	g.Eventually(func() error {
 		if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, tier); err != nil {
 			return err
 		}
@@ -220,12 +218,13 @@ func expectTierTerminating(cli ctrlclient.Client, name, messageSubstring string)
 			}
 		}
 		return fmt.Errorf("tier %s does not have Ready=False/Terminating condition; conditions: %+v", name, tier.Status.Conditions)
-	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "tier should be terminating")
+	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 }
 
-func expectTierDeleted(cli ctrlclient.Client, name string) {
+func expectTierDeleted(g Gomega, name string) {
+	cli := testEnv.Client
 	tier := &v3.Tier{}
-	EventuallyWithOffset(1, func() error {
+	g.Eventually(func() error {
 		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, tier)
 		if errors.IsNotFound(err) {
 			return nil
@@ -233,5 +232,5 @@ func expectTierDeleted(cli ctrlclient.Client, name string) {
 			return err
 		}
 		return fmt.Errorf("tier %s still exists", name)
-	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "tier should be deleted")
+	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 }
