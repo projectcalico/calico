@@ -225,9 +225,9 @@ const (
 )
 
 // FlagNames returns the human-readable names for the set bits in flags.
-func FlagNames(flags uint32) []string {
+func FlagNames(flags uint16) []string {
 	flagTable := []struct {
-		flag uint32
+		flag uint16
 		name string
 	}{
 		{FlagNATOut, "nat-out"},
@@ -243,9 +243,7 @@ func FlagNames(flags uint32) []string {
 		{FlagNPRemote, "np-remote"},
 		{FlagNoDSR, "no-dsr"},
 		{FlagNoRedirPeer, "no-redir-peer"},
-		{FlagSetDSCP, "dscp"},
-		{FlagMaglev, "maglev"},
-		{FlagSendRST, "send-rst"},
+		{FlagClusterExternal, "cluster-external"},
 	}
 	var names []string
 	for _, f := range flagTable {
