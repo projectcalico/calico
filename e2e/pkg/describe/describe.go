@@ -66,6 +66,8 @@ var features = map[string]bool{
 	"HostPorts":       true,
 	"OwnerReferences": true,
 	"MTU":             true,
+	"IPIP":            true,
+	"BGPPeer":         true,
 }
 
 // WithFeature marks tests as verifying a specific feature.

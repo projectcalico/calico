@@ -701,12 +701,12 @@ func extractIPsFromHostEndpoint(endpoint *model.HostEndpoint) [][16]byte {
 	combined := make([][16]byte, 0, len(v4Addrs)+len(v6Addrs))
 	for _, addr := range v4Addrs {
 		var addrB [16]byte
-		copy(addrB[:], addr.IP.To16()[:16])
+		copy(addrB[:], addr.To16()[:16])
 		combined = append(combined, addrB)
 	}
 	for _, addr := range v6Addrs {
 		var addrB [16]byte
-		copy(addrB[:], addr.IP.To16()[:16])
+		copy(addrB[:], addr.To16()[:16])
 		combined = append(combined, addrB)
 	}
 	return combined

@@ -294,7 +294,7 @@ func (c *VXLANResolver) sendVTEPUpdateOrRemove(node string) {
 	hasV4Info, hasV6Info := c.hasVTEPInfo(node)
 	oldVTEP, hasSentVTEP := c.nodeNameToSentVTEP[node]
 
-	if !(hasV4Info || hasV6Info) {
+	if !hasV4Info && !hasV6Info {
 		if hasSentVTEP {
 			logCtx.Info("Missing both IPv4 and IPv6 VTEP information for node, withdrawing VTEP from dataplane")
 			delete(c.nodeNameToSentVTEP, node)

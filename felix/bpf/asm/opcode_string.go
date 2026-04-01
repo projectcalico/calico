@@ -273,8 +273,9 @@ const _Reg_name = "R0R1R2R3R4R5R6R7R8R9R10"
 var _Reg_index = [...]uint8{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 23}
 
 func (i Reg) String() string {
-	if i < 0 || i >= Reg(len(_Reg_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_Reg_index)-1 {
 		return "Reg(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _Reg_name[_Reg_index[i]:_Reg_index[i+1]]
+	return _Reg_name[_Reg_index[idx]:_Reg_index[idx+1]]
 }

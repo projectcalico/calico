@@ -42,15 +42,15 @@ var _ = Describe("Test Node conversion", func() {
 			},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeInternalIP,
 						Address: "172.17.17.10",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeExternalIP,
 						Address: "192.168.1.100",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeHostName,
 						Address: "172-17-17-10",
 					},
@@ -94,21 +94,21 @@ var _ = Describe("Test Node conversion", func() {
 				Name:            "TestNode",
 				ResourceVersion: "1234",
 				Annotations: map[string]string{
-					nodeBgpIpv4AddrAnnotation: "172.17.17.10",
-					nodeBgpCIDAnnotation:      "288.0.4.5",
+					nodeBgpIpv4AddrAnnotation:         "172.17.17.10",
+					RouteReflectorClusterIDAnnotation: "288.0.4.5",
 				},
 			},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeInternalIP,
 						Address: "172.17.17.10",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeExternalIP,
 						Address: "192.168.1.100",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeHostName,
 						Address: "172-17-17-10",
 					},
@@ -131,21 +131,21 @@ var _ = Describe("Test Node conversion", func() {
 				Name:            "TestNode",
 				ResourceVersion: "1234",
 				Annotations: map[string]string{
-					nodeBgpIpv4AddrAnnotation: "172.17.17.10",
-					nodeBgpCIDAnnotation:      "fd10::10",
+					nodeBgpIpv4AddrAnnotation:         "172.17.17.10",
+					RouteReflectorClusterIDAnnotation: "fd10::10",
 				},
 			},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeInternalIP,
 						Address: "172.17.17.10",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeExternalIP,
 						Address: "192.168.1.100",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeHostName,
 						Address: "172-17-17-10",
 					},
@@ -168,22 +168,22 @@ var _ = Describe("Test Node conversion", func() {
 				Name:            "TestNode",
 				ResourceVersion: "1234",
 				Annotations: map[string]string{
-					nodeBgpIpv4AddrAnnotation: "172.17.17.10",
-					nodeBgpAsnAnnotation:      "2546",
-					nodeBgpCIDAnnotation:      "248.0.4.5",
+					nodeBgpIpv4AddrAnnotation:         "172.17.17.10",
+					nodeBgpAsnAnnotation:              "2546",
+					RouteReflectorClusterIDAnnotation: "248.0.4.5",
 				},
 			},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeInternalIP,
 						Address: "172.17.17.10",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeExternalIP,
 						Address: "192.168.1.100",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeHostName,
 						Address: "172-17-17-10",
 					},
@@ -223,15 +223,15 @@ var _ = Describe("Test Node conversion", func() {
 			},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeInternalIP,
 						Address: "fd10::10",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeExternalIP,
 						Address: "fd20::100",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeHostName,
 						Address: "fd10-10",
 					},
@@ -348,7 +348,7 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(nodeBgpIpv4AddrAnnotation, "172.17.17.10/24"))
 		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(nodeBgpIpv6AddrAnnotation, "aa:bb:cc::ffff/120"))
 		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(nodeBgpAsnAnnotation, "2456"))
-		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(nodeBgpCIDAnnotation, "245.0.0.3"))
+		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(RouteReflectorClusterIDAnnotation, "245.0.0.3"))
 		Expect(newK8sNode.Annotations).To(HaveKeyWithValue(nodeInterfacesAnnotation, "[{\"name\":\"eth1\",\"addresses\":[\"172.31.11.4\"]},{\"name\":\"eth0\",\"addresses\":[\"172.17.17.10\",\"172.17.17.11\"]}]"))
 
 		// The calico node annotations and labels should not have escaped directly into the node annotations
@@ -367,8 +367,8 @@ var _ = Describe("Test Node conversion", func() {
 		calicoNodeWithMergedLabels.Annotations[nodeK8sLabelAnnotation] = "{\"net.beta.kubernetes.io/role\":\"control-plane\"}"
 		calicoNodeWithMergedLabels.Labels["net.beta.kubernetes.io/role"] = "control-plane"
 		calicoNodeWithMergedLabels.Spec.Addresses = []libapiv3.NodeAddress{
-			libapiv3.NodeAddress{Address: "172.17.17.10/24", Type: libapiv3.CalicoNodeIP},
-			libapiv3.NodeAddress{Address: "aa:bb:cc::ffff/120", Type: libapiv3.CalicoNodeIP},
+			{Address: "172.17.17.10/24", Type: libapiv3.CalicoNodeIP},
+			{Address: "aa:bb:cc::ffff/120", Type: libapiv3.CalicoNodeIP},
 		}
 		Expect(newCalicoNode.Value).To(Equal(calicoNodeWithMergedLabels))
 	})
@@ -466,15 +466,15 @@ var _ = Describe("Test Node conversion", func() {
 			},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeInternalIP,
 						Address: "172.17.17.10",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeExternalIP,
 						Address: "192.168.1.100",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeHostName,
 						Address: "172-17-17-10",
 					},
@@ -585,7 +585,6 @@ var _ = Describe("Test Node conversion", func() {
 			ipInIpAddr := n.Value.(*libapiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
 			Expect(ipInIpAddr).To(Equal(""))
 		})
-
 	})
 
 	It("should parse addresses of all types into Calico Node", func() {
@@ -606,15 +605,15 @@ var _ = Describe("Test Node conversion", func() {
 			},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeInternalIP,
 						Address: "172.17.17.10",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeExternalIP,
 						Address: "192.168.1.100",
 					},
-					k8sapi.NodeAddress{
+					{
 						Type:    k8sapi.NodeHostName,
 						Address: "172-17-17-10",
 					},

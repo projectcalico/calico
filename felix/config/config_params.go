@@ -385,7 +385,6 @@ type Config struct {
 
 	EndpointReportingEnabled   bool          `config:"bool;false"`
 	EndpointReportingDelaySecs time.Duration `config:"seconds;1"`
-
 	// EndpointStatusPathPrefix is the path to the directory
 	// where endpoint status will be written. Endpoint status
 	// file reporting is disabled if field is empty.
@@ -947,7 +946,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
 	}
 
-	if !(config.Encapsulation.IPIPEnabled || config.Encapsulation.VXLANEnabled || config.BPFEnabled) {
+	if !config.Encapsulation.IPIPEnabled && !config.Encapsulation.VXLANEnabled && !config.BPFEnabled {
 		// Polling k8s for node updates is expensive (because we get many superfluous
 		// updates) so disable if we don't need it.
 		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
@@ -959,7 +958,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 // Validate() performs cross-field validation.
 func (config *Config) Validate() (err error) {
 	if config.FelixHostname == "" {
-		err = errors.New("Failed to determine hostname")
+		err = errors.New("failed to determine hostname")
 	}
 
 	if config.DatastoreType == "etcdv3" && len(config.EtcdEndpoints) == 0 {
@@ -983,9 +982,9 @@ func (config *Config) Validate() (err error) {
 			config.TyphaCertFile == "" ||
 			config.TyphaCAFile == "" ||
 			(config.TyphaCN == "" && config.TyphaURISAN == "") {
-			err = errors.New("If any Felix-Typha TLS config parameters are specified," +
+			err = errors.New("if any Felix-Typha TLS config parameters are specified," +
 				" they _all_ must be" +
-				" - except that either TyphaCN or TyphaURISAN may be left unset.")
+				" - except that either TyphaCN or TyphaURISAN may be left unset")
 		}
 	}
 

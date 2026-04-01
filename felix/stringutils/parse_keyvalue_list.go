@@ -48,7 +48,7 @@ func ParseKeyValueList(param string) (map[string]string, error) {
 		res[kv[1]] = kv[2]
 	}
 	if len(invalidItems) > 0 {
-		return nil, fmt.Errorf("Invalid items %v", invalidItems)
+		return nil, fmt.Errorf("invalid items %v", invalidItems)
 	}
 	return res, nil
 }
