@@ -236,6 +236,10 @@ e2e-run-cnp-test:
 release/bin/release: $(shell find ./release -type f -name '*.go')
 	$(MAKE) -C release
 
+# Prepare for a release (update version references, charts, manifests).
+release-prep: release/bin/release bin/gh
+	@release/bin/release release prep
+
 # Install ghr for publishing to github.
 bin/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
@@ -321,5 +325,5 @@ update-pins: update-go-build-pin update-calico-base-pin
 bin/gotestsum:
 	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
-postrelease-checks: release/bin/release bin/gotestsum
+postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate
