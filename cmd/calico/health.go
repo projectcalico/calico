@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -40,7 +41,8 @@ HealthAggregator pattern. Sends an HTTP GET to the component's
 			}
 
 			url := fmt.Sprintf("http://%s:%d/%s", host, port, checkType)
-			resp, err := http.Get(url)
+			client := &http.Client{Timeout: 5 * time.Second}
+			resp, err := client.Get(url)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Health check failed: %v\n", err)
 				os.Exit(1)
