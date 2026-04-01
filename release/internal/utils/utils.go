@@ -84,6 +84,7 @@ var (
 		"apiserver",
 		"app-policy",
 		"calicoctl",
+		"cmd/calico",
 		"cni-plugin",
 		"goldmane",
 		"guardian",

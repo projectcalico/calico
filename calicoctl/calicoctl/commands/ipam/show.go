@@ -115,7 +115,7 @@ func getBorrowedIPs(ctx context.Context, ippoolClient clientv3.IPPoolInterface, 
 	return details, unclassifiedIPs, nil
 }
 
-func showBorrowedDetails(ctx context.Context, ippoolClient clientv3.IPPoolInterface, bc bapi.Client) error {
+func ShowBorrowedDetails(ctx context.Context, ippoolClient clientv3.IPPoolInterface, bc bapi.Client) error {
 	details, unclassifiedIPs, err := getBorrowedIPs(ctx, ippoolClient, bc)
 	if err != nil {
 		return err
@@ -149,8 +149,8 @@ func showBorrowedDetails(ctx context.Context, ippoolClient clientv3.IPPoolInterf
 	return nil
 }
 
-func showIP(ctx context.Context, ipamClient ipam.Interface, passedIP any) error {
-	ip := argutils.ValidateIP(passedIP.(string))
+func ShowIP(ctx context.Context, ipamClient ipam.Interface, passedIP string) error {
+	ip := argutils.ValidateIP(passedIP)
 	allocAttr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -212,7 +212,7 @@ func formatOwnerAttrs(title string, attrs map[string]string) string {
 	return b.String()
 }
 
-func showBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBlocks bool) error {
+func ShowBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBlocks bool) error {
 	usage, err := ipamClient.GetUtilization(ctx, ipam.GetUtilizationArgs{})
 	if err != nil {
 		return err
@@ -254,7 +254,7 @@ func showBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBl
 	return nil
 }
 
-func showConfiguration(ctx context.Context, ipamClient ipam.Interface) error {
+func ShowConfiguration(ctx context.Context, ipamClient ipam.Interface) error {
 	ipamConfig, err := ipamClient.GetIPAMConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("error: %v", err)
@@ -343,14 +343,14 @@ Description:
 	configuration := parsedArgs["--show-configuration"].(bool)
 
 	if passedIP != nil {
-		return showIP(ctx, ipamClient, passedIP)
+		return ShowIP(ctx, ipamClient, passedIP.(string))
 	} else if showBlocks {
-		return showBlockUtilization(ctx, ipamClient, true)
+		return ShowBlockUtilization(ctx, ipamClient, true)
 	} else if showBorrowed {
-		return showBorrowedDetails(ctx, ippoolClient, bc)
+		return ShowBorrowedDetails(ctx, ippoolClient, bc)
 	} else if configuration {
-		return showConfiguration(ctx, ipamClient)
+		return ShowConfiguration(ctx, ipamClient)
 	}
 
-	return showBlockUtilization(ctx, ipamClient, false)
+	return ShowBlockUtilization(ctx, ipamClient, false)
 }
