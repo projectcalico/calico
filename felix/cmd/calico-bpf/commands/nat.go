@@ -15,8 +15,12 @@
 package commands
 
 import (
+	"bytes"
+	"cmp"
+	"encoding/json"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -107,7 +111,22 @@ func dump(cmd *cobra.Command) error {
 			return err
 		}
 
-		dumpNice[nat.FrontendKeyV6, nat.BackendValueV6](cmd.Printf, natMap, back)
+		filtered := map[nat.FrontendKeyV6]nat.FrontendValue(natMap)
+		if len(args) == 3 {
+			ip, port, proto, err := parseIPPortProto(args)
+			if err != nil {
+				return err
+			}
+			filtered, err = filterByServiceID(natMap, nat.NewNATKeyV6(ip, port, proto))
+			if err != nil {
+				return err
+			}
+		}
+
+		if *jsonOutput {
+			return dumpNATJSON(cmd, filtered, back, natDumpGroupByService)
+		}
+		dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
 	} else {
 		natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
 		if err != nil {
@@ -119,7 +138,22 @@ func dump(cmd *cobra.Command) error {
 			return err
 		}
 
-		dumpNice[nat.FrontendKey, nat.BackendValue](cmd.Printf, natMap, back)
+		filtered := map[nat.FrontendKey]nat.FrontendValue(natMap)
+		if len(args) == 3 {
+			ip, port, proto, err := parseIPPortProto(args)
+			if err != nil {
+				return err
+			}
+			filtered, err = filterByServiceID(natMap, nat.NewNATKey(ip, port, proto))
+			if err != nil {
+				return err
+			}
+		}
+
+		if *jsonOutput {
+			return dumpNATJSON(cmd, filtered, back, natDumpGroupByService)
+		}
+		dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
 	}
 	return nil
 }
@@ -158,6 +192,156 @@ func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf
 			}
 		}
 	}
+}
+
+// JSON types for nat dump output.
+
+type natBackendJSON struct {
+	Addr string `json:"addr"`
+	Port uint16 `json:"port"`
+}
+
+type natFrontendJSON struct {
+	Addr    string `json:"addr"`
+	Port    uint16 `json:"port"`
+	Proto   uint8  `json:"proto"`
+	SrcCIDR string `json:"src_cidr,omitempty"`
+	ID      uint32 `json:"id"`
+	Count   int    `json:"count"`
+	Local   uint32 `json:"local"`
+	Flags   string `json:"flags,omitempty"`
+}
+
+// natServiceJSON is used in flat mode: one frontend with its backends.
+type natServiceJSON struct {
+	Frontend natFrontendJSON  `json:"frontend"`
+	Backends []natBackendJSON `json:"backends"`
+}
+
+// natServiceGroupJSON is used in --group-by-service mode.
+type natServiceGroupJSON struct {
+	ID        uint32            `json:"id"`
+	Frontends []natFrontendJSON `json:"frontends"`
+	Backends  []natBackendJSON  `json:"backends"`
+}
+
+func dumpNATJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
+	cmd *cobra.Command,
+	natMap map[FK]nat.FrontendValue,
+	back map[nat.BackendKey]BV,
+	groupByService bool,
+) error {
+	if groupByService {
+		return dumpNATGroupedJSON(cmd, natMap, back)
+	}
+	return dumpNATFlatJSON(cmd, natMap, back)
+}
+
+func makeFrontendJSON[FK nat.FrontendKeyComparable](nk FK, nv nat.FrontendValue) natFrontendJSON {
+	count := int(nv.Count())
+	if nv.Count() == nat.BlackHoleCount {
+		count = -1
+	}
+	fe := natFrontendJSON{
+		Addr:  nk.Addr().String(),
+		Port:  nk.Port(),
+		Proto: nk.Proto(),
+		ID:    nv.ID(),
+		Count: count,
+		Local: nv.LocalCount(),
+		Flags: nv.FlagsAsString(),
+	}
+	if srcCIDR := nk.SrcCIDR(); srcCIDR.Prefix() != 0 {
+		fe.SrcCIDR = srcCIDR.String()
+	}
+	return fe
+}
+
+func makeBackendsJSON[BV nat.BackendValueInterface](id uint32, count int, back map[nat.BackendKey]BV) []natBackendJSON {
+	var backends []natBackendJSON
+	for i := 0; i < count; i++ {
+		bk := nat.NewNATBackendKey(id, uint32(i))
+		bv, ok := back[bk]
+		if !ok {
+			backends = append(backends, natBackendJSON{Addr: "missing"})
+		} else {
+			backends = append(backends, natBackendJSON{
+				Addr: bv.Addr().String(),
+				Port: bv.Port(),
+			})
+		}
+	}
+	return backends
+}
+
+func dumpNATFlatJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
+	cmd *cobra.Command,
+	natMap map[FK]nat.FrontendValue,
+	back map[nat.BackendKey]BV,
+) error {
+	var services []natServiceJSON
+	for nk, nv := range natMap {
+		fe := makeFrontendJSON(nk, nv)
+		count := fe.Count
+		if count < 0 {
+			count = 0
+		}
+		services = append(services, natServiceJSON{
+			Frontend: fe,
+			Backends: makeBackendsJSON(nv.ID(), count, back),
+		})
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(services)
+}
+
+func dumpNATGroupedJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
+	cmd *cobra.Command,
+	natMap map[FK]nat.FrontendValue,
+	back map[nat.BackendKey]BV,
+) error {
+	byID := make(map[uint32][]FK)
+	for nk := range natMap {
+		id := natMap[nk].ID()
+		byID[id] = append(byID[id], nk)
+	}
+
+	ids := make([]uint32, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+	slices.SortFunc(ids, func(a, b uint32) int { return cmp.Compare(a, b) })
+
+	var groups []natServiceGroupJSON
+	for _, id := range ids {
+		keys := byID[id]
+		slices.SortFunc(keys, func(a, b FK) int {
+			return bytes.Compare(a.AsBytes(), b.AsBytes())
+		})
+
+		firstVal := natMap[keys[0]]
+		count := int(firstVal.Count())
+		if firstVal.Count() == nat.BlackHoleCount {
+			count = 0
+		}
+
+		var frontends []natFrontendJSON
+		for _, nk := range keys {
+			frontends = append(frontends, makeFrontendJSON(nk, natMap[nk]))
+		}
+
+		groups = append(groups, natServiceGroupJSON{
+			ID:        id,
+			Frontends: frontends,
+			Backends:  makeBackendsJSON(id, count, back),
+		})
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(groups)
 }
 
 type natFrontend struct {
