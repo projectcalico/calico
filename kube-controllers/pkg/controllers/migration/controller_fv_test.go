@@ -197,7 +197,9 @@ func TestLifecycle_Mainline(t *testing.T) {
 	// Tiers should exist in v3 with the internal annotation stripped.
 	tier1 := &apiv3.Tier{}
 	h.getV3Resource("default", tier1)
-	g.Expect(tier1.Spec.Order).To(Equal(ptr.To(float64(100))))
+	// The default tier's order is normalised to DefaultTierOrder during migration
+	// regardless of the v1 value, because the v3 API enforces this requirement.
+	g.Expect(tier1.Spec.Order).To(Equal(ptr.To(apiv3.DefaultTierOrder)))
 	g.Expect(tier1.Annotations).NotTo(HaveKey("projectcalico.org/metadata"))
 
 	tier2 := &apiv3.Tier{}
@@ -340,10 +342,12 @@ func TestLifecycle_ConflictResolution(t *testing.T) {
 
 	gate.release(DatastoreMigrationPhaseWaitingForConflictResolution)
 
-	// Fix the conflict by updating the v3 Tier to match the v1 spec.
+	// Fix the conflict by updating the v3 Tier to match the migrated spec.
+	// The converter normalises the default tier's order to DefaultTierOrder
+	// regardless of the v1 value, so we must match that normalised value.
 	tier := &apiv3.Tier{}
 	h.getV3Resource("default", tier)
-	tier.Spec.Order = ptr.To(float64(100))
+	tier.Spec.Order = ptr.To(apiv3.DefaultTierOrder)
 	g.Expect(fvRTClient.Update(ctx, tier)).To(Succeed())
 
 	// The controller should re-check, find no conflicts, transition through
