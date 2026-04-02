@@ -22,6 +22,7 @@ global_job_config:
     - name: banzai-secrets
   env_vars:
     # The skips for sig-* are tests that are not relevant to OSS Calico
+    # NoTierPrefix: skipped because this version requires policies to be named with a tier prefix.
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard|NoTierPrefix)
     - name: K8S_VERSION
