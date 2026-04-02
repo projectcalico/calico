@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -214,6 +215,24 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 	}
 }
 
+func determineOperatorReleaseVersion(c *cli.Command, tmpDir string) (string, error) {
+	// Clone the operator repository to determine the operator version.
+	operatorDir := filepath.Join(tmpDir, operator.DefaultRepoName)
+	if err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir); err != nil {
+		return "", fmt.Errorf("clone operator repository: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(operatorDir) }()
+	operatorGitVer, err := command.GitVersion(operatorDir, true)
+	if err != nil {
+		return "", fmt.Errorf("determine operator git version: %w", err)
+	}
+	operatorVer, err := version.DetermineReleaseVersion(version.New(operatorGitVer), operator.DefaultDevTagSuffix)
+	if err != nil {
+		return "", err
+	}
+	return operatorVer.FormattedString(), nil
+}
+
 func releasePrepCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
 		Name:  "prep",
@@ -224,11 +243,16 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			repoRemoteFlag,
 			releaseBranchPrefixFlag,
 			devTagSuffixFlag,
+			operatorOrgFlag,
+			operatorRepoFlag,
+			operatorBranchFlag,
 			githubTokenFlag,
+			skipBranchCheckFlag,
 			skipValidationFlag,
 			localFlag,
 		},
 		Action: withLogging(withSummary(cfg, "release-prep", func(_ context.Context, c *cli.Command) (string, map[string]any, error) {
+			// Determine the versions to use for the release.
 			ver, err := version.DetermineReleaseVersion(version.GitVersion(), c.String(devTagSuffixFlag.Name))
 			if err != nil {
 				return "", nil, err
@@ -236,35 +260,37 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			outs := map[string]any{
 				"version": ver.FormattedString(),
 			}
-			operatorVer, err := version.DetermineOperatorVersion(cfg.RepoRootDir)
+			operatorVer, err := determineOperatorReleaseVersion(c, cfg.TmpDir)
 			if err != nil {
-				return ver.FormattedString(), outs, err
+				return "", outs, err
 			}
-			outs["operator"] = operatorVer.FormattedString()
+			outs["operator"] = operatorVer
 
+			// Generate release notes
+			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
+				return ver.FormattedString(), outs, fmt.Errorf("generate release notes: %w", err)
+			}
+
+			// Prepare the release using the manager.
 			opts := []calico.Option{
 				calico.WithRepoRoot(cfg.RepoRootDir),
 				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 				calico.WithVersion(ver.FormattedString()),
-				calico.WithOperatorVersion(operatorVer.FormattedString()),
+				calico.WithOperatorVersion(operatorVer),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 				calico.WithTmpDir(cfg.TmpDir),
 				calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-				calico.WithReleaseBranchValidation(!c.Bool(skipValidationFlag.Name)),
+				calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 				calico.WithPublishGitRef(!c.Bool(localFlag.Name)),
 			}
-
-			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
-				return ver.FormattedString(), outs, fmt.Errorf("generate release notes: %w", err)
-			}
-
 			r := calico.NewManager(opts...)
-			if err := r.PrepareRelease(); err != nil {
+			branch, err := r.PrepareRelease()
+			if err != nil {
 				return ver.FormattedString(), outs, err
 			}
-			outs["branch"] = fmt.Sprintf("build-%s", ver.FormattedString())
+			outs["branch"] = branch
 			return ver.FormattedString(), outs, nil
 		})),
 	}
