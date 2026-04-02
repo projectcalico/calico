@@ -40,6 +40,12 @@ var _ = describe.CalicoDescribe(
 	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
 	describe.WithSerial(),
+	// These tests disable full-mesh BGP and verify that cross-node connectivity fails
+	// (see disableFullMesh call in the It block). This explicitly relies on unencapsulated
+	// routing being absent — with overlay encapsulation the test assertions would not hold.
+	// On cloud providers such as GCP that do not natively route pod subnets between nodes,
+	// cross-node connectivity is broken in NoEncap mode, causing these tests to fail.
+	describe.RequiresNoEncap(),
 	"BGPPeer",
 	func() {
 		// Define variables common across all tests.

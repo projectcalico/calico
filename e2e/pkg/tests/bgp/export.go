@@ -38,6 +38,12 @@ var _ = describe.CalicoDescribe(
 	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
 	describe.WithSerial(),
+	// These tests use a custom IP pool with no encapsulation (IPIPMode unset, defaulting to
+	// Never — see pool creation in BeforeEach) and verify cross-node connectivity with BGP
+	// export disabled. On cloud providers such as GCP that do not natively route pod subnets
+	// between nodes, the initial cross-node connectivity check in BeforeEach fails in NoEncap
+	// mode.
+	describe.RequiresNoEncap(),
 	"BGP export tests",
 	func() {
 		// Define variables common across all tests.
