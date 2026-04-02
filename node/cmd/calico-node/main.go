@@ -47,19 +47,25 @@ var flagSet = flag.NewFlagSet("Calico", flag.ContinueOnError)
 
 // Build the set of supported flags.
 var (
-	version                    = flagSet.Bool("v", false, "Display version")
-	runFelix                   = flagSet.Bool("felix", false, "Run Felix")
-	runBPF                     = flagSet.Bool("bpf", false, "Run BPF debug tool")
-	runInit                    = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
-	bestEffort                 = flagSet.Bool("best-effort", false, "Used in combination with the init flag. Report errors but do not fail if an error occurs during initialisation.")
-	runStartup                 = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
-	runShutdown                = flagSet.Bool("shutdown", false, "Do shutdown routine.")
+	version         = flagSet.Bool("v", false, "Display version")
+	runFelix        = flagSet.Bool("felix", false, "Run Felix")
+	runBPF          = flagSet.Bool("bpf", false, "Run BPF debug tool")
+	runInit         = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
+	bestEffort      = flagSet.Bool("best-effort", false, "Used in combination with the init flag. Report errors but do not fail if an error occurs during initialisation.")
+	runStartup      = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
+	runShutdown     = flagSet.Bool("shutdown", false, "Do shutdown routine.")
+	runNodeServices = flagSet.Bool("node-services", false, "Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)")
+	completeStartup = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
+)
+
+// Backwards-compat flags for services now consolidated into -node-services.
+// These are kept so older operators and manual invocations continue to work.
+var (
 	monitorAddrs               = flagSet.Bool("monitor-addresses", false, "Monitor change in node IP addresses")
 	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
 	monitorToken               = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
-	runNodeServices            = flagSet.Bool("node-services", false, "Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)")
-	completeStartup            = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
+	runStatusReporter          = flagSet.Bool("status-reporter", false, "Run node status reporter")
 )
 
 // Options for liveness checks.
@@ -80,10 +86,7 @@ var (
 var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshold time for bird readiness")
 
 // Options for node status.
-var (
-	runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status reporter")
-	showStatus        = flagSet.Bool("show-status", false, "Print out node status")
-)
+var showStatus = flagSet.Bool("show-status", false, "Print out node status")
 
 // Options for watching node flowlogs.
 var flows = flagSet.Int("flows", 0, "Fetch a number of Flows. Use a negative value to watch forever.")
