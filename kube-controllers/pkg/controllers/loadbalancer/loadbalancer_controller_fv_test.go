@@ -457,13 +457,19 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", Ordered,
 			service, err = k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Update the service to have the same IP as the service we have created above
-			service.Annotations = map[string]string{
-				"projectcalico.org/loadBalancerIPs": fmt.Sprintf("[\"%s\"]", specificIpFromAutomaticPool),
-			}
-
-			_, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), service, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			// Update the service to have the same IP as the service we have created above.
+			// Retry on conflict since the loadbalancer controller may concurrently update the service.
+			Eventually(func() error {
+				svc, err := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				svc.Annotations = map[string]string{
+					"projectcalico.org/loadBalancerIPs": fmt.Sprintf("[\"%s\"]", specificIpFromAutomaticPool),
+				}
+				_, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), svc, metav1.UpdateOptions{})
+				return err
+			}, time.Second*5, 500*time.Millisecond).Should(Succeed())
 
 			// The service ingress should be empty
 			Eventually(func() []v1.LoadBalancerIngress {
