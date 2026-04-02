@@ -202,6 +202,10 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 	if outputDir == "" {
 		outputDir = releaseNoteDirPath(repoRootDir)
 	}
+	if owner != utils.ProjectCalicoOrg {
+		logrus.WithField("org", owner).Warn("generating release notes outside of %s GitHub organization is not supported, switching to %s", utils.ProjectCalicoOrg, utils.ProjectCalicoOrg)
+		owner = utils.ProjectCalicoOrg
+	}
 
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
 	milestone := ver.Milestone(utils.ProductName)
