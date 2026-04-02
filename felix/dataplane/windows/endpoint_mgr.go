@@ -52,8 +52,8 @@ const (
 )
 
 var (
-	ErrorUnknownEndpoint = errors.New("Endpoint could not be found")
-	ErrorUpdateFailed    = errors.New("Endpoint update failed")
+	ErrorUnknownEndpoint = errors.New("endpoint could not be found")
+	ErrorUpdateFailed    = errors.New("endpoint update failed")
 )
 
 // endpointManager processes WorkloadEndpoint* updates from the datastore. Updates are

@@ -198,7 +198,7 @@ func (m *InterfaceMonitor) isExcludedInterface(ifName string) bool {
 
 func (m *InterfaceMonitor) handleNetlinkUpdate(update netlink.LinkUpdate) {
 	attrs := update.Attrs()
-	linkAttrs := update.Link.Attrs()
+	linkAttrs := update.Attrs()
 	if attrs == nil || linkAttrs == nil {
 		// Defensive, some sort of interface that the netlink lib doesn't understand?
 		log.WithField("update", update).Warn("Missing attributes on netlink update.")
