@@ -46,10 +46,6 @@ func logPrettifier(f *runtime.Frame) (string, string) {
 	return fmt.Sprintf("%s()", funcSegments[len(funcSegments)-1]), fmt.Sprintf("%s:%d", filename, f.Line)
 }
 
-func configureCommandLogging(c *cli.Command) {
-	configureLogging(fmt.Sprintf("%s.log", strings.ReplaceAll(c.FullName(), " ", "-")))
-}
-
 // configureLogging sets up logging to both stdout and a file.
 func configureLogging(filename string) {
 	if debug {
@@ -84,7 +80,9 @@ func configureLogging(filename string) {
 // derived from the command's full name (e.g. "release prep" -> "release-prep.log").
 func withLogging(action cli.ActionFunc) cli.ActionFunc {
 	return func(ctx context.Context, c *cli.Command) error {
-		configureCommandLogging(c)
+		cmdName := strings.TrimSpace(strings.TrimPrefix(c.FullName(), c.Root().Name))
+		logFileName := strings.ReplaceAll(cmdName, " ", "-") + ".log"
+		configureLogging(logFileName)
 		return action(ctx, c)
 	}
 }

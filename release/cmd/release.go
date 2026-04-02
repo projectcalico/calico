@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -224,11 +225,16 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			repoRemoteFlag,
 			releaseBranchPrefixFlag,
 			devTagSuffixFlag,
+			operatorOrgFlag,
+			operatorRepoFlag,
+			operatorBranchFlag,
 			githubTokenFlag,
+			skipBranchCheckFlag,
 			skipValidationFlag,
 			localFlag,
 		},
 		Action: withLogging(withSummary(cfg, "release-prep", func(_ context.Context, c *cli.Command) (string, map[string]any, error) {
+			// Determine the versions to use for the release.
 			ver, err := version.DetermineReleaseVersion(version.GitVersion(), c.String(devTagSuffixFlag.Name))
 			if err != nil {
 				return "", nil, err
@@ -236,12 +242,29 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			outs := map[string]any{
 				"version": ver.FormattedString(),
 			}
-			operatorVer, err := version.DetermineOperatorVersion(cfg.RepoRootDir)
+
+			// Clone the operator repository to determine the operator version.
+			operatorDir := filepath.Join(cfg.TmpDir, operator.DefaultRepoName)
+			err = operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir)
 			if err != nil {
-				return ver.FormattedString(), outs, err
+				return "", outs, fmt.Errorf("clone operator repository: %v", err)
+			}
+			operatorGitVer, err := command.GitVersion(operatorDir, true)
+			if err != nil {
+				return "", outs, fmt.Errorf("determine operator git version: %v", err)
+			}
+			operatorVer, err := version.DetermineReleaseVersion(version.New(operatorGitVer), c.String(devTagSuffixFlag.Name))
+			if err != nil {
+				return "", outs, err
 			}
 			outs["operator"] = operatorVer.FormattedString()
 
+			// Generate release notes
+			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
+				return ver.FormattedString(), outs, fmt.Errorf("generate release notes: %w", err)
+			}
+
+			// Prepare the release using the manager.
 			opts := []calico.Option{
 				calico.WithRepoRoot(cfg.RepoRootDir),
 				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
@@ -252,14 +275,9 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 				calico.WithTmpDir(cfg.TmpDir),
 				calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-				calico.WithReleaseBranchValidation(!c.Bool(skipValidationFlag.Name)),
+				calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 				calico.WithPublishGitRef(!c.Bool(localFlag.Name)),
 			}
-
-			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
-				return ver.FormattedString(), outs, fmt.Errorf("generate release notes: %w", err)
-			}
-
 			r := calico.NewManager(opts...)
 			if err := r.PrepareRelease(); err != nil {
 				return ver.FormattedString(), outs, err
