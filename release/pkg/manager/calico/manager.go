@@ -492,6 +492,16 @@ func (r *CalicoManager) TagRelease(ver string) error {
 // modifyHelmChartsValues modifies values in helm charts to use the correct version.
 // This is only necessary for hashreleases or new branch cut.
 func (r *CalicoManager) modifyHelmChartsValues() error {
+	if err := r.modifyOperatorChartValues(); err != nil {
+		return err
+	}
+	if err := r.modifyCalicoChartsValues(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *CalicoManager) modifyOperatorChartValues() error {
 	operatorChartFilePath := filepath.Join(r.repoRoot, "charts", "tigera-operator", "values.yaml")
 	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, r.operatorVersion), operatorChartFilePath}, nil); err != nil {
 		logrus.WithError(err).Errorf("Failed to update operator version in %s", operatorChartFilePath)
@@ -500,6 +510,15 @@ func (r *CalicoManager) modifyHelmChartsValues() error {
 	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/tag: .*/tag: %s/g`, r.calicoVersion), operatorChartFilePath}, nil); err != nil {
 		logrus.WithError(err).Errorf("Failed to update calicoctl version in %s", operatorChartFilePath)
 		return fmt.Errorf("failed to update calicoctl version in %s: %w", operatorChartFilePath, err)
+	}
+	return nil
+}
+
+func (r *CalicoManager) modifyCalicoChartsValues() error {
+	calicoChartFilePath := filepath.Join(r.repoRoot, "charts", "calico", "values.yaml")
+	if out, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, r.calicoVersion), calicoChartFilePath}, nil); err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("failed to update version in %s: %w", calicoChartFilePath, err)
 	}
 	return nil
 }
@@ -1503,11 +1522,6 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 		"calico_version":   r.calicoVersion,
 		"operator_version": r.operatorVersion,
 	}).Debug("Updating versions in helm charts to release branches")
-	calicoChartFilePath := filepath.Join(r.repoRoot, "charts", "calico", "values.yaml")
-	if out, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, branch), calicoChartFilePath}, nil); err != nil {
-		logrus.Error(out)
-		return fmt.Errorf("failed to update version in %s: %w", calicoChartFilePath, err)
-	}
 	if err := r.modifyHelmChartsValues(); err != nil {
 		return err
 	}
@@ -1637,7 +1651,7 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 	); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
-	if _, err := r.git("commit", "-m", fmt.Sprintf("Prepare release %s", r.calicoVersion)); err != nil {
+	if _, err := r.git("commit", "-m", fmt.Sprintf("build: %s release", r.calicoVersion)); err != nil {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 	return nil
@@ -1646,8 +1660,8 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 // pushPrepBranch pushes the prep branch to remote and creates a PR if not in local mode.
 func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 	if !r.publishGitRef {
-		logrus.WithField("branch", prepBranch).Info("Local mode: skipping push and PR creation")
-		return nil
+		logrus.WithField("branch", prepBranch).Warn("Local mode: skipping branch push and PR creation")
+		return r.switchToBaseBranch(baseBranch)
 	}
 
 	if _, err := r.git("push", "--force-with-lease", r.remote, prepBranch); err != nil {
@@ -1696,7 +1710,6 @@ func (r *CalicoManager) switchToBaseBranch(baseBranch string) error {
 		logrus.Error(out)
 		return fmt.Errorf("failed to switch back to base branch %s: %w", baseBranch, err)
 	}
-	logrus.WithField("baseBranch", baseBranch).Info("Switched back to base branch after PR creation")
 	return nil
 }
 
