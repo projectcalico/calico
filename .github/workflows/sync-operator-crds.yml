@@ -22,8 +22,11 @@ jobs:
         id: branches
         run: |
           # Get master + the two most recent release branches (by semver).
-          branches=$(gh api repos/${{ github.repository }}/branches --paginate --jq '
-            [.[] | select(.name | test("^release-v[0-9]+\\.[0-9]+$")) | .name]
+          # Pipe to jq separately so --slurp combines all pages before filtering.
+          # Using --jq with --paginate applies the filter per-page, which can
+          # produce multiple JSON arrays and break $GITHUB_OUTPUT.
+          branches=$(gh api repos/${{ github.repository }}/branches --paginate | jq -sc '
+            [flatten[] | select(.name | test("^release-v[0-9]+\\.[0-9]+$")) | .name]
             | sort_by(ltrimstr("release-v") | split(".") | map(tonumber))
             | .[-2:]
             | ["master"] + .
