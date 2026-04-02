@@ -22,6 +22,7 @@ global_job_config:
     - name: banzai-secrets
   env_vars:
     # This should match the default flags with the additional skip of the "Proxy version v1". There is a problem with the server pod failing to bind to the port for listening.
+    # NoTierPrefix: skipped because this version requires policies to be named with a tier prefix.
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard|NoTierPrefix)
     - name: DATAPLANE

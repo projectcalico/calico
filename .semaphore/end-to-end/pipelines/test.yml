@@ -31,6 +31,7 @@ global_job_config:
       value: calico
     - name: FUNCTIONAL_AREA
       value: "test.yml"
+    # NoTierPrefix: skipped because this version requires policies to be named with a tier prefix.
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=(\[sig-calico\].*\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|NoTierPrefix)
     - name: USE_PRIVATE_REGISTRY
