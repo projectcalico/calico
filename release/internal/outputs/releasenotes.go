@@ -33,6 +33,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
+const ReleaseNotesDir = "release-notes"
+
 const (
 	releaseNoteRequiredLabel = "release-note-required"
 	closedState              = issueState("closed")
@@ -194,10 +196,13 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 	if githubToken == "" {
 		return "", fmt.Errorf("github token not set, set GITHUB_TOKEN environment variable")
 	}
-	if outputDir == "" {
-		logrus.Warn("No directory is set, using current directory")
-		outputDir = "."
+	if outputDir == "" && repoRootDir == "" {
+		return "", fmt.Errorf("either outputDir or repoRootDir must be set")
 	}
+	if outputDir == "" {
+		outputDir = releaseNoteDirPath(repoRootDir)
+	}
+
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
 	milestone := ver.Milestone(utils.ProductName)
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
@@ -249,10 +254,22 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 	if len(releaseNoteDataList) == 0 {
 		logrus.WithField("milestone", milestone).Warn("No closed issues requiring release notes found in milestone")
 	}
-	releaseNoteFilePath := filepath.Join(outputDir, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
+	releaseNoteFilePath := releaseNoteFilePathFromDir(outputDir, ver.FormattedString())
 	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err
 	}
 	return releaseNoteFilePath, nil
+}
+
+func releaseNoteDirPath(rootDir string) string {
+	return filepath.Join(rootDir, ReleaseNotesDir)
+}
+
+func releaseNoteFilePathFromDir(dir, version string) string {
+	return filepath.Join(dir, fmt.Sprintf("%s-release-notes.md", version))
+}
+
+func ReleaseNoteFilePath(repoRootDir, version string) string {
+	return releaseNoteFilePathFromDir(releaseNoteDirPath(repoRootDir), version)
 }
