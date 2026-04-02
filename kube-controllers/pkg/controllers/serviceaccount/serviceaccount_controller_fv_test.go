@@ -93,7 +93,7 @@ var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", Ordere
 			// Create the K8s objects before starting the controller so the
 			// informer's initial List picks them up deterministically,
 			// avoiding any race with watch establishment.
-			k8sClient = fake.NewSimpleClientset(sa)
+			k8sClient = fake.NewClientset(sa)
 			stopCh = make(chan struct{})
 
 			ctrl := serviceaccount.NewServiceAccountController(

@@ -2040,7 +2040,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		BeforeEach(func() {
 			// Create a new fake clientset for the scale test. We'll populate the informer
 			// caches directly to avoid the slow create→watch→inform round-trip.
-			scaleCS = fake.NewSimpleClientset()
+			scaleCS = fake.NewClientset()
 
 			scaleFactory := informers.NewSharedInformerFactory(scaleCS, 0)
 			scalePodInformer := scaleFactory.Core().V1().Pods().Informer()

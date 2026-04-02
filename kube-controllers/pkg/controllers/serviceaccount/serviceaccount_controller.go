@@ -89,8 +89,10 @@ func NewServiceAccountController(ctx context.Context, k8sClientset kubernetes.In
 	}
 	ccache := rcache.NewResourceCache(cacheArgs)
 
-	// Create a ServiceAccount watcher.
-	listWatcher := &cache.ListWatch{
+	// Create a ServiceAccount watcher. Wrap with ToListWatcherWithWatchListSemantics
+	// so the reflector inherits the clientset's WatchList capability signal (fake
+	// clientsets report WatchList as unsupported).
+	lw := &cache.ListWatch{
 		ListWithContextFunc: func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
 			return k8sClientset.CoreV1().ServiceAccounts("").List(ctx, opts)
 		},
@@ -98,6 +100,7 @@ func NewServiceAccountController(ctx context.Context, k8sClientset kubernetes.In
 			return k8sClientset.CoreV1().ServiceAccounts("").Watch(ctx, opts)
 		},
 	}
+	listWatcher := cache.ToListWatcherWithWatchListSemantics(lw, k8sClientset)
 
 	// Bind the calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.

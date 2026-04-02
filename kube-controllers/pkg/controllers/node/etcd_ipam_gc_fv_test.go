@@ -69,7 +69,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		// We use a single controller for all tests (matching how the Docker-based
 		// tests share a single K8s apiserver) to avoid prometheus metric re-registration
 		// panics from the IPAM controller's package-level metrics.
-		k8sClient = fake.NewSimpleClientset()
+		k8sClient = fake.NewClientset()
 		stopCh = make(chan struct{})
 
 		factory := informers.NewSharedInformerFactory(k8sClient, 0)

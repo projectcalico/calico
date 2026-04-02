@@ -74,7 +74,7 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", Ordered
 		for i := range objects {
 			runtimeObjs[i] = &objects[i]
 		}
-		k8sClient = fake.NewSimpleClientset(runtimeObjs...)
+		k8sClient = fake.NewClientset(runtimeObjs...)
 		stopCh = make(chan struct{})
 
 		ctrl := networkpolicy.NewPolicyController(

@@ -257,7 +257,18 @@ func cleanupIPPools(ctx context.Context, c client.Interface) {
 		return
 	}
 	var deleted []string
-	for _, pool := range pools.Items {
+	for i := range pools.Items {
+		pool := &pools.Items[i]
+
+		// Strip finalizers so the pool can be fully deleted even if the
+		// controller that manages them has already been stopped.
+		if len(pool.Finalizers) > 0 {
+			pool.Finalizers = nil
+			if _, err := c.IPPools().Update(ctx, pool, options.SetOptions{}); err != nil {
+				log.WithError(err).WithField("pool", pool.Name).Debug("Failed to strip finalizers from IP pool during cleanup")
+			}
+		}
+
 		if _, err := c.IPPools().Delete(ctx, pool.Name, options.DeleteOptions{}); err != nil {
 			log.WithError(err).WithField("pool", pool.Name).Debug("Failed to delete IP pool during cleanup")
 		} else {

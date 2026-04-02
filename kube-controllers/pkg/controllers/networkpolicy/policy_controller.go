@@ -54,8 +54,10 @@ type policyController struct {
 func NewPolicyController(ctx context.Context, clientset kubernetes.Interface, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
 	policyConverter := converter.NewPolicyConverter()
 
-	// Create a NetworkPolicy watcher.
-	listWatcher := &cache.ListWatch{
+	// Create a NetworkPolicy watcher. Wrap with ToListWatcherWithWatchListSemantics
+	// so the reflector inherits the clientset's WatchList capability signal (fake
+	// clientsets report WatchList as unsupported).
+	lw := &cache.ListWatch{
 		ListWithContextFunc: func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
 			return clientset.NetworkingV1().NetworkPolicies("").List(ctx, opts)
 		},
@@ -63,6 +65,7 @@ func NewPolicyController(ctx context.Context, clientset kubernetes.Interface, c 
 			return clientset.NetworkingV1().NetworkPolicies("").Watch(ctx, opts)
 		},
 	}
+	listWatcher := cache.ToListWatcherWithWatchListSemantics(lw, clientset)
 
 	// Function returns map of policyName:policy stored by policy controller
 	// in datastore.
