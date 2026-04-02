@@ -224,6 +224,36 @@ const (
 	FlagClusterExternal uint16 = (1 << 15)
 )
 
+// FlagNames returns the human-readable names for the set bits in flags.
+func FlagNames(flags uint16) []string {
+	flagTable := []struct {
+		flag uint16
+		name string
+	}{
+		{FlagNATOut, "nat-out"},
+		{FlagNATFwdDsr, "fwd-dsr"},
+		{FlagNATNPFwd, "np-fwd"},
+		{FlagSkipFIB, "skip-fib"},
+		{FlagExtLocal, "ext-local"},
+		{FlagViaNATIf, "via-nat-iface"},
+		{FlagSrcDstBA, "B-A"},
+		{FlagHostPSNAT, "host-psnat"},
+		{FlagSvcSelf, "svc-self"},
+		{FlagNPLoop, "np-loop"},
+		{FlagNPRemote, "np-remote"},
+		{FlagNoDSR, "no-dsr"},
+		{FlagNoRedirPeer, "no-redir-peer"},
+		{FlagClusterExternal, "cluster-external"},
+	}
+	var names []string
+	for _, f := range flagTable {
+		if flags&f.flag != 0 {
+			names = append(names, f.name)
+		}
+	}
+	return names
+}
+
 func (e Value) ReverseNATKey() KeyInterface {
 	var ret Key
 
