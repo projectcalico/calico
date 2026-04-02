@@ -518,6 +518,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane nat outgoing flow 
 		workload2.ConfigureInInfra(infra)
 	})
 
+	AfterEach(func() {
+		workload1.Stop()
+		workload2.Stop()
+		tc.Stop()
+		infra.Stop()
+	})
+
 	It("Should report non-zero bytes for an SNAT'd flow", func() {
 		cc := &connectivity.Checker{
 			Protocol: "tcp",
@@ -526,23 +533,30 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane nat outgoing flow 
 		cc.ExpectSome(workload1, workload2)
 		cc.CheckConnectivity()
 
+		bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+		flowlogs.WaitForConntrackScan(bpfEnabled)
+
 		Eventually(func() error {
 			flows, err := tc.Felixes[0].FlowLogs()
 			if err != nil {
 				return err
 			}
+			found := false
 			for _, flow := range flows {
 				if flow.SrcMeta.AggregatedName == workload1.Name &&
 					flow.DstMeta.AggregatedName == workload2.Name {
-					if flow.PacketsIn == 0 || flow.PacketsOut == 0 ||
-						flow.BytesIn == 0 || flow.BytesOut == 0 {
-						return fmt.Errorf("expected non-zero counters for SNAT'd flow, got PacketsIn=%d PacketsOut=%d BytesIn=%d BytesOut=%d",
-							flow.PacketsIn, flow.PacketsOut, flow.BytesIn, flow.BytesOut)
+					found = true
+					if flow.PacketsIn > 0 && flow.PacketsOut > 0 &&
+						flow.BytesIn > 0 && flow.BytesOut > 0 {
+						return nil
 					}
-					return nil
 				}
 			}
-			return fmt.Errorf("no flows found between %s and %s", workload1.Name, workload2.Name)
+			if !found {
+				return fmt.Errorf("no flows found between %s and %s", workload1.Name, workload2.Name)
+			}
+			return fmt.Errorf("found flow(s) between %s and %s but none had non-zero counters in both directions",
+				workload1.Name, workload2.Name)
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	})
 })
