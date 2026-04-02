@@ -227,6 +227,55 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 	}, nil
 }
 
+// RunWithContext is the context-aware variant of Run for use when running
+// as a goroutine in a consolidated process.
+func RunWithContext(ctx context.Context) error {
+	clientset, err := BuildClientSet()
+	if err != nil {
+		return fmt.Errorf("failed to create in-cluster client set: %w", err)
+	}
+
+	namespace, err := readNamespace()
+	if err != nil {
+		return fmt.Errorf("failed to read service account namespace: %w", err)
+	}
+
+	tr := NewTokenRefresher(clientset, namespace, CNIServiceAccountName())
+	tokenChan := tr.TokenChan()
+	go tr.Run()
+
+	// Stop the refresher when the context is cancelled.
+	go func() {
+		<-ctx.Done()
+		tr.Stop()
+	}()
+
+	for tu := range tokenChan {
+		logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
+		kubeconfig := os.Getenv("KUBECONFIG")
+		cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			logrus.WithError(err).Error("Error generating kube config.")
+			continue
+		}
+		if err = rest.LoadTLSFiles(cfg); err != nil {
+			logrus.WithError(err).Error("Error loading TLS files.")
+			continue
+		}
+		writeKubeconfig(cfg, tu.Token)
+	}
+	return nil
+}
+
+// readNamespace reads the service account namespace from the mounted secret.
+func readNamespace() (string, error) {
+	namespace, err := os.ReadFile(winutils.GetHostPath(serviceAccountNamespace))
+	if err != nil {
+		return "", err
+	}
+	return string(namespace), nil
+}
+
 func Run() {
 	clientset, err := BuildClientSet()
 	if err != nil {
