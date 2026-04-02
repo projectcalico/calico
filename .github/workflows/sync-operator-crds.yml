@@ -23,7 +23,7 @@ jobs:
         run: |
           # Get master + the two most recent release branches (by semver).
           branches=$(gh api repos/${{ github.repository }}/branches --paginate --jq '
-            [.[] | select(.name | startswith("release-")) | .name]
+            [.[] | select(.name | test("^release-v[0-9]+\\.[0-9]+$")) | .name]
             | sort_by(ltrimstr("release-v") | split(".") | map(tonumber))
             | .[-2:]
             | ["master"] + .
@@ -43,7 +43,7 @@ jobs:
       matrix:
         branch: ${{ fromJson(needs.discover-branches.outputs.branches) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
           ref: ${{ matrix.branch }}
 
@@ -56,8 +56,9 @@ jobs:
       - name: Regenerate manifests
         run: make gen-manifests
 
-      - uses: peter-evans/create-pull-request@v6
+      - uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c  # v6.1.0
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "Sync operator CRDs from tigera/operator"
           branch: auto-sync-operator-crds-${{ matrix.branch }}
           base: ${{ matrix.branch }}
