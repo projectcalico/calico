@@ -39,6 +39,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("BGPPeer"),
 	describe.WithCategory(describe.Networking),
+	describe.RequiresBGPMesh(),
 	describe.WithSerial(),
 	"BGPPeer",
 	func() {
@@ -72,6 +73,7 @@ var _ = describe.CalicoDescribe(
 			Expect(installation.Spec.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
 			Expect(installation.Spec.CalicoNetwork.BGP).NotTo(BeNil(), "BGP is not enabled in the cluster")
 			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
+			requireNonVXLANCluster(cli)
 
 			// Ensure full mesh BGP is functioning before each test.
 			restoreBGPConfig = ensureInitialBGPConfig(cli)

@@ -13,11 +13,31 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
+
+// requireNonVXLANCluster checks that no IP pool uses VXLAN encapsulation. Tests that
+// disable the BGP mesh and expect connectivity to break cannot work on VXLAN clusters
+// because Felix programs VXLAN tunnel routes independently of BGP.
+func requireNonVXLANCluster(cli ctrlclient.Client) {
+	pools := &v3.IPPoolList{}
+	err := cli.List(context.Background(), pools)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error listing IP pools")
+
+	for _, pool := range pools.Items {
+		switch pool.Spec.VXLANMode {
+		case v3.VXLANModeAlways, v3.VXLANModeCrossSubnet:
+			framework.Failf(
+				"This test requires BGP full mesh as the sole routing mechanism, and cannot run with VXLAN enabled (pool %s uses VXLANMode %s)",
+				pool.Name, pool.Spec.VXLANMode,
+			)
+		}
+	}
+}
 
 // ensureInitialBGPConfig updates the default BGPConfiguration to ensures that full mesh BGP is enabled.
 // It returns a cleanup function to restore the original state after the test.
