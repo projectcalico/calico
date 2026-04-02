@@ -22,7 +22,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
@@ -229,22 +228,20 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			skipValidationFlag,
 			localFlag,
 		},
-		Action: func(_ context.Context, c *cli.Command) error {
-			configureLogging("release-prep.log")
-
-			started := time.Now()
-
-			// Determine the versions to use for the release.
+		Action: withLogging(withSummary(cfg, "release-prep", func(_ context.Context, c *cli.Command) (string, map[string]any, error) {
 			ver, err := version.DetermineReleaseVersion(version.GitVersion(), c.String(devTagSuffixFlag.Name))
 			if err != nil {
-				return err
+				return "", nil, err
+			}
+			outs := map[string]any{
+				"version": ver.FormattedString(),
 			}
 			operatorVer, err := version.DetermineOperatorVersion(cfg.RepoRootDir)
 			if err != nil {
-				return err
+				return ver.FormattedString(), outs, err
 			}
+			outs["operator"] = operatorVer.FormattedString()
 
-			// Configure the manager.
 			opts := []calico.Option{
 				calico.WithRepoRoot(cfg.RepoRootDir),
 				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
@@ -259,34 +256,17 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithPublishGitRef(!c.Bool(localFlag.Name)),
 			}
 
-			// Generate release notes before prep so they're included in the commit.
 			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
-				return fmt.Errorf("generate release notes: %w", err)
+				return ver.FormattedString(), outs, fmt.Errorf("generate release notes: %w", err)
 			}
 
 			r := calico.NewManager(opts...)
-			prepErr := r.PrepareRelease()
-
-			// Write structured summary for the PrepareRelease step.
-			summary := outputs.StepSummary{
-				Status:    "success",
-				Started:   started,
-				Completed: time.Now(),
-				Outputs: map[string]any{
-					"branch":   fmt.Sprintf("build-%s", ver.FormattedString()),
-					"operator": operatorVer.FormattedString(),
-				},
+			if err := r.PrepareRelease(); err != nil {
+				return ver.FormattedString(), outs, err
 			}
-			if prepErr != nil {
-				summary.Status = "failure"
-			}
-			outputDir := outputs.SummaryOutputDir(cfg.RepoRootDir)
-			if err := outputs.WriteSummary(outputDir, ver.FormattedString(), "release-prep", summary); err != nil {
-				logrus.WithError(err).Warn("Failed to write summary file")
-			}
-
-			return prepErr
-		},
+			outs["branch"] = fmt.Sprintf("build-%s", ver.FormattedString())
+			return ver.FormattedString(), outs, nil
+		})),
 	}
 }
 
