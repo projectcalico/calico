@@ -68,12 +68,17 @@ func NewManager(opts ...Option) *CalicoManager {
 		productCode:       utils.CalicoProductCode,
 		validate:          true,
 		validateBranch:    true,
-		buildImages:       true,
-		publishImages:     true,
-		publishCharts:     true,
+		manifests:         true,
+		images:            true,
 		archiveImages:     true,
-		publishGitRef:     true,
-		publishGithub:     true,
+		binaries:          true,
+		ocpBundle:         true,
+		tarball:           true,
+		windowsArchive:    true,
+		helmCharts:        true,
+		helmIndex:         true,
+		gitRef:            true,
+		githubRelease:     true,
 		imageRegistries:   defaultRegistries,
 		helmRegistries:    registry.DefaultHelmRegistries,
 		helmRepoURL:       utils.CalicoHelmRepoURL,
@@ -127,9 +132,6 @@ type CalicoManager struct {
 	// isHashRelease is a flag to indicate that we should build a hashrelease.
 	isHashRelease bool
 
-	// buildImages controls whether we should build container images, or use ones already built by CI.
-	buildImages bool
-
 	// archiveImages controls whether we should archive container images in release tarball.
 	archiveImages bool
 
@@ -157,13 +159,11 @@ type CalicoManager struct {
 	// tmpDir is the directory to which we should write temporary files.
 	tmpDir string
 
-	// Fine-tuning configuration for publishing.
-	publishImages bool
-	publishCharts bool
-	publishGitRef bool
-	publishGithub bool
+	gitRef        bool
+	githubRelease bool
 	awsProfile    string
 	s3Bucket      string
+	githubToken   string
 
 	// imageRegistries is the list of imageRegistries to which we should publish images.
 	imageRegistries []string
@@ -200,8 +200,15 @@ type CalicoManager struct {
 	imageScanningConfig imagescanner.Config
 	imageComponents     map[string]registry.Component
 
-	// external configuration.
-	githubToken string
+	// Unified step flags.
+	manifests      bool
+	images         bool
+	binaries       bool
+	ocpBundle      bool
+	windowsArchive bool
+	tarball        bool
+	helmCharts     bool
+	helmIndex      bool
 }
 
 func releaseImages(images []string, version, registry, operatorImage, operatorVersion, operatorRegistry string) []string {
@@ -225,8 +232,11 @@ func (r *CalicoManager) PreBuildValidation() error {
 	if r.operatorVersion == "" {
 		errStack = errors.Join(errStack, fmt.Errorf("no operator version specified"))
 	}
-	if (r.buildImages || r.archiveImages) && len(r.imageRegistries) == 0 {
+	if (r.images || r.archiveImages) && len(r.imageRegistries) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no image registries specified"))
+	}
+	if r.ocpBundle && !r.manifests {
+		errStack = errors.Join(errStack, fmt.Errorf("cannot build OCP bundle without manifests; set --manifests to 'true'"))
 	}
 	if errStack != nil {
 		return errStack
@@ -807,7 +817,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 		}
 	}
 
-	if r.publishImages {
+	if r.images {
 		return r.assertImageVersions()
 	} else {
 		if err := r.checkHashreleaseImagesPublished(); err != nil {
@@ -871,10 +881,10 @@ func (r *CalicoManager) publishPrereqs() error {
 	if r.calicoVersion == "" {
 		errStack = errors.Join(errStack, fmt.Errorf("no calico version specified"))
 	}
-	if r.publishImages && len(r.imageRegistries) == 0 {
+	if r.images && len(r.imageRegistries) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no image registries specified"))
 	}
-	if r.publishCharts {
+	if r.helmCharts {
 		if len(r.helmRegistries) == 0 {
 			errStack = errors.Join(errStack, fmt.Errorf("no helm chart registries specified"))
 		}
@@ -922,40 +932,23 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 		return fmt.Errorf("failed to build release metadata file: %s", err)
 	}
 
-	// We attach calicoctl binaries directly to the release as well.
-	files, err := os.ReadDir(filepath.Join(r.repoRoot, "calicoctl", "bin"))
-	if err != nil {
-		return fmt.Errorf("failed to read calicoctl binaries: %w", err)
+	if err := r.collectBinaries(); err != nil {
+		return err
 	}
-	for _, b := range files {
-		if _, err := r.runner.Run("cp", []string{filepath.Join(r.repoRoot, "calicoctl", "bin", b.Name()), uploadDir}, nil); err != nil {
-			return fmt.Errorf("failed to copy calicoctl binary %s: %w", b.Name(), err)
-		}
+	if err := r.collectManifests(); err != nil {
+		return err
 	}
-
-	if r.isHashRelease {
-		// Hashrelease include manifests in a different way, instead of just in the release tarball.
-		if _, err := r.runner.Run("cp", []string{"-r", filepath.Join(r.repoRoot, "manifests"), uploadDir}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to copy manifests to output directory")
-			return fmt.Errorf("failed to copy manifests: %w", err)
-		}
+	if err := r.collectWindowsArchive(); err != nil {
+		return err
 	}
-
-	// Add in the already-built windows zip archive, the Windows install script, ocp bundle, and the helm chart.
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", r.calicoVersion), uploadDir}, nil); err != nil {
-		return fmt.Errorf("failed to copy windows zip archive: %w", err)
-	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"node/dist/install-calico-windows.ps1", uploadDir}, nil); err != nil {
-		return fmt.Errorf("failed to copy windows install script: %w", err)
-	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
-		return fmt.Errorf("failed to copy OCP bundle: %w", err)
+	if err := r.collectOCPBundle(); err != nil {
+		return err
 	}
 
 	// Generate a SHA256SUMS file containing the checksums for each artifact
 	// that we attach to the release. These can be confirmed by end users via the following command:
 	// sha256sum -c --ignore-missing SHA256SUMS
-	files, err = os.ReadDir(uploadDir)
+	files, err := os.ReadDir(uploadDir)
 	if err != nil {
 		return fmt.Errorf("failed to read upload directory: %w", err)
 	}
@@ -974,6 +967,64 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 		return fmt.Errorf("failed to write SHA256SUMS file: %w", err)
 	}
 
+	return nil
+}
+
+func (r *CalicoManager) collectBinaries() error {
+	if !r.binaries {
+		return nil
+	}
+	uploadDir := r.uploadDir()
+	// We attach calicoctl binaries directly to the release as well.
+	files, err := os.ReadDir(filepath.Join(r.repoRoot, "calicoctl", "bin"))
+	if err != nil {
+		return fmt.Errorf("failed to read calicoctl binaries: %w", err)
+	}
+	for _, b := range files {
+		if _, err := r.runner.Run("cp", []string{filepath.Join(r.repoRoot, "calicoctl", "bin", b.Name()), uploadDir}, nil); err != nil {
+			return fmt.Errorf("failed to copy calicoctl binary %s: %w", b.Name(), err)
+		}
+	}
+	return nil
+}
+
+func (r *CalicoManager) collectManifests() error {
+	if !r.manifests {
+		return nil
+	}
+	if r.isHashRelease {
+		uploadDir := r.uploadDir()
+		// Hashrelease include manifests in a different way, instead of just in the release tarball.
+		if _, err := r.runner.Run("cp", []string{"-r", filepath.Join(r.repoRoot, "manifests"), uploadDir}, nil); err != nil {
+			logrus.WithError(err).Error("Failed to copy manifests to output directory")
+			return fmt.Errorf("failed to copy manifests: %w", err)
+		}
+	}
+	return nil
+}
+
+func (r *CalicoManager) collectWindowsArchive() error {
+	if !r.windowsArchive {
+		return nil
+	}
+	uploadDir := r.uploadDir()
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", r.calicoVersion), uploadDir}, nil); err != nil {
+		return fmt.Errorf("failed to copy windows zip archive: %w", err)
+	}
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"node/dist/install-calico-windows.ps1", uploadDir}, nil); err != nil {
+		return fmt.Errorf("failed to copy windows install script: %w", err)
+	}
+	return nil
+}
+
+func (r *CalicoManager) collectOCPBundle() error {
+	if !r.ocpBundle {
+		return nil
+	}
+	uploadDir := r.uploadDir()
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
+		return fmt.Errorf("failed to copy OCP bundle: %w", err)
+	}
 	return nil
 }
 
@@ -1116,7 +1167,7 @@ func (r *CalicoManager) buildE2EBinaries() error {
 func (r *CalicoManager) buildBinaries() error {
 	// Skip building binaries if we are building images
 	// binaries are built as part of "release-build" target.
-	if r.buildImages {
+	if r.images {
 		return nil
 	}
 	m := map[string]string{
@@ -1138,7 +1189,7 @@ func (r *CalicoManager) buildBinaries() error {
 }
 
 func (r *CalicoManager) buildContainerImages() error {
-	if !r.buildImages {
+	if !r.images {
 		logrus.Info("Skip building container images")
 		return nil
 	}
@@ -1177,7 +1228,7 @@ func (r *CalicoManager) buildContainerImages() error {
 }
 
 func (r *CalicoManager) publishGitTag() error {
-	if !r.publishGitRef {
+	if !r.gitRef {
 		logrus.Info("Skipping git tag")
 		return nil
 	}
@@ -1189,7 +1240,7 @@ func (r *CalicoManager) publishGitTag() error {
 }
 
 func (r *CalicoManager) publishGithubRelease() error {
-	if !r.publishGithub {
+	if !r.githubRelease {
 		logrus.Info("Skipping github release")
 		return nil
 	}
@@ -1245,7 +1296,7 @@ Additional links:
 }
 
 func (r *CalicoManager) publishContainerImages() error {
-	if !r.publishImages {
+	if !r.images {
 		logrus.Info("Skipping image publish")
 		return nil
 	}
@@ -1292,7 +1343,7 @@ func (r *CalicoManager) publishContainerImages() error {
 }
 
 func (r *CalicoManager) publishHelmCharts() error {
-	if !r.publishCharts {
+	if !r.helmCharts {
 		logrus.Info("Skipping publishing helm charts")
 		return nil
 	}
@@ -1335,7 +1386,7 @@ func (r *CalicoManager) publishHelmChart(chart, registry string) error {
 }
 
 func (r *CalicoManager) updateHelmChartIndex() error {
-	if !r.publishCharts {
+	if !r.helmCharts {
 		logrus.Info("Skipping updating helm index")
 		return nil
 	}
@@ -1405,7 +1456,7 @@ func (r *CalicoManager) determineBranch() (string, error) {
 
 // Uses docker to build a tgz archive of the specified container image.
 func (r *CalicoManager) archiveContainerImage(out, image string) error {
-	if r.isHashRelease && !r.buildImages {
+	if r.isHashRelease && !r.images {
 		if _, err := r.runner.Run("docker", []string{"image", "inspect", image}, nil); err != nil {
 			logrus.WithError(err).WithField("image", image).Error("Image not found locally, will attempt to pull")
 			if _, err := r.runner.Run("docker", []string{"pull", image}, nil); err != nil {
@@ -1636,7 +1687,7 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 
 // pushPrepBranch pushes the prep branch to remote and creates a PR if not in local mode.
 func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
-	if !r.publishGitRef {
+	if !r.gitRef {
 		logrus.WithField("branch", prepBranch).Warn("Local mode: skipping branch push and PR creation")
 		return r.switchToBaseBranch(baseBranch)
 	}
@@ -1717,13 +1768,13 @@ func (r *CalicoManager) prepPrereqs() error {
 			return fmt.Errorf("failed to determine current git branch: %w", err)
 		} else if branch == defaultBranch {
 			return fmt.Errorf("cannot cut release from branch: %s", branch)
-		} else if r.publishGitRef && !strings.HasPrefix(branch, r.releaseBranchPrefix) {
+		} else if r.gitRef && !strings.HasPrefix(branch, r.releaseBranchPrefix) {
 			return fmt.Errorf("current branch is %s, expected to be a release branch with prefix %s. Please switch to the appropriate release branch to cut the release", branch, r.releaseBranchPrefix)
 		}
 	}
 
 	// If publishing, check that we are not on a fork branch. We want to ensure releases are always cut from the main repo
-	if r.publishGitRef {
+	if r.gitRef {
 		owner, err := r.remoteOwner()
 		if err != nil {
 			return err
