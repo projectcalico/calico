@@ -15,13 +15,9 @@
 package v3
 
 import (
-	"context"
 	"runtime"
 	"sync"
 	"testing"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TestCRDValidatorsMemory verifies that compiling all CRD validators stays
@@ -29,68 +25,31 @@ import (
 // maxItems/maxLength annotations on CRD schemas — if those bounds grow
 // too large the compilation can consume hundreds of megabytes.
 func TestCRDValidatorsMemory(t *testing.T) {
-	// Reset state so we can measure a fresh initialization.
 	resetCRDValidationState()
 	SetCRDValidationEnabled(true)
+
+	// Load schemas so we can iterate all Kinds.
+	schemasOnce.Do(loadSchemas)
+	if schemasErr != nil {
+		t.Fatalf("failed to load schemas: %v", schemasErr)
+	}
 
 	runtime.GC()
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
 
-	// Force compilation of the most expensive Kinds by validating a
-	// representative object for each.
-	gnp := &apiv3.GlobalNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "mem-test"},
-		Spec:       apiv3.GlobalNetworkPolicySpec{},
+	// Force every Kind to compile.
+	for kind, entry := range kindEntries {
+		entry.once.Do(func() { entry.compile(kind) })
 	}
-	defaultAndValidateCRD(context.Background(), gnp, nil)
-
-	np := &apiv3.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "mem-test", Namespace: "default"},
-		Spec:       apiv3.NetworkPolicySpec{},
-	}
-	defaultAndValidateCRD(context.Background(), np, nil)
-
-	sgnp := &apiv3.StagedGlobalNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "mem-test"},
-		Spec:       apiv3.StagedGlobalNetworkPolicySpec{},
-	}
-	defaultAndValidateCRD(context.Background(), sgnp, nil)
-
-	snp := &apiv3.StagedNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "mem-test", Namespace: "default"},
-		Spec:       apiv3.StagedNetworkPolicySpec{},
-	}
-	defaultAndValidateCRD(context.Background(), snp, nil)
-
-	pool := &apiv3.IPPool{
-		ObjectMeta: metav1.ObjectMeta{Name: "mem-test"},
-		Spec:       apiv3.IPPoolSpec{CIDR: "10.0.0.0/16"},
-	}
-	defaultAndValidateCRD(context.Background(), pool, nil)
-
-	fc := &apiv3.FelixConfiguration{
-		ObjectMeta: metav1.ObjectMeta{Name: "mem-test"},
-		Spec:       apiv3.FelixConfigurationSpec{},
-	}
-	defaultAndValidateCRD(context.Background(), fc, nil)
-
-	bgp := &apiv3.BGPConfiguration{
-		ObjectMeta: metav1.ObjectMeta{Name: "mem-test"},
-		Spec:       apiv3.BGPConfigurationSpec{},
-	}
-	defaultAndValidateCRD(context.Background(), bgp, nil)
 
 	runtime.GC()
 	var after runtime.MemStats
 	runtime.ReadMemStats(&after)
 
 	allocMB := float64(after.TotalAlloc-before.TotalAlloc) / (1024 * 1024)
-	t.Logf("CRD validator compilation allocated %.1f MB", allocMB)
+	t.Logf("CRD validator compilation allocated %.1f MB (%d Kinds)", allocMB, len(kindEntries))
 
-	// Budget: 100 MB. If a CRD change pushes compilation past this
-	// threshold, investigate the CEL cost of newly added
-	// maxItems/maxLength annotations.
 	const budgetMB = 100.0
 	if allocMB > budgetMB {
 		t.Errorf("CRD validator compilation allocated %.1f MB, exceeding %.0f MB budget; CEL compilation is too expensive", allocMB, budgetMB)
@@ -100,15 +59,8 @@ func TestCRDValidatorsMemory(t *testing.T) {
 // resetCRDValidationState resets all CRD validation state so tests can
 // measure fresh initialization.
 func resetCRDValidationState() {
-	crdValidationEnabled = false
-	rawSchemas = nil
-	schemasOnce = syncOnceZero
+	crdValidationEnabled.Store(false)
+	kindEntries = nil
+	schemasOnce = sync.Once{}
 	schemasErr = nil
-	celValidators = nil
-	schemaValidators = nil
-	schemas = nil
-	kindCompiled = nil
 }
-
-// syncOnceZero is a zero-value sync.Once used to reset schemasOnce.
-var syncOnceZero sync.Once
