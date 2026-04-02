@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 	"github.com/projectcalico/calico/node/pkg/nodeinit"
+	"github.com/projectcalico/calico/node/pkg/nodeservices"
 	"github.com/projectcalico/calico/node/pkg/status"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
@@ -57,6 +58,7 @@ var (
 	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
 	monitorToken               = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
+	runNodeServices            = flagSet.Bool("node-services", false, "Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)")
 	completeStartup            = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
 )
 
@@ -165,9 +167,11 @@ func main() {
 		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
 		shutdown.Run()
 	} else if *monitorAddrs {
-		logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
+		logutils.ConfigureFormatter("monitor-addresses")
 		startup.ConfigureLogging()
-		startup.MonitorIPAddressSubnets()
+		if err := startup.MonitorIPAddressSubnetsWithContext(context.Background()); err != nil {
+			logrus.WithError(err).Fatal("Monitor addresses failed")
+		}
 	} else if *completeStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "complete-startup"})
 		ctx := context.Background() // Context is never cancelled.
@@ -185,21 +189,30 @@ func main() {
 		cfg.Onetime = *confdRunOnce
 		confd.Run(cfg)
 	} else if *runAllocateTunnelAddrs {
-		logrus.SetFormatter(&logutils.Formatter{Component: "tunnel-ip-allocator"})
+		logutils.ConfigureFormatter("tunnel-ip-allocator")
 		if *allocateTunnelAddrsRunOnce {
 			allocateip.Run(nil)
 		} else {
-			allocateip.Run(make(chan struct{}))
+			if err := allocateip.RunWithContext(context.Background()); err != nil {
+				logrus.WithError(err).Fatal("Tunnel IP allocator failed")
+			}
 		}
 	} else if *monitorToken {
-		logrus.SetFormatter(&logutils.Formatter{Component: "cni-config-monitor"})
-		cni.Run()
+		logutils.ConfigureFormatter("cni-config-monitor")
+		if err := cni.RunWithContext(context.Background()); err != nil {
+			logrus.WithError(err).Fatal("CNI token monitor failed")
+		}
+	} else if *runNodeServices {
+		logutils.ConfigureFormatter("node-services")
+		nodeservices.Run()
 	} else if *initHostpaths {
 		logrus.SetFormatter(&logutils.Formatter{Component: "hostpath-init"})
 		hostpathinit.Run()
 	} else if *runStatusReporter {
-		logrus.SetFormatter(&logutils.Formatter{Component: "status-reporter"})
-		status.Run()
+		logutils.ConfigureFormatter("status-reporter")
+		if err := status.RunWithContext(context.Background()); err != nil {
+			logrus.WithError(err).Fatal("Node status reporter failed")
+		}
 	} else if *showStatus {
 		status.Show()
 		os.Exit(0)
