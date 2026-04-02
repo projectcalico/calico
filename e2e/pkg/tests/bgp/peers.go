@@ -49,7 +49,7 @@ var _ = describe.CalicoDescribe(
 		var server1 *conncheck.Server
 		var client1 *conncheck.Client
 		var restoreBGPConfig func()
-		var logBGPStatus func()
+		var bgpStatus *BGPStatusMonitor
 
 		// Create a new framework for the tests.
 		f := utils.NewDefaultFramework("bgppeer")
@@ -76,8 +76,8 @@ var _ = describe.CalicoDescribe(
 			// Ensure full mesh BGP is functioning before each test.
 			restoreBGPConfig = ensureInitialBGPConfig(cli)
 
-			// Set up CalicoNodeStatus resources for BGP diagnostics.
-			logBGPStatus = setupBGPNodeStatus(cli)
+			// Set up CalicoNodeStatus resources for BGP diagnostics and convergence waits.
+			bgpStatus = NewBGPStatusMonitor(cli)
 
 			// Before each test, perform the following steps:
 			// - Create a server pod and corresponding service in the main namespace for the test.
@@ -113,8 +113,7 @@ var _ = describe.CalicoDescribe(
 			// Disable full mesh BGP.
 			disableFullMesh(cli)
 
-			ginkgo.By("Logging BGP state after disabling full mesh")
-			logBGPStatus()
+			bgpStatus.WaitForNoMeshPeers()
 
 			// Verify connectivity is lost.
 			checker.ResetExpectations()
@@ -149,8 +148,7 @@ var _ = describe.CalicoDescribe(
 			err = cli.Delete(context.Background(), peer)
 			Expect(err).NotTo(HaveOccurred(), "Error deleting BGPPeer resource")
 
-			ginkgo.By("Logging BGP state after deleting BGPPeer")
-			logBGPStatus()
+			bgpStatus.WaitForNoPeers()
 
 			// Verify connectivity is lost again.
 			checker.ResetExpectations()
