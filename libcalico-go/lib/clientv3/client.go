@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 // client implements the client.Interface.
@@ -56,6 +57,15 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Enable in-process CRD validation (CEL rules, OpenAPI constraints,
+	// schema defaulting) for etcd mode. In KDD mode the kube-apiserver
+	// handles this on admission, so we skip it to avoid the expensive
+	// CEL compilation cost.
+	if config.Spec.DatastoreType == apiconfig.EtcdV3 {
+		validator.SetCRDValidationEnabled(true)
+	}
+
 	return client{
 		config:    config,
 		backend:   be,
