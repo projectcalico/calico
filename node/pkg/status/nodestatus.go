@@ -15,6 +15,7 @@
 package status
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -77,6 +78,42 @@ func Run() {
 
 	// Run the NodeStatusReporter.
 	r.Run()
+}
+
+// RunWithContext is the context-aware variant of Run for use when running
+// as a goroutine in a consolidated process.
+func RunWithContext(ctx context.Context) error {
+	startup.ConfigureLogging()
+
+	nodename := os.Getenv("NODENAME")
+	if nodename == "" {
+		return fmt.Errorf("NODENAME environment is not set")
+	}
+
+	cfg, c := calicoclient.CreateClient()
+	r := NewNodeStatusReporter(nodename, cfg, c, GetPopulators())
+
+	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
+	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
+		&typhaConfig, syncproto.SyncerTypeNodeStatus,
+		buildinfo.Version, nodename, fmt.Sprintf("node-status %s", buildinfo.Version),
+		r,
+	) {
+		log.Debug("Using typha syncclient")
+	} else {
+		log.Debug("Using local syncer")
+		syncer := nodestatussyncer.New(c.(backendClientAccessor).Backend(), r)
+		syncer.Start()
+	}
+
+	// Stop the reporter when the context is cancelled.
+	go func() {
+		<-ctx.Done()
+		r.Stop()
+	}()
+
+	r.Run()
+	return nil
 }
 
 // Map IPFamily to a map from each class to a populator.

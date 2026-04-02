@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 	"github.com/projectcalico/calico/node/pkg/nodeinit"
+	"github.com/projectcalico/calico/node/pkg/nodeservices"
 	"github.com/projectcalico/calico/node/pkg/status"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
@@ -57,6 +58,7 @@ var (
 	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
 	monitorToken               = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
+	runNodeServices            = flagSet.Bool("node-services", false, "Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)")
 	completeStartup            = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
 )
 
@@ -194,6 +196,9 @@ func main() {
 	} else if *monitorToken {
 		logrus.SetFormatter(&logutils.Formatter{Component: "cni-config-monitor"})
 		cni.Run()
+	} else if *runNodeServices {
+		logutils.ConfigureFormatter("node-services")
+		nodeservices.Run()
 	} else if *initHostpaths {
 		logrus.SetFormatter(&logutils.Formatter{Component: "hostpath-init"})
 		hostpathinit.Run()
