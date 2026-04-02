@@ -1613,6 +1613,14 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfIPFragmentReassemblyEnabled:
+                  description: |-
+                    BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
+                    reassembles out-of-order IP fragments from external networks. This program requires
+                    a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+                    Felix reports not-ready until the user sets this to false. When false, fragmented
+                    packets from external sources are dropped. [Default: true]
+                  type: boolean
                 bpfJITHardening:
                   allOf:
                     - enum:

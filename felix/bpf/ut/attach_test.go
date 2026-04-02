@@ -99,7 +99,7 @@ func newBPFTestEpMgr(
 // countSubPrograms counts the number of sub-programs that would be loaded for a given AttachType.
 // This uses the GetApplicableSubProgs API from the hook package.
 func countSubPrograms(at hook.AttachType) int {
-	applicableProgs := hook.GetApplicableSubProgs(at, false)
+	applicableProgs := hook.GetApplicableSubProgs(at, nil)
 	return len(applicableProgs)
 }
 
@@ -132,10 +132,11 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			RulesConfig: rules.Config{
 				EndpointToHostAction: "RETURN",
 			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
-			BPFIpv6Enabled:          ipv6Enabled,
-			BPFAttachType:           "TCX",
+			BPFExtToServiceConnmark:        0,
+			BPFPolicyDebugEnabled:          true,
+			BPFIPFragmentReassemblyEnabled: true,
+			BPFIpv6Enabled:                 ipv6Enabled,
+			BPFAttachType:                  "TCX",
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -605,8 +606,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				RulesConfig: rules.Config{
 					EndpointToHostAction: "RETURN",
 				},
-				BPFExtToServiceConnmark: 0,
-				BPFPolicyDebugEnabled:   true,
+				BPFExtToServiceConnmark:        0,
+				BPFPolicyDebugEnabled:          true,
+				BPFIPFragmentReassemblyEnabled: true,
 			},
 			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
@@ -739,8 +741,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				RulesConfig: rules.Config{
 					EndpointToHostAction: "RETURN",
 				},
-				BPFExtToServiceConnmark: 0,
-				BPFPolicyDebugEnabled:   true,
+				BPFExtToServiceConnmark:        0,
+				BPFPolicyDebugEnabled:          true,
+				BPFIPFragmentReassemblyEnabled: true,
 			},
 			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
@@ -802,8 +805,9 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 			RulesConfig: rules.Config{
 				EndpointToHostAction: "RETURN",
 			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
+			BPFExtToServiceConnmark:        0,
+			BPFPolicyDebugEnabled:          true,
+			BPFIPFragmentReassemblyEnabled: true,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[123]"),
@@ -986,8 +990,9 @@ func TestRepeatedAttach(t *testing.T) {
 			RulesConfig: rules.Config{
 				EndpointToHostAction: "RETURN",
 			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
+			BPFExtToServiceConnmark:        0,
+			BPFPolicyDebugEnabled:          true,
+			BPFIPFragmentReassemblyEnabled: true,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[123]"),
@@ -1126,9 +1131,10 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 			RulesConfig: rules.Config{
 				EndpointToHostAction: "RETURN",
 			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
-			BPFAttachType:           v3.BPFAttachOptionTCX,
+			BPFExtToServiceConnmark:        0,
+			BPFPolicyDebugEnabled:          true,
+			BPFIPFragmentReassemblyEnabled: true,
+			BPFAttachType:                  v3.BPFAttachOptionTCX,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -1220,9 +1226,10 @@ func TestAttachTcx(t *testing.T) {
 		RulesConfig: rules.Config{
 			EndpointToHostAction: "RETURN",
 		},
-		BPFExtToServiceConnmark: 0,
-		BPFPolicyDebugEnabled:   true,
-		BPFAttachType:           v3.BPFAttachOptionTCX,
+		BPFExtToServiceConnmark:        0,
+		BPFPolicyDebugEnabled:          true,
+		BPFIPFragmentReassemblyEnabled: true,
+		BPFAttachType:                  v3.BPFAttachOptionTCX,
 	}
 
 	bpfEpMgr, err := newBPFTestEpMgr(
@@ -1347,9 +1354,10 @@ func TestLogFilters(t *testing.T) {
 		RulesConfig: rules.Config{
 			EndpointToHostAction: "RETURN",
 		},
-		BPFExtToServiceConnmark: 0,
-		BPFPolicyDebugEnabled:   true,
-		BPFLogFilters:           map[string]string{"hostep1": "tcp"},
+		BPFExtToServiceConnmark:        0,
+		BPFPolicyDebugEnabled:          true,
+		BPFIPFragmentReassemblyEnabled: true,
+		BPFLogFilters:                  map[string]string{"hostep1": "tcp"},
 	}
 
 	bpfEpMgr, err := newBPFTestEpMgr(
