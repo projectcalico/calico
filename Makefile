@@ -238,7 +238,7 @@ release/bin/release: $(shell find ./release -type f -name '*.go')
 
 # Prepare for a release (update version references, charts, manifests).
 release-prep: release/bin/release bin/gh
-	@release/bin/release release prep
+	@OPERATOR_BRANCH=$(OPERATOR_BRANCH) release/bin/release release prep
 
 # Install ghr for publishing to github.
 bin/ghr:
@@ -246,10 +246,11 @@ bin/ghr:
 
 # Install GitHub CLI
 bin/gh:
-	curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
-	tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
-	chmod +x $@
-	rm bin/gh.tgz
+	@mkdir -p bin
+	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	@tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
+	@chmod +x $@
+	@rm bin/gh.tgz
 
 # Build a release.
 release: release/bin/release
