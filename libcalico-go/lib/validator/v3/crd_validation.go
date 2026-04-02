@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 
 	calicoapi "github.com/projectcalico/api"
 	"github.com/sirupsen/logrus"
@@ -35,6 +36,43 @@ import (
 	celconfig "k8s.io/apiserver/pkg/apis/cel"
 )
 
+// kindEntry holds the raw schema and lazily-compiled validators for a
+// single CRD Kind. The sync.Once ensures compilation happens exactly
+// once and all fields are visible to concurrent readers after Do returns.
+type kindEntry struct {
+	rawSchema *apiextensions.JSONSchemaProps
+
+	once            sync.Once
+	celValidator    *celvalidation.Validator
+	schemaValidator schemavalidation.SchemaCreateValidator
+	structural      *structuralschema.Structural
+}
+
+// compile builds the OpenAPI schema validator, structural schema, and
+// CEL validator from the raw schema. Called via e.once.Do().
+func (e *kindEntry) compile(kind string) {
+	sv, _, err := schemavalidation.NewSchemaValidator(e.rawSchema)
+	if err != nil {
+		logrus.WithError(err).WithField("kind", kind).Warn("Failed to create schema validator from CRD")
+	} else {
+		e.schemaValidator = sv
+	}
+
+	structural, err := structuralschema.NewStructural(e.rawSchema)
+	if err != nil {
+		logrus.WithError(err).WithField("kind", kind).Warn("Failed to create structural schema from CRD")
+		return
+	}
+	e.structural = structural
+
+	v := celvalidation.NewValidator(structural, true, celconfig.PerCallLimit)
+	if v != nil {
+		e.celValidator = v
+	}
+
+	logrus.WithField("kind", kind).Debug("Compiled CRD validators")
+}
+
 var (
 	// crdValidationEnabled controls whether CRD schema defaulting and
 	// validation (CEL rules, OpenAPI constraints) run inside Validate().
@@ -42,23 +80,15 @@ var (
 	// the in-process check is redundant and the CEL compilation cost is
 	// wasted. Disabled by default; enabled when an etcd-backed client is
 	// created.
-	crdValidationEnabled bool
+	crdValidationEnabled atomic.Bool
 
-	// rawSchemas holds the parsed internal JSONSchemaProps for each CRD
-	// Kind, loaded once via schemasOnce. CEL and OpenAPI validators are
-	// compiled per-Kind on demand from these schemas.
-	rawSchemas  map[string]*apiextensions.JSONSchemaProps
+	// kindEntries maps CRD Kind to its entry (raw schema + lazily
+	// compiled validators). Populated once by loadSchemas, then
+	// read-only — per-Kind compilation mutates only the entry itself
+	// under its own sync.Once.
+	kindEntries map[string]*kindEntry
 	schemasOnce sync.Once
 	schemasErr  error
-
-	// Per-Kind compiled validators, populated lazily by ensureKindCompiled.
-	celValidators    map[string]*celvalidation.Validator
-	schemaValidators map[string]schemavalidation.SchemaCreateValidator
-	schemas          map[string]*structuralschema.Structural
-
-	// kindCompiled tracks which Kinds have had their validators compiled.
-	kindCompiled map[string]bool
-	kindMu       sync.Mutex
 )
 
 // SetCRDValidationEnabled controls whether Validate() applies CRD schema
@@ -67,18 +97,14 @@ var (
 // should be enabled when there is no kube-apiserver to enforce CRD rules
 // (i.e., etcd datastore mode).
 func SetCRDValidationEnabled(enabled bool) {
-	crdValidationEnabled = enabled
+	crdValidationEnabled.Store(enabled)
 }
 
 // loadSchemas loads all embedded CRDs and converts their schemas to
 // internal format. This is the cheap part (~9 MB); CEL compilation
-// happens per-Kind in ensureKindCompiled.
+// happens per-Kind on demand via kindEntry.once.
 func loadSchemas() {
-	rawSchemas = make(map[string]*apiextensions.JSONSchemaProps)
-	celValidators = make(map[string]*celvalidation.Validator)
-	schemaValidators = make(map[string]schemavalidation.SchemaCreateValidator)
-	schemas = make(map[string]*structuralschema.Structural)
-	kindCompiled = make(map[string]bool)
+	kindEntries = make(map[string]*kindEntry)
 
 	crds, err := calicoapi.AllCRDs()
 	if err != nil {
@@ -109,59 +135,18 @@ func loadSchemas() {
 
 		// Convert v1 JSONSchemaProps to internal.
 		internalSchema := &apiextensions.JSONSchemaProps{}
-		if err := apiextensionsv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(
+		err := apiextensionsv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(
 			version.Schema.OpenAPIV3Schema,
 			internalSchema,
 			nil,
-		); err != nil {
+		)
+		if err != nil {
 			logrus.WithError(err).WithField("kind", kind).Warn("Failed to convert CRD schema to internal format")
 			continue
 		}
 
-		rawSchemas[kind] = internalSchema
+		kindEntries[kind] = &kindEntry{rawSchema: internalSchema}
 	}
-}
-
-// ensureKindCompiled compiles the CEL and OpenAPI validators for the given
-// Kind if they haven't been compiled yet. This is the expensive part and
-// only runs once per Kind.
-func ensureKindCompiled(kind string) {
-	kindMu.Lock()
-	defer kindMu.Unlock()
-
-	if kindCompiled[kind] {
-		return
-	}
-	kindCompiled[kind] = true
-
-	internalSchema, ok := rawSchemas[kind]
-	if !ok {
-		return
-	}
-
-	// Build OpenAPI schema validator.
-	sv, _, err := schemavalidation.NewSchemaValidator(internalSchema)
-	if err != nil {
-		logrus.WithError(err).WithField("kind", kind).Warn("Failed to create schema validator from CRD")
-	} else {
-		schemaValidators[kind] = sv
-	}
-
-	// Convert to structural schema for CEL compilation and defaulting.
-	structural, err := structuralschema.NewStructural(internalSchema)
-	if err != nil {
-		logrus.WithError(err).WithField("kind", kind).Warn("Failed to create structural schema from CRD")
-		return
-	}
-	schemas[kind] = structural
-
-	// Compile CEL validator. Returns nil if no x-kubernetes-validations exist.
-	v := celvalidation.NewValidator(structural, true, celconfig.PerCallLimit)
-	if v != nil {
-		celValidators[kind] = v
-	}
-
-	logrus.WithField("kind", kind).Debug("Compiled CRD validators")
 }
 
 // defaultAndValidateCRD applies CRD schema defaults to the object in-place
@@ -175,7 +160,7 @@ func ensureKindCompiled(kind string) {
 // Returns nil if CRD validation is disabled, the object's Kind has no CRD
 // schema, or if defaulting and validation both succeed.
 func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runtime.Object) field.ErrorList {
-	if !crdValidationEnabled {
+	if !crdValidationEnabled.Load() {
 		return nil
 	}
 
@@ -187,8 +172,13 @@ func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runti
 
 	kind := resolveKind(obj)
 
-	// Compile validators for this Kind if needed (expensive, per-Kind).
-	ensureKindCompiled(kind)
+	entry, ok := kindEntries[kind]
+	if !ok {
+		return nil
+	}
+
+	// Compile validators for this Kind if needed (expensive, once per Kind).
+	entry.once.Do(func() { entry.compile(kind) })
 
 	// Convert to unstructured map representation once, shared by both
 	// defaulting and validation.
@@ -198,18 +188,20 @@ func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runti
 	}
 
 	// Apply CRD schema defaults to the unstructured representation.
-	applyCRDDefaults(unstructuredObj, kind)
+	if entry.structural != nil {
+		schemadefaulting.Default(unstructuredObj, entry.structural)
+	}
 
 	// Validate the defaulted unstructured data.
 	var allErrs field.ErrorList
 
 	// Run OpenAPI schema validation (MinItems, MaxLength, Pattern, Enum, etc.).
-	if sv, ok := schemaValidators[kind]; ok {
-		allErrs = append(allErrs, schemavalidation.ValidateCustomResource(nil, unstructuredObj, sv)...)
+	if entry.schemaValidator != nil {
+		allErrs = append(allErrs, schemavalidation.ValidateCustomResource(nil, unstructuredObj, entry.schemaValidator)...)
 	}
 
 	// Run CEL validation (x-kubernetes-validations rules).
-	if cv, ok := celValidators[kind]; ok {
+	if entry.celValidator != nil {
 		var unstructuredOldObj any
 		if oldObj != nil {
 			unstructuredOldObj, err = toUnstructured(oldObj)
@@ -218,7 +210,7 @@ func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runti
 			}
 		}
 
-		celErrs, _ := cv.Validate(ctx, nil, nil, unstructuredObj, unstructuredOldObj, int64(celconfig.RuntimeCELCostBudget))
+		celErrs, _ := entry.celValidator.Validate(ctx, nil, nil, unstructuredObj, unstructuredOldObj, int64(celconfig.RuntimeCELCostBudget))
 		allErrs = append(allErrs, celErrs...)
 	}
 
@@ -233,14 +225,6 @@ func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runti
 	}
 
 	return allErrs
-}
-
-// applyCRDDefaults applies CRD schema default values to an unstructured
-// object representation in-place. This is a no-op if the kind has no schema.
-func applyCRDDefaults(unstructuredObj any, kind string) {
-	if s, ok := schemas[kind]; ok {
-		schemadefaulting.Default(unstructuredObj, s)
-	}
 }
 
 // resolveKind returns the Kind string for a runtime.Object, falling back to
