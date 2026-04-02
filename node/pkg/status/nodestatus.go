@@ -154,7 +154,7 @@ func NewNodeStatusReporter(node string,
 		reporter:       make(map[string]*reporter),
 		pendingUpdates: make(map[string]*apiv3.CalicoNodeStatus),
 		populators:     populators,
-		done:           make(chan struct{}),
+		done:           make(chan struct{}, 1),
 	}
 }
 

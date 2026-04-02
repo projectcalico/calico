@@ -250,21 +250,28 @@ func RunWithContext(ctx context.Context) error {
 		tr.Stop()
 	}()
 
-	for tu := range tokenChan {
-		logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
-		kubeconfig := os.Getenv("KUBECONFIG")
-		cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			logrus.WithError(err).Error("Error generating kube config.")
-			continue
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case tu, ok := <-tokenChan:
+			if !ok {
+				return nil
+			}
+			logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
+			kubeconfig := os.Getenv("KUBECONFIG")
+			cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
+			if err != nil {
+				logrus.WithError(err).Error("Error generating kube config.")
+				continue
+			}
+			if err = rest.LoadTLSFiles(cfg); err != nil {
+				logrus.WithError(err).Error("Error loading TLS files.")
+				continue
+			}
+			writeKubeconfig(cfg, tu.Token)
 		}
-		if err = rest.LoadTLSFiles(cfg); err != nil {
-			logrus.WithError(err).Error("Error loading TLS files.")
-			continue
-		}
-		writeKubeconfig(cfg, tu.Token)
 	}
-	return nil
 }
 
 // readNamespace reads the service account namespace from the mounted secret.

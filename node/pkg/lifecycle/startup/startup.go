@@ -448,11 +448,14 @@ func MonitorIPAddressSubnetsWithContext(ctx context.Context) error {
 		}
 	}
 
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-time.After(pollInterval):
+		case <-ticker.C:
 		}
 		log.Debugf("Checking node IP address every %v", pollInterval)
 
