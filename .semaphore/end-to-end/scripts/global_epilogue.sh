@@ -76,12 +76,17 @@ upload_to_gcs() {
   gsutil cp "${src}" "gs://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
 }
 
-# Create a logs tarball and upload it to GCS.
+# Upload log files to a logs/ subdirectory in GCS.
 upload_logs_to_gcs() {
-  local logs_tgz="/tmp/logs-${SEMAPHORE_JOB_ID}.tgz"
-  tar czf "${logs_tgz}" -C "${BZ_LOGS_DIR}" . || true
-  upload_to_gcs "${logs_tgz}" "logs.tgz"
-  rm -f "${logs_tgz}" || true
+  if [[ -z "${GS_BUCKET}" ]]; then
+    return
+  fi
+  local gcs_dir="${SEMAPHORE_JOB_ID}"
+  if [[ "${FUNCTIONAL_AREA}" == "vpp.yml" ]]; then
+    gcs_dir="${METADATA}"
+  fi
+  echo "[INFO] bucket_upload: uploading logs to gs://${GS_BUCKET}/${gcs_dir}/logs/"
+  gsutil -m cp -r "${BZ_LOGS_DIR}/." "gs://${GS_BUCKET}/${gcs_dir}/logs/" || true
 }
 
 echo "[INFO] starting global_epilogue"

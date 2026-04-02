@@ -254,6 +254,9 @@ blocks:
             - env_var: PROVISIONER
               values:
                 - "aws-openshift"
+          env_vars:
+            - name: AWS_NODE_INSTANCE_TYPE
+              value: "m5.xlarge"
 
   - name: Iptables (Openshift)
     dependencies: []
@@ -275,6 +278,8 @@ blocks:
           env_vars:
             - name: DATAPLANE
               value: "CalicoIptables"
+            - name: AWS_NODE_INSTANCE_TYPE
+              value: "m5.xlarge"
 
 promotions:
   - name: Cleanup jobs
