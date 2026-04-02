@@ -29,7 +29,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
-	"github.com/projectcalico/calico/node/pkg/cni"
 	"github.com/projectcalico/calico/node/pkg/flowlogs"
 	"github.com/projectcalico/calico/node/pkg/health"
 	"github.com/projectcalico/calico/node/pkg/hostpathinit"
@@ -54,12 +53,11 @@ var (
 	bestEffort                 = flagSet.Bool("best-effort", false, "Used in combination with the init flag. Report errors but do not fail if an error occurs during initialisation.")
 	runStartup                 = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
 	runShutdown                = flagSet.Bool("shutdown", false, "Do shutdown routine.")
-	monitorAddrs               = flagSet.Bool("monitor-addresses", false, "Monitor change in node IP addresses")
+	runNodeServices            = flagSet.Bool("node-services", false, "Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)")
 	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
-	monitorToken               = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
-	runNodeServices            = flagSet.Bool("node-services", false, "Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)")
 	completeStartup            = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
+	showStatus                 = flagSet.Bool("show-status", false, "Print out node status")
 )
 
 // Options for liveness checks.
@@ -78,12 +76,6 @@ var (
 
 // thresholdTime is introduced for bird readiness check. Default value is 30 sec.
 var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshold time for bird readiness")
-
-// Options for node status.
-var (
-	runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status reporter")
-	showStatus        = flagSet.Bool("show-status", false, "Print out node status")
-)
 
 // Options for watching node flowlogs.
 var flows = flagSet.Int("flows", 0, "Fetch a number of Flows. Use a negative value to watch forever.")
@@ -116,7 +108,7 @@ func main() {
 
 	// Perform some validation on the parsed flags. Only one of the following may be
 	// specified at a time.
-	onlyOne := []*bool{version, runFelix, runStartup, runConfd, monitorAddrs}
+	onlyOne := []*bool{version, runFelix, runStartup, runConfd, runNodeServices}
 	oneSelected := false
 	for _, o := range onlyOne {
 		if oneSelected && *o {
@@ -166,12 +158,6 @@ func main() {
 	} else if *runShutdown {
 		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
 		shutdown.Run()
-	} else if *monitorAddrs {
-		logutils.ConfigureFormatter("monitor-addresses")
-		startup.ConfigureLogging()
-		if err := startup.MonitorIPAddressSubnetsWithContext(context.Background()); err != nil {
-			logrus.WithError(err).Fatal("Monitor addresses failed")
-		}
 	} else if *completeStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "complete-startup"})
 		ctx := context.Background() // Context is never cancelled.
@@ -197,22 +183,12 @@ func main() {
 				logrus.WithError(err).Fatal("Tunnel IP allocator failed")
 			}
 		}
-	} else if *monitorToken {
-		logutils.ConfigureFormatter("cni-config-monitor")
-		if err := cni.RunWithContext(context.Background()); err != nil {
-			logrus.WithError(err).Fatal("CNI token monitor failed")
-		}
 	} else if *runNodeServices {
 		logutils.ConfigureFormatter("node-services")
 		nodeservices.Run()
 	} else if *initHostpaths {
 		logrus.SetFormatter(&logutils.Formatter{Component: "hostpath-init"})
 		hostpathinit.Run()
-	} else if *runStatusReporter {
-		logutils.ConfigureFormatter("status-reporter")
-		if err := status.RunWithContext(context.Background()); err != nil {
-			logrus.WithError(err).Fatal("Node status reporter failed")
-		}
 	} else if *showStatus {
 		status.Show()
 		os.Exit(0)
