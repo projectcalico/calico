@@ -49,8 +49,6 @@ type egressScenario struct {
 	dstHostNetworked bool
 	// accessType is how the client accesses the service.
 	accessType string // "clusterIP", "node0NodePort", "node1NodePort", "externalIP"
-	// svcTweak customizes the destination service.
-	svcTweak func(svc conncheck.ServerOption)
 	// svcOpts are additional server options for the destination service.
 	svcOpts []conncheck.ServerOption
 	// expectPolicyBypass indicates policy won't be applied (e.g., BPF self-connection).
@@ -100,8 +98,14 @@ var _ = describe.CalicoDescribe(
 				"workload egress tests require at least 2 schedulable nodes")
 
 			nodesInfo := utils.GetNodesInfo(f, nodes, false)
-			nodeNames = nodesInfo.GetNames()[:2]
-			nodeIPs = nodesInfo.GetIPv4s()[:2]
+			allNames := nodesInfo.GetNames()
+			allIPs := nodesInfo.GetIPv4s()
+			Expect(len(allNames)).To(BeNumerically(">=", 2),
+				"workload egress tests require at least 2 non-master nodes with names")
+			Expect(len(allIPs)).To(BeNumerically(">=", 2),
+				"workload egress tests require at least 2 non-master nodes with IPv4 addresses")
+			nodeNames = allNames[:2]
+			nodeIPs = allIPs[:2]
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
 			// Detect BPF dataplane mode.
