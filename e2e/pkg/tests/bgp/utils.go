@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/onsi/ginkgo/v2"
+	"github.com/sirupsen/logrus"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -168,4 +169,72 @@ func waitForBGPEstablishedForNode(cli ctrlclient.Client, node string) {
 		}
 		return nil
 	}, "1m", "1s").ShouldNot(HaveOccurred(), "BGPPeer count did not reach expected value")
+}
+
+// setupBGPNodeStatus creates CalicoNodeStatus resources for all nodes in the cluster
+// with BGP and Routes classes enabled and a fast update period. It returns a function
+// that logs the current BGP state for all nodes (useful inside Eventually loops for
+// diagnostics) and registers a DeferCleanup to remove the resources.
+func setupBGPNodeStatus(cli ctrlclient.Client) func() {
+	nodes := &corev1.NodeList{}
+	err := cli.List(context.Background(), nodes)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error listing nodes")
+
+	var statusNames []string
+	for _, node := range nodes.Items {
+		status := &v3.CalicoNodeStatus{
+			ObjectMeta: metav1.ObjectMeta{Name: node.Name},
+			Spec: v3.CalicoNodeStatusSpec{
+				Node: node.Name,
+				Classes: []v3.NodeStatusClassType{
+					v3.NodeStatusClassTypeBGP,
+					v3.NodeStatusClassTypeRoutes,
+				},
+				UpdatePeriodSeconds: ptr.To[uint32](1),
+			},
+		}
+		err := cli.Create(context.Background(), status)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error creating CalicoNodeStatus for node %s", node.Name)
+		statusNames = append(statusNames, node.Name)
+	}
+
+	ginkgo.DeferCleanup(func() {
+		for _, name := range statusNames {
+			status := &v3.CalicoNodeStatus{ObjectMeta: metav1.ObjectMeta{Name: name}}
+			err := cli.Delete(context.Background(), status)
+			if err != nil {
+				logrus.WithError(err).Warnf("Failed to delete CalicoNodeStatus %s", name)
+			}
+		}
+	})
+
+	return func() {
+		logBGPNodeStatus(cli, statusNames)
+	}
+}
+
+// logBGPNodeStatus queries and logs the BGP session and route state for each node.
+func logBGPNodeStatus(cli ctrlclient.Client, nodeNames []string) {
+	for _, name := range nodeNames {
+		status := &v3.CalicoNodeStatus{}
+		err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, status)
+		if err != nil {
+			logrus.WithError(err).Warnf("Failed to get CalicoNodeStatus for %s", name)
+			continue
+		}
+
+		bgp := status.Status.BGP
+		logrus.Infof("[BGP] Node %s: established_v4=%d not_established_v4=%d established_v6=%d not_established_v6=%d last_updated=%s",
+			name,
+			bgp.NumberEstablishedV4, bgp.NumberNotEstablishedV4,
+			bgp.NumberEstablishedV6, bgp.NumberNotEstablishedV6,
+			status.Status.LastUpdated.Time,
+		)
+		for _, peer := range bgp.PeersV4 {
+			logrus.Infof("[BGP]   Node %s peer %s type=%s state=%s since=%s", name, peer.PeerIP, peer.Type, peer.State, peer.Since)
+		}
+		for _, route := range status.Status.Routes.RoutesV4 {
+			logrus.Infof("[BGP]   Node %s route: %s via %s type=%s", name, route.Destination, route.Gateway, route.Type)
+		}
+	}
 }
