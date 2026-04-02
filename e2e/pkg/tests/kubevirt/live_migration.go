@@ -32,13 +32,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
+	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -65,6 +66,17 @@ const (
 	testTimeout = 10 * time.Minute
 )
 
+// KubeVirt live migration e2e tests validate Calico's IPAM IP persistence and seamless
+// migration support for KubeVirt VMs. The tests cover:
+//   - IP preservation across migrations, pod evictions, and VM reboots (Tests 1-4)
+//   - Correct route programming and IPAM attribute ownership handover (Tests 5-6)
+//   - Zero-downtime TCP connectivity through iBGP and eBGP during migration (Tests 7-8)
+//
+// Prerequisites:
+//   - KubeVirt installed with live migration support
+//   - IPAMConfig.kubeVirtVMAddressPersistence set to "Enabled"
+//   - At least 2 schedulable worker nodes (3 recommended for double-migration tests)
+//   - For Test 8: an external TOR node with BIRD eBGP peering (EXT_IP, EXT_KEY, EXT_USER)
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
@@ -76,19 +88,19 @@ var _ = describe.CalicoDescribe(
 		var kvClient kubevirtcorev1.KubevirtV1Interface
 
 		ginkgo.BeforeEach(func() {
-			nodeCtx, nodeCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer nodeCancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(nodeCtx, f.ClientSet, 3)
-			Expect(err).NotTo(HaveOccurred(), "failed to list schedulable nodes")
-			if len(nodes.Items) < 2 {
-				ginkgo.Skip("live migration requires at least 2 schedulable nodes")
-			}
+			// Live migration needs at least 2 nodes to migrate between.
+			utils.RequireNodeCount(f, 2)
 
+			var err error
 			kvClient, err = kubevirtcorev1.NewForConfig(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred(), "failed to create KubeVirt client")
 		})
 
 		// Test 1: Core live migration with IP preservation and connectivity.
+		// Verifies the fundamental IPAM requirement: when a VM is live-migrated via VMIM,
+		// the VM-based IPAM handle (hashed from VMI namespace+name) ensures the same IP
+		// is assigned to the target pod. A ping pod confirms network reachability before
+		// and after migration.
 		ginkgo.It("should preserve VM IP address across live migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -135,6 +147,10 @@ var _ = describe.CalicoDescribe(
 		})
 
 		// Test 2: IP persists when virt-launcher pod is deleted (simulating eviction).
+		// When a virt-launcher pod is force-deleted (e.g. node eviction, OOM kill),
+		// KubeVirt's VM controller (with RunStrategyAlways) recreates the VMI and pod.
+		// Because Calico IPAM uses a VM-based handle ID derived from the VMI namespace+name
+		// (not the ephemeral container ID), the new pod gets the same IP allocation.
 		ginkgo.It("should preserve VM IP across pod recreation", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -176,6 +192,11 @@ var _ = describe.CalicoDescribe(
 		})
 
 		// Test 3: IP persists across VMI recreation (VM reboot).
+		// Stopping a VM (RunStrategyHalted) deletes the VMI and its pod, but the IPAM
+		// allocation is retained because kube-controllers GC has a 5-minute grace period
+		// for VM recreation events. When the VM is started again (RunStrategyAlways),
+		// the new VMI gets a new UID but the same name, so the VM-based handle ID matches
+		// and the same IP is allocated.
 		ginkgo.It("should preserve VM IP across VMI recreation (reboot)", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -228,6 +249,10 @@ var _ = describe.CalicoDescribe(
 		})
 
 		// Test 4: Source pod deleted mid-migration — IP preserved after recovery.
+		// Exercises a failure scenario: the source virt-launcher pod is force-deleted while
+		// migration is in progress. The migration may succeed (if the target was already
+		// ready) or fail. In either case, the VM eventually recovers with the same IP
+		// because the VM-based IPAM handle persists independently of pod lifecycle.
 		ginkgo.It("should preserve VM IP when source pod is deleted during migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -308,6 +333,11 @@ var _ = describe.CalicoDescribe(
 		})
 
 		// Test 5: Routes switch to target node after migration.
+		// Verifies that Felix correctly updates L3 routes during migration. Before migration,
+		// the VM's /32 route is a local "scope link" route on the source node. After migration,
+		// Felix detects the GARP/RARP from the newly-active VM on the target node, triggers
+		// the VerifyAndSwapOwnerAttributes call, and programs the local route on the target.
+		// The source node's local route must be removed.
 		ginkgo.It("should update routes to target node after migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -349,6 +379,10 @@ var _ = describe.CalicoDescribe(
 		})
 
 		// Test 6: Owner attributes swap during migration.
+		// Validates the IPAM dual-owner mechanism. Before migration, ActiveOwnerAttrs points
+		// to the source pod and AlternateOwnerAttrs is empty. After migration completes and
+		// Felix calls VerifyAndSwapOwnerAttributeForVM, ActiveOwnerAttrs must point to the
+		// target pod (new node), confirming the atomic ownership handover worked correctly.
 		ginkgo.It("should swap IPAM owner attributes on migration completion", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -400,9 +434,13 @@ var _ = describe.CalicoDescribe(
 		})
 
 		// Test 7: TCP connection over iBGP survives two consecutive migrations.
-		// A server VM runs a TCP server. A client pod (on a different node) connects
-		// via nc. Traffic traverses iBGP-learned routes between nodes.
-		// We migrate the server VM twice and verify the TCP stream continues.
+		// This is the key seamless migration test. A server VM runs a TCP server that sends
+		// "seq=N" every second. A client pod on a different node connects via nc and logs
+		// the stream. The server VM is migrated twice across 3 worker nodes. After both
+		// migrations, the TCP stream must have zero sequence gaps — proving that Felix's
+		// live migration FSM (Target→Live→TimeWait→Base), GARP/RARP detection, elevated
+		// BGP route priority, and ARP suppression all work together to maintain connectivity
+		// with no packet loss during the handover.
 		ginkgo.It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -496,11 +534,17 @@ var _ = describe.CalicoDescribe(
 
 			seqGaps, lastSeq := countSequenceGaps(lines)
 			logrus.Infof("Sequence: %d gaps, %d data points across 2 migrations", seqGaps, lastSeq)
-			Expect(seqGaps).To(BeNumerically("<=", 5),
-				"too many gaps — TCP connection likely reset during consecutive migrations")
+			Expect(seqGaps).To(BeNumerically("==", 0),
+				"seamless live migration must not drop any TCP segments")
 		})
 
 		// Test 8: TCP connection from external eBGP client survives migration.
+		// Same as Test 7 but the TCP client runs on an external TOR node connected via eBGP
+		// (ASN 63000) over L2TP tunnels, rather than an in-cluster pod using iBGP mesh.
+		// This validates that the BGP route priority mechanism (krt_metric) works end-to-end:
+		// when the VM migrates, the elevated-priority route advertisement from the target
+		// node reaches the TOR via eBGP, causing the TOR's kernel routing table to switch
+		// to the new next-hop without dropping the TCP connection.
 		// Requires EXT_IP, EXT_KEY, EXT_USER env vars pointing to the TOR/external node.
 		ginkgo.It("should maintain TCP connection from eBGP external client during migration", func() {
 			tor := externalnode.NewClient()
@@ -576,8 +620,8 @@ var _ = describe.CalicoDescribe(
 
 			seqGaps, lastSeq := countSequenceGaps(lines)
 			logrus.Infof("eBGP sequence: %d gaps, %d data points", seqGaps, lastSeq)
-			Expect(seqGaps).To(BeNumerically("<=", 5),
-				"too many gaps in eBGP TCP stream — connection likely reset during migration")
+			Expect(seqGaps).To(BeNumerically("==", 0),
+				"seamless live migration must not drop any TCP segments over eBGP")
 
 			// Cleanup: kill nc on TOR.
 			runOnTOR(tor, "pkill -f 'nc.*9999' 2>/dev/null || true")
@@ -592,14 +636,14 @@ func newTestVM(name, namespace string) *kubevirtv1.VirtualMachine {
 	return &kubevirtv1.VirtualMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name, Namespace: namespace,
-			Labels: map[string]string{"vm": name},
+			Labels: map[string]string{"vm": name, utils.TestResourceLabel: "true"},
 		},
 		Spec: kubevirtv1.VirtualMachineSpec{
 			RunStrategy: &runStrategy,
 			Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{"kubevirt.io/allow-pod-bridge-network-live-migration": "true"},
-					Labels:      map[string]string{"vm": name},
+					Labels:      map[string]string{"vm": name, utils.TestResourceLabel: "true"},
 				},
 				Spec: kubevirtv1.VirtualMachineInstanceSpec{
 					Domain: kubevirtv1.DomainSpec{
@@ -688,9 +732,9 @@ func createAndCleanupVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1I
 func setupPingPod(ctx context.Context, f *framework.Framework, ns string) *corev1.Pod {
 	ginkgo.By("Creating a ping pod for connectivity checks")
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "ping-test", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "ping-test", Namespace: ns, Labels: map[string]string{utils.TestResourceLabel: "true"}},
 		Spec: corev1.PodSpec{
-			Containers:    []corev1.Container{{Name: "ping", Image: "busybox:1.36", Command: []string{"sleep", "3600"}}},
+			Containers:    []corev1.Container{{Name: "ping", Image: images.Alpine, Command: []string{"sleep", "3600"}}},
 			RestartPolicy: corev1.RestartPolicyNever,
 			NodeSelector:  map[string]string{"kubernetes.io/os": "linux"},
 		},
@@ -700,7 +744,8 @@ func setupPingPod(ctx context.Context, f *framework.Framework, ns string) *corev
 	ginkgo.DeferCleanup(func() {
 		_ = f.ClientSet.CoreV1().Pods(ns).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 	})
-	waitForPodRunning(ctx, f, ns, created.Name)
+	err = e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, created.Name, ns, 2*time.Minute)
+	Expect(err).NotTo(HaveOccurred(), "pod %s not Running", created.Name)
 	return created
 }
 
@@ -708,9 +753,9 @@ func setupPingPod(ctx context.Context, f *framework.Framework, ns string) *corev
 func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, ns, avoidNode string) *corev1.Pod {
 	ginkgo.By(fmt.Sprintf("Creating client pod avoiding node %s", avoidNode))
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "tcp-client", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "tcp-client", Namespace: ns, Labels: map[string]string{utils.TestResourceLabel: "true"}},
 		Spec: corev1.PodSpec{
-			Containers:    []corev1.Container{{Name: "client", Image: "busybox:1.36", Command: []string{"sleep", "3600"}}},
+			Containers:    []corev1.Container{{Name: "client", Image: images.Alpine, Command: []string{"sleep", "3600"}}},
 			RestartPolicy: corev1.RestartPolicyNever,
 			NodeSelector:  map[string]string{"kubernetes.io/os": "linux"},
 			Affinity: &corev1.Affinity{
@@ -733,7 +778,8 @@ func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, ns, avoid
 	ginkgo.DeferCleanup(func() {
 		_ = f.ClientSet.CoreV1().Pods(ns).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 	})
-	waitForPodRunning(ctx, f, ns, created.Name)
+	err = e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, created.Name, ns, 2*time.Minute)
+	Expect(err).NotTo(HaveOccurred(), "pod %s not Running", created.Name)
 	pod2, err := f.ClientSet.CoreV1().Pods(ns).Get(ctx, created.Name, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(pod2.Spec.NodeName).NotTo(Equal(avoidNode), "client pod should be on a different node")
@@ -851,16 +897,6 @@ func expectPingSuccess(ns, podName, targetIP string) {
 		}
 		return nil
 	}, 3*time.Minute, 10*time.Second).Should(Succeed(), "failed to ping %s", targetIP)
-}
-
-func waitForPodRunning(ctx context.Context, f *framework.Framework, namespace, name string) {
-	Eventually(func() corev1.PodPhase {
-		pod, err := f.ClientSet.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			return ""
-		}
-		return pod.Status.Phase
-	}, 2*time.Minute, 5*time.Second).Should(Equal(corev1.PodRunning), "pod %s not Running", name)
 }
 
 func getRouteOnNode(f *framework.Framework, nodeName, ip string) string {
