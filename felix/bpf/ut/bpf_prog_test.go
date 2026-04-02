@@ -618,15 +618,15 @@ var (
 	mapInitOnce sync.Once
 
 	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, ipfragsFwdMap, maglevMap, allowSourcesMap maps.Map
-	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6, allowSourcesMapV6                maps.Map
-	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMapXDP                                                                                      maps.Map
-	policyJumpMap                                                                                                                                        []maps.Map
-	ringBufMap, ringBufDropsMap                                                                                                                          maps.Map
-	profilingMap, ipfragsMapTmp                                                                                                                          maps.Map
-	qosMap                                                                                                                                               maps.Map
-	ctlbProgsMap                                                                                                                                         []maps.Map
-	progMap                                                                                                                                              []maps.Map
-	allMaps                                                                                                                                              []maps.Map
+	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6, allowSourcesMapV6                    maps.Map
+	stateMap, countersMap, ifstateMap, progMapXDP, policyJumpMapXDP                                                                                          maps.Map
+	policyJumpMap                                                                                                                                            []maps.Map
+	ringBufMap, ringBufDropsMap                                                                                                                              maps.Map
+	profilingMap, ipfragsMapTmp                                                                                                                              maps.Map
+	qosMap                                                                                                                                                   maps.Map
+	ctlbProgsMap                                                                                                                                             []maps.Map
+	progMap                                                                                                                                                  []maps.Map
+	allMaps                                                                                                                                                  []maps.Map
 )
 
 func initMapsOnce() {

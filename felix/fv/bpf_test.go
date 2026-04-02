@@ -1831,72 +1831,72 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					if testOpts.tunnel == "none" {
 						It("should handle fragmented UDP from external client", func() {
-						// Create policy allowing ingress from external client
-						allowIngressFromExtClient := api.NewGlobalNetworkPolicy()
-						allowIngressFromExtClient.Namespace = "fv"
-						allowIngressFromExtClient.Name = "policy-ext-client"
-						allowIngressFromExtClient.Spec.Ingress = []api.Rule{
-							{
-								Action: "Allow",
-								Source: api.EntityRule{
-									Nets: []string{
-										containerIP(externalClient) + "/" + ipMask(),
+							// Create policy allowing ingress from external client
+							allowIngressFromExtClient := api.NewGlobalNetworkPolicy()
+							allowIngressFromExtClient.Namespace = "fv"
+							allowIngressFromExtClient.Name = "policy-ext-client"
+							allowIngressFromExtClient.Spec.Ingress = []api.Rule{
+								{
+									Action: "Allow",
+									Source: api.EntityRule{
+										Nets: []string{
+											containerIP(externalClient) + "/" + ipMask(),
+										},
 									},
 								},
-							},
-						}
+							}
 
-						allowIngressFromExtClientSelector := "all()"
-						allowIngressFromExtClient.Spec.Selector = allowIngressFromExtClientSelector
-						allowIngressFromExtClient = createPolicy(allowIngressFromExtClient)
+							allowIngressFromExtClientSelector := "all()"
+							allowIngressFromExtClient.Spec.Selector = allowIngressFromExtClientSelector
+							allowIngressFromExtClient = createPolicy(allowIngressFromExtClient)
 
-						tcpdump1 := tc.Felixes[0].AttachTCPDump("eth0")
-						tcpdump1.SetLogEnabled(true)
-						tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
-							fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
-						tcpdump1.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
-						defer tcpdump1.Stop()
+							tcpdump1 := tc.Felixes[0].AttachTCPDump("eth0")
+							tcpdump1.SetLogEnabled(true)
+							tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
+								fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
+							tcpdump1.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
+							defer tcpdump1.Stop()
 
-						tcpdump0 := w[0][0].AttachTCPDump()
-						tcpdump0.SetLogEnabled(true)
-						tcpdump0.AddMatcher("udp-pod-frags", regexp.MustCompile(
-							fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
-						tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
-						defer tcpdump1.Stop()
+							tcpdump0 := w[0][0].AttachTCPDump()
+							tcpdump0.SetLogEnabled(true)
+							tcpdump0.AddMatcher("udp-pod-frags", regexp.MustCompile(
+								fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
+							tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
+							defer tcpdump1.Stop()
 
-						externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
+							externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
 
-						// Send a packet with large payload without the DNF flag
-						// 16,000 bytes is the typical limit on the size of a
-						// single skb, which in turn is the limit on the size
-						// that a BPF program can grow a packet.
-						externalClient.Exec("pktgen", externalClient.IP, w[0][0].IP, "udp",
-							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=16000", "--udp-sock")
+							// Send a packet with large payload without the DNF flag
+							// 16,000 bytes is the typical limit on the size of a
+							// single skb, which in turn is the limit on the size
+							// that a BPF program can grow a packet.
+							externalClient.Exec("pktgen", externalClient.IP, w[0][0].IP, "udp",
+								"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=16000", "--udp-sock")
 
-						// Given the MTU, we should see the packet fragmented into
-						// 11 fragments on the host interface. (externalClient has
-						// large MTU than pod so only 11 fragments are created).
-						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(11))
-						// We should see the fragments reach the workload.  We reassemble them in the middle but they
-						// get fragmented again.
-						// Pod has smaller MTU so we get 12 fragments here.
-						Eventually(func() int { return tcpdump0.MatchCount("udp-pod-frags") }).Should(Equal(12))
-						// Send another set of fragmented packets with the same source and destination ports. This
-						// will result in the first fragment hitting the conntrack and bypass mark set. We should
-						// still see the fragments reach the destination.
-						By("Sending another set of fragmented packets")
-						externalClient.Exec("pktgen", externalClient.IP, w[0][0].IP, "udp",
-							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=16000", "--udp-sock")
-						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(22))
+							// Given the MTU, we should see the packet fragmented into
+							// 11 fragments on the host interface. (externalClient has
+							// large MTU than pod so only 11 fragments are created).
+							Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(11))
+							// We should see the fragments reach the workload.  We reassemble them in the middle but they
+							// get fragmented again.
+							// Pod has smaller MTU so we get 12 fragments here.
+							Eventually(func() int { return tcpdump0.MatchCount("udp-pod-frags") }).Should(Equal(12))
+							// Send another set of fragmented packets with the same source and destination ports. This
+							// will result in the first fragment hitting the conntrack and bypass mark set. We should
+							// still see the fragments reach the destination.
+							By("Sending another set of fragmented packets")
+							externalClient.Exec("pktgen", externalClient.IP, w[0][0].IP, "udp",
+								"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=16000", "--udp-sock")
+							Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(22))
 
-						Eventually(func() int {
-							frgEnts := 0
-							dumpBPFMap(tc.Felixes[0], ipfrags.FwdMap(), func(_, _ []byte) {
-								frgEnts++
-							})
-							return frgEnts
-						}, "5s", "500ms").Should(Equal(0), "All fragments should be reassembled and map should be empty")
-					})
+							Eventually(func() int {
+								frgEnts := 0
+								dumpBPFMap(tc.Felixes[0], ipfrags.FwdMap(), func(_, _ []byte) {
+									frgEnts++
+								})
+								return frgEnts
+							}, "5s", "500ms").Should(Equal(0), "All fragments should be reassembled and map should be empty")
+						})
 					}
 				}
 
