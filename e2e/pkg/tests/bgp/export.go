@@ -47,6 +47,7 @@ var _ = describe.CalicoDescribe(
 		var server1 *conncheck.Server
 		var client1 *conncheck.Client
 		var restoreBGPConfig func()
+		var bgpStatus *BGPStatusMonitor
 
 		// Create a new framework for the tests.
 		f := utils.NewDefaultFramework("bgp-export")
@@ -72,6 +73,9 @@ var _ = describe.CalicoDescribe(
 
 			// Ensure full mesh BGP is functioning before each test.
 			restoreBGPConfig = ensureInitialBGPConfig(cli)
+
+			// Set up CalicoNodeStatus resources for BGP diagnostics and convergence waits.
+			bgpStatus = NewBGPStatusMonitor(cli)
 
 			// Create an IP pool for the test.
 			pool := v3.NewIPPool()
@@ -112,6 +116,9 @@ var _ = describe.CalicoDescribe(
 			checker.AddClient(client1)
 			checker.Deploy()
 
+			// Wait for BGP to be fully established before baseline connectivity check.
+			bgpStatus.WaitForEstablished()
+
 			// Verify initial connectivity.
 			checker.ResetExpectations()
 			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
@@ -148,6 +155,8 @@ var _ = describe.CalicoDescribe(
 			pool.Spec.DisableBGPExport = true
 			err = cli.Update(context.Background(), pool)
 			Expect(err).NotTo(HaveOccurred(), "Error updating IP pool")
+
+			bgpStatus.Log()
 
 			// Routing should stop working on the IPv4 pool. If there is an IPv6 pool in the cluster, it will
 			// continue to work, so only test the IPv4 address.
