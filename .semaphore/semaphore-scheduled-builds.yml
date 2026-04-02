@@ -614,7 +614,12 @@ blocks:
         - name: PRIVATE_REGISTRY
           value: "quay.io/"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+          # Skipped test labels:
+          # - Slow: long-running tests not suitable for CI
+          # - Disruptive: tests that break cluster state for other tests
+          # - RequiresBGPMesh: tests that disable the BGP mesh and expect connectivity
+          #   to break, which doesn't work on VXLAN clusters
+          value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[RequiresBGPMesh\])
         - name: USE_API_SERVER
           value: "false"
       jobs:
