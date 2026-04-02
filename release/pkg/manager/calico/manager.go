@@ -1646,8 +1646,8 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 // pushPrepBranch pushes the prep branch to remote and creates a PR if not in local mode.
 func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 	if !r.publishGitRef {
-		logrus.WithField("branch", prepBranch).Info("Local mode: skipping push and PR creation")
-		return nil
+		logrus.WithField("branch", prepBranch).Warn("Local mode: skipping branch push and PR creation")
+		return r.switchToBaseBranch(baseBranch)
 	}
 
 	if _, err := r.git("push", "--force-with-lease", r.remote, prepBranch); err != nil {
@@ -1696,7 +1696,6 @@ func (r *CalicoManager) switchToBaseBranch(baseBranch string) error {
 		logrus.Error(out)
 		return fmt.Errorf("failed to switch back to base branch %s: %w", baseBranch, err)
 	}
-	logrus.WithField("baseBranch", baseBranch).Info("Switched back to base branch after PR creation")
 	return nil
 }
 
