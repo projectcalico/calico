@@ -401,6 +401,13 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// Unset values are replaced by the default values with a warning log for
 	// incorrect values.
 	BPFConntrackTimeouts *BPFConntrackTimeoutsApplyConfiguration `json:"bpfConntrackTimeouts,omitempty"`
+	// BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly.
+	// This is the maximum time that the BPF dataplane will wait for all fragments of a
+	// fragmented IP packet to arrive before discarding them.  If left unset, the value
+	// is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
+	// seconds).
+	// [Default: unset - read from net.ipv4.ipfrag_time]
+	BPFIPFragTimeout *v1.Duration `json:"bpfIPFragTimeout,omitempty"`
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
@@ -1577,6 +1584,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithBPFConntrackCleanupMode(v
 // If called multiple times, the BPFConntrackTimeouts field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithBPFConntrackTimeouts(value *BPFConntrackTimeoutsApplyConfiguration) *FelixConfigurationSpecApplyConfiguration {
 	b.BPFConntrackTimeouts = value
+	return b
+}
+
+// WithBPFIPFragTimeout sets the BPFIPFragTimeout field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BPFIPFragTimeout field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithBPFIPFragTimeout(value v1.Duration) *FelixConfigurationSpecApplyConfiguration {
+	b.BPFIPFragTimeout = &value
 	return b
 }
 

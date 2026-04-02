@@ -80,6 +80,7 @@ type AttachPoint struct {
 	DSCP                          int8
 	IstioDSCP                     int8
 	MaglevLUTSize                 uint32
+	IPFragTimeout                 uint32
 	ProgramsMap                   maps.Map
 }
 
@@ -437,6 +438,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		DSCP:          ap.DSCP,
 		IstioDSCP:     ap.IstioDSCP,
 		MaglevLUTSize: ap.MaglevLUTSize,
+		IPFragTimeout: ap.IPFragTimeout,
 	}
 
 	if ap.Profiling == "Enabled" {
