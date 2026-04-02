@@ -276,32 +276,6 @@ func readNamespace() (string, error) {
 	return string(namespace), nil
 }
 
-func Run() {
-	clientset, err := BuildClientSet()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create in cluster client set")
-	}
-	tr := NewTokenRefresher(clientset, NamespaceOfUsedServiceAccount(), CNIServiceAccountName())
-	tokenChan := tr.TokenChan()
-	go tr.Run()
-
-	for tu := range tokenChan {
-		logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
-		kubeconfig := os.Getenv("KUBECONFIG")
-		cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			logrus.WithError(err).Error("Error generating kube config.")
-			continue
-		}
-		err = rest.LoadTLSFiles(cfg)
-		if err != nil {
-			logrus.WithError(err).Error("Error loading TLS files.")
-			continue
-		}
-		writeKubeconfig(cfg, tu.Token)
-	}
-}
-
 // CNIServiceAccountName returns the name of the serviceaccount to use for the CNI plugin token request.
 // This can be set via the CALICO_CNI_SERVICE_ACCOUNT environment variable, and defaults to "calico-cni-plugin" (on Linux, "calico-cni-plugin-windows" on Windows) otherwise.
 func CNIServiceAccountName() string {

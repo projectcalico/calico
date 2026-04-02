@@ -33,7 +33,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -472,66 +471,6 @@ func MonitorIPAddressSubnetsWithContext(ctx context.Context) error {
 			return err
 		}
 		if updated {
-			for range 3 {
-				_, err := CreateOrUpdate(ctx, cli, node)
-				if err == nil {
-					log.Info("Updated node IP addresses")
-					break
-				}
-				log.WithError(err).Error("Unable to set node resource configuration, retrying...")
-			}
-		}
-	}
-}
-
-func MonitorIPAddressSubnets() {
-	ctx := context.Background()
-	_, cli := calicoclient.CreateClient()
-	nodeName := utils.DetermineNodeName()
-
-	pollInterval := getMonitorPollInterval()
-
-	var clientset *kubernetes.Clientset
-	var config *rest.Config
-	var k8sNode *v1.Node
-	var err error
-	var node *internalapi.Node
-
-	// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
-	// value is provided.
-	k8sNodeName := nodeName
-	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
-		k8sNodeName = nodeRef
-	}
-	if config, err = winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
-		// Create the k8s clientset.
-		clientset, err = kubernetes.NewForConfig(config)
-		if err != nil {
-			log.WithError(err).Error("Failed to create clientset")
-			return
-		}
-	}
-
-	for {
-		<-time.After(pollInterval)
-		log.Debugf("Checking node IP address every %v", pollInterval)
-
-		// Every polling interval, try to get the k8s Node and use the latest K8s node IP to configure.
-		if clientset != nil {
-			k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
-			if err != nil {
-				log.WithError(err).Error("Failed to read Node from datastore")
-				return
-			}
-		}
-
-		// Every polling interval, try to get new node configuration.
-		node = getNode(ctx, cli, nodeName)
-
-		updated := configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
-		if updated {
-			// Apply the updated node resource.
-			// we try updating the resource up to 3 times, in case of transient issues.
 			for range 3 {
 				_, err := CreateOrUpdate(ctx, cli, node)
 				if err == nil {
