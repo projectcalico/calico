@@ -138,8 +138,10 @@ func GetApplicableSubProgs(at AttachType, skipOptional set.Set[SubProg]) []SubPr
 			continue
 		}
 
-		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || (skipOptional != nil && skipOptional.Contains(SubProgIPFrag))) {
-			continue
+		if isOpt, notApplicable := isOptionalAndNotApplicable(SubProg(idx), at); isOpt {
+			if notApplicable || (skipOptional != nil && skipOptional.Contains(SubProg(idx))) {
+				continue
+			}
 		}
 
 		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
@@ -303,34 +305,19 @@ func (pm *ProgramsMap) getOrCreateProgramInfo(at AttachType) *program {
 	return pi
 }
 
-// optionalProgNames maps optional sub-programs to their BPF C function names.
-var optionalProgNames = map[SubProg]string{
-	SubProgIPFrag: "calico_tc_skb_ipv4_frag",
-}
-
-// RegisterOptionalProgName registers the BPF C function name for an optional
-// sub-program. This is intended for enterprise code to extend the mapping.
-func RegisterOptionalProgName(sp SubProg, name string) {
-	optionalProgNames[sp] = name
-}
-
 // applicableOptionalProgs returns the list of optional sub-programs that are
 // applicable to the given AttachType AND enabled (not in disabledOptional).
 func applicableOptionalProgs(at AttachType, disabledOptional set.Set[SubProg]) []SubProg {
 	var result []SubProg
-	for sp := range optionalSubProgs {
+	forEachOptionalSubProg(func(sp SubProg, info OptionalSubProgInfo) {
 		if disabledOptional != nil && disabledOptional.Contains(sp) {
-			continue
+			return
 		}
-		// Check structural applicability.
-		switch sp {
-		case SubProgIPFrag:
-			if !at.hasIPDefrag() {
-				continue
-			}
+		if !info.IsApplicable(at) {
+			return
 		}
 		result = append(result, sp)
-	}
+	})
 	return result
 }
 
@@ -353,29 +340,29 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string, disab
 			return nil
 		})
 	}
-	for sp, progName := range optionalProgNames {
+	forEachOptionalSubProg(func(sp SubProg, info OptionalSubProgInfo) {
 		if skipOptional.Contains(sp) {
-			obj.SetProgramAutoload(progName, false)
-			continue
+			obj.SetProgramAutoload(info.ProgName, false)
+			return
 		}
-		// Check structural applicability and disable if not applicable.
-		applicable := false
-		switch sp {
-		case SubProgIPFrag:
-			applicable = at.hasIPDefrag()
-		}
-		if !applicable {
-			obj.SetProgramAutoload(progName, false)
+		if !info.IsApplicable(at) {
+			obj.SetProgramAutoload(info.ProgName, false)
 			skipOptional.Add(sp)
 		}
-	}
+	})
 
 	var skippedOptional []OptionalSubProgInfo
 	if err := obj.Load(); err != nil {
-		// Try disabling each enabled optional program and retrying.
+		// Try disabling optional programs one at a time and retrying, so
+		// we preserve as many optional features as possible.
 		enabledOptional := applicableOptionalProgs(at, skipOptional)
-		if len(enabledOptional) > 0 {
-			log.WithError(err).Warn("Failed to load BPF object, retrying without optional programs")
+		if len(enabledOptional) == 0 {
+			return nil, fmt.Errorf("error loading program %s: %w", file, err)
+		}
+
+		log.WithError(err).Warn("Failed to load BPF object, retrying without optional programs")
+		for _, sp := range enabledOptional {
+			skipOptional.Add(sp)
 			obj.Close()
 			obj, err = libbpf.OpenObject(file)
 			if err != nil {
@@ -384,25 +371,30 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string, disab
 			if err := pm.configureMapsAndPrograms(obj, file, progAttachType); err != nil {
 				return nil, err
 			}
-
-			// Disable all optional programs for this retry.
-			for sp, progName := range optionalProgNames {
-				obj.SetProgramAutoload(progName, false)
-				skipOptional.Add(sp)
-			}
-			if err := obj.Load(); err != nil {
-				return nil, fmt.Errorf("error loading program %s: %w", file, err)
-			}
-
-			for _, sp := range enabledOptional {
-				if info := GetOptionalSubProgInfo(sp); info != nil {
-					log.WithField("feature", info.FeatureName).
-						Warn("BPF object loaded without optional program. " + info.DisableMsg)
-					skippedOptional = append(skippedOptional, *info)
+			// Disable all programs we've decided to skip so far.
+			forEachOptionalSubProg(func(osp SubProg, oinfo OptionalSubProgInfo) {
+				if skipOptional.Contains(osp) || !oinfo.IsApplicable(at) {
+					obj.SetProgramAutoload(oinfo.ProgName, false)
 				}
+			})
+			if err = obj.Load(); err == nil {
+				break
 			}
-		} else {
+			log.WithError(err).WithField("skipped", sp).Warn("Still failed after disabling optional program")
+		}
+		if err != nil {
 			return nil, fmt.Errorf("error loading program %s: %w", file, err)
+		}
+
+		for _, sp := range enabledOptional {
+			if !skipOptional.Contains(sp) {
+				continue
+			}
+			if info := GetOptionalSubProgInfo(sp); info != nil {
+				log.WithField("feature", info.FeatureName).
+					Warn("BPF object loaded without optional program. " + info.DisableMsg)
+				skippedOptional = append(skippedOptional, *info)
+			}
 		}
 	}
 
