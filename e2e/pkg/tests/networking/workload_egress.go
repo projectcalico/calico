@@ -17,6 +17,7 @@ package networking
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -231,9 +232,17 @@ var _ = describe.CalicoDescribe(
 
 			// Create server pod on the appropriate node.
 			serverName := fmt.Sprintf("server-%d", scenario.dstPod)
+			// Host-networked pods bind directly to the node's network stack, so
+			// port 80 (the default) can conflict with other host-networked pods or
+			// services on the same node. Use a random high port instead.
+			serverPort := 80
+			if scenario.dstHostNetworked {
+				serverPort = 10000 + rand.Intn(50000)
+			}
 			serverOpts := []conncheck.ServerOption{
 				conncheck.WithEchoServer(),
 				conncheck.WithNodePortService(),
+				conncheck.WithPorts(serverPort),
 				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(dstNode)),
 			}
 			if scenario.dstHostNetworked {
@@ -269,7 +278,7 @@ var _ = describe.CalicoDescribe(
 
 			switch scenario.accessType {
 			case "clusterIP":
-				target = server.ClusterIPv4(clientIPOpt).Port(80)
+				target = server.ClusterIPv4(clientIPOpt).Port(serverPort)
 				if scenario.dstHostNetworked {
 					expectSNAT = true
 				}
@@ -281,7 +290,7 @@ var _ = describe.CalicoDescribe(
 				target = server.NodePort(nodeIPs[1], clientIPOpt)
 			case "externalIP":
 				expectSNAT = true
-				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(80)
+				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(serverPort)
 			default:
 				Fail(fmt.Sprintf("unhandled accessType: %s", scenario.accessType))
 			}
