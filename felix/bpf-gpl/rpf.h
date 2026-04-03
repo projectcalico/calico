@@ -16,6 +16,10 @@
 #define RPF_RES_LOOSE		2
 #define RPF_RES_DISABLED	3
 
+#define DHCPV4_SERVER_PORT	67
+#define DHCPV4_CLIENT_PORT	68
+#define DHCPV4_MAGIC_COOKIE	0x63825363
+
 static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt *r)
 {
         CALI_DEBUG("Workload RPF check src=" IP_FMT " skb iface=%d.",
@@ -70,7 +74,7 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 		.family = 2, /* AF_INET */
 #endif
 		.tot_len = 0,
-		.ifindex = ctx->skb->ingress_ifindex,
+		.ifindex = skb_ingress_ifindex(ctx->skb),
 		.l4_protocol = ctx->state->ip_proto,
 		.sport = bpf_htons(ctx->state->dport),
 		.dport = bpf_htons(ctx->state->sport),
@@ -130,6 +134,26 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 					ret = RPF_RES_STRICT;
 				}
 			}
+#ifndef IPVER6
+			else if (ctx->state->ip_proto == IPPROTO_UDP &&
+				    ((ctx->state->sport == DHCPV4_CLIENT_PORT && ctx->state->dport == DHCPV4_SERVER_PORT) ||
+				     (ctx->state->sport == DHCPV4_SERVER_PORT && ctx->state->dport == DHCPV4_CLIENT_PORT))) {
+				/* Verify DHCP magic cookie (0x63825363) at offset 236
+				 * from the start of the UDP payload to confirm this is
+				 * a genuine DHCPv4 packet, not just any UDP traffic on
+				 * ports 67/68.
+				 */
+				__u32 magic = 0;
+				long udp_payload_off = skb_l4hdr_offset(ctx) + UDP_SIZE;
+
+				if (bpf_skb_load_bytes(ctx->skb, udp_payload_off + 236, &magic, 4) == 0 &&
+				    magic == bpf_htonl(DHCPV4_MAGIC_COOKIE)) {
+					CALI_DEBUG("Host RPF bypass: DHCPv4 packet (sport=%d, dport=%d)",
+							ctx->state->sport, ctx->state->dport);
+					ret = RPF_RES_LOOSE;
+				}
+			}
+#endif
 			break;
 
 	}
