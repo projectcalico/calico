@@ -20,7 +20,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -39,20 +38,24 @@ var _ = testutils.E2eDatastoreDescribe("LiveMigration tests", testutils.Datastor
 	destSelector1 := "kubevirt.io/vmi-name == 'vmi-1'"
 	destSelector2 := "kubevirt.io/vmi-name == 'vmi-2'"
 	spec1 := internalapi.LiveMigrationSpec{
-		Source: &types.NamespacedName{
-			Namespace: "ns-src-1",
-			Name:      "wep-src-1",
+		Source: &internalapi.LiveMigrationSource{
+			Workload: &internalapi.WorkloadIdentifier{
+				OrchestratorID: "k8s",
+				WorkloadID:     "ns-src-1/wep-src-1",
+			},
 		},
-		Destination: &internalapi.WorkloadEndpointIdentifier{
+		Target: &internalapi.LiveMigrationTarget{
 			Selector: &destSelector1,
 		},
 	}
 	spec2 := internalapi.LiveMigrationSpec{
-		Source: &types.NamespacedName{
-			Namespace: "ns-src-2",
-			Name:      "wep-src-2",
+		Source: &internalapi.LiveMigrationSource{
+			Workload: &internalapi.WorkloadIdentifier{
+				OrchestratorID: "k8s",
+				WorkloadID:     "ns-src-2/wep-src-2",
+			},
 		},
-		Destination: &internalapi.WorkloadEndpointIdentifier{
+		Target: &internalapi.LiveMigrationTarget{
 			Selector: &destSelector2,
 		},
 	}

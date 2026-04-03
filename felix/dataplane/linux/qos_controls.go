@@ -27,7 +27,7 @@ import (
 
 // Bandwidth QoS controls are supported on iptables and nftables modes, and on BPF mode if 'tcx' attach mode is used.
 func (m *endpointManager) isQoSBandwidthSupported() bool {
-	return !m.bpfEnabled || (m.bpfEnabled && m.bpfAttachType == apiv3.BPFAttachOptionTCX && tc.IsTcxSupported())
+	return !m.cfg.bpfEnabled || (m.cfg.bpfEnabled && m.cfg.bpfAttachType == apiv3.BPFAttachOptionTCX && tc.IsTcxSupported())
 }
 
 func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoint) error {

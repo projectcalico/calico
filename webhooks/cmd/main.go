@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
+	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
@@ -132,6 +133,7 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 
 func registerHooks(cs kubernetes.Interface, calicoCS calicoclient.Interface) {
 	rbac.RegisterHook(cs, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handleFn))
+	clusterinfo.RegisterHook(utils.HandleFn(handleFn))
 
 	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
 	http.HandleFunc("/readyz", readyFn())

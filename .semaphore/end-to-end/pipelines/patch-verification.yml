@@ -143,7 +143,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./scripts/body_flannel-migration.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_flannel-migration.sh
           env_vars:
             - name: DOWNLEVEL_MANIFEST
               value: "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
@@ -214,7 +214,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./scripts/body_flannel-migration.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_flannel-migration.sh
           env_vars:
             - name: DOWNLEVEL_MANIFEST
               value: "https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/canal.yaml"

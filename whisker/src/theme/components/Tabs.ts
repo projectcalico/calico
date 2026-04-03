@@ -10,7 +10,7 @@ export default {
     },
     baseStyle: {
         tablist: {
-            backgroundColor: 'tigera-color-surface',
+            backgroundColor: 'experimental-token-bg-empty',
             color: 'tigera-color-outline',
             button: {
                 fontSize: 'xs',
@@ -34,7 +34,7 @@ export default {
         },
         tabpanel: {
             px: 0,
-            bg: 'tigera-color-surface',
+            bg: 'experimental-token-bg-empty',
         },
     },
 };

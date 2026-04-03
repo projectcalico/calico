@@ -30,7 +30,7 @@ const (
 // BGPFilterList is a list of BGPFilter resources.
 type BGPFilterList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []BGPFilter `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -49,15 +49,19 @@ type BGPFilter struct {
 // BGPFilterSpec contains the IPv4 and IPv6 filter rules of the BGP Filter.
 type BGPFilterSpec struct {
 	// The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.
+	// +listType=atomic
 	ExportV4 []BGPFilterRuleV4 `json:"exportV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.
+	// +listType=atomic
 	ImportV4 []BGPFilterRuleV4 `json:"importV4,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.
+	// +listType=atomic
 	ExportV6 []BGPFilterRuleV6 `json:"exportV6,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.
+	// +listType=atomic
 	ImportV6 []BGPFilterRuleV6 `json:"importV6,omitempty" validate:"omitempty,dive"`
 }
 
@@ -93,13 +97,14 @@ type BGPFilterRuleV4 struct {
 
 	// If non-empty, this filter rule will only apply to routes with an outgoing interface that
 	// matches Interface.
+	// +kubebuilder:validation:MaxLength=15
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
 
 	// MatchOperator defines how the route's prefix is compared against CIDR.  "Equal" requires
 	// an exact prefix match, "In" requires the route to be contained within the CIDR (or equal),
 	// "NotEqual" and "NotIn" are their negations.  Only meaningful when CIDR is also specified.
 	// Required when CIDR is set.
-	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
+	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty"`
 
 	// If non-empty, this filter rule will only apply to routes being imported from or exported
 	// to a BGP peer of the specified type.  If empty, the rule applies to all peers.
@@ -117,6 +122,7 @@ type BGPFilterRuleV4 struct {
 	// If non-empty, this filter rule will only apply to routes whose AS path begins with the
 	// specified sequence of AS numbers.
 	// +optional
+	// +listType=atomic
 	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty"`
 
 	// If set, this filter rule will only apply to routes with the given priority, in the
@@ -126,7 +132,7 @@ type BGPFilterRuleV4 struct {
 	// +kubebuilder:validation:Maximum=2147483646
 	Priority *int `json:"priority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 
-	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
+	Action BGPFilterAction `json:"action" validate:"required"`
 
 	// Operations is an ordered list of route modifications to apply to matching routes before
 	// accepting them.  Only valid when Action is "Accept"; specifying operations with "Reject"
@@ -134,6 +140,7 @@ type BGPFilterRuleV4 struct {
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=10
+	// +listType=atomic
 	Operations []BGPFilterOperation `json:"operations,omitempty" validate:"omitempty,dive"`
 }
 
@@ -169,13 +176,14 @@ type BGPFilterRuleV6 struct {
 
 	// If non-empty, this filter rule will only apply to routes with an outgoing interface that
 	// matches Interface.
+	// +kubebuilder:validation:MaxLength=15
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
 
 	// MatchOperator defines how the route's prefix is compared against CIDR.  "Equal" requires
 	// an exact prefix match, "In" requires the route to be contained within the CIDR (or equal),
 	// "NotEqual" and "NotIn" are their negations.  Only meaningful when CIDR is also specified.
 	// Required when CIDR is set.
-	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
+	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty"`
 
 	// If non-empty, this filter rule will only apply to routes being imported from or exported
 	// to a BGP peer of the specified type.  If empty, the rule applies to all peers.
@@ -193,6 +201,7 @@ type BGPFilterRuleV6 struct {
 	// If non-empty, this filter rule will only apply to routes whose AS path begins with the
 	// specified sequence of AS numbers.
 	// +optional
+	// +listType=atomic
 	ASPathPrefix []numorstring.ASNumber `json:"asPathPrefix,omitempty" validate:"omitempty"`
 
 	// If set, this filter rule will only apply to routes with the given priority, in the
@@ -202,7 +211,7 @@ type BGPFilterRuleV6 struct {
 	// +kubebuilder:validation:Maximum=2147483646
 	Priority *int `json:"priority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 
-	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
+	Action BGPFilterAction `json:"action" validate:"required"`
 
 	// Operations is an ordered list of route modifications to apply to matching routes before
 	// accepting them.  Only valid when Action is "Accept"; specifying operations with "Reject"
@@ -210,6 +219,7 @@ type BGPFilterRuleV6 struct {
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=10
+	// +listType=atomic
 	Operations []BGPFilterOperation `json:"operations,omitempty" validate:"omitempty,dive"`
 }
 
@@ -275,13 +285,14 @@ const (
 type BGPCommunityValue string
 
 // BGPFilterCommunityMatch specifies community-based match criteria for a BGP filter rule.
-// Currently only a single community value is supported.  A MatchOperator field may be
+// Currently exactly one community value must be specified. A MatchOperator field may be
 // introduced in the future to support anyOf/allOf semantics with multiple values.
 // +mapType=atomic
 type BGPFilterCommunityMatch struct {
-	// Values is a list of BGP community values to match against.
+	// Values is a list of BGP community values to match against. Exactly one value must be specified.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=1
+	// +listType=atomic
 	Values []BGPCommunityValue `json:"values" validate:"required"`
 }
 
@@ -320,6 +331,7 @@ type BGPFilterPrependASPath struct {
 	// e.g. [65000, 65001] produces the path "65000 65001 <original>".
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=10
+	// +listType=atomic
 	Prefix []numorstring.ASNumber `json:"prefix" validate:"required"`
 }
 

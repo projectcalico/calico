@@ -30,7 +30,7 @@ func Resources() string {
 	sort.Strings(kinds)
 	var resourceList strings.Builder
 	for _, r := range kinds {
-		resourceList.WriteString(fmt.Sprintf("    - %s\n", strings.ToLower(r)))
+		fmt.Fprintf(&resourceList, "    - %s\n", strings.ToLower(r))
 	}
 	return resourceList.String()
 }

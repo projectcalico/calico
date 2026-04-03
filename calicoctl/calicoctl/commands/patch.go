@@ -110,7 +110,7 @@ Description:
 	if len(results.ResErrs) > 0 {
 		var errStr strings.Builder
 		for _, err := range results.ResErrs {
-			errStr.WriteString(fmt.Sprintf("Failed to patch '%s' resource: %v\n", results.SingleKind, err))
+			fmt.Fprintf(&errStr, "Failed to patch '%s' resource: %v\n", results.SingleKind, err)
 		}
 		return errors.New(errStr.String())
 	}

@@ -30,7 +30,7 @@ const (
 // IPReservationList contains a list of IPReservation resources.
 type IPReservationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []IPReservation `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -54,7 +54,8 @@ type IPReservation struct {
 
 // IPReservationSpec contains the specification for an IPReservation resource.
 type IPReservationSpec struct {
-	// ReservedCIDRs is a list of CIDRs and/or IP addresses that Calico IPAM will exclude from new allocations.
+	// ReservedCIDRs is a list of CIDRs that Calico IPAM will exclude from new allocations.
+	// Each entry must be in CIDR notation (e.g., "10.0.0.0/24" or "10.0.0.1/32" for a single IP).
 	// +listType=set
 	// +kubebuilder:validation:Format=cidr
 	ReservedCIDRs []string `json:"reservedCIDRs,omitempty" validate:"cidrs,omitempty"`

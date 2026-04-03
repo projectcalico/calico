@@ -2,7 +2,6 @@ import {
     OmniFilterBody,
     OmniFilterContainer,
     OmniFilterContent,
-    OmniFilterFooter,
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
 import Select from '@/libs/tigera/ui-components/components/common/Select';
@@ -10,7 +9,6 @@ import { useDidUpdate } from '@/libs/tigera/ui-components/hooks';
 import { CustomOmniFilterParam } from '@/utils/omniFilter';
 import {
     Box,
-    Button,
     Center,
     Flex,
     FormControl,
@@ -20,6 +18,7 @@ import {
 } from '@chakra-ui/react';
 import React from 'react';
 import { Controller, useForm } from 'react-hook-form';
+import FilterFooter from '../OmniFilterFooter';
 
 type PortOmniFilterProps = {
     port: string;
@@ -107,7 +106,7 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                             >
                                 <OmniFilterBody
                                     data-testid={`${testId}-popover-body`}
-                                    py={4}
+                                    p={4}
                                 >
                                     <Flex gap={4} alignItems='start'>
                                         <FormControl isInvalid={false}>
@@ -191,12 +190,10 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                         </FormControl>
                                     </Flex>
                                 </OmniFilterBody>
-                                <OmniFilterFooter
-                                    data-testid={`${testId}-popover-footer`}
-                                >
-                                    <Button
-                                        variant='ghost'
-                                        onClick={() => {
+                                <FilterFooter
+                                    testId={testId}
+                                    leftButtonProps={{
+                                        onClick: () => {
                                             reset({
                                                 port: '',
                                                 protocol: '',
@@ -206,19 +203,13 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                                 port: null,
                                             });
                                             onClose();
-                                        }}
-                                    >
-                                        Clear filter
-                                    </Button>
-                                    <Button
-                                        disabled={!isDirty || !isValid}
-                                        ml='auto'
-                                        variant='outline'
-                                        type='submit'
-                                    >
-                                        Apply filter
-                                    </Button>
-                                </OmniFilterFooter>
+                                        },
+                                    }}
+                                    rightButtonProps={{
+                                        disabled: !isDirty || !isValid,
+                                        type: 'submit',
+                                    }}
+                                />
                             </form>
                         </OmniFilterContent>
                     </>

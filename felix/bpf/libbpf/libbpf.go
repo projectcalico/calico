@@ -15,7 +15,6 @@
 package libbpf
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -30,6 +29,7 @@ import (
 // #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
 // #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/amd64 -lbpf -lelf -lz
 // #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/arm64 -lbpf -lelf -lz
+// #cgo ppc64le LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/ppc64le -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
@@ -269,47 +269,6 @@ func ProgName(id uint32) (string, error) {
 	buf := make([]byte, C.BPF_OBJ_NAME_LEN)
 	_, err := C.bpf_get_prog_name(C.uint(id), (*C.char)(unsafe.Pointer(&buf[0])))
 	return string(buf), err
-}
-
-func DetachCTLBProgramsLegacy(ipv4Enabled bool, cgroup string) error {
-	attachTypes := []int{C.BPF_CGROUP_INET6_CONNECT,
-		C.BPF_CGROUP_UDP6_SENDMSG,
-		C.BPF_CGROUP_UDP6_RECVMSG,
-	}
-	v4AttachTypes := []int{C.BPF_CGROUP_INET4_CONNECT,
-		C.BPF_CGROUP_UDP4_SENDMSG,
-		C.BPF_CGROUP_UDP4_RECVMSG,
-	}
-	if ipv4Enabled {
-		attachTypes = append(attachTypes, v4AttachTypes...)
-	}
-	var err error
-	for _, attachType := range attachTypes {
-		perr := detachCTLBProgramLegacy(cgroup, attachType)
-		if perr != nil {
-			err = errors.Join(err, perr)
-		}
-	}
-	return err
-}
-
-func detachCTLBProgramLegacy(cgroup string, attachType int) error {
-	f, err := os.OpenFile(cgroup, os.O_RDONLY, 0)
-	if err != nil {
-		return fmt.Errorf("failed to join cgroup %s: %w", cgroup, err)
-	}
-	defer f.Close()
-	fd := int(f.Fd())
-	progFd, err := C.bpf_ctlb_get_prog_fd(C.int(fd), C.int(attachType))
-	if errors.Is(err, unix.EBADF) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("error querying cgroup %d : %w", attachType, err)
-	}
-	defer unix.Close(int(progFd))
-	_, err = C.bpf_ctlb_detach_legacy(C.int(progFd), C.int(fd), C.int(attachType))
-	return err
 }
 
 // AttachClassifier return the program id and pref and handle of the qdisc
@@ -574,24 +533,6 @@ func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
 	return &Link{link: link}, nil
 }
 
-func (o *Obj) AttachCGroupLegacy(cgroup, progName string) error {
-	cProgName := C.CString(progName)
-	defer C.free(unsafe.Pointer(cProgName))
-
-	f, err := os.OpenFile(cgroup, os.O_RDONLY, 0)
-	if err != nil {
-		return fmt.Errorf("failed to join cgroup %s: %w", cgroup, err)
-	}
-	defer f.Close()
-	fd := int(f.Fd())
-	_, err = C.bpf_program_attach_cgroup_legacy(o.obj, C.int(fd), cProgName)
-	if err != nil {
-		return fmt.Errorf("failed to attach %s to cgroup %s (legacy try): %w",
-			progName, cgroup, err)
-	}
-	return nil
-}
-
 const (
 	// Set when IPv6 is enabled to configure bpf dataplane accordingly
 	GlobalsRPFOptionEnabled              uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
@@ -759,6 +700,7 @@ var bpfMapTypeMap = map[string]int{
 	"percpu_array":     6,
 	"lru_hash":         9,
 	"lpm_trie":         11,
+	"ringbuf":          27,
 }
 
 func CreateBPFMap(mapType string, keySize int, valueSize int, maxEntries int, flags int, name string) (int, error) {

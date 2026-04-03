@@ -121,28 +121,6 @@ int bpf_update_link(struct bpf_link *link, struct bpf_object *obj, char *progNam
 	return err;
 }
 
-int bpf_ctlb_get_prog_fd(int target_fd, int attach_type) {
-       int err;
-        __u32 attach_flags, prog_cnt, prog_id;
-
-        err = bpf_prog_query(target_fd, attach_type, 0, &attach_flags, &prog_id, &prog_cnt);
-        if (err) {
-                goto out;
-        }
-        int prog_fd = bpf_prog_get_fd_by_id(prog_id);
-        if (prog_fd < 0) {
-                err = -prog_fd;
-                goto out;
-        }
-out:
-        set_errno(err);
-        return prog_fd;
-}
-
-
-void bpf_ctlb_detach_legacy(int prog_fd, int target_fd, int attach_type) {
-        set_errno(bpf_prog_detach2(prog_fd, target_fd, attach_type));
-}
 
 int bpf_program_query(int ifindex, int attach_type, int flags, uint *attach_flags, uint *prog_ids, uint *prog_cnt) {
 	return bpf_prog_query(ifindex, attach_type, 0, attach_flags, prog_ids, prog_cnt);
@@ -419,29 +397,6 @@ out:
 	return link;
 }
 
-void bpf_program_attach_cgroup_legacy(struct bpf_object *obj, int cgroup_fd, char *name)
-{
-	int err = 0, prog_fd;
-	struct bpf_program *prog;
-	enum bpf_attach_type attach_type;
-
-	if (!(prog = bpf_object__find_program_by_name(obj, name))) {
-		err = ENOENT;
-		goto out;
-	}
-
-	prog_fd = bpf_program__fd(prog);
-	if (prog_fd < 0) {
-		err = EINVAL;
-		goto out;
-	}
-
-	attach_type = bpf_program__get_expected_attach_type(prog);
-	err = bpf_prog_attach(prog_fd, cgroup_fd, attach_type, 0);
-
-out:
-	set_errno(err);
-}
 
 void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo, bool exclude_udp)
 {

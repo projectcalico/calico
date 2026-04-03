@@ -22,7 +22,7 @@
 #include "arp.h"
 #include "conntrack_types.h"
 #include "nat_types.h"
-#include "perf_types.h"
+#include "events_type.h"
 #include "reasons.h"
 
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
@@ -55,7 +55,7 @@ struct fwd {
 // - the Go version of the struct in bpf/state/map.go
 // - the event handling logic in bpf/events/collector_policy_listener.go.
 struct cali_tc_state {
-	struct perf_event_header eventhdr;
+	struct event_header eventhdr;
 	/* Initial IP read from the packet, updated to host's IP when doing NAT encap/ICMP error.
 	 * updated when doing CALI_CT_ESTABLISHED_SNAT handling. Used for FIB lookup. */
 	DECLARE_IP_ADDR(ip_src);

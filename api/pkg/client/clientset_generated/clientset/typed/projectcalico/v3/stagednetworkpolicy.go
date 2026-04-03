@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,18 +32,19 @@ type StagedNetworkPolicyInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.StagedNetworkPolicyList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.StagedNetworkPolicy, err error)
+	Apply(ctx context.Context, stagedNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.StagedNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.StagedNetworkPolicy, err error)
 	StagedNetworkPolicyExpansion
 }
 
 // stagedNetworkPolicies implements StagedNetworkPolicyInterface
 type stagedNetworkPolicies struct {
-	*gentype.ClientWithList[*projectcalicov3.StagedNetworkPolicy, *projectcalicov3.StagedNetworkPolicyList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.StagedNetworkPolicy, *projectcalicov3.StagedNetworkPolicyList, *applyconfigurationgeneratedprojectcalicov3.StagedNetworkPolicyApplyConfiguration]
 }
 
 // newStagedNetworkPolicies returns a StagedNetworkPolicies
 func newStagedNetworkPolicies(c *ProjectcalicoV3Client, namespace string) *stagedNetworkPolicies {
 	return &stagedNetworkPolicies{
-		gentype.NewClientWithList[*projectcalicov3.StagedNetworkPolicy, *projectcalicov3.StagedNetworkPolicyList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.StagedNetworkPolicy, *projectcalicov3.StagedNetworkPolicyList, *applyconfigurationgeneratedprojectcalicov3.StagedNetworkPolicyApplyConfiguration](
 			"stagednetworkpolicies",
 			c.RESTClient(),
 			scheme.ParameterCodec,

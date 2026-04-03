@@ -16,7 +16,6 @@ package pinnedversion
 
 import (
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,18 +103,8 @@ type PinnedVersion struct {
 	Components     map[string]registry.Component `yaml:"components"`
 }
 
-// operatorComponents returns a map of the Tigera operator and its init image components.
-func (p *PinnedVersion) operatorComponents() map[string]registry.Component {
-	op := registry.OperatorComponent{Component: p.TigeraOperator}
-	opInit := op.InitImage()
-	return map[string]registry.Component{
-		op.Image:     op.Component,
-		opInit.Image: opInit,
-	}
-}
-
 // ImageComponents returns a map of all components that produce images
-// including Tigera operator and its init image if includeOperator is true.
+// including Tigera operator if includeOperator is true.
 //
 // Images returned from this function are expected to eventually be in the format "<registry>/<image-name>"
 // e.g. "quay.io/calico/node" where <registry> is "quay.io/calico" and <image-name> is "node".
@@ -136,7 +125,7 @@ func (p *PinnedVersion) ImageComponents(includeOperator bool) map[string]registr
 	}
 
 	if includeOperator {
-		maps.Copy(components, p.operatorComponents())
+		components[p.TigeraOperator.Image] = p.TigeraOperator
 	}
 	return components
 }
@@ -284,15 +273,13 @@ func retrievePinnedVersion(outputDir string) (PinnedVersion, error) {
 	return pinnedVersionFile[0], nil
 }
 
-// RetrievePinnedOperatorVersion retrieves the operator version from the pinned version file.
-func RetrievePinnedOperator(outputDir string) (registry.OperatorComponent, error) {
+// RetrievePinnedOperator retrieves the Tigera operator component from the pinned version file.
+func RetrievePinnedOperator(outputDir string) (registry.Component, error) {
 	pinnedVersion, err := retrievePinnedVersion(outputDir)
 	if err != nil {
-		return registry.OperatorComponent{}, err
+		return registry.Component{}, err
 	}
-	return registry.OperatorComponent{
-		Component: pinnedVersion.TigeraOperator,
-	}, nil
+	return pinnedVersion.TigeraOperator, nil
 }
 
 // LoadHashrelease loads the hashrelease from the pinned version file.

@@ -119,6 +119,7 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -210,6 +211,7 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 podSelector:
                   properties:
                     matchExpressions:

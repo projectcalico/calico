@@ -120,10 +120,6 @@ func (o *Obj) AttachCGroup(_, _ string) (*Link, error) {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachCGroupLegacy(_, _ string) error {
-	panic("LIBBPF syscall stub")
-}
-
 func (o *Obj) UpdateLink(_, _ string) error {
 	panic("LIBBPF syscall stub")
 }
@@ -173,10 +169,6 @@ func OpenLink(path string) (*Link, error) {
 }
 
 func (l *Link) Detach() error {
-	panic("LIBBPF syscall stub")
-}
-
-func DetachCTLBProgramsLegacy(_ bool, _ string) error {
 	panic("LIBBPF syscall stub")
 }
 

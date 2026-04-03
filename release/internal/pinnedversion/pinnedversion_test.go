@@ -122,7 +122,6 @@ func TestImageComponents(t *testing.T) {
 			"istio-proxyv2":                {Version: "v3.31.0", Image: "istio-proxyv2"},
 			"istio-ztunnel":                {Version: "v3.31.0", Image: "istio-ztunnel"},
 			"tigera/operator":              {Version: "v1.40.0-v3.31.0", Image: "tigera/operator", Registry: "docker.io"},
-			"tigera/operator-init":         {Version: "v1.40.0-v3.31.0", Image: "tigera/operator-init", Registry: "docker.io"},
 		}
 		actualComponents := p.ImageComponents(true)
 		if diff := cmp.Diff(expectedComponents, actualComponents); diff != "" {

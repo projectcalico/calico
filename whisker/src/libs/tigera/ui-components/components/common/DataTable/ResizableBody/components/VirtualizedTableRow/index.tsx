@@ -75,6 +75,7 @@ const VirtualizedTableRow = ({
                 }}
             >
                 <TableRow
+                    isLast={index === rows.length - 1}
                     row={row}
                     keyProp={keyProp}
                     style={style}

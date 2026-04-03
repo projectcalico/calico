@@ -19,17 +19,32 @@ global_job_config:
       - export PATH=$HOME/.local/bin:$PATH
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/banzai-google-service-account.json
       - |
-        sudo apt-get update && sudo apt-get -y --only-upgrade install google-cloud-sdk
+        echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+        curl --retry 9 --retry-all-errors -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+        sudo apt-get update -o Acquire::Retries=5 && sudo apt-get install -o Acquire::Retries=5 -y google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin
         gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
-      - pip3 install --upgrade --user awscli
       - |
-        sudo apt-get update && sudo apt-get install -y ca-certificates curl --retry 9 --retry-all-errors apt-transport-https lsb-release gnupg
+        if ! command -v needrestart; then
+          echo "[INFO] creating dummy needrestart script in /usr/local/bin"
+          echo \#\!/usr/bin/bash | sudo tee /usr/local/bin/needrestart
+          echo 'echo [DEBUG] dummy needrestart invoked' | sudo tee -a /usr/local/bin/needrestart
+          sudo chmod +x /usr/local/bin/needrestart
+        fi
+      - |
+        echo "[INFO] Configuring needrestart to auto mode to prevent interactive prompts hanging CI jobs..."
+        sudo mkdir -p /etc/needrestart/conf.d 2>/dev/null || true
+        printf '\044nrconf{restart} = '\''a'\'';\n' | sudo tee /etc/needrestart/conf.d/50-autorestart.conf > /dev/null 2>/dev/null || true
+      - |
+        sudo apt-get -o Acquire::Retries=5 update && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 python3-pip python3-venv -y && sudo needrestart -r a
+        pip3 install --upgrade --user awscli
+      - |
+        sudo apt-get -o Acquire::Retries=5 update && sudo apt-get install -o Acquire::Retries=5 -y ca-certificates curl --retry 9 --retry-all-errors apt-transport-https lsb-release gnupg
         curl --retry 9 --retry-all-errors -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc.gpg > /dev/null
         echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
-        sudo apt-get update && sudo apt-get install -y azure-cli
+        sudo apt-get update -o Acquire::Retries=5 && sudo apt-get install -o Acquire::Retries=5 -y azure-cli
         az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}"
       - curl --retry 9 --retry-all-errors https://storage.googleapis.com/sem-cli-releases/get.sh | bash
-      - sem connect tigera.semaphoreci.com ${SEM_ACCESS_TOKEN}
+      - sem connect tigera-delivery.semaphoreci.com ${SEM_ACCESS_TOKEN}
   secrets:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets

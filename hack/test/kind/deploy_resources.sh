@@ -88,7 +88,9 @@ function collect_diags() {
       echo "  -- Description --"
       ${kctl} describe pod -n "${ns}" "${name}" 2>&1 || true
       echo "  -- Logs --"
-      ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=100 2>&1 || true
+      ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=200 2>&1 || true
+      echo "  -- Previous Logs --"
+      ${kctl} logs -n "${ns}" "${name}" --all-containers --previous --tail=200 2>&1 || true
     fi
   done
 
@@ -103,7 +105,9 @@ function collect_diags() {
         echo "  -- Description --"
         ${kctl} describe pod -n "${ns}" "${name}" 2>&1 || true
         echo "  -- Logs --"
-        ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=100 2>&1 || true
+        ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=200 2>&1 || true
+        echo "  -- Previous Logs --"
+        ${kctl} logs -n "${ns}" "${name}" --all-containers --previous --tail=200 2>&1 || true
       fi
     fi
   done
@@ -165,6 +169,11 @@ echo
 echo "Install Calico using the helm chart"
 ${HELM} install calico ${CHART} -f ${VALUES_FILE} -n tigera-operator --create-namespace
 
+if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
+  echo "Patching installation resource to Felix cluster routing mode"
+  ${kubectl} patch installation default --type='merge' -p '{"spec": {"calicoNetwork": {"clusterRoutingMode":"Felix"}}}'
+fi
+
 echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
@@ -194,14 +203,6 @@ wait_pod_ready calicoctl -n kube-system
 echo "Calico is running."
 echo
 
-if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
-  echo "Patching FelixConfiguration to configure Felix program cluster routes"
-  ${kubectl} patch felixconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Enabled"}}'
-
-  echo "Patching BGPConfiguration to configure BIRD to not program cluster routes"
-  ${kubectl} patch bgpconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Disabled"}}'
-fi
-
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
 ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
@@ -213,8 +214,3 @@ echo
 # Show all the pods running for diags purposes.
 ${kubectl} get po --all-namespaces -o wide
 ${kubectl} get svc
-
-# Scale down the operator so that it doesn't make changes to the cluster.
-# Some of our tests modify calico/node, etc. We should remove this once we
-# fix up those tests.
-${kubectl} scale deployment -n tigera-operator tigera-operator --replicas=0
