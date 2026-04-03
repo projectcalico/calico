@@ -48,8 +48,8 @@ import (
 
 func init() {
 	// Auto-resolve EXT_KEY from BZ_ROOT_DIR if not explicitly set.
-	// This allows local testing with just BZ_ROOT_DIR + EXT_IP, without
-	// manually specifying the SSH key path.
+	// This is a temporary solution until banzai-core sets EXT_KEY automatically
+	// as part of the cluster provisioning workflow.
 	bzRoot := os.Getenv("BZ_ROOT_DIR")
 	if bzRoot != "" && os.Getenv("EXT_KEY") == "" {
 		keyPath := bzRoot + "/.local/external_key"
@@ -60,11 +60,20 @@ func init() {
 }
 
 const (
-	vmImage = "mcas/kubevirt-ubuntu-20.04:latest"
+	defaultVMImage = "mcas/kubevirt-ubuntu-20.04:latest"
 
 	// testTimeout is the per-test context timeout.
 	testTimeout = 10 * time.Minute
 )
+
+// vmImage returns the container disk image for test VMs. Configurable via the
+// KUBEVIRT_TEST_VM_IMAGE env var; defaults to defaultVMImage.
+func vmImage() string {
+	if img := os.Getenv("KUBEVIRT_TEST_VM_IMAGE"); img != "" {
+		return img
+	}
+	return defaultVMImage
+}
 
 // KubeVirt live migration e2e tests validate Calico's IPAM IP persistence and seamless
 // migration support for KubeVirt VMs. The tests cover:
@@ -538,15 +547,17 @@ var _ = describe.CalicoDescribe(
 				"seamless live migration must not drop any TCP segments")
 		})
 
-		// Test 8: TCP connection from external eBGP client survives migration.
+		// Test 8: TCP connection from external eBGP client survives two consecutive migrations.
 		// Same as Test 7 but the TCP client runs on an external TOR node connected via eBGP
 		// (ASN 63000) over L2TP tunnels, rather than an in-cluster pod using iBGP mesh.
 		// This validates that the BGP route priority mechanism (krt_metric) works end-to-end:
 		// when the VM migrates, the elevated-priority route advertisement from the target
 		// node reaches the TOR via eBGP, causing the TOR's kernel routing table to switch
-		// to the new next-hop without dropping the TCP connection.
+		// to the new next-hop without dropping the TCP connection. Two consecutive migrations
+		// verify the route priority reverts correctly after the TimeWait period and can be
+		// re-elevated for the second migration.
 		// Requires EXT_IP, EXT_KEY, EXT_USER env vars pointing to the TOR/external node.
-		ginkgo.It("should maintain TCP connection from eBGP external client during migration", func() {
+		ginkgo.It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
 			tor := externalnode.NewClient()
 			if tor == nil {
 				ginkgo.Skip("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
@@ -565,13 +576,13 @@ var _ = describe.CalicoDescribe(
 				_ = kvClient.VirtualMachines(ns).Delete(context.Background(), vmName, metav1.DeleteOptions{})
 			})
 
-			vmIP, sourceNode := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
+			vmIP, node1 := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
 
 			ginkgo.By("Waiting for VM TCP server")
 			probePod := setupPingPod(ctx, f, ns)
 			expectPingSuccess(ns, probePod.Name, vmIP)
 			waitForTCPServer(ns, probePod.Name, vmIP)
-			logrus.Infof("VM %s on %s with IP %s, TCP server ready", vmName, sourceNode, vmIP)
+			logrus.Infof("VM %s on %s with IP %s, TCP server ready", vmName, node1, vmIP)
 			Eventually(func() string {
 				return runOnTOR(tor, fmt.Sprintf("ping -c 1 -W 2 %s", vmIP))
 			}, 1*time.Minute, 5*time.Second).Should(ContainSubstring("0% packet loss"),
@@ -581,7 +592,6 @@ var _ = describe.CalicoDescribe(
 			ginkgo.By("Starting TCP client on TOR connecting to VM")
 			runOnTOR(tor, fmt.Sprintf("rm -f /tmp/tcp_stream; setsid nc %s 9999 > /tmp/tcp_stream 2>&1 &", vmIP))
 
-			// F5: Poll for data instead of fixed sleep.
 			ginkgo.By("Verifying TCP data is flowing from TOR before migration")
 			var preLines int
 			Eventually(func() int {
@@ -592,34 +602,53 @@ var _ = describe.CalicoDescribe(
 				"TCP data should be flowing from TOR")
 			logrus.Infof("Pre-migration: %d lines received on TOR", preLines)
 
-			ginkgo.By("Migrating the VM")
-			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-migration")
-			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-migration")
-
+			ginkgo.By("First migration")
+			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-mig1")
+			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-mig1")
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			targetNode := vmi.Status.NodeName
-			Expect(targetNode).NotTo(Equal(sourceNode))
-			logrus.Infof("Migration succeeded: %s -> %s", sourceNode, targetNode)
+			node2 := vmi.Status.NodeName
+			Expect(node2).NotTo(Equal(node1))
+			logrus.Infof("First eBGP migration: %s -> %s", node1, node2)
 
-			// F5: Poll for data growth instead of fixed sleep.
-			ginkgo.By("Verifying TCP data continued on TOR after migration")
+			ginkgo.By("Verifying TCP data continued on TOR after first migration")
+			var midLines int
+			Eventually(func() int {
+				midOutput := runOnTOR(tor, "wc -l < /tmp/tcp_stream")
+				fmt.Sscanf(strings.TrimSpace(midOutput), "%d", &midLines)
+				return midLines
+			}, 1*time.Minute, 2*time.Second).Should(BeNumerically(">=", preLines+5),
+				"TCP data should have grown after first eBGP migration")
+			logrus.Infof("After first eBGP migration: %d lines", midLines)
+
+			ginkgo.By("Second migration")
+			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-mig2")
+			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-mig2")
+			vmi, err = kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			node3 := vmi.Status.NodeName
+			Expect(node3).NotTo(Equal(node2))
+			logrus.Infof("Second eBGP migration: %s -> %s", node2, node3)
+
+			// eBGP route convergence through the external TOR may take longer than
+			// iBGP mesh, so allow more time for data to resume after the second migration.
+			ginkgo.By("Verifying TCP data continued on TOR after second migration")
 			Eventually(func() int {
 				postOutput := runOnTOR(tor, "wc -l < /tmp/tcp_stream")
 				var postLines int
 				fmt.Sscanf(strings.TrimSpace(postOutput), "%d", &postLines)
 				return postLines
-			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">", preLines),
-				"TCP stream stopped on TOR after migration")
+			}, 1*time.Minute, 2*time.Second).Should(BeNumerically(">=", midLines+5),
+				"TCP data should have grown after second eBGP migration")
 
-			ginkgo.By("Checking sequence continuity from TOR")
+			ginkgo.By("Checking sequence continuity from TOR across both migrations")
 			streamAll := runOnTOR(tor, "cat /tmp/tcp_stream")
 			lines := strings.Split(strings.TrimSpace(streamAll), "\n")
 			logrus.Infof("eBGP TCP stream: %d lines, first: %s, last: %s",
 				len(lines), lines[0], lines[len(lines)-1])
 
 			seqGaps, lastSeq := countSequenceGaps(lines)
-			logrus.Infof("eBGP sequence: %d gaps, %d data points", seqGaps, lastSeq)
+			logrus.Infof("eBGP sequence: %d gaps, %d data points across 2 migrations", seqGaps, lastSeq)
 			Expect(seqGaps).To(BeNumerically("==", 0),
 				"seamless live migration must not drop any TCP segments over eBGP")
 
@@ -631,6 +660,10 @@ var _ = describe.CalicoDescribe(
 
 // --- Helper functions ---
 
+// newTestVM creates a VirtualMachine spec with RunStrategyAlways, bridge networking,
+// and the kubevirt.io/allow-pod-bridge-network-live-migration annotation required for
+// live migration with bridge-mode interfaces. The VM uses a containerDisk image and
+// basic cloud-init for SSH access.
 func newTestVM(name, namespace string) *kubevirtv1.VirtualMachine {
 	runStrategy := kubevirtv1.RunStrategyAlways
 	return &kubevirtv1.VirtualMachine{
@@ -663,7 +696,7 @@ func newTestVM(name, namespace string) *kubevirtv1.VirtualMachine {
 					Networks:                      []kubevirtv1.Network{{Name: "default", NetworkSource: kubevirtv1.NetworkSource{Pod: &kubevirtv1.PodNetwork{}}}},
 					TerminationGracePeriodSeconds: ptrInt64(30),
 					Volumes: []kubevirtv1.Volume{
-						{Name: "containerdisk", VolumeSource: kubevirtv1.VolumeSource{ContainerDisk: &kubevirtv1.ContainerDiskSource{Image: vmImage}}},
+						{Name: "containerdisk", VolumeSource: kubevirtv1.VolumeSource{ContainerDisk: &kubevirtv1.ContainerDiskSource{Image: vmImage()}}},
 						{Name: "cloudinitdisk", VolumeSource: kubevirtv1.VolumeSource{CloudInitNoCloud: &kubevirtv1.CloudInitNoCloudSource{
 							UserData: "#cloud-config\npassword: testpass\nchpasswd: { expire: False }\nssh_pwauth: True\n",
 						}}},
@@ -716,7 +749,8 @@ runcmd:
 	return vm
 }
 
-// createAndCleanupVM creates a VM and registers cleanup.
+// createAndCleanupVM creates a VirtualMachine using newTestVM and registers a
+// DeferCleanup handler to delete it after the test completes.
 func createAndCleanupVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, f *framework.Framework, ns, vmName string) {
 	ginkgo.By(fmt.Sprintf("Creating VirtualMachine %s", vmName))
 	vm := newTestVM(vmName, ns)
@@ -728,7 +762,8 @@ func createAndCleanupVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1I
 	})
 }
 
-// setupPingPod creates a ping pod and registers cleanup.
+// setupPingPod creates a long-running Alpine pod for connectivity checks (ping, nc).
+// The pod is scheduled on any Linux node and cleaned up after the test.
 func setupPingPod(ctx context.Context, f *framework.Framework, ns string) *corev1.Pod {
 	ginkgo.By("Creating a ping pod for connectivity checks")
 	pod := &corev1.Pod{
@@ -749,7 +784,9 @@ func setupPingPod(ctx context.Context, f *framework.Framework, ns string) *corev
 	return created
 }
 
-// setupAntiAffinityPod creates a pod scheduled on a different node than avoidNode.
+// setupAntiAffinityPod creates a long-running Alpine pod with a node anti-affinity rule
+// that prevents scheduling on avoidNode. Used for TCP tests where the client must be on
+// a different node than the server VM to exercise cross-node BGP routing.
 func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, ns, avoidNode string) *corev1.Pod {
 	ginkgo.By(fmt.Sprintf("Creating client pod avoiding node %s", avoidNode))
 	pod := &corev1.Pod{
@@ -787,7 +824,8 @@ func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, ns, avoid
 	return created
 }
 
-// migrateAndCleanup creates a VMIM and registers cleanup.
+// migrateAndCleanup creates a VirtualMachineInstanceMigration (VMIM) resource to trigger
+// a live migration of the specified VMI, and registers a DeferCleanup to delete the VMIM.
 func migrateAndCleanup(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmiName, vmimName string) {
 	ginkgo.By(fmt.Sprintf("Creating migration %s", vmimName))
 	vmim := &kubevirtv1.VirtualMachineInstanceMigration{
@@ -801,6 +839,8 @@ func migrateAndCleanup(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1In
 	})
 }
 
+// waitForVMIRunningWithIP polls the VMI until it reaches Running phase and has an IP
+// address assigned. Returns the IP and the node where the VMI is scheduled.
 func waitForVMIRunningWithIP(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmName string) (ip, node string) {
 	ginkgo.By(fmt.Sprintf("Waiting for VMI %s to be Running with IP", vmName))
 	Eventually(func() error {
@@ -821,6 +861,8 @@ func waitForVMIRunningWithIP(ctx context.Context, kvClient kubevirtcorev1.Kubevi
 	return
 }
 
+// waitForMigrationSuccess polls the VMIM until it reaches MigrationSucceeded phase.
+// Immediately stops polling with a fatal error if MigrationFailed is observed.
 func waitForMigrationSuccess(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmimName string) {
 	ginkgo.By(fmt.Sprintf("Waiting for migration %s to succeed", vmimName))
 	Eventually(func() error {
@@ -838,6 +880,8 @@ func waitForMigrationSuccess(ctx context.Context, kvClient kubevirtcorev1.Kubevi
 	}, 5*time.Minute, 5*time.Second).Should(Succeed())
 }
 
+// stopVM sets the VM's RunStrategy to Halted, causing KubeVirt to delete the VMI and
+// its virt-launcher pod. Uses Eventually to retry on conflict errors.
 func stopVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmName string) {
 	Eventually(func() error {
 		stopStrategy := kubevirtv1.RunStrategyHalted
@@ -855,6 +899,8 @@ func stopVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns
 	}, 1*time.Minute, 5*time.Second).Should(Succeed(), "failed to stop VM %s", vmName)
 }
 
+// startVM sets the VM's RunStrategy to Always, causing KubeVirt to create a new VMI
+// and virt-launcher pod. Uses Eventually to retry on conflict errors.
 func startVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmName string) {
 	Eventually(func() error {
 		startStrategy := kubevirtv1.RunStrategyAlways
@@ -872,6 +918,8 @@ func startVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, n
 	}, 1*time.Minute, 5*time.Second).Should(Succeed(), "failed to start VM %s", vmName)
 }
 
+// findVirtLauncherPod finds the running virt-launcher pod for a given VMI by label selector.
+// Returns the first Running pod that is not being deleted, or an error if none found.
 func findVirtLauncherPod(ctx context.Context, f *framework.Framework, namespace, vmiName string) (*corev1.Pod, error) {
 	pods, err := f.ClientSet.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("kubevirt.io=virt-launcher,vm.kubevirt.io/name=%s", vmiName),
@@ -888,6 +936,8 @@ func findVirtLauncherPod(ctx context.Context, f *framework.Framework, namespace,
 	return nil, fmt.Errorf("no running virt-launcher pod found for VMI %s (total pods: %d)", vmiName, len(pods.Items))
 }
 
+// expectPingSuccess verifies ICMP connectivity from a pod to the target IP.
+// Retries for up to 3 minutes to allow for route convergence after migration.
 func expectPingSuccess(ns, podName, targetIP string) {
 	Eventually(func() error {
 		output, err := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
@@ -899,6 +949,9 @@ func expectPingSuccess(ns, podName, targetIP string) {
 	}, 3*time.Minute, 10*time.Second).Should(Succeed(), "failed to ping %s", targetIP)
 }
 
+// getRouteOnNode runs "ip route show <ip>" inside the calico-node pod on the given node
+// and returns the output. Used to verify that Felix programs/removes local routes for
+// the VM's /32 during migration.
 func getRouteOnNode(f *framework.Framework, nodeName, ip string) string {
 	calicoNodePod := utils.GetCalicoNodePodOnNode(f.ClientSet, nodeName)
 	if calicoNodePod == nil {
@@ -913,6 +966,8 @@ func getRouteOnNode(f *framework.Framework, nodeName, ip string) string {
 	return strings.TrimSpace(output)
 }
 
+// newLibcalicoClient creates a libcalico-go clientv3.Interface for direct IPAM queries.
+// Uses the Kubernetes datastore backend with the test framework's kubeconfig.
 func newLibcalicoClient(f *framework.Framework) clientv3.Interface {
 	cfg := apiconfig.NewCalicoAPIConfig()
 	cfg.Spec.DatastoreType = apiconfig.Kubernetes
@@ -922,6 +977,8 @@ func newLibcalicoClient(f *framework.Framework) clientv3.Interface {
 	return c
 }
 
+// getIPAMOwnerAttributes queries Calico IPAM for the ActiveOwnerAttrs and AlternateOwnerAttrs
+// of the given IP address. Returns nil maps if the IP is not allocated or on error.
 func getIPAMOwnerAttributes(ctx context.Context, c clientv3.Interface, ipStr string) (active, alternate map[string]string) {
 	queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -966,7 +1023,8 @@ func countSequenceGaps(lines []string) (gaps, lastSeq int) {
 	return
 }
 
-// runOnTOR executes a command on the TOR node via SSH and returns stdout.
+// runOnTOR executes a shell command on the external TOR node via SSH and returns stdout.
+// Logs a warning on error but does not fail the test — callers decide how to handle errors.
 func runOnTOR(tor *externalnode.Client, cmd string) string {
 	output, err := tor.Exec("sh", "-c", cmd)
 	if err != nil {
