@@ -65,7 +65,7 @@ func LoadClientConfig(cf string) (*apiconfig.CalicoAPIConfig, error) {
 	return apiconfig.LoadClientConfig(cf)
 }
 
-func GetClients(cf string) (kubeClient *kubernetes.Clientset, calicoClient client.Interface, bc bapi.Client, err error) {
+func GetClients(cf string) (kubeClient kubernetes.Interface, calicoClient client.Interface, bc bapi.Client, err error) {
 	calicoClient, err = NewClient(cf)
 	if err != nil {
 		return
