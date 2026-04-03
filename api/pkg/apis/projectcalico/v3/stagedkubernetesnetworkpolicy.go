@@ -38,7 +38,8 @@ type StagedKubernetesNetworkPolicy struct {
 
 type StagedKubernetesNetworkPolicySpec struct {
 	// The staged action. If this is omitted, the default is Set.
-	StagedAction StagedAction `json:"stagedAction,omitempty" validate:"omitempty,stagedAction"`
+	// +kubebuilder:default=Set
+	StagedAction StagedAction `json:"stagedAction,omitempty"`
 
 	// Selects the pods to which this NetworkPolicy object applies. The array of
 	// ingress rules is applied to any pods selected by this field. Multiple network
@@ -57,6 +58,7 @@ type StagedKubernetesNetworkPolicySpec struct {
 	// this field is empty then this NetworkPolicy does not allow any traffic (and serves
 	// solely to ensure that the pods it selects are isolated by default)
 	// +optional
+	// +listType=atomic
 	Ingress []networkingv1.NetworkPolicyIngressRule `json:"ingress,omitempty" protobuf:"bytes,2,rep,name=ingress"`
 
 	// List of egress rules to be applied to the selected pods. Outgoing traffic is
@@ -67,6 +69,7 @@ type StagedKubernetesNetworkPolicySpec struct {
 	// solely to ensure that the pods it selects are isolated by default).
 	// This field is beta-level in 1.8
 	// +optional
+	// +listType=atomic
 	Egress []networkingv1.NetworkPolicyEgressRule `json:"egress,omitempty" protobuf:"bytes,3,rep,name=egress"`
 
 	// List of rule types that the NetworkPolicy relates to.
@@ -91,7 +94,7 @@ type StagedKubernetesNetworkPolicySpec struct {
 // StagedKubernetesNetworkPolicyList contains a list of StagedKubernetesNetworkPolicy resources.
 type StagedKubernetesNetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []StagedKubernetesNetworkPolicy `json:"items"`
 }
 

@@ -904,6 +904,64 @@ must be disabled.
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Enabled` |
 
+### `IPv4ElevatedRoutePriority` (config file) / `ipv4ElevatedRoutePriority` (YAML)
+
+Route Priority value for an elevated priority Calico-programmed IPv4 route. Note, higher
+values mean lower priority. Elevated priority is used during VM live migration, and for
+optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IPv4ElevatedRoutePriority` |
+| Encoding (env var/config file) | Integer: [1,2147483646] |
+| Default value (above encoding) | `512` |
+| `FelixConfiguration` field | `ipv4ElevatedRoutePriority` (YAML) `IPv4ElevatedRoutePriority` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,2147483646] |
+| Default value (YAML) | `512` |
+
+### `IPv4NormalRoutePriority` (config file) / `ipv4NormalRoutePriority` (YAML)
+
+Route Priority value for a normal priority Calico-programmed IPv4 route. Note, higher
+values mean lower priority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IPv4NormalRoutePriority` |
+| Encoding (env var/config file) | Integer: [1,2147483646] |
+| Default value (above encoding) | `1024` |
+| `FelixConfiguration` field | `ipv4NormalRoutePriority` (YAML) `IPv4NormalRoutePriority` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,2147483646] |
+| Default value (YAML) | `1024` |
+
+### `IPv6ElevatedRoutePriority` (config file) / `ipv6ElevatedRoutePriority` (YAML)
+
+Route Priority value for an elevated priority Calico-programmed IPv6 route. Note, higher
+values mean lower priority. Elevated priority is used during VM live migration, and for
+optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IPv6ElevatedRoutePriority` |
+| Encoding (env var/config file) | Integer: [1,2147483646] |
+| Default value (above encoding) | `512` |
+| `FelixConfiguration` field | `ipv6ElevatedRoutePriority` (YAML) `IPv6ElevatedRoutePriority` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,2147483646] |
+| Default value (YAML) | `512` |
+
+### `IPv6NormalRoutePriority` (config file) / `ipv6NormalRoutePriority` (YAML)
+
+Route Priority value for a normal priority Calico-programmed IPv6 route. Note, higher
+values mean lower priority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IPv6NormalRoutePriority` |
+| Encoding (env var/config file) | Integer: [1,2147483646] |
+| Default value (above encoding) | `1024` |
+| `FelixConfiguration` field | `ipv6NormalRoutePriority` (YAML) `IPv6NormalRoutePriority` (Go API) |
+| `FelixConfiguration` schema | Integer: [1,2147483646] |
+| Default value (YAML) | `1024` |
+
 ### `InterfaceExclude` (config file) / `interfaceExclude` (YAML)
 
 A comma-separated list of interface names that should be excluded when Felix is resolving
@@ -964,6 +1022,49 @@ Controls whether Felix enables support for IPv6 (if supported by the in-use data
 | `FelixConfiguration` field | `ipv6Support` (YAML) `IPv6Support` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
+
+### `IstioAmbientMode` (config file) / `istioAmbientMode` (YAML)
+
+Configures Felix to work together with Tigera's Istio distribution.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IstioAmbientMode` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `istioAmbientMode` (YAML) `IstioAmbientMode` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
+
+### `IstioDSCPMark` (config file) / `istioDSCPMark` (YAML)
+
+Sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
+SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
+with other Istio installation.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_IstioDSCPMark` |
+| Encoding (env var/config file) | Numeric value: An integer from 0 to 63, representing the 6-bit DSCP code directly; Named value: A case-insensitive string corresponding to a standardized DSCP name (e.g., "CS0", "AF11", "AF21", "EF", etc.) as defined in the IANA registry for Differentiated Services Field Codepoints. |
+| Default value (above encoding) | `23` |
+| `FelixConfiguration` field | `istioDSCPMark` (YAML) `IstioDSCPMark` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
+### `LiveMigrationRouteConvergenceTime` (config file) / `liveMigrationRouteConvergenceTime` (YAML)
+
+The time to keep elevated route priority after a
+VM live migration completes. This allows routes to converge across the cluster before
+reverting to normal priority.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LiveMigrationRouteConvergenceTime` |
+| Encoding (env var/config file) | Seconds (floating point) |
+| Default value (above encoding) | `30` (30s) |
+| `FelixConfiguration` field | `liveMigrationRouteConvergenceTime` (YAML) `LiveMigrationRouteConvergenceTime` (Go API) |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
+| Default value (YAML) | `30s` |
 
 ### `MTUIfacePattern` (config file) / `mtuIfacePattern` (YAML)
 
@@ -2179,7 +2280,7 @@ Disabled or Enabled.
 ### `BPFRedirectToPeer` (config file) / `bpfRedirectToPeer` (YAML)
 
 Controls whether traffic may be forwarded directly to the peer side of a workload’s device.
-Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled".
 Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
 which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
 As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic.

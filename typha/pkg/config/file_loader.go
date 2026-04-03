@@ -17,8 +17,8 @@ package config
 import (
 	"os"
 
-	"github.com/go-ini/ini"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/ini.v1"
 )
 
 func LoadConfigFile(filename string) (map[string]string, error) {

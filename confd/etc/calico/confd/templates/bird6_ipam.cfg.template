@@ -76,6 +76,9 @@ filter calico_kernel_programming {
 
 {{- end}}
 
+{{- range $line := $config.SetMetricForBGPRoutes }}
+{{ $line }}
+{{- end}}
 {{- range $line := $config.KernelFilterForIPPools }}
 {{ $line }}
 {{- end}}

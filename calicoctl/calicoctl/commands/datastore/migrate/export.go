@@ -122,7 +122,7 @@ Description:
 	// Replace <RESOURCE_LIST> with the list of resources that will be exported.
 	var resourceList strings.Builder
 	for _, r := range allV3Resources {
-		resourceList.WriteString(fmt.Sprintf("    - %s\n", resourceDisplayMap[r]))
+		fmt.Fprintf(&resourceList, "    - %s\n", resourceDisplayMap[r])
 	}
 	doc = strings.Replace(doc, "<RESOURCE_LIST>", resourceList.String(), 1)
 

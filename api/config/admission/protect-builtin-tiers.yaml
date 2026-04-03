@@ -1,0 +1,28 @@
+---
+# ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
+# (default, kube-admin, kube-baseline). These tiers are required for correct
+# operation and should never be deleted.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        resources: ["tiers"]
+        operations: ["DELETE"]
+  validations:
+    - expression: "!(object.metadata.name in ['default', 'kube-admin', 'kube-baseline'])"
+      messageExpression: "'The built-in tier ' + object.metadata.name + ' cannot be deleted'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  policyName: protect-builtin-tiers.projectcalico.org
+  validationActions:
+    - Deny

@@ -260,8 +260,10 @@ func waitForFelixInSync(felix *infrastructure.Felix) {
 		return metrics.GetFelixMetricInt(felix.IP, "felix_resync_state")
 	}, "2s").Should(Equal(3 /* in-sync */))
 	// And then we should see at least one apply to the dataplane.
-	Eventually(func() (int, error) {
-		return metrics.GetFelixMetricInt(felix.IP, "felix_int_dataplane_apply_time_seconds_count")
+	// The initial resync time gauge is set after the first apply; subsequent
+	// applies are tracked by the separate apply_time summary.
+	Eventually(func() (float64, error) {
+		return metrics.GetFelixMetricFloat(felix.IP, "felix_int_dataplane_initial_resync_time_seconds")
 	}, "5s", "100ms").Should(BeNumerically(">", 0),
 		"Expected at least one dataplane apply after config change")
 }

@@ -86,11 +86,8 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
 
-	# generate all pkg/client contents
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/update-client-gen.sh'
-
-	# generate openapi
+	# generate openapi (must run before client-gen, which uses it for --openapi-schema)
+	# Fail on any API rule violations in Calico types (upstream k8s violations are ignored).
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) openapi-gen \
 		--v 1 --logtostderr \
@@ -104,7 +101,21 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		"k8s.io/apimachinery/pkg/runtime" \
 		"k8s.io/apimachinery/pkg/util/intstr" \
 		"k8s.io/apimachinery/pkg/version" \
-		"$(PACKAGE_NAME)/pkg/lib/numorstring"'
+		"$(PACKAGE_NAME)/pkg/lib/numorstring" 2>&1 | tee /tmp/openapi-gen.log; \
+		grep "API rule violation" /tmp/openapi-gen.log | grep "projectcalico" > /tmp/openapi-violations.log || true; \
+		if [ -s /tmp/openapi-violations.log ]; then \
+			grep -v -F -f /go/src/$(PACKAGE_NAME)/hack/openapi-violations-known.list /tmp/openapi-violations.log > /tmp/openapi-new-violations.log || true; \
+			if [ -s /tmp/openapi-new-violations.log ]; then \
+				echo "ERROR: openapi-gen reported new API rule violations in Calico types:"; \
+				cat /tmp/openapi-new-violations.log; \
+				echo "If these are intentional, add them to hack/openapi-violations-known.list"; \
+				exit 1; \
+			fi; \
+		fi'
+
+	# generate all pkg/client contents
+	$(DOCKER_RUN) $(CALICO_BUILD) \
+	   sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/update-client-gen.sh'
 
 	touch .generate_files
 	$(MAKE) fix
@@ -133,7 +144,7 @@ clean-generated:
 	find $(TOP_SRC_DIRS) -name zz_generated* -exec rm {} \;
 	# rollback changes to the generated clientset directories
 	# find $(TOP_SRC_DIRS) -type d -name *_generated -exec rm -rf {} \;
-	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/openapi
+	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/client/applyconfiguration_generated pkg/openapi
 
 clean-bin:
 	rm -rf $(BINDIR) \
@@ -158,6 +169,15 @@ ut: kind-cluster-create
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		$(CALICO_BUILD) \
 		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=api_ut.xml --output-dir=report/ -focus="$(GINKGO_FOCUS)" $(WHAT)'
+
+## Run CRD validation tests using envtest (no kind cluster required)
+.PHONY: ut-validation
+ut-validation: setup-envtest
+	$(DOCKER_RUN) \
+		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
+		-e KUBEBUILDER_ASSETS=/envtest \
+		$(CALICO_BUILD) \
+		sh -c 'go test -count=1 ./...'
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files

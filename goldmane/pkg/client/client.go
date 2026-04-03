@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 	ctx, c.cancel = context.WithCancel(ctx)
 
 	// Start the cache cleanup task.
-	go c.cache.Run(FlowCacheCleanup)
+	go c.cache.Run(ctx, FlowCacheCleanup)
 
 	startUp := make(chan struct{})
 	go func() {

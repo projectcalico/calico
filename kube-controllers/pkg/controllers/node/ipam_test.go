@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -112,6 +113,7 @@ var _ = Describe("IPAM controller UTs", func() {
 	var c *IPAMController
 	var cli client.Interface
 	var cs kubernetes.Interface
+	var deferredInformers *kubevirt.DeferredInformers
 	var vmIndexer cache.Indexer
 	var vmiIndexer cache.Indexer
 	var stopChan chan struct{}
@@ -120,13 +122,14 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	BeforeEach(func() {
 		// Create a fake clientset with nothing in it.
-		cs = fake.NewSimpleClientset()
+		cs = fake.NewClientset()
 
 		// Create a fake Calico client.
 		cli = NewFakeCalicoClient()
 
 		vmIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 		vmiIndexer = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		deferredInformers = kubevirt.NewDeferredInformersWithIndexers(vmIndexer, vmiIndexer)
 
 		// Create a node indexer with the fake clientset
 		factory := informers.NewSharedInformerFactory(cs, 0)
@@ -172,7 +175,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), vmIndexer, vmiIndexer)
+		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers)
 
 		// For testing, speed up update batching.
 		c.consolidationWindow = 1 * time.Millisecond
@@ -184,6 +187,47 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Stop the controller.
 		close(stopChan)
+	})
+
+	It("should clean up all state from assignAllocation when releaseAllocation is called", func() {
+		c.Start(stopChan)
+
+		blockCIDR := "10.0.99.0/30"
+		a := &allocation{
+			ip:     "10.0.99.1",
+			handle: "test-handle-cleanup",
+			attrs: map[string]string{
+				ipam.AttributeNode:      "test-node",
+				ipam.AttributePod:       "test-pod",
+				ipam.AttributeNamespace: "default",
+			},
+			block: blockCIDR,
+		}
+
+		done := c.pause()
+
+		// Set up a minimal block entry so assertConsistentState is happy.
+		c.allBlocks[blockCIDR] = model.KVPair{}
+
+		c.assignAllocation(blockCIDR, a)
+
+		// Verify assignAllocation populated all maps.
+		Expect(c.allocationsByBlock[blockCIDR]).To(HaveKey(a.id()))
+		Expect(c.allocationState.allocationsByNode["test-node"]).To(HaveKey(a.id()))
+		Expect(c.handleTracker.allocationsByHandle[a.handle]).To(HaveKey(a.id()))
+
+		// Also mark as a confirmed leak so we can verify that is cleaned too.
+		a.markConfirmedLeak()
+		c.confirmedLeaks[a.id()] = a
+
+		c.releaseAllocation(a)
+
+		// Verify releaseAllocation cleaned all maps.
+		Expect(c.allocationsByBlock[blockCIDR]).NotTo(HaveKey(a.id()))
+		Expect(c.allocationState.allocationsByNode).NotTo(HaveKey("test-node"))
+		Expect(c.handleTracker.allocationsByHandle).NotTo(HaveKey(a.handle))
+		Expect(c.confirmedLeaks).NotTo(HaveKey(a.id()))
+		done()
 	})
 
 	Describe("VMI allocation validation", func() {
@@ -288,8 +332,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		})
 
 		It("should treat allocation as valid if KubeVirt indexers are nil (KubeVirt not installed)", func() {
-			c.vmIndexer = nil
-			c.vmiIndexer = nil
+			// Create a DeferredInformers with no indexers set (KubeVirt not installed).
+			c.deferredInformers = &kubevirt.DeferredInformers{}
 			c.Start(stopChan)
 
 			allocation := makeVMIAllocation("default", "some-vm")
@@ -1362,17 +1406,19 @@ var _ = Describe("IPAM controller UTs", func() {
 		})
 
 		By("Verifying final state", func() {
-			// The handle should now be marked as a leak. This may take some time, as the IPv4 address needs to go
-			// through the grace period.
+			// After the pod is deleted, all IPs sharing the handle become leaks and
+			// GC releases them. Once released, the handle is cleaned up from the tracker.
 			Eventually(func() bool {
 				done := c.pause()
 				defer done()
-				return c.handleTracker.isConfirmedLeak(handle)
-			}, assertionTimeout, 1*time.Second).Should(BeTrue())
 
-			// Confirm the IPs were released.
-			Eventually(func() bool {
-				return fakeClient.handlesReleased[handle]
+				if !fakeClient.handlesReleased[handle] {
+					return false
+				}
+
+				// Verify that the handle has been removed from the handle tracker.
+				_, ok := c.handleTracker.allocationsByHandle[handle]
+				return !ok
 			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 		})
 	})

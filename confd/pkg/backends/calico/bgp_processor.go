@@ -215,6 +215,28 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 		config.DirectInterfaces = `-"cali*", -"kube-ipvs*", "*"`
 	}
 
+	// Set NormalRoutePriority from BGPConfiguration (default 1024).
+	config.NormalRoutePriority = 1024
+	if c.globalBGPConfig != nil {
+		if ipVersion == 4 && c.globalBGPConfig.Spec.IPv4NormalRoutePriority != nil {
+			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv4NormalRoutePriority
+		} else if ipVersion == 6 && c.globalBGPConfig.Spec.IPv6NormalRoutePriority != nil {
+			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv6NormalRoutePriority
+		}
+	}
+
+	config.SetMetricForBGPRoutes = []string{
+		"  if (defined(source) && (source = RTS_BGP) && !defined(krt_metric)) then {",
+		fmt.Sprintf("      krt_metric = %d;", config.NormalRoutePriority),
+		"      if (defined(bgp_local_pref)) then {",
+		fmt.Sprintf("          krt_metric = %d - bgp_local_pref;", template.BirdIntMaxValue),
+		"      }",
+		fmt.Sprintf("      if (krt_metric < %d) then {", config.NormalRoutePriority),
+		fmt.Sprintf("          preference = %d;", birdOverridePreference),
+		"      }",
+		"  }",
+	}
+
 	return nil
 }
 
@@ -347,9 +369,6 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 			peerName = fmt.Sprintf("Mesh_%s", strings.ReplaceAll(peerIP, ":", "_"))
 		}
 
-		// Mesh peers are iBGP (same AS), so pass true (peer has same AS) to calico_export_to_bgp_peers
-		exportFilter := "calico_export_to_bgp_peers(true);\n    reject;"
-
 		peer := types.BirdBGPPeer{
 			Name:            peerName,
 			IP:              peerIP,
@@ -357,8 +376,6 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 			ASNumber:        peerAS,
 			Type:            "mesh",
 			SourceAddr:      currentNodeIP,
-			ImportFilter:    "", // Empty means "import all;" in template
-			ExportFilter:    exportFilter,
 			Password:        meshPassword,
 			GracefulRestart: meshRestartTime,
 		}
@@ -367,6 +384,21 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 		if peerIP > currentNodeIP {
 			peer.Passive = true
 		}
+
+		peer.ImportFilter = c.buildImportFilter(
+			nil,
+			peer.ASNumber,
+			config.ASNumber,
+			ipVersion,
+			config.NormalRoutePriority,
+		)
+		peer.ExportFilter = c.buildExportFilter(
+			nil,
+			peer.ASNumber,
+			config.ASNumber,
+			ipVersion,
+			config.NormalRoutePriority,
+		)
 
 		config.Peers = append(config.Peers, peer)
 	}
@@ -505,14 +537,27 @@ func (c *client) buildPeerFromData(peer *bgpPeer, prefix string, config *types.B
 		result.SourceAddr = currentNodeIP
 	}
 
-	// Filters - build inline filter blocks
-	result.ImportFilter = c.buildImportFilter(peer.Filters, ipVersion)
 	// Use effective node AS number (local_as_num if set, otherwise node AS)
 	effectiveNodeAS := config.ASNumber
 	if result.LocalASNumber != "" {
 		effectiveNodeAS = result.LocalASNumber
 	}
-	result.ExportFilter = c.buildExportFilter(peer.Filters, result.ASNumber, effectiveNodeAS, ipVersion)
+
+	// Filters - build inline filter blocks
+	result.ImportFilter = c.buildImportFilter(
+		peer.Filters,
+		result.ASNumber,
+		effectiveNodeAS,
+		ipVersion,
+		config.NormalRoutePriority,
+	)
+	result.ExportFilter = c.buildExportFilter(
+		peer.Filters,
+		result.ASNumber,
+		effectiveNodeAS,
+		ipVersion,
+		config.NormalRoutePriority,
+	)
 
 	// Optional fields
 	if peer.Password != nil {
@@ -587,8 +632,55 @@ func truncateBGPFilterName(name string) string {
 	return truncated
 }
 
-// buildImportFilter builds the import filter block
-func (c *client) buildImportFilter(filters []string, ipVersion int) string {
+const (
+	// This is the 'preference' value we use when we want an imported route to override a local
+	// workload route - i.e. for the kernel to say "for <IP1> go via remote node <N1>" even
+	// though there might also be a local workload with <IP1>.  This scenario occurs in live
+	// migration when the VM was previously on this node and is moving to a different node.
+	birdOverridePreference = 200
+)
+
+// filterHasPeerType checks if any rules in the given filter for the specified direction
+// and IP version have a PeerType set.
+func filterHasPeerType(filter *v3.BGPFilter, direction string, ipVersion int) bool {
+	if direction == "import" {
+		if ipVersion == 4 {
+			for _, r := range filter.Spec.ImportV4 {
+				if r.PeerType != "" {
+					return true
+				}
+			}
+		} else {
+			for _, r := range filter.Spec.ImportV6 {
+				if r.PeerType != "" {
+					return true
+				}
+			}
+		}
+	} else {
+		if ipVersion == 4 {
+			for _, r := range filter.Spec.ExportV4 {
+				if r.PeerType != "" {
+					return true
+				}
+			}
+		} else {
+			for _, r := range filter.Spec.ExportV6 {
+				if r.PeerType != "" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// buildImportFilter builds the import filter block.
+func (c *client) buildImportFilter(
+	filters []string,
+	peerAS, nodeAS string,
+	ipVersion, normalRoutePriority int,
+) string {
 	var filterLines []string
 
 	// Determine filter suffix based on IP version
@@ -596,6 +688,8 @@ func (c *client) buildImportFilter(filters []string, ipVersion int) string {
 	if ipVersion == 6 {
 		filterSuffix = "V6"
 	}
+
+	sameAS := peerAS == nodeAS
 
 	// Process BGP filters
 	for _, filterName := range filters {
@@ -606,25 +700,59 @@ func (c *client) buildImportFilter(filters []string, ipVersion int) string {
 				// Check if import rules exist based on IP version
 				if (ipVersion == 4 && len(filter.Spec.ImportV4) > 0) || (ipVersion == 6 && len(filter.Spec.ImportV6) > 0) {
 					truncatedName := truncateBGPFilterName(filterName)
-					filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilter%s'();", truncatedName, filterSuffix))
+					if filterHasPeerType(&filter, "import", ipVersion) {
+						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilter%s'(%v);", truncatedName, filterSuffix, sameAS))
+					} else {
+						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_importFilter%s'();", truncatedName, filterSuffix))
+					}
 				}
 			}
 		}
 	}
 
-	filterLines = append(filterLines, "accept; # Prior to introduction of BGP Filters we used \"import all\" so use default accept behaviour on import")
+	// If we now have a higher than normal priority route, set 'preference' attribute to allow
+	// it to override an existing local workload route in the kernel.
+	filterLines = append(filterLines,
+		fmt.Sprintf("if (defined(bgp_local_pref)&&(bgp_local_pref > %d)) then", template.BirdIntMaxValue-normalRoutePriority),
+		fmt.Sprintf("  preference = %d;", birdOverridePreference),
+	)
+
+	// Prior to the introduction of BGP Filters we used "import all" so use default accept
+	// behaviour on import.
+	filterLines = append(filterLines, "accept;")
+
 	return strings.Join(filterLines, "\n    ")
 }
 
 // buildExportFilter builds the export filter block
-func (c *client) buildExportFilter(filters []string, peerAS, nodeAS string, ipVersion int) string {
+func (c *client) buildExportFilter(
+	filters []string,
+	peerAS, nodeAS string,
+	ipVersion, normalRoutePriority int,
+) string {
 	var filterLines []string
+
+	// Default krt_metric to our normal route priority, if not already set.
+	filterLines = append(filterLines,
+		fmt.Sprintf("if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
+	)
+
+	// Convert from krt_metric to BGP LOCAL_PREF.  Higher LOCAL_PREF = higher priority, but
+	// lower krt_metric = higher priority, so we invert: bgp_local_pref = INT_MAX - krt_metric.
+	// BGP LOCAL_PREF will only be propagated to iBGP peers; however it's helpful for us to set
+	// the bgp_local_pref attribute for both eBGP and iBGP peers, because then we can implement
+	// the Priority field as a match against bgp_local_pref.
+	filterLines = append(filterLines,
+		fmt.Sprintf("bgp_local_pref = %d - krt_metric;", template.BirdIntMaxValue),
+	)
 
 	// Determine filter suffix based on IP version
 	filterSuffix := "V4"
 	if ipVersion == 6 {
 		filterSuffix = "V6"
 	}
+
+	sameAS := peerAS == nodeAS
 
 	// Process BGP filters
 	for _, filterName := range filters {
@@ -635,14 +763,17 @@ func (c *client) buildExportFilter(filters []string, peerAS, nodeAS string, ipVe
 				// Check if export rules exist based on IP version
 				if (ipVersion == 4 && len(filter.Spec.ExportV4) > 0) || (ipVersion == 6 && len(filter.Spec.ExportV6) > 0) {
 					truncatedName := truncateBGPFilterName(filterName)
-					filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'();", truncatedName, filterSuffix))
+					if filterHasPeerType(&filter, "export", ipVersion) {
+						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'(%v);", truncatedName, filterSuffix, sameAS))
+					} else {
+						filterLines = append(filterLines, fmt.Sprintf("'bgp_%s_exportFilter%s'();", truncatedName, filterSuffix))
+					}
 				}
 			}
 		}
 	}
 
 	// Call calico_export_to_bgp_peers
-	sameAS := peerAS == nodeAS
 	filterLines = append(filterLines, fmt.Sprintf("calico_export_to_bgp_peers(%v);", sameAS))
 	filterLines = append(filterLines, "reject;")
 

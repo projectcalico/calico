@@ -99,6 +99,11 @@ func (rs *resourceStore) SetKeysFunc(_ storage.KeysFunc) {
 	logrus.Error("STUB: SetKeysFunc() not supported by Calico client.")
 }
 
+func (rs *resourceStore) EnableResourceSizeEstimation(_ storage.KeysFunc) error {
+	logrus.Error("STUB: EnableResourceSizeEstimation() not supported by Calico client.")
+	return nil
+}
+
 func (rs *resourceStore) CompactRevision() int64 {
 	logrus.Error("STUB: CompactRevision() not supported by Calico client.")
 	return 0

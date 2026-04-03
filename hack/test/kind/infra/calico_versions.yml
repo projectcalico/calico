@@ -42,3 +42,11 @@ components:
     version: test-build
   guardian:
     version: test-build
+  istio-pilot:
+    version: test-build
+  istio-install-cni:
+    version: test-build
+  istio-ztunnel:
+    version: test-build
+  istio-proxyv2:
+    version: test-build

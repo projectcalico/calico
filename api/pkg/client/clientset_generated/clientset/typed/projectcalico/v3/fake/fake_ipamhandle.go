@@ -6,19 +6,20 @@ package fake
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
+	typedprojectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeIPAMHandles implements IPAMHandleInterface
 type fakeIPAMHandles struct {
-	*gentype.FakeClientWithList[*v3.IPAMHandle, *v3.IPAMHandleList]
+	*gentype.FakeClientWithListAndApply[*v3.IPAMHandle, *v3.IPAMHandleList, *projectcalicov3.IPAMHandleApplyConfiguration]
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeIPAMHandles(fake *FakeProjectcalicoV3, namespace string) projectcalicov3.IPAMHandleInterface {
+func newFakeIPAMHandles(fake *FakeProjectcalicoV3, namespace string) typedprojectcalicov3.IPAMHandleInterface {
 	return &fakeIPAMHandles{
-		gentype.NewFakeClientWithList[*v3.IPAMHandle, *v3.IPAMHandleList](
+		gentype.NewFakeClientWithListAndApply[*v3.IPAMHandle, *v3.IPAMHandleList, *projectcalicov3.IPAMHandleApplyConfiguration](
 			fake.Fake,
 			namespace,
 			v3.SchemeGroupVersion.WithResource("ipamhandles"),

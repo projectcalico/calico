@@ -51,6 +51,8 @@ ifeq ($(findstring x86_64,$(TRIPLET)),x86_64)
 	CFLAGS += -D__TARGET_ARCH_x86 -D__x86_64__
 else ifeq ($(findstring aarch64,$(TRIPLET)),aarch64)
 	CFLAGS += -D__TARGET_ARCH_arm64
+else ifeq ($(findstring ppc64le,$(TRIPLET)),ppc64le)
+	CFLAGS += -D__TARGET_ARCH_powerpc -D__SANE_USERSPACE_TYPES__
 endif
 CC := clang
 LD := llc
@@ -61,7 +63,7 @@ UT_OBJS+=ut/ip_parse_test_v6.o
 UT_OBJS+=ut/tcp_rst_v6.o
 
 XDP_MAP_HEADERS := jump.h
-COMMON_MAP_HEADERS := counters.h ifstate.h perf_types.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
+COMMON_MAP_HEADERS := counters.h ifstate.h ringbuf.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
 IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_types.h policy.h routes.h sendrecv.h
 IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
@@ -126,11 +128,11 @@ $(LIBBPF_FILE_CREATED):
 ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
 	$(info "Directory does not exist.")
 	@echo "Directory does not exist."
-	git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
+	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
 endif
 	rm -rf .libbpf-*
 	cd $(LIBBPF_DIR) && \
-		git fetch --tags && git checkout $(LIBBPF_VERSION)
+		env -u GIT_DIR -u GIT_WORK_TREE git fetch --tags && env -u GIT_DIR -u GIT_WORK_TREE git checkout $(LIBBPF_VERSION)
 	touch $(LIBBPF_FILE_CREATED)
 
 
@@ -141,7 +143,6 @@ UT_CFLAGS=\
 	-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG \
 	-DUNITTEST \
 	-DCALI_LOG_PFX=UNITTEST \
-	-DBPF_CORE_SUPPORTED	\
 	-I .
 
 # Mini-UT programs that test one or two functions.  These are each in their own files.
@@ -188,9 +189,23 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 test_xdp%_v6.ll: xdp.c xdp_v6.d calculate-flags
 	$(COMPILE)
 
+tc.d: tc.c
+	$(COMPILE_DEPS)
 tc_v6.d: tc.c
 	$(COMPILE_DEPS)
+xdp.d: xdp.c
+	$(COMPILE_DEPS)
 xdp_v6.d: xdp.c
+	$(COMPILE_DEPS)
+connect_balancer.d: connect_balancer.c
+	$(COMPILE_DEPS)
+connect_balancer_v6.d: connect_balancer_v6.c
+	$(COMPILE_DEPS)
+connect_balancer_v46.d: connect_balancer_v46.c
+	$(COMPILE_DEPS)
+conntrack_cleanup.d: conntrack_cleanup.c
+	$(COMPILE_DEPS)
+conntrack_cleanup_v6.d: conntrack_cleanup.c
 	$(COMPILE_DEPS)
 
 
@@ -232,20 +247,12 @@ ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
 	$(COMPILE)
 %_debug_v4.ll: %.c %.d calculate-flags
 	$(COMPILE)
-%_no_log_co-re_v4.ll: %.c %.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v4.ll: %.c %.d calculate-flags
-	$(COMPILE)
 
 %_v4.ll: %_v4.c %_v4.d calculate-flags
 	$(COMPILE)
 %_no_log_v4.ll: %_v4.c %_v4.d calculate-flags
 	$(COMPILE)
 %_debug_v4.ll: %_v4.c %_v4.d calculate-flags
-	$(COMPILE)
-%_no_log_co-re_v4.ll: %_v4.c %_v4.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v4.ll: %_v4.c %_v4.d calculate-flags
 	$(COMPILE)
 
 %_v46.ll: %_v46.c %_v46.d calculate-flags
@@ -254,20 +261,12 @@ ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
 	$(COMPILE)
 %_debug_v46.ll: %_v46.c %_v46.d calculate-flags
 	$(COMPILE)
-%_no_log_co-re_v46.ll: %_v46.c %_v46.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v46.ll: %_v46.c %_v46.d calculate-flags
-	$(COMPILE)
 
 %_v6.ll: %_v6.c %_v6.d calculate-flags
 	$(COMPILE)
 %_no_log_v6.ll: %_v6.c %_v6.d calculate-flags
 	$(COMPILE)
 %_debug_v6.ll: %_v6.c %_v6.d calculate-flags
-	$(COMPILE)
-%_no_log_co-re_v6.ll: %_v6.c %_v6.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v6.ll: %_v6.c %_v6.d calculate-flags
 	$(COMPILE)
 
 %_v6.ll: %.c %_v6.d calculate-flags
@@ -276,18 +275,10 @@ ut/tcp_rst_v6.o: ut/tcp_rst_v6.ll
 	$(COMPILE)
 %_debug_v6.ll: %.c %_v6.d calculate-flags
 	$(COMPILE)
-%_no_log_co-re_v6.ll: %.c %_v6.d calculate-flags
-	$(COMPILE)
-%_debug_co-re_v6.ll: %.c %_v6.d calculate-flags
-	$(COMPILE)
 
 %_no_log.ll: %.c %.d calculate-flags
 	$(COMPILE)
 %_debug.ll: %.c %.d calculate-flags
-	$(COMPILE)
-%_no_log_co-re.ll: %.c %.d calculate-flags
-	$(COMPILE)
-%_debug_co-re.ll: %.c %.d calculate-flags
 	$(COMPILE)
 
 bin/%_v4.o: %_v4.ll | bin
@@ -313,7 +304,7 @@ bin:
 .PRECIOUS: %.d %_v6.d
 
 COMPILE_DEPS=set -e; rm -f $@; \
-		$(CC) -MP -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
+		$(CC) -MP -M $(CFLAGS) $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 

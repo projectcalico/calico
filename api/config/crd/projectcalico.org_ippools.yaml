@@ -58,6 +58,7 @@ spec:
                       - Tunnel
                       - LoadBalancer
                     type: string
+                  maxItems: 10
                   type: array
                   x-kubernetes-list-type: set
                 assignmentMode:
@@ -70,9 +71,22 @@ spec:
                   maximum: 128
                   minimum: 0
                   type: integer
+                  x-kubernetes-validations:
+                    - message:
+                        Block size cannot be changed; follow IP pool migration
+                        guide to avoid corruption.
+                      reason: FieldValueInvalid
+                      rule: self == oldSelf
                 cidr:
                   format: cidr
+                  maxLength: 48
                   type: string
+                  x-kubernetes-validations:
+                    - message:
+                        CIDR cannot be changed; follow IP pool migration guide
+                        to avoid corruption.
+                      reason: FieldValueInvalid
+                      rule: self == oldSelf
                 disableBGPExport:
                   type: boolean
                 disabled:
@@ -84,10 +98,13 @@ spec:
                     - CrossSubnet
                   type: string
                 namespaceSelector:
+                  maxLength: 1024
                   type: string
                 natOutgoing:
                   type: boolean
                 nodeSelector:
+                  default: all()
+                  maxLength: 1024
                   type: string
                 vxlanMode:
                   enum:
@@ -98,6 +115,56 @@ spec:
               required:
                 - cidr
               type: object
+              x-kubernetes-validations:
+                - message: ipipMode and vxlanMode cannot both be enabled
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.ipipMode) || !has(self.vxlanMode) || self.ipipMode
+                    == 'Never' || self.vxlanMode == 'Never' || size(self.ipipMode)
+                    == 0 || size(self.vxlanMode) == 0"
+                - message: LoadBalancer IP pool cannot have IPIP or VXLAN enabled
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode
+                    == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) ==
+                    0 || self.vxlanMode == 'Never')"
+                - message:
+                    LoadBalancer cannot be combined with Workload or Tunnel allowed
+                    uses
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel')"
+                - message: IPIP is not supported on IPv6 pools
+                  reason: FieldValueForbidden
+                  rule:
+                    cidr(self.cidr).ip().family() != 6 || !has(self.ipipMode) || self.ipipMode
+                    == 'Never' || size(self.ipipMode) == 0
+                - message: LoadBalancer IP pools cannot disable BGP export
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || !has(self.disableBGPExport) || !self.disableBGPExport"
+                - message:
+                    IP Pool with AllowedUse LoadBalancer must have nodeSelector
+                    set to all()
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || self.nodeSelector == 'all()'"
+                - message: IP Pool with AllowedUse Tunnel cannot have namespaceSelector
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'Tunnel')
+                    || !has(self.namespaceSelector) || size(self.namespaceSelector) ==
+                    0"
+                - message: global() selector is not valid for IPPool nodeSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.nodeSelector) || !self.nodeSelector.contains('global(')"
+                - message: global() selector is not valid for IPPool namespaceSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
             status:
               properties:
                 conditions:
@@ -136,6 +203,9 @@ spec:
                       - type
                     type: object
                   type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
               type: object
           required:
             - metadata

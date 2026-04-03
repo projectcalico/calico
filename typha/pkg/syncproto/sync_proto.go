@@ -312,7 +312,7 @@ func (m MsgKVs) String() string {
 	var b strings.Builder
 	const limit = 10
 	b.WriteString("syncproto.MsgKVs{Num:")
-	b.WriteString(fmt.Sprint(len(m.KVs)))
+	fmt.Fprint(&b, len(m.KVs))
 	b.WriteString(",KVs:[]{")
 	for i, kv := range m.KVs {
 		if i > 0 {

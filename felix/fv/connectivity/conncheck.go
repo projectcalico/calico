@@ -1040,7 +1040,9 @@ func (pc *PersistentConnection) Start() error {
 			line, err := stdoutReader.ReadString('\n')
 			if err != nil {
 				log.WithError(err).Info("End of permanent connection stdout")
+				pc.Lock()
 				pc.connectionReset = true
+				pc.Unlock()
 				return
 			}
 			line = strings.TrimSpace(string(line))
@@ -1061,7 +1063,9 @@ func (pc *PersistentConnection) Start() error {
 			line, err := stderrReader.ReadString('\n')
 			if err != nil {
 				log.WithError(err).Info("End of permanent connection stderr")
+				pc.Lock()
 				pc.connectionReset = true
+				pc.Unlock()
 				return
 			}
 			line = strings.TrimSpace(string(line))
@@ -1115,5 +1119,7 @@ func (pc *PersistentConnection) PongCount() int {
 }
 
 func (pc *PersistentConnection) IsConnectionReset() bool {
+	pc.Lock()
+	defer pc.Unlock()
 	return pc.connectionReset
 }

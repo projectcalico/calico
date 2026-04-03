@@ -61,7 +61,7 @@
   task:
     agent:
       machine:
-        type: s1-aws-arm64-2
+        type: s1-aws-arm64-4
     prologue:
       commands:
         - cd node
@@ -102,6 +102,9 @@
       - name: "Node: kind-cluster tests"
         execution_time_limit:
           minutes: 120
+        env_vars:
+          - name: JOB_TIMEOUT_MINUTES
+            value: "120"
         commands:
           - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
     epilogue:

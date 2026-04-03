@@ -1,0 +1,97 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "rebaseWhen": "behind-base-branch",
+  "dependencyDashboard": false,
+  "baseBranchPatterns": ["release-v3.30"],
+  "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}",
+  "separateMinorPatch": true,
+  "enabledManagers": ["gomod", "custom.regex"],
+  "prHourlyLimit": 20,
+  "prConcurrentLimit": 20,
+  "addLabels": ["docs-not-required", "release-note-not-required", "dependencies"],
+  "gomod": {
+    "managerFilePatterns": ["/^go\\.mod$/"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "postUpdateOptions": ["gomodTidy"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^metadata\\.mk$/"],
+      "matchStrings": ["GO_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "golang",
+      "datasourceTemplate": "golang-version"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^go\\.mod$/", "/^api\\/go\\.mod$/"],
+      "matchStrings": ["\\ngo (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "golang",
+      "datasourceTemplate": "golang-version"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^metadata\\.mk$/"],
+      "matchStrings": ["K8S_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "kubernetes/kubernetes",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^metadata\\.mk$/"],
+      "matchStrings": ["CALICO_BASE_VER=(?<currentValue>ubi\\d+-\\d+)"],
+      "depNameTemplate": "calico/base",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^(?<compatibility>ubi\\d+)-(?<patch>\\d+)$"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Disable all Go module updates",
+      "matchManagers": ["gomod"],
+      "enabled": false
+    },
+    {
+      "description": "Enable k8s.io dependencies",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["k8s.io/**"],
+      "enabled": true
+    },
+    {
+      "description": "Enable golang.org/x libraries",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["golang.org/x/**"],
+      "enabled": true
+    },
+    {
+      "description": "Block all minor, major, and digest updates",
+      "matchUpdateTypes": ["minor", "major", "digest"],
+      "enabled": false
+    },
+    {
+      "description": "Allow golang.org/x minor updates",
+      "matchPackageNames": ["golang.org/x/**"],
+      "matchUpdateTypes": ["minor"],
+      "enabled": true
+    },
+    {
+      "description": "Group all updates into one PR",
+      "matchPackageNames": ["*"],
+      "matchDepNames": ["*"],
+      "groupName": "dependency-updates"
+    },
+    {
+      "description": "Run gen-deps-files on selected branches only",
+      "matchBaseBranches": ["master", "release-v3.31"],
+      "postUpgradeTasks": {
+        "commands": ["make gen-deps-files"],
+        "fileFilters": ["**/deps.txt"],
+        "executionMode": "branch"
+      }
+    }
+  ]
+}

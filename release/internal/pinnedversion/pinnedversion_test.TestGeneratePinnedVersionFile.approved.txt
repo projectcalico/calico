@@ -47,6 +47,14 @@
       version: v3.31.0
     guardian:
       version: v3.31.0
+    istio-install-cni:
+      version: v3.31.0
+    istio-pilot:
+      version: v3.31.0
+    istio-proxyv2:
+      version: v3.31.0
+    istio-ztunnel:
+      version: v3.31.0
     key-cert-provisioner:
       version: v3.31.0
     kube-controllers:

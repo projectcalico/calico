@@ -45,6 +45,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -124,7 +125,7 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, vmIndexer, vmiIndexer cache.Indexer) *IPAMController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, deferredInformers *kubevirt.DeferredInformers) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -153,11 +154,10 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 	)
 
 	return &IPAMController{
-		client:     c,
-		clientset:  cs,
-		config:     cfg,
-		vmIndexer:  vmIndexer,
-		vmiIndexer: vmiIndexer,
+		client:            c,
+		clientset:         cs,
+		config:            cfg,
+		deferredInformers: deferredInformers,
 
 		syncChan: syncChan,
 
@@ -202,10 +202,10 @@ type IPAMController struct {
 	nodeLister v1lister.NodeLister
 	config     config.NodeControllerConfig
 
-	// vmIndexer and vmiIndexer are optional KubeVirt cache indexers for verifying
-	// VM/VMI resources. Nil if KubeVirt is not installed.
-	vmIndexer  cache.Indexer
-	vmiIndexer cache.Indexer
+	// deferredInformers provides thread-safe access to KubeVirt VM/VMI cache
+	// indexers. The indexers may be populated lazily after startup if KubeVirt
+	// is installed after kube-controllers.
+	deferredInformers *kubevirt.DeferredInformers
 
 	syncStatus bapi.SyncStatus
 
@@ -268,6 +268,37 @@ type IPAMController struct {
 
 	// retryController manages retries and backoff of full IPAM syncs.
 	retryController *utils.RetryController
+}
+
+// assignAllocation registers a new allocation in all internal tracking maps.
+// This is the counterpart to releaseAllocation — both must be kept in sync
+// so that every map updated on assign is also cleaned up on release.
+func (c *IPAMController) assignAllocation(blockCIDR string, a *allocation) {
+	if _, ok := c.allocationsByBlock[blockCIDR]; !ok {
+		c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
+	}
+	c.allocationsByBlock[blockCIDR][a.id()] = a
+	if a.node() != "" {
+		c.allocationState.allocate(a)
+	}
+	c.handleTracker.setAllocation(a)
+}
+
+// releaseAllocation removes an allocation from all internal tracking maps.
+// Every code path that removes an allocation should call this to ensure
+// consistent cleanup and avoid leaking entries in any map.
+func (c *IPAMController) releaseAllocation(a *allocation) {
+	c.handleTracker.removeAllocation(a)
+	delete(c.confirmedLeaks, a.id())
+	if a.node() != "" {
+		c.allocationState.release(a)
+	}
+
+	// Remove from allocationsByBlock. The block-level map entry itself is
+	// cleaned up by callers when the entire block is deleted.
+	if allocs, ok := c.allocationsByBlock[a.block]; ok {
+		delete(allocs, a.id())
+	}
 }
 
 func (c *IPAMController) Start(stop chan struct{}) {
@@ -504,6 +535,9 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		if n, ok := c.nodesByBlock[blockCIDR]; ok {
 			delete(c.nodesByBlock, blockCIDR)
 			delete(c.blocksByNode[n], blockCIDR)
+			if len(c.blocksByNode[n]) == 0 {
+				delete(c.blocksByNode, n)
+			}
 		}
 	}
 
@@ -541,16 +575,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		}
 
 		// This is a new allocation.
-		if _, ok := c.allocationsByBlock[blockCIDR]; !ok {
-			c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
-		}
-		c.allocationsByBlock[blockCIDR][alloc.id()] = &alloc
-
-		// Update the allocations-by-node view.
-		if node := alloc.node(); node != "" {
-			c.allocationState.allocate(&alloc)
-		}
-		c.handleTracker.setAllocation(&alloc)
+		c.assignAllocation(blockCIDR, &alloc)
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
 	}
 
@@ -571,18 +596,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 	// Remove any previously assigned allocations that have since been released.
 	for id, alloc := range c.allocationsByBlock[blockCIDR] {
 		if _, ok := currentAllocations[id]; !ok {
-			// Needs release.
-			c.handleTracker.removeAllocation(alloc)
-			delete(c.allocationsByBlock[blockCIDR], id)
-
-			// Also remove from the node view.
-			node := alloc.node()
-			if node != "" {
-				c.allocationState.release(alloc)
-			}
-
-			// And to be safe, remove from confirmed leaks just in case.
-			delete(c.confirmedLeaks, id)
+			c.releaseAllocation(alloc)
 		}
 	}
 
@@ -599,10 +613,7 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	// Remove allocations that were contributed by this block.
 	allocations := c.allocationsByBlock[blockCIDR]
 	for _, alloc := range allocations {
-		node := alloc.node()
-		if node != "" {
-			c.allocationState.release(alloc)
-		}
+		c.releaseAllocation(alloc)
 	}
 	delete(c.allocationsByBlock, blockCIDR)
 
@@ -610,6 +621,9 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	if n := c.nodesByBlock[blockCIDR]; n != "" {
 		// The block was assigned to a node, make sure to update internal cache.
 		delete(c.blocksByNode[n], blockCIDR)
+		if len(c.blocksByNode[n]) == 0 {
+			delete(c.blocksByNode, n)
+		}
 	}
 	delete(c.allBlocks, blockCIDR)
 	delete(c.nodesByBlock, blockCIDR)
@@ -779,6 +793,9 @@ func (c *IPAMController) releaseUnusedBlocks() error {
 		// accidentally release all of the node's blocks.
 		delete(c.emptyBlocks, blockCIDR)
 		delete(c.blocksByNode[node], blockCIDR)
+		if len(c.blocksByNode[node]) == 0 {
+			delete(c.blocksByNode, node)
+		}
 		delete(c.nodesByBlock, blockCIDR)
 		delete(c.allBlocks, blockCIDR)
 
@@ -1095,9 +1112,12 @@ func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
 	vmiName := a.attrs[ipam.AttributeVMIName]
 	logc := log.WithFields(a.fields())
 
+	vmIndexer := c.deferredInformers.VMIndexer()
+	vmiIndexer := c.deferredInformers.VMInstanceIndexer()
+
 	// If we can't reason about it, don't GC it.
 	// (We can tighten this later once attrs are guaranteed.)
-	if ns == "" || vmiName == "" || c.vmIndexer == nil || c.vmiIndexer == nil {
+	if ns == "" || vmiName == "" || vmIndexer == nil || vmiIndexer == nil {
 		logc.Debug("Insufficient data to validate VMI allocation, assuming valid")
 		return true
 	}
@@ -1106,7 +1126,7 @@ func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
 	key := cache.NewObjectName(ns, vmiName).String()
 
 	// Check if the VM exists in the informer cache.
-	_, vmExists, err := c.vmIndexer.GetByKey(key)
+	_, vmExists, err := vmIndexer.GetByKey(key)
 	if err != nil {
 		logc.WithError(err).Error("Failed to look up VM in cache, assuming allocation is valid")
 		return true
@@ -1119,7 +1139,7 @@ func (c *IPAMController) isVMAllocationValid(a *allocation) bool {
 	// VM not found — check if a standalone VMI (not owned by a VM) exists.
 	// If the VMI has a VM ownerReference but the VM is already gone, the VMI
 	// is just awaiting garbage collection and is not evidence of a valid allocation.
-	obj, vmiExists, err := c.vmiIndexer.GetByKey(key)
+	obj, vmiExists, err := vmiIndexer.GetByKey(key)
 	if err != nil {
 		logc.WithError(err).Warn("Failed to look up VMI in cache, assuming allocation is valid")
 		return true
@@ -1262,11 +1282,10 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		}
 		logc := log.WithFields(a.fields())
 
-		// No longer a leak. Remove it here so we're not dependent on receiving
-		// the update from the syncer (which we will do eventually, this is just cleaner).
-		c.allocationState.release(a)
+		// No longer a leak. Update in-memory allocation tracking so we're not dependent on
+		// receiving the update from the syncer (which we will do eventually; this is just cleaner).
+		c.releaseAllocation(a)
 		c.incrementReclamationMetric(a.block, a.node())
-		delete(c.confirmedLeaks, a.id())
 
 		logc.Info("Successfully garbage collected leaked IP address")
 		delete(leaks, opt.Address)

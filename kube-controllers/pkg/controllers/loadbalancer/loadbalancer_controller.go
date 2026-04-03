@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net"
 	"regexp"
@@ -43,7 +44,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -77,6 +77,9 @@ func (t *allocationTracker) assignAddressToBlock(key string, ip string, svcKey s
 
 func (t *allocationTracker) releaseAddressFromBlock(key string, ip string) {
 	delete(t.ipsByBlock[key], ip)
+	if len(t.ipsByBlock[key]) == 0 {
+		delete(t.ipsByBlock, key)
+	}
 	t.releaseAddressFromService(t.servicesByIP[ip], ip)
 }
 
@@ -99,11 +102,20 @@ func (t *allocationTracker) assignAddressToService(svcKey serviceKey, ip string)
 func (t *allocationTracker) releaseAddressFromService(svcKey serviceKey, ip string) {
 	delete(t.servicesByIP, ip)
 	delete(t.ipsByService[svcKey], ip)
+	for block, ips := range t.ipsByBlock {
+		if ips[ip] {
+			delete(ips, ip)
+			if len(ips) == 0 {
+				delete(t.ipsByBlock, block)
+			}
+			break
+		}
+	}
 }
 
 func (t *allocationTracker) deleteService(svcKey serviceKey) {
 	for ip := range t.ipsByService[svcKey] {
-		delete(t.servicesByIP, ip)
+		t.releaseAddressFromService(svcKey, ip)
 	}
 	delete(t.ipsByService, svcKey)
 }

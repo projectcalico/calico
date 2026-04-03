@@ -18,13 +18,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/install"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 // VERSION is filled out during the build process (using git describe output)
 var VERSION string
 
 func main() {
-	err := install.Install(VERSION)
+	err := install.Install(buildinfo.Version)
 	if err != nil {
 		logrus.WithError(err).Fatal("Error installing CNI plugin")
 	}

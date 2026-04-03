@@ -52,10 +52,11 @@ spec:
                     # to handle []*int properly itself.
                     nullable: true
                   type: array
+                  x-kubernetes-list-type: atomic
                 attributes:
                   items:
                     properties:
-                      alternate:
+                      alternateOwnerAttrs:
                         additionalProperties:
                           type: string
                         type: object
@@ -67,6 +68,7 @@ spec:
                         type: object
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 cidr:
                   format: cidr
                   type: string
@@ -87,6 +89,7 @@ spec:
                   items:
                     type: integer
                   type: array
+                  x-kubernetes-list-type: atomic
               required:
                 - allocations
                 - attributes

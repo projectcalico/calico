@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jiawei Huang <jiawei@tigera.io>
+Date: Thu, 13 Mar 2026 00:00:00 +0000
+Subject: [PATCH] Fix duplicate ensureProtoPort method in FelixConfigurationSpec
+
+applyconfiguration-gen generates an ensure helper named after the element type,
+not the field. When two fields share the same element type (*[]ProtoPort for
+FailsafeInboundHostPorts and FailsafeOutboundHostPorts), the helper is emitted
+twice, causing a compile error. Rename the second to be unique.
+---
+ api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go b/api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go
+--- a/api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go
++++ b/api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go
+@@ -1228,7 +1228,7 @@
+ 	return b
+ }
+
+-func (b *FelixConfigurationSpecApplyConfiguration) ensureProtoPortApplyConfigurationExists() {
++func (b *FelixConfigurationSpecApplyConfiguration) ensureOutboundProtoPortApplyConfigurationExists() {
+ 	if b.FailsafeOutboundHostPorts == nil {
+ 		b.FailsafeOutboundHostPorts = &[]ProtoPortApplyConfiguration{}
+ 	}
+@@ -1238,7 +1238,7 @@
+ // and returns the receiver, so that objects can be build by chaining "With" function invocations.
+ // If called multiple times, values provided by each call will be appended to the FailsafeOutboundHostPorts field.
+ func (b *FelixConfigurationSpecApplyConfiguration) WithFailsafeOutboundHostPorts(values ...*ProtoPortApplyConfiguration) *FelixConfigurationSpecApplyConfiguration {
+-	b.ensureProtoPortApplyConfigurationExists()
++	b.ensureOutboundProtoPortApplyConfigurationExists()
+ 	for i := range values {
+ 		if values[i] == nil {
+ 			panic("nil value passed to WithFailsafeOutboundHostPorts")
+--
+2.34.1
+

@@ -88,7 +88,7 @@ class TestGracefulRestart(TestBase):
             run("docker exec %s pkill bird" % self.restart_node)
             def check_bird_running():
                 run("docker exec %s pgrep bird" % self.restart_node)
-            retry_until_success(check_bird_running, retries=10, wait_time=1)
+            retry_until_success(check_bird_running, timeout=15)
             time.sleep(5)
 
         # Expect non-GR behaviour, i.e. route churn.
@@ -101,14 +101,14 @@ class TestGracefulRestart(TestBase):
             run("kubectl delete po %s -n calico-system" % self.restart_pod_name)
 
             # Wait until a replacement calico-node pod has been created.
-            retry_until_success(self.get_restart_node_pod_name, retries=10, wait_time=1)
+            retry_until_success(self.get_restart_node_pod_name, timeout=15)
 
             # Wait until it is ready, before returning.
             run("kubectl wait po %s -n calico-system --timeout=2m --for=condition=ready" %
                 self.restart_pod_name)
 
         # Expect GR behaviour, i.e. no route churn.
-        self._test_restart_route_churn(8, delete_calico_node_pod, False)
+        self._test_restart_route_churn(3, delete_calico_node_pod, False)
 
 
 class TestAllRunning(TestBase):

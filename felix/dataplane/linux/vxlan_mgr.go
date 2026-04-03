@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -265,7 +264,7 @@ func (m *vxlanManager) updateNeighborsAndAllowedSources() {
 }
 
 func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) {
+	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) || isBorrowedRoute(r, proto.IPPoolType_VXLAN) {
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{
@@ -332,7 +331,7 @@ func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error)
 		Port:      m.vxlanPort,
 	}
 
-	if m.dpConfig.BPFEnabled && bpfutils.BTFEnabled {
+	if m.dpConfig.BPFEnabled {
 		vxlan.FlowBased = true
 	} else {
 		vxlan.VxlanId = m.vxlanID

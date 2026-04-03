@@ -1,8 +1,8 @@
-with-expecter: False
-inpackage: False
+template: testify
+inpackage: false
 dir: "{{.InterfaceDir}}/mocks"
-mockname: "{{.InterfaceName}}"
-outpkg: "mocks"
+structname: "{{.InterfaceName}}"
+pkgname: "mocks"
 filename: "{{.InterfaceName}}.go"
 packages:
   github.com/projectcalico/calico/guardian/pkg/tunnel:
@@ -11,13 +11,13 @@ packages:
       Session:
   net:
     config:
-      outpkg: "{{.PackageName}}"
-      dir: "pkg/thirdpartymocks/{{.PackagePath}}"
+      pkgname: "{{.SrcPackageName}}"
+      dir: "pkg/thirdpartymocks/{{.SrcPackagePath}}"
     interfaces:
       Conn:
   github.com/projectcalico/calico/lib/std/time:
     config:
-      outpkg: "{{.PackageName}}"
+      pkgname: "{{.SrcPackageName}}"
       dir: "pkg/thirdpartymocks/std/time"
     interfaces:
       Clock:

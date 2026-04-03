@@ -93,16 +93,6 @@ blocks:
               values:
                 - "calico-vpp-nohuge.yaml"
 
-        - name: VPP-openshift
-          execution_time_limit:
-            hours: 8
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: PROVISIONER
-              values:
-                - "aws-openshift"
-
         - name: VPP-kadm-Huge
           execution_time_limit:
             hours: 7
@@ -228,19 +218,6 @@ blocks:
             - name: K8S_E2E_FLAGS
               value: --ginkgo.focus=(\[sig-calico\]|Dataplane-BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
 
-        - name: Iptables (Openshift)
-          execution_time_limit:
-            hours: 6
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: PROVISIONER
-              values:
-                - "aws-openshift"
-          env_vars:
-            - name: DATAPLANE
-              value: "CalicoIptables"
-
         - name: VPP-kadm-IPSec-Huge
           execution_time_limit:
             hours: 7
@@ -258,6 +235,46 @@ blocks:
               value: "true"
             - name: ENABLE_VPP_IPSEC
               value: "true"
+
+  # Openshift needs f1-standard-2 (more disk) so these jobs live in their own blocks.
+  - name: VPP-openshift
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      jobs:
+        - name: VPP-openshift
+          execution_time_limit:
+            hours: 8
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "aws-openshift"
+
+  - name: Iptables (Openshift)
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      jobs:
+        - name: Iptables (Openshift)
+          execution_time_limit:
+            hours: 6
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values:
+                - "aws-openshift"
+          env_vars:
+            - name: DATAPLANE
+              value: "CalicoIptables"
 
 promotions:
   - name: Cleanup jobs

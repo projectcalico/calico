@@ -1245,9 +1245,10 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists and Equal. Defaults to Equal.
+                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
+                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -1445,6 +1446,13 @@ spec:
                           type: object
                       type: object
                   type: object
+                metricsPort:
+                  description: |-
+                    MetricsPort configures the port that Goldmane uses to serve Prometheus metrics.
+                    When set to a non-zero value, Goldmane will expose a /metrics endpoint on the given port.
+                    Set to zero to disable metrics. If omitted, metrics are disabled.
+                  format: int32
+                  type: integer
               type: object
             status:
               description: GoldmaneStatus defines the observed state of Goldmane

@@ -72,7 +72,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 		ExportV4: []apiv3.BGPFilterRuleV4{
 			{
 				CIDR:          "10.10.10.0/24",
-				MatchOperator: apiv3.In,
+				MatchOperator: apiv3.MatchOperatorIn,
 				Action:        apiv3.Accept,
 			},
 		},
@@ -82,7 +82,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 		ImportV4: []apiv3.BGPFilterRuleV4{
 			{
 				CIDR:          "11.11.11.0/24",
-				MatchOperator: apiv3.NotIn,
+				MatchOperator: apiv3.MatchOperatorNotIn,
 				Action:        apiv3.Reject,
 			},
 		},

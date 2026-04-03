@@ -29,7 +29,7 @@ BUILD_DEPS = $(LIBBPF_A) \
 	     filesystem/etc/calico/confd/templates
 
 ## IMAGE_DEPS lists non-Go files the calico/node image depends on.
-IMAGE_DEPS = ./Dockerfile.$(ARCH) $(BUILD_DEPS)
+IMAGE_DEPS = ./Dockerfile $(BUILD_DEPS)
 
 # Run these tests against the projectcalico.org/v3 API group by default.
 CALICO_API_GROUP ?= projectcalico.org/v3
@@ -55,9 +55,9 @@ NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
 
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a crosscompilation run.
+ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
+# Required for eBPF support.
+# We need to force target arch build image to be used in a cross-compilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -197,16 +197,25 @@ $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
+	# Clean stale build artifacts that may reference headers from a previous
+	# build environment (e.g., Docker container with different clang version).
+	make -C ../felix/bpf-gpl clean
+	make -C ../felix/bpf-apache clean
 	make -C ../felix build-bpf ARCH=$(ARCH)
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 
 # We need CGO when compiling in Felix for BPF support.
-# Currently CGO can be enabled in ARM64 and AMD64 builds.
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64 ppc64le))
 CGO_ENABLED=1
+# Normalize userspace types to ensure consistency across architectures.
+ARCH_CGO_CFLAGS=
+ifeq ($(ARCH),ppc64le)
+    ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
+endif
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 else
 CGO_ENABLED=0
 CGO_LDFLAGS=""
@@ -217,7 +226,7 @@ $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
 	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
 else
 	$(call build_binary, ./cmd/calico-node/main.go, $@)
@@ -261,12 +270,22 @@ dist/LICENSE: ../LICENSE.md
 # register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
 image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER) | register
 $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
-	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) .
+	$(DOCKER_BUILD) \
+		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
+		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
+		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		--build-arg GIT_VERSION=$(GIT_VERSION) \
+		-t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 $(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
-	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) .
+	$(DOCKER_BUILD) \
+		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
+		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
+		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		--build-arg GIT_VERSION=$(GIT_VERSION) \
+		-t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
@@ -280,10 +299,14 @@ $(BIRD_SOURCE): .bird-source.created
 
 # include GPL felix code in the image.
 $(FELIX_GPL_SOURCE): .felix-gpl-source.created
-.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f)
+.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d' -not -path '*/libbpf/*')
 	rm -rf filesystem/included-source/felix*
 	mkdir -p filesystem/included-source/
-	tar cf $(FELIX_GPL_SOURCE) ../felix/bpf-gpl --use-compress-program="xz -T0"
+	tar cf $(FELIX_GPL_SOURCE) \
+		--exclude='*.ll' --exclude='*.o' --exclude='*.d' \
+		--exclude='libbpf' \
+		--use-compress-program="xz -T0" \
+		../felix/bpf-gpl
 	touch $@
 
 ###############################################################################

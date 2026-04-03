@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,18 +32,19 @@ type BGPPeerInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.BGPPeerList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.BGPPeer, err error)
+	Apply(ctx context.Context, bGPPeer *applyconfigurationgeneratedprojectcalicov3.BGPPeerApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.BGPPeer, err error)
 	BGPPeerExpansion
 }
 
 // bGPPeers implements BGPPeerInterface
 type bGPPeers struct {
-	*gentype.ClientWithList[*projectcalicov3.BGPPeer, *projectcalicov3.BGPPeerList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.BGPPeer, *projectcalicov3.BGPPeerList, *applyconfigurationgeneratedprojectcalicov3.BGPPeerApplyConfiguration]
 }
 
 // newBGPPeers returns a BGPPeers
 func newBGPPeers(c *ProjectcalicoV3Client) *bGPPeers {
 	return &bGPPeers{
-		gentype.NewClientWithList[*projectcalicov3.BGPPeer, *projectcalicov3.BGPPeerList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.BGPPeer, *projectcalicov3.BGPPeerList, *applyconfigurationgeneratedprojectcalicov3.BGPPeerApplyConfiguration](
 			"bgppeers",
 			c.RESTClient(),
 			scheme.ParameterCodec,

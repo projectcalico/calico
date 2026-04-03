@@ -27,9 +27,15 @@ for PKG in "$@"; do
 	HAS_TESTS=$(find ${PKG} -name "ut.test")
 	if [ ! -z "${HAS_TESTS}" ]; then
 		echo "Running tests for package: ${PKG}";
-		# Generate a unique JUnit report name from the package path.
 		REPORT_NAME=$(echo "${PKG}" | tr '/./' '_' | sed 's/^_//')
-		${PKG}/ut.test --ginkgo.junit-report=report/${REPORT_NAME}.xml ${GINKGO_ARGS} || ((RC++))
+
+		# Only pass Ginkgo flags to Ginkgo-based test binaries. Vanilla go test
+		# binaries don't recognize --ginkgo.* flags and will fail immediately.
+		if ${PKG}/ut.test --help 2>&1 | grep -q ginkgo; then
+			${PKG}/ut.test --ginkgo.junit-report=report/${REPORT_NAME}.xml ${GINKGO_ARGS} || ((RC++))
+		else
+			${PKG}/ut.test -test.v || ((RC++))
+		fi
 	else
 		echo "WARNING: No tests to run in ${PKG}, skipping"
 	fi

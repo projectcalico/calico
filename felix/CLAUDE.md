@@ -209,7 +209,7 @@ GPL-licensed BPF programs compiled to eBPF bytecode with clang/LLVM.
 - **NAT**: `nat.h`, `nat4.h`, `nat6.h`, `nat_types.h`, `nat_lookup.h`
 - **Conntrack**: `conntrack.h`, `conntrack_types.h` — connection tracking state
 - **Policy**: `policy.h`, `failsafe.h` — policy evaluation, failsafe rules
-- **Routing**: `routes.h`, `fib.h`, `fib_common.h`, `fib_co_re.h`, `fib_legacy.h`
+- **Routing**: `routes.h`, `fib.h`, `fib_common.h`, `fib_co_re.h`
 - **Protocol**: `tcp4.h`, `tcp6.h`, `icmp.h`, `icmp4.h`, `icmp6.h`, `arp.h`
 - **Load Balancing**: `jenkins_hash.h`, `maglev.h`, `ctlb.h`
 - **Utilities**: `jump.h` (tail calls), `log.h`, `events.h`, `counters.h`
