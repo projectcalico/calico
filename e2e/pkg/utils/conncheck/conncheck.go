@@ -145,19 +145,7 @@ func (c *connectionTester) deploy() error {
 			continue
 		}
 		By(fmt.Sprintf("Deploying server pod %s/%s", server.namespace.Name, server.name))
-		pod, svc := CreateServerPodAndServiceX(
-			c.f,
-			server.namespace,
-			server.name,
-			server.ports,
-			server.labels,
-			server.composedPodCustomizer(),
-			server.composedSvcCustomizer(),
-			server.autoCreateSvc,
-			server.echoServer,
-		)
-		server.pod = pod
-		server.service = svc
+		server.pod, server.service = server.deploy(c.f)
 	}
 
 	// Wait for all pods to be running.
