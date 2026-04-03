@@ -168,11 +168,19 @@ func MergeLayouts(layouts ...Layout) Layout {
 	return ret
 }
 
+// programCacheKey combines AttachType with the BPF program attach type string
+// ("TC", "TCX", or "Netkit") to differentiate cache entries for programs that
+// share the same object file but require different expected_attach_type values.
+type programCacheKey struct {
+	AttachType
+	ProgAttachType string
+}
+
 type ProgramsMap struct {
 	*bpfmaps.PinnedMap
 
 	programsLock sync.Mutex
-	programs     map[AttachType]*program
+	programs     map[programCacheKey]*program
 
 	expectedAttachType string
 	nextIdx            atomic.Int64
@@ -313,7 +321,7 @@ func NewEgressProgramsMap() bpfmaps.Map {
 func newProgramsMap(ProgramsMapParameters bpfmaps.MapParameters, expectedAttachType string) bpfmaps.Map {
 	return &ProgramsMap{
 		PinnedMap:          bpfmaps.NewPinnedMap(ProgramsMapParameters),
-		programs:           make(map[AttachType]*program),
+		programs:           make(map[programCacheKey]*program),
 		expectedAttachType: expectedAttachType,
 	}
 }
@@ -328,7 +336,7 @@ func NewXDPProgramsMap() bpfmaps.Map {
 			Name:       "xdp_cali_progs",
 			Version:    3,
 		}),
-		programs: make(map[AttachType]*program),
+		programs: make(map[programCacheKey]*program),
 	}
 }
 
@@ -339,7 +347,8 @@ func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
 	}
 	log.WithField("AttachType", at).Debugf("Looked up file for attach type: %s", file)
 
-	pi := pm.getOrCreateProgramInfo(at)
+	cacheKey := programCacheKey{AttachType: at, ProgAttachType: progType}
+	pi := pm.getOrCreateProgramInfo(cacheKey)
 
 	// Loading is protected by the program lock to ensure that we do not
 	// load the same object multiple times in parallel.  Two goroutines may
@@ -370,13 +379,13 @@ func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
 	return maps.Clone(pi.layout), err
 }
 
-func (pm *ProgramsMap) getOrCreateProgramInfo(at AttachType) *program {
+func (pm *ProgramsMap) getOrCreateProgramInfo(key programCacheKey) *program {
 	pm.programsLock.Lock()
 	defer pm.programsLock.Unlock()
-	pi, ok := pm.programs[at]
+	pi, ok := pm.programs[key]
 	if !ok {
 		pi = &program{}
-		pm.programs[at] = pi
+		pm.programs[key] = pi
 	}
 	return pi
 }
@@ -547,7 +556,7 @@ func (pm *ProgramsMap) ResetForTesting() {
 	// We keep the same pinned map but reset the accounting as the map is
 	// replaced by repinning by the user.
 	pm.nextIdx.Store(0)
-	pm.programs = make(map[AttachType]*program)
+	pm.programs = make(map[programCacheKey]*program)
 }
 
 func (pm *ProgramsMap) Programs() map[AttachType]Layout {
@@ -555,8 +564,8 @@ func (pm *ProgramsMap) Programs() map[AttachType]Layout {
 	defer pm.programsLock.Unlock()
 
 	progs := make(map[AttachType]Layout, len(pm.programs))
-	for at, prog := range pm.programs {
-		progs[at] = prog.layout
+	for key, prog := range pm.programs {
+		progs[key.AttachType] = prog.layout
 	}
 
 	return progs
