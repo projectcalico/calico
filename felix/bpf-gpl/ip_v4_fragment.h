@@ -201,7 +201,6 @@ out:
 	return false;
 }
 
-#ifdef BPF_CORE_SUPPORTED
 static int frags4_remove_ct_cb(void *map, struct frags4_fwd_key *key, __unused struct frags4_fwd_value *value)
 {
 	cali_v4_frgfwd_delete_elem(key);
@@ -211,7 +210,6 @@ static int frags4_remove_ct_cb(void *map, struct frags4_fwd_key *key, __unused s
 	}
 	return 0;
 }
-#endif
 
 #define FRAGS4_HANDLE_UNSUPPORTED	0
 #define FRAGS4_HANDLE_FIRST_IN_ORDER 	1
@@ -220,9 +218,6 @@ static int frags4_remove_ct_cb(void *map, struct frags4_fwd_key *key, __unused s
 
 static CALI_BPF_INLINE int frags4_handle(struct cali_tc_ctx *ctx)
 {
-#ifndef BPF_CORE_SUPPORTED
-	return false;
-#else
 	struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
 
 	if (!frag_ct_val) {
@@ -323,7 +318,6 @@ static CALI_BPF_INLINE int frags4_handle(struct cali_tc_ctx *ctx)
 
 out:
 	return FRAGS4_HANDLE_STORE_ONLY;
-#endif /* BPF_CORE_SUPPORTED */
 }
 
 static CALI_BPF_INLINE void frags4_record_ct_flags(struct cali_tc_ctx *ctx, __u32 flags)
@@ -372,7 +366,6 @@ static CALI_BPF_INLINE void frags4_record_ct_flags(struct cali_tc_ctx *ctx, __u3
 
 	bpf_timer_set_callback(&val->timer, frags4_remove_ct_cb);
 	bpf_timer_start(&val->timer, IPFRAG_TIMEOUT * 1000000000ULL, 0);
-#endif
 }
 
 static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
