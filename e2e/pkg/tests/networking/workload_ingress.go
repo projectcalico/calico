@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -80,11 +79,12 @@ type ingressScenario struct {
 	hostNetworked bool
 	// dest describes how the client connects: "clusterIP", "svcNodePort", "node1NodePort", or "node0NodePort".
 	dest string
-	// per-dataplane expectations
-	bpfExpect      ingressExpectation
-	iptablesExpect ingressExpectation
-	ipvsExpect     ingressExpectation
-	vppExpect      ingressExpectation
+	// Per-dataplane expectations. xtablesExpect covers both iptables and
+	// nftables dataplanes, which have identical SNAT behavior.
+	bpfExpect     ingressExpectation
+	xtablesExpect ingressExpectation
+	ipvsExpect    ingressExpectation
+	vppExpect     ingressExpectation
 }
 
 var ingressScenarioTable = []ingressScenario{
@@ -95,7 +95,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  false,
 		dest:           "clusterIP",
 		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
+		xtablesExpect: noSNAT,
 		ipvsExpect:     noSNAT,
 		vppExpect:      noSNAT,
 	},
@@ -106,7 +106,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  true,
 		dest:           "clusterIP",
 		bpfExpect:      alwaysAllowed,
-		iptablesExpect: alwaysAllowed,
+		xtablesExpect: alwaysAllowed,
 		ipvsExpect:     alwaysAllowed,
 		vppExpect:      alwaysAllowed,
 	},
@@ -117,7 +117,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  false,
 		dest:           "clusterIP",
 		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
+		xtablesExpect: noSNAT,
 		ipvsExpect:     noSNAT,
 		vppExpect:      noSNAT,
 	},
@@ -128,7 +128,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  true,
 		dest:           "clusterIP",
 		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
+		xtablesExpect: noSNAT,
 		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      noSNAT,
 	},
@@ -139,7 +139,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  false,
 		dest:           "svcNodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: snatWorkingPolicy,
+		xtablesExpect: snatWorkingPolicy,
 		ipvsExpect:     snatWorkingPolicy,
 		vppExpect:      noSNAT,
 	},
@@ -150,7 +150,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  true,
 		dest:           "svcNodePort",
 		bpfExpect:      alwaysAllowed,
-		iptablesExpect: alwaysAllowed,
+		xtablesExpect: alwaysAllowed,
 		ipvsExpect:     alwaysAllowed,
 		vppExpect:      alwaysAllowed,
 	},
@@ -161,7 +161,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  false,
 		dest:           "svcNodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
+		xtablesExpect: snatNoWorkingPolicy,
 		ipvsExpect:     snatNoWorkingPolicy,
 		vppExpect:      noSNAT,
 	},
@@ -172,7 +172,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  true,
 		dest:           "svcNodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
+		xtablesExpect: noSNAT,
 		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      noSNAT,
 	},
@@ -183,7 +183,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  false,
 		dest:           "node1NodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
+		xtablesExpect: snatNoWorkingPolicy,
 		ipvsExpect:     snatNoWorkingPolicy,
 		vppExpect:      noSNAT,
 	},
@@ -194,7 +194,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  true,
 		dest:           "node1NodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
+		xtablesExpect: noSNAT,
 		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      noSNAT,
 	},
@@ -205,7 +205,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  false,
 		dest:           "node1NodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
+		xtablesExpect: snatNoWorkingPolicy,
 		ipvsExpect:     snatNoWorkingPolicy,
 		vppExpect:      snatNoWorkingPolicy,
 	},
@@ -216,7 +216,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  true,
 		dest:           "node1NodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
+		xtablesExpect: snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
 		ipvsExpect:     snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
 		vppExpect:      snatNoWorkingPolicy,
 	},
@@ -229,7 +229,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  false,
 		dest:           "node0NodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
+		xtablesExpect: snatNoWorkingPolicy,
 		ipvsExpect:     snatNoWorkingPolicy,
 		vppExpect:      snatNoWorkingPolicy,
 	},
@@ -240,7 +240,7 @@ var ingressScenarioTable = []ingressScenario{
 		hostNetworked:  false,
 		dest:           "svcNodePort",
 		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
+		xtablesExpect: snatNoWorkingPolicy,
 		ipvsExpect:     snatNoWorkingPolicy,
 		vppExpect:      noSNAT,
 	},
@@ -271,7 +271,6 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("workload-ingress")
 
 		var (
-			cli       ctrlclient.Client
 			nodeNames []string
 			nodeIPs   []string
 			tunnelIPs []string
@@ -279,8 +278,7 @@ var _ = describe.CalicoDescribe(
 		)
 
 		BeforeEach(func() {
-			var err error
-			cli, err = client.New(f.ClientConfig())
+			cli, err := client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -306,7 +304,8 @@ var _ = describe.CalicoDescribe(
 				dp.Calico, dp.IsBPF(), dp.IsIPVS(), dp.IsVPP())
 		})
 
-		// expectForDP returns the ingressExpectation appropriate for the detected dataplane.
+		// expectForDP returns the ingressExpectation appropriate for the detected
+		// dataplane. IPVS has its own column; iptables and nftables share xtablesExpect.
 		expectForDP := func(s ingressScenario) ingressExpectation {
 			switch {
 			case dp.IsBPF():
@@ -316,7 +315,7 @@ var _ = describe.CalicoDescribe(
 			case dp.IsIPVS():
 				return s.ipvsExpect
 			default:
-				return s.iptablesExpect
+				return s.xtablesExpect
 			}
 		}
 
@@ -579,10 +578,14 @@ var _ = describe.CalicoDescribe(
 			Eventually(tryConnectBlocked, 30*time.Second, 2*time.Second).Should(Succeed())
 			Consistently(tryConnectBlocked, 5*time.Second, 1*time.Second).Should(Succeed())
 
-			// Build /32 CIDRs for the external node's source IPs.
+			// Build /32 (IPv4) or /128 (IPv6) CIDRs for the external node's source IPs.
 			cidrs := make([]string, 0, len(extIPs))
 			for _, ip := range extIPs {
-				cidrs = append(cidrs, ip+"/32")
+				if net.ParseIP(ip).To4() != nil {
+					cidrs = append(cidrs, ip+"/32")
+				} else {
+					cidrs = append(cidrs, ip+"/128")
+				}
 			}
 			By(fmt.Sprintf("Installing allow-by-CIDR policy for external node IPs: %v", cidrs))
 			allowExt := ingressCreateAllowByCIDRPolicy(f, cidrs)
@@ -600,7 +603,9 @@ var _ = describe.CalicoDescribe(
 			}
 		}
 
-		// Register test cases for all scenarios.
+		// Register test cases for all scenarios. Scenario 3 (cross-node
+		// ClusterIP, pod-networked) is marked as conformance since it's the
+		// most fundamental ingress path.
 		for _, scenario := range ingressScenarioTable {
 			s := scenario // capture loop variable
 			name := fmt.Sprintf("scenario-%d: %s hostNet=%v -> %s",
@@ -609,6 +614,10 @@ var _ = describe.CalicoDescribe(
 			if s.srcNode == "external" {
 				It(name, Label("ExternalNode"), func() {
 					runExternalIngressTest(s)
+				})
+			} else if s.num == 3 {
+				framework.ConformanceIt(name, func() {
+					runStandardIngressTest(s)
 				})
 			} else {
 				It(name, func() {
@@ -671,9 +680,8 @@ func ingressCreateAllowByPodLabelPolicy(f *framework.Framework, clientName strin
 func ingressCreateAllowByCIDRPolicy(f *framework.Framework, cidrs []string) *networkingv1.NetworkPolicy {
 	peers := make([]networkingv1.NetworkPolicyPeer, 0, len(cidrs))
 	for _, cidr := range cidrs {
-		c := cidr
 		peers = append(peers, networkingv1.NetworkPolicyPeer{
-			IPBlock: &networkingv1.IPBlock{CIDR: c},
+			IPBlock: &networkingv1.IPBlock{CIDR: cidr},
 		})
 	}
 	policy := &networkingv1.NetworkPolicy{

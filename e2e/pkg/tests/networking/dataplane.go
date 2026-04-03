@@ -70,9 +70,12 @@ func detectDataplane(cli ctrlclient.Client, clientset kubernetes.Interface) clus
 		KubeProxy: proxyIptables,
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	// Try Installation CR first (operator-managed clusters).
 	installation := &operatorv1.Installation{}
-	err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation)
+	err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
 	if err == nil && installation.Spec.CalicoNetwork != nil && installation.Spec.CalicoNetwork.LinuxDataplane != nil {
 		switch *installation.Spec.CalicoNetwork.LinuxDataplane {
 		case operatorv1.LinuxDataplaneBPF:
@@ -88,7 +91,7 @@ func detectDataplane(cli ctrlclient.Client, clientset kubernetes.Interface) clus
 	} else {
 		// Fall back to FelixConfiguration for manifest-based installs.
 		felixCfg := &v3.FelixConfiguration{}
-		if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, felixCfg); err == nil {
+		if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixCfg); err == nil {
 			if felixCfg.Spec.BPFEnabled != nil && *felixCfg.Spec.BPFEnabled {
 				dp.Calico = dataplaneBPF
 			} else if felixCfg.Spec.UseInternalDataplaneDriver != nil && !*felixCfg.Spec.UseInternalDataplaneDriver {
@@ -109,7 +112,7 @@ func detectDataplane(cli ctrlclient.Client, clientset kubernetes.Interface) clus
 
 // kubeProxyConfig is a minimal struct for parsing the kube-proxy config.
 type kubeProxyConfig struct {
-	Mode string `json:"mode"`
+	Mode string `yaml:"mode" json:"mode"`
 }
 
 // detectKubeProxyMode reads the kube-proxy ConfigMap to determine the proxy mode.
@@ -124,16 +127,7 @@ func detectKubeProxyMode(clientset kubernetes.Interface) kubeProxyMode {
 
 	configData, ok := cm.Data["config.conf"]
 	if !ok {
-		configData, ok = cm.Data["kubeconfig.conf"]
-	}
-	if !ok {
-		// Try the common key used by kubeadm.
-		for key, val := range cm.Data {
-			if key == "config.conf" || key == "kubeconfig.conf" {
-				configData = val
-				break
-			}
-		}
+		configData = cm.Data["kubeconfig.conf"]
 	}
 
 	if configData == "" {
