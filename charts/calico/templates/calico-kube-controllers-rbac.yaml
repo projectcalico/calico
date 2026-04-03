@@ -37,7 +37,7 @@ rules:
       - watch
       - list
   # Needed for policy name migrator.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["{{ include "calicoAPIGroup" . }}"]
     resources:
       - networkpolicies
       - stagednetworkpolicies
@@ -115,17 +115,17 @@ rules:
       - update
       - watch
   # IPAM resources are manipulated in response to node and block updates, as well as periodic triggers.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["{{ include "calicoAPIGroup" . }}"]
     resources:
       - ipreservations
     verbs:
       - list
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["{{ include "calicoAPIGroup" . }}"]
     resources:
       - blockaffinities
       - ipamblocks
       - ipamhandles
-      - ipamconfigs
+      - {{ if .Values.useV3CRDs }}ipamconfigurations{{ else }}ipamconfigs{{ end }}
       - tiers
     verbs:
       - get
@@ -135,14 +135,14 @@ rules:
       - delete
       - watch
   # Pools are watched to maintain a mapping of blocks to IP pools.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["{{ include "calicoAPIGroup" . }}"]
     resources:
       - ippools
     verbs:
       - list
       - watch
   # kube-controllers manages hostendpoints.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["{{ include "calicoAPIGroup" . }}"]
     resources:
       - hostendpoints
     verbs:
@@ -153,7 +153,7 @@ rules:
       - delete
       - watch
   # Needs access to update clusterinformations.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["{{ include "calicoAPIGroup" . }}"]
     resources:
       - clusterinformations
     verbs:
@@ -163,7 +163,7 @@ rules:
       - update
       - watch
   # KubeControllersConfiguration is where it gets its config
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["{{ include "calicoAPIGroup" . }}"]
     resources:
       - kubecontrollersconfigurations
     verbs:
@@ -176,14 +176,14 @@ rules:
       - update
       # watch for changes
       - watch
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["{{ include "calicoAPIGroup" . }}"]
     resources:
       - kubecontrollersconfigurations/status
     verbs:
       - get
       - update
   # Needed for policy name migrator.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["{{ include "calicoAPIGroup" . }}"]
     resources:
       - networkpolicies
       - stagednetworkpolicies
