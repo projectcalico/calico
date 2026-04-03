@@ -7,11 +7,11 @@
 #   1. Create a TLS certificate/key pair for the webhook service. The certificate
 #      must be valid for the DNS names:
 #        - calico-webhooks
-#        - calico-webhooks.calico-system
-#        - calico-webhooks.calico-system.svc
+#        - calico-webhooks.kube-system
+#        - calico-webhooks.kube-system.svc
 #
-#   2. Create the TLS secret in the calico-system namespace:
-#        kubectl -n calico-system create secret tls calico-webhooks-tls \
+#   2. Create the TLS secret in the kube-system namespace:
+#        kubectl -n kube-system create secret tls calico-webhooks-tls \
 #          --cert=<cert-file> --key=<key-file>
 #
 #   3. Patch the ValidatingWebhookConfiguration with the CA bundle:
@@ -25,7 +25,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: calico-webhooks
-  namespace: calico-system
+  namespace: kube-system
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -52,14 +52,14 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: calico-webhooks
-    namespace: calico-system
+    namespace: kube-system
 
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: calico-webhooks
-  namespace: calico-system
+  namespace: kube-system
   labels:
     k8s-app: calico-webhooks
 spec:
@@ -127,7 +127,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: calico-webhooks
-  namespace: calico-system
+  namespace: kube-system
 spec:
   selector:
     k8s-app: calico-webhooks
@@ -151,7 +151,7 @@ webhooks:
       caBundle: ""
       service:
         name: calico-webhooks
-        namespace: calico-system
+        namespace: kube-system
         path: /rbac
     failurePolicy: Fail
     sideEffects: None

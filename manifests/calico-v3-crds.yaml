@@ -1,12 +1,4 @@
 ---
-# Source: calico/templates/calico-webhooks.yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: calico-system
-  labels:
-    name: calico-system
----
 # Source: calico/templates/calico-kube-controllers.yaml
 # This manifest creates a Pod Disruption Budget for Controller to allow K8s Cluster Autoscaler to evict
 
@@ -49,7 +41,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: calico-webhooks
-  namespace: calico-system
+  namespace: kube-system
 ---
 # Source: calico/templates/calico-config.yaml
 # This ConfigMap is used to configure a self-hosted Calico installation.
@@ -6161,7 +6153,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: calico-webhooks
-    namespace: calico-system
+    namespace: kube-system
 ---
 # Source: calico/templates/tier-getter.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -6182,7 +6174,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: calico-webhooks
-  namespace: calico-system
+  namespace: kube-system
 spec:
   selector:
     k8s-app: calico-webhooks
@@ -6567,7 +6559,7 @@ spec:
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
-              value: node,loadbalancer,tier
+              value: node,loadbalancer
             - name: DATASTORE_TYPE
               value: kubernetes
           livenessProbe:
@@ -6593,7 +6585,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: calico-webhooks
-  namespace: calico-system
+  namespace: kube-system
   labels:
     k8s-app: calico-webhooks
 spec:
@@ -6665,8 +6657,8 @@ spec:
 # Source: calico/templates/calico-webhooks.yaml
 # Calico webhooks for tiered RBAC enforcement on policy resources.
 # Requires TLS certificates:
-#   1. Create a cert/key pair valid for calico-webhooks.calico-system.svc
-#   2. kubectl -n calico-system create secret tls calico-webhooks-tls --cert=<cert> --key=<key>
+#   1. Create a cert/key pair valid for calico-webhooks.kube-system.svc
+#   2. kubectl -n kube-system create secret tls calico-webhooks-tls --cert=<cert> --key=<key>
 #   3. Patch the ValidatingWebhookConfiguration caBundle with the CA cert (base64-encoded)
 ---
 # Source: calico/templates/admission-policies.yaml
@@ -6805,7 +6797,7 @@ webhooks:
       caBundle: ""
       service:
         name: calico-webhooks
-        namespace: calico-system
+        namespace: kube-system
         path: /rbac
     failurePolicy: Fail
     sideEffects: None

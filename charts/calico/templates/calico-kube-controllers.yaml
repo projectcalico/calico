@@ -111,7 +111,7 @@ spec:
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
-              value: node,loadbalancer{{- if .Values.useV3CRDs }},tier{{- end }}
+              value: node,loadbalancer
             - name: DATASTORE_TYPE
               value: kubernetes
           livenessProbe:
