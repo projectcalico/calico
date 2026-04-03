@@ -465,6 +465,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		jumpMapEgr = mock.NewMockMap(progsParamsEg)
 		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jumpMapIng)
 		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jumpMapEgr)
+		// Netkit jump maps are needed even in non-netkit tests because the
+		// bpfEndpointManager indexes into them unconditionally (e.g. syncIfStateMap).
 		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, mock.NewMockMap(progsParamsIng))
 		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, mock.NewMockMap(progsParamsEg))
 		xdpJumpMap = mock.NewMockMap(progsParamsIng)
@@ -1102,6 +1104,37 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genHostMetadataV6Update("1::4")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(5))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(5))
+		})
+	})
+
+	Context("with netkit workload endpoint", func() {
+		JustBeforeEach(func() {
+			newBpfEpMgr(false)
+			err := dp.createIface("calinkit0", 50, "netkit")
+			Expect(err).NotTo(HaveOccurred())
+			genWLUpdate("calinkit0")()
+			genIfaceUpdate("calinkit0", ifacemonitor.StateUp, 50)()
+		})
+
+		It("should detect netkit interface type", func() {
+			bpfEpMgr.ifacesLock.Lock()
+			iface := bpfEpMgr.nameToIface["calinkit0"]
+			bpfEpMgr.ifacesLock.Unlock()
+			Expect(iface.info.ifaceType).To(Equal(IfaceTypeNetkit))
+		})
+
+		It("should allocate jump indices for netkit workload", func() {
+			bpfEpMgr.ifacesLock.Lock()
+			iface := bpfEpMgr.nameToIface["calinkit0"]
+			bpfEpMgr.ifacesLock.Unlock()
+			// Netkit workload should have policy indices allocated.
+			Expect(iface.dpState.v4.policyIdx[hook.Ingress]).To(BeNumerically(">=", 0))
+			Expect(iface.dpState.v4.policyIdx[hook.Egress]).To(BeNumerically(">=", 0))
+		})
+
+		It("should clean up netkit jump maps on interface removal", func() {
+			genIfaceUpdate("calinkit0", ifacemonitor.StateNotPresent, 50)()
+			genWLUpdateEpRemove("calinkit0")()
 		})
 	})
 
