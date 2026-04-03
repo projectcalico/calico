@@ -6081,6 +6081,14 @@ rules:
       - subjectaccessreviews
     verbs:
       - create
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - tiers
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/tier-getter.yaml
 # Implements the necessary permissions for the kube-controller-manager to interact with
