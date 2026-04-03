@@ -8291,10 +8291,10 @@ rules:
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - globalfelixconfigs
+      - globalbgpconfigs
       - felixconfigurations
       - bgppeers
       - bgpfilters
-      - globalbgpconfigs
       - bgpconfigurations
       - ippools
       - ipreservations
