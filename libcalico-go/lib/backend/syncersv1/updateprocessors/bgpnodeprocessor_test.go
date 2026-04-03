@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		Kind: internalapi.KindNode,
 		Name: "bgpnode1",
 	}
-	numBgpConfigs := 6
+	numBgpConfigs := 8
 	up := updateprocessors.NewBGPNodeUpdateProcessor(false)
 
 	BeforeEach(func() {
@@ -50,12 +50,14 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		res := internalapi.NewNode()
 		res.Name = "bgpnode1"
 		expected := map[string]any{
-			"ip_addr_v4":    "",
-			"ip_addr_v6":    "",
-			"network_v4":    nil,
-			"network_v6":    nil,
-			"as_num":        nil,
-			"rr_cluster_id": "",
+			"ip_addr_v4":        "",
+			"ip_addr_v6":        "",
+			"network_v4":        nil,
+			"network_v6":        nil,
+			"as_num":            nil,
+			"rr_cluster_id":     "",
+			"wireguard_addr_v4": nil,
+			"wireguard_addr_v6": nil,
 		}
 		kvps, err := up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -93,12 +95,14 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			IPv4Address: "1.2.3.4",
 		}
 		expected = map[string]any{
-			"ip_addr_v4":    "1.2.3.4",
-			"ip_addr_v6":    "",
-			"network_v4":    "1.2.3.4/32",
-			"network_v6":    nil,
-			"as_num":        nil,
-			"rr_cluster_id": "",
+			"ip_addr_v4":        "1.2.3.4",
+			"ip_addr_v6":        "",
+			"network_v4":        "1.2.3.4/32",
+			"network_v6":        nil,
+			"as_num":            nil,
+			"rr_cluster_id":     "",
+			"wireguard_addr_v4": nil,
+			"wireguard_addr_v6": nil,
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -119,12 +123,14 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			IPv6Address: "aa:bb:cc::",
 		}
 		expected = map[string]any{
-			"ip_addr_v4":    "",
-			"ip_addr_v6":    "aa:bb:cc::",
-			"network_v4":    nil,
-			"network_v6":    "aa:bb:cc::/128",
-			"as_num":        nil,
-			"rr_cluster_id": "",
+			"ip_addr_v4":        "",
+			"ip_addr_v6":        "aa:bb:cc::",
+			"network_v4":        nil,
+			"network_v6":        "aa:bb:cc::/128",
+			"as_num":            nil,
+			"rr_cluster_id":     "",
+			"wireguard_addr_v4": nil,
+			"wireguard_addr_v6": nil,
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -148,12 +154,75 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			ASNumber:    &asn,
 		}
 		expected = map[string]any{
-			"ip_addr_v4":    "1.2.3.4",
-			"ip_addr_v6":    "aa:bb:cc::ffff",
-			"network_v4":    "1.2.3.0/24",
-			"network_v6":    "aa:bb:cc::ff00/120",
-			"as_num":        "12345",
-			"rr_cluster_id": "",
+			"ip_addr_v4":        "1.2.3.4",
+			"ip_addr_v6":        "aa:bb:cc::ffff",
+			"network_v4":        "1.2.3.0/24",
+			"network_v6":        "aa:bb:cc::ff00/120",
+			"as_num":            "12345",
+			"rr_cluster_id":     "",
+			"wireguard_addr_v4": nil,
+			"wireguard_addr_v6": nil,
+		}
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeBgpConfig,
+			numBgpConfigs,
+			expected,
+		)
+
+		By("converting a Node with WireGuard addresses")
+		res = internalapi.NewNode()
+		res.Name = "bgpnode1"
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
+			IPv4Address: "1.2.3.4/24",
+		}
+		res.Spec.Wireguard = &internalapi.NodeWireguardSpec{
+			InterfaceIPv4Address: "10.0.0.1",
+			InterfaceIPv6Address: "fd00::1",
+		}
+		expected = map[string]any{
+			"ip_addr_v4":        "1.2.3.4",
+			"ip_addr_v6":        "",
+			"network_v4":        "1.2.3.0/24",
+			"network_v6":        nil,
+			"as_num":            nil,
+			"rr_cluster_id":     "",
+			"wireguard_addr_v4": "10.0.0.1",
+			"wireguard_addr_v6": "fd00::1",
+		}
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeBgpConfig,
+			numBgpConfigs,
+			expected,
+		)
+
+		By("converting a Node with nil Wireguard spec")
+		res = internalapi.NewNode()
+		res.Name = "bgpnode1"
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
+			IPv4Address: "1.2.3.4/24",
+		}
+		res.Spec.Wireguard = nil
+		expected = map[string]any{
+			"ip_addr_v4":        "1.2.3.4",
+			"ip_addr_v6":        "",
+			"network_v4":        "1.2.3.0/24",
+			"network_v6":        nil,
+			"as_num":            nil,
+			"rr_cluster_id":     "",
+			"wireguard_addr_v4": nil,
+			"wireguard_addr_v6": nil,
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -205,12 +274,14 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		})
 		// IPv4 address should be blank, network should be nil (deleted)
 		expected := map[string]any{
-			"ip_addr_v4":    "",
-			"ip_addr_v6":    "aa:bb:cc::ffff",
-			"network_v4":    nil,
-			"network_v6":    "aa:bb:cc::ff00/120",
-			"as_num":        "12345",
-			"rr_cluster_id": "",
+			"ip_addr_v4":        "",
+			"ip_addr_v6":        "aa:bb:cc::ffff",
+			"network_v4":        nil,
+			"network_v6":        "aa:bb:cc::ff00/120",
+			"as_num":            "12345",
+			"rr_cluster_id":     "",
+			"wireguard_addr_v4": nil,
+			"wireguard_addr_v6": nil,
 		}
 		Expect(err).To(HaveOccurred())
 		checkExpectedConfigs(
@@ -233,12 +304,14 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		})
 		// IPv6 address should be blank, network should be nil (deleted)
 		expected = map[string]any{
-			"ip_addr_v4":    "1.2.3.4",
-			"ip_addr_v6":    "",
-			"network_v4":    "1.2.3.0/24",
-			"network_v6":    nil,
-			"as_num":        nil,
-			"rr_cluster_id": "",
+			"ip_addr_v4":        "1.2.3.4",
+			"ip_addr_v6":        "",
+			"network_v4":        "1.2.3.0/24",
+			"network_v6":        nil,
+			"as_num":            nil,
+			"rr_cluster_id":     "",
+			"wireguard_addr_v4": nil,
+			"wireguard_addr_v6": nil,
 		}
 		Expect(err).To(HaveOccurred())
 		checkExpectedConfigs(
@@ -257,12 +330,14 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			RouteReflectorClusterID: "255.0.0.1",
 		}
 		expected := map[string]any{
-			"ip_addr_v4":    "172.17.0.2",
-			"ip_addr_v6":    "",
-			"network_v4":    "172.17.0.0/24",
-			"network_v6":    nil,
-			"as_num":        nil,
-			"rr_cluster_id": "255.0.0.1",
+			"ip_addr_v4":        "172.17.0.2",
+			"ip_addr_v6":        "",
+			"network_v4":        "172.17.0.0/24",
+			"network_v6":        nil,
+			"as_num":            nil,
+			"rr_cluster_id":     "255.0.0.1",
+			"wireguard_addr_v4": nil,
+			"wireguard_addr_v6": nil,
 		}
 		kvps, err := up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
