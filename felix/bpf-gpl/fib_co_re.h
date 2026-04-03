@@ -192,6 +192,10 @@ skip_redir_ifindex:
 
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
 			CALI_DEBUG("ifindex_fwd is CT_INVALID_IFINDEX, doing FIB lookup");
+			__u32 __fib_ifindex = ctx->skb->ifindex;
+			if (CALI_F_FROM_WEP && ctx->globals->data.host_ifindex) {
+				__fib_ifindex = ctx->globals->data.host_ifindex;
+			}
 			*fib_params(ctx) = (struct bpf_fib_lookup) {
 #ifdef IPVER6
 				.family = 10, /* AF_INET6 */
@@ -199,7 +203,7 @@ skip_redir_ifindex:
 				.family = 2, /* AF_INET */
 #endif
 				.tot_len = 0,
-				.ifindex = ctx->skb->ifindex,
+				.ifindex = __fib_ifindex,
 				.l4_protocol = state->ip_proto,
 			};
 

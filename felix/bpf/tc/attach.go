@@ -81,6 +81,17 @@ type AttachPoint struct {
 	IstioDSCP                     int8
 	MaglevLUTSize                 uint32
 	ProgramsMap                   maps.Map
+	MapPinOverrides               map[string]string // prog_array pin path overrides for netkit
+}
+
+// AttachOptionNetkit is used internally to signal netkit attachment.
+// It is not part of the public API (not user-configurable); Felix auto-selects
+// it when it detects a netkit device.
+const AttachOptionNetkit = "Netkit"
+
+// IsNetkit reports whether this attach point targets a netkit device.
+func (ap *AttachPoint) IsNetkit() bool {
+	return string(ap.AttachType) == AttachOptionNetkit
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -95,15 +106,40 @@ func (ap *AttachPoint) Log() *log.Entry {
 }
 
 func (ap *AttachPoint) loadObject(file string, configurator bpf.ObjectConfigurator) (*libbpf.Obj, error) {
-	obj, err := bpf.LoadObjectWithOptions(file, ap.Configure(), configurator)
+	obj, err := bpf.LoadObjectWithPinOverrides(file, ap.Configure(), configurator, ap.MapPinOverrides)
 	if err != nil {
 		return nil, fmt.Errorf("error loading %s: %w", file, err)
 	}
 	return obj, nil
 }
 
+// tryUpdateExistingLink attempts to update a previously-pinned BPF link.
+// Returns needsReattach=true when the caller should create a fresh attachment
+// (pin absent or link severed). Returns err!=nil on hard failures.
+func (ap *AttachPoint) tryUpdateExistingLink(obj *libbpf.Obj, progPinPath string) (needsReattach bool, err error) {
+	if _, err := os.Stat(progPinPath); err != nil {
+		// Pin does not exist; caller must attach anew.
+		return true, nil
+	}
+	link, err := libbpf.OpenLink(progPinPath)
+	if err != nil {
+		return false, fmt.Errorf("error opening link %s: %w", progPinPath, err)
+	}
+	defer link.Close()
+	if err := link.Update(obj, "cali_tc_preamble"); err != nil {
+		if errors.Is(err, unix.ENOLINK) {
+			// The link was severed from the interface; remove the stale pin
+			// and let the caller re-attach.
+			ap.Log().Debug("Link severed from interface, re-attaching")
+			os.Remove(progPinPath)
+			return true, nil
+		}
+		return false, fmt.Errorf("error updating program %s: %w", progPinPath, err)
+	}
+	return false, nil
+}
+
 func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
-	logCxt := log.WithField("attachPoint", ap)
 	obj, err := ap.loadObject(binaryToLoad, func(obj *libbpf.Obj) error {
 		attachType := libbpf.AttachTypeTcxEgress
 		if ap.Hook == hook.Ingress {
@@ -112,35 +148,25 @@ func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
 		return obj.SetAttachType("cali_tc_preamble", attachType)
 	})
 	if err != nil {
-		logCxt.Warn("Failed to load program")
+		ap.Log().Warn("Failed to load program")
 		return fmt.Errorf("object %w", err)
 	}
 	defer obj.Close()
-	progPinPath := ap.ProgPinPath()
-	if _, err := os.Stat(progPinPath); err == nil {
-		link, err := libbpf.OpenLink(progPinPath)
-		if err != nil {
-			return fmt.Errorf("error opening link %s : %w", progPinPath, err)
-		}
-		defer link.Close()
-		if err := link.Update(obj, "cali_tc_preamble"); err != nil {
-			if errors.Is(err, unix.ENOLINK) {
-				// The link was deleted out from under us, so try attaching a new one.
-				logCxt.Debug("Link severed from interface, re-attaching")
-				os.Remove(progPinPath)
-				goto attachNew
-			}
-			return fmt.Errorf("error updating program %s : %w", progPinPath, err)
-		}
+
+	needsReattach, err := ap.tryUpdateExistingLink(obj, ap.ProgPinPath())
+	if err != nil {
+		return err
+	}
+	if !needsReattach {
 		return nil
 	}
-attachNew:
+
 	link, err := obj.AttachTCX("cali_tc_preamble", ap.Iface)
 	if err != nil {
 		return err
 	}
 	defer link.Close()
-	err = link.Pin(progPinPath)
+	err = link.Pin(ap.ProgPinPath())
 	if err != nil {
 		return fmt.Errorf("error pinning link %w", err)
 	}
@@ -155,6 +181,19 @@ func (ap *AttachPoint) AttachProgram() error {
 	// configuration further to the selected set of programs.
 
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("tc_preamble_%s.o", ap.Hook))
+	if ap.IsNetkit() {
+		err := ap.attachNetkitProgram(binaryToLoad)
+		if err != nil {
+			return fmt.Errorf("error attaching netkit program %s:%s: %w", ap.Iface, ap.Hook, err)
+		}
+		// Clean up legacy TC and TCX attachments from previous runs.
+		_ = RemoveQdisc(ap.Iface)
+		if _, err := os.Stat(ap.ProgPinPath()); err == nil {
+			_ = ap.detachTcxProgram()
+		}
+		logCxt.Info("Program attached to netkit.")
+		return nil
+	}
 	if ap.AttachType == apiv3.BPFAttachOptionTCX {
 		err := ap.attachTCXProgram(binaryToLoad)
 		if err != nil {
@@ -205,6 +244,62 @@ func (ap *AttachPoint) ProgPinPath() string {
 	return path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_%s", strings.ReplaceAll(ap.Iface, ".", ""), ap.Hook))
 }
 
+func (ap *AttachPoint) NetkitProgPinPath() string {
+	return path.Join(bpfdefs.NetkitPinDir, fmt.Sprintf("%s_%s", strings.ReplaceAll(ap.Iface, ".", ""), ap.Hook))
+}
+
+func (ap *AttachPoint) attachNetkitProgram(binaryToLoad string) error {
+	obj, err := ap.loadObject(binaryToLoad, func(obj *libbpf.Obj) error {
+		// Map TC hook direction to netkit attach type:
+		// hook.Ingress (traffic from pod) -> BPF_NETKIT_PEER (peer transmits)
+		// hook.Egress (traffic to pod) -> BPF_NETKIT_PRIMARY (primary transmits)
+		attachType := libbpf.AttachTypeNetkitPrimary
+		if ap.Hook == hook.Ingress {
+			attachType = libbpf.AttachTypeNetkitPeer
+		}
+		return obj.SetAttachType("cali_tc_preamble", attachType)
+	})
+	if err != nil {
+		ap.Log().Warn("Failed to load program for netkit")
+		return fmt.Errorf("object %w", err)
+	}
+	defer obj.Close()
+
+	needsReattach, err := ap.tryUpdateExistingLink(obj, ap.NetkitProgPinPath())
+	if err != nil {
+		return err
+	}
+	if !needsReattach {
+		return nil
+	}
+
+	link, err := obj.AttachNetkit("cali_tc_preamble", ap.Iface)
+	if err != nil {
+		return err
+	}
+	defer link.Close()
+	err = link.Pin(ap.NetkitProgPinPath())
+	if err != nil {
+		return fmt.Errorf("error pinning netkit link: %w", err)
+	}
+	return nil
+}
+
+func (ap *AttachPoint) detachNetkitProgram() error {
+	progPinPath := ap.NetkitProgPinPath()
+	defer os.Remove(progPinPath)
+	link, err := libbpf.OpenLink(progPinPath)
+	if err != nil {
+		return fmt.Errorf("error opening netkit link %s: %w", progPinPath, err)
+	}
+	defer link.Close()
+	err = link.Detach()
+	if err != nil {
+		return fmt.Errorf("error detaching netkit link %s: %w", progPinPath, err)
+	}
+	return nil
+}
+
 func (ap *AttachPoint) detachTcxProgram() error {
 	progPinPath := ap.ProgPinPath()
 	defer os.Remove(progPinPath)
@@ -229,11 +324,17 @@ func (ap *AttachPoint) detachTcProgram() error {
 }
 
 func (ap *AttachPoint) DetachProgram() error {
-	err := ap.detachTcxProgram()
-	if err != nil {
-		log.Warnf("error detaching tcx program from %s hook %s : %s", ap.Iface, ap.Hook, err)
+	if _, err := os.Stat(ap.NetkitProgPinPath()); err == nil {
+		if err := ap.detachNetkitProgram(); err != nil {
+			log.Warnf("error detaching netkit program from %s hook %s : %s", ap.Iface, ap.Hook, err)
+		}
 	}
-	err = ap.detachTcProgram()
+	if _, err := os.Stat(ap.ProgPinPath()); err == nil {
+		if err := ap.detachTcxProgram(); err != nil {
+			log.Warnf("error detaching tcx program from %s hook %s : %s", ap.Iface, ap.Hook, err)
+		}
+	}
+	err := ap.detachTcProgram()
 	if err != nil {
 		log.Warnf("error detaching tc program from %s hook %s : %s", ap.Iface, ap.Hook, err)
 	}
@@ -439,6 +540,14 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		MaglevLUTSize: ap.MaglevLUTSize,
 	}
 
+	// Only set HostIfindex for netkit interfaces. For netkit, skb->ifindex
+	// is the peer's ifindex which differs from the primary that maps are
+	// keyed by. For TC/TCX, skb->ifindex already matches the host-side
+	// interface, so we leave HostIfindex as 0 to use the skb->ifindex fallback.
+	if ap.IsNetkit() {
+		globalData.HostIfindex = uint32(ap.IfIndex)
+	}
+
 	if ap.Profiling == "Enabled" {
 		globalData.Profiling = 1
 	}
@@ -571,4 +680,51 @@ var IsTcxSupported = sync.OnceValue(func() bool {
 	defer obj.Close()
 	_, err = obj.AttachTCX("cali_tcx_test", name)
 	return err == nil
+})
+
+var IsNetkitSupported = sync.OnceValue(func() bool {
+	name := "cali_nk_probe"
+	// Clean up a stale probe device that may have been left behind by a
+	// previous crash before the deferred cleanup could run.
+	if old, err := netlink.LinkByName(name); err == nil {
+		_ = netlink.LinkDel(old)
+	}
+	la := netlink.NewLinkAttrs()
+	la.Name = name
+	la.Flags = net.FlagUp
+	nk := &netlink.Netkit{
+		LinkAttrs: la,
+		Mode:      netlink.NETKIT_MODE_L2,
+	}
+	err := netlink.LinkAdd(nk)
+	if err != nil {
+		log.WithError(err).Debug("Netkit not supported on this kernel")
+		return false
+	}
+
+	defer func() {
+		if err := netlink.LinkDel(nk); err != nil {
+			log.Warnf("failed to delete netkit interface %s: %s", name, err)
+		}
+	}()
+
+	// Use LoadObjectWithOptions with a configurator to set the netkit attach
+	// type before loading. bpf.LoadObject calls Load() internally, so we
+	// must set the attach type in the configurator callback.
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tcx_test.o")
+	obj, err := bpf.LoadObjectWithOptions(binaryToLoad, &libbpf.TcGlobalData{}, func(obj *libbpf.Obj) error {
+		return obj.SetAttachType("cali_tcx_test", libbpf.AttachTypeNetkitPrimary)
+	})
+	if err != nil {
+		log.WithError(err).Debug("Failed to load test object for netkit probe")
+		return false
+	}
+	defer obj.Close()
+	link, err := obj.AttachNetkit("cali_tcx_test", name)
+	if err != nil {
+		log.WithError(err).Debug("Netkit BPF attachment not supported")
+		return false
+	}
+	link.Close()
+	return true
 })
