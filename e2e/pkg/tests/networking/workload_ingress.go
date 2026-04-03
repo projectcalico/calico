@@ -365,18 +365,20 @@ var _ = describe.CalicoDescribe(
 		}
 
 		// buildTarget returns the connection target for the given scenario, using the
-		// already-deployed server.
+		// already-deployed server. All targets use HTTP GET /clientip so that
+		// checkConnection can verify SNAT behavior from the response body.
 		buildTarget := func(s ingressScenario, server *conncheck.Server) conncheck.Target {
+			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
 			switch s.dest {
 			case "clusterIP":
 				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
-				return server.ClusterIPv4().Port(80)
+				return server.ClusterIPv4(clientIPOpt).Port(80)
 			case "svcNodePort":
-				return server.NodePort(nodeIPs[2])
+				return server.NodePort(nodeIPs[2], clientIPOpt)
 			case "node1NodePort":
-				return server.NodePort(nodeIPs[1])
+				return server.NodePort(nodeIPs[1], clientIPOpt)
 			case "node0NodePort":
-				return server.NodePort(nodeIPs[0])
+				return server.NodePort(nodeIPs[0], clientIPOpt)
 			default:
 				framework.Failf("unknown dest %q", s.dest)
 				return nil
@@ -410,6 +412,7 @@ var _ = describe.CalicoDescribe(
 				opts := []conncheck.ClientOption{
 					conncheck.WithClientLabels(map[string]string{"pod-name": name}),
 					conncheck.WithClientCustomizer(conncheck.WithNodeName(srcNodeName(s.srcNode))),
+					conncheck.WithClientCustomizer(withCurlClient),
 				}
 				if s.hostNetworked {
 					opts = append(opts, conncheck.WithClientCustomizer(func(pod *corev1.Pod) {
