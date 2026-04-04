@@ -15,8 +15,6 @@ spec:
   scope: Cluster
   versions:
     - name: v1
-      subresources:
-        status: {}
       schema:
         openAPIV3Schema:
           properties:
@@ -43,9 +41,6 @@ spec:
                 order:
                   type: number
               type: object
-            status:
-              type: object
-              x-kubernetes-preserve-unknown-fields: true
           required:
             - metadata
             - spec
