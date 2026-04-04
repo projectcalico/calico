@@ -1,0 +1,71 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: tiers.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: Tier
+    listKind: TierList
+    plural: tiers
+    singular: tier
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - additionalPrinterColumns:
+        - description: Order in which the tier is applied
+          jsonPath: .spec.order
+          name: Order
+          type: integer
+        - description: Default action for the tier
+          jsonPath: .spec.defaultAction
+          name: DefaultAction
+          type: string
+      name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                defaultAction:
+                  allOf:
+                    - enum:
+                        - Allow
+                        - Deny
+                        - Log
+                        - Pass
+                    - enum:
+                        - Pass
+                        - Deny
+                  type: string
+                order:
+                  type: number
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+          x-kubernetes-validations:
+            - message: The 'kube-admin' tier must have default action 'Pass'
+              rule:
+                "self.metadata.name == 'kube-admin' ? self.spec.defaultAction ==
+                'Pass' : true"
+            - message: The 'kube-baseline' tier must have default action 'Pass'
+              rule:
+                "self.metadata.name == 'kube-baseline' ? self.spec.defaultAction
+                == 'Pass' : true"
+            - message: The 'default' tier must have default action 'Deny'
+              rule:
+                "self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny'
+                : true"
+      served: true
+      storage: true
+      subresources: {}

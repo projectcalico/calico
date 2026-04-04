@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -432,6 +433,10 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 
 	// Step 1: Create v3 ClusterInformation with DatastoreReady=false to lock the datastore.
 	if err := m.lockDatastore(logCtx); err != nil {
+		if strings.Contains(err.Error(), "no matches for kind") {
+			dm.Status.Message = "v3 CRDs (projectcalico.org) not installed - apply them before starting migration"
+			_ = m.updateStatus(dm)
+		}
 		return err
 	}
 
@@ -599,7 +604,12 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 	}
 	if !hasV3Env {
 		logCtx.Info("Waiting for calico-node DaemonSet to be configured with CALICO_API_GROUP=projectcalico.org/v3")
-		dm.Status.Message = "Waiting for operator to configure calico-node with v3 API group"
+		operatorManaged, _ := discovery.IsOperatorManaged(m.k8sClient.Discovery())
+		if operatorManaged {
+			dm.Status.Message = "Waiting for operator to configure calico-node with v3 API group"
+		} else {
+			dm.Status.Message = "Waiting for user to set CALICO_API_GROUP=projectcalico.org/v3 on calico-node DaemonSet"
+		}
 		return m.updateStatus(dm)
 	}
 
