@@ -102,7 +102,7 @@ func NewController(cfg ControllerConfig) controller.Controller {
 	if pollInterval == 0 {
 		pollInterval = defaultWaitingPollInterval
 	}
-	operatorManaged, _ := discovery.IsOperatorManaged(cfg.K8sClient.Discovery())
+	operatorManaged, _ := discovery.IsOperatorManaged(cfg.K8sClient.Discovery(), cfg.DynamicClient)
 	logrus.WithField("operatorManaged", operatorManaged).Info("Migration controller: detected install type")
 
 	m := &migrationController{
@@ -674,11 +674,10 @@ func (m *migrationController) handleDeletion(logCtx *logrus.Entry, dm *Datastore
 		return nil
 	}
 
-	dm.Status.Message = "Cleaning up v1 CRDs"
-	_ = m.updateStatus(dm)
-
 	switch dm.Status.Phase {
 	case DatastoreMigrationPhaseComplete:
+		dm.Status.Message = "Cleaning up v1 CRDs"
+		_ = m.updateStatus(dm)
 		return m.handleCompletedCleanup(logCtx, dm)
 	case DatastoreMigrationPhaseConverged:
 		// Once converged, the operator may have started rolling out pods with
@@ -1031,6 +1030,7 @@ func (m *migrationController) setV1ClusterInfoReady(logCtx *logrus.Entry, ready 
 
 func (m *migrationController) setFailedStatus(dm *DatastoreMigration, message string) {
 	dm.Status.Phase = DatastoreMigrationPhaseFailed
+	dm.Status.Message = message
 	setPhaseMetric(DatastoreMigrationPhaseFailed)
 	dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
 		Type:               conditionTypeFailed,
