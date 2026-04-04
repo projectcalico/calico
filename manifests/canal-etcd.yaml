@@ -162,7 +162,7 @@ rules:
       - watch
       - list
   # Needed for policy name migrator.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - networkpolicies
       - stagednetworkpolicies

@@ -1,0 +1,147 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: ippools.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: IPPool
+    listKind: IPPoolList
+    plural: ippools
+    singular: ippool
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - additionalPrinterColumns:
+        - description: The pool CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+        - description: The VXLAN mode for this pool
+          jsonPath: .spec.vxlanMode
+          name: VXLAN
+          type: string
+        - description: The IPIP mode for this pool
+          jsonPath: .spec.ipipMode
+          name: IPIP
+          type: string
+        - description: Whether outgoing NAT is enabled for this pool
+          jsonPath: .spec.natOutgoing
+          name: NAT
+          type: boolean
+        - description: Whether or not this pool is available for IP allocations
+          jsonPath: .status.conditions[?(@.type=='Allocatable')].status
+          name: Allocatable
+          type: string
+        - description: The age of the pool
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                allowedUses:
+                  items:
+                    enum:
+                      - Workload
+                      - Tunnel
+                      - LoadBalancer
+                    type: string
+                  type: array
+                  x-kubernetes-list-type: set
+                assignmentMode:
+                  default: Automatic
+                  enum:
+                    - Automatic
+                    - Manual
+                  type: string
+                blockSize:
+                  maximum: 128
+                  minimum: 0
+                  type: integer
+                cidr:
+                  format: cidr
+                  type: string
+                disableBGPExport:
+                  type: boolean
+                disabled:
+                  type: boolean
+                ipipMode:
+                  enum:
+                    - Never
+                    - Always
+                    - CrossSubnet
+                  type: string
+                namespaceSelector:
+                  type: string
+                natOutgoing:
+                  type: boolean
+                nodeSelector:
+                  type: string
+                vxlanMode:
+                  enum:
+                    - Never
+                    - Always
+                    - CrossSubnet
+                  type: string
+              required:
+                - cidr
+              type: object
+            status:
+              properties:
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}
