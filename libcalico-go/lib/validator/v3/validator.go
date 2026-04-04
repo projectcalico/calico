@@ -23,8 +23,8 @@ import (
 	"strconv"
 	"strings"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	api "github.com/projectcalico/api/v3/apis/projectcalico/v3"
+	"github.com/projectcalico/api/v3/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"gopkg.in/go-playground/validator.v9"

@@ -21,7 +21,7 @@ import (
 	"os"
 	"reflect"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	api "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	felixconfig "github.com/projectcalico/calico/felix/config"

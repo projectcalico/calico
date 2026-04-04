@@ -23,8 +23,8 @@ set -o pipefail
 REPO_ROOT=$(realpath $(dirname "${BASH_SOURCE}")/..)
 BINDIR=${REPO_ROOT}/bin
 
-APPLY_CONFIG_PKG="github.com/projectcalico/api/pkg/client/applyconfiguration_generated"
-APPLY_CONFIG_DIR="${REPO_ROOT}/pkg/client/applyconfiguration_generated"
+APPLY_CONFIG_PKG="github.com/projectcalico/api/v3/client/applyconfiguration_generated"
+APPLY_CONFIG_DIR="${REPO_ROOT}/client/applyconfiguration_generated"
 
 # Generate OpenAPI schema JSON for applyconfiguration-gen.
 # This populates the structured-merge-diff type information in internal/internal.go,
@@ -40,32 +40,32 @@ applyconfiguration-gen "$@" \
 		--openapi-schema "${OPENAPI_SCHEMA}" \
 		--output-dir "${APPLY_CONFIG_DIR}" \
 		--output-pkg "${APPLY_CONFIG_PKG}" \
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3"
 
 # Patch applyconfiguration-gen bugs (see patches/0002-* and patches/0003-*).
 patch -p2 -d "${REPO_ROOT}" < "${REPO_ROOT}/patches/0002-Fix-duplicate-ensureProtoPort-method-in-FelixConfigurationSpec.patch"
 patch -p2 -d "${REPO_ROOT}" < "${REPO_ROOT}/patches/0003-Fix-pointer-slice-append-in-IPAMBlockSpec-Allocations.patch"
 
-# Generate the versioned clientset (pkg/client/clientset_generated/clientset)
+# Generate the versioned clientset (client/clientset_generated/clientset)
 client-gen "$@" \
 		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
-		--input-base "github.com/projectcalico/api/pkg/apis/" \
+		--input-base "github.com/projectcalico/api/v3/apis/" \
 		--input "projectcalico/v3" \
-		--output-dir "${REPO_ROOT}/pkg/client/clientset_generated" \
-		--clientset-path "github.com/projectcalico/api/pkg/client/clientset_generated/" \
+		--output-dir "${REPO_ROOT}/client/clientset_generated" \
+		--clientset-path "github.com/projectcalico/api/v3/client/clientset_generated/" \
 		--clientset-name "clientset" \
 		--apply-configuration-package "${APPLY_CONFIG_PKG}"
 # generate lister
 lister-gen "$@" \
 		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
-		--output-dir "${REPO_ROOT}/pkg/client/listers_generated" \
-		--output-pkg "github.com/projectcalico/api/pkg/client/listers_generated" \
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+		--output-dir "${REPO_ROOT}/client/listers_generated" \
+		--output-pkg "github.com/projectcalico/api/v3/client/listers_generated" \
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3"
 # generate informer
 informer-gen "$@" \
 		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
-		--versioned-clientset-package "github.com/projectcalico/api/pkg/client/clientset_generated/clientset" \
-		--listers-package "github.com/projectcalico/api/pkg/client/listers_generated" \
-		--output-dir "${REPO_ROOT}/pkg/client/informers_generated" \
-		--output-pkg "github.com/projectcalico/api/pkg/client/informers_generated" \
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+		--versioned-clientset-package "github.com/projectcalico/api/v3/client/clientset_generated/clientset" \
+		--listers-package "github.com/projectcalico/api/v3/client/listers_generated" \
+		--output-dir "${REPO_ROOT}/client/informers_generated" \
+		--output-pkg "github.com/projectcalico/api/v3/client/informers_generated" \
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3"

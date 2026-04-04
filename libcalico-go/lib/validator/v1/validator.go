@@ -20,7 +20,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/v3/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/go-playground/validator.v9"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"

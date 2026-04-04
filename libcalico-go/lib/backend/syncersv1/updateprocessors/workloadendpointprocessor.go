@@ -20,7 +20,7 @@ import (
 	"net"
 	"strings"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"

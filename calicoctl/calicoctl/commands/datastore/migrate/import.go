@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"

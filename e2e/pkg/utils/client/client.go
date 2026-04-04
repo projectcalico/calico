@@ -15,7 +15,7 @@
 package client
 
 import (
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"

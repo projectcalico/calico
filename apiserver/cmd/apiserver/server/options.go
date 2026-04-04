@@ -24,7 +24,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/projectcalico/api/pkg/openapi"
+	"github.com/projectcalico/api/v3/openapi"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"

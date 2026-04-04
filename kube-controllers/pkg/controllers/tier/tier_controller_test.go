@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"testing"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/fake"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
+	"github.com/projectcalico/api/v3/client/clientset_generated/clientset/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"

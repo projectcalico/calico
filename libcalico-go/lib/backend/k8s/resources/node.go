@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"reflect"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	apiv3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
+	"github.com/projectcalico/api/v3/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"

@@ -15,7 +15,7 @@
 package model
 
 import (
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/v3/lib/numorstring"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 )
