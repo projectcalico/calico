@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -103,6 +102,9 @@ func NewController(cfg ControllerConfig) controller.Controller {
 	if pollInterval == 0 {
 		pollInterval = defaultWaitingPollInterval
 	}
+	operatorManaged, _ := discovery.IsOperatorManaged(cfg.K8sClient.Discovery())
+	logrus.WithField("operatorManaged", operatorManaged).Info("Migration controller: detected install type")
+
 	m := &migrationController{
 		ctx:                 cfg.Ctx,
 		k8sClient:           cfg.K8sClient,
@@ -112,6 +114,7 @@ func NewController(cfg ControllerConfig) controller.Controller {
 		apiregClient:        cfg.APIRegClient,
 		migrators:           cfg.Migrators,
 		waitingPollInterval: pollInterval,
+		operatorManaged:     operatorManaged,
 	}
 	return controller.NewDeferredCRDController(
 		"datastoremigrations.migration.projectcalico.org",
@@ -147,6 +150,10 @@ type migrationController struct {
 	migrators           []migrators.ResourceMigrator
 	waitingPollInterval time.Duration
 	queue               workqueue.TypedRateLimitingInterface[string]
+
+	// operatorManaged is true if the cluster is managed by the Tigera operator,
+	// detected at init by checking for the operator.tigera.io API group.
+	operatorManaged bool
 }
 
 // RunWithContext is called by the DeferredCRDController once the DatastoreMigration
@@ -353,28 +360,33 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 	}
 	logCtx.WithField("v1CRDs", v1CRDCount).Info("Found v1 CRDs to migrate")
 
-	// Pre-validation: check the APIService.
+	// Pre-validation: check the APIService. In operator mode, there should be
+	// an aggregated APIService pointing to the calico apiserver. In manifest
+	// mode, there may be no APIService at all (or an automanaged CRD-backed one
+	// if v3 CRDs were pre-installed).
 	apiSvc, err := m.apiregClient.APIServices().Get(m.ctx, apiServiceName, metav1.GetOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			logCtx.Warn("APIService v3.projectcalico.org not found — may not be running with API server aggregation")
+			if m.operatorManaged {
+				logCtx.Warn("APIService v3.projectcalico.org not found — may not be running with API server aggregation")
+			} else {
+				logCtx.Info("No APIService found (expected for manifest installs)")
+			}
 		} else {
 			return fmt.Errorf("checking APIService: %w", err)
 		}
 	} else if apiSvc.Labels != nil && apiSvc.Labels["kube-aggregator.kubernetes.io/automanaged"] == "true" {
-		return asTerminal(fmt.Errorf("APIService v3.projectcalico.org is automanaged (CRD-backed), not aggregated — migration requires an aggregated API server"))
+		if m.operatorManaged {
+			return asTerminal(fmt.Errorf("APIService v3.projectcalico.org is automanaged (CRD-backed), not aggregated — migration requires an aggregated API server"))
+		}
+		// In manifest mode, an automanaged APIService means v3 CRDs are already
+		// installed. This is fine - we'll migrate data into them.
+		logCtx.Info("APIService is CRD-backed (v3 CRDs already installed)")
 	}
 
-	// Detect install namespace from the serviceaccount namespace file.
 	installNamespace := names.OwnNamespace()
-
-	// Detect install type by checking whether the operator API group is registered.
-	operatorManaged, err := discovery.IsOperatorManaged(m.k8sClient.Discovery())
-	if err != nil {
-		return fmt.Errorf("checking install type: %w", err)
-	}
 	installType := "manifest"
-	if operatorManaged {
+	if m.operatorManaged {
 		installType = "operator"
 	}
 	logCtx.WithFields(logrus.Fields{
@@ -382,8 +394,16 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 		"installType":      installType,
 	}).Info("Detected installation details")
 
+	// In manifest mode, ensure v3 CRDs are installed before proceeding.
+	if !m.operatorManaged {
+		if err := m.ensureV3CRDs(logCtx); err != nil {
+			return err
+		}
+	}
+
 	// Save and delete the APIService to unregister the API server. This will
 	// route future requests to the projectcalico.org/v3 API to CRDs instead.
+	// In manifest mode this is a no-op if no aggregated APIService exists.
 	if err := m.saveAndDeleteAPIService(logCtx, dm); err != nil {
 		return err
 	}
@@ -434,10 +454,6 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 
 	// Step 1: Create v3 ClusterInformation with DatastoreReady=false to lock the datastore.
 	if err := m.lockDatastore(logCtx); err != nil {
-		if strings.Contains(err.Error(), "no matches for kind") {
-			dm.Status.Message = "v3 CRDs (projectcalico.org) not installed - apply them before starting migration"
-			_ = m.updateStatus(dm)
-		}
 		return err
 	}
 
@@ -605,8 +621,7 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 	}
 	if !hasV3Env {
 		logCtx.Info("Waiting for calico-node DaemonSet to be configured with CALICO_API_GROUP=projectcalico.org/v3")
-		operatorManaged, _ := discovery.IsOperatorManaged(m.k8sClient.Discovery())
-		if operatorManaged {
+		if m.operatorManaged {
 			dm.Status.Message = "Waiting for operator to configure calico-node with v3 API group"
 		} else {
 			dm.Status.Message = "Waiting for user to set CALICO_API_GROUP=projectcalico.org/v3 on calico-node DaemonSet"
@@ -646,8 +661,7 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 
 	// In manifest mode, restart so kube-controllers re-discovers the v3 API
 	// group on startup. In operator mode, the operator handles the restart.
-	operatorManaged, _ := discovery.IsOperatorManaged(m.k8sClient.Discovery())
-	if !operatorManaged {
+	if !m.operatorManaged {
 		logCtx.Info("Migration complete, restarting kube-controllers to pick up v3 API group")
 		os.Exit(0)
 	}
@@ -943,6 +957,24 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 // unlockV3CRDDatastore sets DatastoreReady=true on the v3 ClusterInformation,
 // signaling components that have switched to v3 to resume normal operation.
 //
+// ensureV3CRDs checks that v3 CRDs (projectcalico.org) are installed. In
+// manifest mode, the user must install them before migration can proceed.
+func (m *migrationController) ensureV3CRDs(logCtx *logrus.Entry) error {
+	crdClient := m.dynamicClient.Resource(crdGVR)
+	crdList, err := crdClient.List(m.ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("listing CRDs: %w", err)
+	}
+	for _, crd := range crdList.Items {
+		group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+		if group == "projectcalico.org" {
+			logCtx.Info("v3 CRDs (projectcalico.org) are installed")
+			return nil
+		}
+	}
+	return fmt.Errorf("v3 CRDs (projectcalico.org) not installed — apply them before starting migration (kubectl apply --server-side -f api/config/crd/)")
+}
+
 // The v1 ClusterInformation is intentionally left locked. Components still
 // reading v1 (before their rolling update to v3 mode) will see the lock and
 // block CNI ADD/DEL operations. This prevents IPAM leaks during the rollout
