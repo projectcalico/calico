@@ -978,6 +978,8 @@ spec:
   scope: Cluster
   versions:
     - name: v1
+      subresources:
+        status: {}
       schema:
         openAPIV3Schema:
           properties:
@@ -3737,6 +3739,8 @@ spec:
   scope: Cluster
   versions:
     - name: v1
+      subresources:
+        status: {}
       schema:
         openAPIV3Schema:
           properties:
@@ -3862,6 +3866,9 @@ spec:
                 - message: global() selector is not valid for IPPool namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
           type: object
       served: true
       storage: true
@@ -6733,6 +6740,8 @@ spec:
   scope: Cluster
   versions:
     - name: v1
+      subresources:
+        status: {}
       schema:
         openAPIV3Schema:
           properties:
@@ -6759,6 +6768,9 @@ spec:
                 order:
                   type: number
               type: object
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
           required:
             - metadata
             - spec

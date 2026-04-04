@@ -3,9 +3,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: caliconodestatuses.crd.projectcalico.org
+  name: caliconodestatuses.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: CalicoNodeStatus
     listKind: CalicoNodeStatusList
@@ -14,9 +14,16 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v1
-      subresources:
-        status: {}
+    - additionalPrinterColumns:
+        - description: The name of the node
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The types of information to monitor for this calico/node
+          jsonPath: .spec.classes
+          name: Classes
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -36,7 +43,6 @@ spec:
                       - Routes
                     type: string
                   type: array
-                  x-kubernetes-list-type: set
                 node:
                   type: string
                 updatePeriodSeconds:
@@ -115,7 +121,6 @@ spec:
                             type: string
                         type: object
                       type: array
-                      x-kubernetes-list-type: atomic
                     peersV6:
                       items:
                         properties:
@@ -141,7 +146,6 @@ spec:
                             type: string
                         type: object
                       type: array
-                      x-kubernetes-list-type: atomic
                   required:
                     - numberEstablishedV4
                     - numberEstablishedV6
@@ -183,7 +187,6 @@ spec:
                             type: string
                         type: object
                       type: array
-                      x-kubernetes-list-type: atomic
                     routesV6:
                       items:
                         properties:
@@ -213,9 +216,12 @@ spec:
                             type: string
                         type: object
                       type: array
-                      x-kubernetes-list-type: atomic
                   type: object
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
