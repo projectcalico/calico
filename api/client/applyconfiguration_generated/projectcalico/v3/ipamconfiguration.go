@@ -42,7 +42,7 @@ func IPAMConfiguration(name string) *IPAMConfigurationApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractIPAMConfigurationFrom(iPAMConfiguration *projectcalicov3.IPAMConfiguration, fieldManager string, subresource string) (*IPAMConfigurationApplyConfiguration, error) {
 	b := &IPAMConfigurationApplyConfiguration{}
-	err := managedfields.ExtractInto(iPAMConfiguration, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMConfiguration"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(iPAMConfiguration, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMConfiguration"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

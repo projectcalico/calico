@@ -41,7 +41,7 @@ func KubeControllersConfiguration(name string) *KubeControllersConfigurationAppl
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractKubeControllersConfigurationFrom(kubeControllersConfiguration *projectcalicov3.KubeControllersConfiguration, fieldManager string, subresource string) (*KubeControllersConfigurationApplyConfiguration, error) {
 	b := &KubeControllersConfigurationApplyConfiguration{}
-	err := managedfields.ExtractInto(kubeControllersConfiguration, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.KubeControllersConfiguration"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(kubeControllersConfiguration, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.KubeControllersConfiguration"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

@@ -41,7 +41,7 @@ func CalicoNodeStatus(name string) *CalicoNodeStatusApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractCalicoNodeStatusFrom(calicoNodeStatus *projectcalicov3.CalicoNodeStatus, fieldManager string, subresource string) (*CalicoNodeStatusApplyConfiguration, error) {
 	b := &CalicoNodeStatusApplyConfiguration{}
-	err := managedfields.ExtractInto(calicoNodeStatus, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeStatus"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(calicoNodeStatus, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeStatus"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

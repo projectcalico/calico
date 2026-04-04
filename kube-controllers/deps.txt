@@ -140,19 +140,19 @@ sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482
 sigs.k8s.io/yaml v1.6.0
 
-local:api/pkg/apis/projectcalico/v3
-local:api/pkg/client/applyconfiguration_generated/internal
-local:api/pkg/client/applyconfiguration_generated/projectcalico/v3
-local:api/pkg/client/clientset_generated/clientset
-local:api/pkg/client/clientset_generated/clientset/scheme
-local:api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3
-local:api/pkg/client/informers_generated/externalversions
-local:api/pkg/client/informers_generated/externalversions/internalinterfaces
-local:api/pkg/client/informers_generated/externalversions/projectcalico
-local:api/pkg/client/informers_generated/externalversions/projectcalico/v3
-local:api/pkg/client/listers_generated/projectcalico/v3
-local:api/pkg/defaults
-local:api/pkg/lib/numorstring
+local:api/apis/projectcalico/v3
+local:api/client/applyconfiguration_generated/internal
+local:api/client/applyconfiguration_generated/projectcalico/v3
+local:api/client/clientset_generated/clientset
+local:api/client/clientset_generated/clientset/scheme
+local:api/client/clientset_generated/clientset/typed/projectcalico/v3
+local:api/client/informers_generated/externalversions
+local:api/client/informers_generated/externalversions/internalinterfaces
+local:api/client/informers_generated/externalversions/projectcalico
+local:api/client/informers_generated/externalversions/projectcalico/v3
+local:api/client/listers_generated/projectcalico/v3
+local:api/defaults
+local:api/lib/numorstring
 local:crypto/pkg/tls
 local:felix/ip
 local:kube-controllers/cmd/check-status

@@ -40,7 +40,7 @@ func ClusterInformation(name string) *ClusterInformationApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractClusterInformationFrom(clusterInformation *projectcalicov3.ClusterInformation, fieldManager string, subresource string) (*ClusterInformationApplyConfiguration, error) {
 	b := &ClusterInformationApplyConfiguration{}
-	err := managedfields.ExtractInto(clusterInformation, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.ClusterInformation"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(clusterInformation, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.ClusterInformation"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

@@ -41,7 +41,7 @@ func NetworkPolicy(name, namespace string) *NetworkPolicyApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractNetworkPolicyFrom(networkPolicy *projectcalicov3.NetworkPolicy, fieldManager string, subresource string) (*NetworkPolicyApplyConfiguration, error) {
 	b := &NetworkPolicyApplyConfiguration{}
-	err := managedfields.ExtractInto(networkPolicy, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkPolicy"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(networkPolicy, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.NetworkPolicy"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

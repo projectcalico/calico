@@ -40,7 +40,7 @@ func FelixConfiguration(name string) *FelixConfigurationApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractFelixConfigurationFrom(felixConfiguration *projectcalicov3.FelixConfiguration, fieldManager string, subresource string) (*FelixConfigurationApplyConfiguration, error) {
 	b := &FelixConfigurationApplyConfiguration{}
-	err := managedfields.ExtractInto(felixConfiguration, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.FelixConfiguration"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(felixConfiguration, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.FelixConfiguration"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

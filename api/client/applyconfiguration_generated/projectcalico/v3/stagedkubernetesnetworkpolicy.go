@@ -43,7 +43,7 @@ func StagedKubernetesNetworkPolicy(name, namespace string) *StagedKubernetesNetw
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractStagedKubernetesNetworkPolicyFrom(stagedKubernetesNetworkPolicy *projectcalicov3.StagedKubernetesNetworkPolicy, fieldManager string, subresource string) (*StagedKubernetesNetworkPolicyApplyConfiguration, error) {
 	b := &StagedKubernetesNetworkPolicyApplyConfiguration{}
-	err := managedfields.ExtractInto(stagedKubernetesNetworkPolicy, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedKubernetesNetworkPolicy"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(stagedKubernetesNetworkPolicy, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedKubernetesNetworkPolicy"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

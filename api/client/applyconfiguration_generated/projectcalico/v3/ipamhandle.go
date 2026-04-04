@@ -41,7 +41,7 @@ func IPAMHandle(name, namespace string) *IPAMHandleApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractIPAMHandleFrom(iPAMHandle *projectcalicov3.IPAMHandle, fieldManager string, subresource string) (*IPAMHandleApplyConfiguration, error) {
 	b := &IPAMHandleApplyConfiguration{}
-	err := managedfields.ExtractInto(iPAMHandle, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMHandle"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(iPAMHandle, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMHandle"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

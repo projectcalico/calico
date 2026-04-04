@@ -40,7 +40,7 @@ func GlobalNetworkSet(name string) *GlobalNetworkSetApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractGlobalNetworkSetFrom(globalNetworkSet *projectcalicov3.GlobalNetworkSet, fieldManager string, subresource string) (*GlobalNetworkSetApplyConfiguration, error) {
 	b := &GlobalNetworkSetApplyConfiguration{}
-	err := managedfields.ExtractInto(globalNetworkSet, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkSet"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(globalNetworkSet, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.GlobalNetworkSet"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

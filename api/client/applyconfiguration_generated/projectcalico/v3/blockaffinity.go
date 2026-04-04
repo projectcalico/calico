@@ -42,7 +42,7 @@ func BlockAffinity(name string) *BlockAffinityApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractBlockAffinityFrom(blockAffinity *projectcalicov3.BlockAffinity, fieldManager string, subresource string) (*BlockAffinityApplyConfiguration, error) {
 	b := &BlockAffinityApplyConfiguration{}
-	err := managedfields.ExtractInto(blockAffinity, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.BlockAffinity"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(blockAffinity, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.BlockAffinity"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

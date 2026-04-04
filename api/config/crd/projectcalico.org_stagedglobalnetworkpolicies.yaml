@@ -68,11 +68,16 @@ spec:
                             x-kubernetes-list-type: set
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              pattern: ^.*
-                              x-kubernetes-int-or-string: true
+                              properties:
+                                maxPort:
+                                  type: integer
+                                minPort:
+                                  type: integer
+                                portName:
+                                  type: string
+                              required:
+                                - portName
+                              type: object
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -81,11 +86,16 @@ spec:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              pattern: ^.*
-                              x-kubernetes-int-or-string: true
+                              properties:
+                                maxPort:
+                                  type: integer
+                                minPort:
+                                  type: integer
+                                portName:
+                                  type: string
+                              required:
+                                - portName
+                              type: object
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -211,17 +221,31 @@ spec:
                             reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
-                        pattern: ^.*
-                        x-kubernetes-int-or-string: true
+                        properties:
+                          numVal:
+                            type: integer
+                          strVal:
+                            type: string
+                          type:
+                            type: integer
+                        required:
+                          - numVal
+                          - strVal
+                          - type
+                        type: object
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
-                        pattern: ^.*
-                        x-kubernetes-int-or-string: true
+                        properties:
+                          numVal:
+                            type: integer
+                          strVal:
+                            type: string
+                          type:
+                            type: integer
+                        required:
+                          - numVal
+                          - strVal
+                          - type
+                        type: object
                       source:
                         properties:
                           namespaceSelector:
@@ -241,11 +265,16 @@ spec:
                             x-kubernetes-list-type: set
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              pattern: ^.*
-                              x-kubernetes-int-or-string: true
+                              properties:
+                                maxPort:
+                                  type: integer
+                                minPort:
+                                  type: integer
+                                portName:
+                                  type: string
+                              required:
+                                - portName
+                              type: object
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -254,11 +283,16 @@ spec:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              pattern: ^.*
-                              x-kubernetes-int-or-string: true
+                              properties:
+                                maxPort:
+                                  type: integer
+                                minPort:
+                                  type: integer
+                                portName:
+                                  type: string
+                              required:
+                                - portName
+                              type: object
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -398,11 +432,16 @@ spec:
                             x-kubernetes-list-type: set
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              pattern: ^.*
-                              x-kubernetes-int-or-string: true
+                              properties:
+                                maxPort:
+                                  type: integer
+                                minPort:
+                                  type: integer
+                                portName:
+                                  type: string
+                              required:
+                                - portName
+                              type: object
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -411,11 +450,16 @@ spec:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              pattern: ^.*
-                              x-kubernetes-int-or-string: true
+                              properties:
+                                maxPort:
+                                  type: integer
+                                minPort:
+                                  type: integer
+                                portName:
+                                  type: string
+                              required:
+                                - portName
+                              type: object
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -541,17 +585,31 @@ spec:
                             reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
-                        pattern: ^.*
-                        x-kubernetes-int-or-string: true
+                        properties:
+                          numVal:
+                            type: integer
+                          strVal:
+                            type: string
+                          type:
+                            type: integer
+                        required:
+                          - numVal
+                          - strVal
+                          - type
+                        type: object
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
-                        pattern: ^.*
-                        x-kubernetes-int-or-string: true
+                        properties:
+                          numVal:
+                            type: integer
+                          strVal:
+                            type: string
+                          type:
+                            type: integer
+                        required:
+                          - numVal
+                          - strVal
+                          - type
+                        type: object
                       source:
                         properties:
                           namespaceSelector:
@@ -571,11 +629,16 @@ spec:
                             x-kubernetes-list-type: set
                           notPorts:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              pattern: ^.*
-                              x-kubernetes-int-or-string: true
+                              properties:
+                                maxPort:
+                                  type: integer
+                                minPort:
+                                  type: integer
+                                portName:
+                                  type: string
+                              required:
+                                - portName
+                              type: object
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic
@@ -584,11 +647,16 @@ spec:
                             type: string
                           ports:
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              pattern: ^.*
-                              x-kubernetes-int-or-string: true
+                              properties:
+                                maxPort:
+                                  type: integer
+                                minPort:
+                                  type: integer
+                                portName:
+                                  type: string
+                              required:
+                                - portName
+                              type: object
                             maxItems: 50
                             type: array
                             x-kubernetes-list-type: atomic

@@ -40,7 +40,7 @@ func GlobalNetworkPolicy(name string) *GlobalNetworkPolicyApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractGlobalNetworkPolicyFrom(globalNetworkPolicy *projectcalicov3.GlobalNetworkPolicy, fieldManager string, subresource string) (*GlobalNetworkPolicyApplyConfiguration, error) {
 	b := &GlobalNetworkPolicyApplyConfiguration{}
-	err := managedfields.ExtractInto(globalNetworkPolicy, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkPolicy"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(globalNetworkPolicy, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.GlobalNetworkPolicy"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

@@ -25,7 +25,7 @@ func Parser() *typed.Parser {
 var parserOnce sync.Once
 var parser *typed.Parser
 var schemaYAML = typed.YAMLObject(`types:
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.AllocationAttribute
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.AllocationAttribute
   map:
     fields:
     - name: alternateOwnerAttrs
@@ -41,7 +41,7 @@ var schemaYAML = typed.YAMLObject(`types:
         map:
           elementType:
             scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.AutoHostEndpointConfig
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.AutoHostEndpointConfig
   map:
     fields:
     - name: autoCreate
@@ -54,9 +54,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Template
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Template
           elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPConfiguration
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPConfiguration
   map:
     fields:
     - name: apiVersion
@@ -71,9 +71,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPConfigurationSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPConfigurationSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPConfigurationSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPConfigurationSpec
   map:
     fields:
     - name: asNumber
@@ -86,7 +86,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Community
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Community
           elementRelationship: associative
     - name: ignoredInterfaces
       type:
@@ -117,7 +117,7 @@ var schemaYAML = typed.YAMLObject(`types:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
     - name: nodeMeshPassword
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPPassword
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPPassword
     - name: nodeToNodeMeshEnabled
       type:
         scalar: boolean
@@ -125,7 +125,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PrefixAdvertisement
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.PrefixAdvertisement
           elementRelationship: associative
     - name: programClusterRoutes
       type:
@@ -134,13 +134,13 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceClusterIPBlock
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceClusterIPBlock
           elementRelationship: associative
     - name: serviceExternalIPs
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceExternalIPBlock
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceExternalIPBlock
           elementRelationship: associative
     - name: serviceLoadBalancerAggregation
       type:
@@ -149,9 +149,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceLoadBalancerIPBlock
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceLoadBalancerIPBlock
           elementRelationship: associative
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPDaemonStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPDaemonStatus
   map:
     fields:
     - name: lastBootTime
@@ -169,7 +169,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: version
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilter
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilter
   map:
     fields:
     - name: apiVersion
@@ -184,16 +184,16 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterAddCommunity
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterAddCommunity
   map:
     fields:
     - name: value
       type:
         scalar: string
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterCommunityMatch
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterCommunityMatch
   map:
     fields:
     - name: values
@@ -203,20 +203,20 @@ var schemaYAML = typed.YAMLObject(`types:
             scalar: string
           elementRelationship: atomic
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterOperation
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterOperation
   map:
     fields:
     - name: addCommunity
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterAddCommunity
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterAddCommunity
     - name: prependASPath
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterPrependASPath
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterPrependASPath
     - name: setPriority
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterSetPriority
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterSetPriority
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterPrefixLengthV4
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterPrefixLengthV4
   map:
     fields:
     - name: max
@@ -226,7 +226,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: numeric
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterPrefixLengthV6
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterPrefixLengthV6
   map:
     fields:
     - name: max
@@ -236,7 +236,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: numeric
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterPrependASPath
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterPrependASPath
   map:
     fields:
     - name: prefix
@@ -246,7 +246,7 @@ var schemaYAML = typed.YAMLObject(`types:
             scalar: numeric
           elementRelationship: atomic
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterRuleV4
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterRuleV4
   map:
     fields:
     - name: action
@@ -264,7 +264,7 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: string
     - name: communities
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterCommunityMatch
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterCommunityMatch
     - name: interface
       type:
         scalar: string
@@ -275,14 +275,14 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterOperation
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterOperation
           elementRelationship: atomic
     - name: peerType
       type:
         scalar: string
     - name: prefixLength
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterPrefixLengthV4
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterPrefixLengthV4
     - name: priority
       type:
         scalar: numeric
@@ -290,7 +290,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterRuleV6
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterRuleV6
   map:
     fields:
     - name: action
@@ -308,7 +308,7 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: string
     - name: communities
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterCommunityMatch
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterCommunityMatch
     - name: interface
       type:
         scalar: string
@@ -319,14 +319,14 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterOperation
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterOperation
           elementRelationship: atomic
     - name: peerType
       type:
         scalar: string
     - name: prefixLength
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterPrefixLengthV6
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterPrefixLengthV6
     - name: priority
       type:
         scalar: numeric
@@ -334,47 +334,47 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterSetPriority
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterSetPriority
   map:
     fields:
     - name: value
       type:
         scalar: numeric
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterSpec
   map:
     fields:
     - name: exportV4
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterRuleV4
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterRuleV4
           elementRelationship: atomic
     - name: exportV6
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterRuleV6
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterRuleV6
           elementRelationship: atomic
     - name: importV4
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterRuleV4
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterRuleV4
           elementRelationship: atomic
     - name: importV6
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilterRuleV6
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilterRuleV6
           elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPPassword
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPPassword
   map:
     fields:
     - name: secretKeyRef
       type:
         namedType: io.k8s.api.core.v1.SecretKeySelector
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPPeer
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPPeer
   map:
     fields:
     - name: apiVersion
@@ -389,9 +389,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPPeerSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPPeerSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPPeerSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPPeerSpec
   map:
     fields:
     - name: asNumber
@@ -432,7 +432,7 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: numeric
     - name: password
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPPassword
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPPassword
     - name: peerIP
       type:
         scalar: string
@@ -451,7 +451,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: ttlSecurity
       type:
         scalar: numeric
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BPFConntrackTimeouts
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BPFConntrackTimeouts
   map:
     fields:
     - name: creationGracePeriod
@@ -478,7 +478,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: udpTimeout
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BlockAffinity
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BlockAffinity
   map:
     fields:
     - name: apiVersion
@@ -493,9 +493,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BlockAffinitySpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BlockAffinitySpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BlockAffinitySpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.BlockAffinitySpec
   map:
     fields:
     - name: cidr
@@ -517,33 +517,33 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: type
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeAgentStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeAgentStatus
   map:
     fields:
     - name: birdV4
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPDaemonStatus
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPDaemonStatus
       default: {}
     - name: birdV6
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPDaemonStatus
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPDaemonStatus
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeBGPRouteStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeBGPRouteStatus
   map:
     fields:
     - name: routesV4
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeRoute
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeRoute
           elementRelationship: atomic
     - name: routesV6
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeRoute
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeRoute
           elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeBGPStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeBGPStatus
   map:
     fields:
     - name: numberEstablishedV4
@@ -566,15 +566,15 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodePeer
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodePeer
           elementRelationship: atomic
     - name: peersV6
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodePeer
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodePeer
           elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodePeer
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodePeer
   map:
     fields:
     - name: peerIP
@@ -589,7 +589,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: type
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeRoute
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeRoute
   map:
     fields:
     - name: destination
@@ -603,12 +603,12 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: string
     - name: learnedFrom
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeRouteLearnedFrom
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeRouteLearnedFrom
       default: {}
     - name: type
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeRouteLearnedFrom
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeRouteLearnedFrom
   map:
     fields:
     - name: peerIP
@@ -617,7 +617,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: sourceType
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeStatus
   map:
     fields:
     - name: apiVersion
@@ -632,13 +632,13 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeStatusSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeStatusSpec
       default: {}
     - name: status
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeStatusStatus
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeStatusStatus
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeStatusSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeStatusSpec
   map:
     fields:
     - name: classes
@@ -653,25 +653,25 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: updatePeriodSeconds
       type:
         scalar: numeric
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeStatusStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeStatusStatus
   map:
     fields:
     - name: agent
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeAgentStatus
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeAgentStatus
       default: {}
     - name: bgp
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeBGPStatus
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeBGPStatus
       default: {}
     - name: lastUpdated
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Time
     - name: routes
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.CalicoNodeBGPRouteStatus
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.CalicoNodeBGPRouteStatus
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ClusterInformation
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ClusterInformation
   map:
     fields:
     - name: apiVersion
@@ -686,9 +686,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ClusterInformationSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ClusterInformationSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ClusterInformationSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ClusterInformationSpec
   map:
     fields:
     - name: calicoVersion
@@ -706,7 +706,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: variant
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Community
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.Community
   map:
     fields:
     - name: name
@@ -716,31 +716,31 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ControllersConfig
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ControllersConfig
   map:
     fields:
     - name: loadBalancer
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.LoadBalancerControllerConfig
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.LoadBalancerControllerConfig
     - name: migration
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.MigrationControllerConfig
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.MigrationControllerConfig
     - name: namespace
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NamespaceControllerConfig
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.NamespaceControllerConfig
     - name: node
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NodeControllerConfig
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.NodeControllerConfig
     - name: policy
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyControllerConfig
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.PolicyControllerConfig
     - name: serviceAccount
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceAccountControllerConfig
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceAccountControllerConfig
     - name: workloadEndpoint
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.WorkloadEndpointControllerConfig
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.EndpointPort
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.WorkloadEndpointControllerConfig
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.EndpointPort
   map:
     fields:
     - name: name
@@ -753,8 +753,8 @@ var schemaYAML = typed.YAMLObject(`types:
       default: 0
     - name: protocol
       type:
-        namedType: com.github.projectcalico.api.pkg.lib.numorstring.Protocol
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.EntityRule
+        namedType: com.github.projectcalico.api.v3.lib.numorstring.Protocol
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.EntityRule
   map:
     fields:
     - name: namespaceSelector
@@ -776,7 +776,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.lib.numorstring.Port
+            namedType: com.github.projectcalico.api.v3.lib.numorstring.Port
           elementRelationship: atomic
     - name: notSelector
       type:
@@ -785,18 +785,18 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.lib.numorstring.Port
+            namedType: com.github.projectcalico.api.v3.lib.numorstring.Port
           elementRelationship: atomic
     - name: selector
       type:
         scalar: string
     - name: serviceAccounts
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceAccountMatch
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceAccountMatch
     - name: services
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceMatch
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.FelixConfiguration
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceMatch
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.FelixConfiguration
   map:
     fields:
     - name: apiVersion
@@ -811,9 +811,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.FelixConfigurationSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.FelixConfigurationSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.FelixConfigurationSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.FelixConfigurationSpec
   map:
     fields:
     - name: allowIPIPPacketsFromWorkloads
@@ -845,7 +845,7 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: string
     - name: bpfConntrackTimeouts
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BPFConntrackTimeouts
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.BPFConntrackTimeouts
     - name: bpfDSROptoutCIDRs
       type:
         list:
@@ -956,7 +956,7 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: numeric
     - name: bpfPSNATPorts
       type:
-        namedType: com.github.projectcalico.api.pkg.lib.numorstring.Port
+        namedType: com.github.projectcalico.api.v3.lib.numorstring.Port
     - name: bpfPolicyDebugEnabled
       type:
         scalar: boolean
@@ -1033,13 +1033,13 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ProtoPort
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ProtoPort
           elementRelationship: atomic
     - name: failsafeOutboundHostPorts
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ProtoPort
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ProtoPort
           elementRelationship: atomic
     - name: featureDetectOverride
       type:
@@ -1090,7 +1090,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HealthTimeoutOverride
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.HealthTimeoutOverride
           elementRelationship: atomic
     - name: interfaceExclude
       type:
@@ -1160,12 +1160,12 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: string
     - name: istioDSCPMark
       type:
-        namedType: com.github.projectcalico.api.pkg.lib.numorstring.DSCP
+        namedType: com.github.projectcalico.api.v3.lib.numorstring.DSCP
     - name: kubeNodePortRanges
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.lib.numorstring.Port
+            namedType: com.github.projectcalico.api.v3.lib.numorstring.Port
           elementRelationship: atomic
     - name: liveMigrationRouteConvergenceTime
       type:
@@ -1214,7 +1214,7 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: string
     - name: natPortRange
       type:
-        namedType: com.github.projectcalico.api.pkg.lib.numorstring.Port
+        namedType: com.github.projectcalico.api.v3.lib.numorstring.Port
     - name: netlinkTimeout
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
@@ -1298,12 +1298,12 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: boolean
     - name: routeTableRange
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.RouteTableRange
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.RouteTableRange
     - name: routeTableRanges
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.RouteTableIDRange
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.RouteTableIDRange
           elementRelationship: atomic
     - name: serviceLoopPrevention
       type:
@@ -1386,7 +1386,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: xdpRefreshInterval
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkPolicy
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.GlobalNetworkPolicy
   map:
     fields:
     - name: apiVersion
@@ -1401,9 +1401,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkPolicySpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.GlobalNetworkPolicySpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkPolicySpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.GlobalNetworkPolicySpec
   map:
     fields:
     - name: applyOnForward
@@ -1416,13 +1416,13 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: ingress
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: namespaceSelector
       type:
@@ -1454,7 +1454,7 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: associative
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkSet
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.GlobalNetworkSet
   map:
     fields:
     - name: apiVersion
@@ -1469,9 +1469,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkSetSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.GlobalNetworkSetSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkSetSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.GlobalNetworkSetSpec
   map:
     fields:
     - name: nets
@@ -1480,7 +1480,7 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: associative
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HTTPMatch
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.HTTPMatch
   map:
     fields:
     - name: methods
@@ -1493,9 +1493,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HTTPPath
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.HTTPPath
           elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HTTPPath
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.HTTPPath
   map:
     fields:
     - name: exact
@@ -1504,7 +1504,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: prefix
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HealthTimeoutOverride
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.HealthTimeoutOverride
   map:
     fields:
     - name: name
@@ -1514,7 +1514,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: timeout
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HostEndpoint
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.HostEndpoint
   map:
     fields:
     - name: apiVersion
@@ -1529,9 +1529,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HostEndpointSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.HostEndpointSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HostEndpointSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.HostEndpointSpec
   map:
     fields:
     - name: expectedIPs
@@ -1550,7 +1550,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.EndpointPort
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.EndpointPort
           elementRelationship: atomic
     - name: profiles
       type:
@@ -1558,7 +1558,7 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: associative
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ICMPFields
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ICMPFields
   map:
     fields:
     - name: code
@@ -1567,7 +1567,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: type
       type:
         scalar: numeric
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMBlock
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMBlock
   map:
     fields:
     - name: apiVersion
@@ -1582,9 +1582,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMBlockSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMBlockSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMBlockSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMBlockSpec
   map:
     fields:
     - name: affinity
@@ -1603,7 +1603,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.AllocationAttribute
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.AllocationAttribute
           elementRelationship: atomic
     - name: cidr
       type:
@@ -1632,7 +1632,7 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: numeric
           elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMConfiguration
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMConfiguration
   map:
     fields:
     - name: apiVersion
@@ -1647,9 +1647,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMConfigurationSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMConfigurationSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMConfigurationSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMConfigurationSpec
   map:
     fields:
     - name: autoAllocateBlocks
@@ -1666,7 +1666,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: boolean
       default: false
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMHandle
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMHandle
   map:
     fields:
     - name: apiVersion
@@ -1681,9 +1681,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMHandleSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMHandleSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMHandleSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMHandleSpec
   map:
     fields:
     - name: block
@@ -1699,7 +1699,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
       default: ""
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPPool
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPPool
   map:
     fields:
     - name: apiVersion
@@ -1714,12 +1714,12 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPPoolSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPPoolSpec
       default: {}
     - name: status
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPPoolStatus
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPPoolSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPPoolStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPPoolSpec
   map:
     fields:
     - name: allowedUses
@@ -1759,7 +1759,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: vxlanMode
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPPoolStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPPoolStatus
   map:
     fields:
     - name: conditions
@@ -1770,7 +1770,7 @@ var schemaYAML = typed.YAMLObject(`types:
           elementRelationship: associative
           keys:
           - type
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPReservation
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPReservation
   map:
     fields:
     - name: apiVersion
@@ -1785,9 +1785,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPReservationSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPReservationSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPReservationSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.IPReservationSpec
   map:
     fields:
     - name: reservedCIDRs
@@ -1796,7 +1796,7 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: associative
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.KubeControllersConfiguration
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.KubeControllersConfiguration
   map:
     fields:
     - name: apiVersion
@@ -1811,18 +1811,18 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.KubeControllersConfigurationSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.KubeControllersConfigurationSpec
       default: {}
     - name: status
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.KubeControllersConfigurationStatus
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.KubeControllersConfigurationStatus
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.KubeControllersConfigurationSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.KubeControllersConfigurationSpec
   map:
     fields:
     - name: controllers
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ControllersConfig
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ControllersConfig
       default: {}
     - name: debugProfilePort
       type:
@@ -1839,7 +1839,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: prometheusMetricsPort
       type:
         scalar: numeric
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.KubeControllersConfigurationStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.KubeControllersConfigurationStatus
   map:
     fields:
     - name: environmentVars
@@ -1849,26 +1849,26 @@ var schemaYAML = typed.YAMLObject(`types:
             scalar: string
     - name: runningConfig
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.KubeControllersConfigurationSpec
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.LoadBalancerControllerConfig
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.KubeControllersConfigurationSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.LoadBalancerControllerConfig
   map:
     fields:
     - name: assignIPs
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.MigrationControllerConfig
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.MigrationControllerConfig
   map:
     fields:
     - name: policyNameMigrator
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NamespaceControllerConfig
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.NamespaceControllerConfig
   map:
     fields:
     - name: reconcilerPeriod
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkPolicy
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.NetworkPolicy
   map:
     fields:
     - name: apiVersion
@@ -1883,22 +1883,22 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkPolicySpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.NetworkPolicySpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkPolicySpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.NetworkPolicySpec
   map:
     fields:
     - name: egress
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: ingress
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: order
       type:
@@ -1924,7 +1924,7 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: associative
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkSet
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.NetworkSet
   map:
     fields:
     - name: apiVersion
@@ -1939,9 +1939,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkSetSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.NetworkSetSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkSetSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.NetworkSetSpec
   map:
     fields:
     - name: nets
@@ -1950,12 +1950,12 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: associative
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NodeControllerConfig
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.NodeControllerConfig
   map:
     fields:
     - name: hostEndpoint
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.AutoHostEndpointConfig
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.AutoHostEndpointConfig
     - name: leakGracePeriod
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
@@ -1965,13 +1965,13 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: syncLabels
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyControllerConfig
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.PolicyControllerConfig
   map:
     fields:
     - name: reconcilerPeriod
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PrefixAdvertisement
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.PrefixAdvertisement
   map:
     fields:
     - name: cidr
@@ -1984,7 +1984,7 @@ var schemaYAML = typed.YAMLObject(`types:
             scalar: string
           elementRelationship: atomic
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Profile
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.Profile
   map:
     fields:
     - name: apiVersion
@@ -1999,29 +1999,29 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ProfileSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ProfileSpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ProfileSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ProfileSpec
   map:
     fields:
     - name: egress
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: ingress
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: labelsToApply
       type:
         map:
           elementType:
             scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ProtoPort
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ProtoPort
   map:
     fields:
     - name: net
@@ -2034,7 +2034,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: protocol
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.RouteTableIDRange
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.RouteTableIDRange
   map:
     fields:
     - name: max
@@ -2045,7 +2045,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: numeric
       default: 0
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.RouteTableRange
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.RouteTableRange
   map:
     fields:
     - name: max
@@ -2056,7 +2056,7 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: numeric
       default: 0
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
   map:
     fields:
     - name: action
@@ -2065,34 +2065,34 @@ var schemaYAML = typed.YAMLObject(`types:
       default: ""
     - name: destination
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.EntityRule
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.EntityRule
       default: {}
     - name: http
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HTTPMatch
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.HTTPMatch
     - name: icmp
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ICMPFields
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ICMPFields
     - name: ipVersion
       type:
         scalar: numeric
     - name: metadata
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.RuleMetadata
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.RuleMetadata
     - name: notICMP
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ICMPFields
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.ICMPFields
     - name: notProtocol
       type:
-        namedType: com.github.projectcalico.api.pkg.lib.numorstring.Protocol
+        namedType: com.github.projectcalico.api.v3.lib.numorstring.Protocol
     - name: protocol
       type:
-        namedType: com.github.projectcalico.api.pkg.lib.numorstring.Protocol
+        namedType: com.github.projectcalico.api.v3.lib.numorstring.Protocol
     - name: source
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.EntityRule
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.EntityRule
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.RuleMetadata
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.RuleMetadata
   map:
     fields:
     - name: annotations
@@ -2100,13 +2100,13 @@ var schemaYAML = typed.YAMLObject(`types:
         map:
           elementType:
             scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceAccountControllerConfig
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceAccountControllerConfig
   map:
     fields:
     - name: reconcilerPeriod
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceAccountMatch
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceAccountMatch
   map:
     fields:
     - name: names
@@ -2118,28 +2118,28 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: selector
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceClusterIPBlock
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceClusterIPBlock
   map:
     fields:
     - name: cidr
       type:
         scalar: string
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceExternalIPBlock
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceExternalIPBlock
   map:
     fields:
     - name: cidr
       type:
         scalar: string
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceLoadBalancerIPBlock
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceLoadBalancerIPBlock
   map:
     fields:
     - name: cidr
       type:
         scalar: string
     elementRelationship: atomic
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceMatch
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.ServiceMatch
   map:
     fields:
     - name: name
@@ -2148,7 +2148,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: namespace
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedGlobalNetworkPolicy
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedGlobalNetworkPolicy
   map:
     fields:
     - name: apiVersion
@@ -2163,9 +2163,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedGlobalNetworkPolicySpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedGlobalNetworkPolicySpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedGlobalNetworkPolicySpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedGlobalNetworkPolicySpec
   map:
     fields:
     - name: applyOnForward
@@ -2178,13 +2178,13 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: ingress
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: namespaceSelector
       type:
@@ -2219,7 +2219,7 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: associative
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedKubernetesNetworkPolicy
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedKubernetesNetworkPolicy
   map:
     fields:
     - name: apiVersion
@@ -2234,9 +2234,9 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedKubernetesNetworkPolicySpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedKubernetesNetworkPolicySpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedKubernetesNetworkPolicySpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedKubernetesNetworkPolicySpec
   map:
     fields:
     - name: egress
@@ -2264,7 +2264,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: stagedAction
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedNetworkPolicy
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedNetworkPolicy
   map:
     fields:
     - name: apiVersion
@@ -2279,22 +2279,22 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedNetworkPolicySpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedNetworkPolicySpec
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedNetworkPolicySpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedNetworkPolicySpec
   map:
     fields:
     - name: egress
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: ingress
       type:
         list:
           elementType:
-            namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Rule
+            namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.Rule
           elementRelationship: atomic
     - name: order
       type:
@@ -2323,7 +2323,7 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: associative
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Template
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.Template
   map:
     fields:
     - name: generateName
@@ -2346,7 +2346,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: nodeSelector
       type:
         scalar: string
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Tier
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.Tier
   map:
     fields:
     - name: apiVersion
@@ -2361,13 +2361,13 @@ var schemaYAML = typed.YAMLObject(`types:
       default: {}
     - name: spec
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.TierSpec
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.TierSpec
       default: {}
     - name: status
       type:
-        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.TierStatus
+        namedType: com.github.projectcalico.api.v3.apis.projectcalico.v3.TierStatus
       default: {}
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.TierSpec
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.TierSpec
   map:
     fields:
     - name: defaultAction
@@ -2376,7 +2376,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: order
       type:
         scalar: numeric
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.TierStatus
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.TierStatus
   map:
     fields:
     - name: conditions
@@ -2387,17 +2387,17 @@ var schemaYAML = typed.YAMLObject(`types:
           elementRelationship: associative
           keys:
           - type
-- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.WorkloadEndpointControllerConfig
+- name: com.github.projectcalico.api.v3.apis.projectcalico.v3.WorkloadEndpointControllerConfig
   map:
     fields:
     - name: reconcilerPeriod
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
-- name: com.github.projectcalico.api.pkg.lib.numorstring.DSCP
+- name: com.github.projectcalico.api.v3.lib.numorstring.DSCP
   scalar: untyped
-- name: com.github.projectcalico.api.pkg.lib.numorstring.Port
+- name: com.github.projectcalico.api.v3.lib.numorstring.Port
   scalar: untyped
-- name: com.github.projectcalico.api.pkg.lib.numorstring.Protocol
+- name: com.github.projectcalico.api.v3.lib.numorstring.Protocol
   scalar: untyped
 - name: io.k8s.api.core.v1.SecretKeySelector
   map:

@@ -61,11 +61,18 @@ spec:
                         minimum: 1
                         type: integer
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
-                        pattern: ^.*
-                        x-kubernetes-int-or-string: true
+                        properties:
+                          numVal:
+                            type: integer
+                          strVal:
+                            type: string
+                          type:
+                            type: integer
+                        required:
+                          - numVal
+                          - strVal
+                          - type
+                        type: object
                     required:
                       - name
                       - port

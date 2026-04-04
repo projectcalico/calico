@@ -178,11 +178,16 @@ spec:
                 bpfMapSizeRoute:
                   type: integer
                 bpfPSNATPorts:
-                  anyOf:
-                    - type: integer
-                    - type: string
-                  pattern: ^.*
-                  x-kubernetes-int-or-string: true
+                  properties:
+                    maxPort:
+                      type: integer
+                    minPort:
+                      type: integer
+                    portName:
+                      type: string
+                  required:
+                    - portName
+                  type: object
                 bpfPolicyDebugEnabled:
                   type: boolean
                 bpfProfiling:
@@ -396,11 +401,16 @@ spec:
                   x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   items:
-                    anyOf:
-                      - type: integer
-                      - type: string
-                    pattern: ^.*
-                    x-kubernetes-int-or-string: true
+                    properties:
+                      maxPort:
+                        type: integer
+                      minPort:
+                        type: integer
+                      portName:
+                        type: string
+                    required:
+                      - portName
+                    type: object
                   maxItems: 7
                   type: array
                 liveMigrationRouteConvergenceTime:
@@ -446,11 +456,16 @@ spec:
                     - IPPoolsAndHostIPs
                   type: string
                 natPortRange:
-                  anyOf:
-                    - type: integer
-                    - type: string
-                  pattern: ^.*
-                  x-kubernetes-int-or-string: true
+                  properties:
+                    maxPort:
+                      type: integer
+                    minPort:
+                      type: integer
+                    portName:
+                      type: string
+                  required:
+                    - portName
+                  type: object
                 netlinkTimeout:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string

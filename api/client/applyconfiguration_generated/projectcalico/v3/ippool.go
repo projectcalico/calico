@@ -41,7 +41,7 @@ func IPPool(name string) *IPPoolApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractIPPoolFrom(iPPool *projectcalicov3.IPPool, fieldManager string, subresource string) (*IPPoolApplyConfiguration, error) {
 	b := &IPPoolApplyConfiguration{}
-	err := managedfields.ExtractInto(iPPool, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPPool"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(iPPool, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.IPPool"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

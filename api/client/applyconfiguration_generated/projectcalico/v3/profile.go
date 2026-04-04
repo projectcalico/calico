@@ -40,7 +40,7 @@ func Profile(name string) *ProfileApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractProfileFrom(profile *projectcalicov3.Profile, fieldManager string, subresource string) (*ProfileApplyConfiguration, error) {
 	b := &ProfileApplyConfiguration{}
-	err := managedfields.ExtractInto(profile, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.Profile"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(profile, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.Profile"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

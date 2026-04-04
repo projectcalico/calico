@@ -40,7 +40,7 @@ func IPAMBlock(name string) *IPAMBlockApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractIPAMBlockFrom(iPAMBlock *projectcalicov3.IPAMBlock, fieldManager string, subresource string) (*IPAMBlockApplyConfiguration, error) {
 	b := &IPAMBlockApplyConfiguration{}
-	err := managedfields.ExtractInto(iPAMBlock, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.IPAMBlock"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(iPAMBlock, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.IPAMBlock"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

@@ -42,7 +42,7 @@ func StagedGlobalNetworkPolicy(name string) *StagedGlobalNetworkPolicyApplyConfi
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractStagedGlobalNetworkPolicyFrom(stagedGlobalNetworkPolicy *projectcalicov3.StagedGlobalNetworkPolicy, fieldManager string, subresource string) (*StagedGlobalNetworkPolicyApplyConfiguration, error) {
 	b := &StagedGlobalNetworkPolicyApplyConfiguration{}
-	err := managedfields.ExtractInto(stagedGlobalNetworkPolicy, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedGlobalNetworkPolicy"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(stagedGlobalNetworkPolicy, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.StagedGlobalNetworkPolicy"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

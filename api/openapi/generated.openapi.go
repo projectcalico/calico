@@ -21,461 +21,461 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.AllocationAttribute":                schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.AutoHostEndpointConfig":             schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPConfiguration":                   schema_pkg_apis_projectcalico_v3_BGPConfiguration(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPConfigurationList":               schema_pkg_apis_projectcalico_v3_BGPConfigurationList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPConfigurationSpec":               schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPDaemonStatus":                    schema_pkg_apis_projectcalico_v3_BGPDaemonStatus(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilter":                          schema_pkg_apis_projectcalico_v3_BGPFilter(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterAddCommunity":              schema_pkg_apis_projectcalico_v3_BGPFilterAddCommunity(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterCommunityMatch":            schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterList":                      schema_pkg_apis_projectcalico_v3_BGPFilterList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterOperation":                 schema_pkg_apis_projectcalico_v3_BGPFilterOperation(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterPrefixLengthV4":            schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterPrefixLengthV6":            schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterPrependASPath":             schema_pkg_apis_projectcalico_v3_BGPFilterPrependASPath(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterRuleV4":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterRuleV6":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterSetPriority":               schema_pkg_apis_projectcalico_v3_BGPFilterSetPriority(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterSpec":                      schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPPassword":                        schema_pkg_apis_projectcalico_v3_BGPPassword(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPPeer":                            schema_pkg_apis_projectcalico_v3_BGPPeer(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPPeerList":                        schema_pkg_apis_projectcalico_v3_BGPPeerList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPPeerSpec":                        schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BPFConntrackTimeouts":               schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BlockAffinity":                      schema_pkg_apis_projectcalico_v3_BlockAffinity(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BlockAffinityList":                  schema_pkg_apis_projectcalico_v3_BlockAffinityList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BlockAffinitySpec":                  schema_pkg_apis_projectcalico_v3_BlockAffinitySpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeAgentStatus":              schema_pkg_apis_projectcalico_v3_CalicoNodeAgentStatus(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeBGPRouteStatus":           schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeBGPStatus":                schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodePeer":                     schema_pkg_apis_projectcalico_v3_CalicoNodePeer(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeRoute":                    schema_pkg_apis_projectcalico_v3_CalicoNodeRoute(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeRouteLearnedFrom":         schema_pkg_apis_projectcalico_v3_CalicoNodeRouteLearnedFrom(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeStatus":                   schema_pkg_apis_projectcalico_v3_CalicoNodeStatus(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeStatusList":               schema_pkg_apis_projectcalico_v3_CalicoNodeStatusList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeStatusSpec":               schema_pkg_apis_projectcalico_v3_CalicoNodeStatusSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeStatusStatus":             schema_pkg_apis_projectcalico_v3_CalicoNodeStatusStatus(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ClusterInformation":                 schema_pkg_apis_projectcalico_v3_ClusterInformation(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ClusterInformationList":             schema_pkg_apis_projectcalico_v3_ClusterInformationList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ClusterInformationSpec":             schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Community":                          schema_pkg_apis_projectcalico_v3_Community(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ControllersConfig":                  schema_pkg_apis_projectcalico_v3_ControllersConfig(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.EndpointPort":                       schema_pkg_apis_projectcalico_v3_EndpointPort(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.EntityRule":                         schema_pkg_apis_projectcalico_v3_EntityRule(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.FelixConfiguration":                 schema_pkg_apis_projectcalico_v3_FelixConfiguration(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.FelixConfigurationList":             schema_pkg_apis_projectcalico_v3_FelixConfigurationList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.FelixConfigurationSpec":             schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkPolicy":                schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicy(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkPolicyList":            schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicyList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkPolicySpec":            schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkSet":                   schema_pkg_apis_projectcalico_v3_GlobalNetworkSet(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkSetList":               schema_pkg_apis_projectcalico_v3_GlobalNetworkSetList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkSetSpec":               schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HTTPMatch":                          schema_pkg_apis_projectcalico_v3_HTTPMatch(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HTTPPath":                           schema_pkg_apis_projectcalico_v3_HTTPPath(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HealthTimeoutOverride":              schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HostEndpoint":                       schema_pkg_apis_projectcalico_v3_HostEndpoint(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HostEndpointList":                   schema_pkg_apis_projectcalico_v3_HostEndpointList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HostEndpointSpec":                   schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ICMPFields":                         schema_pkg_apis_projectcalico_v3_ICMPFields(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMBlock":                          schema_pkg_apis_projectcalico_v3_IPAMBlock(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMBlockList":                      schema_pkg_apis_projectcalico_v3_IPAMBlockList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMBlockSpec":                      schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMConfiguration":                  schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMConfigurationList":              schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMConfigurationSpec":              schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMHandle":                         schema_pkg_apis_projectcalico_v3_IPAMHandle(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMHandleList":                     schema_pkg_apis_projectcalico_v3_IPAMHandleList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMHandleSpec":                     schema_pkg_apis_projectcalico_v3_IPAMHandleSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPIPConfiguration":                  schema_pkg_apis_projectcalico_v3_IPIPConfiguration(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPPool":                             schema_pkg_apis_projectcalico_v3_IPPool(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPPoolList":                         schema_pkg_apis_projectcalico_v3_IPPoolList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPPoolSpec":                         schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPPoolStatus":                       schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPReservation":                      schema_pkg_apis_projectcalico_v3_IPReservation(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPReservationList":                  schema_pkg_apis_projectcalico_v3_IPReservationList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPReservationSpec":                  schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.KubeControllersConfiguration":       schema_pkg_apis_projectcalico_v3_KubeControllersConfiguration(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.KubeControllersConfigurationList":   schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.KubeControllersConfigurationSpec":   schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.KubeControllersConfigurationStatus": schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.LoadBalancerControllerConfig":       schema_pkg_apis_projectcalico_v3_LoadBalancerControllerConfig(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.MigrationControllerConfig":          schema_pkg_apis_projectcalico_v3_MigrationControllerConfig(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NamespaceControllerConfig":          schema_pkg_apis_projectcalico_v3_NamespaceControllerConfig(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkPolicy":                      schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkPolicyList":                  schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkPolicySpec":                  schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkSet":                         schema_pkg_apis_projectcalico_v3_NetworkSet(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkSetList":                     schema_pkg_apis_projectcalico_v3_NetworkSetList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkSetSpec":                     schema_pkg_apis_projectcalico_v3_NetworkSetSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NodeControllerConfig":               schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.PolicyControllerConfig":             schema_pkg_apis_projectcalico_v3_PolicyControllerConfig(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.PrefixAdvertisement":                schema_pkg_apis_projectcalico_v3_PrefixAdvertisement(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Profile":                            schema_pkg_apis_projectcalico_v3_Profile(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ProfileList":                        schema_pkg_apis_projectcalico_v3_ProfileList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ProfileSpec":                        schema_pkg_apis_projectcalico_v3_ProfileSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ProtoPort":                          schema_pkg_apis_projectcalico_v3_ProtoPort(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.RouteTableIDRange":                  schema_pkg_apis_projectcalico_v3_RouteTableIDRange(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.RouteTableRange":                    schema_pkg_apis_projectcalico_v3_RouteTableRange(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Rule":                               schema_pkg_apis_projectcalico_v3_Rule(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.RuleMetadata":                       schema_pkg_apis_projectcalico_v3_RuleMetadata(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceAccountControllerConfig":     schema_pkg_apis_projectcalico_v3_ServiceAccountControllerConfig(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceAccountMatch":                schema_pkg_apis_projectcalico_v3_ServiceAccountMatch(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceClusterIPBlock":              schema_pkg_apis_projectcalico_v3_ServiceClusterIPBlock(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceExternalIPBlock":             schema_pkg_apis_projectcalico_v3_ServiceExternalIPBlock(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceLoadBalancerIPBlock":         schema_pkg_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceMatch":                       schema_pkg_apis_projectcalico_v3_ServiceMatch(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedGlobalNetworkPolicy":          schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedGlobalNetworkPolicyList":      schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedGlobalNetworkPolicySpec":      schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedKubernetesNetworkPolicy":      schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedKubernetesNetworkPolicyList":  schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedKubernetesNetworkPolicySpec":  schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedNetworkPolicy":                schema_pkg_apis_projectcalico_v3_StagedNetworkPolicy(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedNetworkPolicyList":            schema_pkg_apis_projectcalico_v3_StagedNetworkPolicyList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedNetworkPolicySpec":            schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Template":                           schema_pkg_apis_projectcalico_v3_Template(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Tier":                               schema_pkg_apis_projectcalico_v3_Tier(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.TierList":                           schema_pkg_apis_projectcalico_v3_TierList(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.TierSpec":                           schema_pkg_apis_projectcalico_v3_TierSpec(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.TierStatus":                         schema_pkg_apis_projectcalico_v3_TierStatus(ref),
-		"github.com/projectcalico/api/v3/apis/projectcalico/v3.WorkloadEndpointControllerConfig":   schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref),
-		"github.com/projectcalico/api/v3/lib/numorstring.DSCP":                                     schema_api_pkg_lib_numorstring_DSCP(ref),
-		"github.com/projectcalico/api/v3/lib/numorstring.Port":                                     schema_api_pkg_lib_numorstring_Port(ref),
-		"github.com/projectcalico/api/v3/lib/numorstring.Protocol":                                 schema_api_pkg_lib_numorstring_Protocol(ref),
-		"github.com/projectcalico/api/v3/lib/numorstring.Uint8OrString":                            schema_api_pkg_lib_numorstring_Uint8OrString(ref),
-		v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
-		v1.Affinity{}.OpenAPIModelName():                                                            schema_k8sio_api_core_v1_Affinity(ref),
-		v1.AppArmorProfile{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_AppArmorProfile(ref),
-		v1.AttachedVolume{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_AttachedVolume(ref),
-		v1.AvoidPods{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_AvoidPods(ref),
-		v1.AzureDiskVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_AzureDiskVolumeSource(ref),
-		v1.AzureFilePersistentVolumeSource{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_AzureFilePersistentVolumeSource(ref),
-		v1.AzureFileVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_AzureFileVolumeSource(ref),
-		v1.Binding{}.OpenAPIModelName():                                                             schema_k8sio_api_core_v1_Binding(ref),
-		v1.CSIPersistentVolumeSource{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_CSIPersistentVolumeSource(ref),
-		v1.CSIVolumeSource{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_CSIVolumeSource(ref),
-		v1.Capabilities{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_Capabilities(ref),
-		v1.CephFSPersistentVolumeSource{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_CephFSPersistentVolumeSource(ref),
-		v1.CephFSVolumeSource{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_CephFSVolumeSource(ref),
-		v1.CinderPersistentVolumeSource{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_CinderPersistentVolumeSource(ref),
-		v1.CinderVolumeSource{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_CinderVolumeSource(ref),
-		v1.ClientIPConfig{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ClientIPConfig(ref),
-		v1.ClusterTrustBundleProjection{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_ClusterTrustBundleProjection(ref),
-		v1.ComponentCondition{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_ComponentCondition(ref),
-		v1.ComponentStatus{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_ComponentStatus(ref),
-		v1.ComponentStatusList{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ComponentStatusList(ref),
-		v1.ConfigMap{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_ConfigMap(ref),
-		v1.ConfigMapEnvSource{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_ConfigMapEnvSource(ref),
-		v1.ConfigMapKeySelector{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ConfigMapKeySelector(ref),
-		v1.ConfigMapList{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_ConfigMapList(ref),
-		v1.ConfigMapNodeConfigSource{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_ConfigMapNodeConfigSource(ref),
-		v1.ConfigMapProjection{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ConfigMapProjection(ref),
-		v1.ConfigMapVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ConfigMapVolumeSource(ref),
-		v1.Container{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_Container(ref),
-		v1.ContainerExtendedResourceRequest{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_ContainerExtendedResourceRequest(ref),
-		v1.ContainerImage{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ContainerImage(ref),
-		v1.ContainerPort{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_ContainerPort(ref),
-		v1.ContainerResizePolicy{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ContainerResizePolicy(ref),
-		v1.ContainerRestartRule{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ContainerRestartRule(ref),
-		v1.ContainerRestartRuleOnExitCodes{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_ContainerRestartRuleOnExitCodes(ref),
-		v1.ContainerState{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ContainerState(ref),
-		v1.ContainerStateRunning{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ContainerStateRunning(ref),
-		v1.ContainerStateTerminated{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_ContainerStateTerminated(ref),
-		v1.ContainerStateWaiting{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ContainerStateWaiting(ref),
-		v1.ContainerStatus{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_ContainerStatus(ref),
-		v1.ContainerUser{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_ContainerUser(ref),
-		v1.DaemonEndpoint{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_DaemonEndpoint(ref),
-		v1.DownwardAPIProjection{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_DownwardAPIProjection(ref),
-		v1.DownwardAPIVolumeFile{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_DownwardAPIVolumeFile(ref),
-		v1.DownwardAPIVolumeSource{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_DownwardAPIVolumeSource(ref),
-		v1.EmptyDirVolumeSource{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_EmptyDirVolumeSource(ref),
-		v1.EndpointAddress{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_EndpointAddress(ref),
-		v1.EndpointPort{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_EndpointPort(ref),
-		v1.EndpointSubset{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_EndpointSubset(ref),
-		v1.Endpoints{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_Endpoints(ref),
-		v1.EndpointsList{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_EndpointsList(ref),
-		v1.EnvFromSource{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_EnvFromSource(ref),
-		v1.EnvVar{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_EnvVar(ref),
-		v1.EnvVarSource{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_EnvVarSource(ref),
-		v1.EphemeralContainer{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_EphemeralContainer(ref),
-		v1.EphemeralContainerCommon{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_EphemeralContainerCommon(ref),
-		v1.EphemeralVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_EphemeralVolumeSource(ref),
-		v1.Event{}.OpenAPIModelName():                                                               schema_k8sio_api_core_v1_Event(ref),
-		v1.EventList{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_EventList(ref),
-		v1.EventSeries{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_EventSeries(ref),
-		v1.EventSource{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_EventSource(ref),
-		v1.ExecAction{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_ExecAction(ref),
-		v1.FCVolumeSource{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_FCVolumeSource(ref),
-		v1.FileKeySelector{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_FileKeySelector(ref),
-		v1.FlexPersistentVolumeSource{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_FlexPersistentVolumeSource(ref),
-		v1.FlexVolumeSource{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_FlexVolumeSource(ref),
-		v1.FlockerVolumeSource{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_FlockerVolumeSource(ref),
-		v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_GCEPersistentDiskVolumeSource(ref),
-		v1.GRPCAction{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_GRPCAction(ref),
-		v1.GitRepoVolumeSource{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_GitRepoVolumeSource(ref),
-		v1.GlusterfsPersistentVolumeSource{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_GlusterfsPersistentVolumeSource(ref),
-		v1.GlusterfsVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_GlusterfsVolumeSource(ref),
-		v1.HTTPGetAction{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_HTTPGetAction(ref),
-		v1.HTTPHeader{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_HTTPHeader(ref),
-		v1.HostAlias{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_HostAlias(ref),
-		v1.HostIP{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_HostIP(ref),
-		v1.HostPathVolumeSource{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_HostPathVolumeSource(ref),
-		v1.ISCSIPersistentVolumeSource{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_ISCSIPersistentVolumeSource(ref),
-		v1.ISCSIVolumeSource{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_ISCSIVolumeSource(ref),
-		v1.ImageVolumeSource{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_ImageVolumeSource(ref),
-		v1.KeyToPath{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_KeyToPath(ref),
-		v1.Lifecycle{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_Lifecycle(ref),
-		v1.LifecycleHandler{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_LifecycleHandler(ref),
-		v1.LimitRange{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_LimitRange(ref),
-		v1.LimitRangeItem{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_LimitRangeItem(ref),
-		v1.LimitRangeList{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_LimitRangeList(ref),
-		v1.LimitRangeSpec{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_LimitRangeSpec(ref),
-		v1.LinuxContainerUser{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_LinuxContainerUser(ref),
-		v1.List{}.OpenAPIModelName():                                                                schema_k8sio_api_core_v1_List(ref),
-		v1.LoadBalancerIngress{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_LoadBalancerIngress(ref),
-		v1.LoadBalancerStatus{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_LoadBalancerStatus(ref),
-		v1.LocalObjectReference{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_LocalObjectReference(ref),
-		v1.LocalVolumeSource{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_LocalVolumeSource(ref),
-		v1.ModifyVolumeStatus{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_ModifyVolumeStatus(ref),
-		v1.NFSVolumeSource{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_NFSVolumeSource(ref),
-		v1.Namespace{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_Namespace(ref),
-		v1.NamespaceCondition{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_NamespaceCondition(ref),
-		v1.NamespaceList{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_NamespaceList(ref),
-		v1.NamespaceSpec{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_NamespaceSpec(ref),
-		v1.NamespaceStatus{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_NamespaceStatus(ref),
-		v1.Node{}.OpenAPIModelName():                                                                schema_k8sio_api_core_v1_Node(ref),
-		v1.NodeAddress{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_NodeAddress(ref),
-		v1.NodeAffinity{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_NodeAffinity(ref),
-		v1.NodeCondition{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_NodeCondition(ref),
-		v1.NodeConfigSource{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_NodeConfigSource(ref),
-		v1.NodeConfigStatus{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_NodeConfigStatus(ref),
-		v1.NodeDaemonEndpoints{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_NodeDaemonEndpoints(ref),
-		v1.NodeFeatures{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_NodeFeatures(ref),
-		v1.NodeList{}.OpenAPIModelName():                                                            schema_k8sio_api_core_v1_NodeList(ref),
-		v1.NodeProxyOptions{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_NodeProxyOptions(ref),
-		v1.NodeRuntimeHandler{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_NodeRuntimeHandler(ref),
-		v1.NodeRuntimeHandlerFeatures{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_NodeRuntimeHandlerFeatures(ref),
-		v1.NodeSelector{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_NodeSelector(ref),
-		v1.NodeSelectorRequirement{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_NodeSelectorRequirement(ref),
-		v1.NodeSelectorTerm{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_NodeSelectorTerm(ref),
-		v1.NodeSpec{}.OpenAPIModelName():                                                            schema_k8sio_api_core_v1_NodeSpec(ref),
-		v1.NodeStatus{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_NodeStatus(ref),
-		v1.NodeSwapStatus{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_NodeSwapStatus(ref),
-		v1.NodeSystemInfo{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_NodeSystemInfo(ref),
-		v1.ObjectFieldSelector{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ObjectFieldSelector(ref),
-		v1.ObjectReference{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_ObjectReference(ref),
-		v1.PersistentVolume{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PersistentVolume(ref),
-		v1.PersistentVolumeClaim{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_PersistentVolumeClaim(ref),
-		v1.PersistentVolumeClaimCondition{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref),
-		v1.PersistentVolumeClaimList{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_PersistentVolumeClaimList(ref),
-		v1.PersistentVolumeClaimSpec{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref),
-		v1.PersistentVolumeClaimStatus{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref),
-		v1.PersistentVolumeClaimTemplate{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_PersistentVolumeClaimTemplate(ref),
-		v1.PersistentVolumeClaimVolumeSource{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_PersistentVolumeClaimVolumeSource(ref),
-		v1.PersistentVolumeList{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_PersistentVolumeList(ref),
-		v1.PersistentVolumeSource{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_PersistentVolumeSource(ref),
-		v1.PersistentVolumeSpec{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_PersistentVolumeSpec(ref),
-		v1.PersistentVolumeStatus{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_PersistentVolumeStatus(ref),
-		v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_PhotonPersistentDiskVolumeSource(ref),
-		v1.Pod{}.OpenAPIModelName():                                                                 schema_k8sio_api_core_v1_Pod(ref),
-		v1.PodAffinity{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_PodAffinity(ref),
-		v1.PodAffinityTerm{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_PodAffinityTerm(ref),
-		v1.PodAntiAffinity{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_PodAntiAffinity(ref),
-		v1.PodAttachOptions{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodAttachOptions(ref),
-		v1.PodCertificateProjection{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_PodCertificateProjection(ref),
-		v1.PodCondition{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_PodCondition(ref),
-		v1.PodDNSConfig{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_PodDNSConfig(ref),
-		v1.PodDNSConfigOption{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_PodDNSConfigOption(ref),
-		v1.PodExecOptions{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_PodExecOptions(ref),
-		v1.PodExtendedResourceClaimStatus{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_PodExtendedResourceClaimStatus(ref),
-		v1.PodIP{}.OpenAPIModelName():                                                               schema_k8sio_api_core_v1_PodIP(ref),
-		v1.PodList{}.OpenAPIModelName():                                                             schema_k8sio_api_core_v1_PodList(ref),
-		v1.PodLogOptions{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_PodLogOptions(ref),
-		v1.PodOS{}.OpenAPIModelName():                                                               schema_k8sio_api_core_v1_PodOS(ref),
-		v1.PodPortForwardOptions{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_PodPortForwardOptions(ref),
-		v1.PodProxyOptions{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_PodProxyOptions(ref),
-		v1.PodReadinessGate{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodReadinessGate(ref),
-		v1.PodResourceClaim{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodResourceClaim(ref),
-		v1.PodResourceClaimStatus{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_PodResourceClaimStatus(ref),
-		v1.PodSchedulingGate{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_PodSchedulingGate(ref),
-		v1.PodSecurityContext{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_PodSecurityContext(ref),
-		v1.PodSignature{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_PodSignature(ref),
-		v1.PodSpec{}.OpenAPIModelName():                                                             schema_k8sio_api_core_v1_PodSpec(ref),
-		v1.PodStatus{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_PodStatus(ref),
-		v1.PodStatusResult{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_PodStatusResult(ref),
-		v1.PodTemplate{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_PodTemplate(ref),
-		v1.PodTemplateList{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_PodTemplateList(ref),
-		v1.PodTemplateSpec{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_PodTemplateSpec(ref),
-		v1.PortStatus{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_PortStatus(ref),
-		v1.PortworxVolumeSource{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_PortworxVolumeSource(ref),
-		v1.PreferAvoidPodsEntry{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_PreferAvoidPodsEntry(ref),
-		v1.PreferredSchedulingTerm{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_PreferredSchedulingTerm(ref),
-		v1.Probe{}.OpenAPIModelName():                                                               schema_k8sio_api_core_v1_Probe(ref),
-		v1.ProbeHandler{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_ProbeHandler(ref),
-		v1.ProjectedVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ProjectedVolumeSource(ref),
-		v1.QuobyteVolumeSource{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_QuobyteVolumeSource(ref),
-		v1.RBDPersistentVolumeSource{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_RBDPersistentVolumeSource(ref),
-		v1.RBDVolumeSource{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_RBDVolumeSource(ref),
-		v1.RangeAllocation{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_RangeAllocation(ref),
-		v1.ReplicationController{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ReplicationController(ref),
-		v1.ReplicationControllerCondition{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ReplicationControllerCondition(ref),
-		v1.ReplicationControllerList{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_ReplicationControllerList(ref),
-		v1.ReplicationControllerSpec{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_ReplicationControllerSpec(ref),
-		v1.ReplicationControllerStatus{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_ReplicationControllerStatus(ref),
-		v1.ResourceClaim{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_ResourceClaim(ref),
-		v1.ResourceFieldSelector{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ResourceFieldSelector(ref),
-		v1.ResourceHealth{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ResourceHealth(ref),
-		v1.ResourceQuota{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_ResourceQuota(ref),
-		v1.ResourceQuotaList{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_ResourceQuotaList(ref),
-		v1.ResourceQuotaSpec{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_ResourceQuotaSpec(ref),
-		v1.ResourceQuotaStatus{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ResourceQuotaStatus(ref),
-		v1.ResourceRequirements{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ResourceRequirements(ref),
-		v1.ResourceStatus{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ResourceStatus(ref),
-		v1.SELinuxOptions{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_SELinuxOptions(ref),
-		v1.ScaleIOPersistentVolumeSource{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref),
-		v1.ScaleIOVolumeSource{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref),
-		v1.ScopeSelector{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_ScopeSelector(ref),
-		v1.ScopedResourceSelectorRequirement{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_ScopedResourceSelectorRequirement(ref),
-		v1.SeccompProfile{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_SeccompProfile(ref),
-		v1.Secret{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_Secret(ref),
-		v1.SecretEnvSource{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_SecretEnvSource(ref),
-		v1.SecretKeySelector{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_SecretKeySelector(ref),
-		v1.SecretList{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_SecretList(ref),
-		v1.SecretProjection{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_SecretProjection(ref),
-		v1.SecretReference{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_SecretReference(ref),
-		v1.SecretVolumeSource{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_SecretVolumeSource(ref),
-		v1.SecurityContext{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_SecurityContext(ref),
-		v1.SerializedReference{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_SerializedReference(ref),
-		v1.Service{}.OpenAPIModelName():                                                             schema_k8sio_api_core_v1_Service(ref),
-		v1.ServiceAccount{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ServiceAccount(ref),
-		v1.ServiceAccountList{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_ServiceAccountList(ref),
-		v1.ServiceAccountTokenProjection{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_ServiceAccountTokenProjection(ref),
-		v1.ServiceList{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_ServiceList(ref),
-		v1.ServicePort{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_ServicePort(ref),
-		v1.ServiceProxyOptions{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ServiceProxyOptions(ref),
-		v1.ServiceSpec{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_ServiceSpec(ref),
-		v1.ServiceStatus{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_ServiceStatus(ref),
-		v1.SessionAffinityConfig{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_SessionAffinityConfig(ref),
-		v1.SleepAction{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_SleepAction(ref),
-		v1.StorageOSPersistentVolumeSource{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_StorageOSPersistentVolumeSource(ref),
-		v1.StorageOSVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_StorageOSVolumeSource(ref),
-		v1.Sysctl{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_Sysctl(ref),
-		v1.TCPSocketAction{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_TCPSocketAction(ref),
-		v1.Taint{}.OpenAPIModelName():                                                               schema_k8sio_api_core_v1_Taint(ref),
-		v1.Toleration{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_Toleration(ref),
-		v1.TopologySelectorLabelRequirement{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_TopologySelectorLabelRequirement(ref),
-		v1.TopologySelectorTerm{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_TopologySelectorTerm(ref),
-		v1.TopologySpreadConstraint{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_TopologySpreadConstraint(ref),
-		v1.TypedLocalObjectReference{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_TypedLocalObjectReference(ref),
-		v1.TypedObjectReference{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_TypedObjectReference(ref),
-		v1.Volume{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_Volume(ref),
-		v1.VolumeDevice{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_VolumeDevice(ref),
-		v1.VolumeMount{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_VolumeMount(ref),
-		v1.VolumeMountStatus{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_VolumeMountStatus(ref),
-		v1.VolumeNodeAffinity{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_VolumeNodeAffinity(ref),
-		v1.VolumeProjection{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_VolumeProjection(ref),
-		v1.VolumeResourceRequirements{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_VolumeResourceRequirements(ref),
-		v1.VolumeSource{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_VolumeSource(ref),
-		v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_VsphereVirtualDiskVolumeSource(ref),
-		v1.WeightedPodAffinityTerm{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref),
-		v1.WindowsSecurityContextOptions{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_WindowsSecurityContextOptions(ref),
-		v1.WorkloadReference{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_WorkloadReference(ref),
-		networkingv1.HTTPIngressPath{}.OpenAPIModelName():                                           schema_k8sio_api_networking_v1_HTTPIngressPath(ref),
-		networkingv1.HTTPIngressRuleValue{}.OpenAPIModelName():                                      schema_k8sio_api_networking_v1_HTTPIngressRuleValue(ref),
-		networkingv1.IPAddress{}.OpenAPIModelName():                                                 schema_k8sio_api_networking_v1_IPAddress(ref),
-		networkingv1.IPAddressList{}.OpenAPIModelName():                                             schema_k8sio_api_networking_v1_IPAddressList(ref),
-		networkingv1.IPAddressSpec{}.OpenAPIModelName():                                             schema_k8sio_api_networking_v1_IPAddressSpec(ref),
-		networkingv1.IPBlock{}.OpenAPIModelName():                                                   schema_k8sio_api_networking_v1_IPBlock(ref),
-		networkingv1.Ingress{}.OpenAPIModelName():                                                   schema_k8sio_api_networking_v1_Ingress(ref),
-		networkingv1.IngressBackend{}.OpenAPIModelName():                                            schema_k8sio_api_networking_v1_IngressBackend(ref),
-		networkingv1.IngressClass{}.OpenAPIModelName():                                              schema_k8sio_api_networking_v1_IngressClass(ref),
-		networkingv1.IngressClassList{}.OpenAPIModelName():                                          schema_k8sio_api_networking_v1_IngressClassList(ref),
-		networkingv1.IngressClassParametersReference{}.OpenAPIModelName():                           schema_k8sio_api_networking_v1_IngressClassParametersReference(ref),
-		networkingv1.IngressClassSpec{}.OpenAPIModelName():                                          schema_k8sio_api_networking_v1_IngressClassSpec(ref),
-		networkingv1.IngressList{}.OpenAPIModelName():                                               schema_k8sio_api_networking_v1_IngressList(ref),
-		networkingv1.IngressLoadBalancerIngress{}.OpenAPIModelName():                                schema_k8sio_api_networking_v1_IngressLoadBalancerIngress(ref),
-		networkingv1.IngressLoadBalancerStatus{}.OpenAPIModelName():                                 schema_k8sio_api_networking_v1_IngressLoadBalancerStatus(ref),
-		networkingv1.IngressPortStatus{}.OpenAPIModelName():                                         schema_k8sio_api_networking_v1_IngressPortStatus(ref),
-		networkingv1.IngressRule{}.OpenAPIModelName():                                               schema_k8sio_api_networking_v1_IngressRule(ref),
-		networkingv1.IngressRuleValue{}.OpenAPIModelName():                                          schema_k8sio_api_networking_v1_IngressRuleValue(ref),
-		networkingv1.IngressServiceBackend{}.OpenAPIModelName():                                     schema_k8sio_api_networking_v1_IngressServiceBackend(ref),
-		networkingv1.IngressSpec{}.OpenAPIModelName():                                               schema_k8sio_api_networking_v1_IngressSpec(ref),
-		networkingv1.IngressStatus{}.OpenAPIModelName():                                             schema_k8sio_api_networking_v1_IngressStatus(ref),
-		networkingv1.IngressTLS{}.OpenAPIModelName():                                                schema_k8sio_api_networking_v1_IngressTLS(ref),
-		networkingv1.NetworkPolicy{}.OpenAPIModelName():                                             schema_k8sio_api_networking_v1_NetworkPolicy(ref),
-		networkingv1.NetworkPolicyEgressRule{}.OpenAPIModelName():                                   schema_k8sio_api_networking_v1_NetworkPolicyEgressRule(ref),
-		networkingv1.NetworkPolicyIngressRule{}.OpenAPIModelName():                                  schema_k8sio_api_networking_v1_NetworkPolicyIngressRule(ref),
-		networkingv1.NetworkPolicyList{}.OpenAPIModelName():                                         schema_k8sio_api_networking_v1_NetworkPolicyList(ref),
-		networkingv1.NetworkPolicyPeer{}.OpenAPIModelName():                                         schema_k8sio_api_networking_v1_NetworkPolicyPeer(ref),
-		networkingv1.NetworkPolicyPort{}.OpenAPIModelName():                                         schema_k8sio_api_networking_v1_NetworkPolicyPort(ref),
-		networkingv1.NetworkPolicySpec{}.OpenAPIModelName():                                         schema_k8sio_api_networking_v1_NetworkPolicySpec(ref),
-		networkingv1.ParentReference{}.OpenAPIModelName():                                           schema_k8sio_api_networking_v1_ParentReference(ref),
-		networkingv1.ServiceBackendPort{}.OpenAPIModelName():                                        schema_k8sio_api_networking_v1_ServiceBackendPort(ref),
-		networkingv1.ServiceCIDR{}.OpenAPIModelName():                                               schema_k8sio_api_networking_v1_ServiceCIDR(ref),
-		networkingv1.ServiceCIDRList{}.OpenAPIModelName():                                           schema_k8sio_api_networking_v1_ServiceCIDRList(ref),
-		networkingv1.ServiceCIDRSpec{}.OpenAPIModelName():                                           schema_k8sio_api_networking_v1_ServiceCIDRSpec(ref),
-		networkingv1.ServiceCIDRStatus{}.OpenAPIModelName():                                         schema_k8sio_api_networking_v1_ServiceCIDRStatus(ref),
-		metav1.APIGroup{}.OpenAPIModelName():                                                        schema_pkg_apis_meta_v1_APIGroup(ref),
-		metav1.APIGroupList{}.OpenAPIModelName():                                                    schema_pkg_apis_meta_v1_APIGroupList(ref),
-		metav1.APIResource{}.OpenAPIModelName():                                                     schema_pkg_apis_meta_v1_APIResource(ref),
-		metav1.APIResourceList{}.OpenAPIModelName():                                                 schema_pkg_apis_meta_v1_APIResourceList(ref),
-		metav1.APIVersions{}.OpenAPIModelName():                                                     schema_pkg_apis_meta_v1_APIVersions(ref),
-		metav1.ApplyOptions{}.OpenAPIModelName():                                                    schema_pkg_apis_meta_v1_ApplyOptions(ref),
-		metav1.Condition{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_Condition(ref),
-		metav1.CreateOptions{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_CreateOptions(ref),
-		metav1.DeleteOptions{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		metav1.Duration{}.OpenAPIModelName():                                                        schema_pkg_apis_meta_v1_Duration(ref),
-		metav1.FieldSelectorRequirement{}.OpenAPIModelName():                                        schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
-		metav1.FieldsV1{}.OpenAPIModelName():                                                        schema_pkg_apis_meta_v1_FieldsV1(ref),
-		metav1.GetOptions{}.OpenAPIModelName():                                                      schema_pkg_apis_meta_v1_GetOptions(ref),
-		metav1.GroupKind{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_GroupKind(ref),
-		metav1.GroupResource{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_GroupResource(ref),
-		metav1.GroupVersion{}.OpenAPIModelName():                                                    schema_pkg_apis_meta_v1_GroupVersion(ref),
-		metav1.GroupVersionForDiscovery{}.OpenAPIModelName():                                        schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		metav1.GroupVersionKind{}.OpenAPIModelName():                                                schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		metav1.GroupVersionResource{}.OpenAPIModelName():                                            schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		metav1.InternalEvent{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_InternalEvent(ref),
-		metav1.LabelSelector{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_LabelSelector(ref),
-		metav1.LabelSelectorRequirement{}.OpenAPIModelName():                                        schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		metav1.List{}.OpenAPIModelName():                                                            schema_pkg_apis_meta_v1_List(ref),
-		metav1.ListMeta{}.OpenAPIModelName():                                                        schema_pkg_apis_meta_v1_ListMeta(ref),
-		metav1.ListOptions{}.OpenAPIModelName():                                                     schema_pkg_apis_meta_v1_ListOptions(ref),
-		metav1.ManagedFieldsEntry{}.OpenAPIModelName():                                              schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		metav1.MicroTime{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_MicroTime(ref),
-		metav1.ObjectMeta{}.OpenAPIModelName():                                                      schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		metav1.OwnerReference{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_OwnerReference(ref),
-		metav1.PartialObjectMetadata{}.OpenAPIModelName():                                           schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		metav1.PartialObjectMetadataList{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		metav1.Patch{}.OpenAPIModelName():                                                           schema_pkg_apis_meta_v1_Patch(ref),
-		metav1.PatchOptions{}.OpenAPIModelName():                                                    schema_pkg_apis_meta_v1_PatchOptions(ref),
-		metav1.Preconditions{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_Preconditions(ref),
-		metav1.RootPaths{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_RootPaths(ref),
-		metav1.ServerAddressByClientCIDR{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		metav1.Status{}.OpenAPIModelName():                                                          schema_pkg_apis_meta_v1_Status(ref),
-		metav1.StatusCause{}.OpenAPIModelName():                                                     schema_pkg_apis_meta_v1_StatusCause(ref),
-		metav1.StatusDetails{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_StatusDetails(ref),
-		metav1.Table{}.OpenAPIModelName():                                                           schema_pkg_apis_meta_v1_Table(ref),
-		metav1.TableColumnDefinition{}.OpenAPIModelName():                                           schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		metav1.TableOptions{}.OpenAPIModelName():                                                    schema_pkg_apis_meta_v1_TableOptions(ref),
-		metav1.TableRow{}.OpenAPIModelName():                                                        schema_pkg_apis_meta_v1_TableRow(ref),
-		metav1.TableRowCondition{}.OpenAPIModelName():                                               schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		metav1.Time{}.OpenAPIModelName():                                                            schema_pkg_apis_meta_v1_Time(ref),
-		metav1.Timestamp{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_Timestamp(ref),
-		metav1.TypeMeta{}.OpenAPIModelName():                                                        schema_pkg_apis_meta_v1_TypeMeta(ref),
-		metav1.UpdateOptions{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		metav1.WatchEvent{}.OpenAPIModelName():                                                      schema_pkg_apis_meta_v1_WatchEvent(ref),
-		runtime.RawExtension{}.OpenAPIModelName():                                                   schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		runtime.TypeMeta{}.OpenAPIModelName():                                                       schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		runtime.Unknown{}.OpenAPIModelName():                                                        schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		intstr.IntOrString{}.OpenAPIModelName():                                                     schema_apimachinery_pkg_util_intstr_IntOrString(ref),
-		version.Info{}.OpenAPIModelName():                                                           schema_k8sio_apimachinery_pkg_version_Info(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.AllocationAttribute":                schema_v3_apis_projectcalico_v3_AllocationAttribute(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.AutoHostEndpointConfig":             schema_v3_apis_projectcalico_v3_AutoHostEndpointConfig(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPConfiguration":                   schema_v3_apis_projectcalico_v3_BGPConfiguration(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPConfigurationList":               schema_v3_apis_projectcalico_v3_BGPConfigurationList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPConfigurationSpec":               schema_v3_apis_projectcalico_v3_BGPConfigurationSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPDaemonStatus":                    schema_v3_apis_projectcalico_v3_BGPDaemonStatus(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilter":                          schema_v3_apis_projectcalico_v3_BGPFilter(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterAddCommunity":              schema_v3_apis_projectcalico_v3_BGPFilterAddCommunity(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterCommunityMatch":            schema_v3_apis_projectcalico_v3_BGPFilterCommunityMatch(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterList":                      schema_v3_apis_projectcalico_v3_BGPFilterList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterOperation":                 schema_v3_apis_projectcalico_v3_BGPFilterOperation(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterPrefixLengthV4":            schema_v3_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterPrefixLengthV6":            schema_v3_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterPrependASPath":             schema_v3_apis_projectcalico_v3_BGPFilterPrependASPath(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterRuleV4":                    schema_v3_apis_projectcalico_v3_BGPFilterRuleV4(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterRuleV6":                    schema_v3_apis_projectcalico_v3_BGPFilterRuleV6(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterSetPriority":               schema_v3_apis_projectcalico_v3_BGPFilterSetPriority(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPFilterSpec":                      schema_v3_apis_projectcalico_v3_BGPFilterSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPPassword":                        schema_v3_apis_projectcalico_v3_BGPPassword(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPPeer":                            schema_v3_apis_projectcalico_v3_BGPPeer(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPPeerList":                        schema_v3_apis_projectcalico_v3_BGPPeerList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BGPPeerSpec":                        schema_v3_apis_projectcalico_v3_BGPPeerSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BPFConntrackTimeouts":               schema_v3_apis_projectcalico_v3_BPFConntrackTimeouts(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BlockAffinity":                      schema_v3_apis_projectcalico_v3_BlockAffinity(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BlockAffinityList":                  schema_v3_apis_projectcalico_v3_BlockAffinityList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.BlockAffinitySpec":                  schema_v3_apis_projectcalico_v3_BlockAffinitySpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeAgentStatus":              schema_v3_apis_projectcalico_v3_CalicoNodeAgentStatus(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeBGPRouteStatus":           schema_v3_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeBGPStatus":                schema_v3_apis_projectcalico_v3_CalicoNodeBGPStatus(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodePeer":                     schema_v3_apis_projectcalico_v3_CalicoNodePeer(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeRoute":                    schema_v3_apis_projectcalico_v3_CalicoNodeRoute(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeRouteLearnedFrom":         schema_v3_apis_projectcalico_v3_CalicoNodeRouteLearnedFrom(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeStatus":                   schema_v3_apis_projectcalico_v3_CalicoNodeStatus(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeStatusList":               schema_v3_apis_projectcalico_v3_CalicoNodeStatusList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeStatusSpec":               schema_v3_apis_projectcalico_v3_CalicoNodeStatusSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.CalicoNodeStatusStatus":             schema_v3_apis_projectcalico_v3_CalicoNodeStatusStatus(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ClusterInformation":                 schema_v3_apis_projectcalico_v3_ClusterInformation(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ClusterInformationList":             schema_v3_apis_projectcalico_v3_ClusterInformationList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ClusterInformationSpec":             schema_v3_apis_projectcalico_v3_ClusterInformationSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Community":                          schema_v3_apis_projectcalico_v3_Community(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ControllersConfig":                  schema_v3_apis_projectcalico_v3_ControllersConfig(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.EndpointPort":                       schema_v3_apis_projectcalico_v3_EndpointPort(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.EntityRule":                         schema_v3_apis_projectcalico_v3_EntityRule(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.FelixConfiguration":                 schema_v3_apis_projectcalico_v3_FelixConfiguration(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.FelixConfigurationList":             schema_v3_apis_projectcalico_v3_FelixConfigurationList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.FelixConfigurationSpec":             schema_v3_apis_projectcalico_v3_FelixConfigurationSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkPolicy":                schema_v3_apis_projectcalico_v3_GlobalNetworkPolicy(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkPolicyList":            schema_v3_apis_projectcalico_v3_GlobalNetworkPolicyList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkPolicySpec":            schema_v3_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkSet":                   schema_v3_apis_projectcalico_v3_GlobalNetworkSet(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkSetList":               schema_v3_apis_projectcalico_v3_GlobalNetworkSetList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.GlobalNetworkSetSpec":               schema_v3_apis_projectcalico_v3_GlobalNetworkSetSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HTTPMatch":                          schema_v3_apis_projectcalico_v3_HTTPMatch(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HTTPPath":                           schema_v3_apis_projectcalico_v3_HTTPPath(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HealthTimeoutOverride":              schema_v3_apis_projectcalico_v3_HealthTimeoutOverride(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HostEndpoint":                       schema_v3_apis_projectcalico_v3_HostEndpoint(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HostEndpointList":                   schema_v3_apis_projectcalico_v3_HostEndpointList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.HostEndpointSpec":                   schema_v3_apis_projectcalico_v3_HostEndpointSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ICMPFields":                         schema_v3_apis_projectcalico_v3_ICMPFields(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMBlock":                          schema_v3_apis_projectcalico_v3_IPAMBlock(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMBlockList":                      schema_v3_apis_projectcalico_v3_IPAMBlockList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMBlockSpec":                      schema_v3_apis_projectcalico_v3_IPAMBlockSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMConfiguration":                  schema_v3_apis_projectcalico_v3_IPAMConfiguration(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMConfigurationList":              schema_v3_apis_projectcalico_v3_IPAMConfigurationList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMConfigurationSpec":              schema_v3_apis_projectcalico_v3_IPAMConfigurationSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMHandle":                         schema_v3_apis_projectcalico_v3_IPAMHandle(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMHandleList":                     schema_v3_apis_projectcalico_v3_IPAMHandleList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPAMHandleSpec":                     schema_v3_apis_projectcalico_v3_IPAMHandleSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPIPConfiguration":                  schema_v3_apis_projectcalico_v3_IPIPConfiguration(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPPool":                             schema_v3_apis_projectcalico_v3_IPPool(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPPoolList":                         schema_v3_apis_projectcalico_v3_IPPoolList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPPoolSpec":                         schema_v3_apis_projectcalico_v3_IPPoolSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPPoolStatus":                       schema_v3_apis_projectcalico_v3_IPPoolStatus(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPReservation":                      schema_v3_apis_projectcalico_v3_IPReservation(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPReservationList":                  schema_v3_apis_projectcalico_v3_IPReservationList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.IPReservationSpec":                  schema_v3_apis_projectcalico_v3_IPReservationSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.KubeControllersConfiguration":       schema_v3_apis_projectcalico_v3_KubeControllersConfiguration(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.KubeControllersConfigurationList":   schema_v3_apis_projectcalico_v3_KubeControllersConfigurationList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.KubeControllersConfigurationSpec":   schema_v3_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.KubeControllersConfigurationStatus": schema_v3_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.LoadBalancerControllerConfig":       schema_v3_apis_projectcalico_v3_LoadBalancerControllerConfig(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.MigrationControllerConfig":          schema_v3_apis_projectcalico_v3_MigrationControllerConfig(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NamespaceControllerConfig":          schema_v3_apis_projectcalico_v3_NamespaceControllerConfig(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkPolicy":                      schema_v3_apis_projectcalico_v3_NetworkPolicy(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkPolicyList":                  schema_v3_apis_projectcalico_v3_NetworkPolicyList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkPolicySpec":                  schema_v3_apis_projectcalico_v3_NetworkPolicySpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkSet":                         schema_v3_apis_projectcalico_v3_NetworkSet(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkSetList":                     schema_v3_apis_projectcalico_v3_NetworkSetList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NetworkSetSpec":                     schema_v3_apis_projectcalico_v3_NetworkSetSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.NodeControllerConfig":               schema_v3_apis_projectcalico_v3_NodeControllerConfig(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.PolicyControllerConfig":             schema_v3_apis_projectcalico_v3_PolicyControllerConfig(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.PrefixAdvertisement":                schema_v3_apis_projectcalico_v3_PrefixAdvertisement(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Profile":                            schema_v3_apis_projectcalico_v3_Profile(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ProfileList":                        schema_v3_apis_projectcalico_v3_ProfileList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ProfileSpec":                        schema_v3_apis_projectcalico_v3_ProfileSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ProtoPort":                          schema_v3_apis_projectcalico_v3_ProtoPort(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.RouteTableIDRange":                  schema_v3_apis_projectcalico_v3_RouteTableIDRange(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.RouteTableRange":                    schema_v3_apis_projectcalico_v3_RouteTableRange(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Rule":                               schema_v3_apis_projectcalico_v3_Rule(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.RuleMetadata":                       schema_v3_apis_projectcalico_v3_RuleMetadata(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceAccountControllerConfig":     schema_v3_apis_projectcalico_v3_ServiceAccountControllerConfig(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceAccountMatch":                schema_v3_apis_projectcalico_v3_ServiceAccountMatch(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceClusterIPBlock":              schema_v3_apis_projectcalico_v3_ServiceClusterIPBlock(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceExternalIPBlock":             schema_v3_apis_projectcalico_v3_ServiceExternalIPBlock(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceLoadBalancerIPBlock":         schema_v3_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.ServiceMatch":                       schema_v3_apis_projectcalico_v3_ServiceMatch(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedGlobalNetworkPolicy":          schema_v3_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedGlobalNetworkPolicyList":      schema_v3_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedGlobalNetworkPolicySpec":      schema_v3_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedKubernetesNetworkPolicy":      schema_v3_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedKubernetesNetworkPolicyList":  schema_v3_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedKubernetesNetworkPolicySpec":  schema_v3_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedNetworkPolicy":                schema_v3_apis_projectcalico_v3_StagedNetworkPolicy(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedNetworkPolicyList":            schema_v3_apis_projectcalico_v3_StagedNetworkPolicyList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.StagedNetworkPolicySpec":            schema_v3_apis_projectcalico_v3_StagedNetworkPolicySpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Template":                           schema_v3_apis_projectcalico_v3_Template(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.Tier":                               schema_v3_apis_projectcalico_v3_Tier(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.TierList":                           schema_v3_apis_projectcalico_v3_TierList(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.TierSpec":                           schema_v3_apis_projectcalico_v3_TierSpec(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.TierStatus":                         schema_v3_apis_projectcalico_v3_TierStatus(ref),
+		"github.com/projectcalico/api/v3/apis/projectcalico/v3.WorkloadEndpointControllerConfig":   schema_v3_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref),
+		"github.com/projectcalico/api/v3/lib/numorstring.DSCP":                                     schema_api_v3_lib_numorstring_DSCP(ref),
+		"github.com/projectcalico/api/v3/lib/numorstring.Port":                                     schema_api_v3_lib_numorstring_Port(ref),
+		"github.com/projectcalico/api/v3/lib/numorstring.Protocol":                                 schema_api_v3_lib_numorstring_Protocol(ref),
+		"github.com/projectcalico/api/v3/lib/numorstring.Uint8OrString":                            schema_api_v3_lib_numorstring_Uint8OrString(ref),
+		v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
+		v1.Affinity{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_Affinity(ref),
+		v1.AppArmorProfile{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_AppArmorProfile(ref),
+		v1.AttachedVolume{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_AttachedVolume(ref),
+		v1.AvoidPods{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_AvoidPods(ref),
+		v1.AzureDiskVolumeSource{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_AzureDiskVolumeSource(ref),
+		v1.AzureFilePersistentVolumeSource{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_AzureFilePersistentVolumeSource(ref),
+		v1.AzureFileVolumeSource{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_AzureFileVolumeSource(ref),
+		v1.Binding{}.OpenAPIModelName():                                                            schema_k8sio_api_core_v1_Binding(ref),
+		v1.CSIPersistentVolumeSource{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_CSIPersistentVolumeSource(ref),
+		v1.CSIVolumeSource{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_CSIVolumeSource(ref),
+		v1.Capabilities{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_Capabilities(ref),
+		v1.CephFSPersistentVolumeSource{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_CephFSPersistentVolumeSource(ref),
+		v1.CephFSVolumeSource{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_CephFSVolumeSource(ref),
+		v1.CinderPersistentVolumeSource{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_CinderPersistentVolumeSource(ref),
+		v1.CinderVolumeSource{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_CinderVolumeSource(ref),
+		v1.ClientIPConfig{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_ClientIPConfig(ref),
+		v1.ClusterTrustBundleProjection{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_ClusterTrustBundleProjection(ref),
+		v1.ComponentCondition{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ComponentCondition(ref),
+		v1.ComponentStatus{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_ComponentStatus(ref),
+		v1.ComponentStatusList{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ComponentStatusList(ref),
+		v1.ConfigMap{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_ConfigMap(ref),
+		v1.ConfigMapEnvSource{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ConfigMapEnvSource(ref),
+		v1.ConfigMapKeySelector{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ConfigMapKeySelector(ref),
+		v1.ConfigMapList{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ConfigMapList(ref),
+		v1.ConfigMapNodeConfigSource{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_ConfigMapNodeConfigSource(ref),
+		v1.ConfigMapProjection{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ConfigMapProjection(ref),
+		v1.ConfigMapVolumeSource{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ConfigMapVolumeSource(ref),
+		v1.Container{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_Container(ref),
+		v1.ContainerExtendedResourceRequest{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_ContainerExtendedResourceRequest(ref),
+		v1.ContainerImage{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_ContainerImage(ref),
+		v1.ContainerPort{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ContainerPort(ref),
+		v1.ContainerResizePolicy{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ContainerResizePolicy(ref),
+		v1.ContainerRestartRule{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ContainerRestartRule(ref),
+		v1.ContainerRestartRuleOnExitCodes{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_ContainerRestartRuleOnExitCodes(ref),
+		v1.ContainerState{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_ContainerState(ref),
+		v1.ContainerStateRunning{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ContainerStateRunning(ref),
+		v1.ContainerStateTerminated{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_ContainerStateTerminated(ref),
+		v1.ContainerStateWaiting{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ContainerStateWaiting(ref),
+		v1.ContainerStatus{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_ContainerStatus(ref),
+		v1.ContainerUser{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ContainerUser(ref),
+		v1.DaemonEndpoint{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_DaemonEndpoint(ref),
+		v1.DownwardAPIProjection{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_DownwardAPIProjection(ref),
+		v1.DownwardAPIVolumeFile{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_DownwardAPIVolumeFile(ref),
+		v1.DownwardAPIVolumeSource{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_DownwardAPIVolumeSource(ref),
+		v1.EmptyDirVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_EmptyDirVolumeSource(ref),
+		v1.EndpointAddress{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_EndpointAddress(ref),
+		v1.EndpointPort{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_EndpointPort(ref),
+		v1.EndpointSubset{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_EndpointSubset(ref),
+		v1.Endpoints{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_Endpoints(ref),
+		v1.EndpointsList{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_EndpointsList(ref),
+		v1.EnvFromSource{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_EnvFromSource(ref),
+		v1.EnvVar{}.OpenAPIModelName():                                                             schema_k8sio_api_core_v1_EnvVar(ref),
+		v1.EnvVarSource{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_EnvVarSource(ref),
+		v1.EphemeralContainer{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_EphemeralContainer(ref),
+		v1.EphemeralContainerCommon{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_EphemeralContainerCommon(ref),
+		v1.EphemeralVolumeSource{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_EphemeralVolumeSource(ref),
+		v1.Event{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_Event(ref),
+		v1.EventList{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_EventList(ref),
+		v1.EventSeries{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_EventSeries(ref),
+		v1.EventSource{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_EventSource(ref),
+		v1.ExecAction{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_ExecAction(ref),
+		v1.FCVolumeSource{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_FCVolumeSource(ref),
+		v1.FileKeySelector{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_FileKeySelector(ref),
+		v1.FlexPersistentVolumeSource{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_FlexPersistentVolumeSource(ref),
+		v1.FlexVolumeSource{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_FlexVolumeSource(ref),
+		v1.FlockerVolumeSource{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_FlockerVolumeSource(ref),
+		v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_GCEPersistentDiskVolumeSource(ref),
+		v1.GRPCAction{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_GRPCAction(ref),
+		v1.GitRepoVolumeSource{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_GitRepoVolumeSource(ref),
+		v1.GlusterfsPersistentVolumeSource{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_GlusterfsPersistentVolumeSource(ref),
+		v1.GlusterfsVolumeSource{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_GlusterfsVolumeSource(ref),
+		v1.HTTPGetAction{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_HTTPGetAction(ref),
+		v1.HTTPHeader{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_HTTPHeader(ref),
+		v1.HostAlias{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_HostAlias(ref),
+		v1.HostIP{}.OpenAPIModelName():                                                             schema_k8sio_api_core_v1_HostIP(ref),
+		v1.HostPathVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_HostPathVolumeSource(ref),
+		v1.ISCSIPersistentVolumeSource{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_ISCSIPersistentVolumeSource(ref),
+		v1.ISCSIVolumeSource{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_ISCSIVolumeSource(ref),
+		v1.ImageVolumeSource{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_ImageVolumeSource(ref),
+		v1.KeyToPath{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_KeyToPath(ref),
+		v1.Lifecycle{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_Lifecycle(ref),
+		v1.LifecycleHandler{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_LifecycleHandler(ref),
+		v1.LimitRange{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_LimitRange(ref),
+		v1.LimitRangeItem{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_LimitRangeItem(ref),
+		v1.LimitRangeList{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_LimitRangeList(ref),
+		v1.LimitRangeSpec{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_LimitRangeSpec(ref),
+		v1.LinuxContainerUser{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_LinuxContainerUser(ref),
+		v1.List{}.OpenAPIModelName():                                                               schema_k8sio_api_core_v1_List(ref),
+		v1.LoadBalancerIngress{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_LoadBalancerIngress(ref),
+		v1.LoadBalancerStatus{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_LoadBalancerStatus(ref),
+		v1.LocalObjectReference{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_LocalObjectReference(ref),
+		v1.LocalVolumeSource{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_LocalVolumeSource(ref),
+		v1.ModifyVolumeStatus{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ModifyVolumeStatus(ref),
+		v1.NFSVolumeSource{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_NFSVolumeSource(ref),
+		v1.Namespace{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_Namespace(ref),
+		v1.NamespaceCondition{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_NamespaceCondition(ref),
+		v1.NamespaceList{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_NamespaceList(ref),
+		v1.NamespaceSpec{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_NamespaceSpec(ref),
+		v1.NamespaceStatus{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_NamespaceStatus(ref),
+		v1.Node{}.OpenAPIModelName():                                                               schema_k8sio_api_core_v1_Node(ref),
+		v1.NodeAddress{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_NodeAddress(ref),
+		v1.NodeAffinity{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_NodeAffinity(ref),
+		v1.NodeCondition{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_NodeCondition(ref),
+		v1.NodeConfigSource{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_NodeConfigSource(ref),
+		v1.NodeConfigStatus{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_NodeConfigStatus(ref),
+		v1.NodeDaemonEndpoints{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_NodeDaemonEndpoints(ref),
+		v1.NodeFeatures{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_NodeFeatures(ref),
+		v1.NodeList{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_NodeList(ref),
+		v1.NodeProxyOptions{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_NodeProxyOptions(ref),
+		v1.NodeRuntimeHandler{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_NodeRuntimeHandler(ref),
+		v1.NodeRuntimeHandlerFeatures{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_NodeRuntimeHandlerFeatures(ref),
+		v1.NodeSelector{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_NodeSelector(ref),
+		v1.NodeSelectorRequirement{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_NodeSelectorRequirement(ref),
+		v1.NodeSelectorTerm{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_NodeSelectorTerm(ref),
+		v1.NodeSpec{}.OpenAPIModelName():                                                           schema_k8sio_api_core_v1_NodeSpec(ref),
+		v1.NodeStatus{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_NodeStatus(ref),
+		v1.NodeSwapStatus{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_NodeSwapStatus(ref),
+		v1.NodeSystemInfo{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_NodeSystemInfo(ref),
+		v1.ObjectFieldSelector{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ObjectFieldSelector(ref),
+		v1.ObjectReference{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_ObjectReference(ref),
+		v1.PersistentVolume{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_PersistentVolume(ref),
+		v1.PersistentVolumeClaim{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_PersistentVolumeClaim(ref),
+		v1.PersistentVolumeClaimCondition{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref),
+		v1.PersistentVolumeClaimList{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_PersistentVolumeClaimList(ref),
+		v1.PersistentVolumeClaimSpec{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref),
+		v1.PersistentVolumeClaimStatus{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref),
+		v1.PersistentVolumeClaimTemplate{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_PersistentVolumeClaimTemplate(ref),
+		v1.PersistentVolumeClaimVolumeSource{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_PersistentVolumeClaimVolumeSource(ref),
+		v1.PersistentVolumeList{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_PersistentVolumeList(ref),
+		v1.PersistentVolumeSource{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_PersistentVolumeSource(ref),
+		v1.PersistentVolumeSpec{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_PersistentVolumeSpec(ref),
+		v1.PersistentVolumeStatus{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_PersistentVolumeStatus(ref),
+		v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_PhotonPersistentDiskVolumeSource(ref),
+		v1.Pod{}.OpenAPIModelName():                                                                schema_k8sio_api_core_v1_Pod(ref),
+		v1.PodAffinity{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_PodAffinity(ref),
+		v1.PodAffinityTerm{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodAffinityTerm(ref),
+		v1.PodAntiAffinity{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodAntiAffinity(ref),
+		v1.PodAttachOptions{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_PodAttachOptions(ref),
+		v1.PodCertificateProjection{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_PodCertificateProjection(ref),
+		v1.PodCondition{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_PodCondition(ref),
+		v1.PodDNSConfig{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_PodDNSConfig(ref),
+		v1.PodDNSConfigOption{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_PodDNSConfigOption(ref),
+		v1.PodExecOptions{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_PodExecOptions(ref),
+		v1.PodExtendedResourceClaimStatus{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_PodExtendedResourceClaimStatus(ref),
+		v1.PodIP{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_PodIP(ref),
+		v1.PodList{}.OpenAPIModelName():                                                            schema_k8sio_api_core_v1_PodList(ref),
+		v1.PodLogOptions{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_PodLogOptions(ref),
+		v1.PodOS{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_PodOS(ref),
+		v1.PodPortForwardOptions{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_PodPortForwardOptions(ref),
+		v1.PodProxyOptions{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodProxyOptions(ref),
+		v1.PodReadinessGate{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_PodReadinessGate(ref),
+		v1.PodResourceClaim{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_PodResourceClaim(ref),
+		v1.PodResourceClaimStatus{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_PodResourceClaimStatus(ref),
+		v1.PodSchedulingGate{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_PodSchedulingGate(ref),
+		v1.PodSecurityContext{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_PodSecurityContext(ref),
+		v1.PodSignature{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_PodSignature(ref),
+		v1.PodSpec{}.OpenAPIModelName():                                                            schema_k8sio_api_core_v1_PodSpec(ref),
+		v1.PodStatus{}.OpenAPIModelName():                                                          schema_k8sio_api_core_v1_PodStatus(ref),
+		v1.PodStatusResult{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodStatusResult(ref),
+		v1.PodTemplate{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_PodTemplate(ref),
+		v1.PodTemplateList{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodTemplateList(ref),
+		v1.PodTemplateSpec{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodTemplateSpec(ref),
+		v1.PortStatus{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_PortStatus(ref),
+		v1.PortworxVolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_PortworxVolumeSource(ref),
+		v1.PreferAvoidPodsEntry{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_PreferAvoidPodsEntry(ref),
+		v1.PreferredSchedulingTerm{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_PreferredSchedulingTerm(ref),
+		v1.Probe{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_Probe(ref),
+		v1.ProbeHandler{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_ProbeHandler(ref),
+		v1.ProjectedVolumeSource{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ProjectedVolumeSource(ref),
+		v1.QuobyteVolumeSource{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_QuobyteVolumeSource(ref),
+		v1.RBDPersistentVolumeSource{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_RBDPersistentVolumeSource(ref),
+		v1.RBDVolumeSource{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_RBDVolumeSource(ref),
+		v1.RangeAllocation{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_RangeAllocation(ref),
+		v1.ReplicationController{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ReplicationController(ref),
+		v1.ReplicationControllerCondition{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_ReplicationControllerCondition(ref),
+		v1.ReplicationControllerList{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_ReplicationControllerList(ref),
+		v1.ReplicationControllerSpec{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_ReplicationControllerSpec(ref),
+		v1.ReplicationControllerStatus{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_ReplicationControllerStatus(ref),
+		v1.ResourceClaim{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ResourceClaim(ref),
+		v1.ResourceFieldSelector{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ResourceFieldSelector(ref),
+		v1.ResourceHealth{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_ResourceHealth(ref),
+		v1.ResourceQuota{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ResourceQuota(ref),
+		v1.ResourceQuotaList{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_ResourceQuotaList(ref),
+		v1.ResourceQuotaSpec{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_ResourceQuotaSpec(ref),
+		v1.ResourceQuotaStatus{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ResourceQuotaStatus(ref),
+		v1.ResourceRequirements{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ResourceRequirements(ref),
+		v1.ResourceStatus{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_ResourceStatus(ref),
+		v1.SELinuxOptions{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_SELinuxOptions(ref),
+		v1.ScaleIOPersistentVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref),
+		v1.ScaleIOVolumeSource{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref),
+		v1.ScopeSelector{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ScopeSelector(ref),
+		v1.ScopedResourceSelectorRequirement{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_ScopedResourceSelectorRequirement(ref),
+		v1.SeccompProfile{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_SeccompProfile(ref),
+		v1.Secret{}.OpenAPIModelName():                                                             schema_k8sio_api_core_v1_Secret(ref),
+		v1.SecretEnvSource{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_SecretEnvSource(ref),
+		v1.SecretKeySelector{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_SecretKeySelector(ref),
+		v1.SecretList{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_SecretList(ref),
+		v1.SecretProjection{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_SecretProjection(ref),
+		v1.SecretReference{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_SecretReference(ref),
+		v1.SecretVolumeSource{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_SecretVolumeSource(ref),
+		v1.SecurityContext{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_SecurityContext(ref),
+		v1.SerializedReference{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_SerializedReference(ref),
+		v1.Service{}.OpenAPIModelName():                                                            schema_k8sio_api_core_v1_Service(ref),
+		v1.ServiceAccount{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_ServiceAccount(ref),
+		v1.ServiceAccountList{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ServiceAccountList(ref),
+		v1.ServiceAccountTokenProjection{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ServiceAccountTokenProjection(ref),
+		v1.ServiceList{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_ServiceList(ref),
+		v1.ServicePort{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_ServicePort(ref),
+		v1.ServiceProxyOptions{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ServiceProxyOptions(ref),
+		v1.ServiceSpec{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_ServiceSpec(ref),
+		v1.ServiceStatus{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_ServiceStatus(ref),
+		v1.SessionAffinityConfig{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_SessionAffinityConfig(ref),
+		v1.SleepAction{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_SleepAction(ref),
+		v1.StorageOSPersistentVolumeSource{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_StorageOSPersistentVolumeSource(ref),
+		v1.StorageOSVolumeSource{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_StorageOSVolumeSource(ref),
+		v1.Sysctl{}.OpenAPIModelName():                                                             schema_k8sio_api_core_v1_Sysctl(ref),
+		v1.TCPSocketAction{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_TCPSocketAction(ref),
+		v1.Taint{}.OpenAPIModelName():                                                              schema_k8sio_api_core_v1_Taint(ref),
+		v1.Toleration{}.OpenAPIModelName():                                                         schema_k8sio_api_core_v1_Toleration(ref),
+		v1.TopologySelectorLabelRequirement{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_TopologySelectorLabelRequirement(ref),
+		v1.TopologySelectorTerm{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_TopologySelectorTerm(ref),
+		v1.TopologySpreadConstraint{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_TopologySpreadConstraint(ref),
+		v1.TypedLocalObjectReference{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_TypedLocalObjectReference(ref),
+		v1.TypedObjectReference{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_TypedObjectReference(ref),
+		v1.Volume{}.OpenAPIModelName():                                                             schema_k8sio_api_core_v1_Volume(ref),
+		v1.VolumeDevice{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_VolumeDevice(ref),
+		v1.VolumeMount{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_VolumeMount(ref),
+		v1.VolumeMountStatus{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_VolumeMountStatus(ref),
+		v1.VolumeNodeAffinity{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_VolumeNodeAffinity(ref),
+		v1.VolumeProjection{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_VolumeProjection(ref),
+		v1.VolumeResourceRequirements{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_VolumeResourceRequirements(ref),
+		v1.VolumeSource{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_VolumeSource(ref),
+		v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_VsphereVirtualDiskVolumeSource(ref),
+		v1.WeightedPodAffinityTerm{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref),
+		v1.WindowsSecurityContextOptions{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_WindowsSecurityContextOptions(ref),
+		v1.WorkloadReference{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_WorkloadReference(ref),
+		networkingv1.HTTPIngressPath{}.OpenAPIModelName():                                          schema_k8sio_api_networking_v1_HTTPIngressPath(ref),
+		networkingv1.HTTPIngressRuleValue{}.OpenAPIModelName():                                     schema_k8sio_api_networking_v1_HTTPIngressRuleValue(ref),
+		networkingv1.IPAddress{}.OpenAPIModelName():                                                schema_k8sio_api_networking_v1_IPAddress(ref),
+		networkingv1.IPAddressList{}.OpenAPIModelName():                                            schema_k8sio_api_networking_v1_IPAddressList(ref),
+		networkingv1.IPAddressSpec{}.OpenAPIModelName():                                            schema_k8sio_api_networking_v1_IPAddressSpec(ref),
+		networkingv1.IPBlock{}.OpenAPIModelName():                                                  schema_k8sio_api_networking_v1_IPBlock(ref),
+		networkingv1.Ingress{}.OpenAPIModelName():                                                  schema_k8sio_api_networking_v1_Ingress(ref),
+		networkingv1.IngressBackend{}.OpenAPIModelName():                                           schema_k8sio_api_networking_v1_IngressBackend(ref),
+		networkingv1.IngressClass{}.OpenAPIModelName():                                             schema_k8sio_api_networking_v1_IngressClass(ref),
+		networkingv1.IngressClassList{}.OpenAPIModelName():                                         schema_k8sio_api_networking_v1_IngressClassList(ref),
+		networkingv1.IngressClassParametersReference{}.OpenAPIModelName():                          schema_k8sio_api_networking_v1_IngressClassParametersReference(ref),
+		networkingv1.IngressClassSpec{}.OpenAPIModelName():                                         schema_k8sio_api_networking_v1_IngressClassSpec(ref),
+		networkingv1.IngressList{}.OpenAPIModelName():                                              schema_k8sio_api_networking_v1_IngressList(ref),
+		networkingv1.IngressLoadBalancerIngress{}.OpenAPIModelName():                               schema_k8sio_api_networking_v1_IngressLoadBalancerIngress(ref),
+		networkingv1.IngressLoadBalancerStatus{}.OpenAPIModelName():                                schema_k8sio_api_networking_v1_IngressLoadBalancerStatus(ref),
+		networkingv1.IngressPortStatus{}.OpenAPIModelName():                                        schema_k8sio_api_networking_v1_IngressPortStatus(ref),
+		networkingv1.IngressRule{}.OpenAPIModelName():                                              schema_k8sio_api_networking_v1_IngressRule(ref),
+		networkingv1.IngressRuleValue{}.OpenAPIModelName():                                         schema_k8sio_api_networking_v1_IngressRuleValue(ref),
+		networkingv1.IngressServiceBackend{}.OpenAPIModelName():                                    schema_k8sio_api_networking_v1_IngressServiceBackend(ref),
+		networkingv1.IngressSpec{}.OpenAPIModelName():                                              schema_k8sio_api_networking_v1_IngressSpec(ref),
+		networkingv1.IngressStatus{}.OpenAPIModelName():                                            schema_k8sio_api_networking_v1_IngressStatus(ref),
+		networkingv1.IngressTLS{}.OpenAPIModelName():                                               schema_k8sio_api_networking_v1_IngressTLS(ref),
+		networkingv1.NetworkPolicy{}.OpenAPIModelName():                                            schema_k8sio_api_networking_v1_NetworkPolicy(ref),
+		networkingv1.NetworkPolicyEgressRule{}.OpenAPIModelName():                                  schema_k8sio_api_networking_v1_NetworkPolicyEgressRule(ref),
+		networkingv1.NetworkPolicyIngressRule{}.OpenAPIModelName():                                 schema_k8sio_api_networking_v1_NetworkPolicyIngressRule(ref),
+		networkingv1.NetworkPolicyList{}.OpenAPIModelName():                                        schema_k8sio_api_networking_v1_NetworkPolicyList(ref),
+		networkingv1.NetworkPolicyPeer{}.OpenAPIModelName():                                        schema_k8sio_api_networking_v1_NetworkPolicyPeer(ref),
+		networkingv1.NetworkPolicyPort{}.OpenAPIModelName():                                        schema_k8sio_api_networking_v1_NetworkPolicyPort(ref),
+		networkingv1.NetworkPolicySpec{}.OpenAPIModelName():                                        schema_k8sio_api_networking_v1_NetworkPolicySpec(ref),
+		networkingv1.ParentReference{}.OpenAPIModelName():                                          schema_k8sio_api_networking_v1_ParentReference(ref),
+		networkingv1.ServiceBackendPort{}.OpenAPIModelName():                                       schema_k8sio_api_networking_v1_ServiceBackendPort(ref),
+		networkingv1.ServiceCIDR{}.OpenAPIModelName():                                              schema_k8sio_api_networking_v1_ServiceCIDR(ref),
+		networkingv1.ServiceCIDRList{}.OpenAPIModelName():                                          schema_k8sio_api_networking_v1_ServiceCIDRList(ref),
+		networkingv1.ServiceCIDRSpec{}.OpenAPIModelName():                                          schema_k8sio_api_networking_v1_ServiceCIDRSpec(ref),
+		networkingv1.ServiceCIDRStatus{}.OpenAPIModelName():                                        schema_k8sio_api_networking_v1_ServiceCIDRStatus(ref),
+		metav1.APIGroup{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_APIGroup(ref),
+		metav1.APIGroupList{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_APIGroupList(ref),
+		metav1.APIResource{}.OpenAPIModelName():                                                    schema_pkg_apis_meta_v1_APIResource(ref),
+		metav1.APIResourceList{}.OpenAPIModelName():                                                schema_pkg_apis_meta_v1_APIResourceList(ref),
+		metav1.APIVersions{}.OpenAPIModelName():                                                    schema_pkg_apis_meta_v1_APIVersions(ref),
+		metav1.ApplyOptions{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_ApplyOptions(ref),
+		metav1.Condition{}.OpenAPIModelName():                                                      schema_pkg_apis_meta_v1_Condition(ref),
+		metav1.CreateOptions{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_CreateOptions(ref),
+		metav1.DeleteOptions{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		metav1.Duration{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_Duration(ref),
+		metav1.FieldSelectorRequirement{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
+		metav1.FieldsV1{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_FieldsV1(ref),
+		metav1.GetOptions{}.OpenAPIModelName():                                                     schema_pkg_apis_meta_v1_GetOptions(ref),
+		metav1.GroupKind{}.OpenAPIModelName():                                                      schema_pkg_apis_meta_v1_GroupKind(ref),
+		metav1.GroupResource{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_GroupResource(ref),
+		metav1.GroupVersion{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_GroupVersion(ref),
+		metav1.GroupVersionForDiscovery{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		metav1.GroupVersionKind{}.OpenAPIModelName():                                               schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		metav1.GroupVersionResource{}.OpenAPIModelName():                                           schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		metav1.InternalEvent{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_InternalEvent(ref),
+		metav1.LabelSelector{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_LabelSelector(ref),
+		metav1.LabelSelectorRequirement{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		metav1.List{}.OpenAPIModelName():                                                           schema_pkg_apis_meta_v1_List(ref),
+		metav1.ListMeta{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_ListMeta(ref),
+		metav1.ListOptions{}.OpenAPIModelName():                                                    schema_pkg_apis_meta_v1_ListOptions(ref),
+		metav1.ManagedFieldsEntry{}.OpenAPIModelName():                                             schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		metav1.MicroTime{}.OpenAPIModelName():                                                      schema_pkg_apis_meta_v1_MicroTime(ref),
+		metav1.ObjectMeta{}.OpenAPIModelName():                                                     schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		metav1.OwnerReference{}.OpenAPIModelName():                                                 schema_pkg_apis_meta_v1_OwnerReference(ref),
+		metav1.PartialObjectMetadata{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		metav1.PartialObjectMetadataList{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		metav1.Patch{}.OpenAPIModelName():                                                          schema_pkg_apis_meta_v1_Patch(ref),
+		metav1.PatchOptions{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_PatchOptions(ref),
+		metav1.Preconditions{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_Preconditions(ref),
+		metav1.RootPaths{}.OpenAPIModelName():                                                      schema_pkg_apis_meta_v1_RootPaths(ref),
+		metav1.ServerAddressByClientCIDR{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		metav1.Status{}.OpenAPIModelName():                                                         schema_pkg_apis_meta_v1_Status(ref),
+		metav1.StatusCause{}.OpenAPIModelName():                                                    schema_pkg_apis_meta_v1_StatusCause(ref),
+		metav1.StatusDetails{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_StatusDetails(ref),
+		metav1.Table{}.OpenAPIModelName():                                                          schema_pkg_apis_meta_v1_Table(ref),
+		metav1.TableColumnDefinition{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		metav1.TableOptions{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_TableOptions(ref),
+		metav1.TableRow{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_TableRow(ref),
+		metav1.TableRowCondition{}.OpenAPIModelName():                                              schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		metav1.Time{}.OpenAPIModelName():                                                           schema_pkg_apis_meta_v1_Time(ref),
+		metav1.Timestamp{}.OpenAPIModelName():                                                      schema_pkg_apis_meta_v1_Timestamp(ref),
+		metav1.TypeMeta{}.OpenAPIModelName():                                                       schema_pkg_apis_meta_v1_TypeMeta(ref),
+		metav1.UpdateOptions{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		metav1.WatchEvent{}.OpenAPIModelName():                                                     schema_pkg_apis_meta_v1_WatchEvent(ref),
+		runtime.RawExtension{}.OpenAPIModelName():                                                  schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		runtime.TypeMeta{}.OpenAPIModelName():                                                      schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		runtime.Unknown{}.OpenAPIModelName():                                                       schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		intstr.IntOrString{}.OpenAPIModelName():                                                    schema_apimachinery_pkg_util_intstr_IntOrString(ref),
+		version.Info{}.OpenAPIModelName():                                                          schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -527,7 +527,7 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_AutoHostEndpointConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -573,7 +573,7 @@ func schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref common.Referenc
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -614,7 +614,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfiguration(ref common.ReferenceCallb
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -663,7 +663,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationList(ref common.ReferenceC
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -882,7 +882,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPDaemonStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPDaemonStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -930,7 +930,7 @@ func schema_pkg_apis_projectcalico_v3_BGPDaemonStatus(ref common.ReferenceCallba
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilter(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilter(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -971,7 +971,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilter(ref common.ReferenceCallback) co
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterAddCommunity(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterAddCommunity(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -997,7 +997,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterAddCommunity(ref common.Reference
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterCommunityMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1036,7 +1036,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref common.Referen
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1085,7 +1085,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterOperation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterOperation(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1123,7 +1123,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterOperation(ref common.ReferenceCal
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1152,7 +1152,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref common.Referen
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1181,7 +1181,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref common.Referen
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterPrependASPath(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterPrependASPath(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1220,7 +1220,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterPrependASPath(ref common.Referenc
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1341,7 +1341,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1462,7 +1462,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterSetPriority(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterSetPriority(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1488,7 +1488,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSetPriority(ref common.ReferenceC
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1579,7 +1579,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPPassword(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPPassword(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1600,7 +1600,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPassword(ref common.ReferenceCallback) 
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPPeer(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPPeer(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1641,7 +1641,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeer(ref common.ReferenceCallback) comm
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPPeerList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPPeerList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1690,7 +1690,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerList(ref common.ReferenceCallback) 
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1841,7 +1841,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BPFConntrackTimeouts(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1909,7 +1909,7 @@ func schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref common.ReferenceC
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BlockAffinity(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BlockAffinity(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -1951,7 +1951,7 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinity(ref common.ReferenceCallback
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BlockAffinityList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BlockAffinityList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2000,7 +2000,7 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinityList(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BlockAffinitySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_BlockAffinitySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2053,7 +2053,7 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinitySpec(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodeAgentStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodeAgentStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2082,7 +2082,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeAgentStatus(ref common.Reference
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2135,7 +2135,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref common.Refere
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodeBGPStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2221,7 +2221,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref common.ReferenceCa
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodePeer(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodePeer(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2262,7 +2262,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodePeer(ref common.ReferenceCallbac
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodeRoute(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodeRoute(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2312,7 +2312,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeRoute(ref common.ReferenceCallba
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodeRouteLearnedFrom(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodeRouteLearnedFrom(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2339,7 +2339,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeRouteLearnedFrom(ref common.Refe
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodeStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodeStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2386,7 +2386,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatus(ref common.ReferenceCallb
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodeStatusList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2435,7 +2435,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusList(ref common.ReferenceC
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodeStatusSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2482,7 +2482,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusSpec(ref common.ReferenceC
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_CalicoNodeStatusStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2524,7 +2524,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusStatus(ref common.Referenc
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ClusterInformation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ClusterInformation(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2565,7 +2565,7 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformation(ref common.ReferenceCal
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ClusterInformationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ClusterInformationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2614,7 +2614,7 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformationList(ref common.Referenc
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ClusterInformationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2662,7 +2662,7 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref common.Referenc
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_Community(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_Community(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2694,7 +2694,7 @@ func schema_pkg_apis_projectcalico_v3_Community(ref common.ReferenceCallback) co
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ControllersConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ControllersConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2751,7 +2751,7 @@ func schema_pkg_apis_projectcalico_v3_ControllersConfig(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_EndpointPort(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_EndpointPort(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2785,7 +2785,7 @@ func schema_pkg_apis_projectcalico_v3_EndpointPort(ref common.ReferenceCallback)
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2909,7 +2909,7 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_FelixConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_FelixConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2950,7 +2950,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfiguration(ref common.ReferenceCal
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_FelixConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_FelixConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -2999,7 +2999,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationList(ref common.Referenc
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_FelixConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4329,7 +4329,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_GlobalNetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4370,7 +4370,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicy(ref common.ReferenceCa
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_GlobalNetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4419,7 +4419,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicyList(ref common.Referen
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4567,7 +4567,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_GlobalNetworkSet(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_GlobalNetworkSet(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4608,7 +4608,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSet(ref common.ReferenceCallb
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_GlobalNetworkSetList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4657,7 +4657,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetList(ref common.ReferenceC
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_GlobalNetworkSetSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4690,7 +4690,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref common.ReferenceC
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_HTTPMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_HTTPMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4744,7 +4744,7 @@ func schema_pkg_apis_projectcalico_v3_HTTPMatch(ref common.ReferenceCallback) co
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_HTTPPath(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_HTTPPath(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4769,7 +4769,7 @@ func schema_pkg_apis_projectcalico_v3_HTTPPath(ref common.ReferenceCallback) com
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_HealthTimeoutOverride(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4796,7 +4796,7 @@ func schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref common.Reference
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_HostEndpoint(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_HostEndpoint(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4837,7 +4837,7 @@ func schema_pkg_apis_projectcalico_v3_HostEndpoint(ref common.ReferenceCallback)
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_HostEndpointList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_HostEndpointList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4886,7 +4886,7 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointList(ref common.ReferenceCallb
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_HostEndpointSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4974,7 +4974,7 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref common.ReferenceCallb
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ICMPFields(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ICMPFields(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5001,7 +5001,7 @@ func schema_pkg_apis_projectcalico_v3_ICMPFields(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPAMBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5042,7 +5042,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlock(ref common.ReferenceCallback) co
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMBlockList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPAMBlockList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5091,7 +5091,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockList(ref common.ReferenceCallback
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5226,7 +5226,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPAMConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5268,7 +5268,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPAMConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5317,7 +5317,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref common.Reference
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5361,7 +5361,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.Reference
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMHandle(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPAMHandle(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5402,7 +5402,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandle(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMHandleList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPAMHandleList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5451,7 +5451,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandleList(ref common.ReferenceCallbac
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPAMHandleSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPAMHandleSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5497,7 +5497,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandleSpec(ref common.ReferenceCallbac
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPIPConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPIPConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5523,7 +5523,7 @@ func schema_pkg_apis_projectcalico_v3_IPIPConfiguration(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPPool(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPPool(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5569,7 +5569,7 @@ func schema_pkg_apis_projectcalico_v3_IPPool(ref common.ReferenceCallback) commo
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPPoolList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPPoolList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5618,7 +5618,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolList(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5723,7 +5723,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPPoolStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5758,7 +5758,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref common.ReferenceCallback)
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPReservation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPReservation(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5800,7 +5800,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservation(ref common.ReferenceCallback
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPReservationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPReservationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5849,7 +5849,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservationList(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_IPReservationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5882,7 +5882,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_KubeControllersConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_KubeControllersConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5929,7 +5929,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfiguration(ref common.Re
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_KubeControllersConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -5978,7 +5978,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref commo
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6035,7 +6035,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6072,7 +6072,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref com
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_LoadBalancerControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_LoadBalancerControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6091,7 +6091,7 @@ func schema_pkg_apis_projectcalico_v3_LoadBalancerControllerConfig(ref common.Re
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_MigrationControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_MigrationControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6110,7 +6110,7 @@ func schema_pkg_apis_projectcalico_v3_MigrationControllerConfig(ref common.Refer
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_NamespaceControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_NamespaceControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6131,7 +6131,7 @@ func schema_pkg_apis_projectcalico_v3_NamespaceControllerConfig(ref common.Refer
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_NetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6172,7 +6172,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref common.ReferenceCallback
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_NetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6221,7 +6221,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6341,7 +6341,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_NetworkSet(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_NetworkSet(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6382,7 +6382,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSet(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_NetworkSetList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_NetworkSetList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6431,7 +6431,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSetList(ref common.ReferenceCallbac
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_NetworkSetSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_NetworkSetSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6464,7 +6464,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSetSpec(ref common.ReferenceCallbac
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_NodeControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6504,7 +6504,7 @@ func schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref common.ReferenceC
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_PolicyControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_PolicyControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6525,7 +6525,7 @@ func schema_pkg_apis_projectcalico_v3_PolicyControllerConfig(ref common.Referenc
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_PrefixAdvertisement(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_PrefixAdvertisement(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6570,7 +6570,7 @@ func schema_pkg_apis_projectcalico_v3_PrefixAdvertisement(ref common.ReferenceCa
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_Profile(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_Profile(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6611,7 +6611,7 @@ func schema_pkg_apis_projectcalico_v3_Profile(ref common.ReferenceCallback) comm
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ProfileList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ProfileList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6660,7 +6660,7 @@ func schema_pkg_apis_projectcalico_v3_ProfileList(ref common.ReferenceCallback) 
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6729,7 +6729,7 @@ func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) 
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ProtoPort(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ProtoPort(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6762,7 +6762,7 @@ func schema_pkg_apis_projectcalico_v3_ProtoPort(ref common.ReferenceCallback) co
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_RouteTableIDRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_RouteTableIDRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6789,7 +6789,7 @@ func schema_pkg_apis_projectcalico_v3_RouteTableIDRange(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_RouteTableRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_RouteTableRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6816,7 +6816,7 @@ func schema_pkg_apis_projectcalico_v3_RouteTableRange(ref common.ReferenceCallba
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_Rule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_Rule(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6896,7 +6896,7 @@ func schema_pkg_apis_projectcalico_v3_Rule(ref common.ReferenceCallback) common.
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_RuleMetadata(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_RuleMetadata(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6924,7 +6924,7 @@ func schema_pkg_apis_projectcalico_v3_RuleMetadata(ref common.ReferenceCallback)
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ServiceAccountControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ServiceAccountControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6945,7 +6945,7 @@ func schema_pkg_apis_projectcalico_v3_ServiceAccountControllerConfig(ref common.
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ServiceAccountMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ServiceAccountMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -6984,7 +6984,7 @@ func schema_pkg_apis_projectcalico_v3_ServiceAccountMatch(ref common.ReferenceCa
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ServiceClusterIPBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ServiceClusterIPBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7008,7 +7008,7 @@ func schema_pkg_apis_projectcalico_v3_ServiceClusterIPBlock(ref common.Reference
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ServiceExternalIPBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ServiceExternalIPBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7032,7 +7032,7 @@ func schema_pkg_apis_projectcalico_v3_ServiceExternalIPBlock(ref common.Referenc
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7056,7 +7056,7 @@ func schema_pkg_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref common.Refe
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_ServiceMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_ServiceMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7082,7 +7082,7 @@ func schema_pkg_apis_projectcalico_v3_ServiceMatch(ref common.ReferenceCallback)
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7124,7 +7124,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref common.Refer
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7173,7 +7173,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref common.R
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7328,7 +7328,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7370,7 +7370,7 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref common.R
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7419,7 +7419,7 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref comm
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7506,7 +7506,7 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref comm
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_StagedNetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7548,7 +7548,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicy(ref common.ReferenceCa
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_StagedNetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7597,7 +7597,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicyList(ref common.Referen
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7724,7 +7724,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_Template(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7793,7 +7793,7 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_Tier(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_Tier(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7841,7 +7841,7 @@ func schema_pkg_apis_projectcalico_v3_Tier(ref common.ReferenceCallback) common.
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_TierList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_TierList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7890,7 +7890,7 @@ func schema_pkg_apis_projectcalico_v3_TierList(ref common.ReferenceCallback) com
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_TierSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_TierSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7917,7 +7917,7 @@ func schema_pkg_apis_projectcalico_v3_TierSpec(ref common.ReferenceCallback) com
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_TierStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_TierStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7954,7 +7954,7 @@ func schema_pkg_apis_projectcalico_v3_TierStatus(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_v3_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7975,7 +7975,7 @@ func schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref commo
 	}
 }
 
-func schema_api_pkg_lib_numorstring_DSCP(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_v3_lib_numorstring_DSCP(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7986,7 +7986,7 @@ func schema_api_pkg_lib_numorstring_DSCP(ref common.ReferenceCallback) common.Op
 	}
 }
 
-func schema_api_pkg_lib_numorstring_Port(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_v3_lib_numorstring_Port(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -7998,7 +7998,7 @@ func schema_api_pkg_lib_numorstring_Port(ref common.ReferenceCallback) common.Op
 	}
 }
 
-func schema_api_pkg_lib_numorstring_Protocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_v3_lib_numorstring_Protocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -8009,7 +8009,7 @@ func schema_api_pkg_lib_numorstring_Protocol(ref common.ReferenceCallback) commo
 	}
 }
 
-func schema_api_pkg_lib_numorstring_Uint8OrString(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_v3_lib_numorstring_Uint8OrString(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{

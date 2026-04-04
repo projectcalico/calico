@@ -41,7 +41,7 @@ func NetworkSet(name, namespace string) *NetworkSetApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractNetworkSetFrom(networkSet *projectcalicov3.NetworkSet, fieldManager string, subresource string) (*NetworkSetApplyConfiguration, error) {
 	b := &NetworkSetApplyConfiguration{}
-	err := managedfields.ExtractInto(networkSet, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkSet"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(networkSet, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.NetworkSet"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

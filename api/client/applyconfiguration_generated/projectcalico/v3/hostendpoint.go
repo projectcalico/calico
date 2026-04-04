@@ -40,7 +40,7 @@ func HostEndpoint(name string) *HostEndpointApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractHostEndpointFrom(hostEndpoint *projectcalicov3.HostEndpoint, fieldManager string, subresource string) (*HostEndpointApplyConfiguration, error) {
 	b := &HostEndpointApplyConfiguration{}
-	err := managedfields.ExtractInto(hostEndpoint, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.HostEndpoint"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(hostEndpoint, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.HostEndpoint"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

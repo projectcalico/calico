@@ -40,7 +40,7 @@ func BGPConfiguration(name string) *BGPConfigurationApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractBGPConfigurationFrom(bGPConfiguration *projectcalicov3.BGPConfiguration, fieldManager string, subresource string) (*BGPConfigurationApplyConfiguration, error) {
 	b := &BGPConfigurationApplyConfiguration{}
-	err := managedfields.ExtractInto(bGPConfiguration, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPConfiguration"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(bGPConfiguration, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPConfiguration"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}

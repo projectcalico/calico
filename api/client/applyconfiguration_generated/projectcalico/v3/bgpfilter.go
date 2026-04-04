@@ -40,7 +40,7 @@ func BGPFilter(name string) *BGPFilterApplyConfiguration {
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
 func ExtractBGPFilterFrom(bGPFilter *projectcalicov3.BGPFilter, fieldManager string, subresource string) (*BGPFilterApplyConfiguration, error) {
 	b := &BGPFilterApplyConfiguration{}
-	err := managedfields.ExtractInto(bGPFilter, internal.Parser().Type("com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPFilter"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(bGPFilter, internal.Parser().Type("com.github.projectcalico.api.v3.apis.projectcalico.v3.BGPFilter"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}
