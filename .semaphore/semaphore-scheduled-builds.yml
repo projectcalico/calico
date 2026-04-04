@@ -614,14 +614,14 @@ blocks:
         - name: PRIVATE_REGISTRY
           value: "quay.io/"
         - name: K8S_E2E_FLAGS
-          # Skipped test labels:
+          # Label filter selects sig-calico tests and excludes:
           # - Slow: long-running tests not suitable for CI
           # - Disruptive: tests that break cluster state for other tests
           # - RequiresBGPMesh: requires BGP routing, but this cluster uses VXLAN
           # - NoEncap: requires non-encapsulated routing, but this cluster uses VXLAN
           # - Feature:Istio: Calico policy not enforced with Istio ambient on BPF dataplane
           # - ExternalNode: requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured
-          value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[RequiresBGPMesh\]|\[NoEncap\]|\[Feature:Istio\]|\[ExternalNode\])
+          value: "--ginkgo.label-filter=sig-calico && !Slow && !Disruptive && !RequiresBGPMesh && !NoEncap && !Feature:Istio && !ExternalNode"
         - name: USE_API_SERVER
           value: "false"
       jobs:

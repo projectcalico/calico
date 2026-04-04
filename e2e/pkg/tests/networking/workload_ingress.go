@@ -611,14 +611,12 @@ var _ = describe.CalicoDescribe(
 		// most fundamental ingress path.
 		for _, scenario := range ingressScenarioTable {
 			s := scenario // capture loop variable
+			if s.srcNode == "external" {
+				continue
+			}
 			name := fmt.Sprintf("scenario-%d: %s hostNet=%v -> %s",
 				s.num, s.srcNode, s.hostNetworked, s.dest)
-
-			if s.srcNode == "external" {
-				It(name, Label("ExternalNode"), func() {
-					runExternalIngressTest(s)
-				})
-			} else if s.num == 3 {
+			if s.num == 3 {
 				framework.ConformanceIt(name, func() {
 					runStandardIngressTest(s)
 				})
@@ -628,6 +626,21 @@ var _ = describe.CalicoDescribe(
 				})
 			}
 		}
+
+		// External node scenarios run from a machine outside the cluster via SSH.
+		Context("external node", describe.WithExternalNode(), func() {
+			for _, scenario := range ingressScenarioTable {
+				s := scenario // capture loop variable
+				if s.srcNode != "external" {
+					continue
+				}
+				name := fmt.Sprintf("scenario-%d: %s hostNet=%v -> %s",
+					s.num, s.srcNode, s.hostNetworked, s.dest)
+				It(name, func() {
+					runExternalIngressTest(s)
+				})
+			}
+		})
 	},
 )
 
