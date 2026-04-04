@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"reflect"
 
-	calicoapi "github.com/projectcalico/api"
+	calicoapi "github.com/projectcalico/api/v3"
 	"github.com/sirupsen/logrus"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"

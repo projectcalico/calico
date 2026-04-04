@@ -501,9 +501,9 @@ func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
 	var out []string
 	for line := range bytes.Lines(raw) {
 		dep := string(bytes.TrimSpace(line))
-		if strings.HasPrefix(dep, "github.com/projectcalico/api/") {
+		if strings.HasPrefix(dep, "github.com/projectcalico/api/v3/") {
 			// HACK, handle the API go mod replace.
-			dep = strings.Replace(dep, "github.com/projectcalico/api/", "github.com/projectcalico/calico/api/", 1)
+			dep = strings.Replace(dep, "github.com/projectcalico/api/v3/", "github.com/projectcalico/calico/api/", 1)
 		}
 		out = append(out, dep)
 		logrus.Debugf("Loaded package: %s", strings.TrimRight(string(line), "\n"))
