@@ -26,6 +26,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
+func init() {
+	SetCRDValidationEnabled(true)
+}
+
 // crdTestCase defines a single CRD validation test. Each case passes a
 // runtime.Object through the full Validate() path and checks whether an
 // error containing errSubstr is produced.
