@@ -41,12 +41,10 @@ global_job_config:
       value: "container"
     - name: FUNCTIONAL_AREA
       value: "upgrade.yml"
-    # The intent here is to run a representative set of tests that cover the main functionality of Calico
-    # Using tests that usually pass.
-    # So we're running the Conformance tests, some RBAC tests, and some Observe tests.
-    # and skipping the slow, disruptive, and some other tests that are not relevant to Calico OSS
+    # Run Conformance tests, RBAC tests, and Observe tests.
+    # Skip slow, disruptive tests. DataPath skipped via --ginkgo.skip (test name, not a label).
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)
+      value: "--ginkgo.label-filter=((Conformance && sig-network) || Observe || Feature:RBAC) && !Slow && !Disruptive --ginkgo.skip=(DataPath)"
     - name: USE_PRIVATE_REGISTRY
       value: "true"
     - name: PRIVATE_REGISTRY
@@ -85,9 +83,9 @@ blocks:
           env_vars:
             - name: PROVISIONER
               value: aws-eks
-              # The extra skips here are for upstream tests that require access to pods via the control plane, and with Calico CNI, the EKS control plane can't access pods.
+              # EKS control plane can't reach pod network with Calico CNI, so skip upstream tests that require it.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1)
+              value: "--ginkgo.label-filter=((Conformance && sig-network) || Observe || Feature:RBAC) && !Slow && !Disruptive --ginkgo.skip=(DataPath|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1)"
           matrix:
             - env_var: K8S_VERSION
               values: ["stable-1"]

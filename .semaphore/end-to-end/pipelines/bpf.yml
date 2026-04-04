@@ -23,7 +23,7 @@ global_job_config:
     - name: banzai-secrets
   env_vars:
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP)
+      value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Feature:Host-Protection) && !Slow && !Disruptive && !Feature:SCTP"
     - name: DATAPLANE
       value: "CalicoBPF"
     - name: INSTALLER
@@ -204,7 +204,7 @@ blocks:
               # External node is false, so we should skip external node tests: "outside.the.cluster|external.to.nodeport"
               # This uses AKS-CNI, so Strict Affinity test does not apply: "StrictAffinity"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Dataplane:BPF || Feature:NetworkPolicy) && !Slow && !Disruptive && !sig-calico-enterprise && !Dataplane:LB && !Feature:SCTP --ginkgo.skip=(allow.ingress.access.from.updated.pod|outside.the.cluster|external.to.nodeport|StrictAffinity)"
 
         - name: AKS w/ Calico-CNI
           execution_time_limit:
@@ -227,7 +227,7 @@ blocks:
               # External node is false, so we should skip external node tests: "outside.the.cluster|external.to.nodeport"
               # This uses AKS-CNI, so Strict Affinity test does not apply: "StrictAffinity"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Dataplane:BPF || Feature:NetworkPolicy) && !Slow && !Disruptive && !sig-calico-enterprise && !Dataplane:LB && !Feature:SCTP --ginkgo.skip=(allow.ingress.access.from.updated.pod|outside.the.cluster|external.to.nodeport|StrictAffinity)"
 
         - name: BPF + AKS w AKS CNI + Overlay
           execution_time_limit:
@@ -249,10 +249,10 @@ blocks:
               value: "azr-aks"
             - name: AZ_CREATE_MODE
               value: AKS
-              # External node is false, so we should skip external node tests: "ExternalNode|outside.the.cluster|external.to.nodeport"
-              # This uses AKS-CNI, so Strict Affinity and MTU tests do not apply: "MTU|StrictAffinity"
+              # External node is false, so we should skip external node tests: outside.the.cluster, external.to.nodeport, ExternalNode
+              # This uses AKS-CNI, so Strict Affinity and MTU tests do not apply
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Feature:NetworkPolicy) && !Slow && !Disruptive && !sig-calico-enterprise && !Dataplane:LB && !Feature:MTU && !ExternalNode && !Feature:SCTP --ginkgo.skip=(allow.ingress.access.from.updated.pod|outside.the.cluster|external.to.nodeport|StrictAffinity)"
 
         - name: aws-kops RHEL8.2
           execution_time_limit:
@@ -268,10 +268,8 @@ blocks:
               value: "ami-02f147dfb8be58a10" # This is the Hourly image.  For Access image, use "ami-03cda30b7a23bda26"
             - name: USE_VENDORED_CNI
               value: "false"
-            # The skip "EndpointSlice\|Services\sshould" is needed to skip Endpoint slice tests which are only possible in k8s 1.21+
-            # The skip "Ingress.API|IngressClass.API" is needed to skip Ingress tests which are only possible in k8s 1.21+
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Feature:SCTP)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Dataplane:BPF || Feature:NetworkPolicy) && !Slow && !Disruptive && !sig-calico-enterprise && !Feature:SCTP --ginkgo.skip=(allow.ingress.access.from.updated.pod)"
 
         - name: aws-lb-bpf
           execution_time_limit:
@@ -291,7 +289,7 @@ blocks:
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB)
+              value: "--ginkgo.label-filter=Dataplane:LB"
             - name: BGP_STATUS
               value: Enabled
             # Skipping these upstream k8s tests since they are failing because of limitations of Calico CNI on EKS:
@@ -304,10 +302,9 @@ blocks:
             # - [It] "DNS should provide DNS for pods for Subdomain"
             # - [It] "DNS should provide DNS for services"
             # - [It] "DNS should provide DNS for the cluster"
-            # - [It] "DNS should resolve DNS of partial qualified names for services"
             # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Feature:Host-Protection) && !Slow && !Disruptive && !Feature:SCTP --ginkgo.skip=(both.pod.and.service.Proxy\\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster)"
 
         - name: aws-lb-iptables
           execution_time_limit:
@@ -327,7 +324,7 @@ blocks:
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB)
+              value: "--ginkgo.label-filter=Dataplane:LB"
             - name: DATAPLANE
               value: "CalicoIptables"
             - name: BGP_STATUS
@@ -342,10 +339,9 @@ blocks:
             # - [It] "DNS should provide DNS for pods for Subdomain"
             # - [It] "DNS should provide DNS for services"
             # - [It] "DNS should provide DNS for the cluster"
-            # - [It] "DNS should resolve DNS of partial qualified names for services"
             # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Feature:Host-Protection) && !Slow && !Disruptive && !Feature:SCTP --ginkgo.skip=(both.pod.and.service.Proxy\\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster)"
 
         - name: EKS w/ aws CNI
           execution_time_limit:
@@ -395,10 +391,9 @@ blocks:
             # - [It] "DNS should provide DNS for pods for Subdomain"
             # - [It] "DNS should provide DNS for services"
             # - [It] "DNS should provide DNS for the cluster"
-            # - [It] "DNS should resolve DNS of partial qualified names for services"
             # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Dataplane:BPF) && !Slow && !Disruptive && !Feature:SCTP --ginkgo.skip=(v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|both.pod.and.service.Proxy\\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster)"
 
         - name: bpf-eks-aws-cni-lb
           execution_time_limit:
@@ -414,7 +409,7 @@ blocks:
             - name: INSTALLER
               value: "operator"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB)
+              value: "--ginkgo.label-filter=Dataplane:LB"
             - name: NUM_ADDON_PODS
               value: "45" # there are 3 nodes, each with 3 ENIs and each ENI can have 12 IPs.
 
@@ -437,7 +432,7 @@ blocks:
             - name: INSTALLER
               value: "operator"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|sig-calico-enterprise)
+              value: "--ginkgo.label-filter=((Conformance && sig-network) || Dataplane:BPF) && !Slow && !Disruptive && !Feature:SCTP && !Feature:HostPorts && !Feature:Wireguard && !sig-calico-enterprise --ginkgo.skip=(v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|DataPath)"
             - name: K8S_E2E_DOCKER_EXTRA_FLAGS
               value: --env IP_FAMILY
             - name: NAT_OUTGOING_V6
@@ -474,7 +469,7 @@ blocks:
             # See https://tigera.atlassian.net/browse/CORE-6725 for the extra skips.
             # Hopefully we'll fix the DataPath ones soon.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Dataplane:BPF) && !Slow && !Disruptive && !Feature:SCTP && !Feature:HostPorts && !Feature:Wireguard --ginkgo.skip=(v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|DataPath)"
             - name: K8S_VERSION
               value: "stable-1"
             - name: NAT_OUTGOING_V6
@@ -512,7 +507,7 @@ blocks:
             # See https://tigera.atlassian.net/browse/CORE-6725 for the extra skips.
             # Hopefully we'll fix the DataPath ones soon.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Dataplane:BPF) && !Slow && !Disruptive && !Feature:SCTP && !Feature:HostPorts && !Feature:Wireguard --ginkgo.skip=(v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|DataPath)"
             - name: NAT_OUTGOING
               value: "Enabled"
             - name: ENCAPSULATION_TYPE
@@ -532,7 +527,7 @@ blocks:
         - name: CLUSTER_NODES
           value: "3"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+          value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Dataplane:BPF || Feature:NetworkPolicy) && !Slow && !Disruptive && !sig-calico-enterprise && !Dataplane:LB && !Feature:SCTP --ginkgo.skip=(allow.ingress.access.from.updated.pod)"
 
   - name: BPF mini-scale runs
     dependencies: []
@@ -574,7 +569,7 @@ blocks:
             - name: NETWORK_MTU
               value: "9001"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Dataplane:BPF || Feature:NetworkPolicy) && !Slow && !Disruptive && !sig-calico-enterprise && !Dataplane:LB && !Feature:SCTP --ginkgo.skip=(allow.ingress.access.from.updated.pod)"
 
         - name: aws-iptables - 9k MTU
           execution_time_limit:
@@ -593,7 +588,7 @@ blocks:
             - name: DATAPLANE
               value: "CalicoIptables"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:SCTP)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network)) && !Slow && !Disruptive && !Feature:Wireguard && !Feature:SCTP --ginkgo.skip=(DataPath)"
 
       env_vars:
         - name: CLUSTER_NODES
@@ -655,10 +650,10 @@ blocks:
               value: "azr-aks"
             - name: AZ_CREATE_MODE
               value: AKS
-              # External node is false, so we should skip external node tests: "ExternalNode|outside.the.cluster|external.to.nodeport"
-              # This uses AKS-CNI, so Strict Affinity and MTU tests do not apply: "MTU|StrictAffinity"
+              # External node is false, so we should skip external node tests: outside.the.cluster, external.to.nodeport, ExternalNode
+              # This uses AKS-CNI, so Strict Affinity and MTU tests do not apply
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+              value: "--ginkgo.label-filter=(sig-calico || (Conformance && sig-network) || Feature:NetworkPolicy) && !Slow && !Disruptive && !sig-calico-enterprise && !Dataplane:LB && !Feature:MTU && !ExternalNode && !Feature:SCTP --ginkgo.skip=(allow.ingress.access.from.updated.pod|outside.the.cluster|external.to.nodeport|StrictAffinity)"
 
   # this is from the old every-week file
   - name: usage reporting with bpf
