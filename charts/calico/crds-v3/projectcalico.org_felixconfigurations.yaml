@@ -1,0 +1,591 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: felixconfigurations.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: FelixConfiguration
+    listKind: FelixConfigurationList
+    plural: felixconfigurations
+    singular: felixconfiguration
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                allowIPIPPacketsFromWorkloads:
+                  type: boolean
+                allowVXLANPacketsFromWorkloads:
+                  type: boolean
+                awsSrcDstCheck:
+                  enum:
+                    - DoNothing
+                    - Enable
+                    - Disable
+                  type: string
+                bpfAttachType:
+                  enum:
+                    - TC
+                    - TCX
+                  type: string
+                bpfCTLBLogFilter:
+                  type: string
+                bpfConnectTimeLoadBalancing:
+                  enum:
+                    - TCP
+                    - Enabled
+                    - Disabled
+                  type: string
+                bpfConnectTimeLoadBalancingEnabled:
+                  type: boolean
+                bpfConntrackLogLevel:
+                  enum:
+                    - "Off"
+                    - Debug
+                  type: string
+                bpfConntrackMode:
+                  enum:
+                    - Auto
+                    - Userspace
+                    - BPFProgram
+                  type: string
+                bpfConntrackTimeouts:
+                  properties:
+                    creationGracePeriod:
+                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      type: string
+                    genericTimeout:
+                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      type: string
+                    icmpTimeout:
+                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      type: string
+                    tcpEstablished:
+                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      type: string
+                    tcpFinsSeen:
+                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      type: string
+                    tcpResetSeen:
+                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      type: string
+                    tcpSynSent:
+                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      type: string
+                    udpTimeout:
+                      pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                      type: string
+                  type: object
+                bpfDSROptoutCIDRs:
+                  items:
+                    type: string
+                  type: array
+                bpfDataIfacePattern:
+                  type: string
+                bpfDisableGROForIfaces:
+                  type: string
+                bpfDisableUnprivileged:
+                  type: boolean
+                bpfEnabled:
+                  type: boolean
+                bpfEnforceRPF:
+                  pattern: ^(?i)(Disabled|Strict|Loose)?$
+                  type: string
+                bpfExcludeCIDRsFromNAT:
+                  items:
+                    type: string
+                  type: array
+                bpfExportBufferSizeMB:
+                  type: integer
+                bpfExtToServiceConnmark:
+                  type: integer
+                bpfExternalServiceMode:
+                  pattern: ^(?i)(Tunnel|DSR)?$
+                  type: string
+                bpfForceTrackPacketsFromIfaces:
+                  items:
+                    type: string
+                  type: array
+                bpfHostConntrackBypass:
+                  type: boolean
+                bpfHostNetworkedNATWithoutCTLB:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                bpfJITHardening:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Strict
+                    - enum:
+                        - Auto
+                        - Strict
+                  type: string
+                bpfKubeProxyHealthzPort:
+                  type: integer
+                bpfKubeProxyIptablesCleanupEnabled:
+                  type: boolean
+                bpfKubeProxyMinSyncPeriod:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                bpfL3IfacePattern:
+                  type: string
+                bpfLogFilters:
+                  additionalProperties:
+                    type: string
+                  type: object
+                bpfLogLevel:
+                  pattern: ^(?i)(Off|Info|Debug)?$
+                  type: string
+                bpfMaglevMaxEndpointsPerService:
+                  type: integer
+                bpfMaglevMaxServices:
+                  type: integer
+                bpfMapSizeConntrack:
+                  type: integer
+                bpfMapSizeConntrackCleanupQueue:
+                  minimum: 1
+                  type: integer
+                bpfMapSizeConntrackScaling:
+                  pattern: ^(?i)(Disabled|DoubleIfFull)?$
+                  type: string
+                bpfMapSizeIPSets:
+                  type: integer
+                bpfMapSizeIfState:
+                  type: integer
+                bpfMapSizeNATAffinity:
+                  type: integer
+                bpfMapSizeNATBackend:
+                  type: integer
+                bpfMapSizeNATFrontend:
+                  type: integer
+                bpfMapSizePerCpuConntrack:
+                  type: integer
+                bpfMapSizeRoute:
+                  type: integer
+                bpfPSNATPorts:
+                  anyOf:
+                    - type: integer
+                    - type: string
+                  pattern: ^.*
+                  x-kubernetes-int-or-string: true
+                bpfPolicyDebugEnabled:
+                  type: boolean
+                bpfProfiling:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                bpfRedirectToPeer:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                cgroupV2Path:
+                  type: string
+                chainInsertMode:
+                  pattern: ^(?i)(Insert|Append)?$
+                  type: string
+                dataplaneDriver:
+                  type: string
+                dataplaneWatchdogTimeout:
+                  type: string
+                debugDisableLogDropping:
+                  type: boolean
+                debugHost:
+                  type: string
+                debugMemoryProfilePath:
+                  type: string
+                debugPort:
+                  type: integer
+                debugSimulateCalcGraphHangAfter:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                debugSimulateDataplaneApplyDelay:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                debugSimulateDataplaneHangAfter:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                defaultEndpointToHostAction:
+                  pattern: ^(?i)(Drop|Accept|Return)?$
+                  type: string
+                deviceRouteProtocol:
+                  type: integer
+                deviceRouteSourceAddress:
+                  type: string
+                deviceRouteSourceAddressIPv6:
+                  type: string
+                disableConntrackInvalidCheck:
+                  type: boolean
+                endpointReportingDelay:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                endpointReportingEnabled:
+                  type: boolean
+                endpointStatusPathPrefix:
+                  type: string
+                externalNodesList:
+                  items:
+                    type: string
+                  type: array
+                failsafeInboundHostPorts:
+                  items:
+                    properties:
+                      net:
+                        type: string
+                      port:
+                        type: integer
+                      protocol:
+                        type: string
+                    required:
+                      - port
+                    type: object
+                  type: array
+                failsafeOutboundHostPorts:
+                  items:
+                    properties:
+                      net:
+                        type: string
+                      port:
+                        type: integer
+                      protocol:
+                        type: string
+                    required:
+                      - port
+                    type: object
+                  type: array
+                featureDetectOverride:
+                  pattern: ^([a-zA-Z0-9-_]+=(true|false|),)*([a-zA-Z0-9-_]+=(true|false|))?$
+                  type: string
+                featureGates:
+                  pattern: ^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$
+                  type: string
+                floatingIPs:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                flowLogsCollectorDebugTrace:
+                  type: boolean
+                flowLogsFlushInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                flowLogsGoldmaneServer:
+                  type: string
+                flowLogsLocalReporter:
+                  enum:
+                    - Disabled
+                    - Enabled
+                  type: string
+                flowLogsPolicyEvaluationMode:
+                  enum:
+                    - None
+                    - Continuous
+                  type: string
+                genericXDPEnabled:
+                  type: boolean
+                goGCThreshold:
+                  type: integer
+                goMaxProcs:
+                  type: integer
+                goMemoryLimitMB:
+                  type: integer
+                healthEnabled:
+                  type: boolean
+                healthHost:
+                  type: string
+                healthPort:
+                  type: integer
+                healthTimeoutOverrides:
+                  items:
+                    properties:
+                      name:
+                        type: string
+                      timeout:
+                        type: string
+                    required:
+                      - name
+                      - timeout
+                    type: object
+                  type: array
+                interfaceExclude:
+                  type: string
+                interfacePrefix:
+                  type: string
+                interfaceRefreshInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                ipForwarding:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                ipipEnabled:
+                  type: boolean
+                ipipMTU:
+                  type: integer
+                ipsetsRefreshInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                iptablesBackend:
+                  enum:
+                    - Legacy
+                    - NFT
+                    - Auto
+                  pattern: ^(?i)(Auto|Legacy|NFT)?$
+                  type: string
+                iptablesFilterAllowAction:
+                  pattern: ^(?i)(Accept|Return)?$
+                  type: string
+                iptablesFilterDenyAction:
+                  pattern: ^(?i)(Drop|Reject)?$
+                  type: string
+                iptablesLockProbeInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                iptablesMangleAllowAction:
+                  pattern: ^(?i)(Accept|Return)?$
+                  type: string
+                iptablesMarkMask:
+                  format: int32
+                  type: integer
+                iptablesNATOutgoingInterfaceFilter:
+                  type: string
+                iptablesPostWriteCheckInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                iptablesRefreshInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                ipv6Support:
+                  type: boolean
+                kubeNodePortRanges:
+                  items:
+                    anyOf:
+                      - type: integer
+                      - type: string
+                    pattern: ^.*
+                    x-kubernetes-int-or-string: true
+                  type: array
+                logActionRateLimit:
+                  pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
+                  type: string
+                logActionRateLimitBurst:
+                  maximum: 9999
+                  minimum: 0
+                  type: integer
+                logDebugFilenameRegex:
+                  type: string
+                logFilePath:
+                  type: string
+                logPrefix:
+                  pattern: "^([a-zA-Z0-9%: /_-])*$"
+                  type: string
+                logSeverityFile:
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
+                  type: string
+                logSeverityScreen:
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
+                  type: string
+                logSeveritySys:
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
+                  type: string
+                maxIpsetSize:
+                  type: integer
+                metadataAddr:
+                  type: string
+                metadataPort:
+                  type: integer
+                mtuIfacePattern:
+                  type: string
+                natOutgoingAddress:
+                  type: string
+                natOutgoingExclusions:
+                  enum:
+                    - IPPoolsOnly
+                    - IPPoolsAndHostIPs
+                  type: string
+                natPortRange:
+                  anyOf:
+                    - type: integer
+                    - type: string
+                  pattern: ^.*
+                  x-kubernetes-int-or-string: true
+                netlinkTimeout:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                nftablesFilterAllowAction:
+                  pattern: ^(?i)(Accept|Return)?$
+                  type: string
+                nftablesFilterDenyAction:
+                  pattern: ^(?i)(Drop|Reject)?$
+                  type: string
+                nftablesMangleAllowAction:
+                  pattern: ^(?i)(Accept|Return)?$
+                  type: string
+                nftablesMarkMask:
+                  format: int32
+                  type: integer
+                nftablesMode:
+                  default: Auto
+                  enum:
+                    - Disabled
+                    - Enabled
+                    - Auto
+                  type: string
+                nftablesRefreshInterval:
+                  type: string
+                openstackRegion:
+                  type: string
+                policySyncPathPrefix:
+                  type: string
+                programClusterRoutes:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                prometheusGoMetricsEnabled:
+                  type: boolean
+                prometheusMetricsCAFile:
+                  type: string
+                prometheusMetricsCertFile:
+                  type: string
+                prometheusMetricsClientAuth:
+                  type: string
+                prometheusMetricsEnabled:
+                  type: boolean
+                prometheusMetricsHost:
+                  type: string
+                prometheusMetricsKeyFile:
+                  type: string
+                prometheusMetricsPort:
+                  type: integer
+                prometheusProcessMetricsEnabled:
+                  type: boolean
+                prometheusWireGuardMetricsEnabled:
+                  type: boolean
+                removeExternalRoutes:
+                  type: boolean
+                reportingInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                reportingTTL:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                requireMTUFile:
+                  type: boolean
+                routeRefreshInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                routeSource:
+                  pattern: ^(?i)(WorkloadIPs|CalicoIPAM)?$
+                  type: string
+                routeSyncDisabled:
+                  type: boolean
+                routeTableRange:
+                  properties:
+                    max:
+                      type: integer
+                    min:
+                      type: integer
+                  required:
+                    - max
+                    - min
+                  type: object
+                routeTableRanges:
+                  items:
+                    properties:
+                      max:
+                        type: integer
+                      min:
+                        type: integer
+                    required:
+                      - max
+                      - min
+                    type: object
+                  type: array
+                serviceLoopPrevention:
+                  pattern: ^(?i)(Drop|Reject|Disabled)?$
+                  type: string
+                sidecarAccelerationEnabled:
+                  type: boolean
+                usageReportingEnabled:
+                  type: boolean
+                usageReportingInitialDelay:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                usageReportingInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                useInternalDataplaneDriver:
+                  type: boolean
+                vxlanEnabled:
+                  type: boolean
+                vxlanMTU:
+                  type: integer
+                vxlanMTUV6:
+                  type: integer
+                vxlanPort:
+                  type: integer
+                vxlanVNI:
+                  type: integer
+                windowsManageFirewallRules:
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
+                wireguardEnabled:
+                  type: boolean
+                wireguardEnabledV6:
+                  type: boolean
+                wireguardHostEncryptionEnabled:
+                  type: boolean
+                wireguardInterfaceName:
+                  type: string
+                wireguardInterfaceNameV6:
+                  type: string
+                wireguardKeepAlive:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                wireguardListeningPort:
+                  type: integer
+                wireguardListeningPortV6:
+                  type: integer
+                wireguardMTU:
+                  type: integer
+                wireguardMTUV6:
+                  type: integer
+                wireguardRoutingRulePriority:
+                  type: integer
+                wireguardThreadingEnabled:
+                  type: boolean
+                workloadSourceSpoofing:
+                  pattern: ^(?i)(Disabled|Any)?$
+                  type: string
+                xdpEnabled:
+                  type: boolean
+                xdpRefreshInterval:
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
