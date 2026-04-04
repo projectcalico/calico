@@ -3,9 +3,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: tiers.crd.projectcalico.org
+  name: tiers.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: Tier
     listKind: TierList
@@ -14,9 +14,16 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - name: v1
-      subresources:
-        status: {}
+    - additionalPrinterColumns:
+        - description: Order in which the tier is applied
+          jsonPath: .spec.order
+          name: Order
+          type: integer
+        - description: Default action for the tier
+          jsonPath: .spec.defaultAction
+          name: DefaultAction
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -38,14 +45,10 @@ spec:
                     - enum:
                         - Pass
                         - Deny
-                  default: Deny
                   type: string
                 order:
                   type: number
               type: object
-            status:
-              type: object
-              x-kubernetes-preserve-unknown-fields: true
           required:
             - metadata
             - spec
@@ -65,3 +68,4 @@ spec:
                 : true"
       served: true
       storage: true
+      subresources: {}
