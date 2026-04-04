@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"

@@ -1,4 +1,4 @@
-module github.com/projectcalico/api
+module github.com/projectcalico/api/v3
 
 go 1.26.1
 

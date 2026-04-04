@@ -18,7 +18,7 @@ import (
 	"context"
 	"time"
 
-	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	calicoclient "github.com/projectcalico/api/v3/client/clientset_generated/clientset/typed/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

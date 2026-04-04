@@ -18,7 +18,7 @@ import (
 	"github.com/mcuadros/go-version"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"

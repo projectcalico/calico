@@ -19,7 +19,7 @@ import (
 	"encoding/base64"
 	"maps"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/v3/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 

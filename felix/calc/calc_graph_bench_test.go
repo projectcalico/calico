@@ -24,8 +24,8 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
+	"github.com/projectcalico/api/v3/lib/numorstring"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"

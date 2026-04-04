@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
-	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
+	apiv3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
+	"github.com/projectcalico/api/v3/client/clientset_generated/clientset"
+	"github.com/projectcalico/api/v3/client/informers_generated/externalversions"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"

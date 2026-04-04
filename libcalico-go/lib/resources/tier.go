@@ -15,7 +15,7 @@
 package resources
 
 import (
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 )
 
 func DefaultTierFields(res *apiv3.Tier) {

@@ -9,12 +9,12 @@ else
 include ./metadata.mk
 endif
 
-PACKAGE_NAME    ?= github.com/projectcalico/api
+PACKAGE_NAME    ?= github.com/projectcalico/api/v3
 LOCAL_CHECKS     = lint-cache-dir check-copyright
 
 BINDIR ?= bin
 BUILD_DIR ?= build
-TOP_SRC_DIRS = pkg
+TOP_SRC_DIRS = apis client lib defaults openapi
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 ##############################################################################
@@ -31,7 +31,7 @@ include ./lib.Makefile
 endif
 
 # Override DOCKER_RUN from lib.Makefile. We need to trick this particular directory to think
-# that its package is github.com/projectcalico/api for easier mirroring.
+# that its package is github.com/projectcalico/api/v3 for easier mirroring.
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
@@ -58,7 +58,7 @@ build: gen-files examples
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
 	# Generate CRDs without descriptions
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./pkg/apis/... output:crd:dir=config/crd/'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./apis/... output:crd:dir=config/crd/'
 	# Remove the first yaml separator line.
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Run prettier to fix indentation
@@ -74,9 +74,9 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	   sh -c '$(GIT_CONFIG_SSH) defaulter-gen \
 		--v 1 --logtostderr \
 		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--extra-peer-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
+		--extra-peer-dirs "$(PACKAGE_NAME)/apis/projectcalico/v3" \
 		--output-file zz_generated.defaults.go \
-		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
+		"$(PACKAGE_NAME)/apis/projectcalico/v3"'
 	# Generate deep copies
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) deepcopy-gen \
@@ -84,7 +84,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
 		--bounding-dirs $(PACKAGE_NAME) \
 		--output-file zz_generated.deepcopy.go \
-		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
+		"$(PACKAGE_NAME)/apis/projectcalico/v3"'
 
 	# generate openapi (must run before client-gen, which uses it for --openapi-schema)
 	# Fail on any API rule violations in Calico types (upstream k8s violations are ignored).
@@ -92,16 +92,16 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	   sh -c '$(GIT_CONFIG_SSH) openapi-gen \
 		--v 1 --logtostderr \
 		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--output-dir "/go/src/$(PACKAGE_NAME)/pkg/openapi" \
-		--output-pkg "$(PACKAGE_NAME)/pkg/openapi" \
-		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
+		--output-dir "/go/src/$(PACKAGE_NAME)/openapi" \
+		--output-pkg "$(PACKAGE_NAME)/openapi" \
+		"$(PACKAGE_NAME)/apis/projectcalico/v3" \
 		"k8s.io/api/core/v1" \
 		"k8s.io/api/networking/v1" \
 		"k8s.io/apimachinery/pkg/apis/meta/v1" \
 		"k8s.io/apimachinery/pkg/runtime" \
 		"k8s.io/apimachinery/pkg/util/intstr" \
 		"k8s.io/apimachinery/pkg/version" \
-		"$(PACKAGE_NAME)/pkg/lib/numorstring" 2>&1 | tee /tmp/openapi-gen.log; \
+		"$(PACKAGE_NAME)/lib/numorstring" 2>&1 | tee /tmp/openapi-gen.log; \
 		grep "API rule violation" /tmp/openapi-gen.log | grep "projectcalico" > /tmp/openapi-violations.log || true; \
 		if [ -s /tmp/openapi-violations.log ]; then \
 			grep -v -F -f /go/src/$(PACKAGE_NAME)/hack/openapi-violations-known.list /tmp/openapi-violations.log > /tmp/openapi-new-violations.log || true; \
@@ -113,7 +113,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 			fi; \
 		fi'
 
-	# generate all pkg/client contents
+	# generate all client/ contents
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/update-client-gen.sh'
 
@@ -144,7 +144,7 @@ clean-generated:
 	find $(TOP_SRC_DIRS) -name zz_generated* -exec rm {} \;
 	# rollback changes to the generated clientset directories
 	# find $(TOP_SRC_DIRS) -type d -name *_generated -exec rm -rf {} \;
-	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/client/applyconfiguration_generated pkg/openapi
+	rm -rf client/clientset_generated client/informers_generated client/listers_generated client/applyconfiguration_generated openapi
 
 clean-bin:
 	rm -rf $(BINDIR) \

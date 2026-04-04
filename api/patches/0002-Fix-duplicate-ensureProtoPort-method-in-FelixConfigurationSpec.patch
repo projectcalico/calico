@@ -8,12 +8,12 @@ not the field. When two fields share the same element type (*[]ProtoPort for
 FailsafeInboundHostPorts and FailsafeOutboundHostPorts), the helper is emitted
 twice, causing a compile error. Rename the second to be unique.
 ---
- api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go | 4 ++--
+ api/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
-diff --git a/api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go b/api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go
---- a/api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go
-+++ b/api/pkg/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go
+diff --git a/api/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go b/api/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go
+--- a/api/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go
++++ b/api/client/applyconfiguration_generated/projectcalico/v3/felixconfigurationspec.go
 @@ -1228,7 +1228,7 @@
  	return b
  }
