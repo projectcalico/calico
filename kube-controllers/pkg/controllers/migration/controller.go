@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -603,53 +605,76 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreM
 // before transitioning to Complete. It checks the calico-node DaemonSet for
 // the CALICO_API_GROUP env var and verifies the rollout is fully complete.
 func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *DatastoreMigration) error {
-	ds, err := m.k8sClient.AppsV1().DaemonSets(names.OwnNamespace()).Get(m.ctx, "calico-node", metav1.GetOptions{})
-	if err != nil {
-		logCtx.WithError(err).Info("Failed to get calico-node DaemonSet, will retry")
+	ns := names.OwnNamespace()
+
+	// Check calico-node and typha (if present) for v3 API group configuration
+	// and rollout completion.
+	componentsToCheck := []string{"calico-node"}
+	typhaDS, err := m.k8sClient.AppsV1().DaemonSets(ns).Get(m.ctx, "calico-typha", metav1.GetOptions{})
+	if err == nil {
+		componentsToCheck = append(componentsToCheck, "calico-typha")
+	} else if !kerrors.IsNotFound(err) {
+		logCtx.WithError(err).Info("Failed to check for calico-typha, will retry")
+		return requeueAfter(m.waitingPollInterval)
+	}
+	// Also check for typha as a Deployment (used in some manifest installs).
+	typhaDeploy, err := m.k8sClient.AppsV1().Deployments(ns).Get(m.ctx, "calico-typha", metav1.GetOptions{})
+	if err == nil && typhaDS == nil {
+		componentsToCheck = append(componentsToCheck, "calico-typha")
+	} else if err != nil && !kerrors.IsNotFound(err) {
+		logCtx.WithError(err).Info("Failed to check for calico-typha deployment, will retry")
 		return requeueAfter(m.waitingPollInterval)
 	}
 
-	// Check if calico-node has been configured with the v3 API group.
-	hasV3Env := false
-	for _, c := range ds.Spec.Template.Spec.Containers {
-		for _, e := range c.Env {
-			if e.Name == "CALICO_API_GROUP" && e.Value == "projectcalico.org/v3" {
-				hasV3Env = true
-				break
+	// Check each component for the v3 API group env var.
+	var needV3 []string
+	for _, name := range componentsToCheck {
+		var podSpec *corev1.PodSpec
+		if name == "calico-node" {
+			ds, getErr := m.k8sClient.AppsV1().DaemonSets(ns).Get(m.ctx, name, metav1.GetOptions{})
+			if getErr != nil {
+				logCtx.WithError(getErr).WithField("component", name).Info("Failed to get DaemonSet, will retry")
+				return requeueAfter(m.waitingPollInterval)
 			}
+			podSpec = &ds.Spec.Template.Spec
+		} else if typhaDS != nil {
+			podSpec = &typhaDS.Spec.Template.Spec
+		} else if typhaDeploy != nil {
+			podSpec = &typhaDeploy.Spec.Template.Spec
+		}
+		if podSpec != nil && !hasV3APIGroupEnv(podSpec) {
+			needV3 = append(needV3, name)
 		}
 	}
-	if !hasV3Env {
-		logCtx.Info("Waiting for calico-node DaemonSet to be configured with CALICO_API_GROUP=projectcalico.org/v3")
+	if len(needV3) > 0 {
+		logCtx.WithField("components", needV3).Info("Waiting for components to be configured with v3 API group")
 		if m.operatorManaged {
-			dm.Status.Message = "Waiting for operator to configure calico-node with v3 API group"
+			dm.Status.Message = fmt.Sprintf("Waiting for operator to configure %s with v3 API group", joinComponents(needV3))
 		} else {
-			dm.Status.Message = "Waiting for user to set CALICO_API_GROUP=projectcalico.org/v3 on calico-node DaemonSet"
+			dm.Status.Message = fmt.Sprintf("Waiting for user to set CALICO_API_GROUP=projectcalico.org/v3 on %s", joinComponents(needV3))
 		}
 		return m.updateStatus(dm)
 	}
 
-	// Verify the rollout is complete — all pods running the new template.
+	// Verify calico-node rollout is complete.
+	ds, err := m.k8sClient.AppsV1().DaemonSets(ns).Get(m.ctx, "calico-node", metav1.GetOptions{})
+	if err != nil {
+		return requeueAfter(m.waitingPollInterval)
+	}
 	if ds.Status.ObservedGeneration != ds.Generation {
-		logCtx.Info("Waiting for calico-node DaemonSet rollout to be observed")
 		dm.Status.Message = "Waiting for calico-node rollout to begin"
 		return m.updateStatus(dm)
 	}
 	if ds.Status.UpdatedNumberScheduled != ds.Status.DesiredNumberScheduled {
-		logCtx.WithFields(logrus.Fields{
-			"updatedNumberScheduled": ds.Status.UpdatedNumberScheduled,
-			"desiredNumberScheduled": ds.Status.DesiredNumberScheduled,
-		}).Info("Waiting for calico-node DaemonSet rollout to complete")
 		dm.Status.Message = fmt.Sprintf("Waiting for calico-node rollout (%d/%d updated)", ds.Status.UpdatedNumberScheduled, ds.Status.DesiredNumberScheduled)
 		return m.updateStatus(dm)
 	}
 	if ds.Status.NumberUnavailable > 0 {
-		logCtx.WithField("numberUnavailable", ds.Status.NumberUnavailable).Info("Waiting for all calico-node pods to be available")
 		dm.Status.Message = fmt.Sprintf("Waiting for calico-node pods to be available (%d unavailable)", ds.Status.NumberUnavailable)
 		return m.updateStatus(dm)
 	}
 
-	logCtx.Info("All calico-node pods running with v3 API group, transitioning to Complete")
+	logCtx.Info("All components running with v3 API group, transitioning to Complete")
 	now := metav1.Now()
 	dm.Status.Phase = DatastoreMigrationPhaseComplete
 	dm.Status.Message = "Migration complete"
@@ -975,6 +1000,27 @@ func (m *migrationController) ensureV3CRDs(logCtx *logrus.Entry) error {
 		}
 	}
 	return fmt.Errorf("v3 CRDs (projectcalico.org) not installed — apply them before starting migration (kubectl apply --server-side -f api/config/crd/)")
+}
+
+// hasV3APIGroupEnv returns true if any container in the pod spec has
+// CALICO_API_GROUP=projectcalico.org/v3.
+func hasV3APIGroupEnv(spec *corev1.PodSpec) bool {
+	for _, c := range spec.Containers {
+		for _, e := range c.Env {
+			if e.Name == "CALICO_API_GROUP" && e.Value == "projectcalico.org/v3" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// joinComponents formats component names for status messages.
+func joinComponents(names []string) string {
+	if len(names) == 1 {
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 // The v1 ClusterInformation is intentionally left locked. Components still

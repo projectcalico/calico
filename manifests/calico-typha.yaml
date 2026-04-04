@@ -1080,6 +1080,8 @@ spec:
   scope: Cluster
   versions:
     - name: v1
+      subresources:
+        status: {}
       schema:
         openAPIV3Schema:
           properties:
@@ -3839,6 +3841,8 @@ spec:
   scope: Cluster
   versions:
     - name: v1
+      subresources:
+        status: {}
       schema:
         openAPIV3Schema:
           properties:
@@ -6835,6 +6839,8 @@ spec:
   scope: Cluster
   versions:
     - name: v1
+      subresources:
+        status: {}
       schema:
         openAPIV3Schema:
           properties:
