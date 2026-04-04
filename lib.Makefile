@@ -1480,8 +1480,10 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_clusternetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
 
-	# Install mutating admission policies.
+	# Install mutating admission policies (only for v3 CRDs, since they reference projectcalico.org/v3 resources).
+ifeq ($(CALICO_API_GROUP),projectcalico.org/v3)
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/; do echo "Waiting for mutating admission policies to be created"; sleep 2; done
+endif
 
 	touch $@
 

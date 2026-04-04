@@ -1,0 +1,207 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: bgpfilters.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: BGPFilter
+    listKind: BGPFilterList
+    plural: bgpfilters
+    singular: bgpfilter
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+    - name: v3
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                exportV4:
+                  items:
+                    properties:
+                      action:
+                        enum:
+                          - Accept
+                          - Reject
+                        type: string
+                      cidr:
+                        format: cidr
+                        type: string
+                      interface:
+                        type: string
+                      matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
+                        type: string
+                      prefixLength:
+                        properties:
+                          max:
+                            format: int32
+                            maximum: 32
+                            minimum: 0
+                            type: integer
+                          min:
+                            format: int32
+                            maximum: 32
+                            minimum: 0
+                            type: integer
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      source:
+                        enum:
+                          - RemotePeers
+                        type: string
+                    required:
+                      - action
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+                exportV6:
+                  items:
+                    properties:
+                      action:
+                        enum:
+                          - Accept
+                          - Reject
+                        type: string
+                      cidr:
+                        format: cidr
+                        type: string
+                      interface:
+                        type: string
+                      matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
+                        type: string
+                      prefixLength:
+                        properties:
+                          max:
+                            format: int32
+                            maximum: 128
+                            minimum: 0
+                            type: integer
+                          min:
+                            format: int32
+                            maximum: 128
+                            minimum: 0
+                            type: integer
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      source:
+                        enum:
+                          - RemotePeers
+                        type: string
+                    required:
+                      - action
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+                importV4:
+                  items:
+                    properties:
+                      action:
+                        enum:
+                          - Accept
+                          - Reject
+                        type: string
+                      cidr:
+                        format: cidr
+                        type: string
+                      interface:
+                        type: string
+                      matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
+                        type: string
+                      prefixLength:
+                        properties:
+                          max:
+                            format: int32
+                            maximum: 32
+                            minimum: 0
+                            type: integer
+                          min:
+                            format: int32
+                            maximum: 32
+                            minimum: 0
+                            type: integer
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      source:
+                        enum:
+                          - RemotePeers
+                        type: string
+                    required:
+                      - action
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+                importV6:
+                  items:
+                    properties:
+                      action:
+                        enum:
+                          - Accept
+                          - Reject
+                        type: string
+                      cidr:
+                        format: cidr
+                        type: string
+                      interface:
+                        type: string
+                      matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
+                        type: string
+                      prefixLength:
+                        properties:
+                          max:
+                            format: int32
+                            maximum: 128
+                            minimum: 0
+                            type: integer
+                          min:
+                            format: int32
+                            maximum: 128
+                            minimum: 0
+                            type: integer
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      source:
+                        enum:
+                          - RemotePeers
+                        type: string
+                    required:
+                      - action
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  type: array
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
