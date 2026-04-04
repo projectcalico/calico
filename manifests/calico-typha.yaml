@@ -8262,11 +8262,13 @@ rules:
       - get
       - list
       - watch
-  # Migration controller: watch daemonsets for rollout status.
+  # Migration controller: check daemonsets and deployments for rollout status.
   - apiGroups: ["apps"]
     resources:
       - daemonsets
+      - deployments
     verbs:
+      - get
       - list
       - watch
 ---
