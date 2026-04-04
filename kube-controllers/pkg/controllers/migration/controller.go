@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -639,7 +640,18 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 	dm.Status.Message = "Migration complete"
 	dm.Status.CompletedAt = &now
 	setPhaseMetric(DatastoreMigrationPhaseComplete)
-	return m.updateStatus(dm)
+	if err := m.updateStatus(dm); err != nil {
+		return err
+	}
+
+	// In manifest mode, restart so kube-controllers re-discovers the v3 API
+	// group on startup. In operator mode, the operator handles the restart.
+	operatorManaged, _ := discovery.IsOperatorManaged(m.k8sClient.Discovery())
+	if !operatorManaged {
+		logCtx.Info("Migration complete, restarting kube-controllers to pick up v3 API group")
+		os.Exit(0)
+	}
+	return nil
 }
 
 // handleDeletion runs the finalizer logic when the DatastoreMigration CR is being deleted.
