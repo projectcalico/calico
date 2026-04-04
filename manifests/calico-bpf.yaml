@@ -8188,6 +8188,62 @@ rules:
       - get
     resourceNames:
       - calico-node
+  # Migration controller: manage DatastoreMigration CRs.
+  - apiGroups: ["migration.projectcalico.org"]
+    resources:
+      - datastoremigrations
+      - datastoremigrations/status
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+  # Migration controller: read and delete CRDs during migration.
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - list
+      - delete
+  # Migration controller: manage API services during migration.
+  - apiGroups: ["apiregistration.k8s.io"]
+    resources:
+      - apiservices
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+  # Migration controller: read v1 resources and write v3 resources.
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - "*"
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - "*"
+    verbs:
+      - get
+      - list
+      - watch
+  # Migration controller: watch daemonsets for rollout status.
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+    verbs:
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,
