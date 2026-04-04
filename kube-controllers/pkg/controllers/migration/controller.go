@@ -674,6 +674,9 @@ func (m *migrationController) handleDeletion(logCtx *logrus.Entry, dm *Datastore
 		return nil
 	}
 
+	dm.Status.Message = "Cleaning up v1 CRDs"
+	_ = m.updateStatus(dm)
+
 	switch dm.Status.Phase {
 	case DatastoreMigrationPhaseComplete:
 		return m.handleCompletedCleanup(logCtx, dm)

@@ -8109,16 +8109,17 @@ rules:
       - update
       - watch
   # IPAM resources are manipulated in response to node and block updates, as well as periodic triggers.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ipreservations
     verbs:
       - list
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
       - ipamblocks
       - ipamhandles
+      - ipamconfigurations
       - ipamconfigs
       - tiers
     verbs:
@@ -8129,14 +8130,14 @@ rules:
       - delete
       - watch
   # Pools are watched to maintain a mapping of blocks to IP pools.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ippools
     verbs:
       - list
       - watch
   # kube-controllers manages hostendpoints.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - hostendpoints
     verbs:
@@ -8147,7 +8148,7 @@ rules:
       - delete
       - watch
   # Needs access to update clusterinformations.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - clusterinformations
     verbs:
@@ -8157,7 +8158,7 @@ rules:
       - update
       - watch
   # KubeControllersConfiguration is where it gets its config
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - kubecontrollersconfigurations
     verbs:
@@ -8170,14 +8171,14 @@ rules:
       - update
       # watch for changes
       - watch
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - kubecontrollersconfigurations/status
     verbs:
       - get
       - update
   # Needed for policy name migrator.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - networkpolicies
       - stagednetworkpolicies
@@ -8342,7 +8343,7 @@ rules:
     verbs:
       - patch
   # Calico monitors various CRDs for config.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - globalfelixconfigs
       - globalbgpconfigs
@@ -8370,13 +8371,13 @@ rules:
       - list
       - watch
   # Calico creates some tiers on startup.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - tiers
     verbs:
       - create
   # Calico must create and update some CRDs on startup.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ippools
       - felixconfigurations
@@ -8386,7 +8387,7 @@ rules:
       - create
       - update
   # Calico must update some CRDs.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - caliconodestatuses
     verbs:
@@ -8401,7 +8402,7 @@ rules:
       - watch
   # These permissions are only required for upgrade from v2.6, and can
   # be removed after upgrade or on fresh installations.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - bgpconfigurations
       - bgppeers
