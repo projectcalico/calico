@@ -21,12 +21,10 @@ global_job_config:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
   env_vars:
-    # The intent here is to run a representative set of tests that cover the main functionality of Calico
-    # Using tests that usually pass.
-    # So we're running the Conformance tests, some RBAC tests, and some Observe tests.
-    # and skipping the slow, disruptive, and some other tests that are not relevant to Calico OSS
+    # Run Conformance tests, RBAC tests, and Observe tests.
+    # Skip slow, disruptive tests.
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)
+      value: "--ginkgo.label-filter=((Conformance && sig-network) || Observe || Feature:RBAC) && !Slow && !Disruptive"
     - name: K8S_VERSION
       value: "stable-3"
     - name: FUNCTIONAL_AREA
@@ -376,9 +374,9 @@ blocks:
               value: "true"
             - name: ENABLE_NODE_LOCAL_DNS_CACHE # nodelocaldns
               value: "true"
-              # The extra skip here is for the upstream DNS tests.  They require access to pods via the control plane, and with Calico CNI, the EKS control plane can't access pods.
+              # EKS control plane can't reach pod network with Calico CNI, so skip upstream DNS tests that require it.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.........DNS)
+              value: "--ginkgo.label-filter=((Conformance && sig-network) || Observe || Feature:RBAC) && !Slow && !Disruptive --ginkgo.skip=(DNS.should.........DNS)"
 
         # operator, awscni, stable-1, amd64, bpf, ipv4, EKS, kdd, amazonlinux2, no-kube-proxy,
         - name: EKS w/ aws CNI

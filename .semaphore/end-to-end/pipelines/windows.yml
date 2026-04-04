@@ -24,7 +24,7 @@ global_job_config:
     - name: CREATE_WINDOWS_NODES
       value: "true"
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\].*\[RunsOnWindows\]) --ginkgo.skip=(\[LinuxOnly\])
+      value: "--ginkgo.label-filter=(sig-calico && RunsOnWindows) && !LinuxOnly"
     - name: FUNCTIONAL_AREA
       value: "windows.yml"
     - name: USE_PRIVATE_REGISTRY
