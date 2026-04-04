@@ -691,7 +691,9 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 
 	// In manifest mode, restart so kube-controllers re-discovers the v3 API
 	// group on startup. In operator mode, the operator handles the restart.
-	if !m.operatorManaged {
+	// Skip the restart if the CR is being deleted - let the finalizer finish
+	// cleanup first.
+	if !m.operatorManaged && dm.DeletionTimestamp == nil {
 		logCtx.Info("Migration complete, restarting kube-controllers to pick up v3 API group")
 		os.Exit(0)
 	}
