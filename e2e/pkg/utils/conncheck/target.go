@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 )
 
 type Protocol string
@@ -31,6 +32,7 @@ const (
 	ICMP Protocol = "ICMP"
 	TCP  Protocol = "TCP"
 	HTTP Protocol = "HTTP"
+	UDP  Protocol = "UDP"
 )
 
 // AccessType represents how the target is accessed. A Kubenretes pod can be accessed in a variety of ways, such as
@@ -148,12 +150,18 @@ func NewPodPingTarget(pod *v1.Pod) Target {
 	}
 }
 
-func NewTarget(dst string, targetType AccessType, proto Protocol) Target {
-	return &target{
+func NewTarget(dst string, targetType AccessType, proto Protocol, opts ...TargetOption) Target {
+	t := &target{
 		destination: dst,
 		targetType:  targetType,
 		protocol:    proto,
 	}
+	for _, opt := range opts {
+		if err := opt(t); err != nil {
+			framework.Failf("NewTarget option error: %v", err)
+		}
+	}
+	return t
 }
 
 type TargetOption func(*target) error
@@ -162,6 +170,10 @@ type HTTPParams struct {
 	Method  string
 	Path    string
 	Headers []string
+
+	// Body is the request body for HTTP POST requests, or the payload for
+	// UDP echo tests.
+	Body string
 }
 
 func WithHTTP(method, path string, headers []string) TargetOption {
@@ -172,6 +184,27 @@ func WithHTTP(method, path string, headers []string) TargetOption {
 			Path:    path,
 			Headers: headers,
 		}
+		return nil
+	}
+}
+
+// WithHTTPBody sets an HTTP POST body on the target.
+func WithHTTPBody(body string) TargetOption {
+	return func(t *target) error {
+		if t.http == nil {
+			return fmt.Errorf("WithHTTPBody requires WithHTTP to be set first")
+		}
+		t.http.Body = body
+		return nil
+	}
+}
+
+// WithUDP configures the target for UDP echo testing. The body is sent as
+// the UDP payload and the response is expected to echo it back.
+func WithUDP(body string) TargetOption {
+	return func(t *target) error {
+		t.protocol = UDP
+		t.http = &HTTPParams{Body: body}
 		return nil
 	}
 }
