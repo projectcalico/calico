@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 package caliconodestatus
 
@@ -61,6 +61,25 @@ func (apiServerStrategy) Canonicalize(obj runtime.Object) {
 }
 
 func (apiServerStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
+	return field.ErrorList{}
+}
+
+type apiServerStatusStrategy struct {
+	apiServerStrategy
+}
+
+func NewStatusStrategy(strategy apiServerStrategy) apiServerStatusStrategy {
+	return apiServerStatusStrategy{strategy}
+}
+
+func (apiServerStatusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newStatus := obj.(*calico.CalicoNodeStatus)
+	oldStatus := old.(*calico.CalicoNodeStatus)
+	newStatus.Spec = oldStatus.Spec
+	newStatus.Labels = oldStatus.Labels
+}
+
+func (apiServerStatusStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
 	return field.ErrorList{}
 }
 
