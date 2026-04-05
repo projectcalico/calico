@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -285,6 +285,28 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{},
 	)
 
+	ipPoolStatusRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ippools/status"), nil)
+	if err != nil {
+		return nil, err
+	}
+	ipPoolStatusOpts := server.NewOptions(
+		etcd.Options{
+			RESTOptions:   ipPoolStatusRESTOptions,
+			Capacity:      10,
+			ObjectType:    calicoippool.EmptyObject(),
+			ScopeStrategy: calicoippool.NewStrategy(scheme),
+			NewListFunc:   calicoippool.NewList,
+			GetAttrsFunc:  calicoippool.GetAttrs,
+			Trigger:       nil,
+		},
+		calicostorage.Options{
+			RESTOptions: ipPoolStatusRESTOptions,
+		},
+		p.StorageType,
+		authorizer,
+		[]string{},
+	)
+
 	ipReservationRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ipreservations"), nil)
 	if err != nil {
 		return nil, err
@@ -559,7 +581,13 @@ func (p RESTStorageProvider) NewV3Storage(
 	storage["globalnetworksets"] = rESTInPeace(calicognetworkset.NewREST(scheme, *gNetworkSetOpts))
 	storage["networksets"] = rESTInPeace(caliconetworkset.NewREST(scheme, *networksetOpts))
 	storage["hostendpoints"] = rESTInPeace(calicohostendpoint.NewREST(scheme, *hostEndpointOpts))
-	storage["ippools"] = rESTInPeace(calicoippool.NewREST(scheme, *ipPoolSetOpts))
+	ipPoolStorage, ipPoolStatusStorage, err := calicoippool.NewREST(scheme, *ipPoolSetOpts, *ipPoolStatusOpts)
+	if err != nil {
+		err = fmt.Errorf("unable to create REST storage for a resource due to %v, will die", err)
+		panic(err)
+	}
+	storage["ippools"] = ipPoolStorage
+	storage["ippools/status"] = ipPoolStatusStorage
 	storage["ipreservations"] = rESTInPeace(calicoipreservation.NewREST(scheme, *ipReservationSetOpts))
 	storage["bgpconfigurations"] = rESTInPeace(calicobgpconfiguration.NewREST(scheme, *bgpConfigurationOpts))
 	storage["bgppeers"] = rESTInPeace(calicobgppeer.NewREST(scheme, *bgpPeerOpts))
