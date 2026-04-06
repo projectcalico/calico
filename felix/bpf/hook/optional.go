@@ -71,17 +71,6 @@ func isOptionalAndNotApplicable(sp SubProg, at AttachType) (isOptional, shouldSk
 	return true, !info.IsApplicable(at)
 }
 
-// optionalProgName returns the BPF C function name for an optional sub-program.
-func optionalProgName(sp SubProg) string {
-	optionalMu.Lock()
-	defer optionalMu.Unlock()
-	info, ok := optionalSubProgs[sp]
-	if !ok {
-		return ""
-	}
-	return info.ProgName
-}
-
 // forEachOptionalSubProg iterates the optional registry under the lock.
 func forEachOptionalSubProg(fn func(SubProg, OptionalSubProgInfo)) {
 	optionalMu.Lock()
