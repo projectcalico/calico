@@ -975,7 +975,7 @@ func (m *migrationController) ensureV3CRDs(logCtx *logrus.Entry) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("v3 CRDs (projectcalico.org) not installed — apply them before starting migration (kubectl apply --server-side -f api/config/crd/)")
+	return fmt.Errorf("v3 CRDs (projectcalico.org) not installed — apply them before starting migration")
 }
 
 // hasV3APIGroupEnv returns true if any container in the pod spec has
