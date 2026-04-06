@@ -28,7 +28,7 @@ import (
 // It checks both that the operator.tigera.io API group is registered and that an
 // Installation CR exists. The CRDs alone are not sufficient since they may be
 // installed as part of the Calico CRD charts without the operator actually running.
-func IsOperatorManaged(discoveryClient discovery.DiscoveryInterface, dynamicClient dynamic.Interface) (bool, error) {
+func IsOperatorManaged(ctx context.Context, discoveryClient discovery.DiscoveryInterface, dynamicClient dynamic.Interface) (bool, error) {
 	_, err := discoveryClient.ServerResourcesForGroupVersion("operator.tigera.io/v1")
 	if err != nil {
 		if kerrors.IsNotFound(err) {
@@ -43,7 +43,7 @@ func IsOperatorManaged(discoveryClient discovery.DiscoveryInterface, dynamicClie
 		Version:  "v1",
 		Resource: "installations",
 	}
-	list, err := dynamicClient.Resource(installationGVR).List(context.Background(), metav1.ListOptions{Limit: 1})
+	list, err := dynamicClient.Resource(installationGVR).List(ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
 		if kerrors.IsNotFound(err) || kerrors.IsForbidden(err) {
 			// CRD doesn't exist or no RBAC - operator CRDs are present

@@ -105,9 +105,6 @@ func NewController(cfg ControllerConfig) controller.Controller {
 	if pollInterval == 0 {
 		pollInterval = defaultWaitingPollInterval
 	}
-	operatorManaged, _ := discovery.IsOperatorManaged(cfg.K8sClient.Discovery(), cfg.DynamicClient)
-	logrus.WithField("operatorManaged", operatorManaged).Info("Migration controller: detected install type")
-
 	m := &migrationController{
 		ctx:                 cfg.Ctx,
 		k8sClient:           cfg.K8sClient,
@@ -117,7 +114,6 @@ func NewController(cfg ControllerConfig) controller.Controller {
 		apiregClient:        cfg.APIRegClient,
 		migrators:           cfg.Migrators,
 		waitingPollInterval: pollInterval,
-		operatorManaged:     operatorManaged,
 	}
 	return controller.NewDeferredCRDController(
 		"datastoremigrations.migration.projectcalico.org",
@@ -155,7 +151,7 @@ type migrationController struct {
 	queue               workqueue.TypedRateLimitingInterface[string]
 
 	// operatorManaged is true if the cluster is managed by the Tigera operator,
-	// detected at init by checking for the operator.tigera.io API group.
+	// detected at RunWithContext start by checking for an Installation CR.
 	operatorManaged bool
 }
 
@@ -167,6 +163,13 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 	defer logrus.Info("Stopping migration controller")
 
 	m.ctx = ctx
+
+	operatorManaged, err := discovery.IsOperatorManaged(ctx, m.k8sClient.Discovery(), m.dynamicClient)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to detect install type, defaulting to manifest mode")
+	}
+	m.operatorManaged = operatorManaged
+	logrus.WithField("operatorManaged", operatorManaged).Info("Migration controller: detected install type")
 	m.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
 	defer m.queue.ShutDown()
 
@@ -184,7 +187,7 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 			m.enqueue(obj)
 		},
 	}
-	_, err := informer.AddEventHandler(handler)
+	_, err = informer.AddEventHandler(handler)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to add event handler to informer")
 		return
@@ -709,7 +712,9 @@ func (m *migrationController) handleDeletion(logCtx *logrus.Entry, dm *Datastore
 	switch dm.Status.Phase {
 	case DatastoreMigrationPhaseComplete:
 		dm.Status.Message = "Cleaning up v1 CRDs"
-		_ = m.updateStatus(dm)
+		if err := m.updateStatus(dm); err != nil {
+			logCtx.WithError(err).Warn("Failed to update status message")
+		}
 		return m.handleCompletedCleanup(logCtx, dm)
 	case DatastoreMigrationPhaseConverged:
 		// Once converged, the operator may have started rolling out pods with
