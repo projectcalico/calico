@@ -4,6 +4,10 @@
 {{ $.Files.Get $path }}
 ---
 {{- end -}}
+{{ range $path, $_ := .Files.Glob "crds/policy.networking*" }}
+{{ $.Files.Get $path }}
+---
+{{- end -}}
 {{- else -}}
 {{ range $path, $_ := .Files.Glob "crds/*" }}
 {{ $.Files.Get $path }}
