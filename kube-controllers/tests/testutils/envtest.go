@@ -29,6 +29,8 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	clientv3 "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	libtestutils "github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
@@ -118,6 +120,27 @@ func NewTestEnv(extraCRDPaths ...string) (*TestEnv, error) {
 // backed by this environment's API server.
 func (te *TestEnv) NewCalicoInformerFactory() externalversions.SharedInformerFactory {
 	return externalversions.NewSharedInformerFactory(te.CalicoClient, 0)
+}
+
+// NewCalicoEtcdClient creates a libcalico-go client.Interface in EtcdV3 mode
+// backed by the same etcd instance that envtest uses for the kube-apiserver.
+// Calico stores data under /calico/ while K8s uses /registry/, so there are
+// no key conflicts.
+func (te *TestEnv) NewCalicoEtcdClient() (clientv3.Interface, error) {
+	etcdURL := te.Env.ControlPlane.Etcd.URL
+	if etcdURL == nil {
+		return nil, fmt.Errorf("envtest etcd URL is nil; was the environment started?")
+	}
+
+	cfg := apiconfig.CalicoAPIConfig{
+		Spec: apiconfig.CalicoAPIConfigSpec{
+			DatastoreType: apiconfig.EtcdV3,
+			EtcdConfig: apiconfig.EtcdConfig{
+				EtcdEndpoints: etcdURL.String(),
+			},
+		},
+	}
+	return clientv3.New(cfg)
 }
 
 // Stop tears down the envtest environment.
