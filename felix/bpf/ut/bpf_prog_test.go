@@ -873,7 +873,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.DSCP = topts.dscp
 				}
 
-				globals.IstioDSCP = topts.istioDSCP
+				if topts.istioDSCP != 0 {
+					globals.IstioDSCP = topts.istioDSCP
+				} else {
+					globals.IstioDSCP = -1
+				}
 
 				if topts.ipv6 {
 					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
