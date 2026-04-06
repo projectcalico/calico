@@ -166,9 +166,9 @@ endif
 # slow QEMU emulation for CGO builds.
 #
 # Map Go ARCH names to clang target triples.
-# Only arm64 and ppc64le need cross-compilation support (CGO is not enabled for s390x).
 CLANG_CROSS_TRIPLE_arm64   := aarch64-linux-gnu
 CLANG_CROSS_TRIPLE_ppc64le := powerpc64le-linux-gnu
+CLANG_CROSS_TRIPLE_s390x   := s390x-linux-gnu
 
 # Rust target triple (long form). Injected as CARGO_BUILD_TARGET so cargo
 # cross-compiles transparently. Linker/sysroot side uses CROSS_TRIPLE below.
