@@ -666,10 +666,7 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 	dm.Status.Message = "Migration complete"
 	dm.Status.CompletedAt = &now
 	setPhaseMetric(DatastoreMigrationPhaseComplete)
-	if err := m.updateStatus(dm); err != nil {
-		return err
-	}
-	return nil
+	return m.updateStatus(dm)
 }
 
 // handleDeletion runs the finalizer logic when the DatastoreMigration CR is being deleted.
