@@ -695,8 +695,7 @@ func compareOutput(t *testing.T, outputDir, goldenDir string) {
 			gotNorm := normalizeBlankLines(string(got))
 			wantNorm := normalizeBlankLines(string(want))
 			if gotNorm != wantNorm {
-				t.Errorf("output mismatch for %s\nexpected: %s\nactual:   %s\n\n--- expected ---\n%s\n\n--- actual ---\n%s",
-					f, expectedPath, actualPath, string(want), string(got))
+				t.Errorf("output mismatch for %s\n\n%s", f, fileDiff(t, expectedPath, actualPath, wantNorm, gotNorm))
 			}
 		})
 	}
@@ -715,6 +714,28 @@ func normalizeBlankLines(s string) string {
 		}
 	}
 	return strings.Join(result, "\n")
+}
+
+// fileDiff writes the two normalized strings to temp files and shells out to
+// diff -u for a proper unified diff. Falls back to a simple before/after dump
+// if diff is unavailable.
+func fileDiff(t *testing.T, expectedPath, actualPath, want, got string) string {
+	t.Helper()
+	wantFile := filepath.Join(t.TempDir(), "expected")
+	gotFile := filepath.Join(t.TempDir(), "actual")
+	require.NoError(t, os.WriteFile(wantFile, []byte(want), 0644))
+	require.NoError(t, os.WriteFile(gotFile, []byte(got), 0644))
+
+	cmd := exec.Command("diff", "-u", "--label", expectedPath, "--label", actualPath, wantFile, gotFile)
+	out, err := cmd.Output()
+	if err != nil {
+		// diff exits 1 when files differ — that's expected.
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return string(out)
+		}
+		return fmt.Sprintf("diff failed: %v\n\n--- expected (%s) ---\n%s\n\n--- actual (%s) ---\n%s", err, expectedPath, want, actualPath, got)
+	}
+	return string(out)
 }
 
 func copyDir(t *testing.T, src, dst string) {
