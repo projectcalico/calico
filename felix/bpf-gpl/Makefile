@@ -53,6 +53,8 @@ else ifeq ($(findstring aarch64,$(TRIPLET)),aarch64)
 	CFLAGS += -D__TARGET_ARCH_arm64
 else ifeq ($(findstring ppc64le,$(TRIPLET)),ppc64le)
 	CFLAGS += -D__TARGET_ARCH_powerpc -D__SANE_USERSPACE_TYPES__
+else ifeq ($(findstring s390x,$(TRIPLET)),s390x)
+	CFLAGS += -D__TARGET_ARCH_s390x -D__s390x__
 endif
 CC := clang
 LD := llc
