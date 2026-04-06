@@ -199,6 +199,7 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 	appsHandler := cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(_ any) { m.queue.Add(defaultMigrationName) },
 		UpdateFunc: func(_, _ any) { m.queue.Add(defaultMigrationName) },
+		DeleteFunc: func(_ any) { m.queue.Add(defaultMigrationName) },
 	}
 
 	dsGVR := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}
