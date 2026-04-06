@@ -408,11 +408,9 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 		"installType":      installType,
 	}).Info("Detected installation details")
 
-	// In manifest mode, ensure v3 CRDs are installed before proceeding.
-	if !m.operatorManaged {
-		if err := m.ensureV3CRDs(logCtx); err != nil {
-			return err
-		}
+	// Ensure v3 CRDs are installed before proceeding with migration.
+	if err := m.ensureV3CRDs(logCtx); err != nil {
+		return err
 	}
 
 	// Save and delete the APIService to unregister the API server. This will
@@ -990,8 +988,8 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 // unlockV3CRDDatastore sets DatastoreReady=true on the v3 ClusterInformation,
 // signaling components that have switched to v3 to resume normal operation.
 //
-// ensureV3CRDs checks that v3 CRDs (projectcalico.org) are installed. In
-// manifest mode, the user must install them before migration can proceed.
+// ensureV3CRDs checks that v3 CRDs (projectcalico.org) are installed.
+// The v3 CRDs must be present before migration can proceed.
 func (m *migrationController) ensureV3CRDs(logCtx *logrus.Entry) error {
 	crdClient := m.dynamicClient.Resource(crdGVR)
 	crdList, err := crdClient.List(m.ctx, metav1.ListOptions{})
