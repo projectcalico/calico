@@ -171,6 +171,8 @@ enum cali_state_flags {
 	CALI_ST_SET_DSCP   = 0x2000,
 	/* CALI_ST_FIRST_FRAG is set if this packet is the first fragment of a fragmented IP packet */
 	CALI_ST_FIRST_FRAG        = 0x4000,
+	/* CALI_ST_AMBIENT is set when the packet is on an ambient mesh workload interface. */
+	CALI_ST_AMBIENT           = 0x8000,
 };
 
 struct cali_tc_ctx {
