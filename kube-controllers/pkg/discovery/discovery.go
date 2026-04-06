@@ -17,6 +17,7 @@ package discovery
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -32,6 +33,7 @@ func IsOperatorManaged(ctx context.Context, discoveryClient discovery.DiscoveryI
 	_, err := discoveryClient.ServerResourcesForGroupVersion("operator.tigera.io/v1")
 	if err != nil {
 		if kerrors.IsNotFound(err) {
+			logrus.WithError(err).Debug("Operator API group not found, not operator-managed")
 			return false, nil
 		}
 		return false, err
@@ -46,7 +48,7 @@ func IsOperatorManaged(ctx context.Context, discoveryClient discovery.DiscoveryI
 	list, err := dynamicClient.Resource(installationGVR).List(ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
 		if kerrors.IsNotFound(err) || kerrors.IsForbidden(err) {
-			// CRD doesn't exist or no RBAC — treat as not operator-managed.
+			logrus.WithError(err).Debug("Unable to list Installation CRs, assuming not operator-managed")
 			return false, nil
 		}
 		return false, err
