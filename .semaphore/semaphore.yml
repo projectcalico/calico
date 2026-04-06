@@ -3375,7 +3375,7 @@ blocks:
         - name: google-service-account-for-gce
         - name: gemini-api-key
         - name: fv-tests-guru-github-token
-  - name: "Felix: BPF program-loading check on 25.10 (nftables)"
+  - name: "Felix: BPF tests on Ubuntu 25.10 with netkit (nftables)"
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -3508,9 +3508,9 @@ blocks:
       - "Felix: Build"
     task:
       jobs:
-        - name: "Felix: BPF program-loading check on 25.10"
+        - name: "Felix: BPF tests on Ubuntu 25.10 with netkit"
           execution_time_limit:
-            minutes: 30
+            minutes: 60
           env_vars:
             - name: FELIX_TEST_GROUP
               value: "bpf-25.10-nft-no-fv-with-ut"
@@ -3518,10 +3518,11 @@ blocks:
               value: "tc"
             - name: JOB_TIMEOUT_MINUTES
               value: "30"
+            - name: FELIX_FV_NETKIT
+              value: "Enabled"
           commands:
             - source felix/.semaphore/fv-prologue
-            # Only run the UT that checks that the precompiled BPF binaries are loadable.
-            - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
+            - export NUM_FV_BATCHES=60
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
         always:
@@ -4040,6 +4041,7 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
         '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
