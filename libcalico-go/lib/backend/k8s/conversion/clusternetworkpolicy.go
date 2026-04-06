@@ -36,7 +36,8 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 	// Pull out important fields.
 	tier, err := clusterNetworkPolicyTier(kcnp)
 	if err != nil {
-		logrus.WithError(err).Errorf("Failed to parse cluster network policy tier.")
+		logrus.WithError(err).WithField("policy", kcnp.Name).
+			Error("Failed to parse cluster network policy tier.")
 		return nil, err
 	}
 
@@ -53,7 +54,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 		nsSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.NamespaceSelector, SelectorNamespace)
 		podSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.PodSelector, SelectorPod)
 	} else {
-		return nil, fmt.Errorf("no selector is specified")
+		return nil, fmt.Errorf("no subject selector specified in cluster network policy %s", kcnp.Name)
 	}
 
 	// Generate the ingress rules list.
