@@ -15,6 +15,17 @@ import (
 //
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpecApplyConfiguration struct {
+	// NodeSelector is an optional label selector that restricts this FelixConfiguration
+	// to only apply to nodes that match the given selector. This field is only valid
+	// on FelixConfiguration resources whose name is not "default" and does not start
+	// with "node.". For resources named "default", the configuration applies globally
+	// to all nodes. For resources named "node.<nodename>", the configuration applies to
+	// the named node only.
+	//
+	// When multiple selector-scoped FelixConfiguration resources match a given node, all
+	// matching configurations are merged. For any fields set in more than one matching
+	// resource, the effective value is not well defined.
+	NodeSelector *string `json:"nodeSelector,omitempty"`
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
 	UseInternalDataplaneDriver *bool `json:"useInternalDataplaneDriver,omitempty"`
@@ -716,6 +727,14 @@ type FelixConfigurationSpecApplyConfiguration struct {
 // apply.
 func FelixConfigurationSpec() *FelixConfigurationSpecApplyConfiguration {
 	return &FelixConfigurationSpecApplyConfiguration{}
+}
+
+// WithNodeSelector sets the NodeSelector field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NodeSelector field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithNodeSelector(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.NodeSelector = &value
+	return b
 }
 
 // WithUseInternalDataplaneDriver sets the UseInternalDataplaneDriver field in the declarative configuration to the given value
