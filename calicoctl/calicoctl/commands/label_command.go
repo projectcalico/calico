@@ -53,10 +53,10 @@ func newLabelCommand() *cobra.Command {
 				"--recursive":               false,
 				"--skip-empty":              false,
 			}
-			if v, _ := cmd.Root().Flags().GetString("context"); v != "" {
+			if v, _ := cmd.Flags().GetString("context"); v != "" {
 				parsedArgs["--context"] = v
 			}
-			if v, _ := cmd.Root().Flags().GetBool("allow-version-mismatch"); v {
+			if v, _ := cmd.Flags().GetBool("allow-version-mismatch"); v {
 				parsedArgs["--allow-version-mismatch"] = true
 			}
 			if namespace == "" {

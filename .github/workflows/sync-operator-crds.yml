@@ -12,41 +12,17 @@ permissions:
   pull-requests: write
 
 jobs:
-  discover-branches:
-    if: github.repository == 'projectcalico/calico'
-    runs-on: ubuntu-latest
-    outputs:
-      branches: ${{ steps.branches.outputs.branches }}
-    steps:
-      - name: Discover branches
-        id: branches
-        run: |
-          # Get master + the two most recent release branches (by semver).
-          # Pipe to jq separately so --slurp combines all pages before filtering.
-          # Using --jq with --paginate applies the filter per-page, which can
-          # produce multiple JSON arrays and break $GITHUB_OUTPUT.
-          branches=$(gh api repos/${{ github.repository }}/branches --paginate | jq -sc '
-            [flatten[] | select(.name | test("^release-v[0-9]+\\.[0-9]+$")) | .name]
-            | sort_by(ltrimstr("release-v") | split(".") | map(tonumber))
-            | .[-2:]
-            | ["master"] + .
-          ')
-          echo "branches=${branches}" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
-
   sync:
-    needs: discover-branches
+    if: github.repository == 'projectcalico/calico'
     runs-on: ubuntu-latest
     concurrency:
       group: sync-operator-crds-${{ matrix.branch }}
       cancel-in-progress: true
     strategy:
-      fail-fast: false
       matrix:
-        branch: ${{ fromJson(needs.discover-branches.outputs.branches) }}
+        branch: [master, release-v3.31, release-v3.30]
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@v4
         with:
           ref: ${{ matrix.branch }}
 
@@ -59,9 +35,8 @@ jobs:
       - name: Regenerate manifests
         run: make gen-manifests
 
-      - uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
+      - uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "Sync operator CRDs from tigera/operator"
           branch: auto-sync-operator-crds-${{ matrix.branch }}
           base: ${{ matrix.branch }}
@@ -71,5 +46,5 @@ jobs:
             `${{ matrix.branch }}` and regeneration of manifests.
 
             Triggered by scheduled workflow.
-          labels: auto-sync,docs-not-required,release-note-not-required,skip-bot-cherry-pick,merge-when-ready
+          labels: auto-sync,docs-not-required,release-note-not-required,skip-bot-cherry-pick
           delete-branch: true

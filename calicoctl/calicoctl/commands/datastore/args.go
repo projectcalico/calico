@@ -29,7 +29,7 @@ func BuildMigrateArgs(subcommand string, cmd *cobra.Command) []string {
 	if filename, _ := cmd.Flags().GetString("filename"); filename != "" {
 		args = append(args, "--filename="+filename)
 	}
-	if allowMismatch, _ := cmd.Root().Flags().GetBool("allow-version-mismatch"); allowMismatch {
+	if allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch"); allowMismatch {
 		args = append(args, "--allow-version-mismatch")
 	}
 	return args

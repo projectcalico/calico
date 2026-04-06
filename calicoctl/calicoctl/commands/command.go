@@ -89,7 +89,7 @@ node instance.`,
 			if clientOnly, _ := cmd.Flags().GetBool("client"); clientOnly {
 				synthArgs = append(synthArgs, "--client")
 			}
-			if allowMismatch, _ := cmd.Root().Flags().GetBool("allow-version-mismatch"); allowMismatch {
+			if allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch"); allowMismatch {
 				synthArgs = append(synthArgs, "--allow-version-mismatch")
 			}
 			return Version(synthArgs)
@@ -115,8 +115,8 @@ func argsFromCRUDFlags(cmd *cobra.Command, positionalArgs []string) map[string]a
 	args["--skip-empty"], _ = cmd.Flags().GetBool("skip-empty")
 	args["--config"], _ = cmd.Flags().GetString("config")
 	args["--namespace"], _ = cmd.Flags().GetString("namespace")
-	args["--context"], _ = cmd.Root().Flags().GetString("context")
-	args["--allow-version-mismatch"], _ = cmd.Root().Flags().GetBool("allow-version-mismatch")
+	args["--context"], _ = cmd.Flags().GetString("context")
+	args["--allow-version-mismatch"], _ = cmd.Flags().GetBool("allow-version-mismatch")
 
 	// Normalize empty strings to nil for fields the common code checks with != nil.
 	if args["--filename"] == "" {

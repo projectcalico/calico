@@ -56,7 +56,7 @@ func newClusterDiagsCommand() *cobra.Command {
 			if skip, _ := cmd.Flags().GetBool("skip-temp-dir-cleanup"); skip {
 				synthArgs = append(synthArgs, "--skip-temp-dir-cleanup")
 			}
-			if allowMismatch, _ := cmd.Root().Flags().GetBool("allow-version-mismatch"); allowMismatch {
+			if allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch"); allowMismatch {
 				synthArgs = append(synthArgs, "--allow-version-mismatch")
 			}
 			return cluster.Diags(synthArgs)

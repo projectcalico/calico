@@ -59,7 +59,7 @@ func newIPAMCheckCommand() *cobra.Command {
 			showProblemIPs, _ := cmd.Flags().GetBool("show-problem-ips")
 			output, _ := cmd.Flags().GetString("output")
 			kubeconfig, _ := cmd.Flags().GetString("kubeconfig")
-			allowMismatch, _ := cmd.Root().Flags().GetBool("allow-version-mismatch")
+			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
 
 			if err := common.CheckVersionMismatch(config, allowMismatch); err != nil {
 				return err
@@ -120,7 +120,7 @@ func newIPAMReleaseCommand() *cobra.Command {
 			ip, _ := cmd.Flags().GetString("ip")
 			fromReport, _ := cmd.Flags().GetStringArray("from-report")
 			force, _ := cmd.Flags().GetBool("force")
-			allowMismatch, _ := cmd.Root().Flags().GetBool("allow-version-mismatch")
+			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
 
 			if err := common.CheckVersionMismatch(config, allowMismatch); err != nil {
 				return err
@@ -183,7 +183,7 @@ func newIPAMShowCommand() *cobra.Command {
 			showBlocks, _ := cmd.Flags().GetBool("show-blocks")
 			showBorrowed, _ := cmd.Flags().GetBool("show-borrowed")
 			showConfiguration, _ := cmd.Flags().GetBool("show-configuration")
-			allowMismatch, _ := cmd.Root().Flags().GetBool("allow-version-mismatch")
+			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
 
 			if err := common.CheckVersionMismatch(config, allowMismatch); err != nil {
 				return err
@@ -233,7 +233,7 @@ func newIPAMSplitCommand() *cobra.Command {
 			config, _ := cmd.Flags().GetString("config")
 			cidr, _ := cmd.Flags().GetString("cidr")
 			poolName, _ := cmd.Flags().GetString("name")
-			allowMismatch, _ := cmd.Root().Flags().GetBool("allow-version-mismatch")
+			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
 
 			if err := common.CheckVersionMismatch(config, allowMismatch); err != nil {
 				return err
@@ -262,7 +262,7 @@ func newIPAMConfigureCommand() *cobra.Command {
 			strictAffinity, _ := cmd.Flags().GetString("strictaffinity")
 			maxBlocksStr, _ := cmd.Flags().GetString("max-blocks-per-host")
 			persistenceStr, _ := cmd.Flags().GetString("kubevirt-ip-persistence")
-			allowMismatch, _ := cmd.Root().Flags().GetBool("allow-version-mismatch")
+			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
 
 			if err := common.CheckVersionMismatch(config, allowMismatch); err != nil {
 				return err

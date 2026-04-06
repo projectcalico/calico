@@ -56,9 +56,9 @@ endif
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
-# Required for eBPF support.
-# We need to force target arch build image to be used in a cross-compilation run.
+ifeq ($(ARCH),arm64)
+# Required for eBPF support in ARM64.
+# We need to force ARM64 build image to be used in a crosscompilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -206,16 +206,11 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 
-# CGO is needed for BPF support.
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64 ppc64le))
+# CGO is needed on amd64/arm64 for the mountns binary.
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
-# Normalize userspace types to ensure consistency across architectures.
-ARCH_CGO_CFLAGS=
-ifeq ($(ARCH),ppc64le)
-    ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
-endif
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
 else
 CGO_ENABLED=0
 CGO_LDFLAGS=""

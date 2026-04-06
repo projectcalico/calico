@@ -20,10 +20,107 @@ import (
 	"fmt"
 	"reflect"
 
+	calicoapi "github.com/projectcalico/api"
+	"github.com/sirupsen/logrus"
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
+	celvalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
+	schemadefaulting "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/defaulting"
+	schemavalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	celconfig "k8s.io/apiserver/pkg/apis/cel"
 )
+
+var (
+	// celValidators maps CRD Kind to its compiled CEL validator.
+	celValidators map[string]*celvalidation.Validator
+
+	// schemaValidators maps CRD Kind to its OpenAPI schema validator, which
+	// enforces constraints like MinItems, MaxLength, Pattern, Enum, etc.
+	schemaValidators map[string]schemavalidation.SchemaCreateValidator
+
+	// schemas maps CRD Kind to its structural schema.
+	schemas map[string]*structuralschema.Structural
+
+	// crdInitErr captures any error from init() so callers can surface it.
+	crdInitErr error
+)
+
+// init loads all embedded CRDs, converts their schemas, and compiles
+// validators for CEL rules and OpenAPI schema constraints.
+func init() {
+	celValidators = make(map[string]*celvalidation.Validator)
+	schemaValidators = make(map[string]schemavalidation.SchemaCreateValidator)
+	schemas = make(map[string]*structuralschema.Structural)
+
+	crds, err := calicoapi.AllCRDs()
+	if err != nil {
+		crdInitErr = fmt.Errorf("failed to load CRDs: %w", err)
+		return
+	}
+
+	for _, crd := range crds {
+		kind := crd.Spec.Names.Kind
+		if len(crd.Spec.Versions) == 0 {
+			continue
+		}
+
+		// Find the storage version's schema.
+		var version *apiextensionsv1.CustomResourceDefinitionVersion
+		for i := range crd.Spec.Versions {
+			if crd.Spec.Versions[i].Storage {
+				version = &crd.Spec.Versions[i]
+				break
+			}
+		}
+		if version == nil {
+			version = &crd.Spec.Versions[0]
+		}
+		if version.Schema == nil || version.Schema.OpenAPIV3Schema == nil {
+			continue
+		}
+
+		// Convert v1 JSONSchemaProps to internal.
+		internalSchema := &apiextensions.JSONSchemaProps{}
+		err := apiextensionsv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(
+			version.Schema.OpenAPIV3Schema,
+			internalSchema,
+			nil,
+		)
+		if err != nil {
+			logrus.WithError(err).WithField("kind", kind).Warn("Failed to convert CRD schema to internal format")
+			continue
+		}
+
+		// Build OpenAPI schema validator for constraints like MinItems,
+		// MaxLength, Pattern, Enum, Required, etc.
+		sv, _, err := schemavalidation.NewSchemaValidator(internalSchema)
+		if err != nil {
+			logrus.WithError(err).WithField("kind", kind).Warn("Failed to create schema validator from CRD")
+		} else {
+			schemaValidators[kind] = sv
+		}
+
+		// Convert to structural schema for CEL compilation.
+		structural, err := structuralschema.NewStructural(internalSchema)
+		if err != nil {
+			logrus.WithError(err).WithField("kind", kind).Warn("Failed to create structural schema from CRD")
+			continue
+		}
+		schemas[kind] = structural
+
+		// Compile CEL validator. Returns nil if no x-kubernetes-validations exist.
+		v := celvalidation.NewValidator(structural, true, celconfig.PerCallLimit)
+		if v != nil {
+			celValidators[kind] = v
+		}
+
+		logrus.WithField("kind", kind).Debug("Compiled CRD validators")
+	}
+}
 
 // defaultAndValidateCRD applies CRD schema defaults to the object in-place
 // and then runs CRD validation rules (OpenAPI schema constraints + CEL
@@ -33,12 +130,11 @@ import (
 // For create operations, pass nil for oldObj.
 // For update operations, pass the previous version as oldObj.
 //
-// Returns nil if CRD validation is disabled, the object's Kind has no CRD
-// schema, or if defaulting and validation both succeed.
+// Returns nil if the object's Kind has no CRD schema, or if defaulting and
+// validation both succeed.
 func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runtime.Object) field.ErrorList {
-	reg := crdRegistry.Load()
-	if reg == nil {
-		return nil
+	if crdInitErr != nil {
+		return field.ErrorList{field.InternalError(nil, crdInitErr)}
 	}
 
 	kind := resolveKind(obj)
@@ -50,16 +146,30 @@ func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runti
 		return field.ErrorList{field.InternalError(nil, fmt.Errorf("failed to convert object to unstructured: %w", err))}
 	}
 
-	var unstructuredOldObj any
-	if oldObj != nil {
-		unstructuredOldObj, err = toUnstructured(oldObj)
-		if err != nil {
-			return field.ErrorList{field.InternalError(nil, fmt.Errorf("failed to convert old object to unstructured: %w", err))}
-		}
+	// Apply CRD schema defaults to the unstructured representation.
+	applyCRDDefaults(unstructuredObj, kind)
+
+	// Validate the defaulted unstructured data.
+	var allErrs field.ErrorList
+
+	// Run OpenAPI schema validation (MinItems, MaxLength, Pattern, Enum, etc.).
+	if sv, ok := schemaValidators[kind]; ok {
+		allErrs = append(allErrs, schemavalidation.ValidateCustomResource(nil, unstructuredObj, sv)...)
 	}
 
-	// Delegate defaulting and validation to the registry.
-	allErrs := reg.DefaultAndValidate(ctx, kind, unstructuredObj, unstructuredOldObj)
+	// Run CEL validation (x-kubernetes-validations rules).
+	if cv, ok := celValidators[kind]; ok {
+		var unstructuredOldObj any
+		if oldObj != nil {
+			unstructuredOldObj, err = toUnstructured(oldObj)
+			if err != nil {
+				return field.ErrorList{field.InternalError(nil, fmt.Errorf("failed to convert old object to unstructured: %w", err))}
+			}
+		}
+
+		celErrs, _ := cv.Validate(ctx, nil, nil, unstructuredObj, unstructuredOldObj, int64(celconfig.RuntimeCELCostBudget))
+		allErrs = append(allErrs, celErrs...)
+	}
 
 	// Convert the defaulted unstructured data back into the typed object so
 	// the caller sees the applied defaults. We use the converter here (rather
@@ -72,6 +182,14 @@ func defaultAndValidateCRD(ctx context.Context, obj runtime.Object, oldObj runti
 	}
 
 	return allErrs
+}
+
+// applyCRDDefaults applies CRD schema default values to an unstructured
+// object representation in-place. This is a no-op if the kind has no schema.
+func applyCRDDefaults(unstructuredObj any, kind string) {
+	if s, ok := schemas[kind]; ok {
+		schemadefaulting.Default(unstructuredObj, s)
+	}
 }
 
 // resolveKind returns the Kind string for a runtime.Object, falling back to
