@@ -175,6 +175,7 @@ local:kube-controllers/pkg/controllers/tier
 local:kube-controllers/pkg/controllers/utils
 local:kube-controllers/pkg/converter
 local:kube-controllers/pkg/discovery
+local:kube-controllers/pkg/kubecontrollers
 local:kube-controllers/pkg/status
 local:lib/std/chanutil
 local:lib/std/time
@@ -196,6 +197,7 @@ local:libcalico-go/lib/clientv3
 local:libcalico-go/lib/debugserver
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
+local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/kubevirt
 local:libcalico-go/lib/logutils

@@ -50,7 +50,7 @@ func mainlineV1Resources() map[string][]*model.KVPair {
 						UID:         v1TierDefaultUID,
 						Annotations: v1InternalAnnotations,
 					},
-					Spec: apiv3.TierSpec{Order: ptr.To(apiv3.DefaultTierOrder), DefaultAction: actionPtr(apiv3.Deny)},
+					Spec: apiv3.TierSpec{Order: ptr.To(float64(100)), DefaultAction: actionPtr(apiv3.Deny)},
 				},
 			},
 			{
@@ -94,18 +94,16 @@ func mainlineV1Resources() map[string][]*model.KVPair {
 	}
 }
 
-// conflictV1Resources returns v1 backend data with a non-default Tier whose
-// spec will differ from a pre-existing v3 Tier, triggering conflict detection.
-// We use a non-default tier because CEL validation locks the default tier's
-// Order and DefaultAction to fixed values.
+// conflictV1Resources returns v1 backend data with a single Tier. Used with a
+// pre-existing v3 Tier that has a different spec to trigger conflict detection.
 func conflictV1Resources() map[string][]*model.KVPair {
 	return map[string][]*model.KVPair{
 		apiv3.KindTier: {
 			{
-				Key: model.ResourceKey{Kind: apiv3.KindTier, Name: "custom"},
+				Key: model.ResourceKey{Kind: apiv3.KindTier, Name: "default"},
 				Value: &apiv3.Tier{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:        "custom",
+						Name:        "default",
 						UID:         v1TierDefaultUID,
 						Annotations: v1InternalAnnotations,
 					},

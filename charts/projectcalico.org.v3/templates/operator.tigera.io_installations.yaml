@@ -1230,10 +1230,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -1476,15 +1475,6 @@ spec:
                             the given regex.
                           type: string
                       type: object
-                      x-kubernetes-map-type: atomic
-                      x-kubernetes-validations:
-                        - message: no more than one autodetection method can be specified
-                          rule:
-                            "[has(self.firstFound) && self.firstFound == true, has(self.kubernetes),
-                            has(self.interface) && size(self.interface) > 0, has(self.skipInterface)
-                            && size(self.skipInterface) > 0, has(self.canReach) && size(self.canReach)
-                            > 0, has(self.cidrs) && size(self.cidrs) > 0].filter(x, x).size()
-                            <= 1"
                     nodeAddressAutodetectionV6:
                       description: |-
                         NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv6 addresses. If not specified,
@@ -1525,15 +1515,6 @@ spec:
                             the given regex.
                           type: string
                       type: object
-                      x-kubernetes-map-type: atomic
-                      x-kubernetes-validations:
-                        - message: no more than one autodetection method can be specified
-                          rule:
-                            "[has(self.firstFound) && self.firstFound == true, has(self.kubernetes),
-                            has(self.interface) && size(self.interface) > 0, has(self.skipInterface)
-                            && size(self.skipInterface) > 0, has(self.canReach) && size(self.canReach)
-                            > 0, has(self.cidrs) && size(self.cidrs) > 0].filter(x, x).size()
-                            <= 1"
                     sysctl:
                       description: Sysctl configures sysctl parameters for tuning plugin
                       items:
@@ -2875,10 +2856,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -4159,10 +4139,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -5351,10 +5330,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -5611,10 +5589,9 @@ spec:
                       operator:
                         description: |-
                           Operator represents a key's relationship to the value.
-                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                          Valid operators are Exists and Equal. Defaults to Equal.
                           Exists is equivalent to wildcard for value, so that a pod can
                           tolerate all taints of a particular category.
-                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                         type: string
                       tolerationSeconds:
                         description: |-
@@ -6798,10 +6775,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -8598,10 +8574,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -10080,10 +10055,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -10326,15 +10300,6 @@ spec:
                                 the given regex.
                               type: string
                           type: object
-                          x-kubernetes-map-type: atomic
-                          x-kubernetes-validations:
-                            - message: no more than one autodetection method can be specified
-                              rule:
-                                "[has(self.firstFound) && self.firstFound == true,
-                                has(self.kubernetes), has(self.interface) && size(self.interface)
-                                > 0, has(self.skipInterface) && size(self.skipInterface)
-                                > 0, has(self.canReach) && size(self.canReach) > 0, has(self.cidrs)
-                                && size(self.cidrs) > 0].filter(x, x).size() <= 1"
                         nodeAddressAutodetectionV6:
                           description: |-
                             NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv6 addresses. If not specified,
@@ -10375,15 +10340,6 @@ spec:
                                 the given regex.
                               type: string
                           type: object
-                          x-kubernetes-map-type: atomic
-                          x-kubernetes-validations:
-                            - message: no more than one autodetection method can be specified
-                              rule:
-                                "[has(self.firstFound) && self.firstFound == true,
-                                has(self.kubernetes), has(self.interface) && size(self.interface)
-                                > 0, has(self.skipInterface) && size(self.skipInterface)
-                                > 0, has(self.canReach) && size(self.canReach) > 0, has(self.cidrs)
-                                && size(self.cidrs) > 0].filter(x, x).size() <= 1"
                         sysctl:
                           description:
                             Sysctl configures sysctl parameters for tuning
@@ -11752,10 +11708,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -13059,10 +13014,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -14274,10 +14228,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -14539,10 +14492,9 @@ spec:
                           operator:
                             description: |-
                               Operator represents a key's relationship to the value.
-                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                              Valid operators are Exists and Equal. Defaults to Equal.
                               Exists is equivalent to wildcard for value, so that a pod can
                               tolerate all taints of a particular category.
-                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                             type: string
                           tolerationSeconds:
                             description: |-
@@ -15751,10 +15703,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -17576,10 +17527,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
