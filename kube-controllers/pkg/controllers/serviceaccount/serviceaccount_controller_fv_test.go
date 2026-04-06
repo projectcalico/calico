@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,128 +16,192 @@ package serviceaccount_test
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico serviceaccount controller FV tests (etcd mode)", func() {
-	var (
-		etcd              *containers.Container
-		kubeControllers   *containers.Container
-		apiserver         *containers.Container
-		calicoClient      client.Interface
-		k8sClient         *kubernetes.Clientset
-		controllerManager *containers.Container
-	)
+var (
+	testEnv      *testutils.TestEnv
+	calicoClient client.Interface
+)
 
-	BeforeEach(func() {
-		// Run etcd.
-		etcd = testutils.RunEtcd()
-		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
+func init() {
+	logrus.SetFormatter(&logutils.Formatter{})
+	logrus.SetLevel(logrus.DebugLevel)
+}
 
-		// Run apiserver.
-		apiserver = testutils.RunK8sApiserver(etcd.IP)
+func TestMain(m *testing.M) {
+	var err error
+	testEnv, err = testutils.NewTestEnv()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "envtest setup: %v\n", err)
+		os.Exit(1)
+	}
 
-		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+	calicoClient, err = testEnv.NewCalicoEtcdClient()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "calico client setup: %v\n", err)
+		testEnv.Stop()
+		os.Exit(1)
+	}
 
-		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
+	code := m.Run()
+	calicoClient.Close()
+	if err := testEnv.Stop(); err != nil {
+		fmt.Fprintf(os.Stderr, "envtest teardown: %v\n", err)
+	}
+	os.Exit(code)
+}
 
-		var err error
-		k8sClient, err = testutils.GetK8sClient(kconfigfile)
-		Expect(err).NotTo(HaveOccurred())
+// startServiceAccountController creates and starts the serviceaccount controller.
+// The controller is stopped when the test ends.
+func startServiceAccountController(t *testing.T, ctx context.Context) {
+	t.Helper()
+	cfg := config.GenericControllerConfig{
+		ReconcilerPeriod: 2 * time.Second,
+		NumberOfWorkers:  1,
+	}
+	ctrl := serviceaccount.NewServiceAccountController(ctx, testEnv.K8sClient, calicoClient, cfg)
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	go ctrl.Run(stop)
+}
 
-		// Wait for the apiserver to be available.
-		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
-			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
+// TestFV_ServiceAccountProfileCreated verifies that the serviceaccount controller
+// creates a Profile in the Calico datastore when a new ServiceAccount is created.
+func TestFV_ServiceAccountProfileCreated(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	startServiceAccountController(t, ctx)
 
-		// Run controller manager.  Empirically it can take around 10s until the
-		// controller manager is ready to create default service accounts, even
-		// when the k8s image has already been downloaded to run the API
-		// server.  We use Eventually to allow for possible delay when doing
-		// initial pod creation below.
-		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
+	saName := "test-sa-create"
+	nsName := "default"
+	profName := "ksa." + nsName + "." + saName
+	sa := &v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      saName,
+			Namespace: nsName,
+			Labels: map[string]string{
+				"peanut": "butter",
+			},
+		},
+	}
+	_, err := testEnv.K8sClient.CoreV1().ServiceAccounts(nsName).Create(ctx, sa, metav1.CreateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		if err := testEnv.K8sClient.CoreV1().ServiceAccounts(nsName).Delete(ctx, saName, metav1.DeleteOptions{}); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
 	})
 
-	AfterEach(func() {
-		_ = calicoClient.Close()
-		controllerManager.Stop()
-		kubeControllers.Stop()
-		apiserver.Stop()
-		etcd.Stop()
+	g.Eventually(func() error {
+		_, err := calicoClient.Profiles().Get(ctx, profName, options.GetOptions{})
+		return err
+	}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+}
+
+// TestFV_ServiceAccountProfileRecreated verifies that deleting a Profile causes
+// the controller to recreate it.
+func TestFV_ServiceAccountProfileRecreated(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	startServiceAccountController(t, ctx)
+
+	saName := "test-sa-recreate"
+	nsName := "default"
+	profName := "ksa." + nsName + "." + saName
+	sa := &v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      saName,
+			Namespace: nsName,
+			Labels: map[string]string{
+				"peanut": "butter",
+			},
+		},
+	}
+	_, err := testEnv.K8sClient.CoreV1().ServiceAccounts(nsName).Create(ctx, sa, metav1.CreateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		if err := testEnv.K8sClient.CoreV1().ServiceAccounts(nsName).Delete(ctx, saName, metav1.DeleteOptions{}); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
 	})
 
-	Context("mainline functionality", func() {
-		var profName string
-		BeforeEach(func() {
-			saName := "peanutbutter"
-			nsName := "default"
-			profName = "ksa." + nsName + "." + saName
-			sa := &v1.ServiceAccount{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      saName,
-					Namespace: nsName,
-					Labels: map[string]string{
-						"peanut": "butter",
-					},
-				},
-			}
-			Eventually(func() error {
-				_, err := k8sClient.CoreV1().ServiceAccounts(nsName).Create(context.Background(),
-					sa, metav1.CreateOptions{})
-				return err
-			}, time.Second*10, 500*time.Millisecond).ShouldNot(HaveOccurred())
+	// Wait for the profile to be created.
+	g.Eventually(func() error {
+		_, err := calicoClient.Profiles().Get(ctx, profName, options.GetOptions{})
+		return err
+	}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 
-			Eventually(func() *api.Profile {
-				profile, _ := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
-				return profile
-			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
-		})
+	// Delete the profile and verify the controller recreates it.
+	_, err = calicoClient.Profiles().Delete(ctx, profName, options.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
 
-		It("should write new profiles in etcd to match service account in k8s ", func() {
-			// Delete profile and then check if it is re-created.
-			_, err := calicoClient.Profiles().Delete(context.Background(), profName, options.DeleteOptions{})
-			Expect(err).ShouldNot(HaveOccurred())
-			Eventually(func() error {
-				_, err := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
-				return err
-			}, time.Second*15, 500*time.Millisecond).ShouldNot(HaveOccurred())
-		})
+	g.Eventually(func() error {
+		_, err := calicoClient.Profiles().Get(ctx, profName, options.GetOptions{})
+		return err
+	}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+}
 
-		It("should update existing profiles in etcd to match service account in k8s", func() {
-			profile, err := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
-			By("getting the profile", func() {
-				Expect(err).ShouldNot(HaveOccurred())
-			})
+// TestFV_ServiceAccountProfileLabelsUpdated verifies that the controller
+// restores the correct labels on a Profile when they are manually cleared.
+func TestFV_ServiceAccountProfileLabelsUpdated(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	startServiceAccountController(t, ctx)
 
-			By("updating the profile to have no labels to apply", func() {
-				profile.Spec.LabelsToApply = map[string]string{}
-				profile, err := calicoClient.Profiles().Update(context.Background(), profile, options.SetOptions{})
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(profile.Spec.LabelsToApply).To(BeEmpty())
-			})
-
-			By("waiting for the controller to write back the original labels to apply", func() {
-				Eventually(func() map[string]string {
-					prof, _ := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
-					return prof.Spec.LabelsToApply
-				}, time.Second*15, 500*time.Millisecond).ShouldNot(BeEmpty())
-			})
-		})
+	saName := "test-sa-labels"
+	nsName := "default"
+	profName := "ksa." + nsName + "." + saName
+	sa := &v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      saName,
+			Namespace: nsName,
+			Labels: map[string]string{
+				"peanut": "butter",
+			},
+		},
+	}
+	_, err := testEnv.K8sClient.CoreV1().ServiceAccounts(nsName).Create(ctx, sa, metav1.CreateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		if err := testEnv.K8sClient.CoreV1().ServiceAccounts(nsName).Delete(ctx, saName, metav1.DeleteOptions{}); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
 	})
-})
+
+	// Wait for the profile to be created.
+	g.Eventually(func() error {
+		_, err := calicoClient.Profiles().Get(ctx, profName, options.GetOptions{})
+		return err
+	}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+
+	// Clear the labels and verify the controller restores them.
+	profile, err := calicoClient.Profiles().Get(ctx, profName, options.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	profile.Spec.LabelsToApply = map[string]string{}
+	_, err = calicoClient.Profiles().Update(ctx, profile, options.SetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	g.Eventually(func() map[string]string {
+		prof, _ := calicoClient.Profiles().Get(ctx, profName, options.GetOptions{})
+		if prof == nil {
+			return nil
+		}
+		return prof.Spec.LabelsToApply
+	}, 15*time.Second, 500*time.Millisecond).ShouldNot(BeEmpty())
+}
