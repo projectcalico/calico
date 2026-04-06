@@ -3475,7 +3475,6 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 	return m.workloadIfaceRegex.MatchString(iface)
 }
 
-
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
 	return m.dataIfaceRegex.MatchString(iface) ||
 		(m.hostNetworkedNATMode != hostNetworkedNATDisabled && (iface == dataplanedefs.BPFOutDev || iface == "lo"))
