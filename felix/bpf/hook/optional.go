@@ -21,10 +21,10 @@ import "sync"
 // health reporting when the program fails to load.
 type OptionalSubProgInfo struct {
 	SubProg      SubProg
-	FeatureName  string                    // human-readable, e.g., "IP fragment reassembly"
-	ProgName     string                    // BPF C function name, e.g., "calico_tc_skb_ipv4_frag"
-	DisableMsg   string                    // message telling user how to disable the feature
-	IsApplicable func(at AttachType) bool  // structural applicability check
+	FeatureName  string                   // human-readable, e.g., "IP fragment reassembly"
+	ProgName     string                   // BPF C function name, e.g., "calico_tc_skb_ipv4_frag"
+	DisableMsg   string                   // message telling user how to disable the feature
+	IsApplicable func(at AttachType) bool // structural applicability check
 }
 
 var optionalMu sync.Mutex
