@@ -290,7 +290,7 @@ func TestToFlagsSimple(t *testing.T) {
 		t.Fatalf("ToFlags: %v", err)
 	}
 
-	expected := "sig-calico && !Slow && !Disruptive"
+	expected := "(sig-calico) && !Slow && !Disruptive"
 	if flags.LabelFilter != expected {
 		t.Errorf("LabelFilter = %q, want %q", flags.LabelFilter, expected)
 	}
@@ -325,7 +325,7 @@ func TestToFlagsMultipleIncludes(t *testing.T) {
 		t.Fatalf("ToFlags: %v", err)
 	}
 
-	expected := "(sig-calico || Conformance && sig-network || Dataplane:BPF) && !Slow"
+	expected := "((sig-calico) || (Conformance && sig-network) || (Dataplane:BPF)) && !Slow"
 	if flags.LabelFilter != expected {
 		t.Errorf("LabelFilter = %q, want %q", flags.LabelFilter, expected)
 	}
@@ -368,6 +368,61 @@ func TestToFlagsEmpty(t *testing.T) {
 	}
 	if flags.SkipString() != "" {
 		t.Errorf("SkipString = %q, want empty", flags.SkipString())
+	}
+}
+
+func TestToFlagsSingleIncludeWithOrAndExcludes(t *testing.T) {
+	cfg := &Config{
+		Include: []IncludeEntry{
+			{Label: "sig-calico || sig-network"},
+		},
+		Exclude: Exclude{
+			Labels: []ExcludeLabel{
+				{Label: "Slow", Reason: "too slow"},
+			},
+		},
+	}
+
+	flags, err := ToFlags(cfg)
+	if err != nil {
+		t.Fatalf("ToFlags: %v", err)
+	}
+
+	expected := "(sig-calico || sig-network) && !Slow"
+	if flags.LabelFilter != expected {
+		t.Errorf("LabelFilter = %q, want %q", flags.LabelFilter, expected)
+	}
+}
+
+func TestToFlagsSingleIncludeNoExcludes(t *testing.T) {
+	cfg := &Config{
+		Include: []IncludeEntry{
+			{Label: "sig-calico"},
+		},
+	}
+
+	flags, err := ToFlags(cfg)
+	if err != nil {
+		t.Fatalf("ToFlags: %v", err)
+	}
+
+	expected := "(sig-calico)"
+	if flags.LabelFilter != expected {
+		t.Errorf("LabelFilter = %q, want %q", flags.LabelFilter, expected)
+	}
+}
+
+func TestLoadEmptyIncludeLabel(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "bad.yaml", `
+include:
+  - label: ""
+    reason: "empty"
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for empty include label")
 	}
 }
 

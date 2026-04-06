@@ -21,6 +21,7 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/test/e2e"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -85,6 +86,11 @@ func runWithTestConfig(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("Failed to convert test config to flags: %v", err)
 	}
+
+	// Match the setup from e2e.RunE2ETests.
+	logs.InitLogs()
+	defer logs.FlushLogs()
+	klog.EnableContextualLogging(true)
 
 	gomega.RegisterFailHandler(framework.Fail)
 	suiteConfig, reporterConfig := framework.CreateGinkgoConfig()

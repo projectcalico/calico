@@ -64,14 +64,16 @@ func buildLabelFilter(cfg *Config) (string, error) {
 	var parts []string
 
 	// Build the include expression: (expr1 || expr2 || ...)
+	// Each entry is wrapped in parens to preserve precedence when entries
+	// contain && or || operators internally.
 	if len(cfg.Include) > 0 {
 		var includeExprs []string
 		for _, entry := range cfg.Include {
-			includeExprs = append(includeExprs, entry.Label)
+			includeExprs = append(includeExprs, "("+entry.Label+")")
 		}
 
 		includeStr := strings.Join(includeExprs, " || ")
-		if len(includeExprs) > 1 {
+		if len(includeExprs) > 1 && len(cfg.Exclude.Labels) > 0 {
 			includeStr = "(" + includeStr + ")"
 		}
 		parts = append(parts, includeStr)

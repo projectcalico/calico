@@ -2,6 +2,10 @@
 #
 # Used by `make e2e-run-test`. Runs Conformance tests from sig-calico and
 # sig-network, plus BGP tests.
+#
+# This config is standalone (doesn't extend base.yaml) because it uses a
+# narrower include scope (Conformance-only for sig-calico) that can't be
+# expressed as an additive extension of base's broader sig-calico include.
 
 include:
   - sig-calico && Conformance

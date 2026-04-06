@@ -93,11 +93,6 @@ type ExcludeLabel struct {
 
 	// Reason documents why this label is excluded. Required.
 	Reason string `yaml:"reason"`
-
-	// Optional, when true, suppresses the validation error when the label
-	// matches zero tests. This is useful for labels that only exist in
-	// certain test binaries (e.g., enterprise-only labels).
-	Optional bool `yaml:"optional,omitempty"`
 }
 
 // NamePatternEntry is a test name pattern to exclude. It supports two forms:
@@ -139,7 +134,7 @@ func (e *NamePatternEntry) Validate() error {
 		return fmt.Errorf("namePattern %q must have a 'reason'", e.Pattern)
 	}
 	if hasGroup && e.Group == "" {
-		return fmt.Errorf("namePattern group must have a 'group' reason")
+		return fmt.Errorf("namePattern group entries must set the 'group' field")
 	}
 	if hasGroup && len(e.Patterns) == 0 {
 		return fmt.Errorf("namePattern group %q must have at least one pattern", e.Group)

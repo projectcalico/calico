@@ -96,6 +96,12 @@ func merge(parent, child *Config) *Config {
 
 // validate checks the structural validity of a config file.
 func validate(cfg *Config, path string) error {
+	for i, entry := range cfg.Include {
+		if entry.Label == "" {
+			return fmt.Errorf("%s: include[%d] must have a non-empty label expression", path, i)
+		}
+	}
+
 	for i, entry := range cfg.Exclude.Labels {
 		if entry.Label == "" {
 			return fmt.Errorf("%s: exclude.labels[%d] must have a 'label' field", path, i)
