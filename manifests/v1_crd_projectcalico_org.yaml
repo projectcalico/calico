@@ -9888,7 +9888,7 @@ spec:
             ImageSet is used to specify image digests for the images that the operator deploys.
             The name of the ImageSet is expected to be in the format `<variant>-<release>`.
             The `variant` used is `enterprise` if the InstallationSpec Variant is
-            `CalicoEnterprise` or `TigeraSecureEnterprise`, otherwise it is `calico`.
+            `TigeraSecureEnterprise` otherwise it is `calico`.
             The `release` must match the version of the variant that the operator is built to deploy,
             this version can be obtained by passing the `--version` flag to the operator binary.
           properties:
@@ -18730,12 +18730,10 @@ spec:
                   type: integer
                 variant:
                   description: |-
-                    Variant is the product to install - one of Calico or CalicoEnterprise.
-                    TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
+                    Variant is the product to install - one of Calico or TigeraSecureEnterprise
                     Default: Calico
                   enum:
                     - Calico
-                    - CalicoEnterprise
                     - TigeraSecureEnterprise
                   type: string
                 windowsNodes:
@@ -27685,12 +27683,10 @@ spec:
                       type: integer
                     variant:
                       description: |-
-                        Variant is the product to install - one of Calico or CalicoEnterprise.
-                        TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
+                        Variant is the product to install - one of Calico or TigeraSecureEnterprise
                         Default: Calico
                       enum:
                         - Calico
-                        - CalicoEnterprise
                         - TigeraSecureEnterprise
                       type: string
                     windowsNodes:
@@ -27802,12 +27798,11 @@ spec:
                   format: int32
                   type: integer
                 variant:
-                  description: |-
-                    Variant is the most recently observed installed variant - one of Calico or CalicoEnterprise.
-                    TigeraSecureEnterprise is a deprecated alias for CalicoEnterprise.
+                  description:
+                    Variant is the most recently observed installed variant
+                    - one of Calico or TigeraSecureEnterprise
                   enum:
                     - Calico
-                    - CalicoEnterprise
                     - TigeraSecureEnterprise
                   type: string
               type: object

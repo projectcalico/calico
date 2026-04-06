@@ -43,15 +43,15 @@ func newLabelCommand() *cobra.Command {
 
 			// Build the bridge args map for ExecuteConfigCommand.
 			parsedArgs := map[string]any{
-				"<KIND>":                    kind,
-				"<NAME>":                    []string{name},
-				"--config":                  config,
-				"--namespace":               namespace,
-				"--context":                 nil,
-				"--allow-version-mismatch":  false,
-				"--filename":                nil,
-				"--recursive":               false,
-				"--skip-empty":              false,
+				"<KIND>":                   kind,
+				"<NAME>":                   []string{name},
+				"--config":                 config,
+				"--namespace":              namespace,
+				"--context":                nil,
+				"--allow-version-mismatch": false,
+				"--filename":               nil,
+				"--recursive":              false,
+				"--skip-empty":             false,
 			}
 			if v, _ := cmd.Flags().GetString("context"); v != "" {
 				parsedArgs["--context"] = v
