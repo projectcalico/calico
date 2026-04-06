@@ -31,5 +31,7 @@ local:pod2daemon/csidriver/driver
 local:pod2daemon/flexvol
 local:pod2daemon/flexvol/creds
 local:pod2daemon/nodeagent
+local:pod2daemon/pkg/csi
+local:pod2daemon/pkg/flexvol
 local:pod2daemon/proto
 local:pod2daemon/workloadapi
