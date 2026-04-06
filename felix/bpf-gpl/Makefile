@@ -58,6 +58,8 @@ else ifeq ($(ARCH),arm64)
 CFLAGS += -D__TARGET_ARCH_arm64
 else ifeq ($(ARCH),ppc64le)
 CFLAGS += -D__TARGET_ARCH_powerpc -D__SANE_USERSPACE_TYPES__
+else ifeq ($(ARCH),s390x)
+CFLAGS += -D__TARGET_ARCH_s390x -D__s390x__
 endif
 CC := clang
 LD := llc
