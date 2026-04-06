@@ -518,13 +518,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane nat outgoing flow 
 		workload2.ConfigureInInfra(infra)
 	})
 
-	AfterEach(func() {
-		workload1.Stop()
-		workload2.Stop()
-		tc.Stop()
-		infra.Stop()
-	})
-
 	It("Should report non-zero bytes for an SNAT'd flow", func() {
 		cc := &connectivity.Checker{
 			Protocol: "tcp",
