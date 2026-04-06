@@ -2297,7 +2297,8 @@ func convertToGNP(
 	}
 
 	// Assert key fields are correct.
-	tier := clusterNetworkPolicyTier(cnp)
+	tier, err := clusterNetworkPolicyTier(cnp)
+	Expect(err).NotTo(HaveOccurred())
 
 	gnp, ok := pol.Value.(*apiv3.GlobalNetworkPolicy)
 	Expect(ok).To(BeTrue())
