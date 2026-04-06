@@ -469,6 +469,15 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			}
 			goto syn_force_policy;
 		}
+		/* Ambient mesh connections on the ingress (TO_WEP) path must always
+		 * go through policy so that policy changes take effect on ztunnel's
+		 * persistent connections. */
+		if (CALI_F_TO_WEP && (ctx->state->ct_result.flags & CALI_CT_FLAG_AMBIENT)) {
+			CALI_DEBUG("Ambient connection: forcing policy re-evaluation");
+			ctx->state->post_nat_ip_dst = ctx->state->ip_dst;
+			ctx->state->post_nat_dport = ctx->state->dport;
+			goto syn_force_policy;
+		}
 		goto skip_policy;
 	}
 
@@ -1368,6 +1377,17 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 
+	// Detect ambient mesh traffic and set state flag for CT entry creation.
+	// ISTIO_DSCP >= 0 is per-interface, set only on ambient workload interfaces.
+	// Check both SYN on existing CT (ct_result_is_syn) and new flows (CALI_CT_NEW)
+	// to ensure the flag is set when the CT entry is first created.
+	if (ISTIO_DSCP >= 0 && ctx->state->ip_proto == IPPROTO_TCP &&
+			(ct_result_is_syn(ctx->state->ct_result.rc) ||
+			 ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_NEW)) {
+		ctx->state->flags |= CALI_ST_AMBIENT;
+		CALI_DEBUG("Ambient mesh workload detected");
+	}
+
 	// Set Istio DSCP mark, if traffic originates from a workload that's part of the mesh.
 	if (CALI_F_TO_WEP && ISTIO_DSCP >= 0 && ctx->state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx->state->ct_result.rc)) {
 		ipv46_addr_t src_ip = ctx->state->ip_src;
@@ -1467,6 +1487,9 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 	if (state->flags & CALI_ST_SET_DSCP) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SET_DSCP;
+	}
+	if (state->flags & CALI_ST_AMBIENT) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_AMBIENT;
 	}
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
