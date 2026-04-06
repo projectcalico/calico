@@ -31,6 +31,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/calc"
@@ -452,6 +453,16 @@ configRetry:
 		v3Client,
 		dpDriver,
 		failureReportChan)
+
+	// TEMPORARY WORKAROUND: When BPF dataplane is enabled with Istio ambient mode and CTLB
+	// disabled, the operator-managed calico-system tier policies for ztunnel and istiod are
+	// too restrictive for cross-node communication. This creates an override policy to allow
+	// ztunnel<->istiod traffic until the operator is updated to handle this case natively.
+	// TODO: Remove once tigera/operator renders correct policies for BPF+ambient without CTLB.
+	if configParams.BPFEnabled && configParams.IsIstioAmbientModeEnabled() &&
+		configParams.BPFConnectTimeLoadBalancing == "Disabled" {
+		go ensureAmbientBPFWorkaroundPolicy(v3Client)
+	}
 
 	// If enabled, create a server for the policy sync API.  This allows clients to connect to
 	// Felix over a socket and receive policy updates.
@@ -1435,6 +1446,62 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 func (fc *DataplaneConnector) ApplyNoRestartConfig(old, new *config.Config) {
 	if !reflect.DeepEqual(old.HealthTimeoutOverrides, new.HealthTimeoutOverrides) {
 		health.SetGlobalTimeoutOverrides(new.HealthTimeoutOverrides)
+	}
+}
+
+// ensureAmbientBPFWorkaroundPolicy creates a permissive NetworkPolicy for ztunnel and istiod
+// in the calico-system namespace. This is a temporary workaround for the fact that the
+// operator-managed policies use service-based selectors that don't resolve correctly for
+// cross-node traffic in BPF mode without CTLB (connect-time load balancing).
+//
+// Without this, only the ztunnel pod co-located with istiod can connect; all others fail
+// with "XDS client connection error" because the calico-system default-deny blocks them.
+//
+// TODO(operator): Remove once tigera/operator is updated to render BPF-compatible policies
+// for the Istio component when CTLB is disabled.
+func ensureAmbientBPFWorkaroundPolicy(v3Client client.Interface) {
+	const (
+		policyName = "allow-ztunnel-istiod-bpf-workaround"
+		namespace  = "calico-system"
+		tierName   = "calico-system"
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	order := float64(0)
+	policy := &apiv3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      tierName + "." + policyName,
+			Namespace: namespace,
+		},
+		Spec: apiv3.NetworkPolicySpec{
+			Tier:     tierName,
+			Order:    &order,
+			Selector: "k8s-app in {'ztunnel', 'istiod'}",
+			Types:    []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
+			Ingress:  []apiv3.Rule{{Action: apiv3.Allow}},
+			Egress:   []apiv3.Rule{{Action: apiv3.Allow}},
+		},
+	}
+
+	existing, err := v3Client.NetworkPolicies().Get(ctx, namespace, tierName+"."+policyName, options.GetOptions{})
+	if err == nil {
+		// Policy exists, update it.
+		policy.ResourceVersion = existing.ResourceVersion
+		_, err = v3Client.NetworkPolicies().Update(ctx, policy, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to update ambient BPF workaround policy, ztunnel may have cross-node connectivity issues.")
+		} else {
+			log.Info("Updated ambient BPF workaround policy for ztunnel<->istiod cross-node connectivity.")
+		}
+	} else {
+		_, err = v3Client.NetworkPolicies().Create(ctx, policy, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Warn("Failed to create ambient BPF workaround policy, ztunnel may have cross-node connectivity issues.")
+		} else {
+			log.Info("Created ambient BPF workaround policy for ztunnel<->istiod cross-node connectivity.")
+		}
 	}
 }
 

@@ -25,8 +25,10 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // TestIstioDSCPv4 tests the BPF implementation of Istio DSCP marking for IPv4 packets.
@@ -417,5 +419,240 @@ func TestIstioDSCPv6(t *testing.T) {
 			actualDSCP := ipv6R.TrafficClass >> 2
 			Expect(actualDSCP).To(Equal(preDSCP), "Expected DSCP not changed when feature disabled, got %d", actualDSCP)
 		}, withIPv6())
+	})
+}
+
+// TestIstioAmbientPolicyEnforcementV4 tests that policy changes take effect on
+// established connections for ambient mesh workloads. This is the fix for the bug
+// where ztunnel's persistent connections bypass policy re-evaluation due to the
+// BPF fast-path (CALI_CT_ESTABLISHED_BYPASS).
+func TestIstioAmbientPolicyEnforcementV4(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "IWep"
+	defer func() {
+		bpfIfaceName = ""
+		skbMark = 0
+	}()
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+
+	ifIndex := 1
+	istioDSCP := uint8(26)
+
+	// Setup routes for source and destination workloads
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	// Add source IP to Istio WEPs IP set
+	ipsetMap := ipsets.Map()
+	Expect(ipsetMap.EnsureExists()).NotTo(HaveOccurred())
+	ipsetEntry := ipsets.ProtoIPSetMemberToBPFEntry(ipsets.AllIstioWEPsID, fmt.Sprintf("%s/32", srcIP.String()))
+	Expect(ipsetMap.Update(ipsetEntry.AsBytes(), ipsets.DummyValue)).NotTo(HaveOccurred())
+	defer func() {
+		_ = ipsetMap.Delete(ipsetEntry.AsBytes())
+	}()
+
+	rulesDefaultDeny := &polprog.Rules{
+		Tiers: []polprog.Tier{{
+			Name: "base tier",
+			Policies: []polprog.Policy{{
+				Name:  "deny all",
+				Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Deny"}}},
+			}},
+		}},
+	}
+
+	// Ignore the unused import warnings by using the variables
+	_ = gopacket.Default
+	_ = layers.LayerTypeEthernet
+
+	t.Run("Ambient: established connection re-evaluates policy on deny", func(t *testing.T) {
+		// Step 1: Send TCP SYN from_wep to create CT entry (with allow policy)
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			tcpHdr := &layers.TCP{
+				SrcPort:    54321,
+				DstPort:    80,
+				SYN:        true,
+				Seq:        1000,
+				Window:     65535,
+				DataOffset: 5,
+			}
+
+			ipv4Hdr := *ipv4Default
+			ipv4Hdr.SrcIP = srcIP
+			ipv4Hdr.DstIP = dstIP
+			ipv4Hdr.Protocol = layers.IPProtocolTCP
+
+			_, _, _, _, pktBytes, err := testPacketV4(nil, &ipv4Hdr, tcpHdr, []byte{})
+			Expect(err).NotTo(HaveOccurred())
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		}, withIstioDSCP(istioDSCP))
+
+		// Step 2: Send TCP SYN to_wep (creates full CT entry with ambient flag)
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			tcpHdr := &layers.TCP{
+				SrcPort:    54321,
+				DstPort:    80,
+				SYN:        true,
+				Seq:        1000,
+				Window:     65535,
+				DataOffset: 5,
+			}
+
+			ipv4Hdr := *ipv4Default
+			ipv4Hdr.SrcIP = srcIP
+			ipv4Hdr.DstIP = dstIP
+			ipv4Hdr.Protocol = layers.IPProtocolTCP
+
+			_, _, _, _, pktBytes, err := testPacketV4(nil, &ipv4Hdr, tcpHdr, []byte{})
+			Expect(err).NotTo(HaveOccurred())
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		}, withIstioDSCP(istioDSCP))
+
+		// Step 3: Send TCP ACK to_wep with allow policy - should be allowed
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			tcpHdr := &layers.TCP{
+				SrcPort:    54321,
+				DstPort:    80,
+				ACK:        true,
+				Seq:        1001,
+				Ack:        2000,
+				Window:     65535,
+				DataOffset: 5,
+			}
+
+			ipv4Hdr := *ipv4Default
+			ipv4Hdr.SrcIP = srcIP
+			ipv4Hdr.DstIP = dstIP
+			ipv4Hdr.Protocol = layers.IPProtocolTCP
+
+			_, _, _, _, pktBytes, err := testPacketV4(nil, &ipv4Hdr, tcpHdr, []byte{})
+			Expect(err).NotTo(HaveOccurred())
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC), "Established ambient connection with allow policy should pass")
+		}, withIstioDSCP(istioDSCP))
+
+		// Step 4: Send TCP ACK to_wep with DENY policy - should be DENIED
+		// This is the core bug fix test: without the fix, this would pass because
+		// the established connection is fast-pathed and policy is never re-evaluated.
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultDeny, func(bpfrun bpfProgRunFn) {
+			tcpHdr := &layers.TCP{
+				SrcPort:    54321,
+				DstPort:    80,
+				ACK:        true,
+				Seq:        1002,
+				Ack:        2000,
+				Window:     65535,
+				DataOffset: 5,
+			}
+
+			ipv4Hdr := *ipv4Default
+			ipv4Hdr.SrcIP = srcIP
+			ipv4Hdr.DstIP = dstIP
+			ipv4Hdr.Protocol = layers.IPProtocolTCP
+
+			_, _, _, _, pktBytes, err := testPacketV4(nil, &ipv4Hdr, tcpHdr, []byte{})
+			Expect(err).NotTo(HaveOccurred())
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_SHOT), "Established ambient connection with deny policy MUST be denied")
+		}, withIstioDSCP(istioDSCP))
+	})
+
+	t.Run("Non-ambient: established connection bypasses policy (existing behavior)", func(t *testing.T) {
+		// Reset CT map for a clean test
+		resetCTMap(ctMap)
+
+		// Step 1: Send TCP SYN from_wep WITHOUT ambient (no istioDSCP)
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			tcpHdr := &layers.TCP{
+				SrcPort:    54322,
+				DstPort:    80,
+				SYN:        true,
+				Seq:        1000,
+				Window:     65535,
+				DataOffset: 5,
+			}
+
+			ipv4Hdr := *ipv4Default
+			ipv4Hdr.SrcIP = srcIP
+			ipv4Hdr.DstIP = dstIP
+			ipv4Hdr.Protocol = layers.IPProtocolTCP
+
+			_, _, _, _, pktBytes, err := testPacketV4(nil, &ipv4Hdr, tcpHdr, []byte{})
+			Expect(err).NotTo(HaveOccurred())
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		})
+
+		// Step 2: Send TCP SYN to_wep (no ambient)
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			tcpHdr := &layers.TCP{
+				SrcPort:    54322,
+				DstPort:    80,
+				SYN:        true,
+				Seq:        1000,
+				Window:     65535,
+				DataOffset: 5,
+			}
+
+			ipv4Hdr := *ipv4Default
+			ipv4Hdr.SrcIP = srcIP
+			ipv4Hdr.DstIP = dstIP
+			ipv4Hdr.Protocol = layers.IPProtocolTCP
+
+			_, _, _, _, pktBytes, err := testPacketV4(nil, &ipv4Hdr, tcpHdr, []byte{})
+			Expect(err).NotTo(HaveOccurred())
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		})
+
+		// Step 3: Send TCP ACK to_wep with deny policy - should STILL be allowed
+		// because non-ambient connections get fast-pathed (existing behavior)
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultDeny, func(bpfrun bpfProgRunFn) {
+			tcpHdr := &layers.TCP{
+				SrcPort:    54322,
+				DstPort:    80,
+				ACK:        true,
+				Seq:        1001,
+				Ack:        2000,
+				Window:     65535,
+				DataOffset: 5,
+			}
+
+			ipv4Hdr := *ipv4Default
+			ipv4Hdr.SrcIP = srcIP
+			ipv4Hdr.DstIP = dstIP
+			ipv4Hdr.Protocol = layers.IPProtocolTCP
+
+			_, _, _, _, pktBytes, err := testPacketV4(nil, &ipv4Hdr, tcpHdr, []byte{})
+			Expect(err).NotTo(HaveOccurred())
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC), "Non-ambient established connection should still be fast-pathed (allowed despite deny policy)")
+		})
 	})
 }
