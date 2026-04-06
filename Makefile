@@ -56,7 +56,7 @@ CALICO_PACKAGE = github.com/projectcalico/calico/cmd/calico
 CALICO_IMAGE ?= calico
 CALICO_BINDIR ?= bin
 
-# Source files for the uber binary, derived from cmd/deps.txt.
+# Source files for the combined binary, derived from cmd/deps.txt.
 CALICO_SRC_FILES := $(call local-deps-go-files,cmd)
 
 # Paths within the build container for BPF source (needed for CGO builds).

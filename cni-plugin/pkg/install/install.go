@@ -182,10 +182,14 @@ func Install(version string) error {
 			continue
 		}
 
-		// Install the calico binary from /usr/bin/calico as both "calico" and
-		// "calico-ipam" in the host CNI bin directory. The uber binary handles
-		// both roles — it detects the invoked name and dispatches accordingly.
+		// Install the calico binary as both "calico" and "calico-ipam" in the
+		// host CNI bin directory. The binary handles both roles — it detects the
+		// invoked name and dispatches accordingly. Check /usr/bin/calico first
+		// (combined image), then fall back to /opt/cni/bin/calico (standalone image).
 		calicoBinary := winutils.GetHostPath("/usr/bin/calico")
+		if !fileExists(calicoBinary) {
+			calicoBinary = winutils.GetHostPath("/opt/cni/bin/calico")
+		}
 		for _, name := range []string{"calico", "calico-ipam"} {
 			target := fmt.Sprintf("%s/%s", d, name)
 			if fileExists(target) && !c.UpdateCNIBinaries {
