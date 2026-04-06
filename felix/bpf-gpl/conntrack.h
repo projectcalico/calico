@@ -898,8 +898,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_VERB("B: approved %d.", v->b_to_a.approved);
 
 		if (v->a_to_b.approved && v->b_to_a.approved) {
-			result.rc = CALI_CT_ESTABLISHED_BYPASS;
-			ct_result_set_flag(result.rc, CT_RES_CONFIRMED);
+			if (ct_value_get_flags(v) & CALI_CT_FLAG_AMBIENT) {
+				result.rc = CALI_CT_ESTABLISHED;
+				CALI_CT_DEBUG("Ambient connection: suppressing bypass");
+			} else {
+				result.rc = CALI_CT_ESTABLISHED_BYPASS;
+				ct_result_set_flag(result.rc, CT_RES_CONFIRMED);
+			}
 		} else {
 			result.rc = CALI_CT_ESTABLISHED;
 		}
@@ -911,6 +916,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			src_to_dst = &v->b_to_a;
 			dst_to_src = &v->a_to_b;
 		}
+
+		/* Only propagate the AMBIENT flag for NORMAL entries. Other flags
+		 * were previously not propagated and doing so could cause side
+		 * effects (e.g., SKIP_FIB being unexpectedly honored). */
+		result.flags = ct_value_get_flags(v) & CALI_CT_FLAG_AMBIENT;
 
 		break;
 	default:
