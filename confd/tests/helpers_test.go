@@ -28,6 +28,7 @@ import (
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	logrus "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -55,6 +56,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	typhadaemon "github.com/projectcalico/calico/typha/pkg/daemon"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
 
@@ -780,11 +782,61 @@ type confdDaemon struct {
 	errCh     chan error
 }
 
-// startConfdDaemon starts confd in daemon mode (not oneshot) with block
-// affinities pre-created. The caller applies resources and calls
-// expectOutput at each step. Call stop() when done.
-func startConfdDaemon(t *testing.T, be *datastoreBackend) *confdDaemon {
+// confdDaemonOption configures startConfdDaemon.
+type confdDaemonOption func(*confdDaemonConfig)
+
+type confdDaemonConfig struct {
+	nodeName       string
+	skipAffinities bool
+	useTypha       bool
+
+	// endpointStatusFiles maps filename → JSON content to write under
+	// <tmpDir>/endpoint-status/ before starting confd.
+	endpointStatusFiles map[string]string
+}
+
+// withNodeName overrides the default "kube-master" node name for this
+// confd instance. Sets NODENAME env, template.NodeName, and calico.NodeName.
+func withNodeName(name string) confdDaemonOption {
+	return func(c *confdDaemonConfig) { c.nodeName = name }
+}
+
+// withoutBlockAffinities skips creating the standard block affinities.
+func withoutBlockAffinities() confdDaemonOption {
+	return func(c *confdDaemonConfig) { c.skipAffinities = true }
+}
+
+// withTypha starts a Typha instance and routes confd through it.
+// KDD-only (requires a K8s API server).
+func withTypha() confdDaemonOption {
+	return func(c *confdDaemonConfig) { c.useTypha = true }
+}
+
+// withEndpointStatus writes endpoint-status files and sets the env var so
+// confd reads them. Used for localWorkloadSelector tests.
+func withEndpointStatus(files map[string]string) confdDaemonOption {
+	return func(c *confdDaemonConfig) { c.endpointStatusFiles = files }
+}
+
+// startConfdDaemon starts confd in daemon mode (not oneshot). The caller
+// applies resources and calls expectOutput at each step. Call stop() when done.
+func startConfdDaemon(t *testing.T, be *datastoreBackend, opts ...confdDaemonOption) *confdDaemon {
 	t.Helper()
+
+	cfg := confdDaemonConfig{nodeName: "kube-master"}
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	if cfg.nodeName != "kube-master" {
+		t.Setenv("NODENAME", cfg.nodeName)
+		template.NodeName = cfg.nodeName
+		calico.NodeName = cfg.nodeName
+		t.Cleanup(func() {
+			template.NodeName = "kube-master"
+			calico.NodeName = "kube-master"
+		})
+	}
 
 	tmpDir := t.TempDir()
 	confDir := filepath.Join(tmpDir, "confd")
@@ -796,7 +848,26 @@ func startConfdDaemon(t *testing.T, be *datastoreBackend) *confdDaemon {
 	copyDir(t, filepath.Join(srcConfDir, "templates"), filepath.Join(confDir, "templates"))
 	rewriteDestPaths(t, filepath.Join(confDir, "conf.d"), outputDir)
 
-	createBlockAffinities(t, be)
+	if len(cfg.endpointStatusFiles) > 0 {
+		esDir := filepath.Join(tmpDir, "endpoint-status")
+		require.NoError(t, os.MkdirAll(esDir, 0755))
+		for name, content := range cfg.endpointStatusFiles {
+			require.NoError(t, os.WriteFile(filepath.Join(esDir, name), []byte(content), 0644))
+		}
+		t.Setenv("CALICO_ENDPOINT_STATUS_PATH_PREFIX", tmpDir)
+	}
+
+	if !cfg.skipAffinities {
+		createBlockAffinities(t, be)
+	}
+
+	typhaConfig := &syncclientutils.TyphaConfig{}
+	if cfg.useTypha {
+		require.NotNil(t, be.restConfig, "withTypha requires KDD backend")
+		typhaAddr := startTypha(t, be)
+		typhaConfig.Addr = typhaAddr
+		typhaConfig.ReadTimeout = 50 * time.Second
+	}
 
 	confdCalicoClient, err := client.New(apiconfig.CalicoAPIConfig{Spec: be.datastoreConfig})
 	require.NoError(t, err, "creating confd Calico client")
@@ -815,7 +886,7 @@ func startConfdDaemon(t *testing.T, be *datastoreBackend) *confdDaemon {
 			confdCalicoClient,
 			be.k8sClientset,
 			be.datastoreConfig,
-			&syncclientutils.TyphaConfig{},
+			typhaConfig,
 			nil,
 		)
 	}()
@@ -832,6 +903,42 @@ func startConfdDaemon(t *testing.T, be *datastoreBackend) *confdDaemon {
 	}
 	t.Cleanup(d.stop)
 	return d
+}
+
+// startTypha starts an in-process Typha instance connected to the same envtest
+// K8s API. Returns the address (host:port) for confd to connect to.
+func startTypha(t *testing.T, be *datastoreBackend) string {
+	t.Helper()
+
+	// Write a minimal config file (Typha requires one).
+	cfgFile := filepath.Join(t.TempDir(), "typha.cfg")
+	require.NoError(t, os.WriteFile(cfgFile, []byte("[default]\nLogFilePath=none\n"), 0644))
+
+	// Point Typha at the envtest K8s API via env vars.
+	t.Setenv("TYPHA_DATASTORETYPE", "kubernetes")
+	t.Setenv("TYPHA_LOGSEVERITYSCREEN", "error")
+	t.Setenv("TYPHA_LOGSEVERITYSYS", "none")
+	t.Setenv("TYPHA_LOGFILEPATH", "none")
+
+	td := typhadaemon.New()
+	td.ConfigFilePath = cfgFile
+	td.BuildInfoLogCxt = logrus.WithField("component", "typha-test")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	err := td.LoadConfiguration(ctx)
+	require.NoError(t, err, "typha LoadConfiguration")
+	td.CreateServer()
+	td.Start(ctx)
+
+	// Port() blocks until Typha is actually listening.
+	port := td.Server.Port()
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	t.Logf("Typha listening on %s", addr)
+
+	t.Cleanup(func() {
+		cancel()
+	})
+	return addr
 }
 
 // stop shuts down the running confd instance.
@@ -893,6 +1000,28 @@ func (d *confdDaemon) expectOutput(goldenDir string) {
 
 		if time.Now().After(deadline) {
 			d.t.Fatalf("timed out waiting for output to match %s (last mismatch: %s)", goldenDir, lastMismatch)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// expectPeeringCount polls until bird.cfg contains exactly n "protocol bgp"
+// stanzas, with a timeout of 10 seconds.
+func (d *confdDaemon) expectPeeringCount(n int) {
+	d.t.Helper()
+
+	birdCfg := filepath.Join(d.outputDir, "bird.cfg")
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		data, err := os.ReadFile(birdCfg)
+		if err == nil {
+			count := strings.Count(string(data), "protocol bgp")
+			if count == n {
+				return
+			}
+			if time.Now().After(deadline) {
+				d.t.Fatalf("expected %d peerings, got %d in %s\n\n%s", n, count, birdCfg, string(data))
+			}
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
