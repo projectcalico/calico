@@ -1,35 +1,3 @@
-- name: Istio Ztunnel
-  run:
-    when: "${CHANGE_IN(third_party/istio-ztunnel)}"
-  dependencies:
-    - Prerequisites
-  task:
-    prologue:
-      commands:
-        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - cd third_party/istio-ztunnel
-    jobs:
-      - name: "Linux amd64"
-        commands:
-          - ../../.semaphore/run-and-monitor build.log make build
-- name: Istio Ztunnel - native arm64 runner
-  run:
-    when: "${CHANGE_IN(third_party/istio-ztunnel)}"
-  dependencies:
-    - Prerequisites
-  task:
-    agent:
-      machine:
-        type: s1-aws-arm64-2
-    prologue:
-      commands:
-        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - cd third_party/istio-ztunnel
-    jobs:
-      - name: "Linux arm64"
-        commands:
-          - ../../.semaphore/run-and-monitor build-arm64.log make build
-
 - name: Istio
   run:
     when: "${CHANGE_IN(istio)}"
@@ -38,17 +6,35 @@
   task:
     prologue:
       commands:
-        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
         - cd istio
     jobs:
       - name: "Istio: CI"
         commands:
-          # build all images except ztunnel, which is built in the previous step
-          - ../.semaphore/run-and-monitor ci.log make clean istio-install-cni istio-pilot istio-proxyv2
+          # Include the istio ztunnel build in the amd64 CI job.
+          - ../.semaphore/run-and-monitor ci.log make ci
       - name: "Istio: build arm64"
         matrix:
           - env_var: ARCH
             values:
               - arm64
         commands:
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+          # Skip istio ztunnel in this arm64 cross-build job.
+          # ztunnel is built separately in the native arm64 runner block below.
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
+
+- name: Istio Ztunnel - native arm64 runner
+  run:
+    when: "${CHANGE_IN(istio)}"
+  dependencies:
+    - Istio
+  task:
+    agent:
+      machine:
+        type: s1-aws-arm64-2
+    prologue:
+      commands:
+        - cd istio
+    jobs:
+      - name: "Linux arm64"
+        commands:
+          - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
