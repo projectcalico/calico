@@ -114,11 +114,22 @@ func init() {
 	}
 }
 
+// testConfigPath is the path to a YAML test selection config file.
+// Registered as --calico.test-config.
+var testConfigPath string
+
+// TestConfigPath returns the path to the test selection config file, or empty
+// if none was specified.
+func TestConfigPath() string {
+	return testConfigPath
+}
+
 func RegisterFlags(flags *flag.FlagSet) {
 	// Register each of the defined config options as a flag.
 	for _, c := range allConfigOptions {
 		flags.StringVar(&c.cmdLineValue, c.cliName(), "", c.helpText)
 	}
+	flags.StringVar(&testConfigPath, "calico.test-config", "", "Path to a YAML test selection config file.")
 }
 
 func AfterReadingAllFlags() {
