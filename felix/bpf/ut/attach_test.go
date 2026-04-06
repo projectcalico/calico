@@ -169,36 +169,36 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(programsIng.Count()).To(Equal(expectedIngCount))
 		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
-			Hook:           hook.Ingress,
-			Family:         4,
-			Type:           tcdefs.EpTypeHost,
-			LogLevel:       loglevel,
-			ToHostDrop:     false,
-			DSR:            false,
+			Hook:       hook.Ingress,
+			Family:     4,
+			Type:       tcdefs.EpTypeHost,
+			LogLevel:   loglevel,
+			ToHostDrop: false,
+			DSR:        false,
 		}))
 		Expect(atEg).To(HaveKey(hook.AttachType{
-			Hook:           hook.Egress,
-			Family:         4,
-			Type:           tcdefs.EpTypeHost,
-			LogLevel:       loglevel,
-			ToHostDrop:     false,
-			DSR:            false,
+			Hook:       hook.Egress,
+			Family:     4,
+			Type:       tcdefs.EpTypeHost,
+			LogLevel:   loglevel,
+			ToHostDrop: false,
+			DSR:        false,
 		}))
 		Expect(atIng).NotTo(HaveKey(hook.AttachType{
-			Hook:           hook.Ingress,
-			Family:         6,
-			Type:           tcdefs.EpTypeHost,
-			LogLevel:       loglevel,
-			ToHostDrop:     false,
-			DSR:            false,
+			Hook:       hook.Ingress,
+			Family:     6,
+			Type:       tcdefs.EpTypeHost,
+			LogLevel:   loglevel,
+			ToHostDrop: false,
+			DSR:        false,
 		}))
 		Expect(atEg).NotTo(HaveKey(hook.AttachType{
-			Hook:           hook.Egress,
-			Family:         6,
-			Type:           tcdefs.EpTypeHost,
-			LogLevel:       loglevel,
-			ToHostDrop:     false,
-			DSR:            false,
+			Hook:       hook.Egress,
+			Family:     6,
+			Type:       tcdefs.EpTypeHost,
+			LogLevel:   loglevel,
+			ToHostDrop: false,
+			DSR:        false,
 		}))
 
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
@@ -228,36 +228,36 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Expect(programsEg.Count()).To(Equal(expectedEgCount))
 
 			Expect(atIng).To(HaveKey(hook.AttachType{
-				Hook:           hook.Ingress,
-				Family:         4,
-				Type:           tcdefs.EpTypeHost,
-				LogLevel:       loglevel,
-				ToHostDrop:     false,
-				DSR:            false,
+				Hook:       hook.Ingress,
+				Family:     4,
+				Type:       tcdefs.EpTypeHost,
+				LogLevel:   loglevel,
+				ToHostDrop: false,
+				DSR:        false,
 			}))
 			Expect(atEg).To(HaveKey(hook.AttachType{
-				Hook:           hook.Egress,
-				Family:         4,
-				Type:           tcdefs.EpTypeHost,
-				LogLevel:       loglevel,
-				ToHostDrop:     false,
-				DSR:            false,
+				Hook:       hook.Egress,
+				Family:     4,
+				Type:       tcdefs.EpTypeHost,
+				LogLevel:   loglevel,
+				ToHostDrop: false,
+				DSR:        false,
 			}))
 			Expect(atIng).To(HaveKey(hook.AttachType{
-				Hook:           hook.Ingress,
-				Family:         6,
-				Type:           tcdefs.EpTypeHost,
-				LogLevel:       loglevel,
-				ToHostDrop:     false,
-				DSR:            false,
+				Hook:       hook.Ingress,
+				Family:     6,
+				Type:       tcdefs.EpTypeHost,
+				LogLevel:   loglevel,
+				ToHostDrop: false,
+				DSR:        false,
 			}))
 			Expect(atEg).To(HaveKey(hook.AttachType{
-				Hook:           hook.Egress,
-				Family:         6,
-				Type:           tcdefs.EpTypeHost,
-				LogLevel:       loglevel,
-				ToHostDrop:     false,
-				DSR:            false,
+				Hook:       hook.Egress,
+				Family:     6,
+				Type:       tcdefs.EpTypeHost,
+				LogLevel:   loglevel,
+				ToHostDrop: false,
+				DSR:        false,
 			}))
 
 		}
@@ -398,37 +398,37 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(programsIng.Count()).To(Equal(expectedIngCount))
 		Expect(programsEg.Count()).To(Equal(expectedEgCount))
 		Expect(atIng).To(HaveKey(hook.AttachType{
-			Hook:           hook.Ingress,
-			Family:         4,
-			Type:           tcdefs.EpTypeWorkload,
-			LogLevel:       loglevel,
-			ToHostDrop:     false,
-			DSR:            false,
+			Hook:       hook.Ingress,
+			Family:     4,
+			Type:       tcdefs.EpTypeWorkload,
+			LogLevel:   loglevel,
+			ToHostDrop: false,
+			DSR:        false,
 		}))
 		Expect(atEg).To(HaveKey(hook.AttachType{
-			Hook:           hook.Egress,
-			Family:         4,
-			Type:           tcdefs.EpTypeWorkload,
-			LogLevel:       loglevel,
-			ToHostDrop:     false,
-			DSR:            false,
+			Hook:       hook.Egress,
+			Family:     4,
+			Type:       tcdefs.EpTypeWorkload,
+			LogLevel:   loglevel,
+			ToHostDrop: false,
+			DSR:        false,
 		}))
 		if ipv6Enabled {
 			Expect(atIng).To(HaveKey(hook.AttachType{
-				Hook:           hook.Ingress,
-				Family:         6,
-				Type:           tcdefs.EpTypeWorkload,
-				LogLevel:       loglevel,
-				ToHostDrop:     false,
-				DSR:            false,
+				Hook:       hook.Ingress,
+				Family:     6,
+				Type:       tcdefs.EpTypeWorkload,
+				LogLevel:   loglevel,
+				ToHostDrop: false,
+				DSR:        false,
 			}))
 			Expect(atEg).To(HaveKey(hook.AttachType{
-				Hook:           hook.Egress,
-				Family:         6,
-				Type:           tcdefs.EpTypeWorkload,
-				LogLevel:       loglevel,
-				ToHostDrop:     false,
-				DSR:            false,
+				Hook:       hook.Egress,
+				Family:     6,
+				Type:       tcdefs.EpTypeWorkload,
+				LogLevel:   loglevel,
+				ToHostDrop: false,
+				DSR:        false,
 			}))
 		}
 
