@@ -26,7 +26,6 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -193,25 +192,34 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 		return
 	}
 
-	// Watch DaemonSets in the install namespace so changes to calico-node
-	// (e.g., the operator setting CALICO_API_GROUP or completing a rollout)
-	// trigger a reconcile during the Converged phase.
-	dsGVR := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}
-	dsFactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(m.dynamicClient, resyncPeriod, names.OwnNamespace(), nil)
-	dsInformer := dsFactory.ForResource(dsGVR).Informer()
-	dsHandler := cache.ResourceEventHandlerFuncs{
+	// Watch DaemonSets and Deployments in the install namespace so changes
+	// to calico-node or calico-typha (e.g., setting CALICO_API_GROUP or
+	// completing a rollout) trigger a reconcile during the Converged phase.
+	appsFactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(m.dynamicClient, resyncPeriod, names.OwnNamespace(), nil)
+	appsHandler := cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(_ any) { m.queue.Add(defaultMigrationName) },
 		UpdateFunc: func(_, _ any) { m.queue.Add(defaultMigrationName) },
 	}
-	if _, err = dsInformer.AddEventHandler(dsHandler); err != nil {
+
+	dsGVR := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}
+	dsInformer := appsFactory.ForResource(dsGVR).Informer()
+	if _, err = dsInformer.AddEventHandler(appsHandler); err != nil {
 		logrus.WithError(err).Fatal("Failed to add DaemonSet event handler")
+		return
+	}
+
+	deployGVR := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+	deployInformer := appsFactory.ForResource(deployGVR).Informer()
+	if _, err = deployInformer.AddEventHandler(appsHandler); err != nil {
+		logrus.WithError(err).Fatal("Failed to add Deployment event handler")
 		return
 	}
 
 	go informer.Run(ctx.Done())
 	go dsInformer.Run(ctx.Done())
+	go deployInformer.Run(ctx.Done())
 
-	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced, dsInformer.HasSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced, dsInformer.HasSynced, deployInformer.HasSynced) {
 		logrus.Error("Failed to sync informer caches")
 		return
 	}
@@ -611,27 +619,15 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreM
 func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	ns := names.OwnNamespace()
 
-	// Check calico-node and typha (if present) for v3 API group configuration
-	// and rollout completion.
+	// Check calico-node and typha (if present) for v3 API group configuration.
 	componentsToCheck := []string{"calico-node"}
-	typhaDS, err := m.k8sClient.AppsV1().DaemonSets(ns).Get(m.ctx, "calico-typha", metav1.GetOptions{})
-	if err == nil {
-		componentsToCheck = append(componentsToCheck, "calico-typha")
-	} else if !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
-		logCtx.WithError(err).Info("Failed to check for calico-typha DaemonSet, will retry")
+	typhaDeploy, err := m.k8sClient.AppsV1().Deployments(ns).Get(m.ctx, "calico-typha", metav1.GetOptions{})
+	if err != nil && !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
+		logCtx.WithError(err).Info("Failed to check for calico-typha Deployment, will retry")
 		return requeueAfter(m.waitingPollInterval)
 	}
-	// Also check for typha as a Deployment (used in some manifest installs).
-	var typhaDeploy *appsv1.Deployment
-	if typhaDS == nil {
-		typhaDeploy, err = m.k8sClient.AppsV1().Deployments(ns).Get(m.ctx, "calico-typha", metav1.GetOptions{})
-		if err != nil && !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
-			logCtx.WithError(err).Info("Failed to check for calico-typha Deployment, will retry")
-			return requeueAfter(m.waitingPollInterval)
-		}
-		if err == nil {
-			componentsToCheck = append(componentsToCheck, "calico-typha")
-		}
+	if err == nil {
+		componentsToCheck = append(componentsToCheck, "calico-typha")
 	}
 
 	// Check each component for the v3 API group env var.
@@ -645,8 +641,6 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 				return requeueAfter(m.waitingPollInterval)
 			}
 			podSpec = &ds.Spec.Template.Spec
-		} else if typhaDS != nil {
-			podSpec = &typhaDS.Spec.Template.Spec
 		} else if typhaDeploy != nil {
 			podSpec = &typhaDeploy.Spec.Template.Spec
 		}
