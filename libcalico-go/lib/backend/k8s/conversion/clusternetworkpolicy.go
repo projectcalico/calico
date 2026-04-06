@@ -21,7 +21,6 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
@@ -35,17 +34,34 @@ import (
 // K8sClusterNetworkPolicyToCalico converts a k8s ClusterNetworkPolicy to a model.KVPair.
 func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	tier := clusterNetworkPolicyTier(kcnp)
+	tier, err := clusterNetworkPolicyTier(kcnp)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to parse cluster network policy tier.")
+		return nil, err
+	}
 
 	order := float64(kcnp.Spec.Priority)
 	errorTracker := cerrors.ErrorClusterNetworkPolicyConversion{PolicyName: kcnp.Name}
+
+	// Either Namespaces or Pods is set. Use one of them to populate the selectors.
+	var nsSelector, podSelector string
+	if kcnp.Spec.Subject.Namespaces != nil {
+		nsSelector = k8sSelectorToCalico(kcnp.Spec.Subject.Namespaces, SelectorNamespace)
+		// Make sure projectcalico.org/orchestrator == 'k8s' label is added to exclude heps.
+		podSelector = k8sSelectorToCalico(nil, SelectorPod)
+	} else if kcnp.Spec.Subject.Pods != nil {
+		nsSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.NamespaceSelector, SelectorNamespace)
+		podSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.PodSelector, SelectorPod)
+	} else {
+		return nil, fmt.Errorf("no selector is specified")
+	}
 
 	// Generate the ingress rules list.
 	var ingressRules []apiv3.Rule
 	for _, r := range kcnp.Spec.Ingress {
 		rules, err := k8sClusterNetPolIngressRuleToCalico(r)
 		if err != nil {
-			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
+			logrus.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
 			// Add rule to conversion error slice
 			errorTracker.BadIngressRule(&r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
 			failClosedRule := k8sClusterNetPolHandleFailedRules(r.Action)
@@ -62,7 +78,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 	for _, r := range kcnp.Spec.Egress {
 		rules, err := k8sClusterNetPolEgressRuleToCalico(r)
 		if err != nil {
-			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
+			logrus.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
 			// Add rule to conversion error slice
 			errorTracker.BadEgressRule(&r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
 			failClosedRule := k8sClusterNetPolHandleFailedRules(r.Action)
@@ -74,19 +90,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 		}
 	}
 
-	// Either Namespaces or Pods is set. Use one of them to populate the selectors.
-	var nsSelector, podSelector string
-	if kcnp.Spec.Subject.Namespaces != nil {
-		nsSelector = k8sSelectorToCalico(kcnp.Spec.Subject.Namespaces, SelectorNamespace)
-		// Make sure projectcalico.org/orchestrator == 'k8s' label is added to exclude heps.
-		podSelector = k8sSelectorToCalico(nil, SelectorPod)
-	} else {
-		nsSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.NamespaceSelector, SelectorNamespace)
-		podSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.PodSelector, SelectorPod)
-	}
-
 	var uid types.UID
-	var err error
 	if kcnp.UID != "" {
 		uid, err = ConvertUID(kcnp.UID)
 		if err != nil {
@@ -138,14 +142,14 @@ func clusterNetPolicyTypes(ingressRules []apiv3.Rule, egressRules []apiv3.Rule) 
 	return policyTypes
 }
 
-func clusterNetworkPolicyTier(kcnp *clusternetpol.ClusterNetworkPolicy) string {
+func clusterNetworkPolicyTier(kcnp *clusternetpol.ClusterNetworkPolicy) (string, error) {
 	switch kcnp.Spec.Tier {
 	case clusternetpol.AdminTier:
-		return names.KubeAdminTierName
+		return names.KubeAdminTierName, nil
 	case clusternetpol.BaselineTier:
-		return names.KubeBaselineTierName
+		return names.KubeBaselineTierName, nil
 	default:
-		return ""
+		return "", fmt.Errorf("invalid cluster network policy tier %s", kcnp.Spec.Tier)
 	}
 }
 
