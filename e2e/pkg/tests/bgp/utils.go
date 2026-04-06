@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/onsi/ginkgo/v2"
-	"github.com/sirupsen/logrus"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -13,31 +12,11 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
-
-// requireNonVXLANCluster checks that no IP pool uses VXLAN encapsulation. Tests that
-// disable the BGP mesh and expect connectivity to break cannot work on VXLAN clusters
-// because Felix programs VXLAN tunnel routes independently of BGP.
-func requireNonVXLANCluster(cli ctrlclient.Client) {
-	pools := &v3.IPPoolList{}
-	err := cli.List(context.Background(), pools)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error listing IP pools")
-
-	for _, pool := range pools.Items {
-		switch pool.Spec.VXLANMode {
-		case v3.VXLANModeAlways, v3.VXLANModeCrossSubnet:
-			framework.Failf(
-				"This test requires BGP full mesh as the sole routing mechanism, and cannot run with VXLAN enabled (pool %s uses VXLANMode %s)",
-				pool.Name, pool.Spec.VXLANMode,
-			)
-		}
-	}
-}
 
 // ensureInitialBGPConfig updates the default BGPConfiguration to ensures that full mesh BGP is enabled.
 // It returns a cleanup function to restore the original state after the test.
@@ -189,149 +168,4 @@ func waitForBGPEstablishedForNode(cli ctrlclient.Client, node string) {
 		}
 		return nil
 	}, "1m", "1s").ShouldNot(HaveOccurred(), "BGPPeer count did not reach expected value")
-}
-
-// BGPStatusMonitor manages CalicoNodeStatus resources for observing BGP session
-// state during tests. Create one per test suite via NewBGPStatusMonitor, which
-// creates the status resources and registers cleanup. Then use Log, WaitForEstablished,
-// and WaitForNoEstablished to orchestrate test assertions around BGP convergence.
-type BGPStatusMonitor struct {
-	cli       ctrlclient.Client
-	nodeNames []string
-}
-
-// NewBGPStatusMonitor creates CalicoNodeStatus resources for all nodes in the cluster
-// with BGP and Routes classes enabled and a fast (1s) update period. Registers a
-// DeferCleanup to remove them when the test completes.
-func NewBGPStatusMonitor(cli ctrlclient.Client) *BGPStatusMonitor {
-	nodes := &corev1.NodeList{}
-	err := cli.List(context.Background(), nodes)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error listing nodes")
-
-	m := &BGPStatusMonitor{cli: cli}
-	for _, node := range nodes.Items {
-		status := &v3.CalicoNodeStatus{
-			ObjectMeta: metav1.ObjectMeta{Name: node.Name},
-			Spec: v3.CalicoNodeStatusSpec{
-				Node: node.Name,
-				Classes: []v3.NodeStatusClassType{
-					v3.NodeStatusClassTypeBGP,
-					v3.NodeStatusClassTypeRoutes,
-				},
-				UpdatePeriodSeconds: ptr.To[uint32](1),
-			},
-		}
-		err := cli.Create(context.Background(), status)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error creating CalicoNodeStatus for node %s", node.Name)
-		m.nodeNames = append(m.nodeNames, node.Name)
-	}
-
-	ginkgo.DeferCleanup(func() {
-		for _, name := range m.nodeNames {
-			status := &v3.CalicoNodeStatus{ObjectMeta: metav1.ObjectMeta{Name: name}}
-			if err := cli.Delete(context.Background(), status); err != nil {
-				logrus.WithError(err).Warnf("Failed to delete CalicoNodeStatus %s", name)
-			}
-		}
-	})
-
-	return m
-}
-
-// Log dumps the current BGP session and route state for all nodes. Useful for
-// diagnostics inside Eventually loops or at key test checkpoints.
-func (m *BGPStatusMonitor) Log() {
-	for _, name := range m.nodeNames {
-		status := &v3.CalicoNodeStatus{}
-		err := m.cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, status)
-		if err != nil {
-			logrus.WithError(err).Warnf("Failed to get CalicoNodeStatus for %s", name)
-			continue
-		}
-
-		bgp := status.Status.BGP
-		logrus.Infof("[BGP] Node %s: established_v4=%d not_established_v4=%d established_v6=%d not_established_v6=%d last_updated=%s",
-			name,
-			bgp.NumberEstablishedV4, bgp.NumberNotEstablishedV4,
-			bgp.NumberEstablishedV6, bgp.NumberNotEstablishedV6,
-			status.Status.LastUpdated.Time,
-		)
-		for _, peer := range bgp.PeersV4 {
-			logrus.Infof("[BGP]   Node %s peer %s type=%s state=%s since=%s", name, peer.PeerIP, peer.Type, peer.State, peer.Since)
-		}
-		for _, route := range status.Status.Routes.RoutesV4 {
-			logrus.Infof("[BGP]   Node %s route: %s via %s type=%s", name, route.Destination, route.Gateway, route.Type)
-		}
-	}
-}
-
-// WaitForEstablished waits until all nodes have at least one established BGP peer
-// and no non-established peers. Logs BGP state on each poll for diagnostics.
-func (m *BGPStatusMonitor) WaitForEstablished() {
-	ginkgo.By("Waiting for all BGP sessions to be established")
-	EventuallyWithOffset(1, func() error {
-		for _, name := range m.nodeNames {
-			status := &v3.CalicoNodeStatus{}
-			if err := m.cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, status); err != nil {
-				return fmt.Errorf("failed to get CalicoNodeStatus for %s: %w", name, err)
-			}
-			bgp := status.Status.BGP
-			if bgp.NumberEstablishedV4+bgp.NumberEstablishedV6 == 0 {
-				return fmt.Errorf("node %s: no BGP peers established yet", name)
-			}
-			if bgp.NumberNotEstablishedV4+bgp.NumberNotEstablishedV6 > 0 {
-				return fmt.Errorf("node %s: %d v4 + %d v6 peers not established",
-					name, bgp.NumberNotEstablishedV4, bgp.NumberNotEstablishedV6)
-			}
-		}
-		return nil
-	}, "2m", "1s").Should(Succeed(), "BGP sessions did not all reach Established state")
-}
-
-// WaitForNoPeers waits until no node reports any established BGP peers of any type.
-// Logs BGP state on each poll for diagnostics.
-func (m *BGPStatusMonitor) WaitForNoPeers() {
-	ginkgo.By("Waiting for all BGP peers to be removed")
-	EventuallyWithOffset(1, func() error {
-		for _, name := range m.nodeNames {
-			status := &v3.CalicoNodeStatus{}
-			if err := m.cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, status); err != nil {
-				return fmt.Errorf("failed to get CalicoNodeStatus for %s: %w", name, err)
-			}
-			bgp := status.Status.BGP
-			total := bgp.NumberEstablishedV4 + bgp.NumberNotEstablishedV4 + bgp.NumberEstablishedV6 + bgp.NumberNotEstablishedV6
-			if total > 0 {
-				m.Log()
-				return fmt.Errorf("node %s still has %d BGP peers", name, total)
-			}
-		}
-		return nil
-	}, "2m", "1s").Should(Succeed(), "BGP peers still present")
-}
-
-// WaitForNoMeshPeers waits until no node reports any NodeMesh BGP peers. This is
-// used after disabling the node-to-node mesh to confirm sessions have torn down.
-// Logs BGP state on each poll for diagnostics.
-func (m *BGPStatusMonitor) WaitForNoMeshPeers() {
-	ginkgo.By("Waiting for all NodeMesh BGP sessions to be torn down")
-	EventuallyWithOffset(1, func() error {
-		for _, name := range m.nodeNames {
-			status := &v3.CalicoNodeStatus{}
-			if err := m.cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, status); err != nil {
-				return fmt.Errorf("failed to get CalicoNodeStatus for %s: %w", name, err)
-			}
-			for _, peer := range status.Status.BGP.PeersV4 {
-				if peer.Type == v3.BGPPeerTypeNodeMesh {
-					m.Log()
-					return fmt.Errorf("node %s still has NodeMesh peer %s (state=%s)", name, peer.PeerIP, peer.State)
-				}
-			}
-			for _, peer := range status.Status.BGP.PeersV6 {
-				if peer.Type == v3.BGPPeerTypeNodeMesh {
-					return fmt.Errorf("node %s still has NodeMesh v6 peer %s (state=%s)", name, peer.PeerIP, peer.State)
-				}
-			}
-		}
-		return nil
-	}, "2m", "1s").Should(Succeed(), "NodeMesh BGP sessions still present after disabling mesh")
 }
