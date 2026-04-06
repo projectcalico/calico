@@ -71,6 +71,30 @@ var _ = describe.CalicoDescribe(
 			var err error
 			cli, err = client.New(f.ClientConfig())
 			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create controller-runtime client")
+
+			// Disable CTLB (connect-time load balancing) for Istio ambient mode tests.
+			// CTLB intercepts connections at the socket level, which can bypass ztunnel's
+			// traffic interception and break policy enforcement.
+			originalFC := v3.NewFelixConfiguration()
+			gomega.Eventually(func() error {
+				return cli.Get(context.Background(), types.NamespacedName{Name: "default"}, originalFC)
+			}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "failed to get default FelixConfiguration")
+
+			originalCTLB := originalFC.Spec.BPFConnectTimeLoadBalancing
+			ctlbDisabled := v3.BPFConnectTimeLBDisabled
+			gomega.Eventually(func() error {
+				return utils.UpdateFelixConfig(cli, func(spec *v3.FelixConfigurationSpec) {
+					spec.BPFConnectTimeLoadBalancing = &ctlbDisabled
+				})
+			}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "failed to disable CTLB")
+
+			ginkgo.DeferCleanup(func() {
+				gomega.Eventually(func() error {
+					return utils.UpdateFelixConfig(cli, func(spec *v3.FelixConfigurationSpec) {
+						spec.BPFConnectTimeLoadBalancing = originalCTLB
+					})
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "failed to restore CTLB")
+			})
 		})
 
 		// Test: Full Istio Ambient Mode lifecycle with traffic encryption and Calico policy enforcement.
