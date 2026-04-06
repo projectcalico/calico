@@ -19,11 +19,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
+	"strings"
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -145,6 +149,10 @@ type migrationController struct {
 	migrators           []migrators.ResourceMigrator
 	waitingPollInterval time.Duration
 	queue               workqueue.TypedRateLimitingInterface[string]
+
+	// operatorManaged is true if the cluster is managed by the Tigera operator,
+	// detected at RunWithContext start by checking for an Installation CR.
+	operatorManaged bool
 }
 
 // RunWithContext is called by the DeferredCRDController once the DatastoreMigration
@@ -155,6 +163,13 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 	defer logrus.Info("Stopping migration controller")
 
 	m.ctx = ctx
+
+	operatorManaged, err := discovery.IsOperatorManaged(ctx, m.k8sClient.Discovery(), m.dynamicClient)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to detect install type, defaulting to manifest mode")
+	}
+	m.operatorManaged = operatorManaged
+	logrus.WithField("operatorManaged", operatorManaged).Info("Migration controller: detected install type")
 	m.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
 	defer m.queue.ShutDown()
 
@@ -172,7 +187,7 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 			m.enqueue(obj)
 		},
 	}
-	_, err := informer.AddEventHandler(handler)
+	_, err = informer.AddEventHandler(handler)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to add event handler to informer")
 		return
@@ -351,28 +366,33 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 	}
 	logCtx.WithField("v1CRDs", v1CRDCount).Info("Found v1 CRDs to migrate")
 
-	// Pre-validation: check the APIService.
+	// Pre-validation: check the APIService. In operator mode, there should be
+	// an aggregated APIService pointing to the calico apiserver. In manifest
+	// mode, there may be no APIService at all (or an automanaged CRD-backed one
+	// if v3 CRDs were pre-installed).
 	apiSvc, err := m.apiregClient.APIServices().Get(m.ctx, apiServiceName, metav1.GetOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			logCtx.Warn("APIService v3.projectcalico.org not found — may not be running with API server aggregation")
+			if m.operatorManaged {
+				logCtx.Warn("APIService v3.projectcalico.org not found — may not be running with API server aggregation")
+			} else {
+				logCtx.Info("No APIService found (expected for manifest installs)")
+			}
 		} else {
 			return fmt.Errorf("checking APIService: %w", err)
 		}
 	} else if apiSvc.Labels != nil && apiSvc.Labels["kube-aggregator.kubernetes.io/automanaged"] == "true" {
-		return asTerminal(fmt.Errorf("APIService v3.projectcalico.org is automanaged (CRD-backed), not aggregated — migration requires an aggregated API server"))
+		if m.operatorManaged {
+			return asTerminal(fmt.Errorf("APIService v3.projectcalico.org is automanaged (CRD-backed), not aggregated — migration requires an aggregated API server"))
+		}
+		// In manifest mode, an automanaged APIService means v3 CRDs are already
+		// installed. This is fine - we'll migrate data into them.
+		logCtx.Info("APIService is CRD-backed (v3 CRDs already installed)")
 	}
 
-	// Detect install namespace from the serviceaccount namespace file.
 	installNamespace := names.OwnNamespace()
-
-	// Detect install type by checking whether the operator API group is registered.
-	operatorManaged, err := discovery.IsOperatorManaged(m.k8sClient.Discovery())
-	if err != nil {
-		return fmt.Errorf("checking install type: %w", err)
-	}
 	installType := "manifest"
-	if operatorManaged {
+	if m.operatorManaged {
 		installType = "operator"
 	}
 	logCtx.WithFields(logrus.Fields{
@@ -380,8 +400,16 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 		"installType":      installType,
 	}).Info("Detected installation details")
 
+	// In manifest mode, ensure v3 CRDs are installed before proceeding.
+	if !m.operatorManaged {
+		if err := m.ensureV3CRDs(logCtx); err != nil {
+			return err
+		}
+	}
+
 	// Save and delete the APIService to unregister the API server. This will
 	// route future requests to the projectcalico.org/v3 API to CRDs instead.
+	// In manifest mode this is a no-op if no aggregated APIService exists.
 	if err := m.saveAndDeleteAPIService(logCtx, dm); err != nil {
 		return err
 	}
@@ -581,55 +609,98 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *DatastoreM
 // before transitioning to Complete. It checks the calico-node DaemonSet for
 // the CALICO_API_GROUP env var and verifies the rollout is fully complete.
 func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *DatastoreMigration) error {
-	ds, err := m.k8sClient.AppsV1().DaemonSets(names.OwnNamespace()).Get(m.ctx, "calico-node", metav1.GetOptions{})
-	if err != nil {
-		logCtx.WithError(err).Info("Failed to get calico-node DaemonSet, will retry")
+	ns := names.OwnNamespace()
+
+	// Check calico-node and typha (if present) for v3 API group configuration
+	// and rollout completion.
+	componentsToCheck := []string{"calico-node"}
+	typhaDS, err := m.k8sClient.AppsV1().DaemonSets(ns).Get(m.ctx, "calico-typha", metav1.GetOptions{})
+	if err == nil {
+		componentsToCheck = append(componentsToCheck, "calico-typha")
+	} else if !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
+		logCtx.WithError(err).Info("Failed to check for calico-typha DaemonSet, will retry")
 		return requeueAfter(m.waitingPollInterval)
 	}
-
-	// Check if calico-node has been configured with the v3 API group.
-	hasV3Env := false
-	for _, c := range ds.Spec.Template.Spec.Containers {
-		for _, e := range c.Env {
-			if e.Name == "CALICO_API_GROUP" && e.Value == "projectcalico.org/v3" {
-				hasV3Env = true
-				break
-			}
+	// Also check for typha as a Deployment (used in some manifest installs).
+	var typhaDeploy *appsv1.Deployment
+	if typhaDS == nil {
+		typhaDeploy, err = m.k8sClient.AppsV1().Deployments(ns).Get(m.ctx, "calico-typha", metav1.GetOptions{})
+		if err != nil && !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
+			logCtx.WithError(err).Info("Failed to check for calico-typha Deployment, will retry")
+			return requeueAfter(m.waitingPollInterval)
+		}
+		if err == nil {
+			componentsToCheck = append(componentsToCheck, "calico-typha")
 		}
 	}
-	if !hasV3Env {
-		logCtx.Info("Waiting for calico-node DaemonSet to be configured with CALICO_API_GROUP=projectcalico.org/v3")
-		dm.Status.Message = "Waiting for operator to configure calico-node with v3 API group"
+
+	// Check each component for the v3 API group env var.
+	var needV3 []string
+	for _, name := range componentsToCheck {
+		var podSpec *corev1.PodSpec
+		if name == "calico-node" {
+			ds, getErr := m.k8sClient.AppsV1().DaemonSets(ns).Get(m.ctx, name, metav1.GetOptions{})
+			if getErr != nil {
+				logCtx.WithError(getErr).WithField("component", name).Info("Failed to get DaemonSet, will retry")
+				return requeueAfter(m.waitingPollInterval)
+			}
+			podSpec = &ds.Spec.Template.Spec
+		} else if typhaDS != nil {
+			podSpec = &typhaDS.Spec.Template.Spec
+		} else if typhaDeploy != nil {
+			podSpec = &typhaDeploy.Spec.Template.Spec
+		}
+		if podSpec != nil && !hasV3APIGroupEnv(podSpec) {
+			needV3 = append(needV3, name)
+		}
+	}
+	if len(needV3) > 0 {
+		logCtx.WithField("components", needV3).Info("Waiting for components to be configured with v3 API group")
+		if m.operatorManaged {
+			dm.Status.Message = fmt.Sprintf("Waiting for operator to configure %s with v3 API group", joinComponents(needV3))
+		} else {
+			dm.Status.Message = fmt.Sprintf("Waiting for user to set CALICO_API_GROUP=projectcalico.org/v3 on %s", joinComponents(needV3))
+		}
 		return m.updateStatus(dm)
 	}
 
-	// Verify the rollout is complete — all pods running the new template.
+	// Verify calico-node rollout is complete.
+	ds, err := m.k8sClient.AppsV1().DaemonSets(ns).Get(m.ctx, "calico-node", metav1.GetOptions{})
+	if err != nil {
+		return requeueAfter(m.waitingPollInterval)
+	}
 	if ds.Status.ObservedGeneration != ds.Generation {
-		logCtx.Info("Waiting for calico-node DaemonSet rollout to be observed")
 		dm.Status.Message = "Waiting for calico-node rollout to begin"
 		return m.updateStatus(dm)
 	}
 	if ds.Status.UpdatedNumberScheduled != ds.Status.DesiredNumberScheduled {
-		logCtx.WithFields(logrus.Fields{
-			"updatedNumberScheduled": ds.Status.UpdatedNumberScheduled,
-			"desiredNumberScheduled": ds.Status.DesiredNumberScheduled,
-		}).Info("Waiting for calico-node DaemonSet rollout to complete")
 		dm.Status.Message = fmt.Sprintf("Waiting for calico-node rollout (%d/%d updated)", ds.Status.UpdatedNumberScheduled, ds.Status.DesiredNumberScheduled)
 		return m.updateStatus(dm)
 	}
 	if ds.Status.NumberUnavailable > 0 {
-		logCtx.WithField("numberUnavailable", ds.Status.NumberUnavailable).Info("Waiting for all calico-node pods to be available")
 		dm.Status.Message = fmt.Sprintf("Waiting for calico-node pods to be available (%d unavailable)", ds.Status.NumberUnavailable)
 		return m.updateStatus(dm)
 	}
 
-	logCtx.Info("All calico-node pods running with v3 API group, transitioning to Complete")
+	logCtx.Info("All components running with v3 API group, transitioning to Complete")
 	now := metav1.Now()
 	dm.Status.Phase = DatastoreMigrationPhaseComplete
 	dm.Status.Message = "Migration complete"
 	dm.Status.CompletedAt = &now
 	setPhaseMetric(DatastoreMigrationPhaseComplete)
-	return m.updateStatus(dm)
+	if err := m.updateStatus(dm); err != nil {
+		return err
+	}
+
+	// In manifest mode, restart so kube-controllers re-discovers the v3 API
+	// group on startup. In operator mode, the operator handles the restart.
+	// Skip the restart if the CR is being deleted - let the finalizer finish
+	// cleanup first.
+	if !m.operatorManaged && dm.DeletionTimestamp == nil {
+		logCtx.Info("Migration complete, restarting kube-controllers to pick up v3 API group")
+		os.Exit(0)
+	}
+	return nil
 }
 
 // handleDeletion runs the finalizer logic when the DatastoreMigration CR is being deleted.
@@ -640,6 +711,10 @@ func (m *migrationController) handleDeletion(logCtx *logrus.Entry, dm *Datastore
 
 	switch dm.Status.Phase {
 	case DatastoreMigrationPhaseComplete:
+		dm.Status.Message = "Cleaning up v1 CRDs"
+		if err := m.updateStatus(dm); err != nil {
+			logCtx.WithError(err).Warn("Failed to update status message")
+		}
 		return m.handleCompletedCleanup(logCtx, dm)
 	case DatastoreMigrationPhaseConverged:
 		// Once converged, the operator may have started rolling out pods with
@@ -921,6 +996,45 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 // unlockV3CRDDatastore sets DatastoreReady=true on the v3 ClusterInformation,
 // signaling components that have switched to v3 to resume normal operation.
 //
+// ensureV3CRDs checks that v3 CRDs (projectcalico.org) are installed. In
+// manifest mode, the user must install them before migration can proceed.
+func (m *migrationController) ensureV3CRDs(logCtx *logrus.Entry) error {
+	crdClient := m.dynamicClient.Resource(crdGVR)
+	crdList, err := crdClient.List(m.ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("listing CRDs: %w", err)
+	}
+	for _, crd := range crdList.Items {
+		group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+		if group == "projectcalico.org" {
+			logCtx.Info("v3 CRDs (projectcalico.org) are installed")
+			return nil
+		}
+	}
+	return fmt.Errorf("v3 CRDs (projectcalico.org) not installed — apply them before starting migration (kubectl apply --server-side -f api/config/crd/)")
+}
+
+// hasV3APIGroupEnv returns true if any container in the pod spec has
+// CALICO_API_GROUP=projectcalico.org/v3.
+func hasV3APIGroupEnv(spec *corev1.PodSpec) bool {
+	for _, c := range spec.Containers {
+		for _, e := range c.Env {
+			if e.Name == "CALICO_API_GROUP" && e.Value == "projectcalico.org/v3" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// joinComponents formats component names for status messages.
+func joinComponents(names []string) string {
+	if len(names) == 1 {
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
 // The v1 ClusterInformation is intentionally left locked. Components still
 // reading v1 (before their rolling update to v3 mode) will see the lock and
 // block CNI ADD/DEL operations. This prevents IPAM leaks during the rollout
@@ -974,6 +1088,7 @@ func (m *migrationController) setV1ClusterInfoReady(logCtx *logrus.Entry, ready 
 
 func (m *migrationController) setFailedStatus(dm *DatastoreMigration, message string) {
 	dm.Status.Phase = DatastoreMigrationPhaseFailed
+	dm.Status.Message = message
 	setPhaseMetric(DatastoreMigrationPhaseFailed)
 	dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
 		Type:               conditionTypeFailed,
