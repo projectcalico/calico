@@ -15,19 +15,41 @@
 package discovery
 
 import (
+	"context"
+
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 )
 
-// IsOperatorManaged returns true if the cluster is managed by the Tigera operator,
-// detected by checking whether the operator.tigera.io API group is registered.
-func IsOperatorManaged(client discovery.DiscoveryInterface) (bool, error) {
-	_, err := client.ServerResourcesForGroupVersion("operator.tigera.io/v1")
-	if err == nil {
-		return true, nil
+// IsOperatorManaged returns true if the cluster is managed by the Tigera operator.
+// It checks both that the operator.tigera.io API group is registered and that an
+// Installation CR exists. The CRDs alone are not sufficient since they may be
+// installed as part of the Calico CRD charts without the operator actually running.
+func IsOperatorManaged(ctx context.Context, discoveryClient discovery.DiscoveryInterface, dynamicClient dynamic.Interface) (bool, error) {
+	_, err := discoveryClient.ServerResourcesForGroupVersion("operator.tigera.io/v1")
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
 	}
-	if kerrors.IsNotFound(err) {
-		return false, nil
+
+	// The API group exists — check if an actual Installation CR is present.
+	installationGVR := schema.GroupVersionResource{
+		Group:    "operator.tigera.io",
+		Version:  "v1",
+		Resource: "installations",
 	}
-	return false, err
+	list, err := dynamicClient.Resource(installationGVR).List(ctx, metav1.ListOptions{Limit: 1})
+	if err != nil {
+		if kerrors.IsNotFound(err) || kerrors.IsForbidden(err) {
+			// CRD doesn't exist or no RBAC — treat as not operator-managed.
+			return false, nil
+		}
+		return false, err
+	}
+	return len(list.Items) > 0, nil
 }
