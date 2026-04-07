@@ -214,7 +214,19 @@ PROD_BPF_GPL_PROGS=$(addprefix bin/bpf/, $(notdir $(BPF_GPL_O_FILES)))
 PROD_BPF_PROGS=$(PROD_BPF_APACHE_PROGS) $(PROD_BPF_GPL_PROGS)
 
 .PHONY: build-bpf clean-bpf
+# PRE_BUILT_BPF_OBJECTS: when set, skip compiling BPF .o programs and use
+# pre-built objects already present in bin/bpf/.  libbpf is still built
+# because it is architecture-specific (linked into the Go binary via CGO).
+# BPF bytecode targets the BPF VM and is architecture-independent across
+# amd64, arm64, and ppc64le, so objects compiled once can be reused.
+ifdef PRE_BUILT_BPF_OBJECTS
+build-bpf: $(LIBBPF_A)
+	@test -d bin/bpf && test -n "$$(ls bin/bpf/*.o 2>/dev/null)" || \
+		{ echo "ERROR: PRE_BUILT_BPF_OBJECTS is set but bin/bpf/ has no .o files"; exit 1; }
+	@echo "Using pre-built BPF objects from bin/bpf/"
+else
 build-bpf: $(LIBBPF_A) $(PROD_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
+endif
 
 $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	rm -rf bin/bpf

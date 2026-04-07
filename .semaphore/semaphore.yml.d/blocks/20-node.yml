@@ -22,6 +22,8 @@
             when: "pull_request =~ '.+'"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+          # Cache BPF objects for multi-arch reuse (no-op if Felix Build already stored them).
+          - (cd ../felix && cache store bpf-objects-${SEMAPHORE_GIT_SHA} bin/bpf)
         env_vars:
           - name: STORE_BUILD_CACHE
             value: "true"
@@ -46,7 +48,10 @@
               - ppc64le
               - s390x
         commands:
-          - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
+          # Restore cached BPF objects built on amd64.  BPF bytecode targets the
+          # BPF VM and is architecture-independent, so objects can be reused.
+          - (cd ../felix && cache restore bpf-objects-${SEMAPHORE_GIT_SHA})
+          - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH PRE_BUILT_BPF_OBJECTS=true
       - name: "Node: build Windows archive"
         commands:
           - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
@@ -68,7 +73,9 @@
     jobs:
       - name: "Node: build arm64 image"
         commands:
-          - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
+          # Restore cached BPF objects built on amd64; BPF bytecode is arch-independent.
+          - (cd ../felix && cache restore bpf-objects-${SEMAPHORE_GIT_SHA})
+          - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64 PRE_BUILT_BPF_OBJECTS=true
 - name: "Node: kind-cluster tests"
   run:
     # KinD tests also build and run all the other images.
