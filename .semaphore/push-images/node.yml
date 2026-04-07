@@ -29,10 +29,15 @@ blocks:
     skip:
       when: "branch !~ '.+'"
     task:
+      prologue:
+        commands:
+          # Restore cached BPF objects built on amd64 during the build pipeline.
+          # BPF bytecode is arch-independent, so we reuse across all architectures.
+          - (cd felix && cache restore bpf-objects-${SEMAPHORE_GIT_SHA})
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node cd EXCLUDEARCH=arm64 CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node cd EXCLUDEARCH=arm64 CONFIRM=true PRE_BUILT_BPF_OBJECTS=true; fi
         - name: Windows
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node release-windows CONFIRM=true; fi
@@ -44,12 +49,16 @@ blocks:
       agent:
         machine:
           type: s1-aws-arm64-4
+      prologue:
+        commands:
+          # Restore cached BPF objects built on amd64 during the build pipeline.
+          - (cd felix && cache restore bpf-objects-${SEMAPHORE_GIT_SHA})
       jobs:
         - name: Linux arm64
           commands:
             # Don't call `make -C node cd ARCHES=arm64` here because node image-all also builds
             # FIPS images that will fail on native arm64 runners. They are built in the previous block.
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=arm64 VALIDARCHES=arm64 CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=arm64 VALIDARCHES=arm64 CONFIRM=true PRE_BUILT_BPF_OBJECTS=true; fi
   - name: Publish node multi-arch manifests
     dependencies:
       - Publish node images

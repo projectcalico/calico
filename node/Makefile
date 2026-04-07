@@ -195,6 +195,16 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
 
+# PRE_BUILT_BPF_OBJECTS: when set, skip compiling BPF programs and copy
+# pre-built objects from felix/bin/bpf/ directly.  BPF bytecode targets the
+# BPF VM and is architecture-independent across amd64/arm64/ppc64le.
+ifdef PRE_BUILT_BPF_OBJECTS
+filesystem/usr/lib/calico/bpf:
+	rm -rf $@ && mkdir -p $@
+	@test -d ../felix/bin/bpf && test -n "$$(ls ../felix/bin/bpf/*.o 2>/dev/null)" || \
+		{ echo "ERROR: PRE_BUILT_BPF_OBJECTS is set but ../felix/bin/bpf/ has no .o files"; exit 1; }
+	cp -r ../felix/bin/bpf/* $@
+else
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
 	# Clean stale build artifacts that may reference headers from a previous
@@ -204,6 +214,7 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	make -C ../felix build-bpf ARCH=$(ARCH)
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
+endif
 
 # We need CGO when compiling in Felix for BPF support.
 # Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
