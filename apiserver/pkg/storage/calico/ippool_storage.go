@@ -92,6 +92,7 @@ func (gc IPPoolConverter) convertToLibcalico(aapiObj runtime.Object) resourceObj
 	lcgIPPool.Kind = api.KindIPPool
 	lcgIPPool.APIVersion = api.GroupVersionCurrent
 	lcgIPPool.Spec = aapiIPPool.Spec
+	lcgIPPool.Status = aapiIPPool.Status
 	return lcgIPPool
 }
 
@@ -99,6 +100,7 @@ func (gc IPPoolConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj 
 	lcgIPPool := libcalicoObject.(*api.IPPool)
 	aapiIPPool := aapiObj.(*api.IPPool)
 	aapiIPPool.Spec = lcgIPPool.Spec
+	aapiIPPool.Status = lcgIPPool.Status
 	aapiIPPool.TypeMeta = lcgIPPool.TypeMeta
 	aapiIPPool.ObjectMeta = lcgIPPool.ObjectMeta
 }

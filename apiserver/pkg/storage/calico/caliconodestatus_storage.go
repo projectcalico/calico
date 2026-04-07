@@ -92,6 +92,7 @@ func (gc CalicoNodeStatusConverter) convertToLibcalico(aapiObj runtime.Object) r
 	lcgCalicoNodeStatus.Kind = api.KindCalicoNodeStatus
 	lcgCalicoNodeStatus.APIVersion = api.GroupVersionCurrent
 	lcgCalicoNodeStatus.Spec = aapiCalicoNodeStatus.Spec
+	lcgCalicoNodeStatus.Status = aapiCalicoNodeStatus.Status
 	return lcgCalicoNodeStatus
 }
 

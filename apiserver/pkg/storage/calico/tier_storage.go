@@ -94,6 +94,7 @@ func (tc TierConverter) convertToLibcalico(aapiObj runtime.Object) resourceObjec
 	lcgTier.Kind = v3.KindTier
 	lcgTier.APIVersion = v3.GroupVersionCurrent
 	lcgTier.Spec = aapiTier.Spec
+	lcgTier.Status = aapiTier.Status
 	return lcgTier
 }
 
@@ -101,6 +102,7 @@ func (tc TierConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj ru
 	lcgTier := libcalicoObject.(*v3.Tier)
 	aapiTier := aapiObj.(*v3.Tier)
 	aapiTier.Spec = lcgTier.Spec
+	aapiTier.Status = lcgTier.Status
 	aapiTier.TypeMeta = lcgTier.TypeMeta
 	aapiTier.ObjectMeta = lcgTier.ObjectMeta
 }
