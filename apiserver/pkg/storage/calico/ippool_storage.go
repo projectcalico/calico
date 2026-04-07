@@ -20,6 +20,17 @@ import (
 // NewIPPoolStorage creates a new libcalico-based storage.Interface implementation for IPPools
 func NewIPPoolStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	c := CreateClientFromConfig()
+	return newIPPoolStorage(opts, c, false)
+}
+
+// NewIPPoolStatusStorage creates a storage that uses the UpdateStatus method for
+// writes, ensuring the status subresource is used when persisting changes.
+func NewIPPoolStatusStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
+	c := CreateClientFromConfig()
+	return newIPPoolStorage(opts, c, true)
+}
+
+func newIPPoolStorage(opts Options, c clientv3.Interface, forStatus bool) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*api.IPPool)
@@ -28,6 +39,9 @@ func NewIPPoolStorage(opts Options) (registry.DryRunnableStorage, factory.Destro
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*api.IPPool)
+		if forStatus {
+			return c.IPPools().UpdateStatus(ctx, res, oso)
+		}
 		return c.IPPools().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {

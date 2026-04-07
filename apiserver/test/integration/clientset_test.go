@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1847,6 +1847,9 @@ func TestCalicoNodeStatusClient(t *testing.T) {
 			if err := testCalicoNodeStatusClient(client, name); err != nil {
 				t.Fatal(err)
 			}
+			if err := testCalicoNodeStatusUpdateStatus(client); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 
@@ -1898,6 +1901,97 @@ func testCalicoNodeStatusClient(client calicoclient.Interface, name string) erro
 	err = caliconodestatusClient.Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("object should be deleted (%s)", err)
+	}
+
+	return nil
+}
+
+func testCalicoNodeStatusUpdateStatus(client calicoclient.Interface) error {
+	seconds := uint32(10)
+	caliconodestatusClient := client.ProjectcalicoV3().CalicoNodeStatuses()
+	caliconodestatus := &v3.CalicoNodeStatus{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-caliconodestatus-updatestatus"},
+		Spec: v3.CalicoNodeStatusSpec{
+			Node: "node1",
+			Classes: []v3.NodeStatusClassType{
+				v3.NodeStatusClassTypeAgent,
+			},
+			UpdatePeriodSeconds: &seconds,
+		},
+		Status: v3.CalicoNodeStatusStatus{
+			LastUpdated: metav1.Now(),
+		},
+	}
+	ctx := context.Background()
+
+	// Create with status populated. The status subresource should strip
+	// the status on create.
+	created, err := caliconodestatusClient.Create(ctx, caliconodestatus, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating caliconodestatus (%s)", err)
+	}
+	if !created.Status.LastUpdated.IsZero() {
+		return fmt.Errorf("status was set on create: %v", created.Status)
+	}
+
+	// Use UpdateStatus to set the status.
+	toUpdate := created.DeepCopy()
+	toUpdate.Status.LastUpdated = metav1.Now()
+	toUpdate.Status.Agent = v3.CalicoNodeAgentStatus{
+		BIRDV4: v3.BGPDaemonStatus{State: v3.BGPDaemonStateReady},
+	}
+	updated, err := caliconodestatusClient.UpdateStatus(ctx, toUpdate, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error calling UpdateStatus (%s)", err)
+	}
+	if updated.Status.LastUpdated.IsZero() {
+		return fmt.Errorf("UpdateStatus did not persist status")
+	}
+	if updated.Status.Agent.BIRDV4.State != v3.BGPDaemonStateReady {
+		return fmt.Errorf("UpdateStatus did not persist agent status")
+	}
+
+	// Use Update to modify spec, verify status is not wiped.
+	specUpdate := updated.DeepCopy()
+	newSeconds := uint32(20)
+	specUpdate.Spec.UpdatePeriodSeconds = &newSeconds
+	specUpdate.Status = v3.CalicoNodeStatusStatus{}
+	afterSpecUpdate, err := caliconodestatusClient.Update(ctx, specUpdate, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error calling Update (%s)", err)
+	}
+	if *afterSpecUpdate.Spec.UpdatePeriodSeconds != 20 {
+		return fmt.Errorf("Update did not persist spec change")
+	}
+	if afterSpecUpdate.Status.LastUpdated.IsZero() {
+		return fmt.Errorf("Update wiped status")
+	}
+	if afterSpecUpdate.Status.Agent.BIRDV4.State != v3.BGPDaemonStateReady {
+		return fmt.Errorf("Update wiped agent status")
+	}
+
+	// Verify UpdateStatus does not modify spec or labels.
+	statusUpdate := afterSpecUpdate.DeepCopy()
+	statusUpdate.Labels = map[string]string{"should": "not-persist"}
+	statusUpdate.Spec.UpdatePeriodSeconds = &seconds
+	statusUpdate.Status.Agent.BIRDV4.State = v3.BGPDaemonStateNotReady
+	afterStatusUpdate, err := caliconodestatusClient.UpdateStatus(ctx, statusUpdate, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error calling UpdateStatus for isolation check (%s)", err)
+	}
+	if afterStatusUpdate.Status.Agent.BIRDV4.State != v3.BGPDaemonStateNotReady {
+		return fmt.Errorf("UpdateStatus did not persist new status")
+	}
+	if _, ok := afterStatusUpdate.Labels["should"]; ok {
+		return fmt.Errorf("UpdateStatus persisted labels")
+	}
+	if *afterStatusUpdate.Spec.UpdatePeriodSeconds != 20 {
+		return fmt.Errorf("UpdateStatus modified spec")
+	}
+
+	err = caliconodestatusClient.Delete(ctx, "test-caliconodestatus-updatestatus", metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("error deleting caliconodestatus (%s)", err)
 	}
 
 	return nil
