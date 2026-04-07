@@ -1663,7 +1663,7 @@ kind-deploy:
 # cluster, and restart pods.
 .PHONY: kind-reload
 kind-reload:
-	$(MAKE) -j$(shell nproc) kind-build-images
+	$(MAKE) -j$$(nproc) kind-build-images
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
@@ -1690,8 +1690,8 @@ $(ENVTEST_ASSETS_MARKER):
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
 	touch $@
 
-# Minimum supported Kubernetes version for CEL XValidation (GA in 1.29).
-MIN_K8S_VERSION ?= v1.29.0
+# Minimum supported Kubernetes version for CEL IP/CIDR library (available in 1.31+).
+MIN_K8S_VERSION ?= v1.31.0
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
 ENVTEST_MIN_K8S_MINOR := $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2)

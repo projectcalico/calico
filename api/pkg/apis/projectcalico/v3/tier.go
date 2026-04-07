@@ -37,6 +37,9 @@ const (
 // +kubebuilder:validation:XValidation:rule="self.metadata.name == 'kube-admin' ? (has(self.spec.defaultAction) && self.spec.defaultAction == 'Pass') : true", message="The 'kube-admin' tier must have default action 'Pass'",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="self.metadata.name == 'kube-baseline' ? (has(self.spec.defaultAction) && self.spec.defaultAction == 'Pass') : true", message="The 'kube-baseline' tier must have default action 'Pass'",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="self.metadata.name == 'default' ? (has(self.spec.defaultAction) && self.spec.defaultAction == 'Deny') : true", message="The 'default' tier must have default action 'Deny'",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.metadata.name != 'default' || (has(self.spec.order) && self.spec.order == 1000000.0)",message="default tier order must be 1000000",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.metadata.name != 'kube-admin' || (has(self.spec.order) && self.spec.order == 1000.0)",message="kube-admin tier order must be 1000",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.metadata.name != 'kube-baseline' || (has(self.spec.order) && self.spec.order == 10000000.0)",message="kube-baseline tier order must be 10000000",reason=FieldValueInvalid
 type Tier struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
@@ -70,8 +73,8 @@ type TierSpec struct {
 	// last.  Tiers with identical order will be applied in alphanumerical order based
 	// on the Tier "Name".
 	Order *float64 `json:"order,omitempty" protobuf:"bytes,1,opt,name=order"`
-	// DefaultAction specifies the action applied to workloads selected by a policy in the tier,
-	// but not rule matched the workload's traffic.
+	// DefaultAction specifies the action applied to traffic that matches a policy in the tier
+	// but does not match any rule within that policy.
 	// [Default: Deny]
 	// +kubebuilder:default=Deny
 	// +kubebuilder:validation:Enum=Pass;Deny

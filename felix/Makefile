@@ -62,9 +62,9 @@ SRC_FILES += $(GENERATED_FILES)
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a cross-compilation run.
+ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
+# Required for eBPF support.
+# We need to force target arch build image to be used in a cross-compilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -122,11 +122,16 @@ clean-generated:
 ###############################################################################
 BUILD_TARGETS:=bin/calico-felix
 
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
-# Currently CGO can be enabled in ARM64 and AMD64 builds.
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
+# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
 CGO_ENABLED=1
+# Normalize userspace types to ensure consistency across architectures.
+ARCH_CGO_CFLAGS=
+ifeq ($(ARCH),ppc64le)
+	ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
+endif
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 FV_RACE_DETECTOR_ENABLED?=true
 BUILD_TARGETS+=build-bpf
 else
@@ -151,15 +156,14 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 libbpf: $(LIBBPF_A)
 clone-libbpf: $(LIBBPF_FILE_CREATED)
 
-$(LIBBPF_FILE_CREATED):
+$(LIBBPF_FILE_CREATED): register
 	@echo Cloning libbpf
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
 	mkdir -p bpf-gpl/include/src/$(ARCH)
-	$(MAKE) register ARCH=$(ARCH)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
@@ -168,7 +172,7 @@ bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le ))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
@@ -217,14 +221,12 @@ $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	mkdir -p bin/bpf
 	cp $(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES) bin/bpf
 
-$(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
-	$(MAKE) register ARCH=$(ARCH)
-	$(DOCKER_GO_BUILD) make -j 16 -C bpf-apache all
+$(BPF_APACHE_O_FILES) &: register $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
+	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache all
 	touch -c $@
 
-$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile
-	$(MAKE) register ARCH=$(ARCH)
-	$(DOCKER_GO_BUILD) make -j 16 -C bpf-gpl all ut-objs map-objs
+$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: register $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile
+	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-gpl all ut-objs map-objs
 	touch -c $@
 
 bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
@@ -232,8 +234,8 @@ bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
 
 clean-bpf:
 	rm -rf bpf-gpl/*.d bpf-apache/*.d bin/bpf
-	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
-	                          make -j -C bpf-gpl clean"
+	$(DOCKER_GO_BUILD) sh -c "make -j$$(nproc) -C bpf-apache clean && \
+	                          make -j$$(nproc) -C bpf-gpl clean"
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/

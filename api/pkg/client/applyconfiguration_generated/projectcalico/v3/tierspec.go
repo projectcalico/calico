@@ -19,8 +19,8 @@ type TierSpecApplyConfiguration struct {
 	// last.  Tiers with identical order will be applied in alphanumerical order based
 	// on the Tier "Name".
 	Order *float64 `json:"order,omitempty"`
-	// DefaultAction specifies the action applied to workloads selected by a policy in the tier,
-	// but not rule matched the workload's traffic.
+	// DefaultAction specifies the action applied to traffic that matches a policy in the tier
+	// but does not match any rule within that policy.
 	// [Default: Deny]
 	DefaultAction *projectcalicov3.Action `json:"defaultAction,omitempty"`
 }

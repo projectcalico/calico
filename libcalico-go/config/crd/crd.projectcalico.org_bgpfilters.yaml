@@ -60,6 +60,7 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
+                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -195,6 +196,7 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
+                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -330,6 +332,7 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
+                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -465,6 +468,7 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
+                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
