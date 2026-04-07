@@ -50,14 +50,15 @@ rules:
       - create
       - update
       - delete
-  # Needed for policy name migrator to check calico/node daemonset status.
+  # Needed for migration controller to watch calico-node and calico-typha status.
   - apiGroups: ["apps"]
     resources:
       - daemonsets
+      - deployments
     verbs:
       - get
-    resourceNames:
-      - calico-node
+      - list
+      - watch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -196,14 +197,15 @@ rules:
       - create
       - update
       - delete
-  # Needed for policy name migrator to check calico/node daemonset status.
+  # Needed for migration controller to watch calico-node and calico-typha status.
   - apiGroups: ["apps"]
     resources:
       - daemonsets
+      - deployments
     verbs:
       - get
-    resourceNames:
-      - calico-node
+      - list
+      - watch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
