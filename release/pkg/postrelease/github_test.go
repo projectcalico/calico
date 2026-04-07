@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-github/v53/github"
 
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
@@ -90,7 +91,7 @@ func TestGitHubReleaseNotes(t *testing.T) {
 
 	checkVersion(t, releaseVersion)
 
-	_, _, resp, err := githubClient().Repositories.GetContents(context.Background(), githubOrg, githubRepo, fmt.Sprintf("release-notes/%s-release-notes.md", releaseVersion), &github.RepositoryContentGetOptions{
+	_, _, resp, err := githubClient().Repositories.GetContents(context.Background(), githubOrg, githubRepo, fmt.Sprintf("%s/%s-release-notes.md", outputs.ReleaseNotesDir, releaseVersion), &github.RepositoryContentGetOptions{
 		Ref: releaseVersion,
 	})
 	if err != nil || resp.StatusCode != http.StatusOK {

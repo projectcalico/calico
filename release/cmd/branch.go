@@ -51,7 +51,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				releaseBranchPrefixFlag,
 				devTagSuffixFlag,
 				operatorBranchFlag,
-				publishBranchFlag,
+				localFlag,
 				skipValidationFlag,
 			},
 			Action: func(_ context.Context, c *cli.Command) error {
@@ -74,7 +74,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					branch.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					branch.WithRepoManager(calicoManager),
 					branch.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					branch.WithPublish(c.Bool(publishBranchFlag.Name)))
+					branch.WithPublish(!c.Bool(localFlag.Name)))
 				return m.CutReleaseBranch()
 			},
 		},

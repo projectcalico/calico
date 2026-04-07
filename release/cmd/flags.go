@@ -106,6 +106,16 @@ var (
 	}
 )
 
+// Mode flags control the execution mode of the release tool.
+var (
+	localFlag = &cli.BoolFlag{
+		Name:    "local",
+		Usage:   "Run all actions locally without remote changes",
+		Sources: cli.EnvVars("LOCAL"),
+		Value:   false,
+	}
+)
+
 // Validation flags are flags used to control validation
 var (
 	skipValidationFlag = &cli.BoolFlag{

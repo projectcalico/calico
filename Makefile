@@ -191,16 +191,21 @@ e2e-test-adminpolicy:
 release/bin/release: $(shell find ./release -type f -name '*.go')
 	$(MAKE) -C release
 
+# Prepare for a release (update version references, charts, manifests).
+release-prep: release/bin/release bin/gh
+	@OPERATOR_BRANCH=$(OPERATOR_BRANCH) release/bin/release release prep
+
 # Install ghr for publishing to github.
 bin/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
 
 # Install GitHub CLI
 bin/gh:
-	curl -sSL -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
-	tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
-	chmod +x $@
-	rm bin/gh.tgz
+	@mkdir -p bin
+	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	@tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
+	@chmod +x $@
+	@rm bin/gh.tgz
 
 # Build a release.
 release: release/bin/release
@@ -276,5 +281,5 @@ update-pins: update-go-build-pin update-calico-base-pin
 bin/gotestsum:
 	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
-postrelease-checks: release/bin/release bin/gotestsum
+postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate
