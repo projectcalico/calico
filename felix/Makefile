@@ -158,12 +158,12 @@ clone-libbpf: $(LIBBPF_FILE_CREATED)
 
 $(LIBBPF_FILE_CREATED): register
 	@echo Cloning libbpf
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$(nproc) -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
 	mkdir -p bpf-gpl/include/src/$(ARCH)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
@@ -222,11 +222,11 @@ $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	cp $(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES) bin/bpf
 
 $(BPF_APACHE_O_FILES) &: register $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
-	$(DOCKER_GO_BUILD) make -j$(shell nproc) -C bpf-apache all
+	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache all
 	touch -c $@
 
 $(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: register $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile
-	$(DOCKER_GO_BUILD) make -j$(shell nproc) -C bpf-gpl all ut-objs map-objs
+	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-gpl all ut-objs map-objs
 	touch -c $@
 
 bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
@@ -234,8 +234,8 @@ bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
 
 clean-bpf:
 	rm -rf bpf-gpl/*.d bpf-apache/*.d bin/bpf
-	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
-	                          make -j -C bpf-gpl clean"
+	$(DOCKER_GO_BUILD) sh -c "make -j$$(nproc) -C bpf-apache clean && \
+	                          make -j$$(nproc) -C bpf-gpl clean"
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/
