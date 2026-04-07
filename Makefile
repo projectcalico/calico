@@ -128,7 +128,7 @@ GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
 gen-deps-files:
-	$(MAKE) -j $(DEP_FILES)
+	$(MAKE) -j$$(nproc) $(DEP_FILES)
 
 $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/*
 	@{ \
