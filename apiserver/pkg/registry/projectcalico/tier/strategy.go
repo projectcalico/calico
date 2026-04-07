@@ -43,9 +43,14 @@ func (apiServerStrategy) NamespaceScoped() bool {
 }
 
 func (apiServerStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
+	tier := obj.(*calico.Tier)
+	tier.Status = calico.TierStatus{}
 }
 
 func (apiServerStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newTier := obj.(*calico.Tier)
+	oldTier := old.(*calico.Tier)
+	newTier.Status = oldTier.Status
 }
 
 func (apiServerStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {

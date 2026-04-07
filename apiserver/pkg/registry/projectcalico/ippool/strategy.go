@@ -31,9 +31,14 @@ func (apiServerStrategy) NamespaceScoped() bool {
 }
 
 func (apiServerStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
+	pool := obj.(*calico.IPPool)
+	pool.Status = nil
 }
 
 func (apiServerStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newPool := obj.(*calico.IPPool)
+	oldPool := old.(*calico.IPPool)
+	newPool.Status = oldPool.Status
 }
 
 func (apiServerStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {

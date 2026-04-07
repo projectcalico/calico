@@ -32,9 +32,14 @@ func (apiServerStrategy) NamespaceScoped() bool {
 }
 
 func (apiServerStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
+	cns := obj.(*calico.CalicoNodeStatus)
+	cns.Status = calico.CalicoNodeStatusStatus{}
 }
 
 func (apiServerStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newCNS := obj.(*calico.CalicoNodeStatus)
+	oldCNS := old.(*calico.CalicoNodeStatus)
+	newCNS.Status = oldCNS.Status
 }
 
 func (apiServerStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
