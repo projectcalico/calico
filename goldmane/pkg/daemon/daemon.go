@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -189,7 +189,7 @@ func Run(ctx context.Context, cfg Config) {
 	// Create a flow collector to receive flows from clients, connected goldmane.
 	collector := server.NewFlowCollector(gm)
 	collector.RegisterWith(grpcServer)
-	go collector.Run()
+	go collector.Run(ctx)
 
 	// Start Goldmane, waiting for it to be ready to receive requests before continuing.
 	<-gm.Run(storage.GetStartTime(int(cfg.AggregationWindow.Seconds())))
