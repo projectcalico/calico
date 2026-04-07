@@ -4040,6 +4040,7 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
         '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
