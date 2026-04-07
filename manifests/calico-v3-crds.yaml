@@ -137,15 +137,12 @@ spec:
                   items:
                     properties:
                       name:
-                        maxLength: 253
                         type: string
                       value:
-                        maxLength: 40
                         pattern: ^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
-                  maxItems: 500
                   type: array
                   x-kubernetes-list-type: set
                 ignoredInterfaces:
@@ -202,12 +199,9 @@ spec:
                       communities:
                         items:
                           type: string
-                        maxItems: 50
                         type: array
-                        x-kubernetes-list-type: atomic
                     type: object
                     x-kubernetes-map-type: atomic
-                  maxItems: 500
                   type: array
                   x-kubernetes-list-type: set
                 programClusterRoutes:
@@ -267,11 +261,6 @@ spec:
                   rule:
                     "!has(self.nodeMeshMaxRestartTime) || !has(self.nodeToNodeMeshEnabled)
                     || self.nodeToNodeMeshEnabled == true"
-                - message: communities are defined but not used in prefixAdvertisements
-                  reason: FieldValueInvalid
-                  rule:
-                    "!has(self.communities) || size(self.communities) == 0 || (has(self.prefixAdvertisements)
-                    && size(self.prefixAdvertisements) > 0)"
           required:
             - metadata
             - spec
@@ -321,7 +310,6 @@ spec:
                           format: int32
                           type: integer
                         type: array
-                        x-kubernetes-list-type: atomic
                       cidr:
                         format: cidr
                         maxLength: 18
@@ -336,13 +324,11 @@ spec:
                             maxItems: 1
                             minItems: 1
                             type: array
-                            x-kubernetes-list-type: atomic
                         required:
                           - values
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
-                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -375,7 +361,6 @@ spec:
                                   maxItems: 10
                                   minItems: 1
                                   type: array
-                                  x-kubernetes-list-type: atomic
                               required:
                                 - prefix
                               type: object
@@ -395,7 +380,6 @@ spec:
                         maxItems: 10
                         minItems: 1
                         type: array
-                        x-kubernetes-list-type: atomic
                       peerType:
                         enum:
                           - eBGP
@@ -443,7 +427,6 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
-                  x-kubernetes-list-type: atomic
                 exportV6:
                   items:
                     properties:
@@ -457,7 +440,6 @@ spec:
                           format: int32
                           type: integer
                         type: array
-                        x-kubernetes-list-type: atomic
                       cidr:
                         format: cidr
                         maxLength: 43
@@ -472,13 +454,11 @@ spec:
                             maxItems: 1
                             minItems: 1
                             type: array
-                            x-kubernetes-list-type: atomic
                         required:
                           - values
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
-                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -511,7 +491,6 @@ spec:
                                   maxItems: 10
                                   minItems: 1
                                   type: array
-                                  x-kubernetes-list-type: atomic
                               required:
                                 - prefix
                               type: object
@@ -531,7 +510,6 @@ spec:
                         maxItems: 10
                         minItems: 1
                         type: array
-                        x-kubernetes-list-type: atomic
                       peerType:
                         enum:
                           - eBGP
@@ -579,7 +557,6 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
-                  x-kubernetes-list-type: atomic
                 importV4:
                   items:
                     properties:
@@ -593,7 +570,6 @@ spec:
                           format: int32
                           type: integer
                         type: array
-                        x-kubernetes-list-type: atomic
                       cidr:
                         format: cidr
                         maxLength: 18
@@ -608,13 +584,11 @@ spec:
                             maxItems: 1
                             minItems: 1
                             type: array
-                            x-kubernetes-list-type: atomic
                         required:
                           - values
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
-                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -647,7 +621,6 @@ spec:
                                   maxItems: 10
                                   minItems: 1
                                   type: array
-                                  x-kubernetes-list-type: atomic
                               required:
                                 - prefix
                               type: object
@@ -667,7 +640,6 @@ spec:
                         maxItems: 10
                         minItems: 1
                         type: array
-                        x-kubernetes-list-type: atomic
                       peerType:
                         enum:
                           - eBGP
@@ -715,7 +687,6 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
-                  x-kubernetes-list-type: atomic
                 importV6:
                   items:
                     properties:
@@ -729,7 +700,6 @@ spec:
                           format: int32
                           type: integer
                         type: array
-                        x-kubernetes-list-type: atomic
                       cidr:
                         format: cidr
                         maxLength: 43
@@ -744,13 +714,11 @@ spec:
                             maxItems: 1
                             minItems: 1
                             type: array
-                            x-kubernetes-list-type: atomic
                         required:
                           - values
                         type: object
                         x-kubernetes-map-type: atomic
                       interface:
-                        maxLength: 15
                         type: string
                       matchOperator:
                         enum:
@@ -783,7 +751,6 @@ spec:
                                   maxItems: 10
                                   minItems: 1
                                   type: array
-                                  x-kubernetes-list-type: atomic
                               required:
                                 - prefix
                               type: object
@@ -803,7 +770,6 @@ spec:
                         maxItems: 10
                         minItems: 1
                         type: array
-                        x-kubernetes-list-type: atomic
                       peerType:
                         enum:
                           - eBGP
@@ -851,7 +817,6 @@ spec:
                           "!has(self.operations) || size(self.operations) == 0 ||
                           self.action == 'Accept'"
                   type: array
-                  x-kubernetes-list-type: atomic
               type: object
           required:
             - metadata
@@ -927,7 +892,6 @@ spec:
                   items:
                     type: string
                   type: array
-                  x-kubernetes-list-type: atomic
                 keepOriginalNextHop:
                   type: boolean
                 keepaliveTime:
@@ -936,7 +900,7 @@ spec:
                   format: int32
                   type: integer
                 localWorkloadSelector:
-                  maxLength: 1024
+                  maxLength: 4096
                   type: string
                 maxRestartTime:
                   type: string
@@ -950,7 +914,7 @@ spec:
                   maxLength: 253
                   type: string
                 nodeSelector:
-                  maxLength: 1024
+                  maxLength: 4096
                   type: string
                 numAllowedLocalASNumbers:
                   format: int32
@@ -975,10 +939,9 @@ spec:
                   maxLength: 64
                   type: string
                 peerSelector:
-                  maxLength: 1024
+                  maxLength: 4096
                   type: string
                 reachableBy:
-                  maxLength: 64
                   type: string
                 reversePeering:
                   allOf:
@@ -1028,18 +991,6 @@ spec:
                   rule:
                     (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
                     == 0) || (has(self.asNumber) && self.asNumber != 0)
-                - message: reachableBy must be empty when peerIP is empty
-                  reason: FieldValueForbidden
-                  rule:
-                    "!has(self.reachableBy) || size(self.reachableBy) == 0 || (has(self.peerIP)
-                    && size(self.peerIP) > 0)"
-                - message:
-                    keepOriginalNextHop and nextHopMode cannot both be set; keepOriginalNextHop
-                    is deprecated, use nextHopMode instead
-                  reason: FieldValueForbidden
-                  rule:
-                    "!has(self.keepOriginalNextHop) || !self.keepOriginalNextHop ||
-                    !has(self.nextHopMode)"
           required:
             - metadata
             - spec
@@ -1170,7 +1121,6 @@ spec:
                       - Routes
                     type: string
                   type: array
-                  x-kubernetes-list-type: set
                 node:
                   type: string
                 updatePeriodSeconds:
@@ -1249,7 +1199,6 @@ spec:
                             type: string
                         type: object
                       type: array
-                      x-kubernetes-list-type: atomic
                     peersV6:
                       items:
                         properties:
@@ -1275,7 +1224,6 @@ spec:
                             type: string
                         type: object
                       type: array
-                      x-kubernetes-list-type: atomic
                   required:
                     - numberEstablishedV4
                     - numberEstablishedV6
@@ -1317,7 +1265,6 @@ spec:
                             type: string
                         type: object
                       type: array
-                      x-kubernetes-list-type: atomic
                     routesV6:
                       items:
                         properties:
@@ -1347,7 +1294,6 @@ spec:
                             type: string
                         type: object
                       type: array
-                      x-kubernetes-list-type: atomic
                   type: object
               type: object
           required:
@@ -1652,10 +1598,8 @@ spec:
                 deviceRouteProtocol:
                   type: integer
                 deviceRouteSourceAddress:
-                  maxLength: 45
                   type: string
                 deviceRouteSourceAddressIPv6:
-                  maxLength: 45
                   type: string
                 disableConntrackInvalidCheck:
                   type: boolean
@@ -1750,7 +1694,6 @@ spec:
                       - timeout
                     type: object
                   type: array
-                  x-kubernetes-list-type: atomic
                 interfaceExclude:
                   type: string
                 interfacePrefix:
@@ -1826,7 +1769,6 @@ spec:
                       - type: string
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
-                  maxItems: 7
                   type: array
                 liveMigrationRouteConvergenceTime:
                   pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
@@ -1863,7 +1805,6 @@ spec:
                 mtuIfacePattern:
                   type: string
                 natOutgoingAddress:
-                  maxLength: 45
                   type: string
                 natOutgoingExclusions:
                   enum:
@@ -1957,10 +1898,6 @@ spec:
                     - max
                     - min
                   type: object
-                  x-kubernetes-validations:
-                    - message: must be a range of route table indices within 1..250
-                      reason: FieldValueInvalid
-                      rule: self.min >= 1 && self.max >= self.min && self.max <= 250
                 routeTableRanges:
                   items:
                     properties:
@@ -1972,13 +1909,6 @@ spec:
                       - max
                       - min
                     type: object
-                    x-kubernetes-validations:
-                      - message: min must be >= 1
-                        reason: FieldValueInvalid
-                        rule: self.min >= 1
-                      - message: min must not be greater than max
-                        reason: FieldValueInvalid
-                        rule: self.min <= self.max
                   type: array
                 serviceLoopPrevention:
                   pattern: ^(?i)(Drop|Reject|Disabled)?$
@@ -2048,24 +1978,6 @@ spec:
                 - message: routeTableRange and routeTableRanges cannot both be set
                   reason: FieldValueForbidden
                   rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
-                - message: natOutgoingAddress must be a valid IPv4 address
-                  reason: FieldValueInvalid
-                  rule:
-                    "!has(self.natOutgoingAddress) || size(self.natOutgoingAddress)
-                    == 0 || (isIP(self.natOutgoingAddress) && ip(self.natOutgoingAddress).family()
-                    == 4)"
-                - message: deviceRouteSourceAddress must be a valid IPv4 address
-                  reason: FieldValueInvalid
-                  rule:
-                    "!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress)
-                    == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family()
-                    == 4)"
-                - message: deviceRouteSourceAddressIPv6 must be a valid IPv6 address
-                  reason: FieldValueInvalid
-                  rule:
-                    "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6)
-                    == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
-                    == 6)"
           required:
             - metadata
             - spec
@@ -2132,20 +2044,16 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -2153,11 +2061,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -2166,11 +2071,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -2185,47 +2087,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -2233,7 +2099,6 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -2246,7 +2111,6 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -2305,20 +2169,16 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -2326,11 +2186,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -2339,11 +2196,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -2358,47 +2212,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
@@ -2418,37 +2236,7 @@ spec:
                           || (!has(self.destination.ports) || size(self.destination.ports)
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
-                      - message: ICMP fields require protocol to be ICMP or ICMPv6
-                        reason: FieldValueInvalid
-                        rule:
-                          "!has(self.icmp) || (has(self.protocol) && (self.protocol
-                          == 'ICMP' || self.protocol == 'ICMPv6' || self.protocol
-                          == 1 || self.protocol == 58))"
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMP' && self.protocol
-                          != 1)) || !has(self.ipVersion) || self.ipVersion == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
-                          != 58)) || !has(self.ipVersion) || self.ipVersion == 6
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
-                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
-                          == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
-                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
-                          == 6
-                  maxItems: 1024
                   type: array
-                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -2462,20 +2250,16 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -2483,11 +2267,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -2496,11 +2277,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -2515,47 +2293,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -2563,7 +2305,6 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -2576,7 +2317,6 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -2635,20 +2375,16 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -2656,11 +2392,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -2669,11 +2402,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -2688,47 +2418,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
@@ -2748,39 +2442,8 @@ spec:
                           || (!has(self.destination.ports) || size(self.destination.ports)
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
-                      - message: ICMP fields require protocol to be ICMP or ICMPv6
-                        reason: FieldValueInvalid
-                        rule:
-                          "!has(self.icmp) || (has(self.protocol) && (self.protocol
-                          == 'ICMP' || self.protocol == 'ICMPv6' || self.protocol
-                          == 1 || self.protocol == 58))"
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMP' && self.protocol
-                          != 1)) || !has(self.ipVersion) || self.ipVersion == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
-                          != 58)) || !has(self.ipVersion) || self.ipVersion == 6
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
-                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
-                          == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
-                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
-                          == 6
-                  maxItems: 1024
                   type: array
-                  x-kubernetes-list-type: atomic
                 namespaceSelector:
-                  maxLength: 1024
                   type: string
                 order:
                   type: number
@@ -2790,14 +2453,11 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
-                  x-kubernetes-list-type: set
                 preDNAT:
                   type: boolean
                 selector:
-                  maxLength: 1024
                   type: string
                 serviceAccountSelector:
-                  maxLength: 1024
                   type: string
                 tier:
                   default: default
@@ -2836,15 +2496,6 @@ spec:
                   rule:
                     (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
                     || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.selector) || !self.selector.contains('global(')"
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
           required:
             - metadata
             - spec
@@ -2979,7 +2630,6 @@ spec:
                       - protocol
                     type: object
                   type: array
-                  x-kubernetes-list-type: atomic
                 profiles:
                   items:
                     type: string
@@ -3058,7 +2708,6 @@ spec:
                     # to handle []*int properly itself.
                     nullable: true
                   type: array
-                  x-kubernetes-list-type: atomic
                 attributes:
                   items:
                     properties:
@@ -3074,7 +2723,6 @@ spec:
                         type: object
                     type: object
                   type: array
-                  x-kubernetes-list-type: atomic
                 cidr:
                   format: cidr
                   type: string
@@ -3095,112 +2743,6 @@ spec:
                   items:
                     type: integer
                   type: array
-                  x-kubernetes-list-type: atomic
-              required:
-                - allocations
-                - attributes
-                - cidr
-                - strictAffinity
-                - unallocated
-              type: object
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
-      subresources: {}
----
-# Source: calico/templates/kdd-crds.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipamblocks.projectcalico.org
-spec:
-  group: projectcalico.org
-  names:
-    kind: IPAMBlock
-    listKind: IPAMBlockList
-    plural: ipamblocks
-    singular: ipamblock
-  preserveUnknownFields: false
-  scope: Cluster
-  versions:
-    - additionalPrinterColumns:
-        - description: The block CIDR
-          jsonPath: .spec.cidr
-          name: CIDR
-          type: string
-        - description: The block affinity
-          jsonPath: .spec.affinity
-          name: Affinity
-          type: string
-        - description: The time at which affinity was claimed
-          jsonPath: .spec.affinityClaimTime
-          name: ClaimTime
-          type: date
-      name: v3
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              properties:
-                affinity:
-                  pattern: ^(host|virtual):[a-zA-Z0-9\.\-_]+$
-                  type: string
-                affinityClaimTime:
-                  format: date-time
-                  type: string
-                allocations:
-                  items:
-                    type: integer
-                  type: array
-                  x-kubernetes-list-type: atomic
-                attributes:
-                  items:
-                    properties:
-                      alternateOwnerAttrs:
-                        additionalProperties:
-                          type: string
-                        type: object
-                      handle_id:
-                        type: string
-                      secondary:
-                        additionalProperties:
-                          type: string
-                        type: object
-                    type: object
-                  type: array
-                  x-kubernetes-list-type: atomic
-                cidr:
-                  format: cidr
-                  type: string
-                deleted:
-                  type: boolean
-                sequenceNumber:
-                  default: 0
-                  format: int64
-                  type: integer
-                sequenceNumberForAllocation:
-                  additionalProperties:
-                    format: int64
-                    type: integer
-                  type: object
-                strictAffinity:
-                  type: boolean
-                unallocated:
-                  items:
-                    type: integer
-                  type: array
-                  x-kubernetes-list-type: atomic
               required:
                 - allocations
                 - attributes
@@ -3445,13 +2987,10 @@ spec:
                     - CrossSubnet
                   type: string
                 namespaceSelector:
-                  maxLength: 1024
                   type: string
                 natOutgoing:
                   type: boolean
                 nodeSelector:
-                  default: all()
-                  maxLength: 1024
                   type: string
                 vxlanMode:
                   enum:
@@ -3486,32 +3025,8 @@ spec:
                 - message: IPIP is not supported on IPv6 pools
                   reason: FieldValueForbidden
                   rule:
-                    cidr(self.cidr).ip().family() != 6 || !has(self.ipipMode) || self.ipipMode
-                    == 'Never' || size(self.ipipMode) == 0
-                - message: LoadBalancer IP pools cannot disable BGP export
-                  reason: FieldValueForbidden
-                  rule:
-                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
-                    || !has(self.disableBGPExport) || !self.disableBGPExport"
-                - message:
-                    IP Pool with AllowedUse LoadBalancer must have nodeSelector
-                    set to all()
-                  reason: FieldValueInvalid
-                  rule:
-                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
-                    || self.nodeSelector == 'all()'"
-                - message: IP Pool with AllowedUse Tunnel cannot have namespaceSelector
-                  reason: FieldValueForbidden
-                  rule:
-                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'Tunnel')
-                    || !has(self.namespaceSelector) || size(self.namespaceSelector) ==
-                    0"
-                - message: global() selector is not valid for IPPool nodeSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.nodeSelector) || !self.nodeSelector.contains('global(')"
-                - message: global() selector is not valid for IPPool namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+                    "!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode
+                    == 'Never' || size(self.ipipMode) == 0"
             status:
               properties:
                 conditions:
@@ -3550,9 +3065,6 @@ spec:
                       - type
                     type: object
                   type: array
-                  x-kubernetes-list-map-keys:
-                    - type
-                  x-kubernetes-list-type: map
               type: object
           required:
             - metadata
@@ -3649,15 +3161,6 @@ spec:
                             - RequestedServicesOnly
                           type: string
                       type: object
-                    migration:
-                      properties:
-                        policyNameMigrator:
-                          default: Enabled
-                          enum:
-                            - Disabled
-                            - Enabled
-                          type: string
-                      type: object
                     namespace:
                       properties:
                         reconcilerPeriod:
@@ -3695,7 +3198,6 @@ spec:
                                     type: string
                                 type: object
                               type: array
-                              x-kubernetes-list-type: atomic
                           type: object
                         leakGracePeriod:
                           type: string
@@ -3710,6 +3212,15 @@ spec:
                     policy:
                       properties:
                         reconcilerPeriod:
+                          type: string
+                      type: object
+                    policyMigration:
+                      properties:
+                        enabled:
+                          default: Enabled
+                          enum:
+                            - Disabled
+                            - Enabled
                           type: string
                       type: object
                     serviceAccount:
@@ -3772,15 +3283,6 @@ spec:
                                 - RequestedServicesOnly
                               type: string
                           type: object
-                        migration:
-                          properties:
-                            policyNameMigrator:
-                              default: Enabled
-                              enum:
-                                - Disabled
-                                - Enabled
-                              type: string
-                          type: object
                         namespace:
                           properties:
                             reconcilerPeriod:
@@ -3818,7 +3320,6 @@ spec:
                                         type: string
                                     type: object
                                   type: array
-                                  x-kubernetes-list-type: atomic
                               type: object
                             leakGracePeriod:
                               type: string
@@ -3833,6 +3334,15 @@ spec:
                         policy:
                           properties:
                             reconcilerPeriod:
+                              type: string
+                          type: object
+                        policyMigration:
+                          properties:
+                            enabled:
+                              default: Enabled
+                              enum:
+                                - Disabled
+                                - Enabled
                               type: string
                           type: object
                         serviceAccount:
@@ -3938,20 +3448,16 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -3959,11 +3465,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -3972,11 +3475,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -3991,47 +3491,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -4039,7 +3503,6 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -4052,7 +3515,6 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -4111,20 +3573,16 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -4132,11 +3590,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -4145,11 +3600,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -4164,47 +3616,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
@@ -4224,37 +3640,7 @@ spec:
                           || (!has(self.destination.ports) || size(self.destination.ports)
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
-                      - message: ICMP fields require protocol to be ICMP or ICMPv6
-                        reason: FieldValueInvalid
-                        rule:
-                          "!has(self.icmp) || (has(self.protocol) && (self.protocol
-                          == 'ICMP' || self.protocol == 'ICMPv6' || self.protocol
-                          == 1 || self.protocol == 58))"
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMP' && self.protocol
-                          != 1)) || !has(self.ipVersion) || self.ipVersion == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
-                          != 58)) || !has(self.ipVersion) || self.ipVersion == 6
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
-                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
-                          == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
-                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
-                          == 6
-                  maxItems: 1024
                   type: array
-                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -4268,20 +3654,16 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -4289,11 +3671,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -4302,11 +3681,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -4321,47 +3697,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -4369,7 +3709,6 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -4382,7 +3721,6 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -4441,20 +3779,16 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -4462,11 +3796,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -4475,11 +3806,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -4494,47 +3822,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
@@ -4554,37 +3846,7 @@ spec:
                           || (!has(self.destination.ports) || size(self.destination.ports)
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
-                      - message: ICMP fields require protocol to be ICMP or ICMPv6
-                        reason: FieldValueInvalid
-                        rule:
-                          "!has(self.icmp) || (has(self.protocol) && (self.protocol
-                          == 'ICMP' || self.protocol == 'ICMPv6' || self.protocol
-                          == 1 || self.protocol == 58))"
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMP' && self.protocol
-                          != 1)) || !has(self.ipVersion) || self.ipVersion == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
-                          != 58)) || !has(self.ipVersion) || self.ipVersion == 6
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
-                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
-                          == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
-                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
-                          == 6
-                  maxItems: 1024
                   type: array
-                  x-kubernetes-list-type: atomic
                 order:
                   type: number
                 performanceHints:
@@ -4593,12 +3855,9 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
-                  x-kubernetes-list-type: set
                 selector:
-                  maxLength: 1024
                   type: string
                 serviceAccountSelector:
-                  maxLength: 1024
                   type: string
                 tier:
                   default: default
@@ -4614,13 +3873,6 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
-              x-kubernetes-validations:
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.selector) || !self.selector.contains('global(')"
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
           required:
             - metadata
             - spec
@@ -4728,20 +3980,16 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -4749,11 +3997,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -4762,11 +4007,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -4781,47 +4023,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -4829,7 +4035,6 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -4842,7 +4047,6 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -4901,20 +4105,16 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -4922,11 +4122,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -4935,11 +4132,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -4954,47 +4148,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
@@ -5014,37 +4172,7 @@ spec:
                           || (!has(self.destination.ports) || size(self.destination.ports)
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
-                      - message: ICMP fields require protocol to be ICMP or ICMPv6
-                        reason: FieldValueInvalid
-                        rule:
-                          "!has(self.icmp) || (has(self.protocol) && (self.protocol
-                          == 'ICMP' || self.protocol == 'ICMPv6' || self.protocol
-                          == 1 || self.protocol == 58))"
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMP' && self.protocol
-                          != 1)) || !has(self.ipVersion) || self.ipVersion == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
-                          != 58)) || !has(self.ipVersion) || self.ipVersion == 6
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
-                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
-                          == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
-                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
-                          == 6
-                  maxItems: 1024
                   type: array
-                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -5058,20 +4186,16 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -5079,11 +4203,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -5092,11 +4213,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -5111,47 +4229,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -5159,7 +4241,6 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -5172,7 +4253,6 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -5231,20 +4311,16 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -5252,11 +4328,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -5265,11 +4338,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -5284,47 +4354,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
@@ -5344,39 +4378,8 @@ spec:
                           || (!has(self.destination.ports) || size(self.destination.ports)
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
-                      - message: ICMP fields require protocol to be ICMP or ICMPv6
-                        reason: FieldValueInvalid
-                        rule:
-                          "!has(self.icmp) || (has(self.protocol) && (self.protocol
-                          == 'ICMP' || self.protocol == 'ICMPv6' || self.protocol
-                          == 1 || self.protocol == 58))"
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMP' && self.protocol
-                          != 1)) || !has(self.ipVersion) || self.ipVersion == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
-                          != 58)) || !has(self.ipVersion) || self.ipVersion == 6
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
-                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
-                          == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
-                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
-                          == 6
-                  maxItems: 1024
                   type: array
-                  x-kubernetes-list-type: atomic
                 namespaceSelector:
-                  maxLength: 1024
                   type: string
                 order:
                   type: number
@@ -5386,14 +4389,11 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
-                  x-kubernetes-list-type: set
                 preDNAT:
                   type: boolean
                 selector:
-                  maxLength: 1024
                   type: string
                 serviceAccountSelector:
-                  maxLength: 1024
                   type: string
                 stagedAction:
                   default: Set
@@ -5440,15 +4440,6 @@ spec:
                   rule:
                     (has(self.applyOnForward) && self.applyOnForward) || ((!has(self.doNotTrack)
                     || !self.doNotTrack) && (!has(self.preDNAT) || !self.preDNAT))
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.selector) || !self.selector.contains('global(')"
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
           required:
             - metadata
             - spec
@@ -5581,7 +4572,6 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                   type: array
-                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -5673,7 +4663,6 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                   type: array
-                  x-kubernetes-list-type: atomic
                 podSelector:
                   properties:
                     matchExpressions:
@@ -5775,20 +4764,16 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -5796,11 +4781,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -5809,11 +4791,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -5828,47 +4807,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -5876,7 +4819,6 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -5889,7 +4831,6 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -5948,20 +4889,16 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -5969,11 +4906,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -5982,11 +4916,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -6001,47 +4932,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
@@ -6061,37 +4956,7 @@ spec:
                           || (!has(self.destination.ports) || size(self.destination.ports)
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
-                      - message: ICMP fields require protocol to be ICMP or ICMPv6
-                        reason: FieldValueInvalid
-                        rule:
-                          "!has(self.icmp) || (has(self.protocol) && (self.protocol
-                          == 'ICMP' || self.protocol == 'ICMPv6' || self.protocol
-                          == 1 || self.protocol == 58))"
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMP' && self.protocol
-                          != 1)) || !has(self.ipVersion) || self.ipVersion == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
-                          != 58)) || !has(self.ipVersion) || self.ipVersion == 6
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
-                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
-                          == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
-                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
-                          == 6
-                  maxItems: 1024
                   type: array
-                  x-kubernetes-list-type: atomic
                 ingress:
                   items:
                     properties:
@@ -6105,20 +4970,16 @@ spec:
                       destination:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -6126,11 +4987,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -6139,11 +4997,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -6158,47 +5013,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                       http:
                         properties:
                           methods:
@@ -6206,7 +5025,6 @@ spec:
                               type: string
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                           paths:
                             items:
                               properties:
@@ -6219,7 +5037,6 @@ spec:
                               type: object
                             maxItems: 20
                             type: array
-                            x-kubernetes-list-type: atomic
                         type: object
                       icmp:
                         properties:
@@ -6278,20 +5095,16 @@ spec:
                       source:
                         properties:
                           namespaceSelector:
-                            maxLength: 1024
                             type: string
                           nets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
                             x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
-                            maxItems: 256
                             type: array
-                            x-kubernetes-list-type: set
                           notPorts:
                             items:
                               anyOf:
@@ -6299,11 +5112,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           notSelector:
-                            maxLength: 1024
                             type: string
                           ports:
                             items:
@@ -6312,11 +5122,8 @@ spec:
                                 - type: string
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
-                            maxItems: 50
                             type: array
-                            x-kubernetes-list-type: atomic
                           selector:
-                            maxLength: 1024
                             type: string
                           serviceAccounts:
                             properties:
@@ -6331,47 +5138,11 @@ spec:
                           services:
                             properties:
                               name:
-                                maxLength: 253
                                 type: string
                               namespace:
-                                maxLength: 253
                                 type: string
                             type: object
                         type: object
-                        x-kubernetes-validations:
-                          - message: global() can only be used in an EntityRule namespaceSelector
-                            reason: FieldValueInvalid
-                            rule: "!has(self.selector) || !self.selector.contains('global(')"
-                          - message:
-                              cannot specify NamespaceSelector and Services on
-                              the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || !has(self.namespaceSelector)
-                              || size(self.namespaceSelector) == 0"
-                          - message:
-                              cannot specify ServiceAccounts and Services on the
-                              same rule
-                            reason: FieldValueForbidden
-                            rule: "!has(self.services) || !has(self.serviceAccounts)"
-                          - message: services must specify a service name
-                            reason: FieldValueRequired
-                            rule: "!has(self.services) || size(self.services.name) > 0"
-                          - message:
-                              cannot specify Selector/NotSelector and Services
-                              on the same rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.selector) || size(self.selector)
-                              == 0) && (!has(self.notSelector) || size(self.notSelector)
-                              == 0)"
-                          - message:
-                              cannot specify Nets/NotNets and Services on the same
-                              rule
-                            reason: FieldValueForbidden
-                            rule:
-                              "!has(self.services) || (!has(self.nets) || size(self.nets)
-                              == 0) && (!has(self.notNets) || size(self.notNets) == 0)"
                     required:
                       - action
                     type: object
@@ -6391,37 +5162,7 @@ spec:
                           || (!has(self.destination.ports) || size(self.destination.ports)
                           == 0) && (!has(self.destination.notPorts) || size(self.destination.notPorts)
                           == 0)"
-                      - message: ICMP fields require protocol to be ICMP or ICMPv6
-                        reason: FieldValueInvalid
-                        rule:
-                          "!has(self.icmp) || (has(self.protocol) && (self.protocol
-                          == 'ICMP' || self.protocol == 'ICMPv6' || self.protocol
-                          == 1 || self.protocol == 58))"
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMP' && self.protocol
-                          != 1)) || !has(self.ipVersion) || self.ipVersion == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol
-                          != 58)) || !has(self.ipVersion) || self.ipVersion == 6
-                      - message: protocol ICMP requires ipVersion 4
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMP' &&
-                          self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion
-                          == 4
-                      - message: protocol ICMPv6 requires ipVersion 6
-                        reason: FieldValueInvalid
-                        rule:
-                          (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
-                          && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
-                          == 6
-                  maxItems: 1024
                   type: array
-                  x-kubernetes-list-type: atomic
                 order:
                   type: number
                 performanceHints:
@@ -6430,12 +5171,9 @@ spec:
                       - AssumeNeededOnEveryNode
                     type: string
                   type: array
-                  x-kubernetes-list-type: set
                 selector:
-                  maxLength: 1024
                   type: string
                 serviceAccountSelector:
-                  maxLength: 1024
                   type: string
                 stagedAction:
                   default: Set
@@ -6459,13 +5197,6 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
-              x-kubernetes-validations:
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.selector) || !self.selector.contains('global(')"
-                - message: global() can only be used in an EntityRule namespaceSelector
-                  reason: FieldValueInvalid
-                  rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
           required:
             - metadata
             - spec
@@ -6571,9 +5302,6 @@ spec:
                       - type
                     type: object
                   type: array
-                  x-kubernetes-list-map-keys:
-                    - type
-                  x-kubernetes-list-type: map
               type: object
           required:
             - metadata
@@ -6595,21 +5323,6 @@ spec:
               rule:
                 "self.metadata.name == 'default' ? (has(self.spec.defaultAction)
                 && self.spec.defaultAction == 'Deny') : true"
-            - message: default tier order must be 1000000
-              reason: FieldValueInvalid
-              rule:
-                self.metadata.name != 'default' || (has(self.spec.order) && self.spec.order
-                == 1000000.0)
-            - message: kube-admin tier order must be 1000
-              reason: FieldValueInvalid
-              rule:
-                self.metadata.name != 'kube-admin' || (has(self.spec.order) && self.spec.order
-                == 1000.0)
-            - message: kube-baseline tier order must be 10000000
-              reason: FieldValueInvalid
-              rule:
-                self.metadata.name != 'kube-baseline' || (has(self.spec.order) &&
-                self.spec.order == 10000000.0)
       served: true
       storage: true
       subresources:
@@ -8387,7 +7100,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: quay.io/calico/cni:master
+          image: quay.io/calico/cni:release-v3.32
           imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
@@ -8415,7 +7128,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:master
+          image: quay.io/calico/cni:release-v3.32
           imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/install"]
           envFrom:
@@ -8459,7 +7172,7 @@ spec:
         # networking to allow communication with the API Server. Calico-node initialization is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptables mode.
         - name: "ebpf-bootstrap"
-          image: quay.io/calico/node:master
+          image: quay.io/calico/node:release-v3.32
           imagePullPolicy: IfNotPresent
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
@@ -8485,7 +7198,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:master
+          image: quay.io/calico/node:release-v3.32
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -8708,7 +7421,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: quay.io/calico/kube-controllers:master
+          image: quay.io/calico/kube-controllers:release-v3.32
           imagePullPolicy: IfNotPresent
           env:
             # Choose which controllers to run.
@@ -8767,7 +7480,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: calico-webhooks
-          image: quay.io/calico/webhooks:master
+          image: quay.io/calico/webhooks:release-v3.32
           imagePullPolicy: IfNotPresent
           args:
             - webhook
