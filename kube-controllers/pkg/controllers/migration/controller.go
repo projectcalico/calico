@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -639,7 +640,11 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 	}
 	if len(needV3) > 0 {
 		logCtx.WithField("components", needV3).Info("Waiting for components to be configured with v3 API group")
-		dm.Status.Message = fmt.Sprintf("Waiting for %s to be configured with CALICO_API_GROUP=projectcalico.org/v3", joinComponents(needV3))
+		if m.operatorManaged {
+			dm.Status.Message = fmt.Sprintf("Waiting for operator to configure %s with v3 API group", joinComponents(needV3))
+		} else {
+			dm.Status.Message = fmt.Sprintf("Waiting for user to set CALICO_API_GROUP=projectcalico.org/v3 on %s", joinComponents(needV3))
+		}
 		return m.updateStatus(dm)
 	}
 
@@ -667,7 +672,19 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *Datastor
 	dm.Status.Message = "Migration complete"
 	dm.Status.CompletedAt = &now
 	setPhaseMetric(DatastoreMigrationPhaseComplete)
-	return m.updateStatus(dm)
+	if err := m.updateStatus(dm); err != nil {
+		return err
+	}
+
+	// In manifest mode, restart so kube-controllers re-discovers the v3 API
+	// group on startup. In operator mode, the operator handles the restart.
+	// Skip the restart if the CR is being deleted - let the finalizer finish
+	// cleanup first.
+	if !m.operatorManaged && dm.DeletionTimestamp == nil {
+		logCtx.Info("Migration complete, restarting kube-controllers to pick up v3 API group")
+		os.Exit(0)
+	}
+	return nil
 }
 
 // handleDeletion runs the finalizer logic when the DatastoreMigration CR is being deleted.
