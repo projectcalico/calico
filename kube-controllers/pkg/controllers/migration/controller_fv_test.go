@@ -31,24 +31,22 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/utils/ptr"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	libtestutils "github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 var (
-	fvK8sClient     kubernetes.Interface
+	fvTestEnv       *testutils.TestEnv
 	fvDynamicClient dynamic.Interface
 	fvCRDClient     apiextclient.Interface
 	fvRTClient      rtclient.WithWatch
-	fvTestEnv       *envtest.Environment
 )
 
 // dmKey is the NamespacedName for the well-known DatastoreMigration CR.
@@ -74,42 +72,32 @@ func init() {
 }
 
 func TestMain(m *testing.M) {
-	repoRoot := testutils.FindRepoRoot()
-	fvTestEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{
-			filepath.Join(repoRoot, "api", "config", "crd"),
-			filepath.Join(repoRoot, "libcalico-go", "config", "crd"),
-			filepath.Join(repoRoot, "kube-controllers", "pkg", "controllers", "migration", "crd"),
-		},
-	}
+	repoRoot := libtestutils.FindRepoRoot()
+	migrationCRDPath := filepath.Join(repoRoot, "kube-controllers", "pkg", "controllers", "migration", "crd")
 
-	cfg, err := fvTestEnv.Start()
+	var err error
+	fvTestEnv, err = testutils.NewTestEnv(migrationCRDPath)
 	expectNoError(err)
-	defer func() {
-		expectNoError(fvTestEnv.Stop())
-	}()
 
-	// Raise the default client-go rate limits to avoid spurious throttling
-	// in tests where the controller and test assertions both hit the
-	// envtest apiserver concurrently.
-	cfg.QPS = 100
-	cfg.Burst = 200
-
+	// Build a controller-runtime client with the migration scheme registered
+	// in addition to the core and Calico schemes.
 	scheme := runtime.NewScheme()
 	expectNoError(clientgoscheme.AddToScheme(scheme))
 	expectNoError(apiv3.AddToScheme(scheme))
 	expectNoError(AddToScheme(scheme))
-
-	fvRTClient, err = rtclient.NewWithWatch(cfg, rtclient.Options{Scheme: scheme})
-	expectNoError(err)
-	fvK8sClient, err = kubernetes.NewForConfig(cfg)
-	expectNoError(err)
-	fvDynamicClient, err = dynamic.NewForConfig(cfg)
-	expectNoError(err)
-	fvCRDClient, err = apiextclient.NewForConfig(cfg)
+	fvRTClient, err = rtclient.NewWithWatch(fvTestEnv.RestConfig, rtclient.Options{Scheme: scheme})
 	expectNoError(err)
 
-	os.Exit(m.Run())
+	fvDynamicClient, err = dynamic.NewForConfig(fvTestEnv.RestConfig)
+	expectNoError(err)
+	fvCRDClient, err = apiextclient.NewForConfig(fvTestEnv.RestConfig)
+	expectNoError(err)
+
+	code := m.Run()
+	if err := fvTestEnv.Stop(); err != nil {
+		fmt.Fprintf(os.Stderr, "envtest teardown: %v\n", err)
+	}
+	os.Exit(code)
 }
 
 // newAggregatedAPIServiceObj returns an aggregated (non-automanaged) APIService
@@ -163,7 +151,7 @@ func TestLifecycle_Mainline(t *testing.T) {
 
 	ctrl := NewController(ControllerConfig{
 		Ctx:           ctx,
-		K8sClient:     fvK8sClient,
+		K8sClient:     fvTestEnv.K8sClient,
 		BackendClient: bc,
 		RTClient:      gatedClient,
 		DynamicClient: fvDynamicClient,
