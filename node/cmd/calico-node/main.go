@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
+	"github.com/projectcalico/calico/node/pkg/cni"
 	"github.com/projectcalico/calico/node/pkg/flowlogs"
 	"github.com/projectcalico/calico/node/pkg/health"
 	"github.com/projectcalico/calico/node/pkg/hostpathinit"
@@ -44,41 +45,66 @@ import (
 // Create a new flag set.
 var flagSet = flag.NewFlagSet("Calico", flag.ContinueOnError)
 
-// Build the set of supported flags.
-var (
-	version                    = flagSet.Bool("v", false, "Display version")
-	runFelix                   = flagSet.Bool("felix", false, "Run Felix")
-	runBPF                     = flagSet.Bool("bpf", false, "Run BPF debug tool")
-	runInit                    = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
-	bestEffort                 = flagSet.Bool("best-effort", false, "Used in combination with the init flag. Report errors but do not fail if an error occurs during initialisation.")
-	runStartup                 = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
-	runShutdown                = flagSet.Bool("shutdown", false, "Do shutdown routine.")
-	runNodeServices            = flagSet.Bool("node-services", false, "Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)")
-	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
-	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
-	completeStartup            = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
-	showStatus                 = flagSet.Bool("show-status", false, "Print out node status")
+var version = flagSet.Bool("v", false, "Display version")
+
+// Consolidated node services mode.
+var runNodeServices = flagSet.Bool(
+	"node-services",
+	false,
+	"Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)",
 )
 
-// Options for liveness checks.
+// Deprecated flags: these are superseded by -node-services but kept for backwards
+// compatibility. They will be removed in a future release.
 var (
+	monitorAddrs      = flagSet.Bool("monitor-addresses", false, "Deprecated: use -node-services instead.")
+	monitorToken      = flagSet.Bool("monitor-token", false, "Deprecated: use -node-services instead.")
+	runStatusReporter = flagSet.Bool("status-reporter", false, "Deprecated: use -node-services instead.")
+)
+
+// Felix flags.
+var (
+	runFelix = flagSet.Bool("felix", false, "Run Felix")
+	runBPF   = flagSet.Bool("bpf", false, "Run BPF debug tool")
+
+	// For watching node flowlogs.
+	flows = flagSet.Int("flows", 0, "Fetch a number of Flows. Use a negative value to watch forever.")
+)
+
+// Node init, startup, and shutdown flags.
+var (
+	runInit       = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
+	bestEffort    = flagSet.Bool("best-effort", false, "Used in combination with the init flag. Report errors but do not fail if an error occurs during initialisation.")
+	initHostpaths = flagSet.Bool("hostpath-init", false, "Initialize hostpaths for non-root access")
+
+	runStartup      = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
+	runShutdown     = flagSet.Bool("shutdown", false, "Do shutdown routine.")
+	completeStartup = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
+)
+
+// Tunnel IP allocation flags.
+var (
+	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
+	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
+)
+
+var (
+	// Options for liveness checks.
 	felixLive = flagSet.Bool("felix-live", false, "Run felix liveness checks")
 	birdLive  = flagSet.Bool("bird-live", false, "Run bird liveness checks")
 	bird6Live = flagSet.Bool("bird6-live", false, "Run bird6 liveness checks")
-)
 
-// Options for readiness checks.
-var (
+	// Options for readiness checks.
 	birdReady  = flagSet.Bool("bird-ready", false, "Run BIRD readiness checks")
 	bird6Ready = flagSet.Bool("bird6-ready", false, "Run BIRD6 readiness checks")
 	felixReady = flagSet.Bool("felix-ready", false, "Run felix readiness checks")
+
+	// thresholdTime for bird readiness check. Default value is 30 sec.
+	thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshold time for bird readiness")
+
+	// Node status flags.
+	showStatus = flagSet.Bool("show-status", false, "Print out node status")
 )
-
-// thresholdTime is introduced for bird readiness check. Default value is 30 sec.
-var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshold time for bird readiness")
-
-// Options for watching node flowlogs.
-var flows = flagSet.Int("flows", 0, "Fetch a number of Flows. Use a negative value to watch forever.")
 
 // confd flags
 var (
@@ -87,9 +113,6 @@ var (
 	confdKeep    = flagSet.Bool("confd-keep-stage-file", false, "Keep stage file when running confd")
 	confdConfDir = flagSet.String("confd-confdir", "/etc/calico/confd", "Confd configuration directory.")
 )
-
-// non-root hostpath init flags
-var initHostpaths = flagSet.Bool("hostpath-init", false, "Initialize hostpaths for non-root access")
 
 func main() {
 	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
@@ -108,7 +131,7 @@ func main() {
 
 	// Perform some validation on the parsed flags. Only one of the following may be
 	// specified at a time.
-	onlyOne := []*bool{version, runFelix, runStartup, runConfd, runNodeServices}
+	onlyOne := []*bool{version, runFelix, runStartup, runConfd, runNodeServices, monitorAddrs, monitorToken, runStatusReporter}
 	oneSelected := false
 	for _, o := range onlyOne {
 		if oneSelected && *o {
@@ -179,6 +202,7 @@ func main() {
 		if *allocateTunnelAddrsRunOnce {
 			allocateip.Run(nil)
 		} else {
+			logrus.Warn("-allocate-tunnel-addrs daemon mode is deprecated, use -node-services instead")
 			if err := allocateip.RunWithContext(context.Background()); err != nil {
 				logrus.WithError(err).Fatal("Tunnel IP allocator failed")
 			}
@@ -186,6 +210,25 @@ func main() {
 	} else if *runNodeServices {
 		logutils.ConfigureFormatter("node-services")
 		nodeservices.Run()
+	} else if *monitorAddrs {
+		logrus.Warn("-monitor-addresses is deprecated, use -node-services instead")
+		logutils.ConfigureFormatter("monitor-addresses")
+		startup.ConfigureLogging()
+		if err := startup.MonitorIPAddressSubnetsWithContext(context.Background()); err != nil {
+			logrus.WithError(err).Fatal("Monitor addresses failed")
+		}
+	} else if *monitorToken {
+		logrus.Warn("-monitor-token is deprecated, use -node-services instead")
+		logutils.ConfigureFormatter("cni-config-monitor")
+		if err := cni.RunWithContext(context.Background()); err != nil {
+			logrus.WithError(err).Fatal("CNI config monitor failed")
+		}
+	} else if *runStatusReporter {
+		logrus.Warn("-status-reporter is deprecated, use -node-services instead")
+		logutils.ConfigureFormatter("status-reporter")
+		if err := status.RunWithContext(context.Background()); err != nil {
+			logrus.WithError(err).Fatal("Status reporter failed")
+		}
 	} else if *initHostpaths {
 		logrus.SetFormatter(&logutils.Formatter{Component: "hostpath-init"})
 		hostpathinit.Run()
