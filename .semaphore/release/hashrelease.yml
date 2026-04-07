@@ -53,6 +53,8 @@ global_job_config:
       - gcloud config set project --quiet "${OIDC_GCP_PROJECT_NAME}"
       # Configure docker to use the gcloud credential helper
       - gcloud auth configure-docker --quiet
+      # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+      - docker system prune -af
 
 blocks:
   - name: Publish hashrelease
