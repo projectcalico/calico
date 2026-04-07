@@ -1029,8 +1029,8 @@ func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSub
 		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
 		return fmt.Sprintf(format, localSubnet)
 	case v3.Never:
-		// No-encap case.
-		return `krt_tunnel="";`
+		// No encapsulation needed; no need to set krt_tunnel.
+		return ``
 	default:
 		return ``
 	}
