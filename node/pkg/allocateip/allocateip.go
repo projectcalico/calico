@@ -71,6 +71,56 @@ func Run(done <-chan struct{}) {
 	run(nodename, cfg, c, felixEnvConfig, done)
 }
 
+// RunWithContext is the context-aware variant of Run for use when running as
+// a goroutine in a consolidated process. It returns errors instead of calling
+// log.Fatal, and shuts down cleanly when the context is cancelled.
+func RunWithContext(ctx context.Context) error {
+	nodename := os.Getenv("NODENAME")
+	if nodename == "" {
+		return fmt.Errorf("NODENAME environment is not set")
+	}
+
+	felixEnvConfig := loadFelixEnvConfig()
+	cfg, c := calicoclient.CreateClient()
+
+	return runWithContext(ctx, nodename, cfg, c, felixEnvConfig)
+}
+
+func runWithContext(
+	ctx context.Context, nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface,
+	felixEnvConfig *felixconfig.Config,
+) error {
+	if cfg.Spec.K8sUsePodCIDR {
+		log.Debug("Using host-local IPAM, no need to allocate a tunnel IP")
+		<-ctx.Done()
+		return nil
+	}
+
+	r := &reconciler{
+		nodename:       nodename,
+		cfg:            cfg,
+		client:         c,
+		ch:             make(chan struct{}),
+		data:           make(map[string]any),
+		felixEnvConfig: felixEnvConfig,
+	}
+
+	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
+	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
+		&typhaConfig, syncproto.SyncerTypeTunnelIPAllocation,
+		buildinfo.Version, nodename, fmt.Sprintf("tunnel-ip-allocation %s", buildinfo.Version),
+		r,
+	) {
+		log.Debug("Using typha syncclient")
+	} else {
+		log.Debug("Using local syncer")
+		syncer := tunnelipsyncer.New(c.(backendClientAccessor).Backend(), r, nodename)
+		syncer.Start()
+	}
+
+	return r.runWithContext(ctx)
+}
+
 func run(
 	nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface,
 	felixEnvConfig *felixconfig.Config, done <-chan struct{},
@@ -126,6 +176,20 @@ func run(
 
 	// Run the reconciler.
 	r.run(done)
+}
+
+// runWithContext is the context-aware variant of run for the reconciler.
+func (r reconciler) runWithContext(ctx context.Context) error {
+	for {
+		select {
+		case <-r.ch:
+			if err := reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig); err != nil {
+				return fmt.Errorf("failed to reconcile tunnel address: %w", err)
+			}
+		case <-ctx.Done():
+			return nil
+		}
+	}
 }
 
 // reconciler watches IPPool and Node configuration and triggers a reconciliation of the Tunnel IP addresses whenever
@@ -245,13 +309,13 @@ func reconcileTunnelAddrs(
 	// Get node resource for given nodename.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
 	if err != nil {
-		log.WithError(err).Fatalf("failed to fetch node resource '%s'", nodename)
+		return fmt.Errorf("failed to fetch node resource '%s': %w", nodename, err)
 	}
 
 	// Get list of ip pools
 	ipPoolList, err := c.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
-		log.WithError(err).Fatal("Unable to query IP pool configuration")
+		return fmt.Errorf("unable to query IP pool configuration: %w", err)
 	}
 
 	originalNode := node.DeepCopy()
@@ -405,8 +469,8 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, node *inte
 			// in IPAM. For example, if the node object was manually edited.
 			release = true
 		} else {
-			// Failed to get assignment attributes, datastore connection issues possible, panic
-			logCtx.WithError(err).Panicf("Failed to get assignment attributes for CIDR '%s'", addr)
+			// Failed to get assignment attributes, datastore connection issues possible.
+			return "", fmt.Errorf("failed to get assignment attributes for CIDR '%s': %w", addr, err)
 		}
 	}
 
@@ -436,8 +500,7 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, node *inte
 func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, nodename string, attrType string) error {
 	ipAddr := net.ParseIP(addr)
 	if ipAddr == nil {
-		log.Fatalf("Failed to parse node tunnel address '%s'", addr)
-		return nil
+		return fmt.Errorf("failed to parse node tunnel address '%s'", addr)
 	}
 
 	// Release the old allocation.
