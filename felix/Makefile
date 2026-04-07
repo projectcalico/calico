@@ -326,6 +326,7 @@ fv-prereqs: $(REMOTE_DEPS) \
             bin/test-workload \
             bin/test-connection \
             bin/calico-bpf \
+            bin/calico-qos \
             bin/pktgen \
             build-bpf \
             fv/fv.test
@@ -490,6 +491,10 @@ bin/calico-bpf: $(LIBBPF_A) $(SRC_FILES)
 	@echo Building calico-bpf...
 	$(call build_cgo_binary, "$(PACKAGE_NAME)/cmd/calico-bpf", $@)
 
+bin/calico-qos: $(SRC_FILES)
+	@echo Building calico-qos...
+	$(call build_cgo_binary, "$(PACKAGE_NAME)/cmd/calico-qos", $@)
+
 bin/pktgen: $(SRC_FILES) $(FV_SRC_FILES)
 	@echo Building pktgen...
 	$(call build_binary, "$(PACKAGE_NAME)/fv/pktgen", $@)
@@ -534,7 +539,7 @@ cd: cd-common
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean build bin/calico-bpf
+	$(MAKE) clean build bin/calico-bpf bin/calico-qos
 	touch $@
 
 ###############################################################################
