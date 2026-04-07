@@ -383,6 +383,9 @@ fv-no-prereqs:
 fv-bpf:
 	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
 
+fv-bpf-no-prereqs:
+	$(MAKE) fv-no-prereqs FELIX_FV_ENABLE_BPF=true
+
 fv-nft:
 	$(MAKE) fv FELIX_FV_NFTABLES=Enabled
 
@@ -548,8 +551,14 @@ bin/bpf_ut.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 	$(DOCKER_GO_BUILD_CGO) go test ./bpf/ut -c -gcflags="-N -l" -o $@
 
+.PHONY: ut-bpf-prereqs
+ut-bpf-prereqs: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
+
 .PHONY: ut-bpf
-ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
+ut-bpf: ut-bpf-prereqs
+	$(MAKE) ut-bpf-no-prereqs
+
+ut-bpf-no-prereqs:
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \

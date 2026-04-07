@@ -15,8 +15,20 @@
 
 set -e
 
-my_dir="$(dirname "$0")"
-vm_ip="$("$my_dir/vm-ip")"
-source "$my_dir/ssh-options"
+if [ -z "${VM_NAME}" ]; then
+  echo "VM_NAME is not set; it should be set to the name of the test VM" 1>&2
+  exit 1
+fi
+if [ -z "${ZONE}" ]; then
+  echo "ZONE is not set; it should be set to the GCP zone of the test VM" 1>&2
+  exit 1
+fi
 
-exec ssh "ubuntu@${vm_ip}" -n -A "${SSH_OPTIONS[@]}" "$@"
+ip_cache_file="/tmp/vm_ip_${VM_NAME}_${ZONE}"
+if [ -e "$ip_cache_file" ]; then
+  vm_ip=$(cat "$ip_cache_file")
+else
+  vm_ip=$(gcloud compute instances describe "${VM_NAME}" --zone="${ZONE}" --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+  echo "$vm_ip" > "$ip_cache_file"
+fi
+echo "$vm_ip"
