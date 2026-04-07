@@ -34,6 +34,7 @@ const (
 	DefaultRepoName            = "operator"
 	DefaultBranchName          = utils.DefaultBranch
 	DefaultReleaseBranchPrefix = "release"
+	DefaultDevTagSuffix        = "0.dev"
 	DefaultRegistry            = "quay.io"
 )
 
