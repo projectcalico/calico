@@ -934,7 +934,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 // This function generates BIRD statements for an IPPool to be used as BIRD filters based on the following input:
 //   - ippool: IPPool resource.
 //   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
-//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
+//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP routes.
 //   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
 //     first reject disabled ippools, and then accept the rest at the end after all other filters. Allowed values are
 //     "accept", "reject", and "" (no filtering).
@@ -991,7 +991,7 @@ func (c *client) processIPPool(
 		if programClusterRoutes {
 			var extraStatement string
 			if forProgrammingKernel && ipVersion == 4 {
-				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+				// For IPv4 IPIP routes, we need to set `krt_tunnel` variable which is needed by
 				// our fork of BIRD.
 				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 			}
