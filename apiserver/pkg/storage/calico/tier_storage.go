@@ -20,6 +20,17 @@ import (
 // NewTierStorage creates a new libcalico-based storage.Interface implementation for Tiers
 func NewTierStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	c := CreateClientFromConfig()
+	return newTierStorage(opts, c, false)
+}
+
+// NewTierStatusStorage creates a storage that uses the UpdateStatus method for
+// writes, ensuring the status subresource is used when persisting changes.
+func NewTierStatusStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
+	c := CreateClientFromConfig()
+	return newTierStorage(opts, c, true)
+}
+
+func newTierStorage(opts Options, c clientv3.Interface, forStatus bool) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*v3.Tier)
@@ -28,6 +39,9 @@ func NewTierStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyF
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*v3.Tier)
+		if forStatus {
+			return c.Tiers().UpdateStatus(ctx, res, oso)
+		}
 		return c.Tiers().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
