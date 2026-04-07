@@ -199,13 +199,11 @@ func main() {
 		confd.Run(cfg)
 	} else if *runAllocateTunnelAddrs {
 		logutils.ConfigureFormatter("tunnel-ip-allocator")
-		if *allocateTunnelAddrsRunOnce {
-			allocateip.Run(nil)
-		} else {
+		if !*allocateTunnelAddrsRunOnce {
 			logrus.Warn("-allocate-tunnel-addrs daemon mode is deprecated, use -node-services instead")
-			if err := allocateip.RunWithContext(context.Background()); err != nil {
-				logrus.WithError(err).Fatal("Tunnel IP allocator failed")
-			}
+		}
+		if err := allocateip.Run(context.Background(), *allocateTunnelAddrsRunOnce); err != nil {
+			logrus.WithError(err).Fatal("Tunnel IP allocator failed")
 		}
 	} else if *runNodeServices {
 		logutils.ConfigureFormatter("node-services")

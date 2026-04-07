@@ -952,11 +952,11 @@ var _ = Describe("Running as daemon", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("starting the IP allocation daemon")
-		done := make(chan struct{})
+		ctx, cancel := context.WithCancel(ctx)
 		completed := make(chan struct{})
 		go func() {
-			run("test.node", cfg, c, felixconfig.New(), done)
-			close(completed)
+			defer close(completed)
+			_ = run(ctx, "test.node", cfg, c, felixconfig.New(), false)
 		}()
 
 		// Wireguard is assigned first, then IPIP.  Note that this is an implementation detail rather than a requirement
@@ -1015,9 +1015,8 @@ var _ = Describe("Running as daemon", func() {
 		expectTunnelAddressEmptyForNodeName(c, "test.node", ipam.AttributeTypeIPIP)
 		expectTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeVXLAN, "172.16.0.2")
 
-		// Close the done channel to trigger completion.
 		By("shutting down the daemon")
-		close(done)
+		cancel()
 		Eventually(completed).Should(BeClosed(), "2s", "200ms")
 	})
 })

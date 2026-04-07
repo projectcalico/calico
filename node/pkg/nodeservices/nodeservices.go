@@ -55,7 +55,7 @@ func Run() {
 
 	g.Go(func() error {
 		log.Info("Starting tunnel IP allocator service")
-		return allocateip.RunWithContext(ctx)
+		return allocateip.Run(ctx, false)
 	})
 
 	g.Go(func() error {
