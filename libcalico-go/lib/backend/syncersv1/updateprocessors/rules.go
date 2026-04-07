@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -271,14 +271,17 @@ func normalizeIPNet(n string) *cnet.IPNet {
 }
 
 // NormalizeIPNets converts an []*IPNet to a slice of networks by ensuring the IP addresses
-// are correctly masked.
+// are correctly masked. Unparseable CIDRs are skipped.
 func NormalizeIPNets(nets []string) []*cnet.IPNet {
 	if len(nets) == 0 {
 		return nil
 	}
-	out := make([]*cnet.IPNet, len(nets))
-	for i, n := range nets {
-		out[i] = normalizeIPNet(n)
+	var out []*cnet.IPNet
+	for _, n := range nets {
+		ipn := normalizeIPNet(n)
+		if ipn != nil {
+			out = append(out, ipn)
+		}
 	}
 	return out
 }
