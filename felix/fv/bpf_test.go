@@ -1209,39 +1209,31 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					// as part of this test. There can be other preamble programs
 					// from previous tests and we want to ignore those when checking that programs are cleaned up after disabling BPF.
 					getPreambleProgramIDs := func() set.Set[int] {
-						var bpfnetTCX []struct {
-							TC []struct {
-								Name string `json:"name"`
-								ID   int    `json:"prog_id"`
-							} `json:"tc"`
-						}
-
+						// bpftool net show -j puts both TC/TCX and netkit
+						// programs under the "tc" key. Older bpftool uses "id"
+						// for the program ID while newer versions use "prog_id".
+						// Parse both and take whichever is set.
 						var bpfnet []struct {
 							TC []struct {
-								Name string `json:"name"`
-								ID   int    `json:"id"`
+								Name   string `json:"name"`
+								ID     int    `json:"id"`
+								ProgID int    `json:"prog_id"`
 							} `json:"tc"`
 						}
 						out, err := tc.Felixes[0].ExecOutput("bpftool", "net", "show", "-j")
 						Expect(err).NotTo(HaveOccurred())
 						preambleIDs := set.New[int]()
-						if BPFAttachType() == "tc" {
-							err = json.Unmarshal([]byte(out), &bpfnet)
-							Expect(err).NotTo(HaveOccurred())
-							for _, entry := range bpfnet {
-								for _, prog := range entry.TC {
-									if strings.Contains(prog.Name, "cali_tc_pream") {
-										preambleIDs.Add(prog.ID)
+						err = json.Unmarshal([]byte(out), &bpfnet)
+						Expect(err).NotTo(HaveOccurred())
+						for _, entry := range bpfnet {
+							for _, prog := range entry.TC {
+								if strings.Contains(prog.Name, "cali_tc_pream") {
+									id := prog.ProgID
+									if id == 0 {
+										id = prog.ID
 									}
-								}
-							}
-						} else {
-							err = json.Unmarshal([]byte(out), &bpfnetTCX)
-							Expect(err).NotTo(HaveOccurred())
-							for _, entry := range bpfnetTCX {
-								for _, prog := range entry.TC {
-									if strings.Contains(prog.Name, "cali_tc_pream") {
-										preambleIDs.Add(prog.ID)
+									if id != 0 {
+										preambleIDs.Add(id)
 									}
 								}
 							}
