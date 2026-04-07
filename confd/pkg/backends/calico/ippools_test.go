@@ -81,8 +81,8 @@ func Test_processIPPoolsV4(t *testing.T) {
 		`  if (net ~ 10.12.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
 		`  if (net ~ 10.13.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
 		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { krt_tunnel=""; accept; }`,
-		`  if (net ~ 10.15.0.0/16) then { krt_tunnel=""; accept; }`,
+		`  if (net ~ 10.14.0.0/16) then { accept; }`,
+		`  if (net ~ 10.15.0.0/16) then { accept; }`,
 		// IPv4 VXLAN Encapsulation cases.
 		`  if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 		`  if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
