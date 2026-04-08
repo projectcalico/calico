@@ -1,0 +1,87 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  nodeToNodeMeshEnabled: false
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    route-reflector: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: peer-with-route-reflectors
+spec:
+  nodeSelector: all()
+  peerSelector: route-reflector == 'true'
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-a-ipv4
+spec:
+  peerIP: 10.225.0.4
+  asNumber: 65515
+  reachableBy: 10.224.0.1
+  keepOriginalNextHop: true
+  nodeSelector: route-reflector == 'true'
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-b-ipv4
+spec:
+  peerIP: 10.225.0.5
+  asNumber: 65515
+  reachableBy: 10.224.0.1
+  keepOriginalNextHop: true
+  nodeSelector: route-reflector == 'true'
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-a-ipv6
+spec:
+  peerIP: ffee::10
+  asNumber: 65515
+  reachableBy: ffee::1:1
+  keepOriginalNextHop: true
+  nodeSelector: route-reflector == 'true'
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-b-ipv6
+spec:
+  peerIP: ffee::11
+  asNumber: 65515
+  reachableBy: ffee::1:1
+  keepOriginalNextHop: true
+  nodeSelector: route-reflector == 'true'

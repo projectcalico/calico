@@ -38,69 +38,24 @@ endif
 ###############################################################################
 # Unit Tests
 ###############################################################################
-# Set to true when calling test-xxx to update the rendered templates instead of
-# checking them.
-UPDATE_EXPECTED_DATA?=false
 
-test: ut test-kdd test-etcd
-
-.PHONY: test-kdd
-## Run template tests against KDD
-test-kdd: bin/confd-$(ARCH) bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
-	-git clean -fx etc/calico/confd
-	mkdir -p tests/logs
-	docker run --rm --net=host \
-		-v $(CERTS_PATH):/home/user/certs \
-		-v $(CURDIR)/tests/:/tests/ \
-		-v $(CURDIR)/bin:/calico/bin/ \
-		-v $(CURDIR)/etc/calico:/etc/calico/ \
-		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
-		-e CALICO_CRD_PATH=$(CALICO_CRD_PATH) \
-		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-		-e GOPATH=/go \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
-		-e FELIX_TYPHAREADTIMEOUT=50 \
-		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
-		-w /go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) /tests/test_suite_kdd.sh || \
-	{ \
-	    echo; \
-	    echo === confd single-shot log:; \
-	    cat tests/logs/kdd/logss || true; \
-	    echo; \
-	    echo === confd daemon log:; \
-	    cat tests/logs/kdd/logd1 || true; \
-	    echo; \
-	    echo === Typha log:; \
-	    cat tests/logs/kdd/typha || true; \
-	    echo; \
-	    false; \
-	}
-	-git clean -fx etc/calico/confd
-
-.PHONY: test-etcd
-## Run template tests against etcd
-test-etcd: bin/confd-$(ARCH) bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl bin/calicoctl run-etcd run-k8s-apiserver
-	-git clean -fx etc/calico/confd
-	mkdir -p tests/logs
-	docker run --rm --net=host \
-		-v $(CERTS_PATH):/home/user/certs \
-		-v $(CURDIR)/tests/:/tests/ \
-		-v $(CURDIR)/bin:/calico/bin/ \
-		-v $(CURDIR)/etc/calico:/etc/calico/ \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		-e GOPATH=/go \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
-		$(CALICO_BUILD) /tests/test_suite_etcd.sh
-	-git clean -fx etc/calico/confd
+test: ut fv
 
 .PHONY: ut
 ## Run the fast set of unit tests in a container.
 ut:
 	mkdir -p report
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -race --junit-report=confd_ut.xml --output-dir=report/ .'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -race --junit-report=confd_ut.xml --output-dir=report/ --skip-package=tests .'
+
+.PHONY: fv
+## Run confd functional verification tests (envtest-based, replaces bash test suite).
+fv: setup-envtest
+	$(DOCKER_RUN) \
+		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
+		-e KUBEBUILDER_ASSETS=/envtest \
+		$(CALICO_BUILD) \
+		go test -count=1 -v -timeout 600s ./confd/tests/...
+# -count=1 disables test caching; envtest-based tests should always run fresh.
 
 
 bin/kubectl:
@@ -137,9 +92,6 @@ bin/calicoctl:
 bin/typha:
 	make -C ../typha build
 	cp ../typha/bin/calico-typha-$(ARCH) $@
-
-fv st:
-	@echo "No FVs or STs available."
 
 ###############################################################################
 # CI
