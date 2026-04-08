@@ -1593,36 +1593,47 @@ KIND_IMAGE_MARKERS = \
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
+	touch $@
 
 $(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
 	$(MAKE) -C $(REPO_ROOT)/typha image
+	touch $@
 
 $(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
 	$(MAKE) -C $(REPO_ROOT)/apiserver image
+	touch $@
 
 $(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
 	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
+	touch $@
 
 $(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
 	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+	touch $@
 
 $(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
 	$(MAKE) -C $(REPO_ROOT)/calicoctl image
+	touch $@
 
 $(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
 	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
+	touch $@
 
 $(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
 	$(MAKE) -C $(REPO_ROOT)/goldmane image
+	touch $@
 
 $(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
 	$(MAKE) -C $(REPO_ROOT)/webhooks image
+	touch $@
 
 $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
+	touch $@
 
 $(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
 	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
+	touch $@
 
 # Operator is built from a separate repo/branch. It only needs
 # calico_versions.yml (a static file with version strings), not the
@@ -1709,6 +1720,20 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
 	touch $@
+
+###############################################################################
+# Dev image build variables. Targets that use these are in the root Makefile.
+###############################################################################
+DEV_IMAGE_PATH ?= calico
+DEV_IMAGE_TAG ?= $(GIT_VERSION)
+DEV_IMAGE_REGISTRY ?= docker.io
+DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
+
+# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
+# filter-registry strips "docker.io/" since Docker Hub doesn't use it in image refs.
+DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
+DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
+DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
 
 ###############################################################################
 # Common functions for launching a local etcd instance.
