@@ -15,62 +15,63 @@
 
 # dev-push.sh — Tag and push Calico dev images to a remote registry.
 #
-# Called by `make dev-image` and `make dev-push`. Not intended to be
-# run directly (requires environment variables set by the Makefile).
+# Called by `make dev-image` and `make dev-push`. Not intended to be run
+# directly (requires environment variables set by the Makefile).
 #
-# Environment:
-#   ACTION          - "tag", "push", or "operator" (required)
-#   CALICO_IMAGES   - Space-separated list of calico/<name>:<tag> images (for tag/push)
-#   DEV_IMAGES      - Space-separated list of target <registry>/<path>/<name>:<tag> images (for push)
-#   DEV_IMAGE_PREFIX - <registry>/<path> prefix for dev images (for tag)
-#   DEV_IMAGE_TAG   - Tag to apply to dev images (for tag)
-#   ARCH            - Architecture suffix for source image tags (for tag)
-#   STAMP_DIR       - Directory for stamp files (for tag/push)
-#   OPERATOR_IMAGE  - Target operator image ref (for push, included in DEV_IMAGES)
+# Usage:
+#   dev-push.sh --tag         Tag locally-built images for the dev registry
+#   dev-push.sh --operator    Build the operator image if inputs changed
+#   dev-push.sh --push        Push dev-tagged images to the registry
 #
-# Operator-specific (ACTION=operator):
+# Environment (--tag):
+#   CALICO_IMAGES    - Space-separated calico/<name>:<tag> source images
+#   DEV_IMAGE_PREFIX - <registry>/<path> prefix for dev images
+#   DEV_IMAGE_TAG    - Tag to apply
+#   ARCH             - Architecture suffix for source tags
+#   STAMP_DIR        - Directory for stamp files
+#
+# Environment (--operator):
+#   STAMP_DIR          - Directory for stamp files
 #   KIND_INFRA_DIR     - Path to hack/test/kind/infra/
 #   OPERATOR_REPO      - Operator git repo (e.g., tigera/operator)
 #   OPERATOR_BRANCH    - Operator branch to build
 #   DEV_IMAGE_TAG      - Tag for the operator image
 #   DEV_IMAGE_REGISTRY - Registry for the operator image
 #   DEV_IMAGE_PATH     - Path within the registry
+#
+# Environment (--push):
+#   DEV_IMAGES - Space-separated target image refs to push
+#   STAMP_DIR  - Directory for stamp files
 
 set -euo pipefail
 
-ACTION="${ACTION:-}"
-
-case "$ACTION" in
-  tag)
-    # Tag locally-built calico images for the dev registry.
-    # Only re-tags images whose docker image ID has changed since the last run.
+tag() {
     mkdir -p "$STAMP_DIR"
     tagged=0
     skipped=0
 
     for img in $CALICO_IMAGES; do
-      base="${img%%:*}"
-      name="${base#calico/}"
-      dev_img="${DEV_IMAGE_PREFIX}/${name}:${DEV_IMAGE_TAG}"
-      cur_id=$(docker image inspect "${base}:latest-${ARCH}" --format '{{.Id}}' 2>/dev/null || echo "none")
-      stamp="${STAMP_DIR}/${name}.image-id"
-      prev_id=$(cat "$stamp" 2>/dev/null || echo "")
+        base="${img%%:*}"
+        name="${base#calico/}"
+        dev_img="${DEV_IMAGE_PREFIX}/${name}:${DEV_IMAGE_TAG}"
+        cur_id=$(docker image inspect "${base}:latest-${ARCH}" --format '{{.Id}}' 2>/dev/null || echo "none")
+        stamp="${STAMP_DIR}/${name}.image-id"
+        prev_id=$(cat "$stamp" 2>/dev/null || echo "")
 
-      if [ "$cur_id" = "$prev_id" ]; then
-        skipped=$((skipped + 1))
-      else
-        docker tag "${base}:latest-${ARCH}" "$dev_img"
-        echo "$cur_id" > "$stamp"
-        echo "Tagged $dev_img"
-        tagged=$((tagged + 1))
-      fi
+        if [ "$cur_id" = "$prev_id" ]; then
+            skipped=$((skipped + 1))
+        else
+            docker tag "${base}:latest-${ARCH}" "$dev_img"
+            echo "$cur_id" > "$stamp"
+            echo "Tagged $dev_img"
+            tagged=$((tagged + 1))
+        fi
     done
 
     echo "Calico images: $tagged tagged, $skipped unchanged"
-    ;;
+}
 
-  operator)
-    # Build the operator image if its inputs have changed.
+operator() {
     mkdir -p "$STAMP_DIR"
     versions_hash=$(md5sum "${KIND_INFRA_DIR}/calico_versions.yml" | cut -d' ' -f1)
     cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${OPERATOR_BRANCH}:${versions_hash}"
@@ -78,47 +79,49 @@ case "$ACTION" in
     prev_inputs=$(cat "$stamp" 2>/dev/null || echo "")
 
     if [ "$cur_inputs" = "$prev_inputs" ]; then
-      echo "Operator unchanged (inputs match)"
+        echo "Operator unchanged (inputs match)"
     else
-      echo "Building operator (inputs changed)..."
-      cd "$KIND_INFRA_DIR"
-      REPO="$OPERATOR_REPO" \
-        BRANCH="$OPERATOR_BRANCH" \
-        DEV_IMAGE_TAG="$DEV_IMAGE_TAG" \
-        DEV_IMAGE_REGISTRY="$DEV_IMAGE_REGISTRY" \
-        DEV_IMAGE_PATH="$DEV_IMAGE_PATH" \
-        ./build-operator.sh
-      echo "$cur_inputs" > "$stamp"
+        echo "Building operator (inputs changed)..."
+        cd "$KIND_INFRA_DIR"
+        REPO="$OPERATOR_REPO" \
+            BRANCH="$OPERATOR_BRANCH" \
+            DEV_IMAGE_TAG="$DEV_IMAGE_TAG" \
+            DEV_IMAGE_REGISTRY="$DEV_IMAGE_REGISTRY" \
+            DEV_IMAGE_PATH="$DEV_IMAGE_PATH" \
+            ./build-operator.sh
+        echo "$cur_inputs" > "$stamp"
     fi
-    ;;
+}
 
-  push)
-    # Push dev-tagged images to the registry. Only pushes images whose
-    # docker image ID has changed since the last push.
+push() {
     pushed=0
     skipped=0
 
     for img in $DEV_IMAGES; do
-      local_id=$(docker image inspect "$img" --format '{{.Id}}' 2>/dev/null || echo "none")
-      stamp_name=$(echo "$img" | tr '/:' '__')
-      stamp="${STAMP_DIR}/${stamp_name}.pushed-id"
-      prev_id=$(cat "$stamp" 2>/dev/null || echo "")
+        local_id=$(docker image inspect "$img" --format '{{.Id}}' 2>/dev/null || echo "none")
+        stamp_name=$(echo "$img" | tr '/:' '__')
+        stamp="${STAMP_DIR}/${stamp_name}.pushed-id"
+        prev_id=$(cat "$stamp" 2>/dev/null || echo "")
 
-      if [ "$local_id" = "$prev_id" ]; then
-        skipped=$((skipped + 1))
-      else
-        echo "Pushing $img"
-        docker push "$img"
-        echo "$local_id" > "$stamp"
-        pushed=$((pushed + 1))
-      fi
+        if [ "$local_id" = "$prev_id" ]; then
+            skipped=$((skipped + 1))
+        else
+            echo "Pushing $img"
+            docker push "$img"
+            echo "$local_id" > "$stamp"
+            pushed=$((pushed + 1))
+        fi
     done
 
     echo "dev-push complete: $pushed pushed, $skipped already up-to-date"
-    ;;
+}
 
-  *)
-    echo "error: unknown ACTION '$ACTION'. Expected: tag, operator, push" >&2
-    exit 1
-    ;;
+case "${1:-}" in
+    --tag)      tag ;;
+    --operator) operator ;;
+    --push)     push ;;
+    *)
+        echo "Usage: $0 --tag | --operator | --push" >&2
+        exit 1
+        ;;
 esac
