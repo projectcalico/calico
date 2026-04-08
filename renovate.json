@@ -27,7 +27,7 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^go\\.mod$/", "/^api\\/go\\.mod$/"],
+      "managerFilePatterns": ["/^go\\.mod$/", "/^api\\/go\\.mod$/", "/^lib\\/std\\/go\\.mod$/", "/^lib\\/httpmachinery\\/go\\.mod$/"],
       "matchStrings": ["\\ngo (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "depNameTemplate": "golang",
       "datasourceTemplate": "golang-version"
