@@ -81,3 +81,5 @@
             value: "operator"
           - name: DATAPLANE
             value: "CalicoNftables"
+          - name: KUBE_PROXY_MODE
+            value: "nftables"

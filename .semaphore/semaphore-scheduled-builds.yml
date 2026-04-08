@@ -704,6 +704,8 @@ blocks:
               value: "operator"
             - name: DATAPLANE
               value: "CalicoNftables"
+            - name: KUBE_PROXY_MODE
+              value: "nftables"
   - name: E2E script & pipeline validations
     run:
       when: >-
