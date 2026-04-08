@@ -1711,6 +1711,59 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 	touch $@
 
 ###############################################################################
+# Dev build & push workflow — build all images, tag with a custom tag, and
+# optionally push to a personal Docker Hub registry.
+#
+# Images are only re-tagged / re-pushed when their docker image ID changes,
+# and the operator is only rebuilt when its inputs change. This makes repeated
+# runs fast when only one component has been modified.
+#
+# Usage:
+#   make dev-push DEV_IMAGE_PATH=caseydavenport DEV_IMAGE_TAG=my-feature
+#
+# To force a full rebuild, remove the stamp directory:
+#   rm -rf .dev-stamps && make dev-push ...
+###############################################################################
+DEV_IMAGE_TAG ?= $(GIT_VERSION)
+DEV_IMAGE_REGISTRY ?= docker.io
+DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
+
+# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
+# filter-registry strips "docker.io/" since Docker Hub doesn't use it in image refs.
+DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
+DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
+DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
+
+## Build all component images and tag them for the dev registry.
+.PHONY: dev-image
+dev-image: $(KIND_IMAGE_MARKERS)
+ifndef DEV_IMAGE_PATH
+	$(error DEV_IMAGE_PATH is required (e.g., make dev-image DEV_IMAGE_PATH=caseydavenport DEV_IMAGE_TAG=my-feature))
+endif
+	@CALICO_IMAGES="$(KIND_CALICO_IMAGES)" \
+	  DEV_IMAGE_PREFIX="$(DEV_IMAGE_PREFIX)" \
+	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
+	  ARCH="$(ARCH)" \
+	  STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --tag
+	@STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
+	  OPERATOR_REPO="$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)" \
+	  OPERATOR_BRANCH="$(OPERATOR_BRANCH)" \
+	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
+	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
+	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --operator
+	@echo "dev-image complete"
+
+## Push all dev-tagged images to the registry.
+.PHONY: dev-push
+dev-push: dev-image
+	@DEV_IMAGES="$(DEV_CALICO_IMAGES) $(DEV_OPERATOR_IMAGE)" \
+	  STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --push
+
+###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)
