@@ -311,8 +311,11 @@ fi
 echo ""
 echo "Triggering: ${CMD} on PR #${PR}"
 
-if [[ -n "$ARG_PROFILE" && -n "$ARG_PR" && -n "$ARG_LABEL_FILTER" ]]; then
-    # All flags provided non-interactively; skip confirmation.
+if [[ ! -t 0 ]]; then
+    # Non-interactive — skip confirmation.
+    CONFIRMED=1
+elif [[ -n "$ARG_PROFILE" && -n "$ARG_PR" && -n "$ARG_LABEL_FILTER" ]]; then
+    # All flags provided explicitly; skip confirmation.
     CONFIRMED=1
 else
     printf "Continue? [Y/n] "
