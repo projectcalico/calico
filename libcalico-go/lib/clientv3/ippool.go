@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import (
 type IPPoolInterface interface {
 	Create(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error)
 	Update(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error)
+	UpdateStatus(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error)
 	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.IPPool, error)
 	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.IPPool, error)
 	List(ctx context.Context, opts options.ListOptions) (*apiv3.IPPoolList, error)
@@ -140,6 +141,16 @@ func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.Set
 	}
 
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindIPPool, res)
+	if out != nil {
+		return out.(*apiv3.IPPool), err
+	}
+	return nil, err
+}
+
+// UpdateStatus takes the representation of an IPPool and updates its status.
+// Returns the stored representation of the IPPool, and an error, if there is any.
+func (r ipPools) UpdateStatus(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error) {
+	out, err := r.client.resources.UpdateStatus(ctx, opts, apiv3.KindIPPool, res)
 	if out != nil {
 		return out.(*apiv3.IPPool), err
 	}
