@@ -615,6 +615,37 @@ func mustParseCIDR(s string) cnet.IPNet {
 	return *cidr
 }
 
+// oneshotTestCase defines a single oneshot confd template rendering test.
+// Each test applies input YAML from <goldenDir>/input.yaml, runs confd
+// once, and compares the rendered output against golden files in goldenDir.
+type oneshotTestCase struct {
+	name      string
+	goldenDir string
+
+	envVars map[string]string
+	kddOnly bool // true if this test requires K8s resources (Services, etc.)
+}
+
+// runOneshotTests runs a set of oneshot template tests against all active backends.
+func runOneshotTests(t *testing.T, cases []oneshotTestCase) {
+	t.Helper()
+	for _, be := range activeBackends {
+		t.Run(be.name, func(t *testing.T) {
+			for _, tc := range cases {
+				if tc.kddOnly && be.ctrlClient == nil {
+					continue
+				}
+				t.Run(tc.name, func(t *testing.T) {
+					for k, v := range tc.envVars {
+						t.Setenv(k, v)
+					}
+					runConfdTest(t, be, tc.goldenDir+"/input.yaml", tc.goldenDir)
+				})
+			}
+		})
+	}
+}
+
 // runConfdTest runs a full in-process confd test against the given backend.
 func runConfdTest(t *testing.T, be *datastoreBackend, inputYAML, goldenDir string) {
 	t.Helper()

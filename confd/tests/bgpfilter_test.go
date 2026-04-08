@@ -17,42 +17,28 @@ package tests
 import "testing"
 
 func TestBGPFilterTemplates(t *testing.T) {
-	tests := []struct {
-		name      string
-		inputYAML string
-		goldenDir string
-	}{
-		{"single_filter/global_peer", "bgpfilter/single_filter/global_peer/input.yaml", "bgpfilter/single_filter/global_peer"},
-		{"single_filter/explicit_peer", "bgpfilter/single_filter/explicit_peer/input.yaml", "bgpfilter/single_filter/explicit_peer"},
-		{"multi_filter/global_peer", "bgpfilter/multi_filter/global_peer/input.yaml", "bgpfilter/multi_filter/global_peer"},
-		{"multi_filter/explicit_peer", "bgpfilter/multi_filter/explicit_peer/input.yaml", "bgpfilter/multi_filter/explicit_peer"},
-		{"node_mesh", "bgpfilter/node_mesh/input.yaml", "bgpfilter/node_mesh"},
-		{"match_operators", "bgpfilter/match_operators/input.yaml", "bgpfilter/match_operators"},
-		{"match_source", "bgpfilter/match_source/input.yaml", "bgpfilter/match_source"},
-		{"match_interface", "bgpfilter/match_interface/input.yaml", "bgpfilter/match_interface"},
-		{"filter_names", "bgpfilter/filter_names/input.yaml", "bgpfilter/filter_names"},
-		{"import_only/explicit_peer", "bgpfilter/import_only/explicit_peer/input.yaml", "bgpfilter/import_only/explicit_peer"},
-		{"import_only/global_peer", "bgpfilter/import_only/global_peer/input.yaml", "bgpfilter/import_only/global_peer"},
-		{"v6_only/global_peer", "bgpfilter/v6_only/global_peer/input.yaml", "bgpfilter/v6_only/global_peer"},
-		{"export_only/explicit_peer", "bgpfilter/export_only/explicit_peer/input.yaml", "bgpfilter/export_only/explicit_peer"},
-		{"export_only/global_peer", "bgpfilter/export_only/global_peer/input.yaml", "bgpfilter/export_only/global_peer"},
-		{"v4_only/explicit_peer", "bgpfilter/v4_only/explicit_peer/input.yaml", "bgpfilter/v4_only/explicit_peer"},
-		{"v4_only/global_peer", "bgpfilter/v4_only/global_peer/input.yaml", "bgpfilter/v4_only/global_peer"},
-		{"v6_only/explicit_peer", "bgpfilter/v6_only/explicit_peer/input.yaml", "bgpfilter/v6_only/explicit_peer"},
-		{"communities_and_operations", "bgpfilter/communities_and_operations/input.yaml", "bgpfilter/communities_and_operations"},
-		{"peer_type", "bgpfilter/peer_type/input.yaml", "bgpfilter/peer_type"},
-		{"as_path_and_priority", "bgpfilter/as_path_and_priority/input.yaml", "bgpfilter/as_path_and_priority"},
-		{"large_community", "bgpfilter/large_community/input.yaml", "bgpfilter/large_community"},
-		{"kubevirt_live_migration", "bgpfilter/kubevirt_live_migration/input.yaml", "bgpfilter/kubevirt_live_migration"},
-	}
-
-	for _, be := range activeBackends {
-		t.Run(be.name, func(t *testing.T) {
-			for _, tc := range tests {
-				t.Run(tc.name, func(t *testing.T) {
-					runConfdTest(t, be, tc.inputYAML, tc.goldenDir)
-				})
-			}
-		})
-	}
+	runOneshotTests(t, []oneshotTestCase{
+		{name: "single_filter/global_peer", goldenDir: "bgpfilter/single_filter/global_peer"},
+		{name: "single_filter/explicit_peer", goldenDir: "bgpfilter/single_filter/explicit_peer"},
+		{name: "multi_filter/global_peer", goldenDir: "bgpfilter/multi_filter/global_peer"},
+		{name: "multi_filter/explicit_peer", goldenDir: "bgpfilter/multi_filter/explicit_peer"},
+		{name: "node_mesh", goldenDir: "bgpfilter/node_mesh"},
+		{name: "match_operators", goldenDir: "bgpfilter/match_operators"},
+		{name: "match_source", goldenDir: "bgpfilter/match_source"},
+		{name: "match_interface", goldenDir: "bgpfilter/match_interface"},
+		{name: "filter_names", goldenDir: "bgpfilter/filter_names"},
+		{name: "import_only/explicit_peer", goldenDir: "bgpfilter/import_only/explicit_peer"},
+		{name: "import_only/global_peer", goldenDir: "bgpfilter/import_only/global_peer"},
+		{name: "v6_only/global_peer", goldenDir: "bgpfilter/v6_only/global_peer"},
+		{name: "export_only/explicit_peer", goldenDir: "bgpfilter/export_only/explicit_peer"},
+		{name: "export_only/global_peer", goldenDir: "bgpfilter/export_only/global_peer"},
+		{name: "v4_only/explicit_peer", goldenDir: "bgpfilter/v4_only/explicit_peer"},
+		{name: "v4_only/global_peer", goldenDir: "bgpfilter/v4_only/global_peer"},
+		{name: "v6_only/explicit_peer", goldenDir: "bgpfilter/v6_only/explicit_peer"},
+		{name: "communities_and_operations", goldenDir: "bgpfilter/communities_and_operations"},
+		{name: "peer_type", goldenDir: "bgpfilter/peer_type"},
+		{name: "as_path_and_priority", goldenDir: "bgpfilter/as_path_and_priority"},
+		{name: "large_community", goldenDir: "bgpfilter/large_community"},
+		{name: "kubevirt_live_migration", goldenDir: "bgpfilter/kubevirt_live_migration"},
+	})
 }

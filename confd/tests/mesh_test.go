@@ -17,40 +17,18 @@ package tests
 import "testing"
 
 func TestMeshTemplates(t *testing.T) {
-	tests := []struct {
-		name      string
-		inputYAML string
-		goldenDir string
-		envVars   map[string]string
-		kddOnly   bool // true if this test requires K8s resources (Services, etc.)
-	}{
-		{"bgp-export", "mesh/bgp-export/input.yaml", "mesh/bgp-export", nil, false},
-		{"ipip-always", "mesh/ipip-always/input.yaml", "mesh/ipip-always", nil, false},
-		{"ipip-cross-subnet", "mesh/ipip-cross-subnet/input.yaml", "mesh/ipip-cross-subnet", nil, false},
-		{"ipip-off", "mesh/ipip-off/input.yaml", "mesh/ipip-off", nil, false},
-		{"vxlan-always", "mesh/vxlan-always/input.yaml", "mesh/vxlan-always", nil, false},
-		{"hash", "mesh/hash/input.yaml", "mesh/hash", map[string]string{"CALICO_ROUTER_ID": "hash"}, false},
-		{"communities", "mesh/communities/input.yaml", "mesh/communities", nil, false},
-		{"restart-time", "mesh/restart-time/input.yaml", "mesh/restart-time", nil, false},
-		{"route-reflector-mesh-enabled", "mesh/route-reflector-mesh-enabled/input.yaml", "mesh/route-reflector-mesh-enabled", nil, false},
-		{"static-routes", "mesh/static-routes/input.yaml", "mesh/static-routes", nil, true},
-		{"static-routes-exclude-node", "mesh/static-routes-exclude-node/input.yaml", "mesh/static-routes-exclude-node", nil, true},
-		{"static-routes-no-ipv4-address", "mesh/static-routes-no-ipv4-address/input.yaml", "mesh/static-routes-no-ipv4-address", map[string]string{"CALICO_ROUTER_ID": "10.10.10.10"}, true},
-	}
-
-	for _, be := range activeBackends {
-		t.Run(be.name, func(t *testing.T) {
-			for _, tc := range tests {
-				if tc.kddOnly && be.ctrlClient == nil {
-					continue
-				}
-				t.Run(tc.name, func(t *testing.T) {
-					for k, v := range tc.envVars {
-						t.Setenv(k, v)
-					}
-					runConfdTest(t, be, tc.inputYAML, tc.goldenDir)
-				})
-			}
-		})
-	}
+	runOneshotTests(t, []oneshotTestCase{
+		{name: "bgp-export", goldenDir: "mesh/bgp-export"},
+		{name: "ipip-always", goldenDir: "mesh/ipip-always"},
+		{name: "ipip-cross-subnet", goldenDir: "mesh/ipip-cross-subnet"},
+		{name: "ipip-off", goldenDir: "mesh/ipip-off"},
+		{name: "vxlan-always", goldenDir: "mesh/vxlan-always"},
+		{name: "hash", goldenDir: "mesh/hash", envVars: map[string]string{"CALICO_ROUTER_ID": "hash"}},
+		{name: "communities", goldenDir: "mesh/communities"},
+		{name: "restart-time", goldenDir: "mesh/restart-time"},
+		{name: "route-reflector-mesh-enabled", goldenDir: "mesh/route-reflector-mesh-enabled"},
+		{name: "static-routes", goldenDir: "mesh/static-routes", kddOnly: true},
+		{name: "static-routes-exclude-node", goldenDir: "mesh/static-routes-exclude-node", kddOnly: true},
+		{name: "static-routes-no-ipv4-address", goldenDir: "mesh/static-routes-no-ipv4-address", envVars: map[string]string{"CALICO_ROUTER_ID": "10.10.10.10"}, kddOnly: true},
+	})
 }

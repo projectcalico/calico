@@ -17,23 +17,9 @@ package tests
 import "testing"
 
 func TestTTLSecurityTemplates(t *testing.T) {
-	tests := []struct {
-		name      string
-		inputYAML string
-		goldenDir string
-	}{
-		{"explicit_node", "ttl_security/explicit_node/input.yaml", "ttl_security/explicit_node"},
-		{"peer_selector", "ttl_security/peer_selector/input.yaml", "ttl_security/peer_selector"},
-		{"global", "ttl_security/global/input.yaml", "ttl_security/global"},
-	}
-
-	for _, be := range activeBackends {
-		t.Run(be.name, func(t *testing.T) {
-			for _, tc := range tests {
-				t.Run(tc.name, func(t *testing.T) {
-					runConfdTest(t, be, tc.inputYAML, tc.goldenDir)
-				})
-			}
-		})
-	}
+	runOneshotTests(t, []oneshotTestCase{
+		{name: "explicit_node", goldenDir: "ttl_security/explicit_node"},
+		{name: "peer_selector", goldenDir: "ttl_security/peer_selector"},
+		{name: "global", goldenDir: "ttl_security/global"},
+	})
 }

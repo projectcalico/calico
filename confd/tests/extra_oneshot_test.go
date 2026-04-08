@@ -17,80 +17,34 @@ package tests
 import "testing"
 
 func TestIgnoredInterfacesTemplates(t *testing.T) {
-	for _, be := range activeBackends {
-		t.Run(be.name, func(t *testing.T) {
-			runConfdTest(t, be, "ignored_interfaces/input.yaml", "ignored_interfaces")
-		})
-	}
+	runOneshotTests(t, []oneshotTestCase{
+		{name: "ignored_interfaces", goldenDir: "ignored_interfaces"},
+	})
 }
 
 func TestReachableByTemplates(t *testing.T) {
-	tests := []struct {
-		name      string
-		inputYAML string
-		goldenDir string
-	}{
-		{"global_peers", "reachable_by/global_peers/input.yaml", "reachable_by/global_peers"},
-		{"route_reflectors", "reachable_by/route_reflectors/input.yaml", "reachable_by/route_reflectors"},
-	}
-
-	for _, be := range activeBackends {
-		t.Run(be.name, func(t *testing.T) {
-			for _, tc := range tests {
-				t.Run(tc.name, func(t *testing.T) {
-					runConfdTest(t, be, tc.inputYAML, tc.goldenDir)
-				})
-			}
-		})
-	}
+	runOneshotTests(t, []oneshotTestCase{
+		{name: "global_peers", goldenDir: "reachable_by/global_peers"},
+		{name: "route_reflectors", goldenDir: "reachable_by/route_reflectors"},
+	})
 }
 
 func TestFelixClusterRoutingTemplates(t *testing.T) {
-	for _, be := range activeBackends {
-		t.Run(be.name, func(t *testing.T) {
-			runConfdTest(t, be, "felix_cluster_routing/input.yaml", "felix_cluster_routing")
-		})
-	}
+	runOneshotTests(t, []oneshotTestCase{
+		{name: "felix_cluster_routing", goldenDir: "felix_cluster_routing"},
+	})
 }
 
 func TestNextHopModeTemplates(t *testing.T) {
-	tests := []struct {
-		name      string
-		inputYAML string
-		goldenDir string
-	}{
-		{"global_peers", "next_hop_mode/global_peers/input.yaml", "next_hop_mode/global_peers"},
-		{"route_reflectors", "next_hop_mode/route_reflectors/input.yaml", "next_hop_mode/route_reflectors"},
-	}
-
-	for _, be := range activeBackends {
-		t.Run(be.name, func(t *testing.T) {
-			for _, tc := range tests {
-				t.Run(tc.name, func(t *testing.T) {
-					runConfdTest(t, be, tc.inputYAML, tc.goldenDir)
-				})
-			}
-		})
-	}
+	runOneshotTests(t, []oneshotTestCase{
+		{name: "global_peers", goldenDir: "next_hop_mode/global_peers"},
+		{name: "route_reflectors", goldenDir: "next_hop_mode/route_reflectors"},
+	})
 }
 
 func TestReversePeeringTemplates(t *testing.T) {
-	tests := []struct {
-		name      string
-		inputYAML string
-		goldenDir string
-	}{
-		{"manual", "reverse_peering/manual/input.yaml", "reverse_peering/manual"},
-		{"auto", "reverse_peering/auto/input.yaml", "reverse_peering/auto"},
-	}
-
-	for _, be := range activeBackends {
-		t.Run(be.name, func(t *testing.T) {
-			for _, tc := range tests {
-				t.Run(tc.name, func(t *testing.T) {
-					runConfdTest(t, be, tc.inputYAML, tc.goldenDir)
-				})
-			}
-		})
-	}
+	runOneshotTests(t, []oneshotTestCase{
+		{name: "manual", goldenDir: "reverse_peering/manual"},
+		{name: "auto", goldenDir: "reverse_peering/auto"},
+	})
 }
