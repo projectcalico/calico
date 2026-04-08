@@ -3,7 +3,7 @@
   "extends": ["config:recommended"],
   "rebaseWhen": "behind-base-branch",
   "dependencyDashboard": false,
-  "baseBranchPatterns": ["release-v3.30"],
+  "baseBranchPatterns": ["release-v3.31"],
   "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}",
   "separateMinorPatch": true,
   "enabledManagers": ["gomod", "custom.regex"],
@@ -86,7 +86,7 @@
     },
     {
       "description": "Run gen-deps-files on selected branches only",
-      "matchBaseBranches": ["master", "release-v3.31"],
+      "matchBaseBranches": ["master", "release-v3.31", "release-v3.32"],
       "postUpgradeTasks": {
         "commands": ["make gen-deps-files"],
         "fileFilters": ["**/deps.txt"],

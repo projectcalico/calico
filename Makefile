@@ -209,7 +209,7 @@ GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
 gen-deps-files:
-	$(MAKE) -j $(DEP_FILES)
+	$(MAKE) -j$$(nproc) $(DEP_FILES)
 
 $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/*
 	@{ \
@@ -274,7 +274,7 @@ CLUSTER_ROUTING ?= BIRD
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
 kind-up:
-	$(MAKE) -j$(shell nproc) kind-build-images
+	$(MAKE) -j$$(nproc) kind-build-images
 	$(MAKE) kind-cluster-create CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	$(MAKE) kind-deploy
 
@@ -317,16 +317,21 @@ e2e-run-cnp-test:
 release/bin/release: $(shell find ./release -type f -name '*.go')
 	$(MAKE) -C release
 
+# Prepare for a release (update version references, charts, manifests).
+release-prep: release/bin/release bin/gh
+	@OPERATOR_BRANCH=$(OPERATOR_BRANCH) release/bin/release release prep
+
 # Install ghr for publishing to github.
 bin/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
 
 # Install GitHub CLI
 bin/gh:
-	curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
-	tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
-	chmod +x $@
-	rm bin/gh.tgz
+	@mkdir -p bin
+	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	@tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
+	@chmod +x $@
+	@rm bin/gh.tgz
 
 # Build a release.
 release: release/bin/release
@@ -402,5 +407,5 @@ update-pins: update-go-build-pin update-calico-base-pin
 bin/gotestsum:
 	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
-postrelease-checks: release/bin/release bin/gotestsum
+postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate
