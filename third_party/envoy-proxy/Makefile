@@ -10,7 +10,8 @@ BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 # See https://gateway.envoyproxy.io/news/releases/matrix/ for version compatibility.
 ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.37.1-0a0b20ed98
 
-EXCLUDEARCH ?= ppc64le s390x
+# Envoy proxy artifacts are only supported for amd64 and arm64.
+ARCHES ?= amd64 arm64
 
 ##############################################################################
 # Include lib.Makefile before anything else

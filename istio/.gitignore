@@ -4,4 +4,6 @@
 .istio-ztunnel.created-*
 .istio.downloaded
 .release-*
+.ztunnel.downloaded
 istio/
+ztunnel/
