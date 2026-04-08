@@ -45,7 +45,7 @@ sub-image-%:
 image: $(BUILD_IMAGES)
 
 $(ENVOY_PROXY_IMAGE): $(ENVOY_PROXY_IMAGE_CREATED)
-$(ENVOY_PROXY_IMAGE_CREATED): Dockerfile
+$(ENVOY_PROXY_IMAGE_CREATED): Dockerfile | register
 	$(DOCKER_BUILD) --build-arg ENVOYBINARY_IMAGE=$(ENVOYBINARY_IMAGE) \
 		-t $(ENVOY_PROXY_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
