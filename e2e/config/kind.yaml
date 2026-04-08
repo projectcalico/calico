@@ -1,0 +1,24 @@
+# kind.yaml - test selection for local kind cluster e2e runs.
+#
+# Used by `make e2e-run-test`. Runs Conformance tests from sig-calico and
+# sig-network, plus BGP tests.
+#
+# This config is standalone (doesn't extend base.yaml) because it uses a
+# narrower include scope (Conformance-only for sig-calico) that can't be
+# expressed as an additive extension of base's broader sig-calico include.
+
+include:
+  - Conformance && sig-calico
+  - Conformance && sig-network
+  - Feature:BGPPeer
+
+exclude:
+  labels:
+    - label: Slow
+      reason: "long-running tests not suitable for CI"
+
+    - label: Disruptive
+      reason: "breaks cluster state for other parallel tests"
+
+    - label: ExternalNode
+      reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
