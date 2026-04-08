@@ -59,7 +59,13 @@ if [ -n "$DEV_IMAGE_PATH" ] && [ -n "$DEV_IMAGE_TAG" ]; then
 
   # Build operator image and tag for the dev registry.
   make image
-  docker tag tigera/operator:latest "${DEV_IMAGE_PATH}/operator:${DEV_IMAGE_TAG}"
+  # Construct the full image ref, stripping docker.io/ since Docker Hub doesn't use it.
+  if [ "${DEV_IMAGE_REGISTRY}" = "docker.io" ] || [ -z "${DEV_IMAGE_REGISTRY}" ]; then
+    OPERATOR_REF="${DEV_IMAGE_PATH}/operator:${DEV_IMAGE_TAG}"
+  else
+    OPERATOR_REF="${DEV_IMAGE_REGISTRY}/${DEV_IMAGE_PATH}/operator:${DEV_IMAGE_TAG}"
+  fi
+  docker tag tigera/operator:latest "${OPERATOR_REF}"
 else
   # Kind mode: use test-build tag and PullNever.
   build/_output/bin/gen-versions -os-versions=../calico_versions.yml > pkg/components/calico.go

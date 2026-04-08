@@ -1726,9 +1726,11 @@ DEV_IMAGE_TAG ?= $(GIT_VERSION)
 DEV_IMAGE_REGISTRY ?= docker.io
 DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
 
-# Map calico/<name>:test-build → $(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
-DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PATH)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
-DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PATH)/operator:$(DEV_IMAGE_TAG)
+# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
+# filter-registry strips "docker.io/" since Docker Hub doesn't use it in image refs.
+DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
+DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
+DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
 
 ## Build all component images and tag them for the dev registry. Only re-tags
 ## images whose underlying docker image ID has changed since the last run.
@@ -1742,7 +1744,7 @@ endif
 	for img in $(KIND_CALICO_IMAGES); do \
 	  base=$${img%%:*}; \
 	  name=$${base#calico/}; \
-	  dev_img=$(DEV_IMAGE_PATH)/$$name:$(DEV_IMAGE_TAG); \
+	  dev_img=$(DEV_IMAGE_PREFIX)/$$name:$(DEV_IMAGE_TAG); \
 	  cur_id=$$(docker image inspect $$base:latest-$(ARCH) --format '{{.Id}}' 2>/dev/null || echo "none"); \
 	  stamp=$(DEV_STAMP_DIR)/$$name.image-id; \
 	  prev_id=$$(cat "$$stamp" 2>/dev/null || echo ""); \
@@ -1785,7 +1787,7 @@ dev-image-operator:
 ## docker image ID has changed since the last push.
 .PHONY: dev-push
 dev-push: dev-image
-	@pushed=0; skipped=0; \
+	@set -e; pushed=0; skipped=0; \
 	for img in $(DEV_CALICO_IMAGES) $(DEV_OPERATOR_IMAGE); do \
 	  local_id=$$(docker image inspect "$$img" --format '{{.Id}}' 2>/dev/null || echo "none"); \
 	  stamp_name=$$(echo "$$img" | tr '/:' '__'); \
