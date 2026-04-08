@@ -282,7 +282,7 @@
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
           - name: JOB_TIMEOUT_MINUTES
-            value: "30"
+            value: "60"
           - name: FELIX_FV_NETKIT
             value: "Enabled"
         commands:
