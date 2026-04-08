@@ -33,6 +33,7 @@ endif
 	xargs -I {} sh -c 'if ! grep -q "Copyright (c)" "{}"; then sed "s/YEAR/'$$YEAR'/g" hack/copyright.template | (cat -; echo; cat "{}") > temp && mv temp "{}"; fi'
 
 clean:
+	rm -rf .dev-stamps/
 	$(MAKE) -C api clean
 	$(MAKE) -C apiserver clean
 	$(MAKE) -C app-policy clean
@@ -167,17 +168,51 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)
 
-# Build all Calico images for the current architecture.
-image:
-	$(MAKE) -C pod2daemon image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C key-cert-provisioner image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C calicoctl image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C cni-plugin image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C apiserver image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C kube-controllers image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C app-policy image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C typha image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C node image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
+###############################################################################
+# Build & push workflow — build all images, tag with a custom tag, and
+# optionally push to a remote registry.
+#
+# Images are only re-tagged / re-pushed when their docker image ID changes,
+# and the operator is only rebuilt when its inputs change. This makes repeated
+# runs fast when only one component has been modified.
+#
+# Usage:
+#   make image                                              # build + tag as calico/<name>:<version>
+#   make push DEV_IMAGE_PATH=myuser DEV_IMAGE_TAG=latest    # build + tag + push to myuser/<name>:latest
+#
+# Component images are independent targets, so `make -jN` builds them in
+# parallel (e.g., `make -j4 push DEV_IMAGE_PATH=myuser`).
+#
+# To force a full rebuild, remove the stamp directory:
+#   rm -rf .dev-stamps && make push ...
+###############################################################################
+
+## Build all component images and tag them for the dev registry.
+## Supports `make -jN image` to build component images in parallel.
+.PHONY: image
+image: $(KIND_IMAGE_MARKERS)
+	@CALICO_IMAGES="$(KIND_CALICO_IMAGES)" \
+	  DEV_IMAGE_PREFIX="$(DEV_IMAGE_PREFIX)" \
+	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
+	  ARCH="$(ARCH)" \
+	  STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --tag
+	@STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
+	  OPERATOR_REPO="$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)" \
+	  OPERATOR_BRANCH="$(OPERATOR_BRANCH)" \
+	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
+	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
+	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --operator
+	@echo "image complete"
+
+## Push all dev-tagged images to the registry.
+.PHONY: push
+push: image
+	@DEV_IMAGES="$(DEV_CALICO_IMAGES) $(DEV_OPERATOR_IMAGE)" \
+	  STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --push
 
 ###############################################################################
 # Run local e2e smoke test against the checked-out code
