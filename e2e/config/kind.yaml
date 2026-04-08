@@ -8,7 +8,7 @@
 # expressed as an additive extension of base's broader sig-calico include.
 
 include:
-  - sig-calico && Conformance
+  - Conformance && sig-calico
   - Conformance && sig-network
   - Feature:BGPPeer
 
