@@ -37,6 +37,7 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
+	describe.WithFeature("Goldmane"),
 	"staged network policy",
 	func() {
 		var (
