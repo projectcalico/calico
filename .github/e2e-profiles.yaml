@@ -1,0 +1,24 @@
+# E2E test profiles — single source of truth for the GHA workflow and CLI wrapper.
+# Each profile maps to a Semaphore pipeline that provisions a specific cluster
+# configuration and runs the e2e test suite.
+profiles:
+  bpf-gcp:
+    description: "BPF dataplane on GCP kubeadm"
+    semaphore_pipeline: end-to-end/pipelines/bpf.yml
+    default_label_filter: ""
+  nft-gcp:
+    description: "nftables dataplane on GCP kubeadm"
+    semaphore_pipeline: end-to-end/pipelines/nftables.yml
+    default_label_filter: ""
+  iptables-gcp:
+    description: "iptables dataplane on GCP kubeadm"
+    semaphore_pipeline: end-to-end/pipelines/iptables.yml
+    default_label_filter: ""
+  upgrade-gcp:
+    description: "Upgrade tests on GCP kubeadm"
+    semaphore_pipeline: end-to-end/pipelines/upgrade.yml
+    default_label_filter: ""
+  windows:
+    description: "Windows tests"
+    semaphore_pipeline: end-to-end/pipelines/windows.yml
+    default_label_filter: ""
