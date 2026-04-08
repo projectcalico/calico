@@ -44,9 +44,22 @@ func listCalicoInterfaces() ([]string, error) {
 	var ifaces []string
 	for _, link := range links {
 		name := link.Attrs().Name
-		if len(name) > 4 && (name[:4] == "cali" || name[:3] == "tap") {
+		if strings.HasPrefix(name, "cali") || strings.HasPrefix(name, "tap") {
 			ifaces = append(ifaces, name)
 		}
+	}
+	return ifaces, nil
+}
+
+// listAllInterfaces returns all network interfaces on the host.
+func listAllInterfaces() ([]string, error) {
+	links, err := netlink.LinkList()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list links: %w", err)
+	}
+	var ifaces []string
+	for _, link := range links {
+		ifaces = append(ifaces, link.Attrs().Name)
 	}
 	return ifaces, nil
 }
