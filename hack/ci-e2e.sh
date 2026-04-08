@@ -279,7 +279,7 @@ LABEL_FILTER=""
 
 if [[ -n "$ARG_LABEL_FILTER" ]]; then
     LABEL_FILTER="$ARG_LABEL_FILTER"
-else
+elif [[ -t 0 ]]; then
     echo ""
     if [[ -n "$SUGGESTED_LABEL" ]]; then
         printf "Label filter [%s]:\n> " "$SUGGESTED_LABEL"
@@ -292,6 +292,9 @@ else
     else
         LABEL_FILTER="$user_label"
     fi
+else
+    # Non-interactive — use suggestion if available.
+    LABEL_FILTER="${SUGGESTED_LABEL}"
 fi
 
 # ---------------------------------------------------------------------------
