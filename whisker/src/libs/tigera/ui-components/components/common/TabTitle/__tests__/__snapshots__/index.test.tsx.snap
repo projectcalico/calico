@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`<TabTitle renders TabTitle -- alt path when has no data 1`] = `
 <DocumentFragment>
