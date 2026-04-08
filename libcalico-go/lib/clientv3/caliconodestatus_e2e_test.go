@@ -213,13 +213,19 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
-			By("Creating a new CalicoNodeStatus with name1/spec1")
+			By("Creating a new CalicoNodeStatus with name1/spec1 and status1 included")
 			res1, outError := c.CalicoNodeStatus().Create(ctx, &apiv3.CalicoNodeStatus{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec1,
+				Status:     status1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindCalicoNodeStatus, testutils.ExpectNoNamespace, name1, spec1))
+
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				By("Verifying that Create did not persist the status (status subresource isolation)")
+				Expect(res1.Status).To(Equal(apiv3.CalicoNodeStatusStatus{}))
+			}
 
 			By("Setting status1 on CalicoNodeStatus name1 via UpdateStatus")
 			res1.Status = status1
@@ -260,13 +266,19 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 				testutils.ResourceWithStatus(apiv3.KindCalicoNodeStatus, testutils.ExpectNoNamespace, name1, spec1, status1),
 			))
 
-			By("Creating a new CalicoNodeStatus with name2/spec2")
+			By("Creating a new CalicoNodeStatus with name2/spec2 and status2 included")
 			res2, outError := c.CalicoNodeStatus().Create(ctx, &apiv3.CalicoNodeStatus{
 				ObjectMeta: metav1.ObjectMeta{Name: name2},
 				Spec:       spec2,
+				Status:     status2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(apiv3.KindCalicoNodeStatus, testutils.ExpectNoNamespace, name2, spec2))
+
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				By("Verifying that Create did not persist the status for name2")
+				Expect(res2.Status).To(Equal(apiv3.CalicoNodeStatusStatus{}))
+			}
 
 			By("Setting status2 on CalicoNodeStatus name2 via UpdateStatus")
 			res2.Status = status2
@@ -294,6 +306,32 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 			res1, outError = c.CalicoNodeStatus().UpdateStatus(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResourceWithStatus(apiv3.KindCalicoNodeStatus, testutils.ExpectNoNamespace, name1, spec1, status2))
+
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				By("Verifying that Update (spec only) does not modify the status")
+				res1.Spec = spec2
+				res1, outError = c.CalicoNodeStatus().Update(ctx, res1, options.SetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				Expect(res1).To(MatchResourceWithStatus(apiv3.KindCalicoNodeStatus, testutils.ExpectNoNamespace, name1, spec2, status2))
+
+				By("Verifying that UpdateStatus does not modify the spec")
+				res1.Spec = spec1
+				res1.Status = status1
+				res1, outError = c.CalicoNodeStatus().UpdateStatus(ctx, res1, options.SetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				status1.LastUpdated = res1.Status.LastUpdated
+				Expect(res1).To(MatchResourceWithStatus(apiv3.KindCalicoNodeStatus, testutils.ExpectNoNamespace, name1, spec2, status1))
+
+				// Restore spec back to spec1 for the remaining tests.
+				res1.Spec = spec1
+				res1, outError = c.CalicoNodeStatus().Update(ctx, res1, options.SetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+
+				// Restore status back to status2 for the remaining tests.
+				res1.Status = status2
+				res1, outError = c.CalicoNodeStatus().UpdateStatus(ctx, res1, options.SetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+			}
 
 			By("Attempting to update the CalicoNodeStatus without a Creation Timestamp")
 			res, outError = c.CalicoNodeStatus().Update(ctx, &apiv3.CalicoNodeStatus{
