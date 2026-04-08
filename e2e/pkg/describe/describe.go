@@ -75,7 +75,6 @@ var features = map[string]bool{
 	"QoS":             true,
 	"Datapath":        true,
 	"Istio":           true,
-	"Goldmane":        true,
 }
 
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
@@ -84,6 +83,14 @@ var features = map[string]bool{
 // or cloud clusters with appropriate configuration.
 func RequiresNoEncap() any {
 	return framework.WithLabel("NoEncap")
+}
+
+// RequiresGoldmane marks tests that depend on Goldmane (and Whisker) being installed
+// in the cluster. These tests read flow logs via the Whisker API, which requires
+// the Goldmane flow aggregation backend. Skip on clusters without Goldmane
+// via --ginkgo.skip=RequiresGoldmane.
+func RequiresGoldmane() any {
+	return framework.WithLabel("RequiresGoldmane")
 }
 
 // RequiresBGPMesh marks tests that depend on the BGP node-to-node mesh being the sole
