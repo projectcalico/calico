@@ -167,6 +167,12 @@ jobs:
       # Part 2: Checkout PR branch and build images
       # -----------------------------------------------------------------------
 
+      - name: Disable sparse checkout
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        run: |
+          git sparse-checkout disable 2>/dev/null || true
+          git config core.sparseCheckout false 2>/dev/null || true
+
       - name: Checkout PR branch
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
         uses: actions/checkout@v4
