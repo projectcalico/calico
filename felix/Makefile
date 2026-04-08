@@ -156,7 +156,7 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 libbpf: $(LIBBPF_A)
 clone-libbpf: $(LIBBPF_FILE_CREATED)
 
-$(LIBBPF_FILE_CREATED): register
+$(LIBBPF_FILE_CREATED): | register
 	@echo Cloning libbpf
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
@@ -221,11 +221,11 @@ $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	mkdir -p bin/bpf
 	cp $(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES) bin/bpf
 
-$(BPF_APACHE_O_FILES) &: register $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
+$(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile | register
 	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache all
 	touch -c $@
 
-$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: register $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile
+$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile | register
 	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-gpl all ut-objs map-objs
 	touch -c $@
 
