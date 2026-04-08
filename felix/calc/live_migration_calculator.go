@@ -167,7 +167,7 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 				"selector": newSelector,
 			}).Info("LiveMigrationCalculator: LiveMigration created/updated")
 		} else {
-			logrus.WithField("lm", key).Debug("LiveMigrationCalculator: LiveMigration deleted")
+			logrus.WithField("lm", key).Info("LiveMigrationCalculator: LiveMigration deleted")
 			delete(lmc.liveMigrations, key)
 		}
 
