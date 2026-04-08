@@ -184,6 +184,15 @@ func (h *ServerHarness) CreateClient(id any, syncType syncproto.SyncerType) *Cli
 	return c
 }
 
+func (h *ServerHarness) CreateClientWithOptions(id any, opts syncclient.Options) *ClientState {
+	recorder := NewRecorder()
+	c := h.createClient(id, opts, recorder)
+	c.recorder = recorder
+	go recorder.Loop(c.recorderCtx)
+	h.ClientStates = append(h.ClientStates, c)
+	return c
+}
+
 func (h *ServerHarness) CreateClientNoDecodeRestart(id any, syncType syncproto.SyncerType) *ClientState {
 	recorder := NewRecorder()
 	c := h.createClient(id, syncclient.Options{SyncerType: syncType, DisableDecoderRestart: true}, recorder)
