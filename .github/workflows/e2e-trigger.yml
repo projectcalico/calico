@@ -288,19 +288,25 @@ jobs:
           gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
             -X PATCH -f "body=$BODY"
 
-      - name: Update status comment on build failure
+      - name: Update status comment on failure
         if: >
           always() &&
           steps.auth.outputs.authorized == 'true' &&
           steps.validate.outputs.profile_invalid == 'false' &&
           steps.status-comment.outputs.comment_id != '' &&
-          (steps.build-images.outcome == 'failure' || steps.build-e2e.outcome == 'failure')
+          (steps.build-images.outcome == 'failure' || steps.build-e2e.outcome == 'failure' || steps.semaphore-trigger.outcome == 'failure')
         run: |
           PROFILE="${{ steps.parse.outputs.profile }}"
           WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-          BODY=$(printf '❌ Image build failed for e2e profile `%s`.\n\n[Workflow run](%s)' \
-            "$PROFILE" "$WORKFLOW_URL")
+          if [[ "${{ steps.semaphore-trigger.outcome }}" == "failure" ]]; then
+            REASON="Semaphore pipeline trigger failed"
+          else
+            REASON="Image build failed"
+          fi
+
+          BODY=$(printf '❌ %s for e2e profile `%s`.\n\n[Workflow run](%s)' \
+            "$REASON" "$PROFILE" "$WORKFLOW_URL")
 
           gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
             -X PATCH -f "body=$BODY"
