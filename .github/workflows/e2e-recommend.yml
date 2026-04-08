@@ -1,0 +1,134 @@
+name: E2E Recommendations
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  recommend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed
+        run: |
+          gh pr diff ${{ github.event.pull_request.number }} --name-only > /tmp/changed-files.txt
+          echo "Changed files:"
+          cat /tmp/changed-files.txt
+
+      - name: Generate recommendations
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          import yaml
+          from fnmatch import fnmatch
+          from collections import defaultdict
+
+          with open(".github/e2e-path-labels.yaml") as f:
+              path_labels_config = yaml.safe_load(f)
+
+          with open(".github/e2e-profiles.yaml") as f:
+              profiles_config = yaml.safe_load(f)
+
+          with open("/tmp/changed-files.txt") as f:
+              changed_files = [line.strip() for line in f if line.strip()]
+
+          # Map (profile, label) -> list of (reason, matched_files)
+          # We track matched files per rule match, deduplicated by (profile, label)
+          recommendations = defaultdict(lambda: {"reason": "", "matched_files": []})
+
+          for rule in path_labels_config.get("path_labels", []):
+              patterns = rule.get("paths", [])
+              profiles = rule.get("profiles", [])
+              label = rule.get("labels", "")
+              reason = rule.get("reason", "")
+
+              matched = [f for f in changed_files if any(fnmatch(f, p) for p in patterns)]
+              if not matched:
+                  continue
+
+              for profile in profiles:
+                  key = (profile, label)
+                  rec = recommendations[key]
+                  rec["reason"] = reason
+                  for mf in matched:
+                      if mf not in rec["matched_files"]:
+                          rec["matched_files"].append(mf)
+
+          lines = []
+          if recommendations:
+              lines.append("**Suggested e2e tests** (based on changed files):")
+              lines.append("")
+              lines.append("| Command | Reason |")
+              lines.append("|---------|--------|")
+
+              for (profile, label), info in recommendations.items():
+                  reason = info["reason"]
+                  matched_files = info["matched_files"]
+
+                  if label:
+                      cmd = f'`/e2e {profile} --label-filter="{label}"`'
+                  else:
+                      cmd = f'`/e2e {profile}`'
+
+                  shown = matched_files[:3]
+                  remainder = len(matched_files) - len(shown)
+                  file_list = ", ".join(f"`{f}`" for f in shown)
+                  if remainder > 0:
+                      file_list += f" and {remainder} more"
+
+                  cell_reason = f"{reason} ({file_list})"
+                  lines.append(f"| {cmd} | {cell_reason} |")
+
+              lines.append("")
+              lines.append("Copy a command above and paste it as a PR comment to trigger.")
+          else:
+              lines.append("No specific tests matched the changed files. Consider running `/e2e iptables-gcp` for general coverage.")
+
+          body = "\n".join(lines)
+          with open("/tmp/recommendation.md", "w") as f:
+              f.write(body)
+
+          print("Generated recommendation:")
+          print(body)
+          PYEOF
+
+      - name: Find existing recommendation comment
+        id: find-comment
+        run: |
+          comment_id=$(gh api \
+            repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq '[.[] | select(.body | startswith("**Suggested e2e tests**"))] | first | .id // empty')
+          echo "comment_id=${comment_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update recommendation comment
+        run: |
+          body=$(cat /tmp/recommendation.md)
+          comment_id="${{ steps.find-comment.outputs.comment_id }}"
+
+          if [ -n "${comment_id}" ]; then
+            gh api \
+              --method PATCH \
+              repos/${{ github.repository }}/issues/comments/${comment_id} \
+              --input - <<EOF
+          {"body": $(python3 -c "import sys, json; print(json.dumps(open('/tmp/recommendation.md').read()))")}
+          EOF
+          else
+            gh api \
+              --method POST \
+              repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+              --input - <<EOF
+          {"body": $(python3 -c "import sys, json; print(json.dumps(open('/tmp/recommendation.md').read()))")}
+          EOF
+          fi
