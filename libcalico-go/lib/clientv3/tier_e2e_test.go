@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -873,6 +873,69 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Attempting to delete tier-1 (expecting success)")
 			_, err = c.Tiers().Delete(ctx, "knp", options.DeleteOptions{ResourceVersion: tier.ResourceVersion})
 			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Describe("Tier UpdateStatus functionality", func() {
+		It("should set and preserve status across spec updates", func() {
+			c, err := clientv3.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(be.Clean()).NotTo(HaveOccurred())
+
+			By("Creating a tier")
+			order := 100.0
+			tier, err := c.Tiers().Create(ctx, &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "status-test"},
+				Spec: apiv3.TierSpec{
+					Order:         &order,
+					DefaultAction: &actionPass,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tier.Status.Conditions).To(BeEmpty())
+
+			By("Setting status via UpdateStatus")
+			tier.Status = apiv3.TierStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               "Ready",
+						Status:             metav1.ConditionTrue,
+						Reason:             "TierReady",
+						Message:            "Tier is ready",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			}
+			tier, err = c.Tiers().UpdateStatus(ctx, tier, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tier.Status.Conditions).To(HaveLen(1))
+			Expect(tier.Status.Conditions[0].Type).To(Equal("Ready"))
+
+			By("Getting the tier and verifying status is present")
+			tier, err = c.Tiers().Get(ctx, "status-test", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tier.Status.Conditions).To(HaveLen(1))
+			Expect(tier.Status.Conditions[0].Type).To(Equal("Ready"))
+
+			By("Updating the tier spec and verifying status is preserved")
+			newOrder := 200.0
+			tier.Spec.Order = &newOrder
+			tier, err = c.Tiers().Update(ctx, tier, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting the tier and verifying status is still present after spec update")
+			tier, err = c.Tiers().Get(ctx, "status-test", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*tier.Spec.Order).To(Equal(newOrder))
+			Expect(tier.Status.Conditions).To(HaveLen(1))
+			Expect(tier.Status.Conditions[0].Type).To(Equal("Ready"))
+
+			By("Cleaning up")
+			_, err = c.Tiers().Delete(ctx, "status-test", options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
