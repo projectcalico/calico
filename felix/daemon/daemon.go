@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -1034,6 +1035,13 @@ func loadSelectorScopedFelixConfig(
 		return nil, fmt.Errorf("failed to list FelixConfiguration resources: %w", err)
 	}
 
+	// Collect matching selector-scoped configs, then merge in alphabetical
+	// order by resource name for determinism.
+	type matchEntry struct {
+		name   string
+		config map[string]string
+	}
+	var matches []matchEntry
 	for _, kvp := range felixConfigs.KVPairs {
 		rk, ok := kvp.Key.(model.ResourceKey)
 		if !ok {
@@ -1066,8 +1074,24 @@ func loadSelectorScopedFelixConfig(
 		if sel.Evaluate(nodeLabels) {
 			log.WithField("name", rk.Name).Info("Selector-scoped FelixConfiguration matches local node at startup")
 			extracted := calc.ExtractConfigFromFelixSpec(&fc.Spec)
-			maps.Copy(result, extracted)
+			// Apply annotation-based config overrides, consistent with
+			// how default/per-node resources handle annotations.
+			for k, v := range fc.GetAnnotations() {
+				if strings.HasPrefix(k, calc.AnnotationConfigPrefix) {
+					extracted[k[len(calc.AnnotationConfigPrefix):]] = v
+				}
+			}
+			matches = append(matches, matchEntry{
+				name:   rk.Name,
+				config: extracted,
+			})
 		}
+	}
+	slices.SortFunc(matches, func(a, b matchEntry) int {
+		return strings.Compare(a.name, b.name)
+	})
+	for _, m := range matches {
+		maps.Copy(result, m.config)
 	}
 
 	return result, nil

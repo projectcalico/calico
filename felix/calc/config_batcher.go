@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
@@ -123,6 +125,7 @@ func (cb *ConfigBatcher) OnUpdate(update api.Update) (filterOut bool) {
 	default:
 		// Ignore updates for unknown key types; other components may register
 		// for model.ResourceKey and dispatch updates that aren't relevant here.
+		log.WithField("key", update.Key).Debug("Ignoring update with unhandled key type")
 		return
 	}
 	cb.maybeSendCachedConfig()
@@ -189,6 +192,14 @@ func (cb *ConfigBatcher) onFelixConfigResourceUpdate(name string, update api.Upd
 
 	config := ExtractConfigFromFelixSpec(&fc.Spec)
 
+	// Apply annotation-based config overrides, consistent with how the
+	// configUpdateProcessor handles annotations on default/per-node resources.
+	for k, v := range fc.GetAnnotations() {
+		if strings.HasPrefix(k, AnnotationConfigPrefix) {
+			config[k[len(AnnotationConfigPrefix):]] = v
+		}
+	}
+
 	cb.selectorConfigs[name] = &selectorConfigEntry{
 		selectorStr: selectorStr,
 		sel:         sel,
@@ -221,7 +232,7 @@ func (cb *ConfigBatcher) onNodeUpdate(update api.Update) {
 
 	newLabels := node.Labels
 	if !maps.Equal(cb.nodeLabels, newLabels) {
-		cb.nodeLabels = newLabels
+		cb.nodeLabels = maps.Clone(newLabels)
 		cb.configDirty = true
 		log.WithField("labels", newLabels).Info("Local node labels changed")
 	}
@@ -258,26 +269,33 @@ func (cb *ConfigBatcher) maybeSendCachedConfig() {
 
 // mergeMatchingSelectorConfigs evaluates all selector-scoped FelixConfiguration
 // resources against the local node's labels and merges matching configs into a
-// single map. When multiple resources match, values from all are merged; if
-// multiple resources set the same key, the effective value is not well defined.
+// single map. When multiple resources match, they are merged in alphabetical
+// order by resource name for determinism.
 func (cb *ConfigBatcher) mergeMatchingSelectorConfigs() map[string]string {
 	merged := make(map[string]string)
+	if cb.nodeLabels == nil {
+		return merged
+	}
+	var matchingNames []string
 	for name, entry := range cb.selectorConfigs {
 		if entry.sel == nil {
-			// No selector means this doesn't match any node.
-			continue
-		}
-		if cb.nodeLabels == nil {
-			// No node labels available; can't match.
 			continue
 		}
 		if entry.sel.Evaluate(cb.nodeLabels) {
-			log.WithField("name", name).Debug("Selector-scoped FelixConfiguration matches local node")
-			maps.Copy(merged, entry.config)
+			matchingNames = append(matchingNames, name)
 		}
+	}
+	slices.Sort(matchingNames)
+	for _, name := range matchingNames {
+		log.WithField("name", name).Debug("Selector-scoped FelixConfiguration matches local node")
+		maps.Copy(merged, cb.selectorConfigs[name].config)
 	}
 	return merged
 }
+
+// AnnotationConfigPrefix is the prefix for config override annotations on
+// FelixConfiguration resources. Must match the prefix in configurationprocessor.go.
+const AnnotationConfigPrefix = "config.projectcalico.org/"
 
 // ExtractConfigFromFelixSpec extracts the configuration key-value pairs from a
 // FelixConfigurationSpec using reflection. This mirrors the logic in the
@@ -313,30 +331,39 @@ func ExtractConfigFromFelixSpec(spec *apiv3.FelixConfigurationSpec) map[string]s
 
 		value := field.Interface()
 
-		// Convert the value to string, similar to the configurationprocessor.
+		// Convert the value to string. Use the same special-case converters
+		// as the configUpdateProcessor to ensure consistent string formatting.
 		var strValue string
-		switch vt := value.(type) {
-		case string:
-			strValue = vt
-		case v1.Duration:
-			switch fieldInfo.Tag.Get("configv1timescale") {
-			case "milliseconds":
-				ms := vt.Duration / time.Millisecond
-				remainder := vt.Duration % time.Millisecond
-				strValue = fmt.Sprintf("%v", float64(ms)+float64(remainder)/1e6)
+		if converter, ok := updateprocessors.FelixValueConverters[name]; ok {
+			converted := converter(value)
+			if converted == nil {
+				continue
+			}
+			strValue = converted.(string)
+		} else {
+			switch vt := value.(type) {
+			case string:
+				strValue = vt
+			case v1.Duration:
+				switch fieldInfo.Tag.Get("configv1timescale") {
+				case "milliseconds":
+					ms := vt.Duration / time.Millisecond
+					remainder := vt.Duration % time.Millisecond
+					strValue = fmt.Sprintf("%v", float64(ms)+float64(remainder)/1e6)
+				default:
+					strValue = fmt.Sprintf("%v", vt.Seconds())
+				}
+			case []string:
+				strValue = strings.Join(vt, ",")
+			case map[string]string:
+				var kvp strings.Builder
+				for k, v := range vt {
+					kvp.WriteString(k + "=" + v + ",")
+				}
+				strValue = kvp.String()
 			default:
-				strValue = fmt.Sprintf("%v", vt.Seconds())
+				strValue = fmt.Sprintf("%v", vt)
 			}
-		case []string:
-			strValue = strings.Join(vt, ",")
-		case map[string]string:
-			var kvp strings.Builder
-			for k, v := range vt {
-				kvp.WriteString(k + "=" + v + ",")
-			}
-			strValue = kvp.String()
-		default:
-			strValue = fmt.Sprintf("%v", vt)
 		}
 
 		config[name] = strValue
