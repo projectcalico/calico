@@ -2,7 +2,8 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/whisker
 IMAGE_BUILD_MARKER = whisker_container-$(ARCH).created
-EXCLUDEARCH        ?=ppc64le s390x
+# Whisker artifacts are only supported for amd64 and arm64.
+ARCHES             ?=amd64 arm64
 
 # Configure variables used by ci/cd common targets from lib.Makefile.
 BUILD_IMAGES=whisker

@@ -12,7 +12,9 @@ ISTIO_PROXYV2_IMAGE ?= istio-proxyv2
 ISTIO_ZTUNNEL_IMAGE ?= istio-ztunnel
 
 BUILD_IMAGES ?= $(ISTIO_CNI_IMAGE) $(ISTIO_PILOT_IMAGE) $(ISTIO_PROXYV2_IMAGE) $(ISTIO_ZTUNNEL_IMAGE)
-EXCLUDEARCH ?= ppc64le s390x
+
+# Istio artifacts are only supported for amd64 and arm64.
+ARCHES ?= amd64 arm64
 
 # Upstream version (configurable)
 ISTIO_VERSION ?= 1.28.1
