@@ -48,7 +48,6 @@ jobs:
         if: steps.auth.outputs.authorized == 'true'
         uses: actions/checkout@v4
         with:
-          ref: master
           sparse-checkout: .github/e2e-profiles.yaml
           sparse-checkout-cone-mode: false
 
