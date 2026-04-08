@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 	"github.com/projectcalico/calico/node/pkg/nodeinit"
+	"github.com/projectcalico/calico/node/pkg/nodeservices"
 	"github.com/projectcalico/calico/node/pkg/status"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
@@ -52,6 +53,7 @@ func NewCommand() *cobra.Command {
 		newInitCommand(),
 		newStartupCommand(),
 		newShutdownCommand(),
+		newNodeServicesCommand(),
 		newMonitorAddressesCommand(),
 		newAllocateTunnelAddrsCommand(),
 		newMonitorTokenCommand(),
@@ -170,6 +172,17 @@ func newShutdownCommand() *cobra.Command {
 	}
 }
 
+func newNodeServicesCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "node-services",
+		Short: "Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)",
+		Run: func(cmd *cobra.Command, args []string) {
+			logutils.ConfigureFormatter("node-services")
+			nodeservices.Run()
+		},
+	}
+}
+
 func newMonitorAddressesCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "monitor-addresses",
@@ -177,7 +190,9 @@ func newMonitorAddressesCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
 			startup.ConfigureLogging()
-			startup.MonitorIPAddressSubnets()
+			if err := startup.MonitorIPAddressSubnetsWithContext(context.Background()); err != nil {
+				logrus.WithError(err).Fatal("Monitor addresses failed")
+			}
 		},
 	}
 }
@@ -190,10 +205,8 @@ func newAllocateTunnelAddrsCommand() *cobra.Command {
 		Short: "Configure tunnel addresses for this node",
 		Run: func(cmd *cobra.Command, args []string) {
 			logrus.SetFormatter(&logutils.Formatter{Component: "tunnel-ip-allocator"})
-			if runOnce {
-				allocateip.Run(nil)
-			} else {
-				allocateip.Run(make(chan struct{}))
+			if err := allocateip.Run(context.Background(), runOnce); err != nil {
+				logrus.WithError(err).Fatal("Tunnel IP allocator failed")
 			}
 		},
 	}
@@ -209,7 +222,9 @@ func newMonitorTokenCommand() *cobra.Command {
 		Short: "Watch for Kubernetes token changes, update CNI config",
 		Run: func(cmd *cobra.Command, args []string) {
 			logrus.SetFormatter(&logutils.Formatter{Component: "cni-config-monitor"})
-			cni.Run()
+			if err := cni.RunWithContext(context.Background()); err != nil {
+				logrus.WithError(err).Fatal("CNI config monitor failed")
+			}
 		},
 	}
 }
@@ -275,7 +290,9 @@ func newStatusCommand() *cobra.Command {
 		Short: "Run node status reporter",
 		Run: func(cmd *cobra.Command, args []string) {
 			logrus.SetFormatter(&logutils.Formatter{Component: "status-reporter"})
-			status.Run()
+			if err := status.RunWithContext(context.Background()); err != nil {
+				logrus.WithError(err).Fatal("Status reporter failed")
+			}
 		},
 	})
 

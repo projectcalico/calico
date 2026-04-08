@@ -411,7 +411,6 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 		return err
 	}
 
-
 	// Pre-check conflicts: detect v3 resources that differ from their v1 source
 	// before starting migration. This avoids locking the datastore only to
 	// discover conflicts mid-migration.
