@@ -190,8 +190,43 @@ jobs:
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
         run: gcloud auth configure-docker gcr.io --quiet
 
-      - name: Build and push Calico images
+      - name: Check if images already exist
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        id: check-images
+        run: |
+          TAG="${{ steps.pr.outputs.image_tag }}"
+          REGISTRY="gcr.io/unique-caldron-775/ci/calico"
+
+          # Check calico component images and e2e image separately - e2e
+          # test code changes more often than component images.
+          NODE_EXISTS=$(gcloud container images list-tags "${REGISTRY}/node" \
+            --filter="tags:${TAG}" --format="value(tags)" 2>/dev/null || true)
+          E2E_EXISTS=$(gcloud container images list-tags "${REGISTRY}/e2e" \
+            --filter="tags:${TAG}" --format="value(tags)" 2>/dev/null || true)
+
+          if [[ -n "$NODE_EXISTS" ]]; then
+            echo "Calico images already exist for tag ${TAG}, skipping component build"
+            echo "calico_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Calico images not found for tag ${TAG}, building"
+            echo "calico_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ -n "$E2E_EXISTS" ]]; then
+            echo "E2E image already exists for tag ${TAG}, skipping e2e build"
+            echo "e2e_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "E2E image not found for tag ${TAG}, building"
+            echo "e2e_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "e2e_image=${REGISTRY}/e2e:${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Calico images
+        if: >
+          steps.auth.outputs.authorized == 'true' &&
+          steps.validate.outputs.profile_invalid == 'false' &&
+          steps.check-images.outputs.calico_exists == 'false'
         id: build-images
         run: |
           TAG="${{ steps.pr.outputs.image_tag }}"
@@ -204,7 +239,7 @@ jobs:
         if: >
           steps.auth.outputs.authorized == 'true' &&
           steps.validate.outputs.profile_invalid == 'false' &&
-          steps.build-images.outcome == 'success'
+          steps.check-images.outputs.e2e_exists == 'false'
         id: build-e2e
         run: |
           TAG="${{ steps.pr.outputs.image_tag }}"
@@ -220,14 +255,13 @@ jobs:
 
           docker build -f /tmp/e2e.Dockerfile -t "$E2E_IMAGE" .
           docker push "$E2E_IMAGE"
-          echo "e2e_image=$E2E_IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Update status comment after build success
         if: >
           steps.auth.outputs.authorized == 'true' &&
           steps.validate.outputs.profile_invalid == 'false' &&
-          steps.build-images.outcome == 'success' &&
-          steps.build-e2e.outcome == 'success'
+          (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success') &&
+          (steps.check-images.outputs.e2e_exists == 'true' || steps.build-e2e.outcome == 'success')
         run: |
           PROFILE="${{ steps.parse.outputs.profile }}"
           TAG="${{ steps.pr.outputs.image_tag }}"
@@ -270,15 +304,15 @@ jobs:
         if: >
           steps.auth.outputs.authorized == 'true' &&
           steps.validate.outputs.profile_invalid == 'false' &&
-          steps.build-images.outcome == 'success' &&
-          steps.build-e2e.outcome == 'success'
+          (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success') &&
+          (steps.check-images.outputs.e2e_exists == 'true' || steps.build-e2e.outcome == 'success')
         id: semaphore-trigger
         run: |
           TAG="${{ steps.pr.outputs.image_tag }}"
           BRANCH="${{ steps.pr.outputs.branch }}"
           SHA="${{ steps.pr.outputs.sha }}"
           PIPELINE_FILE="${{ steps.validate.outputs.semaphore_pipeline }}"
-          E2E_IMAGE="${{ steps.build-e2e.outputs.e2e_image }}"
+          E2E_IMAGE="${{ steps.check-images.outputs.e2e_image }}"
           LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
 
           RESPONSE=$(curl -s -f -X POST \
