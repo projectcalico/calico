@@ -426,6 +426,38 @@ include:
 	}
 }
 
+func TestLoadInvalidRegex(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "bad.yaml", `
+exclude:
+  namePatterns:
+    - pattern: "[invalid"
+      reason: "bad regex"
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for invalid regex")
+	}
+}
+
+func TestLoadInvalidRegexInGroup(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "bad.yaml", `
+exclude:
+  namePatterns:
+    - group: "broken patterns"
+      patterns:
+        - "valid.*"
+        - "(unclosed"
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for invalid regex in group")
+	}
+}
+
 func TestToFlagsRejectsComplexExcludeLabels(t *testing.T) {
 	cfg := &Config{
 		Exclude: Exclude{

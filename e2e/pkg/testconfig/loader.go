@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
@@ -114,6 +115,11 @@ func validate(cfg *Config, path string) error {
 	for i, entry := range cfg.Exclude.NamePatterns {
 		if err := entry.Validate(); err != nil {
 			return fmt.Errorf("%s: exclude.namePatterns[%d]: %w", path, i, err)
+		}
+		for _, p := range entry.AllPatterns() {
+			if _, err := regexp.Compile(p); err != nil {
+				return fmt.Errorf("%s: exclude.namePatterns[%d]: invalid regex %q: %w", path, i, p, err)
+			}
 		}
 	}
 
