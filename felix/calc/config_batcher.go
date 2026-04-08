@@ -322,8 +322,8 @@ func ExtractConfigFromFelixSpec(spec *apiv3.FelixConfigurationSpec) map[string]s
 			switch fieldInfo.Tag.Get("configv1timescale") {
 			case "milliseconds":
 				ms := vt.Duration / time.Millisecond
-				nMs := vt.Duration % time.Millisecond
-				strValue = fmt.Sprintf("%v", float64(ms)+float64(nMs)/1e6)
+				remainder := vt.Duration % time.Millisecond
+				strValue = fmt.Sprintf("%v", float64(ms)+float64(remainder)/1e6)
 			default:
 				strValue = fmt.Sprintf("%v", vt.Seconds())
 			}
