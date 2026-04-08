@@ -1,0 +1,426 @@
+name: Self-Service E2E
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  handle-e2e-comment:
+    if: >
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/e2e ')
+    runs-on: ubuntu-latest
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SEMAPHORE_ORG: tigera
+      SEMAPHORE_PROJECT_ID: ${{ secrets.SEMAPHORE_E2E_PROJECT_ID }}
+      SEMAPHORE_TOKEN: ${{ secrets.SEMAPHORE_E2E_TOKEN }}
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Part 1: Authorization, parsing, validation
+      # -----------------------------------------------------------------------
+
+      - name: Check authorization
+        id: auth
+        run: |
+          ASSOC="${{ github.event.comment.author_association }}"
+          if [[ "$ASSOC" != "MEMBER" && "$ASSOC" != "OWNER" && "$ASSOC" != "COLLABORATOR" ]]; then
+            echo "::notice::Ignoring /e2e from ${{ github.event.comment.user.login }} (association: $ASSOC)"
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Add unauthorized reaction
+        if: steps.auth.outputs.authorized == 'false'
+        run: |
+          gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -X POST -f content="-1"
+
+      - name: Checkout default branch (for profile config)
+        if: steps.auth.outputs.authorized == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          sparse-checkout: .github/e2e-profiles.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Parse comment
+        if: steps.auth.outputs.authorized == 'true'
+        id: parse
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+
+          # Extract profile name (first token after /e2e)
+          PROFILE=$(echo "$COMMENT" | awk '{print $2}')
+
+          # Extract optional --label-filter="..." value
+          LABEL_FILTER=""
+          if echo "$COMMENT" | grep -qE '\-\-label-filter='; then
+            LABEL_FILTER=$(echo "$COMMENT" | sed -nE 's/.*--label-filter="([^"]+)".*/\1/p')
+            if [[ -z "$LABEL_FILTER" ]]; then
+              # Try without quotes
+              LABEL_FILTER=$(echo "$COMMENT" | sed -nE 's/.*--label-filter=([^ ]+).*/\1/p')
+            fi
+          fi
+
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "label_filter=$LABEL_FILTER" >> "$GITHUB_OUTPUT"
+
+      - name: Capture validation output
+        if: steps.auth.outputs.authorized == 'true'
+        id: validate
+        run: |
+          python3 - >> "$GITHUB_OUTPUT" <<'PYEOF'
+          import yaml, sys, os
+
+          with open(".github/e2e-profiles.yaml") as f:
+              config = yaml.safe_load(f)
+
+          profiles = config.get("profiles", {})
+          profile = os.environ.get("PROFILE_INPUT", "")
+
+          if profile not in profiles:
+              names = "\n".join(f"- `{k}`: {v['description']}" for k, v in profiles.items())
+              print(f"profile_invalid=true")
+              print(f"available_profiles<<ENDOFPROFILES\n{names}\nENDOFPROFILES")
+          else:
+              p = profiles[profile]
+              print(f"profile_invalid=false")
+              print(f"semaphore_pipeline={p['semaphore_pipeline']}")
+              lf = os.environ.get("LABEL_FILTER_INPUT", "").strip()
+              effective_filter = lf if lf else p.get("default_label_filter", "")
+              print(f"effective_label_filter={effective_filter}")
+          PYEOF
+        env:
+          PROFILE_INPUT: ${{ steps.parse.outputs.profile }}
+          LABEL_FILTER_INPUT: ${{ steps.parse.outputs.label_filter }}
+
+      - name: React to comment (invalid profile)
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'true'
+        run: |
+          gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -X POST -f content="-1"
+
+      - name: Post invalid profile comment
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'true'
+        run: |
+          PROFILES="${{ steps.validate.outputs.available_profiles }}"
+          PROFILE="${{ steps.parse.outputs.profile }}"
+          gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            -X POST --input - <<EOF
+          {
+            "body": "❌ Unknown e2e profile \`${PROFILE}\`.\n\nAvailable profiles:\n${PROFILES}\n\nUsage: \`/e2e <profile> [--label-filter=\"<filter>\"]\`"
+          }
+          EOF
+
+      - name: React to comment (valid profile)
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        run: |
+          gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -X POST -f content="rocket"
+
+      - name: Get PR info
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        id: pr
+        run: |
+          PR_NUMBER="${{ github.event.issue.number }}"
+          PR_INFO=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName,headRefOid)
+          BRANCH=$(echo "$PR_INFO" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['headRefName'])")
+          SHA=$(echo "$PR_INFO" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['headRefOid'])")
+          SHORT_SHA="${SHA:0:8}"
+          IMAGE_TAG="pr-${PR_NUMBER}-${SHORT_SHA}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Post initial status comment
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        id: status-comment
+        run: |
+          PROFILE="${{ steps.parse.outputs.profile }}"
+          TAG="${{ steps.pr.outputs.image_tag }}"
+          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          LABEL_LINE=""
+          if [[ -n "$LABEL_FILTER" ]]; then
+            LABEL_LINE="\n**Label filter:** \`${LABEL_FILTER}\`"
+          fi
+
+          BODY=$(printf '⏳ Building images for e2e profile `%s` (tag: `%s`)...%b\n\n[Workflow run](%s)' \
+            "$PROFILE" "$TAG" "$LABEL_LINE" "$WORKFLOW_URL")
+
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            -X POST -f "body=$BODY" --jq '.id')
+          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # Part 2: Checkout PR branch and build images
+      # -----------------------------------------------------------------------
+
+      - name: Checkout PR branch
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.sha }}
+          fetch-depth: 1
+
+      - name: Authenticate to GCR
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCR_CI_KEY }}
+
+      - name: Configure Docker for GCR
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build and push Calico images
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        id: build-images
+        run: |
+          TAG="${{ steps.pr.outputs.image_tag }}"
+          make dev-push \
+            DEV_IMAGE_REGISTRY=gcr.io \
+            DEV_IMAGE_PATH=unique-caldron-775/ci/calico \
+            DEV_IMAGE_TAG="${TAG}"
+
+      - name: Build e2e test binary and image
+        if: >
+          steps.auth.outputs.authorized == 'true' &&
+          steps.validate.outputs.profile_invalid == 'false' &&
+          steps.build-images.outcome == 'success'
+        id: build-e2e
+        run: |
+          TAG="${{ steps.pr.outputs.image_tag }}"
+          E2E_IMAGE="gcr.io/unique-caldron-775/ci/calico/e2e:${TAG}"
+
+          make -C e2e build
+
+          cat > /tmp/e2e.Dockerfile <<'DOCKERFILE'
+          FROM gcr.io/distroless/static:nonroot
+          COPY e2e/bin/e2e.test /e2e.test
+          ENTRYPOINT ["/e2e.test"]
+          DOCKERFILE
+
+          docker build -f /tmp/e2e.Dockerfile -t "$E2E_IMAGE" .
+          docker push "$E2E_IMAGE"
+          echo "e2e_image=$E2E_IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Update status comment after build success
+        if: >
+          steps.auth.outputs.authorized == 'true' &&
+          steps.validate.outputs.profile_invalid == 'false' &&
+          steps.build-images.outcome == 'success' &&
+          steps.build-e2e.outcome == 'success'
+        run: |
+          PROFILE="${{ steps.parse.outputs.profile }}"
+          TAG="${{ steps.pr.outputs.image_tag }}"
+          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          LABEL_LINE=""
+          if [[ -n "$LABEL_FILTER" ]]; then
+            LABEL_LINE="\n**Label filter:** \`${LABEL_FILTER}\`"
+          fi
+
+          BODY=$(printf '⏳ Images built for e2e profile `%s` (tag: `%s`). Triggering pipeline...%b\n\n[Workflow run](%s)' \
+            "$PROFILE" "$TAG" "$LABEL_LINE" "$WORKFLOW_URL")
+
+          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
+            -X PATCH -f "body=$BODY"
+
+      - name: Update status comment on build failure
+        if: >
+          always() &&
+          steps.auth.outputs.authorized == 'true' &&
+          steps.validate.outputs.profile_invalid == 'false' &&
+          steps.status-comment.outputs.comment_id != '' &&
+          (steps.build-images.outcome == 'failure' || steps.build-e2e.outcome == 'failure')
+        run: |
+          PROFILE="${{ steps.parse.outputs.profile }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          BODY=$(printf '❌ Image build failed for e2e profile `%s`.\n\n[Workflow run](%s)' \
+            "$PROFILE" "$WORKFLOW_URL")
+
+          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
+            -X PATCH -f "body=$BODY"
+
+      # -----------------------------------------------------------------------
+      # Part 3: Trigger Semaphore and poll for results
+      # -----------------------------------------------------------------------
+
+      - name: Trigger Semaphore pipeline
+        if: >
+          steps.auth.outputs.authorized == 'true' &&
+          steps.validate.outputs.profile_invalid == 'false' &&
+          steps.build-images.outcome == 'success' &&
+          steps.build-e2e.outcome == 'success'
+        id: semaphore-trigger
+        run: |
+          TAG="${{ steps.pr.outputs.image_tag }}"
+          BRANCH="${{ steps.pr.outputs.branch }}"
+          SHA="${{ steps.pr.outputs.sha }}"
+          PIPELINE_FILE="${{ steps.validate.outputs.semaphore_pipeline }}"
+          E2E_IMAGE="${{ steps.build-e2e.outputs.e2e_image }}"
+          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
+
+          RESPONSE=$(curl -s -f -X POST \
+            "https://${SEMAPHORE_ORG}.semaphoreci.com/api/v1alpha/plumber-workflows" \
+            -H "Authorization: Token ${SEMAPHORE_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "project_id": "${SEMAPHORE_PROJECT_ID}",
+            "reference": "${BRANCH}",
+            "commit_sha": "${SHA}",
+            "pipeline_file": "${PIPELINE_FILE}",
+            "parameters": {
+              "IMAGE_REGISTRY": "gcr.io",
+              "IMAGE_PATH": "unique-caldron-775/ci/calico",
+              "IMAGE_TAG": "${TAG}",
+              "E2E_IMAGE": "${E2E_IMAGE}",
+              "LABEL_FILTER": "${LABEL_FILTER}"
+            }
+          }
+          EOF
+          )
+
+          WORKFLOW_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow_id'])")
+          echo "workflow_id=$WORKFLOW_ID" >> "$GITHUB_OUTPUT"
+
+          SEMAPHORE_URL="https://${SEMAPHORE_ORG}.semaphoreci.com/workflows/${WORKFLOW_ID}"
+          echo "semaphore_url=$SEMAPHORE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Update status comment with Semaphore link
+        if: >
+          steps.auth.outputs.authorized == 'true' &&
+          steps.validate.outputs.profile_invalid == 'false' &&
+          steps.semaphore-trigger.outcome == 'success'
+        run: |
+          PROFILE="${{ steps.parse.outputs.profile }}"
+          TAG="${{ steps.pr.outputs.image_tag }}"
+          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
+          SEMAPHORE_URL="${{ steps.semaphore-trigger.outputs.semaphore_url }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          LABEL_LINE=""
+          if [[ -n "$LABEL_FILTER" ]]; then
+            LABEL_LINE="\n**Label filter:** \`${LABEL_FILTER}\`"
+          fi
+
+          BODY=$(printf '⏳ Running e2e profile `%s` (tag: `%s`)...%b\n\n[Semaphore pipeline](%s) | [Workflow run](%s)' \
+            "$PROFILE" "$TAG" "$LABEL_LINE" "$SEMAPHORE_URL" "$WORKFLOW_URL")
+
+          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
+            -X PATCH -f "body=$BODY"
+
+      - name: Poll Semaphore for result
+        if: >
+          steps.auth.outputs.authorized == 'true' &&
+          steps.validate.outputs.profile_invalid == 'false' &&
+          steps.semaphore-trigger.outcome == 'success'
+        id: poll
+        timeout-minutes: 240
+        run: |
+          WORKFLOW_ID="${{ steps.semaphore-trigger.outputs.workflow_id }}"
+          START_TIME=$(date +%s)
+
+          while true; do
+            RESPONSE=$(curl -s -f \
+              "https://${SEMAPHORE_ORG}.semaphoreci.com/api/v1alpha/plumber-workflows/${WORKFLOW_ID}" \
+              -H "Authorization: Token ${SEMAPHORE_TOKEN}")
+
+            STATE=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow']['state'])" 2>/dev/null || echo "UNKNOWN")
+            RESULT=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow'].get('result', ''))" 2>/dev/null || echo "")
+
+            echo "Workflow $WORKFLOW_ID: state=$STATE result=$RESULT"
+
+            if [[ "$STATE" == "DONE" ]]; then
+              echo "final_result=$RESULT" >> "$GITHUB_OUTPUT"
+              echo "final_state=$STATE" >> "$GITHUB_OUTPUT"
+              break
+            fi
+
+            if [[ "$STATE" == "STOPPING" || "$STATE" == "STOPPED" ]]; then
+              echo "final_result=STOPPED" >> "$GITHUB_OUTPUT"
+              echo "final_state=$STATE" >> "$GITHUB_OUTPUT"
+              break
+            fi
+
+            NOW=$(date +%s)
+            ELAPSED=$(( NOW - START_TIME ))
+            if (( ELAPSED > 14400 )); then
+              echo "final_result=TIMEOUT" >> "$GITHUB_OUTPUT"
+              echo "final_state=TIMEOUT" >> "$GITHUB_OUTPUT"
+              break
+            fi
+
+            sleep 60
+          done
+
+          END_TIME=$(date +%s)
+          DURATION=$(( END_TIME - START_TIME ))
+          DURATION_MIN=$(( DURATION / 60 ))
+          echo "duration_minutes=$DURATION_MIN" >> "$GITHUB_OUTPUT"
+
+      - name: Post final result
+        if: >
+          always() &&
+          steps.auth.outputs.authorized == 'true' &&
+          steps.validate.outputs.profile_invalid == 'false' &&
+          steps.status-comment.outputs.comment_id != '' &&
+          steps.poll.outcome != 'skipped'
+        run: |
+          PROFILE="${{ steps.parse.outputs.profile }}"
+          TAG="${{ steps.pr.outputs.image_tag }}"
+          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
+          SEMAPHORE_URL="${{ steps.semaphore-trigger.outputs.semaphore_url }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          RESULT="${{ steps.poll.outputs.final_result }}"
+          DURATION="${{ steps.poll.outputs.duration_minutes }}"
+
+          LABEL_LINE=""
+          if [[ -n "$LABEL_FILTER" ]]; then
+            LABEL_LINE="\n**Label filter:** \`${LABEL_FILTER}\`"
+          fi
+
+          case "$RESULT" in
+            PASSED)
+              ICON="✅"
+              SUMMARY="passed"
+              ;;
+            FAILED)
+              ICON="❌"
+              SUMMARY="failed"
+              ;;
+            STOPPED)
+              ICON="⛔"
+              SUMMARY="was stopped"
+              ;;
+            TIMEOUT)
+              ICON="⏱️"
+              SUMMARY="timed out after 4 hours"
+              ;;
+            *)
+              ICON="❓"
+              SUMMARY="finished with unknown result: ${RESULT}"
+              ;;
+          esac
+
+          BODY=$(printf '%s E2E profile `%s` %s in %d minutes (tag: `%s`).%b\n\n[Semaphore pipeline](%s) | [Workflow run](%s)' \
+            "$ICON" "$PROFILE" "$SUMMARY" "$DURATION" "$TAG" "$LABEL_LINE" "$SEMAPHORE_URL" "$WORKFLOW_URL")
+
+          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
+            -X PATCH -f "body=$BODY"
