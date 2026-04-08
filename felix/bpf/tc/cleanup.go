@@ -127,7 +127,8 @@ func CleanUpProgramsAndPins() {
 			}
 		}
 	}
-	// Remove all tcx pins
+	// Remove all tcx and netkit pins
 	os.RemoveAll(bpfdefs.TcxPinDir)
+	os.RemoveAll(bpfdefs.NetkitPinDir)
 	bpf.CleanUpCalicoPins(bpfdefs.DefaultBPFfsPath)
 }
