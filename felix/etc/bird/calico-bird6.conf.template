@@ -17,11 +17,11 @@ router id @MY_IPV4_ADDRESS@;
 # priorities are important for optimal live migration behaviour.  This works as follows.
 #
 # - Normally, when Felix programs the local route for a VM, it specifies metric 1024 (configurable
-#   using the IPv4NormalRoutePriority setting).
+#   using the IPv6NormalRoutePriority setting).
 #
 # - But when Felix is handling a live-migrating VM, on the target node - i.e. the new node for that
 #   VM - it programs the VM route on the target node with a higher priority metric, 512
-#   (configurable using the IPv4ElevatedRoutePriority setting).  Note, _lower_ metric values mean
+#   (configurable using the IPv6ElevatedRoutePriority setting).  Note, _lower_ metric values mean
 #   _higher_ priority.
 #
 # - This is because there will be an overlap period during which other nodes, or routers beyond the
