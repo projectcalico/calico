@@ -84,7 +84,10 @@ jobs:
               lines.append("\nCopy a command and paste it as a PR comment to trigger.")
           else:
               lines.append("No specific tests were identified for the changes in this PR. "
-                           "Consider running `/e2e iptables-gcp` for general coverage.")
+                           "Consider running one of the following for general coverage:\n")
+              lines.append("- `/e2e iptables-gcp`")
+              lines.append("- `/e2e bpf-gcp`")
+              lines.append("- `/e2e nft-gcp`")
 
           body = "\n".join(lines)
           with open("/tmp/recommendation-body.md", "w") as f:
