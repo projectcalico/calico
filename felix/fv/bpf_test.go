@@ -932,7 +932,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 
 						By("handling ingress program removal")
-						if BPFAttachType() == "tc" {
+						if BPFAttachType() == "tc" && !infrastructure.NetkitMode() {
 							tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
 						} else {
 							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
@@ -949,7 +949,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 
 						// Check the program is put back.
-						if BPFAttachType() == "tc" {
+						if BPFAttachType() == "tc" && !infrastructure.NetkitMode() {
 							Eventually(func() string {
 								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 								return out
@@ -964,7 +964,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 
 						By("handling egress program removal")
-						if BPFAttachType() == "tc" {
+						if BPFAttachType() == "tc" && !infrastructure.NetkitMode() {
 							tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
 						} else {
 							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_egress", w[0].InterfaceName)))
@@ -975,7 +975,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						trigger()
 
 						// Check the program is put back.
-						if BPFAttachType() == "tc" {
+						if BPFAttachType() == "tc" && !infrastructure.NetkitMode() {
 							Eventually(func() string {
 								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 								return out
@@ -990,7 +990,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						cc.CheckConnectivity()
 
-						if BPFAttachType() == "tc" {
+						if BPFAttachType() == "tc" && !infrastructure.NetkitMode() {
 							By("Handling qdisc removal")
 							tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
 
