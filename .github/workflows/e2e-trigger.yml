@@ -167,6 +167,15 @@ jobs:
       # Part 2: Checkout PR branch and build images
       # -----------------------------------------------------------------------
 
+      - name: Free disk space
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        run: |
+          # GHA runners have ~14GB free but building all Calico images needs
+          # more. Remove preinstalled software we don't need.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          sudo docker image prune -af
+          df -h /
+
       - name: Disable sparse checkout
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
         run: |
