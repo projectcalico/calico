@@ -1690,7 +1690,7 @@ func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 	pr, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			if m := regexp.MustCompile(`https://github\.com/\S+/pull/\d+`).FindString(err.Error()); m != "" {
+			if m := regexp.MustCompile(`https://github\.com/[\w.-]+/[\w.-]+/pull/\d+`).FindString(err.Error()); m != "" {
 				pr = m
 			} else {
 				pr = fmt.Sprintf("https://github.com/%s/%s/pulls?q=is%%3Aopen+head%%3A%s", r.githubOrg, r.repo, prepBranch)
