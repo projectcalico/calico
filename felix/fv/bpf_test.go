@@ -912,6 +912,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 				It("should recover if the BPF programs are removed", func() {
+					if infrastructure.NetkitMode() {
+						Skip("Netkit uses bpf_link; removing pins doesn't detach programs")
+					}
 					flapInterface := func() {
 						By("Flapping interface")
 						tc.Felixes[0].Exec("ip", "link", "set", "down", w[0].InterfaceName)
