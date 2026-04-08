@@ -45,32 +45,16 @@
 
 set -euo pipefail
 
-# Re-tag locally-built calico images for the dev registry. Skips images
-# whose docker image ID hasn't changed since the last run.
+# Re-tag locally-built calico images for the dev registry.
 tag() {
-    mkdir -p "$STAMP_DIR"
-    tagged=0
-    skipped=0
-
     for img in $CALICO_IMAGES; do
         base="${img%%:*}"
         name="${base#calico/}"
         dev_img="${DEV_IMAGE_PREFIX}/${name}:${DEV_IMAGE_TAG}"
-        cur_id=$(docker image inspect "${base}:latest-${ARCH}" --format '{{.Id}}' 2>/dev/null || echo "none")
-        stamp="${STAMP_DIR}/${name}.image-id"
-        prev_id=$(cat "$stamp" 2>/dev/null || echo "")
-
-        if [ "$cur_id" = "$prev_id" ]; then
-            skipped=$((skipped + 1))
-        else
-            docker tag "${base}:latest-${ARCH}" "$dev_img"
-            echo "$cur_id" > "$stamp"
-            echo "Tagged $dev_img"
-            tagged=$((tagged + 1))
-        fi
+        docker tag "${base}:latest-${ARCH}" "$dev_img"
     done
 
-    echo "Calico images: $tagged tagged, $skipped unchanged"
+    echo "Tagged $(echo $CALICO_IMAGES | wc -w) images as ${DEV_IMAGE_PREFIX}/*:${DEV_IMAGE_TAG}"
 }
 
 # Build the operator image if its inputs (tag, registry, branch, versions)
