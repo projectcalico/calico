@@ -1412,6 +1412,7 @@ blocks:
         '/node/pkg/lifecycle/startup/autodetection/ipv4/*.go',
         '/node/pkg/lifecycle/utils/*.go',
         '/node/pkg/nodeinit/*.go',
+        '/node/pkg/nodeservices/*.go',
         '/node/pkg/status/*.go',
         '/node/pkg/status/populators/*.go',
         '/node/windows-packaging/tests/*.go',
@@ -1512,6 +1513,10 @@ blocks:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
+      prologue:
+        commands:
+          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+          - docker system prune -af
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
@@ -1857,6 +1862,7 @@ blocks:
         '/node/pkg/lifecycle/startup/autodetection/ipv4/*.go',
         '/node/pkg/lifecycle/utils/*.go',
         '/node/pkg/nodeinit/*.go',
+        '/node/pkg/nodeservices/*.go',
         '/node/pkg/status/*.go',
         '/node/pkg/status/populators/*.go',
         '/node/windows-packaging/tests/*.go',
@@ -1957,6 +1963,10 @@ blocks:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
+      prologue:
+        commands:
+          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+          - docker system prune -af
       jobs:
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
@@ -4040,6 +4050,7 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
         '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',

@@ -1480,8 +1480,10 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_clusternetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
 
-	# Install mutating admission policies.
+	# Install mutating admission policies (only for v3 CRDs, since they reference projectcalico.org/v3 resources).
+ifeq ($(CALICO_API_GROUP),projectcalico.org/v3)
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/; do echo "Waiting for mutating admission policies to be created"; sleep 2; done
+endif
 
 	touch $@
 
@@ -1663,7 +1665,7 @@ kind-deploy:
 # cluster, and restart pods.
 .PHONY: kind-reload
 kind-reload:
-	$(MAKE) -j$(shell nproc) kind-build-images
+	$(MAKE) -j$$(nproc) kind-build-images
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
