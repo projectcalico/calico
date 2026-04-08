@@ -36097,6 +36097,8 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfIPFragmentReassemblyEnabled:
+                  type: boolean
                 bpfJITHardening:
                   allOf:
                     - enum:
