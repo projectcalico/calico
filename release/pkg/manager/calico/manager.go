@@ -1686,16 +1686,23 @@ func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 			"--label", "release-note-not-required,docs-not-required",
 		}...)
 	}
+	fallbackURL := fmt.Sprintf("https://github.com/%s/%s/pulls?q=is%%3Aopen+head%%3A%s", r.githubOrg, r.repo, prepBranch)
 	logrus.WithField("args", args).Debug("Creating PR for release preparation")
 	pr, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
 	if err != nil {
+		pr = fallbackURL
 		if strings.Contains(err.Error(), "already exists") {
-			if m := regexp.MustCompile(`https://github\.com/\S+/pull/\d+`).FindString(err.Error()); m != "" {
-				pr = m
-			} else {
-				pr = fmt.Sprintf("https://github.com/%s/%s/pulls?q=is%%3Aopen+head%%3A%s", r.githubOrg, r.repo, prepBranch)
+			if m := regexp.MustCompile(`(?:^|\s)(https://github\.com/[\w.-]+/[\w.-]+/pull/\d+)(?:$|\s)`).FindStringSubmatch(err.Error()); len(m) > 1 {
+				if u, err := url.Parse(m[1]); err != nil {
+					logrus.WithField("PR", pr).Warn("PR already exists but could not parse URL from error, find using fallback PR URL")
+					return fmt.Errorf("parsing URL for PR: %w", err)
+				} else if u.Host != "github.com" || !strings.Contains(m[1], fmt.Sprintf("%s/%s/pull/", r.githubOrg, r.repo)) {
+					logrus.WithField("PR", pr).Warn("PR already exists but error returned an unexpected URL, find using fallback PR URL")
+					return fmt.Errorf("unexpected URL format for PR: %s", m[1])
+				}
+				pr = m[1]
 			}
-			logrus.Warnf("PR already exists, skipping creation. Find PR at: %s", pr)
+			logrus.WithField("PR", pr).Warn("PR already exists, find PR using fallback PR URL")
 			return r.switchToBaseBranch(baseBranch)
 		}
 		logrus.WithError(err).Error("Failed to create PR for release preparation")
