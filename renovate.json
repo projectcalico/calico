@@ -6,7 +6,7 @@
   "baseBranchPatterns": ["release-v3.31"],
   "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}",
   "separateMinorPatch": true,
-  "enabledManagers": ["gomod", "custom.regex"],
+  "enabledManagers": ["gomod", "custom.regex", "npm"],
   "prHourlyLimit": 20,
   "prConcurrentLimit": 20,
   "addLabels": ["docs-not-required", "release-note-not-required", "dependencies"],
@@ -53,6 +53,11 @@
     {
       "description": "Disable all Go module updates",
       "matchManagers": ["gomod"],
+      "enabled": false
+    },
+    {
+      "description": "Disable all npm updates",
+      "matchManagers": ["npm"],
       "enabled": false
     },
     {
