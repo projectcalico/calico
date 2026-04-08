@@ -81,6 +81,7 @@ type mockDataplane struct {
 	ensureStartedFn        func()
 	ensureQdiscFn          func(string) (bool, error)
 	interfaceByIndexFn     func(ifindex int) (*net.Interface, error)
+	ensureProgramLoadedFn  func(ap attachPoint, ipFamily proto.IPVersion) error
 	ensureProgramLoadedErr error // if set, ensureProgramLoaded returns this error
 
 	jitHarden             bool
@@ -141,6 +142,10 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	if m.ensureProgramLoadedFn != nil {
+		return m.ensureProgramLoadedFn(ap, ipFamily)
+	}
 
 	if m.ensureProgramLoadedErr != nil {
 		return m.ensureProgramLoadedErr
@@ -3091,6 +3096,61 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(bookkeepingSetV6.Len()).To(Equal(0))
 		})
 
+	})
+
+	Context("with optional defrag program load failure on FROM_HEP ingress", func() {
+		JustBeforeEach(func() {
+			dp = newMockDataplane()
+			mockDP = dp
+			newBpfEpMgr(false)
+			// Simulate the optional defrag program failing to load on ingress.
+			// The real code retries without the optional program and records
+			// the skipped program in failedOptionalProgs. We mimic that here
+			// by hooking ensureProgramLoaded.
+			dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
+				if ap.HookName() == hook.Ingress && ipFamily == proto.IPVersion_IPV4 {
+					info := hook.GetOptionalSubProgInfo(hook.SubProgIPFrag)
+					if info != nil {
+						bpfEpMgr.failedOptionalProgs[info.FeatureName] = info
+					}
+				}
+
+				if apxdp, ok := ap.(*xdp.AttachPoint); ok {
+					apxdp.HookLayoutV4 = hook.Layout{
+						hook.SubProgXDPAllowed: 123,
+						hook.SubProgXDPDrop:    456,
+					}
+				}
+
+				key := ap.IfaceName() + ":" + ap.HookName().String()
+				if _, exists := dp.progs[key]; exists {
+					return nil
+				}
+				dp.lastProgID += 1
+				dp.progs[key] = dp.lastProgID
+				return nil
+			}
+		})
+
+		It("should program the interface and report failed optional programs", func() {
+			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp, Index: 3})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			// The interface should be programmed (not dirty).
+			Expect(bpfEpMgr.dirtyIfaceNames.Len()).To(Equal(0),
+				"interface should not remain dirty after successful load with skipped optional")
+
+			// No permanent error — the program loaded, just without defrag.
+			Expect(bpfEpMgr.permanentBPFErr).To(BeNil())
+
+			// The failed optional program should be recorded.
+			Expect(bpfEpMgr.failedOptionalProgs).To(HaveKey("IP fragment reassembly"))
+
+			// Programs should still be attached for eth0 ingress and egress.
+			Expect(dp.progs).To(HaveKey("eth0:ingress"))
+			Expect(dp.progs).To(HaveKey("eth0:egress"))
+		})
 	})
 
 	Context("with permanent BPF load failure", func() {
