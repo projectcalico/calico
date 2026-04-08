@@ -10,7 +10,7 @@
 # for pushing to a remote registry (no PullNever hack, custom tag/registry).
 # The operator will resolve images as:
 #   <DEV_IMAGE_REGISTRY>/<DEV_IMAGE_PATH>/<image>:<DEV_IMAGE_TAG>
-# e.g., docker.io/caseydavenport/node:my-feature
+# e.g., docker.io/myuser/node:my-feature
 
 set -e
 REPO=${REPO:-tigera/operator}

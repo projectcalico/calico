@@ -15,7 +15,7 @@
 
 # dev-build.sh — Tag and push Calico dev images to a remote registry.
 #
-# Called by `make dev-image` and `make dev-push`. Not intended to be run
+# Called by `make image` and `make push`. Not intended to be run
 # directly (requires environment variables set by the Makefile).
 #
 # Usage:
@@ -119,7 +119,7 @@ push() {
         fi
     done
 
-    echo "dev-push complete: $pushed pushed, $skipped already up-to-date"
+    echo "push complete: $pushed pushed, $skipped already up-to-date"
 }
 
 case "${1:-}" in

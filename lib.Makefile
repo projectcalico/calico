@@ -1591,36 +1591,47 @@ KIND_IMAGE_MARKERS = \
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
+	touch $@
 
 $(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
 	$(MAKE) -C $(REPO_ROOT)/typha image
+	touch $@
 
 $(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
 	$(MAKE) -C $(REPO_ROOT)/apiserver image
+	touch $@
 
 $(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
 	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
+	touch $@
 
 $(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
 	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+	touch $@
 
 $(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
 	$(MAKE) -C $(REPO_ROOT)/calicoctl image
+	touch $@
 
 $(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
 	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
+	touch $@
 
 $(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
 	$(MAKE) -C $(REPO_ROOT)/goldmane image
+	touch $@
 
 $(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
 	$(MAKE) -C $(REPO_ROOT)/webhooks image
+	touch $@
 
 $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
+	touch $@
 
 $(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
 	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
+	touch $@
 
 # Operator is built from a separate repo/branch. It only needs
 # calico_versions.yml (a static file with version strings), not the
@@ -1709,19 +1720,9 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 	touch $@
 
 ###############################################################################
-# Dev build & push workflow — build all images, tag with a custom tag, and
-# optionally push to a personal Docker Hub registry.
-#
-# Images are only re-tagged / re-pushed when their docker image ID changes,
-# and the operator is only rebuilt when its inputs change. This makes repeated
-# runs fast when only one component has been modified.
-#
-# Usage:
-#   make dev-push DEV_IMAGE_PATH=caseydavenport DEV_IMAGE_TAG=my-feature
-#
-# To force a full rebuild, remove the stamp directory:
-#   rm -rf .dev-stamps && make dev-push ...
+# Dev image build variables. Targets that use these are in the root Makefile.
 ###############################################################################
+DEV_IMAGE_PATH ?= calico
 DEV_IMAGE_TAG ?= $(GIT_VERSION)
 DEV_IMAGE_REGISTRY ?= docker.io
 DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
@@ -1731,35 +1732,6 @@ DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
 DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
 DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
 DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
-
-## Build all component images and tag them for the dev registry.
-.PHONY: dev-image
-dev-image: $(KIND_IMAGE_MARKERS)
-ifndef DEV_IMAGE_PATH
-	$(error DEV_IMAGE_PATH is required (e.g., make dev-image DEV_IMAGE_PATH=caseydavenport DEV_IMAGE_TAG=my-feature))
-endif
-	@CALICO_IMAGES="$(KIND_CALICO_IMAGES)" \
-	  DEV_IMAGE_PREFIX="$(DEV_IMAGE_PREFIX)" \
-	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
-	  ARCH="$(ARCH)" \
-	  STAMP_DIR="$(DEV_STAMP_DIR)" \
-	  $(REPO_ROOT)/hack/dev-build.sh --tag
-	@STAMP_DIR="$(DEV_STAMP_DIR)" \
-	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
-	  OPERATOR_REPO="$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)" \
-	  OPERATOR_BRANCH="$(OPERATOR_BRANCH)" \
-	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
-	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
-	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
-	  $(REPO_ROOT)/hack/dev-build.sh --operator
-	@echo "dev-image complete"
-
-## Push all dev-tagged images to the registry.
-.PHONY: dev-push
-dev-push: dev-image
-	@DEV_IMAGES="$(DEV_CALICO_IMAGES) $(DEV_OPERATOR_IMAGE)" \
-	  STAMP_DIR="$(DEV_STAMP_DIR)" \
-	  $(REPO_ROOT)/hack/dev-build.sh --push
 
 ###############################################################################
 # Common functions for launching a local etcd instance.
