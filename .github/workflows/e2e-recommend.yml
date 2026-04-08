@@ -104,7 +104,7 @@ jobs:
           HEADER="${COMMENT_MARKER}
           **E2E Testing**
 
-          You can use the \`/e2e\` command to run e2e tests against this PR. Do this when you are confident the PR is ready to go.
+          Project maintainers can use the \`/e2e\` command to run e2e tests against this PR. Do this when you are confident the PR is ready to go.
 
           "
 
