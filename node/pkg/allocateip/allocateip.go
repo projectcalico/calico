@@ -48,16 +48,13 @@ import (
 // It will assign an address if there are any available, and remove any tunnel addresses
 // that are configured and should no longer be.
 
-// Run runs the tunnel ip allocator. If done is nil, it runs in single-shot mode. If non-nil, it runs in daemon mode
-// performing a reconciliation when IP pool or node configuration changes that may impact the allocations.
-func Run(done <-chan struct{}) {
-	// This binary is only ever invoked _after_ the
-	// startup binary has been invoked and the modified environments have
-	// been sourced.  Therefore, the NODENAME environment will always be
-	// set at this point.
+// Run runs the tunnel IP allocator. In oneshot mode it reconciles once and
+// returns. In daemon mode it watches for IP pool and node configuration
+// changes, reconciling whenever they occur, and blocks until ctx is cancelled.
+func Run(ctx context.Context, oneshot bool) error {
 	nodename := os.Getenv("NODENAME")
 	if nodename == "" {
-		log.Panic("NODENAME environment is not set")
+		return fmt.Errorf("NODENAME environment is not set")
 	}
 
 	// Load felix environment configuration. Note that this does not perform the full hierarchical load of felix
@@ -68,33 +65,28 @@ func Run(done <-chan struct{}) {
 	// Load the client config from environment.
 	cfg, c := calicoclient.CreateClient()
 
-	run(nodename, cfg, c, felixEnvConfig, done)
+	return run(ctx, nodename, cfg, c, felixEnvConfig, oneshot)
 }
 
 func run(
-	nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface,
-	felixEnvConfig *felixconfig.Config, done <-chan struct{},
-) {
+	ctx context.Context, nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface,
+	felixEnvConfig *felixconfig.Config, oneshot bool,
+) error {
 	// If configured to use host-local IPAM, there is no need to configure tunnel addresses as they use the
 	// first IP of the pod CIDR - this is handled in the k8s backend code in libcalico-go.
 	if cfg.Spec.K8sUsePodCIDR {
 		log.Debug("Using host-local IPAM, no need to allocate a tunnel IP")
-		if done != nil {
-			// If a done channel is specified, only exit when this is closed.
-			<-done
+		if !oneshot {
+			<-ctx.Done()
 		}
-		return
+		return nil
 	}
 
-	if done == nil {
-		// Running in single shot mode, so assign addresses and exit.
-		if err := reconcileTunnelAddrs(nodename, c, felixEnvConfig); err != nil {
-			log.WithError(err).Fatal("Failed to reconcile tunnel address")
-		}
-		return
+	if oneshot {
+		return reconcileTunnelAddrs(nodename, c, felixEnvConfig)
 	}
 
-	// This is running as a daemon. Create a long-running reconciler.
+	// Daemon mode: create a long-running reconciler.
 	r := &reconciler{
 		nodename:       nodename,
 		cfg:            cfg,
@@ -106,10 +98,6 @@ func run(
 
 	// Either create a typha syncclient or a local syncer depending on configuration. This calls back into the
 	// reconciler to trigger updates when necessary.
-
-	// Read Typha settings from the environment.
-	// When Typha is in use, there will already be variables prefixed with FELIX_, so it's
-	// convenient if we honor those as well as the CALICO variables.
 	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
 	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
 		&typhaConfig, syncproto.SyncerTypeTunnelIPAllocation,
@@ -118,14 +106,25 @@ func run(
 	) {
 		log.Debug("Using typha syncclient")
 	} else {
-		// Use the syncer locally.
 		log.Debug("Using local syncer")
 		syncer := tunnelipsyncer.New(c.(backendClientAccessor).Backend(), r, nodename)
 		syncer.Start()
 	}
 
-	// Run the reconciler.
-	r.run(done)
+	return r.run(ctx)
+}
+
+func (r reconciler) run(ctx context.Context) error {
+	for {
+		select {
+		case <-r.ch:
+			if err := reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig); err != nil {
+				return fmt.Errorf("failed to reconcile tunnel address: %w", err)
+			}
+		case <-ctx.Done():
+			return nil
+		}
+	}
 }
 
 // reconciler watches IPPool and Node configuration and triggers a reconciliation of the Tunnel IP addresses whenever
@@ -138,24 +137,6 @@ type reconciler struct {
 	data           map[string]any
 	felixEnvConfig *felixconfig.Config
 	inSync         bool
-}
-
-// run is the main reconciliation loop, it loops until done.
-func (r reconciler) run(done <-chan struct{}) {
-	// Loop forever, updating whenever we get a kick. The first kick will happen as soon as the syncer is in sync.
-	for {
-		select {
-		case <-r.ch:
-			// Received an update that requires reconciliation.  If the reconciliation fails it will cause the daemon
-			// to exit this is fine - it will be restarted, and the syncer will trigger a reconciliation when in-sync
-			// again.
-			if err := reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig); err != nil {
-				log.WithError(err).Fatal("Failed to reconcile tunnel address")
-			}
-		case <-done:
-			return
-		}
-	}
 }
 
 // OnStatusUpdated handles the syncer status callback method.
@@ -245,13 +226,13 @@ func reconcileTunnelAddrs(
 	// Get node resource for given nodename.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
 	if err != nil {
-		log.WithError(err).Fatalf("failed to fetch node resource '%s'", nodename)
+		return fmt.Errorf("failed to fetch node resource '%s': %w", nodename, err)
 	}
 
 	// Get list of ip pools
 	ipPoolList, err := c.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
-		log.WithError(err).Fatal("Unable to query IP pool configuration")
+		return fmt.Errorf("unable to query IP pool configuration: %w", err)
 	}
 
 	originalNode := node.DeepCopy()
@@ -405,8 +386,8 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, node *inte
 			// in IPAM. For example, if the node object was manually edited.
 			release = true
 		} else {
-			// Failed to get assignment attributes, datastore connection issues possible, panic
-			logCtx.WithError(err).Panicf("Failed to get assignment attributes for CIDR '%s'", addr)
+			// Failed to get assignment attributes, datastore connection issues possible.
+			return "", fmt.Errorf("failed to get assignment attributes for CIDR '%s': %w", addr, err)
 		}
 	}
 
@@ -436,8 +417,7 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, node *inte
 func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, nodename string, attrType string) error {
 	ipAddr := net.ParseIP(addr)
 	if ipAddr == nil {
-		log.Fatalf("Failed to parse node tunnel address '%s'", addr)
-		return nil
+		return fmt.Errorf("failed to parse node tunnel address '%s'", addr)
 	}
 
 	// Release the old allocation.
