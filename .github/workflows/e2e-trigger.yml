@@ -130,19 +130,17 @@ jobs:
 
       - name: Post available profiles (help mode)
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.help_mode == 'true'
+        env:
+          PROFILES: ${{ steps.validate.outputs.available_profiles }}
         run: |
-          PROFILES="${{ steps.validate.outputs.available_profiles }}"
           gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
             -X POST -f content="eyes"
-          gh pr comment "${{ github.event.issue.number }}" \
-            --body "$(cat <<EOF
-          **Available e2e profiles:**
 
-          ${PROFILES}
-
-          Usage: \`/e2e <profile> [--label-filter="<filter>"]\`
-          EOF
-          )"
+          printf '**Available e2e profiles:**\n\n%s\n\nUsage: `/e2e <profile> [--label-filter="<filter>"]`\n' "$PROFILES" > /tmp/help-body.md
+          gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+            -X POST --input - <<APIEOF
+          {"body": $(python3 -c "import json; print(json.dumps(open('/tmp/help-body.md').read()))")}
+          APIEOF
 
       - name: React to comment (valid profile)
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
