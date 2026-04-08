@@ -290,29 +290,6 @@ jobs:
           gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
             -X PATCH -f "body=$BODY"
 
-      - name: Update status comment on failure
-        if: >
-          always() &&
-          steps.auth.outputs.authorized == 'true' &&
-          steps.validate.outputs.profile_invalid == 'false' &&
-          steps.status-comment.outputs.comment_id != '' &&
-          (steps.build-images.outcome == 'failure' || steps.build-e2e.outcome == 'failure' || steps.semaphore-trigger.outcome == 'failure')
-        run: |
-          PROFILE="${{ steps.parse.outputs.profile }}"
-          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-          if [[ "${{ steps.semaphore-trigger.outcome }}" == "failure" ]]; then
-            REASON="Semaphore pipeline trigger failed"
-          else
-            REASON="Image build failed"
-          fi
-
-          BODY=$(printf '❌ %s for e2e profile `%s`.\n\n[Workflow run](%s)' \
-            "$REASON" "$PROFILE" "$WORKFLOW_URL")
-
-          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
-            -X PATCH -f "body=$BODY"
-
       # -----------------------------------------------------------------------
       # Part 3: Trigger Semaphore and poll for results
       # -----------------------------------------------------------------------
@@ -477,6 +454,34 @@ jobs:
 
           BODY=$(printf '%s E2E profile `%s` %s in %d minutes (tag: `%s`).%b\n\n[Semaphore pipeline](%s) | [Workflow run](%s)' \
             "$ICON" "$PROFILE" "$SUMMARY" "$DURATION" "$TAG" "$LABEL_LINE" "$SEMAPHORE_URL" "$WORKFLOW_URL")
+
+          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
+            -X PATCH -f "body=$BODY"
+
+      # -----------------------------------------------------------------------
+      # Catch-all failure handler — must be the LAST step so it can reference
+      # the outcome of every preceding step.
+      # -----------------------------------------------------------------------
+      - name: Update status comment on failure
+        if: >
+          always() &&
+          steps.status-comment.outputs.comment_id != '' &&
+          steps.poll.outcome != 'success' &&
+          (steps.build-images.outcome == 'failure' || steps.build-e2e.outcome == 'failure' || steps.semaphore-trigger.outcome == 'failure')
+        run: |
+          PROFILE="${{ steps.parse.outputs.profile }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [[ "${{ steps.semaphore-trigger.outcome }}" == "failure" ]]; then
+            REASON="Semaphore pipeline trigger failed"
+          elif [[ "${{ steps.build-e2e.outcome }}" == "failure" ]]; then
+            REASON="E2E image build failed"
+          else
+            REASON="Image build failed"
+          fi
+
+          BODY=$(printf '❌ %s for e2e profile `%s`.\n\n[Workflow run](%s)' \
+            "$REASON" "$PROFILE" "$WORKFLOW_URL")
 
           gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
             -X PATCH -f "body=$BODY"
