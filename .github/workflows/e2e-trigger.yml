@@ -38,11 +38,13 @@ jobs:
             echo "authorized=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Add unauthorized reaction
+      - name: Add unauthorized reaction and reply
         if: steps.auth.outputs.authorized == 'false'
         run: |
           gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
             -X POST -f content="-1"
+          gh pr comment "${{ github.event.issue.number }}" \
+            --body "Only organization members can trigger e2e tests."
 
       - name: Checkout default branch (for profile config)
         if: steps.auth.outputs.authorized == 'true'
