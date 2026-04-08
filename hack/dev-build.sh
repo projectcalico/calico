@@ -45,6 +45,8 @@
 
 set -euo pipefail
 
+# Re-tag locally-built calico images for the dev registry. Skips images
+# whose docker image ID hasn't changed since the last run.
 tag() {
     mkdir -p "$STAMP_DIR"
     tagged=0
@@ -71,6 +73,8 @@ tag() {
     echo "Calico images: $tagged tagged, $skipped unchanged"
 }
 
+# Build the operator image if its inputs (tag, registry, branch, versions)
+# have changed since the last run.
 operator() {
     mkdir -p "$STAMP_DIR"
     versions_hash=$(md5sum "${KIND_INFRA_DIR}/calico_versions.yml" | cut -d' ' -f1)
@@ -93,6 +97,8 @@ operator() {
     fi
 }
 
+# Push dev-tagged images to the remote registry. Skips images whose
+# docker image ID hasn't changed since the last push.
 push() {
     pushed=0
     skipped=0
