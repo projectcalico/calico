@@ -181,11 +181,11 @@ describe('<ResizableBody/>', () => {
             </Table>,
         );
 
-        expect(mockCallBack).toBeCalledTimes(0);
+        expect(mockCallBack).toHaveBeenCalledTimes(0);
 
         fireEvent.click(screen.getAllByTestId('column-header')[0]);
 
-        expect(mockCallBack).toBeCalledTimes(1);
+        expect(mockCallBack).toHaveBeenCalledTimes(1);
 
         fireEvent.keyUp(screen.getByTestId('column-header'), {
             key: 'Enter',
@@ -197,6 +197,6 @@ describe('<ResizableBody/>', () => {
             keyCode: 13,
         });
 
-        expect(mockCallBack).toBeCalledTimes(3);
+        expect(mockCallBack).toHaveBeenCalledTimes(3);
     });
 });

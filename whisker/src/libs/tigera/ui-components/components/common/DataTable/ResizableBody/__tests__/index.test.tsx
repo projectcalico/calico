@@ -204,7 +204,7 @@ describe('<ResizableBody/>', () => {
         expect(screen.getAllByTestId('cell-checkbox')[0]).toBeInTheDocument();
         fireEvent.click(screen.getAllByTestId('cell-checkbox')[0]);
 
-        expect(mockCallBack).toBeCalledTimes(1);
+        expect(mockCallBack).toHaveBeenCalledTimes(1);
     });
 
     it('getTableStateReducer', () => {
