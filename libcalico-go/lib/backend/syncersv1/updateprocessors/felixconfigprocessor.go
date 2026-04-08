@@ -27,6 +27,19 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
+// FelixValueConverters maps FelixConfigurationSpec field names to their
+// special-case value converter functions. These are needed both by the
+// configUpdateProcessor (for v1 config decomposition) and by
+// ExtractConfigFromFelixSpec (for selector-scoped config extraction).
+var FelixValueConverters = map[string]ConfigFieldValueToV1ModelValue{
+	"FailsafeInboundHostPorts":  protoPortSliceToString,
+	"FailsafeOutboundHostPorts": protoPortSliceToString,
+	"RouteTableRange":           routeTableRangeToString,
+	"RouteTableRanges":          routeTableRangeListToString,
+	"HealthTimeoutOverrides":    healthTimeoutOverridesToString,
+	"BPFConntrackTimeouts":      bpfConntrackTimeoutsToString,
+}
+
 // Create a new SyncerUpdateProcessor to sync FelixConfiguration data in v1 format for
 // consumption by Felix.
 func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
@@ -35,14 +48,7 @@ func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 		AllowAnnotations,
 		func(node, name string) model.Key { return model.HostConfigKey{Hostname: node, Name: name} },
 		func(name string) model.Key { return model.GlobalConfigKey{Name: name} },
-		map[string]ConfigFieldValueToV1ModelValue{
-			"FailsafeInboundHostPorts":  protoPortSliceToString,
-			"FailsafeOutboundHostPorts": protoPortSliceToString,
-			"RouteTableRange":           routeTableRangeToString,
-			"RouteTableRanges":          routeTableRangeListToString,
-			"HealthTimeoutOverrides":    healthTimeoutOverridesToString,
-			"BPFConntrackTimeouts":      bpfConntrackTimeoutsToString,
-		},
+		FelixValueConverters,
 	)
 }
 

@@ -15,6 +15,8 @@
 package calc_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -337,6 +339,140 @@ var _ = Describe("ConfigBatcher", func() {
 				Expect(recorder.Updates).To(BeEmpty())
 			})
 		})
+
+		Context("with multiple overlapping selector-scoped FelixConfigurations", func() {
+			BeforeEach(func() {
+				// Config "b-config" sets BPFEnabled=true and BPFLogLevel=debug.
+				fcB := apiv3.NewFelixConfiguration()
+				fcB.Name = "b-config"
+				enabled := true
+				fcB.Spec.NodeSelector = "role == 'gpu'"
+				fcB.Spec.BPFEnabled = &enabled
+				fcB.Spec.BPFLogLevel = "debug"
+				sendFelixConfigResource("b-config", fcB)
+
+				// Config "a-config" sets BPFLogLevel=info (should be overridden by
+				// b-config because "b" > "a" alphabetically).
+				fcA := apiv3.NewFelixConfiguration()
+				fcA.Name = "a-config"
+				fcA.Spec.NodeSelector = "role == 'gpu'"
+				fcA.Spec.BPFLogLevel = "info"
+				sendFelixConfigResource("a-config", fcA)
+
+				cb.OnDatamodelStatus(api.InSync)
+			})
+			It("should merge in alphabetical order (later names win)", func() {
+				Expect(recorder.Updates).To(HaveLen(1))
+				Expect(recorder.Updates[0].selector).To(HaveKeyWithValue("BPFEnabled", "true"))
+				// "b-config" is merged after "a-config", so its BPFLogLevel wins.
+				Expect(recorder.Updates[0].selector).To(HaveKeyWithValue("BPFLogLevel", "debug"))
+			})
+		})
+
+		Context("with an invalid selector string", func() {
+			BeforeEach(func() {
+				fc := apiv3.NewFelixConfiguration()
+				fc.Name = "bad-selector"
+				fc.Spec.NodeSelector = "invalid @@@ selector"
+				enabled := true
+				fc.Spec.BPFEnabled = &enabled
+				sendFelixConfigResource("bad-selector", fc)
+				cb.OnDatamodelStatus(api.InSync)
+			})
+			It("should ignore the invalid selector config", func() {
+				Expect(recorder.Updates).To(HaveLen(1))
+				Expect(recorder.Updates[0].selector).To(BeEmpty())
+			})
+		})
+	})
+})
+
+var _ = Describe("ExtractConfigFromFelixSpec", func() {
+	It("should extract simple fields", func() {
+		enabled := true
+		spec := &apiv3.FelixConfigurationSpec{
+			BPFEnabled:  &enabled,
+			BPFLogLevel: "debug",
+		}
+		result := ExtractConfigFromFelixSpec(spec)
+		Expect(result).To(HaveKeyWithValue("BPFEnabled", "true"))
+		Expect(result).To(HaveKeyWithValue("BPFLogLevel", "debug"))
+	})
+
+	It("should skip nil pointer fields", func() {
+		spec := &apiv3.FelixConfigurationSpec{}
+		result := ExtractConfigFromFelixSpec(spec)
+		Expect(result).NotTo(HaveKey("BPFEnabled"))
+	})
+
+	It("should convert ProtoPort slices using the standard converter", func() {
+		ports := []apiv3.ProtoPort{
+			{Protocol: "TCP", Port: 22},
+			{Protocol: "UDP", Port: 68},
+		}
+		spec := &apiv3.FelixConfigurationSpec{
+			FailsafeInboundHostPorts: &ports,
+		}
+		result := ExtractConfigFromFelixSpec(spec)
+		Expect(result).To(HaveKeyWithValue("FailsafeInboundHostPorts", "tcp:22,udp:68"))
+	})
+
+	It("should convert empty ProtoPort slices to 'none'", func() {
+		ports := []apiv3.ProtoPort{}
+		spec := &apiv3.FelixConfigurationSpec{
+			FailsafeInboundHostPorts: &ports,
+		}
+		result := ExtractConfigFromFelixSpec(spec)
+		Expect(result).To(HaveKeyWithValue("FailsafeInboundHostPorts", "none"))
+	})
+
+	It("should convert RouteTableRange using the standard converter", func() {
+		rtr := apiv3.RouteTableRange{Min: 1, Max: 250}
+		spec := &apiv3.FelixConfigurationSpec{
+			RouteTableRange: &rtr,
+		}
+		result := ExtractConfigFromFelixSpec(spec)
+		Expect(result).To(HaveKeyWithValue("RouteTableRange", "1-250"))
+	})
+
+	It("should convert RouteTableRanges using the standard converter", func() {
+		ranges := apiv3.RouteTableRanges{
+			{Min: 1, Max: 250},
+			{Min: 500, Max: 600},
+		}
+		spec := &apiv3.FelixConfigurationSpec{
+			RouteTableRanges: &ranges,
+		}
+		result := ExtractConfigFromFelixSpec(spec)
+		Expect(result).To(HaveKeyWithValue("RouteTableRanges", "1-250,500-600"))
+	})
+
+	It("should convert HealthTimeoutOverrides using the standard converter", func() {
+		spec := &apiv3.FelixConfigurationSpec{
+			HealthTimeoutOverrides: []apiv3.HealthTimeoutOverride{
+				{Name: "InternalDataplaneMainLoop", Timeout: metav1.Duration{Duration: 90 * time.Second}},
+			},
+		}
+		result := ExtractConfigFromFelixSpec(spec)
+		Expect(result).To(HaveKeyWithValue("HealthTimeoutOverrides", "InternalDataplaneMainLoop=1m30s"))
+	})
+
+	It("should convert Duration fields to seconds by default", func() {
+		dur := metav1.Duration{Duration: 30 * time.Second}
+		spec := &apiv3.FelixConfigurationSpec{
+			IptablesRefreshInterval: &dur,
+		}
+		result := ExtractConfigFromFelixSpec(spec)
+		Expect(result).To(HaveKeyWithValue("IptablesRefreshInterval", "30"))
+	})
+
+	It("should skip the NodeSelector field (confignamev1:\"-\")", func() {
+		spec := &apiv3.FelixConfigurationSpec{
+			NodeSelector: "role == 'gpu'",
+		}
+		result := ExtractConfigFromFelixSpec(spec)
+		Expect(result).NotTo(HaveKey("NodeSelector"))
+		Expect(result).NotTo(HaveKey("-"))
 	})
 })
 
