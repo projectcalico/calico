@@ -30,7 +30,7 @@ blocks:
       when: "branch !~ '.+'"
     task:
       jobs:
-        - name: Linux multi-arch
+        - name: Linux amd64
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C istio cd ARCHES=amd64 CONFIRM=true; fi
   - name: Publish istio images - native arm64 runner
