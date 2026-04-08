@@ -13,11 +13,72 @@ router id @MY_IPV4_ADDRESS@;
 # We should automate the build of this out of variables when
 # we have time.
 
+# The following filters also arrange to propagate route priority within a contiguous AS.  Route
+# priorities are important for optimal live migration behaviour.  This works as follows.
+#
+# - Normally, when Felix programs the local route for a VM, it specifies metric 1024 (configurable
+#   using the IPv4NormalRoutePriority setting).
+#
+# - But when Felix is handling a live-migrating VM, on the target node - i.e. the new node for that
+#   VM - it programs the VM route on the target node with a higher priority metric, 512
+#   (configurable using the IPv4ElevatedRoutePriority setting).  Note, _lower_ metric values mean
+#   _higher_ priority.
+#
+# - This is because there will be an overlap period during which other nodes, or routers beyond the
+#   cluster, see routes to the migrating VM IP via both the old and the new node.  To minimize any
+#   hiatus in connectivity to the migrating VM it is important that they choose the route via the
+#   new node; the higher priority metric enables this.
+#
+# - BIRD filters see the metric value that Felix programmed as the "krt_metric" attribute.
+#   krt_metric itself is not exposed in the BGP wire protocol, but there is a "bgp_local_pref"
+#   attribute that becomes the BGP LOCAL_PREF attribute on the wire.  Therefore, when exporting to
+#   other BGP peers, we use BIRD filter code that converts from krt_metric to bgp_local_pref.
+#   bgp_local_pref uses _higher_ values to mean _higher_ priority, and the valid range for priority
+#   is 1..2^31-2, so the conversion is:
+#
+#     bgp_local_pref = 2^31-1 - krt_metric
+#
+# - Correspondingly, on import from a BGP peer, we use BIRD filter code that converts back from
+#   bgp_local_pref to krt_metric:
+#
+#     krt_metric = 2^31-1 - bgp_local_pref
+#
+#   However this must be done in the kernel export filter, instead of BGP import, because it doesn't
+#   take effect when BGP import filter code sets krt_metric.
+#
+# - When importing a higher priority route from a BGP peer, we also need to set the "preference"
+#   attribute (which BIRD uses to choose between routes from different protocols) so that BIRD can
+#   choose to program a remote route via another node, into its local Linux kernel, even if it
+#   already has a local device route for the same VM IP.  This situation arises - for example - if
+#   there is an active connection between two VMs on the same node, and then one of those VMs is
+#   live-migrated to a different node.
+
 filter export_bgp {
+  if (!defined(krt_metric)) then { krt_metric = 1024; }
+  bgp_local_pref = 2147483647 - krt_metric;
   if ( (ifname ~ "tap*") || (ifname ~ "cali*") || (ifname ~ "dummy1") ) then {
     if  net != ::/0 then accept;
   }
   reject;
+}
+
+filter import_bgp {
+  if (defined(bgp_local_pref)&&(bgp_local_pref > 2147482623)) then
+    preference = 200;
+  accept;
+}
+
+filter export_kernel {
+  if (defined(source) && (source = RTS_BGP) && !defined(krt_metric)) then {
+    krt_metric = 1024;
+    if (defined(bgp_local_pref)) then {
+      krt_metric = 2147483647 - bgp_local_pref;
+    }
+    if (krt_metric < 1024) then {
+      preference = 200;
+    }
+  }
+  accept;
 }
 
 # Configure synchronization between BIRD's routing tables and the
@@ -28,7 +89,7 @@ protocol kernel {
   scan time 2;    # Scan kernel routing table every 2 seconds
   import all;
   graceful restart;
-  export all;     # Default is export none
+  export filter export_kernel;     # Default is export none
 }
 
 # Watch interface up/down events.
