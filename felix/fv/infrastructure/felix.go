@@ -692,9 +692,17 @@ func (f *Felix) BPFNumPolProgramsTotalByEntryPointFn(entryPointIdx int, ingressO
 
 func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int, ingressOrEgress string) (contiguous, total int) {
 	gapSeen := false
-	jmpMapName := jump.EgressMapParameters.VersionedName()
-	if ingressOrEgress == "egress" {
-		jmpMapName = jump.IngressMapParameters.VersionedName()
+	var jmpMapName string
+	if NetkitMode() {
+		jmpMapName = jump.NetkitEgressMapParameters.VersionedName()
+		if ingressOrEgress == "egress" {
+			jmpMapName = jump.NetkitIngressMapParameters.VersionedName()
+		}
+	} else {
+		jmpMapName = jump.EgressMapParameters.VersionedName()
+		if ingressOrEgress == "egress" {
+			jmpMapName = jump.IngressMapParameters.VersionedName()
+		}
 	}
 	pinnedMap := "/sys/fs/bpf/tc/globals/" + jmpMapName
 	for i := range jump.MaxSubPrograms {
