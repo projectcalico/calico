@@ -187,9 +187,8 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 #   rm -rf .dev-stamps && make push ...
 ###############################################################################
 
-## Build all component images and tag them for the dev registry.
-## Supports `make -jN image` to build component images in parallel.
 .PHONY: image
+## Build all component images and tag for dev registry. Supports make -jN for parallel builds.
 image: $(KIND_IMAGE_MARKERS)
 	@CALICO_IMAGES="$(KIND_CALICO_IMAGES)" \
 	  DEV_IMAGE_PREFIX="$(DEV_IMAGE_PREFIX)" \
@@ -207,8 +206,8 @@ image: $(KIND_IMAGE_MARKERS)
 	  $(REPO_ROOT)/hack/dev-build.sh --operator
 	@echo "image complete"
 
-## Push all dev-tagged images to the registry.
 .PHONY: push
+## Push all tagged images to the remote registry.
 push: image
 	@DEV_IMAGES="$(DEV_CALICO_IMAGES) $(DEV_OPERATOR_IMAGE)" \
 	  STAMP_DIR="$(DEV_STAMP_DIR)" \
