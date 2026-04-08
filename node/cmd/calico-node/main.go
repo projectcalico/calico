@@ -28,6 +28,7 @@ import (
 	felix "github.com/projectcalico/calico/felix/daemon"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
+	"github.com/projectcalico/calico/node/cmd/calico-node/qos"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
 	"github.com/projectcalico/calico/node/pkg/cni"
 	"github.com/projectcalico/calico/node/pkg/flowlogs"
@@ -49,6 +50,7 @@ var (
 	version                    = flagSet.Bool("v", false, "Display version")
 	runFelix                   = flagSet.Bool("felix", false, "Run Felix")
 	runBPF                     = flagSet.Bool("bpf", false, "Run BPF debug tool")
+	runQoS                     = flagSet.Bool("qos", false, "Run QoS monitoring tool")
 	runInit                    = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
 	bestEffort                 = flagSet.Bool("best-effort", false, "Used in combination with the init flag. Report errors but do not fail if an error occurs during initialisation.")
 	runStartup                 = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
@@ -144,6 +146,9 @@ func main() {
 		// Command-line tools should log to stderr to avoid confusion with the output.
 		logrus.SetOutput(os.Stderr)
 		bpf.RunBPFCmd()
+	} else if *runQoS {
+		logrus.SetOutput(os.Stderr)
+		qos.RunQoSCmd()
 	} else if *runInit {
 		logrus.SetFormatter(&logutils.Formatter{Component: "init"})
 		if *bestEffort {
