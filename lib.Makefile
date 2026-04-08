@@ -1743,7 +1743,7 @@ endif
 	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
 	  ARCH="$(ARCH)" \
 	  STAMP_DIR="$(DEV_STAMP_DIR)" \
-	  $(REPO_ROOT)/hack/dev-push.sh --tag
+	  $(REPO_ROOT)/hack/dev-build.sh --tag
 	@STAMP_DIR="$(DEV_STAMP_DIR)" \
 	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
 	  OPERATOR_REPO="$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)" \
@@ -1751,7 +1751,7 @@ endif
 	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
 	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
 	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
-	  $(REPO_ROOT)/hack/dev-push.sh --operator
+	  $(REPO_ROOT)/hack/dev-build.sh --operator
 	@echo "dev-image complete"
 
 ## Push all dev-tagged images to the registry.
@@ -1759,7 +1759,7 @@ endif
 dev-push: dev-image
 	@DEV_IMAGES="$(DEV_CALICO_IMAGES) $(DEV_OPERATOR_IMAGE)" \
 	  STAMP_DIR="$(DEV_STAMP_DIR)" \
-	  $(REPO_ROOT)/hack/dev-push.sh --push
+	  $(REPO_ROOT)/hack/dev-build.sh --push
 
 ###############################################################################
 # Common functions for launching a local etcd instance.

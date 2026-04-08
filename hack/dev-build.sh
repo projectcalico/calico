@@ -13,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# dev-push.sh — Tag and push Calico dev images to a remote registry.
+# dev-build.sh — Tag and push Calico dev images to a remote registry.
 #
 # Called by `make dev-image` and `make dev-push`. Not intended to be run
 # directly (requires environment variables set by the Makefile).
 #
 # Usage:
-#   dev-push.sh --tag         Tag locally-built images for the dev registry
-#   dev-push.sh --operator    Build the operator image if inputs changed
-#   dev-push.sh --push        Push dev-tagged images to the registry
+#   dev-build.sh --tag         Tag locally-built images for the dev registry
+#   dev-build.sh --operator    Build the operator image if inputs changed
+#   dev-build.sh --push        Push dev-tagged images to the registry
 #
 # Environment (--tag):
 #   CALICO_IMAGES    - Space-separated calico/<name>:<tag> source images
