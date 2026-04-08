@@ -1736,6 +1736,16 @@ DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(su
 DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
 
 ###############################################################################
+# Self-service e2e trigger
+###############################################################################
+.PHONY: ci-e2e
+ci-e2e:
+	@$(REPO_ROOT)/hack/ci-e2e.sh \
+		$(if $(PROFILE),--profile=$(PROFILE)) \
+		$(if $(LABEL_FILTER),--label-filter=$(LABEL_FILTER)) \
+		$(if $(PR),--pr=$(PR))
+
+###############################################################################
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)
