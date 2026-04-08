@@ -309,7 +309,7 @@ jobs:
           E2E_IMAGE="${{ steps.check-images.outputs.e2e_image }}"
           LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
 
-          RESPONSE=$(curl -s -f -X POST \
+          HTTP_CODE=$(curl -s -o /tmp/sem-response.json -w "%{http_code}" -X POST \
             "https://${SEMAPHORE_ORG}.semaphoreci.com/api/v1alpha/plumber-workflows" \
             -H "Authorization: Token ${SEMAPHORE_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -329,6 +329,14 @@ jobs:
           }
           EOF
           )
+
+          RESPONSE=$(cat /tmp/sem-response.json)
+          echo "Semaphore API response (HTTP ${HTTP_CODE}): ${RESPONSE}"
+
+          if [[ "$HTTP_CODE" -ge 400 ]]; then
+            echo "::error::Semaphore API returned HTTP ${HTTP_CODE}: ${RESPONSE}"
+            exit 1
+          fi
 
           WORKFLOW_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow_id'])")
           echo "workflow_id=$WORKFLOW_ID" >> "$GITHUB_OUTPUT"
