@@ -13,7 +13,7 @@ jobs:
   handle-e2e-comment:
     if: >
       github.event.issue.pull_request != null &&
-      (startsWith(github.event.comment.body, '/e2e ') || github.event.comment.body == '/e2e')
+      contains(github.event.comment.body, '/e2e')
     runs-on: ubuntu-latest
 
     env:
