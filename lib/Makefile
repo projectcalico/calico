@@ -1,4 +1,3 @@
-include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/lib
 

@@ -1,4 +1,3 @@
-include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/apiserver
 LOCAL_CHECKS     = lint-cache-dir
@@ -49,7 +48,7 @@ CALICO_API_GROUP := crd.projectcalico.org/v1
 include ../lib.Makefile
 
 
-FIPS ?= false
+FIPS ?= $(call _read_default,.fips.default)
 
 ifeq ($(FIPS),true)
 CONTAINER_MARKER=$(CONTAINER_FIPS_CREATED)

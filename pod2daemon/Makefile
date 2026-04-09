@@ -1,4 +1,3 @@
-include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/pod2daemon
 
@@ -40,7 +39,7 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-FIPS ?= false
+FIPS ?= $(call _read_default,.fips.default)
 
 FLEXVOL_CONTAINER_MARKER=$(FLEXVOL_CONTAINER_CREATED)
 ifeq ($(FIPS),true)
@@ -84,7 +83,7 @@ protobuf proto/udsver.pb.go: proto/udsver.proto
 	$(MAKE) fix-changed
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= f0fd46fc3fbdb6fe20fc2d2614631816b551a143 #https://github.com/kubernetes-csi/node-driver-registrar/commit/f0fd46fc3fbdb6fe20fc2d2614631816b551a143
+UPSTREAM_REGISTRAR_TAG     ?= $(call _read_default,.versions.node_driver_registrar)
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"

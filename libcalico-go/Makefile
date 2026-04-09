@@ -1,4 +1,3 @@
-include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/libcalico-go
 
@@ -202,7 +201,7 @@ run-coredns: stop-coredns
 		--rm \
 		-v $(shell pwd)/test/coredns:/etc/coredns \
 		-w /etc/coredns \
-		coredns/coredns:$(COREDNS_VERSION)
+		coredns/coredns:$(call _read_default,.versions.coredns)
 
 stop-coredns:
 	-docker rm -f coredns

@@ -1,4 +1,3 @@
-include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/kube-controllers
 
@@ -20,7 +19,7 @@ include ../lib.Makefile
 KUBE_CONTROLLER_CONTAINER_CREATED=.image.created-$(ARCH)
 KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=.image.created-$(ARCH)-fips
 
-FIPS ?= false
+FIPS ?= $(call _read_default,.fips.default)
 
 ifeq ($(FIPS),true)
 KUBE_CONTROLLER_CONTAINER_MARKER=$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED)

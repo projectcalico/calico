@@ -28,7 +28,7 @@ blocks:
             - name: GITHUB_TOKEN
               value: ${MARVIN_GITHUB_TOKEN}
             - name: GIT_COMMIT_EXTRA_FILES
-              value: metadata.mk
+              value: defaults.yaml
             - name: GIT_COMMIT_TITLE
               value: "Semaphore Auto go-build Update"
           commands:

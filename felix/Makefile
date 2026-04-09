@@ -1,4 +1,3 @@
-include ../metadata.mk
 
 # This Makefile builds Felix and releases it in various forms:
 #
