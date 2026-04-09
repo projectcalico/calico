@@ -23,10 +23,10 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ConfigureWithCleanup fetches a cluster-scoped object by key, applies a
-// mutation, and returns a cleanup function that restores the original state.
-// If the object doesn't exist, it is created with the mutation applied and the
-// cleanup function deletes it.
+// ConfigureWithCleanup fetches an object by key, applies a mutation, and
+// returns a cleanup function that restores the original state. If the object
+// doesn't exist, it is created with the mutation applied and the cleanup
+// function deletes it.
 //
 // Typical usage with Ginkgo:
 //
