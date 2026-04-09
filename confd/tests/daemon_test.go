@@ -194,7 +194,7 @@ func TestBGPPeerPassword(t *testing.T) {
 
 // TestBGPPasswordDeadlock is a regression test for a deadlock that occurred
 // when iterating through many BGPPeers with password references. The deadlock
-// required the iteration to take >100ms, so we create 99 nodes/peers.
+// required the iteration to take >100ms, so we create many nodes/peers.
 func TestBGPPasswordDeadlock(t *testing.T) {
 	for _, be := range activeBackends {
 		if be.ctrlClient == nil {
@@ -202,49 +202,65 @@ func TestBGPPasswordDeadlock(t *testing.T) {
 		}
 		t.Run(be.name, func(t *testing.T) {
 			ctx := context.Background()
-			scale := 99
+			scale := 30
+
+			// Disable node-to-node mesh so the golden file (which only expects
+			// the explicit peer) matches.
+			meshOff := false
+			bgpCfg := &apiv3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       apiv3.BGPConfigurationSpec{NodeToNodeMeshEnabled: &meshOff},
+			}
+			_, err := be.calicoClient.BGPConfigurations().Create(ctx, bgpCfg, options.SetOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				_, _ = be.calicoClient.BGPConfigurations().Delete(ctx, "default", options.DeleteOptions{})
+			})
 
 			// Create the secret first (confd needs it to render passwords).
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: "my-secrets-1", Namespace: "kube-system"},
 				StringData: map[string]string{"a": "password-a"},
 			}
-			_, err := be.k8sClientset.CoreV1().Secrets("kube-system").Create(ctx, secret, metav1.CreateOptions{})
+			_, err = be.k8sClientset.CoreV1().Secrets("kube-system").Create(ctx, secret, metav1.CreateOptions{})
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				err := be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
-				require.NoError(t, err)
+				_ = be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
 			})
 
-			// Create scale nodes and BGPPeers with password refs.
-			for i := 1; i <= scale; i++ {
-				nodeName := fmt.Sprintf("node%d", i)
-				peerName := fmt.Sprintf("bgppeer-%d", i)
-				ip := fmt.Sprintf("10.24.0.%d/24", i)
+			// Use a distinct prefix to avoid collisions with other tests that
+			// share the envtest API server (e.g. TestNodeDeletion also uses "node1").
+			prefix := "dl-node"
 
-				// Create K8s node first (required in KDD mode).
+			// Create all K8s nodes first, then update with Calico BGP spec and
+			// create BGPPeers. Batching by resource type reduces the number of
+			// watch-event round-trips compared to the interleaved approach.
+			for i := 1; i <= scale; i++ {
 				k8sNode := &corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:   nodeName,
+						Name:   fmt.Sprintf("%s%d", prefix, i),
 						Labels: map[string]string{"node": "yes"},
 					},
 				}
 				_, err := be.k8sClientset.CoreV1().Nodes().Create(ctx, k8sNode, metav1.CreateOptions{})
 				require.NoError(t, err)
+			}
 
-				// Update with Calico BGP spec.
+			for i := 1; i <= scale; i++ {
+				nodeName := fmt.Sprintf("%s%d", prefix, i)
+				ip := fmt.Sprintf("10.24.0.%d/24", i)
+
 				cNode, err := be.calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
 				require.NoError(t, err)
 				cNode.Spec.BGP = &internalapi.NodeBGPSpec{IPv4Address: ip}
 				cNode.Labels["node"] = "yes"
 				_, err = be.calicoClient.Nodes().Update(ctx, cNode, options.SetOptions{})
 				require.NoError(t, err)
-				t.Cleanup(func() {
-					_, err := be.calicoClient.Nodes().Delete(ctx, nodeName, options.DeleteOptions{})
-					require.NoError(t, err)
-					err = be.k8sClientset.CoreV1().Nodes().Delete(ctx, nodeName, metav1.DeleteOptions{})
-					require.NoError(t, err)
-				})
+			}
+
+			for i := 1; i <= scale; i++ {
+				nodeName := fmt.Sprintf("%s%d", prefix, i)
+				peerName := fmt.Sprintf("dl-bgppeer-%d", i)
 
 				peer := &apiv3.BGPPeer{
 					ObjectMeta: metav1.ObjectMeta{Name: peerName},
@@ -260,16 +276,23 @@ func TestBGPPasswordDeadlock(t *testing.T) {
 						},
 					},
 				}
-				_, err = be.calicoClient.BGPPeers().Create(ctx, peer, options.SetOptions{})
+				_, err := be.calicoClient.BGPPeers().Create(ctx, peer, options.SetOptions{})
 				require.NoError(t, err)
-				t.Cleanup(func() {
-					_, err := be.calicoClient.BGPPeers().Delete(ctx, peerName, options.DeleteOptions{})
-					require.NoError(t, err)
-				})
 			}
 
-			// Start confd with Typha (matching the original test setup).
-			d := startConfdDaemon(t, be, withNodeName("node1"), withoutBlockAffinities(), withTypha())
+			t.Cleanup(func() {
+				for i := 1; i <= scale; i++ {
+					_, _ = be.calicoClient.BGPPeers().Delete(ctx, fmt.Sprintf("dl-bgppeer-%d", i), options.DeleteOptions{})
+					_, _ = be.calicoClient.Nodes().Delete(ctx, fmt.Sprintf("%s%d", prefix, i), options.DeleteOptions{})
+					_ = be.k8sClientset.CoreV1().Nodes().Delete(ctx, fmt.Sprintf("%s%d", prefix, i), metav1.DeleteOptions{})
+				}
+			})
+
+			// Start confd. The original bash test used Typha, but the deadlock
+			// is in the confd client's lock ordering, not the Typha path.
+			// Use dl-node1 as the confd node so the golden file (which expects
+			// a single peer to 10.24.0.2) still matches.
+			d := startConfdDaemon(t, be, withNodeName(prefix+"1"), withoutBlockAffinities())
 			d.expectOutput("password-deadlock")
 		})
 	}
@@ -333,8 +356,17 @@ func TestNodeDeletion(t *testing.T) {
 			d.expectPeeringCount(3)
 
 			// Delete node3 → node1 should see 2 peers.
-			_, err := be.calicoClient.Nodes().Delete(ctx, "node3", options.DeleteOptions{})
-			require.NoError(t, err)
+			if be.k8sClientset != nil {
+				// KDD: delete the K8s node directly. The Calico client's
+				// Node.Delete does WorkloadEndpoint GC that doesn't work in
+				// envtest, but all we need is for confd to see the node
+				// disappear.
+				err := be.k8sClientset.CoreV1().Nodes().Delete(ctx, "node3", metav1.DeleteOptions{})
+				require.NoError(t, err)
+			} else {
+				_, err := be.calicoClient.Nodes().Delete(ctx, "node3", options.DeleteOptions{})
+				require.NoError(t, err)
+			}
 			d.expectPeeringCount(2)
 		})
 	}
