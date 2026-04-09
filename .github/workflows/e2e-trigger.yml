@@ -174,11 +174,6 @@ jobs:
         run: |
           git remote add projectcalico https://github.com/projectcalico/calico.git 2>/dev/null || true
 
-      - name: Restore workflow scripts from default branch
-        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
-        run: |
-          git fetch origin ${{ github.event.repository.default_branch }} -- .github/scripts/
-          git checkout FETCH_HEAD -- .github/scripts/
 
       - name: Authenticate to GCR
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
