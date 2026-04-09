@@ -94,6 +94,8 @@ func detectDataplane(cli ctrlclient.Client, clientset kubernetes.Interface) clus
 		if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixCfg); err == nil {
 			if felixCfg.Spec.BPFEnabled != nil && *felixCfg.Spec.BPFEnabled {
 				dp.Calico = dataplaneBPF
+			} else if felixCfg.Spec.NFTablesMode != nil && *felixCfg.Spec.NFTablesMode == v3.NFTablesModeEnabled {
+				dp.Calico = dataplaneNftables
 			} else if felixCfg.Spec.UseInternalDataplaneDriver != nil && !*felixCfg.Spec.UseInternalDataplaneDriver {
 				dp.Calico = dataplaneVPP
 			}
