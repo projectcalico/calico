@@ -18,7 +18,7 @@ jobs:
 
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SEMAPHORE_ORG: tigera
+      SEMAPHORE_ORG: tigera-delivery
       SEMAPHORE_PROJECT_ID: ${{ secrets.SEMAPHORE_E2E_PROJECT_ID }}
       SEMAPHORE_TOKEN: ${{ secrets.SEMAPHORE_E2E_TOKEN }}
 
