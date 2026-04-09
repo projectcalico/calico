@@ -1,6 +1,6 @@
 - name: "OpenStack integration (Caracal)"
   run:
-    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'], {pipeline_file: 'ignore'})"
+    when: "${FORCE_RUN} or change_in(['/defaults.yaml', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'], {pipeline_file: 'ignore'})"
   dependencies:
     - Prerequisites
   task:

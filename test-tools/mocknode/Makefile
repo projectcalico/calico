@@ -1,5 +1,3 @@
-include ../../metadata.mk
-
 PACKAGE_NAME?=github.com/projectcalico/calico/test-tools/mocknode
 
 IMAGE_NAME  ?=mock-node
