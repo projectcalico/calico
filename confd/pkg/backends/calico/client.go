@@ -1887,6 +1887,13 @@ func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, 
 	}
 
 	for {
+		// Check if the client is shutting down.
+		select {
+		case <-c.stopCh:
+			return "", fmt.Errorf("client stopped")
+		default:
+		}
+
 		// Loop through each key, if the revision associated with the key is higher than the lastRevision
 		// then exit with the current cacheRevision and render with the current data.
 		log.Debugf("Checking for updated key revisions, watching from rev %d", lastRevision)
@@ -1923,6 +1930,11 @@ func (c *client) GetCurrentRevision() uint64 {
 // on the zero-capacity syncerC channel.
 func (c *client) Stop() {
 	close(c.stopCh)
+
+	// Wake any goroutines blocked in WatchPrefix so they can observe the
+	// closed stopCh and return.
+	c.watcherCond.Broadcast()
+
 	if c.syncer != nil {
 		c.syncer.Stop()
 	}

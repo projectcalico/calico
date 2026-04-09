@@ -231,13 +231,19 @@ func setupEtcd() *datastoreBackend {
 	}
 
 	// Wait for etcd to be ready.
+	ready := false
 	for i := 0; i < 50; i++ {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
 		if err == nil {
 			_ = conn.Close()
+			ready = true
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+	if !ready {
+		fmt.Fprintf(os.Stderr, "etcd did not become ready on %s\n", endpoint)
+		os.Exit(1)
 	}
 
 	datastoreCfg := apiconfig.CalicoAPIConfigSpec{
@@ -383,7 +389,9 @@ func applyResources(t *testing.T, be *datastoreBackend, path string) func() {
 		clientObj, ok := obj.(ctrlclient.Object)
 		require.True(t, ok, "decoded object %v does not implement client.Object", gvk)
 
-		if clientObj.GetNamespace() == "" {
+		isNamespaced, nsErr := be.ctrlClient.IsObjectNamespaced(clientObj)
+		require.NoError(t, nsErr, "checking if %v is namespaced", gvk)
+		if isNamespaced && clientObj.GetNamespace() == "" {
 			clientObj.SetNamespace("default")
 		}
 

@@ -110,7 +110,9 @@ func RunWithContext(
 			return nil
 		case <-ctx.Done():
 			logrus.Info("Context cancelled, shutting down")
-			close(doneChan)
+			close(stopChan)
+			storeClient.Stop()
+			<-doneChan
 			return nil
 		}
 	}

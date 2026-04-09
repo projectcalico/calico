@@ -54,7 +54,7 @@ fv: setup-envtest
 		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
 		-e KUBEBUILDER_ASSETS=/envtest \
 		$(CALICO_BUILD) \
-		go test -count=1 -v -timeout 600s ./confd/tests/...
+		go test -count=1 -v -timeout 600s ./tests/...
 # -count=1 disables test caching; envtest-based tests should always run fresh.
 
 
