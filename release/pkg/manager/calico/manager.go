@@ -53,36 +53,6 @@ var (
 		"cni-plugin",
 	}
 
-// images that should be expected for a release.
-	// This list needs to be kept up-to-date
-	// with the actual release artifacts produced for a release
-	// as images are added or removed.
-	images = []string{
-		"apiserver",
-		"cni",
-		"csi",
-		"ctl",
-		"dikastes",
-		"envoy-gateway",
-		"envoy-proxy",
-		"envoy-ratelimit",
-		"guardian",
-		"key-cert-provisioner",
-		"kube-controllers",
-		"node",
-		"node-driver-registrar",
-		"pod2daemon-flexvol",
-		"test-signer",
-		"typha",
-		"goldmane",
-		"whisker",
-		"whisker-backend",
-	}
-	windowsImages = []string{
-		"cni-windows",
-		"node-windows",
-	}
-
 	defaultOrg    = utils.ProjectCalicoOrg
 	defaultRepo   = utils.CalicoRepoName
 	defaultBranch = utils.DefaultBranch
@@ -181,7 +151,7 @@ type CalicoManager struct {
 	operatorVersion   string
 	operatorGithubOrg string
 	operatorRepo      string
-	operatorBranch string
+	operatorBranch    string
 
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
