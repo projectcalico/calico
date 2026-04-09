@@ -1,5 +1,3 @@
-include ../metadata.mk
-
 PACKAGE_NAME    ?= github.com/projectcalico/calico/key-cert-provisioner
 
 #############################################
@@ -23,7 +21,7 @@ include ../lib.Makefile
 ###############################################################################
 # BUILD BINARY
 ###############################################################################
-FIPS ?= false
+FIPS ?= $(call _read_default,.fips.default)
 
 ifeq ($(FIPS),true)
 KEY_CERT_PROVISIONER_CREATED=.key-cert-provisioner.created-$(ARCH)-fips

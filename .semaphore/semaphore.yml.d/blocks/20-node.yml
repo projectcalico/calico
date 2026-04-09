@@ -101,7 +101,7 @@
     jobs:
       - name: "Node: kind-cluster tests"
         execution_time_limit:
-          minutes: 120
+          hours: 2
         env_vars:
           - name: JOB_TIMEOUT_MINUTES
             value: "120"
