@@ -141,6 +141,28 @@ else
 CGO_ENABLED?=0
 endif
 
+# Cross-compilation support using clang.  When building on amd64 for a different
+# target architecture, we use clang as a cross-compiler (it natively supports all
+# targets) with a per-arch sysroot containing the target libraries.  This avoids
+# slow QEMU emulation for CGO builds.
+#
+# Map Go ARCH names to clang target triples.
+# Only arm64 and ppc64le need cross-compilation support (CGO is not enabled for s390x).
+CLANG_CROSS_TRIPLE_arm64   := aarch64-linux-gnu
+CLANG_CROSS_TRIPLE_ppc64le := powerpc64le-linux-gnu
+
+# Set CROSS_CC and CROSS_SYSROOT when cross-compiling from amd64.
+ifeq ($(BUILDARCH),amd64)
+ifneq ($(ARCH),amd64)
+ifneq ($(CLANG_CROSS_TRIPLE_$(ARCH)),)
+CROSS_TRIPLE := $(CLANG_CROSS_TRIPLE_$(ARCH))
+CROSS_SYSROOT := /usr/$(CROSS_TRIPLE)/sys-root
+CROSS_CC := clang --target=$(CROSS_TRIPLE) --sysroot=$(CROSS_SYSROOT)
+CROSS_LDFLAGS := -fuse-ld=lld
+endif
+endif
+endif
+
 # Build a binary with boring crypto support.
 # This function expects you to pass in two arguments:
 #   1st arg: path/to/input/package(s)
@@ -151,6 +173,7 @@ endif
 define build_cgo_boring_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=1 \
+		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
 		-e CGO_CFLAGS=$(CGO_CFLAGS) \
 		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
 		$(CALICO_BUILD) \
@@ -162,6 +185,7 @@ endef
 define build_cgo_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=1 \
+		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
 		-e CGO_CFLAGS=$(CGO_CFLAGS) \
 		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
 		$(CALICO_BUILD) \
