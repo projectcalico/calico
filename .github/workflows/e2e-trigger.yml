@@ -56,56 +56,14 @@ jobs:
       - name: Parse comment
         if: steps.auth.outputs.authorized == 'true'
         id: parse
-        run: |
-          COMMENT="${{ github.event.comment.body }}"
-
-          # Extract profile name (first token after /e2e)
-          PROFILE=$(echo "$COMMENT" | awk '{print $2}')
-
-          # Extract optional --label-filter="..." value
-          LABEL_FILTER=""
-          if echo "$COMMENT" | grep -qE '\-\-label-filter='; then
-            LABEL_FILTER=$(echo "$COMMENT" | sed -nE 's/.*--label-filter="([^"]+)".*/\1/p')
-            if [[ -z "$LABEL_FILTER" ]]; then
-              # Try without quotes
-              LABEL_FILTER=$(echo "$COMMENT" | sed -nE 's/.*--label-filter=([^ ]+).*/\1/p')
-            fi
-          fi
-
-          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
-          echo "label_filter=$LABEL_FILTER" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/parse-e2e-comment.sh
+        env:
+          COMMENT: ${{ github.event.comment.body }}
 
       - name: Capture validation output
         if: steps.auth.outputs.authorized == 'true'
         id: validate
-        run: |
-          python3 - >> "$GITHUB_OUTPUT" <<'PYEOF'
-          import yaml, sys, os
-
-          with open(".github/e2e-profiles.yaml") as f:
-              config = yaml.safe_load(f)
-
-          profiles = config.get("profiles", {})
-          profile = os.environ.get("PROFILE_INPUT", "")
-
-          if not profile:
-              names = "\n".join(f"- `{k}` — {v['description']}" for k, v in profiles.items())
-              print(f"profile_invalid=true")
-              print(f"help_mode=true")
-              print(f"available_profiles<<ENDOFPROFILES\n{names}\nENDOFPROFILES")
-          elif profile not in profiles:
-              names = "\n".join(f"- `{k}` — {v['description']}" for k, v in profiles.items())
-              print(f"profile_invalid=true")
-              print(f"help_mode=false")
-              print(f"available_profiles<<ENDOFPROFILES\n{names}\nENDOFPROFILES")
-          else:
-              p = profiles[profile]
-              print(f"profile_invalid=false")
-              print(f"semaphore_pipeline={p['semaphore_pipeline']}")
-              lf = os.environ.get("LABEL_FILTER_INPUT", "").strip()
-              effective_filter = lf if lf else p.get("default_label_filter", "")
-              print(f"effective_label_filter={effective_filter}")
-          PYEOF
+        run: python3 .github/scripts/validate-e2e-profile.py
         env:
           PROFILE_INPUT: ${{ steps.parse.outputs.profile }}
           LABEL_FILTER_INPUT: ${{ steps.parse.outputs.label_filter }}
@@ -168,22 +126,21 @@ jobs:
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
         id: status-comment
         run: |
-          PROFILE="${{ steps.parse.outputs.profile }}"
-          TAG="${{ steps.pr.outputs.image_tag }}"
-          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
-          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
           LABEL_LINE=""
           if [[ -n "$LABEL_FILTER" ]]; then
             LABEL_LINE="\n**Label filter:** \`${LABEL_FILTER}\`"
           fi
-
           BODY=$(printf '⏳ Building images for e2e profile `%s` (tag: `%s`)...%b\n\n[Workflow run](%s)' \
             "$PROFILE" "$TAG" "$LABEL_LINE" "$WORKFLOW_URL")
-
-          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-            -X POST -f "body=$BODY" --jq '.id')
+          COMMENT_ID=$(.github/scripts/update-pr-comment.sh "$REPO" "$ISSUE_NUMBER" "$BODY")
           echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+        env:
+          PROFILE: ${{ steps.parse.outputs.profile }}
+          TAG: ${{ steps.pr.outputs.image_tag }}
+          LABEL_FILTER: ${{ steps.validate.outputs.effective_label_filter }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
 
       # -----------------------------------------------------------------------
       # Part 2: Checkout PR branch and build images
@@ -294,21 +251,21 @@ jobs:
           (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success') &&
           (steps.check-images.outputs.e2e_exists == 'true' || steps.build-e2e.outcome == 'success')
         run: |
-          PROFILE="${{ steps.parse.outputs.profile }}"
-          TAG="${{ steps.pr.outputs.image_tag }}"
-          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
-          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
           LABEL_LINE=""
           if [[ -n "$LABEL_FILTER" ]]; then
             LABEL_LINE="\n**Label filter:** \`${LABEL_FILTER}\`"
           fi
-
           BODY=$(printf '⏳ Images built for e2e profile `%s` (tag: `%s`). Triggering pipeline...%b\n\n[Workflow run](%s)' \
             "$PROFILE" "$TAG" "$LABEL_LINE" "$WORKFLOW_URL")
-
-          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
-            -X PATCH -f "body=$BODY"
+          .github/scripts/update-pr-comment.sh "$REPO" "$ISSUE_NUMBER" "$BODY" "$COMMENT_ID"
+        env:
+          PROFILE: ${{ steps.parse.outputs.profile }}
+          TAG: ${{ steps.pr.outputs.image_tag }}
+          LABEL_FILTER: ${{ steps.validate.outputs.effective_label_filter }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ steps.status-comment.outputs.comment_id }}
 
       # -----------------------------------------------------------------------
       # Part 3: Trigger Semaphore and poll for results
@@ -321,48 +278,14 @@ jobs:
           (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success') &&
           (steps.check-images.outputs.e2e_exists == 'true' || steps.build-e2e.outcome == 'success')
         id: semaphore-trigger
-        run: |
-          TAG="${{ steps.pr.outputs.image_tag }}"
-          BRANCH="${{ steps.pr.outputs.branch }}"
-          SHA="${{ steps.pr.outputs.sha }}"
-          PIPELINE_FILE="${{ steps.validate.outputs.semaphore_pipeline }}"
-          E2E_IMAGE="${{ steps.check-images.outputs.e2e_image }}"
-          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
-
-          HTTP_CODE=$(curl -s -o /tmp/sem-response.json -w "%{http_code}" -X POST \
-            "https://${SEMAPHORE_ORG}.semaphoreci.com/api/v1alpha/plumber-workflows" \
-            -H "Authorization: Token ${SEMAPHORE_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d @- <<EOF
-          {
-            "project_id": "${SEMAPHORE_PROJECT_ID}",
-            "reference": "${BRANCH}",
-            "commit_sha": "${SHA}",
-            "pipeline_file": "${PIPELINE_FILE}",
-            "parameters": {
-              "IMAGE_REGISTRY": "gcr.io",
-              "IMAGE_PATH": "unique-caldron-775/ci/calico",
-              "IMAGE_TAG": "${TAG}",
-              "E2E_IMAGE": "${E2E_IMAGE}",
-              "LABEL_FILTER": "${LABEL_FILTER}"
-            }
-          }
-          EOF
-          )
-
-          RESPONSE=$(cat /tmp/sem-response.json)
-          echo "Semaphore API response (HTTP ${HTTP_CODE}): ${RESPONSE}"
-
-          if [[ "$HTTP_CODE" -ge 400 ]]; then
-            echo "::error::Semaphore API returned HTTP ${HTTP_CODE}: ${RESPONSE}"
-            exit 1
-          fi
-
-          WORKFLOW_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow_id'])")
-          echo "workflow_id=$WORKFLOW_ID" >> "$GITHUB_OUTPUT"
-
-          SEMAPHORE_URL="https://${SEMAPHORE_ORG}.semaphoreci.com/workflows/${WORKFLOW_ID}"
-          echo "semaphore_url=$SEMAPHORE_URL" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/trigger-semaphore.sh
+        env:
+          TAG: ${{ steps.pr.outputs.image_tag }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
+          SHA: ${{ steps.pr.outputs.sha }}
+          PIPELINE_FILE: ${{ steps.validate.outputs.semaphore_pipeline }}
+          E2E_IMAGE: ${{ steps.check-images.outputs.e2e_image }}
+          LABEL_FILTER: ${{ steps.validate.outputs.effective_label_filter }}
 
       - name: Update status comment with Semaphore link
         if: >
@@ -370,22 +293,22 @@ jobs:
           steps.validate.outputs.profile_invalid == 'false' &&
           steps.semaphore-trigger.outcome == 'success'
         run: |
-          PROFILE="${{ steps.parse.outputs.profile }}"
-          TAG="${{ steps.pr.outputs.image_tag }}"
-          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
-          SEMAPHORE_URL="${{ steps.semaphore-trigger.outputs.semaphore_url }}"
-          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
           LABEL_LINE=""
           if [[ -n "$LABEL_FILTER" ]]; then
             LABEL_LINE="\n**Label filter:** \`${LABEL_FILTER}\`"
           fi
-
           BODY=$(printf '⏳ Running e2e profile `%s` (tag: `%s`)...%b\n\n[Semaphore pipeline](%s) | [Workflow run](%s)' \
             "$PROFILE" "$TAG" "$LABEL_LINE" "$SEMAPHORE_URL" "$WORKFLOW_URL")
-
-          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
-            -X PATCH -f "body=$BODY"
+          .github/scripts/update-pr-comment.sh "$REPO" "$ISSUE_NUMBER" "$BODY" "$COMMENT_ID"
+        env:
+          PROFILE: ${{ steps.parse.outputs.profile }}
+          TAG: ${{ steps.pr.outputs.image_tag }}
+          LABEL_FILTER: ${{ steps.validate.outputs.effective_label_filter }}
+          SEMAPHORE_URL: ${{ steps.semaphore-trigger.outputs.semaphore_url }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ steps.status-comment.outputs.comment_id }}
 
       - name: Poll Semaphore for result
         if: >
@@ -394,47 +317,9 @@ jobs:
           steps.semaphore-trigger.outcome == 'success'
         id: poll
         timeout-minutes: 240
-        run: |
-          WORKFLOW_ID="${{ steps.semaphore-trigger.outputs.workflow_id }}"
-          START_TIME=$(date +%s)
-
-          while true; do
-            RESPONSE=$(curl -s -f \
-              "https://${SEMAPHORE_ORG}.semaphoreci.com/api/v1alpha/plumber-workflows/${WORKFLOW_ID}" \
-              -H "Authorization: Token ${SEMAPHORE_TOKEN}")
-
-            STATE=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow']['state'])" 2>/dev/null || echo "UNKNOWN")
-            RESULT=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow'].get('result', ''))" 2>/dev/null || echo "")
-
-            echo "Workflow $WORKFLOW_ID: state=$STATE result=$RESULT"
-
-            if [[ "$STATE" == "DONE" ]]; then
-              echo "final_result=$RESULT" >> "$GITHUB_OUTPUT"
-              echo "final_state=$STATE" >> "$GITHUB_OUTPUT"
-              break
-            fi
-
-            if [[ "$STATE" == "STOPPING" || "$STATE" == "STOPPED" ]]; then
-              echo "final_result=STOPPED" >> "$GITHUB_OUTPUT"
-              echo "final_state=$STATE" >> "$GITHUB_OUTPUT"
-              break
-            fi
-
-            NOW=$(date +%s)
-            ELAPSED=$(( NOW - START_TIME ))
-            if (( ELAPSED > 14400 )); then
-              echo "final_result=TIMEOUT" >> "$GITHUB_OUTPUT"
-              echo "final_state=TIMEOUT" >> "$GITHUB_OUTPUT"
-              break
-            fi
-
-            sleep 60
-          done
-
-          END_TIME=$(date +%s)
-          DURATION=$(( END_TIME - START_TIME ))
-          DURATION_MIN=$(( DURATION / 60 ))
-          echo "duration_minutes=$DURATION_MIN" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/poll-semaphore.sh
+        env:
+          WORKFLOW_ID: ${{ steps.semaphore-trigger.outputs.workflow_id }}
 
       - name: Post final result
         if: >
@@ -444,14 +329,6 @@ jobs:
           steps.status-comment.outputs.comment_id != '' &&
           steps.poll.outcome != 'skipped'
         run: |
-          PROFILE="${{ steps.parse.outputs.profile }}"
-          TAG="${{ steps.pr.outputs.image_tag }}"
-          LABEL_FILTER="${{ steps.validate.outputs.effective_label_filter }}"
-          SEMAPHORE_URL="${{ steps.semaphore-trigger.outputs.semaphore_url }}"
-          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          RESULT="${{ steps.poll.outputs.final_result }}"
-          DURATION="${{ steps.poll.outputs.duration_minutes }}"
-
           LABEL_LINE=""
           if [[ -n "$LABEL_FILTER" ]]; then
             LABEL_LINE="\n**Label filter:** \`${LABEL_FILTER}\`"
@@ -483,8 +360,18 @@ jobs:
           BODY=$(printf '%s E2E profile `%s` %s in %d minutes (tag: `%s`).%b\n\n[Semaphore pipeline](%s) | [Workflow run](%s)' \
             "$ICON" "$PROFILE" "$SUMMARY" "$DURATION" "$TAG" "$LABEL_LINE" "$SEMAPHORE_URL" "$WORKFLOW_URL")
 
-          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
-            -X PATCH -f "body=$BODY"
+          .github/scripts/update-pr-comment.sh "$REPO" "$ISSUE_NUMBER" "$BODY" "$COMMENT_ID"
+        env:
+          PROFILE: ${{ steps.parse.outputs.profile }}
+          TAG: ${{ steps.pr.outputs.image_tag }}
+          LABEL_FILTER: ${{ steps.validate.outputs.effective_label_filter }}
+          SEMAPHORE_URL: ${{ steps.semaphore-trigger.outputs.semaphore_url }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULT: ${{ steps.poll.outputs.final_result }}
+          DURATION: ${{ steps.poll.outputs.duration_minutes }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ steps.status-comment.outputs.comment_id }}
 
       # -----------------------------------------------------------------------
       # Catch-all failure handler — must be the LAST step so it can reference
@@ -497,12 +384,9 @@ jobs:
           steps.poll.outcome != 'success' &&
           (steps.build-images.outcome == 'failure' || steps.build-e2e.outcome == 'failure' || steps.semaphore-trigger.outcome == 'failure')
         run: |
-          PROFILE="${{ steps.parse.outputs.profile }}"
-          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-          if [[ "${{ steps.semaphore-trigger.outcome }}" == "failure" ]]; then
+          if [[ "$SEMAPHORE_TRIGGER_OUTCOME" == "failure" ]]; then
             REASON="Semaphore pipeline trigger failed"
-          elif [[ "${{ steps.build-e2e.outcome }}" == "failure" ]]; then
+          elif [[ "$BUILD_E2E_OUTCOME" == "failure" ]]; then
             REASON="E2E image build failed"
           else
             REASON="Image build failed"
@@ -511,5 +395,12 @@ jobs:
           BODY=$(printf '❌ %s for e2e profile `%s`.\n\n[Workflow run](%s)' \
             "$REASON" "$PROFILE" "$WORKFLOW_URL")
 
-          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.status-comment.outputs.comment_id }}" \
-            -X PATCH -f "body=$BODY"
+          .github/scripts/update-pr-comment.sh "$REPO" "$ISSUE_NUMBER" "$BODY" "$COMMENT_ID"
+        env:
+          PROFILE: ${{ steps.parse.outputs.profile }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SEMAPHORE_TRIGGER_OUTCOME: ${{ steps.semaphore-trigger.outcome }}
+          BUILD_E2E_OUTCOME: ${{ steps.build-e2e.outcome }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ steps.status-comment.outputs.comment_id }}
