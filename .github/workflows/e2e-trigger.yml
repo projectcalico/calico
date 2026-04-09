@@ -221,6 +221,18 @@ jobs:
             DEV_IMAGE_TAG="${TAG}"
 
 
+      - name: Package and push helm chart
+        if: >
+          steps.auth.outputs.authorized == 'true' &&
+          steps.validate.outputs.profile_invalid == 'false' &&
+          (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success')
+        id: helm-chart
+        run: .github/scripts/package-helm-chart.sh
+        env:
+          TAG: ${{ steps.pr.outputs.image_tag }}
+          REGISTRY: gcr.io
+          IMAGE_PATH: unique-caldron-775/ci/calico
+
       - name: Update status comment after build success
         if: >
           steps.auth.outputs.authorized == 'true' &&
