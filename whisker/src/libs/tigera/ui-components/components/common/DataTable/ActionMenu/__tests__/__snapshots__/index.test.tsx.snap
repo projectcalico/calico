@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`<ActionMenu/> it renders 1`] = `
 <DocumentFragment>
@@ -39,7 +39,7 @@ exports[`<ActionMenu/> it renders 1`] = `
     data-popper-escaped=""
     data-popper-placement="bottom-start"
     data-popper-reference-hidden=""
-    style="visibility: visible; position: absolute; min-width: max-content; inset: 0 auto auto 0; left: 0px; top: 0px; margin: 0px; transform: translate(0px, 8px); --popper-transform-origin: top left;"
+    style="visibility: visible; position: absolute; min-width: max-content; inset: 0 auto auto 0; left: 0px; top: 0px; margin: 0px; right: auto; bottom: auto; transform: translate(0px, 8px); --popper-transform-origin: top left;"
   >
     <div
       aria-orientation="vertical"
