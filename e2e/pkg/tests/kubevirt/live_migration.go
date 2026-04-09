@@ -22,7 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/onsi/ginkgo/v2"
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
+	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -96,7 +97,7 @@ var _ = describe.CalicoDescribe(
 
 		var kvClient kubevirtcorev1.KubevirtV1Interface
 
-		ginkgo.BeforeEach(func() {
+		BeforeEach(func() {
 			// Live migration needs at least 2 nodes to migrate between.
 			utils.RequireNodeCount(f, 2)
 
@@ -110,25 +111,27 @@ var _ = describe.CalicoDescribe(
 		// the VM-based IPAM handle (hashed from VMI namespace+name) ensures the same IP
 		// is assigned to the target pod. A ping pod confirms network reachability before
 		// and after migration.
-		ginkgo.It("should preserve VM IP address across live migration", func() {
+		It("should preserve VM IP address across live migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-migration-test"
+			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
 
 			pingPod := setupPingPod(ctx, f, ns)
-			createAndCleanupVM(ctx, kvClient, f, ns, vmName)
+			vm.Create(ctx)
+			DeferCleanup(vm.Delete)
 
 			originalIP, sourceNode := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
 			logrus.Infof("VM %s running on node %s with IP %s", vmName, sourceNode, originalIP)
 
-			ginkgo.By("Verifying connectivity to VM before migration")
+			By("Verifying connectivity to VM before migration")
 			expectPingSuccess(ns, pingPod.Name, originalIP)
 
 			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-migration")
 			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-migration")
 
-			ginkgo.By("Verifying VMI IP is preserved after migration")
+			By("Verifying VMI IP is preserved after migration")
 			// F6: Use Eventually to avoid reading stale VMI status after migration.
 			var postMigrationIP, postMigrationNode string
 			Eventually(func() error {
@@ -151,7 +154,7 @@ var _ = describe.CalicoDescribe(
 			Expect(postMigrationNode).NotTo(Equal(sourceNode), "VM should have moved")
 			logrus.Infof("VM migrated from %s to %s, IP preserved: %s", sourceNode, postMigrationNode, originalIP)
 
-			ginkgo.By("Verifying connectivity after migration")
+			By("Verifying connectivity after migration")
 			expectPingSuccess(ns, pingPod.Name, originalIP)
 		})
 
@@ -160,13 +163,15 @@ var _ = describe.CalicoDescribe(
 		// KubeVirt's VM controller (with RunStrategyAlways) recreates the VMI and pod.
 		// Because Calico IPAM uses a VM-based handle ID derived from the VMI namespace+name
 		// (not the ephemeral container ID), the new pod gets the same IP allocation.
-		ginkgo.It("should preserve VM IP across pod recreation", func() {
+		It("should preserve VM IP across pod recreation", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-pod-recreate"
+			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
 
-			createAndCleanupVM(ctx, kvClient, f, ns, vmName)
+			vm.Create(ctx)
+			DeferCleanup(vm.Delete)
 			originalIP, _ := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
 
 			sourcePod, err := findVirtLauncherPod(ctx, f, ns, vmName)
@@ -174,13 +179,13 @@ var _ = describe.CalicoDescribe(
 			sourcePodName := sourcePod.Name
 			logrus.Infof("Original pod: %s, IP: %s", sourcePodName, originalIP)
 
-			ginkgo.By("Deleting the virt-launcher pod to simulate eviction")
+			By("Deleting the virt-launcher pod to simulate eviction")
 			err = f.ClientSet.CoreV1().Pods(ns).Delete(ctx, sourcePodName, metav1.DeleteOptions{
 				GracePeriodSeconds: ptrInt64(0),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			ginkgo.By("Waiting for a new virt-launcher pod with the same IP")
+			By("Waiting for a new virt-launcher pod with the same IP")
 			Eventually(func() error {
 				pod, err := findVirtLauncherPod(ctx, f, ns, vmName)
 				if err != nil {
@@ -206,13 +211,15 @@ var _ = describe.CalicoDescribe(
 		// for VM recreation events. When the VM is started again (RunStrategyAlways),
 		// the new VMI gets a new UID but the same name, so the VM-based handle ID matches
 		// and the same IP is allocated.
-		ginkgo.It("should preserve VM IP across VMI recreation (reboot)", func() {
+		It("should preserve VM IP across VMI recreation (reboot)", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-vmi-recreate"
+			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
 
-			createAndCleanupVM(ctx, kvClient, f, ns, vmName)
+			vm.Create(ctx)
+			DeferCleanup(vm.Delete)
 			originalIP, _ := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
 
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
@@ -220,20 +227,20 @@ var _ = describe.CalicoDescribe(
 			originalVMIUID := vmi.UID
 			logrus.Infof("Original VMI UID: %s, IP: %s", originalVMIUID, originalIP)
 
-			ginkgo.By("Stopping the VM")
-			stopVM(ctx, kvClient, ns, vmName)
+			By("Stopping the VM")
+			vm.Stop(ctx)
 
-			ginkgo.By("Waiting for VMI to be deleted")
+			By("Waiting for VMI to be deleted")
 			// F12: Check for specific NotFound error, not any error.
 			Eventually(func() bool {
 				_, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 				return kerrors.IsNotFound(err)
 			}, 2*time.Minute, 5*time.Second).Should(BeTrue())
 
-			ginkgo.By("Starting the VM again")
-			startVM(ctx, kvClient, ns, vmName)
+			By("Starting the VM again")
+			vm.Start(ctx)
 
-			ginkgo.By("Waiting for new VMI with the same IP")
+			By("Waiting for new VMI with the same IP")
 			var newIP string
 			Eventually(func() error {
 				vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
@@ -262,23 +269,25 @@ var _ = describe.CalicoDescribe(
 		// migration is in progress. The migration may succeed (if the target was already
 		// ready) or fail. In either case, the VM eventually recovers with the same IP
 		// because the VM-based IPAM handle persists independently of pod lifecycle.
-		ginkgo.It("should preserve VM IP when source pod is deleted during migration", func() {
+		It("should preserve VM IP when source pod is deleted during migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-source-delete"
+			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
 
-			createAndCleanupVM(ctx, kvClient, f, ns, vmName)
+			vm.Create(ctx)
+			DeferCleanup(vm.Delete)
 			originalIP, _ := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
 
 			sourcePod, err := findVirtLauncherPod(ctx, f, ns, vmName)
 			Expect(err).NotTo(HaveOccurred())
 			logrus.Infof("Source pod: %s, IP: %s", sourcePod.Name, originalIP)
 
-			ginkgo.By("Triggering live migration")
+			By("Triggering live migration")
 			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-migration")
 
-			ginkgo.By("Waiting for migration to reach an active phase, then deleting source pod")
+			By("Waiting for migration to reach an active phase, then deleting source pod")
 			// F2: Migration can be very fast. Accept any non-empty phase including Succeeded.
 			// If already Succeeded, we skip the pod deletion — the test still verifies IP persistence.
 			var alreadySucceeded bool
@@ -313,7 +322,7 @@ var _ = describe.CalicoDescribe(
 				logrus.Infof("Migration already succeeded before source pod could be deleted")
 			}
 
-			ginkgo.By("Waiting for migration to complete (succeed or fail)")
+			By("Waiting for migration to complete (succeed or fail)")
 			var migrationPhase kubevirtv1.VirtualMachineInstanceMigrationPhase
 			Eventually(func() bool {
 				m, mErr := kvClient.VirtualMachineInstanceMigrations(ns).Get(ctx, vmName+"-migration", metav1.GetOptions{})
@@ -326,14 +335,14 @@ var _ = describe.CalicoDescribe(
 			}, 3*time.Minute, 3*time.Second).Should(BeTrue())
 			logrus.Infof("Migration completed with phase: %s", migrationPhase)
 
-			ginkgo.By("Recovering the VM and verifying same IP")
+			By("Recovering the VM and verifying same IP")
 			if migrationPhase == kubevirtv1.MigrationFailed {
-				stopVM(ctx, kvClient, ns, vmName)
+				vm.Stop(ctx)
 				Eventually(func() bool {
 					_, vmiErr := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 					return kerrors.IsNotFound(vmiErr)
 				}, 2*time.Minute, 5*time.Second).Should(BeTrue())
-				startVM(ctx, kvClient, ns, vmName)
+				vm.Start(ctx)
 			}
 
 			recoveredIP, _ := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
@@ -347,23 +356,25 @@ var _ = describe.CalicoDescribe(
 		// Felix detects the GARP/RARP from the newly-active VM on the target node, triggers
 		// the VerifyAndSwapOwnerAttributes call, and programs the local route on the target.
 		// The source node's local route must be removed.
-		ginkgo.It("should update routes to target node after migration", func() {
+		It("should update routes to target node after migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-route-check"
+			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
 
-			createAndCleanupVM(ctx, kvClient, f, ns, vmName)
+			vm.Create(ctx)
+			DeferCleanup(vm.Delete)
 			originalIP, sourceNode := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
 
 			// F7: Route may take a moment to be programmed after WEP creation.
-			ginkgo.By("Verifying local route on source node before migration")
+			By("Verifying local route on source node before migration")
 			Eventually(func() string {
 				return getRouteOnNode(f, sourceNode, originalIP)
 			}, 30*time.Second, 2*time.Second).Should(ContainSubstring("scope link"),
 				"expected local route on source node")
 
-			ginkgo.By("Triggering live migration")
+			By("Triggering live migration")
 			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-migration")
 			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-migration")
 
@@ -372,13 +383,13 @@ var _ = describe.CalicoDescribe(
 			targetNode := vmi.Status.NodeName
 			Expect(targetNode).NotTo(Equal(sourceNode))
 
-			ginkgo.By("Verifying local route on target node after migration")
+			By("Verifying local route on target node after migration")
 			Eventually(func() string {
 				return getRouteOnNode(f, targetNode, originalIP)
 			}, 1*time.Minute, 5*time.Second).Should(ContainSubstring("scope link"),
 				"expected local route on target node")
 
-			ginkgo.By("Verifying source node no longer has local route")
+			By("Verifying source node no longer has local route")
 			Eventually(func() bool {
 				route := getRouteOnNode(f, sourceNode, originalIP)
 				return !strings.Contains(route, "scope link")
@@ -392,13 +403,15 @@ var _ = describe.CalicoDescribe(
 		// to the source pod and AlternateOwnerAttrs is empty. After migration completes and
 		// Felix calls VerifyAndSwapOwnerAttributeForVM, ActiveOwnerAttrs must point to the
 		// target pod (new node), confirming the atomic ownership handover worked correctly.
-		ginkgo.It("should swap IPAM owner attributes on migration completion", func() {
+		It("should swap IPAM owner attributes on migration completion", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-attr-swap"
+			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
 
-			createAndCleanupVM(ctx, kvClient, f, ns, vmName)
+			vm.Create(ctx)
+			DeferCleanup(vm.Delete)
 			originalIP, sourceNode := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
 
 			sourcePod, err := findVirtLauncherPod(ctx, f, ns, vmName)
@@ -406,7 +419,7 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Source pod: %s on %s, IP: %s", sourcePod.Name, sourceNode, originalIP)
 
 			// F8: IPAM attributes may take a moment to be set after CNI ADD.
-			ginkgo.By("Verifying IPAM attributes before migration")
+			By("Verifying IPAM attributes before migration")
 			lcgc := newLibcalicoClient(f)
 			Eventually(func() map[string]string {
 				active, _ := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
@@ -417,11 +430,11 @@ var _ = describe.CalicoDescribe(
 			_, alternateAttrs := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
 			Expect(alternateAttrs).To(BeEmpty())
 
-			ginkgo.By("Triggering live migration")
+			By("Triggering live migration")
 			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-migration")
 			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-migration")
 
-			ginkgo.By("Verifying ActiveOwnerAttrs changed to target pod after migration")
+			By("Verifying ActiveOwnerAttrs changed to target pod after migration")
 			var finalActivePod, finalActiveNode string
 			Eventually(func() bool {
 				active, _ := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
@@ -450,36 +463,33 @@ var _ = describe.CalicoDescribe(
 		// live migration FSM (Target→Live→TimeWait→Base), GARP/RARP detection, elevated
 		// BGP route priority, and ARP suppression all work together to maintain connectivity
 		// with no packet loss during the handover.
-		ginkgo.It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
+		It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			serverVMName := "e2e-tcp-double-srv"
+			serverVM := &testVM{name: serverVMName, namespace: ns, cloudInit: tcpServerCloudInit, kvClient: kvClient}
 
-			ginkgo.By("Creating server VM with TCP server")
-			serverVM := newTestVMWithTCPServer(serverVMName, ns)
-			_, err := kvClient.VirtualMachines(ns).Create(ctx, serverVM, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			ginkgo.DeferCleanup(func() {
-				_ = kvClient.VirtualMachines(ns).Delete(context.Background(), serverVMName, metav1.DeleteOptions{})
-			})
+			By("Creating server VM with TCP server")
+			serverVM.Create(ctx)
+			DeferCleanup(serverVM.Delete)
 
 			serverIP, node1 := waitForVMIRunningWithIP(ctx, kvClient, ns, serverVMName)
 			logrus.Infof("Server VM: %s on %s", serverIP, node1)
 
-			ginkgo.By("Creating client pod on a different node than server VM")
+			By("Creating client pod on a different node than server VM")
 			clientPod := setupAntiAffinityPod(ctx, f, ns, node1)
 			expectPingSuccess(ns, clientPod.Name, serverIP)
 			waitForTCPServer(ns, clientPod.Name, serverIP)
 
 			// F4: Use nohup to prevent SIGHUP when kubectl exec session closes.
-			ginkgo.By("Starting TCP client")
-			_, err = kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
+			By("Starting TCP client")
+			_, err := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
 				"sh", "-c", fmt.Sprintf("nohup nc %s 9999 > /tmp/tcp_stream 2>&1 &", serverIP)).Exec()
 			Expect(err).NotTo(HaveOccurred())
 
 			// F5: Poll for data instead of fixed sleep.
-			ginkgo.By("Verifying TCP data is flowing before migration")
+			By("Verifying TCP data is flowing before migration")
 			var preLines int
 			Eventually(func() int {
 				preOutput, _ := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
@@ -490,7 +500,7 @@ var _ = describe.CalicoDescribe(
 				"TCP data should be flowing")
 			logrus.Infof("Pre-migration: %d lines on client pod", preLines)
 
-			ginkgo.By("First migration")
+			By("First migration")
 			migrateAndCleanup(ctx, kvClient, ns, serverVMName, serverVMName+"-mig1")
 			waitForMigrationSuccess(ctx, kvClient, ns, serverVMName+"-mig1")
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, serverVMName, metav1.GetOptions{})
@@ -500,7 +510,7 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("First migration: %s -> %s", node1, node2)
 
 			// F5: Poll for data growth instead of fixed sleep.
-			ginkgo.By("Verifying TCP stream survived first migration")
+			By("Verifying TCP stream survived first migration")
 			var midLines int
 			Eventually(func() int {
 				midOutput, _ := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
@@ -511,7 +521,7 @@ var _ = describe.CalicoDescribe(
 				"TCP data should have grown after first migration")
 			logrus.Infof("After first migration: %d lines", midLines)
 
-			ginkgo.By("Second migration")
+			By("Second migration")
 			migrateAndCleanup(ctx, kvClient, ns, serverVMName, serverVMName+"-mig2")
 			waitForMigrationSuccess(ctx, kvClient, ns, serverVMName+"-mig2")
 			vmi, err = kvClient.VirtualMachineInstances(ns).Get(ctx, serverVMName, metav1.GetOptions{})
@@ -523,7 +533,7 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Second migration: %s -> %s", node2, node3)
 
 			// F5: Poll for data growth instead of fixed sleep.
-			ginkgo.By("Waiting for TCP data to grow after second migration")
+			By("Waiting for TCP data to grow after second migration")
 			Eventually(func() int {
 				postOutput, _ := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
 					"wc", "-l", "/tmp/tcp_stream").Exec()
@@ -533,7 +543,7 @@ var _ = describe.CalicoDescribe(
 			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", midLines+5),
 				"TCP data should have grown after second migration")
 
-			ginkgo.By("Checking sequence continuity")
+			By("Checking sequence continuity")
 			streamAll, err := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
 				"cat", "/tmp/tcp_stream").Exec()
 			Expect(err).NotTo(HaveOccurred())
@@ -557,28 +567,25 @@ var _ = describe.CalicoDescribe(
 		// verify the route priority reverts correctly after the TimeWait period and can be
 		// re-elevated for the second migration.
 		// Requires EXT_IP, EXT_KEY, EXT_USER env vars pointing to the TOR/external node.
-		ginkgo.It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
+		It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
 			tor := externalnode.NewClient()
 			if tor == nil {
-				ginkgo.Skip("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
+				Skip("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-ebgp-tcp"
+			vm := &testVM{name: vmName, namespace: ns, cloudInit: tcpServerCloudInit, kvClient: kvClient}
 
-			ginkgo.By("Creating a VM with TCP server")
-			vm := newTestVMWithTCPServer(vmName, ns)
-			_, err := kvClient.VirtualMachines(ns).Create(ctx, vm, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			ginkgo.DeferCleanup(func() {
-				_ = kvClient.VirtualMachines(ns).Delete(context.Background(), vmName, metav1.DeleteOptions{})
-			})
+			By("Creating a VM with TCP server")
+			vm.Create(ctx)
+			DeferCleanup(vm.Delete)
 
 			vmIP, node1 := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
 
-			ginkgo.By("Waiting for VM TCP server")
+			By("Waiting for VM TCP server")
 			probePod := setupPingPod(ctx, f, ns)
 			expectPingSuccess(ns, probePod.Name, vmIP)
 			waitForTCPServer(ns, probePod.Name, vmIP)
@@ -589,10 +596,10 @@ var _ = describe.CalicoDescribe(
 				"TOR cannot reach VM — eBGP routing may not be configured")
 
 			// F9: Use setsid to fully detach nc from SSH session.
-			ginkgo.By("Starting TCP client on TOR connecting to VM")
+			By("Starting TCP client on TOR connecting to VM")
 			runOnTOR(tor, fmt.Sprintf("rm -f /tmp/tcp_stream; setsid nc %s 9999 > /tmp/tcp_stream 2>&1 &", vmIP))
 
-			ginkgo.By("Verifying TCP data is flowing from TOR before migration")
+			By("Verifying TCP data is flowing from TOR before migration")
 			var preLines int
 			Eventually(func() int {
 				preOutput := runOnTOR(tor, "wc -l < /tmp/tcp_stream")
@@ -602,7 +609,7 @@ var _ = describe.CalicoDescribe(
 				"TCP data should be flowing from TOR")
 			logrus.Infof("Pre-migration: %d lines received on TOR", preLines)
 
-			ginkgo.By("First migration")
+			By("First migration")
 			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-mig1")
 			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-mig1")
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
@@ -611,7 +618,7 @@ var _ = describe.CalicoDescribe(
 			Expect(node2).NotTo(Equal(node1))
 			logrus.Infof("First eBGP migration: %s -> %s", node1, node2)
 
-			ginkgo.By("Verifying TCP data continued on TOR after first migration")
+			By("Verifying TCP data continued on TOR after first migration")
 			var midLines int
 			Eventually(func() int {
 				midOutput := runOnTOR(tor, "wc -l < /tmp/tcp_stream")
@@ -621,7 +628,7 @@ var _ = describe.CalicoDescribe(
 				"TCP data should have grown after first eBGP migration")
 			logrus.Infof("After first eBGP migration: %d lines", midLines)
 
-			ginkgo.By("Second migration")
+			By("Second migration")
 			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-mig2")
 			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-mig2")
 			vmi, err = kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
@@ -632,7 +639,7 @@ var _ = describe.CalicoDescribe(
 
 			// eBGP route convergence through the external TOR may take longer than
 			// iBGP mesh, so allow more time for data to resume after the second migration.
-			ginkgo.By("Verifying TCP data continued on TOR after second migration")
+			By("Verifying TCP data continued on TOR after second migration")
 			Eventually(func() int {
 				postOutput := runOnTOR(tor, "wc -l < /tmp/tcp_stream")
 				var postLines int
@@ -641,7 +648,7 @@ var _ = describe.CalicoDescribe(
 			}, 1*time.Minute, 2*time.Second).Should(BeNumerically(">=", midLines+5),
 				"TCP data should have grown after second eBGP migration")
 
-			ginkgo.By("Checking sequence continuity from TOR across both migrations")
+			By("Checking sequence continuity from TOR across both migrations")
 			streamAll := runOnTOR(tor, "cat /tmp/tcp_stream")
 			lines := strings.Split(strings.TrimSpace(streamAll), "\n")
 			logrus.Infof("eBGP TCP stream: %d lines, first: %s, last: %s",
@@ -660,60 +667,9 @@ var _ = describe.CalicoDescribe(
 
 // --- Helper functions ---
 
-// newTestVM creates a VirtualMachine spec with RunStrategyAlways, bridge networking,
-// and the kubevirt.io/allow-pod-bridge-network-live-migration annotation required for
-// live migration with bridge-mode interfaces. The VM uses a containerDisk image and
-// basic cloud-init for SSH access.
-func newTestVM(name, namespace string) *kubevirtv1.VirtualMachine {
-	runStrategy := kubevirtv1.RunStrategyAlways
-	return &kubevirtv1.VirtualMachine{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name, Namespace: namespace,
-			Labels: map[string]string{"vm": name, utils.TestResourceLabel: "true"},
-		},
-		Spec: kubevirtv1.VirtualMachineSpec{
-			RunStrategy: &runStrategy,
-			Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{"kubevirt.io/allow-pod-bridge-network-live-migration": "true"},
-					Labels:      map[string]string{"vm": name, utils.TestResourceLabel: "true"},
-				},
-				Spec: kubevirtv1.VirtualMachineInstanceSpec{
-					Domain: kubevirtv1.DomainSpec{
-						Resources: kubevirtv1.ResourceRequirements{
-							Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("512Mi")},
-						},
-						Devices: kubevirtv1.Devices{
-							Disks: []kubevirtv1.Disk{
-								{Name: "containerdisk", DiskDevice: kubevirtv1.DiskDevice{Disk: &kubevirtv1.DiskTarget{Bus: kubevirtv1.DiskBusVirtio}}},
-								{Name: "cloudinitdisk", DiskDevice: kubevirtv1.DiskDevice{Disk: &kubevirtv1.DiskTarget{Bus: kubevirtv1.DiskBusVirtio}}},
-							},
-							Interfaces: []kubevirtv1.Interface{
-								{Name: "default", InterfaceBindingMethod: kubevirtv1.InterfaceBindingMethod{Bridge: &kubevirtv1.InterfaceBridge{}}},
-							},
-						},
-					},
-					Networks:                      []kubevirtv1.Network{{Name: "default", NetworkSource: kubevirtv1.NetworkSource{Pod: &kubevirtv1.PodNetwork{}}}},
-					TerminationGracePeriodSeconds: ptrInt64(30),
-					Volumes: []kubevirtv1.Volume{
-						{Name: "containerdisk", VolumeSource: kubevirtv1.VolumeSource{ContainerDisk: &kubevirtv1.ContainerDiskSource{Image: vmImage()}}},
-						{Name: "cloudinitdisk", VolumeSource: kubevirtv1.VolumeSource{CloudInitNoCloud: &kubevirtv1.CloudInitNoCloudSource{
-							UserData: "#cloud-config\npassword: testpass\nchpasswd: { expire: False }\nssh_pwauth: True\n",
-						}}},
-					},
-				},
-			},
-		},
-	}
-}
+const defaultCloudInit = "#cloud-config\npassword: testpass\nchpasswd: { expire: False }\nssh_pwauth: True\n"
 
-// newTestVMWithTCPServer creates a VM that runs a TCP server on port 9999 via cloud-init.
-// The server sends "seq=N" every second to each connected client.
-func newTestVMWithTCPServer(name, namespace string) *kubevirtv1.VirtualMachine {
-	vm := newTestVM(name, namespace)
-	for i := range vm.Spec.Template.Spec.Volumes {
-		if vm.Spec.Template.Spec.Volumes[i].Name == "cloudinitdisk" {
-			vm.Spec.Template.Spec.Volumes[i].VolumeSource.CloudInitNoCloud.UserData = `#cloud-config
+const tcpServerCloudInit = `#cloud-config
 password: testpass
 chpasswd: { expire: False }
 ssh_pwauth: True
@@ -744,28 +700,115 @@ write_files:
 runcmd:
   - [bash, -c, "nohup python3 /usr/local/bin/tcp-server.py &"]
 `
-		}
-	}
-	return vm
+
+// testVM encapsulates a KubeVirt VirtualMachine for e2e tests.
+type testVM struct {
+	name      string
+	namespace string
+	cloudInit string
+	kvClient  kubevirtcorev1.KubevirtV1Interface
 }
 
-// createAndCleanupVM creates a VirtualMachine using newTestVM and registers a
-// DeferCleanup handler to delete it after the test completes.
-func createAndCleanupVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, f *framework.Framework, ns, vmName string) {
-	ginkgo.By(fmt.Sprintf("Creating VirtualMachine %s", vmName))
-	vm := newTestVM(vmName, ns)
-	_, err := kvClient.VirtualMachines(ns).Create(ctx, vm, metav1.CreateOptions{})
+func (v *testVM) spec() *kubevirtv1.VirtualMachine {
+	cloudInit := v.cloudInit
+	if cloudInit == "" {
+		cloudInit = defaultCloudInit
+	}
+	runStrategy := kubevirtv1.RunStrategyAlways
+	return &kubevirtv1.VirtualMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: v.name, Namespace: v.namespace,
+			Labels: map[string]string{"vm": v.name, utils.TestResourceLabel: "true"},
+		},
+		Spec: kubevirtv1.VirtualMachineSpec{
+			RunStrategy: &runStrategy,
+			Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{"kubevirt.io/allow-pod-bridge-network-live-migration": "true"},
+					Labels:      map[string]string{"vm": v.name, utils.TestResourceLabel: "true"},
+				},
+				Spec: kubevirtv1.VirtualMachineInstanceSpec{
+					Domain: kubevirtv1.DomainSpec{
+						Resources: kubevirtv1.ResourceRequirements{
+							Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("512Mi")},
+						},
+						Devices: kubevirtv1.Devices{
+							Disks: []kubevirtv1.Disk{
+								{Name: "containerdisk", DiskDevice: kubevirtv1.DiskDevice{Disk: &kubevirtv1.DiskTarget{Bus: kubevirtv1.DiskBusVirtio}}},
+								{Name: "cloudinitdisk", DiskDevice: kubevirtv1.DiskDevice{Disk: &kubevirtv1.DiskTarget{Bus: kubevirtv1.DiskBusVirtio}}},
+							},
+							Interfaces: []kubevirtv1.Interface{
+								{Name: "default", InterfaceBindingMethod: kubevirtv1.InterfaceBindingMethod{Bridge: &kubevirtv1.InterfaceBridge{}}},
+							},
+						},
+					},
+					Networks:                      []kubevirtv1.Network{{Name: "default", NetworkSource: kubevirtv1.NetworkSource{Pod: &kubevirtv1.PodNetwork{}}}},
+					TerminationGracePeriodSeconds: ptrInt64(30),
+					Volumes: []kubevirtv1.Volume{
+						{Name: "containerdisk", VolumeSource: kubevirtv1.VolumeSource{ContainerDisk: &kubevirtv1.ContainerDiskSource{Image: vmImage()}}},
+						{Name: "cloudinitdisk", VolumeSource: kubevirtv1.VolumeSource{CloudInitNoCloud: &kubevirtv1.CloudInitNoCloudSource{
+							UserData: cloudInit,
+						}}},
+					},
+				},
+			},
+		},
+	}
+}
+
+// Create creates the VirtualMachine in the cluster.
+func (v *testVM) Create(ctx context.Context) {
+	By(fmt.Sprintf("Creating VirtualMachine %s", v.name))
+	_, err := v.kvClient.VirtualMachines(v.namespace).Create(ctx, v.spec(), metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	ginkgo.DeferCleanup(func() {
-		logrus.Infof("Cleaning up VM %s/%s", ns, vmName)
-		_ = kvClient.VirtualMachines(ns).Delete(context.Background(), vmName, metav1.DeleteOptions{})
-	})
+}
+
+// Delete removes the VirtualMachine from the cluster.
+func (v *testVM) Delete() {
+	logrus.Infof("Cleaning up VM %s/%s", v.namespace, v.name)
+	_ = v.kvClient.VirtualMachines(v.namespace).Delete(context.Background(), v.name, metav1.DeleteOptions{})
+}
+
+// Stop sets RunStrategy to Halted, causing KubeVirt to delete the VMI and pod.
+func (v *testVM) Stop(ctx context.Context) {
+	Eventually(func() error {
+		stopStrategy := kubevirtv1.RunStrategyHalted
+		vm, err := v.kvClient.VirtualMachines(v.namespace).Get(ctx, v.name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("get VM: %w", err)
+		}
+		vm.Spec.RunStrategy = &stopStrategy
+		vm.Spec.Running = nil
+		_, err = v.kvClient.VirtualMachines(v.namespace).Update(ctx, vm, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("update VM: %w", err)
+		}
+		return nil
+	}, 1*time.Minute, 5*time.Second).Should(Succeed(), "failed to stop VM %s", v.name)
+}
+
+// Start sets RunStrategy to Always, causing KubeVirt to create a new VMI and pod.
+func (v *testVM) Start(ctx context.Context) {
+	Eventually(func() error {
+		startStrategy := kubevirtv1.RunStrategyAlways
+		vm, err := v.kvClient.VirtualMachines(v.namespace).Get(ctx, v.name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("get VM: %w", err)
+		}
+		vm.Spec.RunStrategy = &startStrategy
+		vm.Spec.Running = nil
+		_, err = v.kvClient.VirtualMachines(v.namespace).Update(ctx, vm, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("update VM: %w", err)
+		}
+		return nil
+	}, 1*time.Minute, 5*time.Second).Should(Succeed(), "failed to start VM %s", v.name)
 }
 
 // setupPingPod creates a long-running Alpine pod for connectivity checks (ping, nc).
 // The pod is scheduled on any Linux node and cleaned up after the test.
 func setupPingPod(ctx context.Context, f *framework.Framework, ns string) *corev1.Pod {
-	ginkgo.By("Creating a ping pod for connectivity checks")
+	By("Creating a ping pod for connectivity checks")
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "ping-test", Namespace: ns, Labels: map[string]string{utils.TestResourceLabel: "true"}},
 		Spec: corev1.PodSpec{
@@ -776,7 +819,7 @@ func setupPingPod(ctx context.Context, f *framework.Framework, ns string) *corev
 	}
 	created, err := f.ClientSet.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	ginkgo.DeferCleanup(func() {
+	DeferCleanup(func() {
 		_ = f.ClientSet.CoreV1().Pods(ns).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 	})
 	err = e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, created.Name, ns, 2*time.Minute)
@@ -788,7 +831,7 @@ func setupPingPod(ctx context.Context, f *framework.Framework, ns string) *corev
 // that prevents scheduling on avoidNode. Used for TCP tests where the client must be on
 // a different node than the server VM to exercise cross-node BGP routing.
 func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, ns, avoidNode string) *corev1.Pod {
-	ginkgo.By(fmt.Sprintf("Creating client pod avoiding node %s", avoidNode))
+	By(fmt.Sprintf("Creating client pod avoiding node %s", avoidNode))
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "tcp-client", Namespace: ns, Labels: map[string]string{utils.TestResourceLabel: "true"}},
 		Spec: corev1.PodSpec{
@@ -812,7 +855,7 @@ func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, ns, avoid
 	}
 	created, err := f.ClientSet.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	ginkgo.DeferCleanup(func() {
+	DeferCleanup(func() {
 		_ = f.ClientSet.CoreV1().Pods(ns).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 	})
 	err = e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, created.Name, ns, 2*time.Minute)
@@ -827,14 +870,14 @@ func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, ns, avoid
 // migrateAndCleanup creates a VirtualMachineInstanceMigration (VMIM) resource to trigger
 // a live migration of the specified VMI, and registers a DeferCleanup to delete the VMIM.
 func migrateAndCleanup(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmiName, vmimName string) {
-	ginkgo.By(fmt.Sprintf("Creating migration %s", vmimName))
+	By(fmt.Sprintf("Creating migration %s", vmimName))
 	vmim := &kubevirtv1.VirtualMachineInstanceMigration{
 		ObjectMeta: metav1.ObjectMeta{Name: vmimName, Namespace: ns},
 		Spec:       kubevirtv1.VirtualMachineInstanceMigrationSpec{VMIName: vmiName},
 	}
 	_, err := kvClient.VirtualMachineInstanceMigrations(ns).Create(ctx, vmim, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	ginkgo.DeferCleanup(func() {
+	DeferCleanup(func() {
 		_ = kvClient.VirtualMachineInstanceMigrations(ns).Delete(context.Background(), vmimName, metav1.DeleteOptions{})
 	})
 }
@@ -842,7 +885,7 @@ func migrateAndCleanup(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1In
 // waitForVMIRunningWithIP polls the VMI until it reaches Running phase and has an IP
 // address assigned. Returns the IP and the node where the VMI is scheduled.
 func waitForVMIRunningWithIP(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmName string) (ip, node string) {
-	ginkgo.By(fmt.Sprintf("Waiting for VMI %s to be Running with IP", vmName))
+	By(fmt.Sprintf("Waiting for VMI %s to be Running with IP", vmName))
 	Eventually(func() error {
 		vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 		if err != nil {
@@ -864,7 +907,7 @@ func waitForVMIRunningWithIP(ctx context.Context, kvClient kubevirtcorev1.Kubevi
 // waitForMigrationSuccess polls the VMIM until it reaches MigrationSucceeded phase.
 // Immediately stops polling with a fatal error if MigrationFailed is observed.
 func waitForMigrationSuccess(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmimName string) {
-	ginkgo.By(fmt.Sprintf("Waiting for migration %s to succeed", vmimName))
+	By(fmt.Sprintf("Waiting for migration %s to succeed", vmimName))
 	Eventually(func() error {
 		m, err := kvClient.VirtualMachineInstanceMigrations(ns).Get(ctx, vmimName, metav1.GetOptions{})
 		if err != nil {
@@ -878,44 +921,6 @@ func waitForMigrationSuccess(ctx context.Context, kvClient kubevirtcorev1.Kubevi
 		}
 		return nil
 	}, 5*time.Minute, 5*time.Second).Should(Succeed())
-}
-
-// stopVM sets the VM's RunStrategy to Halted, causing KubeVirt to delete the VMI and
-// its virt-launcher pod. Uses Eventually to retry on conflict errors.
-func stopVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmName string) {
-	Eventually(func() error {
-		stopStrategy := kubevirtv1.RunStrategyHalted
-		vm, err := kvClient.VirtualMachines(ns).Get(ctx, vmName, metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("get VM: %w", err)
-		}
-		vm.Spec.RunStrategy = &stopStrategy
-		vm.Spec.Running = nil
-		_, err = kvClient.VirtualMachines(ns).Update(ctx, vm, metav1.UpdateOptions{})
-		if err != nil {
-			return fmt.Errorf("update VM: %w", err)
-		}
-		return nil
-	}, 1*time.Minute, 5*time.Second).Should(Succeed(), "failed to stop VM %s", vmName)
-}
-
-// startVM sets the VM's RunStrategy to Always, causing KubeVirt to create a new VMI
-// and virt-launcher pod. Uses Eventually to retry on conflict errors.
-func startVM(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmName string) {
-	Eventually(func() error {
-		startStrategy := kubevirtv1.RunStrategyAlways
-		vm, err := kvClient.VirtualMachines(ns).Get(ctx, vmName, metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("get VM: %w", err)
-		}
-		vm.Spec.RunStrategy = &startStrategy
-		vm.Spec.Running = nil
-		_, err = kvClient.VirtualMachines(ns).Update(ctx, vm, metav1.UpdateOptions{})
-		if err != nil {
-			return fmt.Errorf("update VM: %w", err)
-		}
-		return nil
-	}, 1*time.Minute, 5*time.Second).Should(Succeed(), "failed to start VM %s", vmName)
 }
 
 // findVirtLauncherPod finds the running virt-launcher pod for a given VMI by label selector.
@@ -993,7 +998,7 @@ func getIPAMOwnerAttributes(ctx context.Context, c clientv3.Interface, ipStr str
 // waitForTCPServer waits for the VM's TCP server on port 9999 to accept connections.
 // F13: Increased timeout to 5s for nc, and 2 minutes overall for slow-booting VMs.
 func waitForTCPServer(ns, podName, vmIP string) {
-	ginkgo.By(fmt.Sprintf("Waiting for TCP server on %s:9999", vmIP))
+	By(fmt.Sprintf("Waiting for TCP server on %s:9999", vmIP))
 	Eventually(func() error {
 		output, err := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
 			"sh", "-c", fmt.Sprintf("timeout 5 nc %s 9999 || true", vmIP)).Exec()
@@ -1010,13 +1015,15 @@ func waitForTCPServer(ns, podName, vmIP string) {
 
 // countSequenceGaps parses "seq=N" lines and counts gaps in the sequence.
 func countSequenceGaps(lines []string) (gaps, lastSeq int) {
+	first := true
 	for _, line := range lines {
 		var seq int
 		if _, scanErr := fmt.Sscanf(line, "seq=%d", &seq); scanErr == nil {
-			if lastSeq > 0 && seq != lastSeq+1 {
+			if !first && seq != lastSeq+1 {
 				gaps++
 				logrus.Infof("Sequence gap: %d -> %d", lastSeq, seq)
 			}
+			first = false
 			lastSeq = seq
 		}
 	}
