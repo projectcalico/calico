@@ -1,5 +1,3 @@
-include ../metadata.mk
-
 PACKAGE_NAME = github.com/projectcalico/calico/typha
 
 # Name of the images.
@@ -21,7 +19,7 @@ include ../lib.Makefile
 # Touchfile created when we make the typha image.
 TYPHA_CONTAINER_CREATED=.calico_typha.created-$(ARCH)
 TYPHA_CONTAINER_FIPS_CREATED=.calico_typha.created-$(ARCH)-fips
-FIPS ?= false
+FIPS ?= $(call _read_default,.fips.default)
 
 ifeq ($(FIPS),true)
 TYPHA_CONTAINER_MARKER=$(TYPHA_CONTAINER_FIPS_CREATED)
