@@ -169,6 +169,11 @@ jobs:
           ref: ${{ steps.pr.outputs.sha }}
           fetch-depth: 1
 
+      - name: Add upstream remote
+        if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
+        run: |
+          git remote add projectcalico https://github.com/projectcalico/calico.git 2>/dev/null || true
+
       - name: Authenticate to GCR
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'false'
         uses: google-github-actions/auth@v2
