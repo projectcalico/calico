@@ -115,42 +115,12 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "failed to annotate namespace")
 
 			By("Configuring IPAMConfiguration with StrictAffinity=false")
-			ipamCfg := &v3.IPAMConfiguration{}
-			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, ipamCfg)
-			createdIPAMConfig := false
-			if apierrors.IsNotFound(err) {
-				// Create the resource if it doesn't exist.
-				ipamCfg.Name = "default"
-				ipamCfg.Spec.StrictAffinity = false
-				ipamCfg.Spec.AutoAllocateBlocks = true
-				err = cli.Create(ctx, ipamCfg)
-				Expect(err).NotTo(HaveOccurred(), "failed to create IPAMConfiguration")
-				createdIPAMConfig = true
-			} else {
-				Expect(err).NotTo(HaveOccurred(), "failed to get IPAMConfiguration")
-			}
-			origStrictAffinity := ipamCfg.Spec.StrictAffinity
-			DeferCleanup(func() {
-				if createdIPAMConfig {
-					// We created it, so clean up by deleting it entirely.
-					cfg := &v3.IPAMConfiguration{}
-					cfg.Name = "default"
-					if err := cli.Delete(context.Background(), cfg); err != nil && !apierrors.IsNotFound(err) {
-						framework.Logf("WARNING: failed to delete IPAMConfiguration: %v", err)
-					}
-					return
-				}
-				// Restore the original value.
-				cfg := &v3.IPAMConfiguration{}
-				if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, cfg); err != nil {
-					framework.Logf("WARNING: failed to get IPAMConfiguration for restoration: %v", err)
-					return
-				}
-				cfg.Spec.StrictAffinity = origStrictAffinity
-				if err := cli.Update(context.Background(), cfg); err != nil {
-					framework.Logf("WARNING: failed to restore IPAMConfiguration: %v", err)
-				}
+			restore, err := utils.ConfigureWithCleanup(cli, ctrlclient.ObjectKey{Name: "default"}, &v3.IPAMConfiguration{}, func(cfg *v3.IPAMConfiguration) {
+				cfg.Spec.StrictAffinity = false
+				cfg.Spec.AutoAllocateBlocks = true
 			})
+			Expect(err).NotTo(HaveOccurred(), "failed to configure IPAMConfiguration")
+			DeferCleanup(restore)
 
 			setStrictAffinity := func(strict bool) {
 				cfg := &v3.IPAMConfiguration{}
