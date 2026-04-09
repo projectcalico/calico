@@ -5,11 +5,13 @@
 set -euo pipefail
 
 START_TIME=$(date +%s)
+UNKNOWN_COUNT=0
+MAX_UNKNOWN=5
 
 while true; do
     RESPONSE=$(curl -s -f \
         "https://${SEMAPHORE_ORG}.semaphoreci.com/api/v1alpha/plumber-workflows/${WORKFLOW_ID}" \
-        -H "Authorization: Token ${SEMAPHORE_TOKEN}")
+        -H "Authorization: Token ${SEMAPHORE_TOKEN}") || true
 
     STATE=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow']['state'])" 2>/dev/null || echo "UNKNOWN")
     RESULT=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow'].get('result', ''))" 2>/dev/null || echo "")
@@ -26,6 +28,19 @@ while true; do
         echo "final_result=STOPPED" >> "$GITHUB_OUTPUT"
         echo "final_state=$STATE" >> "$GITHUB_OUTPUT"
         break
+    fi
+
+    if [[ "$STATE" == "UNKNOWN" ]]; then
+        UNKNOWN_COUNT=$(( UNKNOWN_COUNT + 1 ))
+        echo "Unknown state count: $UNKNOWN_COUNT / $MAX_UNKNOWN"
+        if (( UNKNOWN_COUNT >= MAX_UNKNOWN )); then
+            echo "::error::Semaphore workflow stuck in UNKNOWN state after $MAX_UNKNOWN checks"
+            echo "final_result=ERROR" >> "$GITHUB_OUTPUT"
+            echo "final_state=UNKNOWN" >> "$GITHUB_OUTPUT"
+            break
+        fi
+    else
+        UNKNOWN_COUNT=0
     fi
 
     NOW=$(date +%s)
