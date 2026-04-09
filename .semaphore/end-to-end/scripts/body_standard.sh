@@ -45,11 +45,9 @@ else
       CHART_REF="oci://${IMAGE_REGISTRY}/${IMAGE_PATH}/charts/tigera-operator"
       CHART_VERSION="0.0.0-${IMAGE_TAG}"
 
-      # Install helm if not already available.
-      if ! command -v helm &>/dev/null; then
-        echo "[INFO] installing helm..."
-        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-      fi
+      # Build the repo-pinned helm binary.
+      make -C "${CALICO_SRC}" bin/helm
+      export PATH="${CALICO_SRC}/bin:${PATH}"
 
       # Install CRDs first from the local checkout.
       echo "[INFO] installing CRDs..."
