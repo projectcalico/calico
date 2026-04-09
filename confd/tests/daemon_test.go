@@ -84,10 +84,6 @@ func TestNodeMeshBGPPassword(t *testing.T) {
 			}
 			_, err := be.k8sClientset.CoreV1().Secrets("kube-system").Create(ctx, secret, metav1.CreateOptions{})
 			require.NoError(t, err)
-			t.Cleanup(func() {
-				err := be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
-				require.NoError(t, err)
-			})
 			d.expectOutput("mesh/password/step2")
 
 			// Step 3: update the password.
@@ -112,6 +108,12 @@ func TestNodeMeshBGPPassword(t *testing.T) {
 			err = be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
 			require.NoError(t, err)
 			d.expectOutput("mesh/password/step1")
+
+			// Secret already deleted by step 5; explicitly clean up only if
+			// the test failed before reaching step 5.
+			t.Cleanup(func() {
+				_ = be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
+			})
 		})
 	}
 }
@@ -141,8 +143,7 @@ func TestBGPPeerPassword(t *testing.T) {
 			_, err := be.k8sClientset.CoreV1().Secrets("kube-system").Create(ctx, secret1, metav1.CreateOptions{})
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				err := be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
-				require.NoError(t, err)
+				_ = be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
 			})
 			d.expectOutput("password/step2")
 
@@ -161,8 +162,7 @@ func TestBGPPeerPassword(t *testing.T) {
 			_, err = be.k8sClientset.CoreV1().Secrets("kube-system").Create(ctx, secret2, metav1.CreateOptions{})
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				err := be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-2", metav1.DeleteOptions{})
-				require.NoError(t, err)
+				_ = be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-2", metav1.DeleteOptions{})
 			})
 			d.expectOutput("password/step3")
 

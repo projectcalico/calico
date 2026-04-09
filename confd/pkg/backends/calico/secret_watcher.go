@@ -176,7 +176,9 @@ func (sw *secretWatcher) OnDelete(obj any) {
 func (sw *secretWatcher) updateSecret(secret *v1.Secret) {
 	sw.mutex.Lock()
 	defer sw.mutex.Unlock()
-	sw.watches[secret.Name].secret = secret
+	if w, ok := sw.watches[secret.Name]; ok {
+		w.secret = secret
+	}
 }
 
 func (sw *secretWatcher) deleteSecret(secret *v1.Secret) {
