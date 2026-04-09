@@ -38,44 +38,34 @@ else
     cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}
 
     if [[ -n "${IMAGE_TAG:-}" ]]; then
-      # Install from the PR's manifests and helm chart instead of a hashrelease.
-      echo "[INFO] installing Calico from PR source..."
-      CALICO_SRC="${HOME}/${SEMAPHORE_GIT_DIR}"
+      # Install from the OCI helm chart pushed by the GHA workflow.
+      echo "[INFO] installing Calico from PR helm chart..."
       KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig"
+      CHART_REF="oci://${IMAGE_REGISTRY}/${IMAGE_PATH}/charts/tigera-operator"
+      CHART_VERSION="0.0.0-${IMAGE_TAG}"
 
-      # Generate the operator manifest with the custom operator image baked in.
-      helm template calico "${CALICO_SRC}/charts/tigera-operator" \
-        --include-crds \
-        --set tigeraOperator.registry="${IMAGE_REGISTRY}" \
-        --set tigeraOperator.image="${IMAGE_PATH}/operator" \
-        --set tigeraOperator.version="${IMAGE_TAG}" \
-        --namespace tigera-operator \
-        > /tmp/tigera-operator.yaml
+      # Map banzai DATAPLANE values to helm linuxDataplane values.
+      HELM_DATAPLANE_ARGS=""
+      case "${DATAPLANE:-CalicoIptables}" in
+        CalicoBPF)
+          HELM_DATAPLANE_ARGS="--set installation.calicoNetwork.linuxDataplane=BPF --set installation.calicoNetwork.bpfNetworkBootstrap=Enabled --set installation.calicoNetwork.kubeProxyManagement=Enabled" ;;
+        CalicoNftables)
+          HELM_DATAPLANE_ARGS="--set installation.calicoNetwork.linuxDataplane=Nftables" ;;
+        CalicoVPP)
+          HELM_DATAPLANE_ARGS="--set installation.calicoNetwork.linuxDataplane=VPP" ;;
+      esac
 
-      KUBECONFIG="${KUBECONFIG}" kubectl create namespace tigera-operator 2>/dev/null || true
-      KUBECONFIG="${KUBECONFIG}" kubectl create -f "${CALICO_SRC}/manifests/operator-crds.yaml"
-      KUBECONFIG="${KUBECONFIG}" kubectl apply -f /tmp/tigera-operator.yaml
-
-      # Wait for the operator to be ready before applying custom resources.
-      KUBECONFIG="${KUBECONFIG}" kubectl wait pod --for=condition=Ready -n tigera-operator -l k8s-app=tigera-operator --timeout=120s
-
-      # Select the right custom resources for the dataplane.
-      CR_MANIFEST="${CALICO_SRC}/manifests/custom-resources.yaml"
-      if [[ "${DATAPLANE:-}" == "CalicoBPF" ]]; then
-        CR_MANIFEST="${CALICO_SRC}/manifests/custom-resources-bpf.yaml"
-      fi
-      KUBECONFIG="${KUBECONFIG}" kubectl create -f "${CR_MANIFEST}"
-
-      # Patch the Installation for nftables if needed.
-      if [[ "${DATAPLANE:-}" == "CalicoNftables" ]]; then
-        KUBECONFIG="${KUBECONFIG}" kubectl patch installation default --type=merge \
-          -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Nftables"}}}'
-      fi
+      #shellcheck disable=SC2086
+      KUBECONFIG="${KUBECONFIG}" helm install calico "${CHART_REF}" \
+        --version "${CHART_VERSION}" \
+        --namespace tigera-operator --create-namespace \
+        --wait --timeout 300s \
+        ${HELM_DATAPLANE_ARGS}
 
       echo "[INFO] waiting for Calico to be ready..."
       KUBECONFIG="${KUBECONFIG}" kubectl wait --for=condition=Available --timeout=300s tigerastatus/calico
 
-      echo "[INFO] Calico installed from PR source"
+      echo "[INFO] Calico installed from PR helm chart"
     else
       echo "[INFO] starting bz install..."
       bz install $VERBOSE |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/install.log.gz)
