@@ -23,8 +23,9 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// the named node only.
 	//
 	// When multiple selector-scoped FelixConfiguration resources match a given node, all
-	// matching configurations are merged. For any fields set in more than one matching
-	// resource, the effective value is not well defined.
+	// matching configurations are merged in alphabetical order by resource name.
+	// For any fields set in more than one matching resource, the value from the
+	// last resource in alphabetical order takes precedence.
 	NodeSelector *string `json:"nodeSelector,omitempty"`
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
