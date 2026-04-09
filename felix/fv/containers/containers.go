@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -61,6 +61,7 @@ type Container struct {
 	logFinished      sync.WaitGroup
 	dropAllLogs      bool
 	ignoreEmptyLines bool
+	logLimitBytes    int
 }
 
 type watch struct {
@@ -190,6 +191,7 @@ type RunOpts struct {
 	SameNamespace    *Container
 	StopTimeoutSecs  int
 	StopSignal       string
+	LogLimitBytes    int
 }
 
 func NextContainerIndex() int {
@@ -212,6 +214,7 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	c = &Container{
 		Name:             name,
 		ignoreEmptyLines: opts.IgnoreEmptyLines,
+		logLimitBytes:    opts.LogLimitBytes,
 	}
 
 	// Prep command to run the container.
@@ -240,21 +243,22 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 	if opts.WithStdinPipe {
 		var err error
 		c.Stdin, err = c.runCmd.StdinPipe()
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
 
 	// Get the command's output pipes, so we can merge those into the test's own logging.
 	stdout, err := c.runCmd.StdoutPipe()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	stderr, err := c.runCmd.StderrPipe()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// Start the container running.
 	err = c.runCmd.Start()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
+
 	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
 	go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches, nil)
 
@@ -313,13 +317,13 @@ func (c *Container) Start() {
 	c.runCmd = utils.Command("docker", "start", "--attach", c.Name)
 
 	stdout, err := c.runCmd.StdoutPipe()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	stderr, err := c.runCmd.StderrPipe()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// Start the container running.
 	err = c.runCmd.Start()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
@@ -336,7 +340,7 @@ func (c *Container) Start() {
 func (c *Container) Remove() {
 	c.runCmd = utils.Command("docker", "rm", "-f", c.Name)
 	err := c.runCmd.Start()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	log.WithField("container", c).Info("Removed container.")
 }
@@ -366,9 +370,10 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 	}
 	defer func() {
 		err := dataRaceFile.Close()
-		Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log (close).")
+		gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to write to data race log (close).")
 	}()
 
+	bytesSeen := 0
 	for scanner.Scan() {
 		line := scanner.Text()
 		if extraWriter != nil {
@@ -386,6 +391,19 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		c.mutex.Lock()
 		droppingLogs := c.dropAllLogs
 		c.mutex.Unlock()
+
+		// Or because we hit the limit.
+		wasDropping := c.logLimitBytes > 0 && bytesSeen > c.logLimitBytes
+		bytesSeen += len(line)
+		nowDropping := c.logLimitBytes > 0 && bytesSeen > c.logLimitBytes
+		if nowDropping {
+			if !wasDropping {
+				// We just hit the limit.
+				fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, "...truncated...")
+			}
+			droppingLogs = true
+		}
+
 		if !droppingLogs {
 			fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, line)
 		}
@@ -394,7 +412,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		if strings.Contains(line, "WARNING: DATA RACE") {
 			_, err := fmt.Fprintf(dataRaceFile, "Detected data race (in %s) while running test: %s\n",
 				c.Name, ginkgo.CurrentGinkgoTestDescription().FullTestText)
-			Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log.")
+			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to write to data race log.")
 			foundDataRace = true
 		}
 		if foundDataRace {
@@ -410,7 +428,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 				dataRaceText += line + "\n"
 				_, err = dataRaceFile.WriteString(line + "\n")
 			}
-			Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log.")
+			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to write to data race log.")
 		}
 
 		if watches == nil {
@@ -466,7 +484,7 @@ func (c *Container) DockerInspect(format string) string {
 		c.Name,
 	)
 	outputBytes, err := inspectCmd.CombinedOutput()
-	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to run %q", inspectCmd))
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to run %q", inspectCmd))
 	return string(outputBytes)
 }
 
@@ -512,7 +530,7 @@ func (c *Container) GetPIDs(processName string) []int {
 			continue
 		}
 		pid, err := strconv.Atoi(line)
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		pids = append(pids, pid)
 	}
 	return pids
@@ -581,7 +599,7 @@ func (c *Container) GetSinglePID(processName string) int {
 			// Success, there's one process.
 			return filteredProcs[0].PID
 		}
-		ExpectWithOffset(1, time.Since(start)).To(BeNumerically("<", 5*time.Second),
+		gomega.ExpectWithOffset(1, time.Since(start)).To(gomega.BeNumerically("<", 5*time.Second),
 			fmt.Sprintf("Timed out waiting for there to be a single PID for %s", processName))
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -602,11 +620,11 @@ func (c *Container) WaitUntilRunning() {
 	}()
 
 	for {
-		Expect(stoppedChan).NotTo(BeClosed(), fmt.Sprintf("Container %s failed before being listed in 'docker ps'", c.Name))
+		gomega.Expect(stoppedChan).NotTo(gomega.BeClosed(), fmt.Sprintf("Container %s failed before being listed in 'docker ps'", c.Name))
 
 		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred(), "Failed to run 'docker ps'")
+		gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to run 'docker ps'")
 		if strings.Contains(string(out), c.Name) {
 			break
 		}
@@ -623,17 +641,14 @@ func (c *Container) Stopped() bool {
 func (c *Container) ListedInDockerPS() bool {
 	cmd := utils.Command("docker", "ps")
 	out, err := cmd.CombinedOutput()
-	Expect(err).NotTo(HaveOccurred(), "Failed to run 'docker ps'")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to run 'docker ps'")
 	return strings.Contains(string(out), c.Name)
 }
 
 func (c *Container) WaitNotRunning(timeout time.Duration) {
 	log.Info("Wait for container not to be listed in docker ps")
 	start := time.Now()
-	for {
-		if !c.ListedInDockerPS() {
-			break
-		}
+	for c.ListedInDockerPS() {
 		if time.Since(start) > timeout {
 			log.Panic("Timed out waiting for container not to be listed.")
 		}
@@ -756,7 +771,7 @@ func (c *Container) IPSetSizes() map[string]int {
 	numMembers := map[string]int{}
 	args := []string{"ipset", "list"}
 	ipsetsOutput, err := c.ExecOutput(args...)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	currentName := ""
 	membersSeen := false
 	log.WithField("ipsets", ipsetsOutput).Info("IP sets state")
@@ -813,17 +828,17 @@ func (c *Container) NumNFTSetMembers(ipVersion int, setName string) int {
 		Nftables []map[string]interface{} `json:"nftables"`
 	}
 	var resp nftResp
-	Expect(json.Unmarshal([]byte(out), &resp)).NotTo(HaveOccurred(), fmt.Sprintf("Failed to unmarshal JSON: %s", out))
+	gomega.Expect(json.Unmarshal([]byte(out), &resp)).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to unmarshal JSON: %s", out))
 	for _, obj := range resp.Nftables {
 		if obj["set"] != nil {
 			setObj, ok := obj["set"].(map[string]interface{})
-			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse set: %v", obj))
+			gomega.Expect(ok).To(gomega.BeTrue(), fmt.Sprintf("Failed to parse set: %v", obj))
 			if _, ok := setObj["elem"]; !ok {
 				// No elements.
 				return 0
 			}
 			elems, ok := setObj["elem"].([]interface{})
-			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse elem: %v", setObj))
+			gomega.Expect(ok).To(gomega.BeTrue(), fmt.Sprintf("Failed to parse elem: %v", setObj))
 			return len(elems)
 		}
 	}
@@ -836,7 +851,7 @@ func (c *Container) IPSetNames() []string {
 	}
 
 	out, err := c.ExecOutput("ipset", "list", "-name")
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	out = strings.Trim(out, "\n")
 	if out == "" {
 		return nil
@@ -853,7 +868,7 @@ func (c *Container) nftablesSetNames() []string {
 
 func (c *Container) nftablesSetNamesForVersion(ver string) []string {
 	out, err := c.ExecOutput("nft", "list", "sets", ver)
-	Expect(err).NotTo(HaveOccurred(), out)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), out)
 	var names []string
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -876,14 +891,14 @@ func (c *Container) NumTCBPFProgs(ifaceName string) int {
 	if strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE")) == "tc" {
 		for _, dir := range []string{"ingress", "egress"} {
 			out, err := c.ExecOutput("tc", "filter", "show", "dev", ifaceName, dir)
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			count := strings.Count(out, "direct-action")
 			log.Debugf("Output from tc filter show for %s, dir=%s: %q (count=%d)", c.Name, dir, out, count)
 			total += count
 		}
 	} else {
 		out, err := c.ExecOutput("bpftool", "net", "show")
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		total = strings.Count(out, ifaceName)
 
 	}

@@ -64,6 +64,7 @@ type ProxyFrontend interface {
 type DPSyncerState struct {
 	SvcMap   k8sp.ServicePortMap
 	EpsMap   k8sp.EndpointsMap
+	Hostname string
 	NodeZone string
 }
 
@@ -281,6 +282,7 @@ func (p *proxy) invokeDPSyncer() {
 	err := p.dpSyncer.Apply(DPSyncerState{
 		SvcMap:   p.svcMap,
 		EpsMap:   p.epsMap,
+		Hostname: p.hostname,
 		NodeZone: p.nodeZone,
 	})
 	p.syncerLck.Unlock()
@@ -430,11 +432,13 @@ const (
 type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
+	TopologyMode() string
 }
 
 type servicePortAnnotations struct {
 	reapTerminatingUDP bool
 	excludeService     bool
+	topologyMode       string
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
@@ -443,6 +447,10 @@ func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
 
 func (s *servicePortAnnotations) ExcludeService() bool {
 	return s.excludeService
+}
+
+func (s *servicePortAnnotations) TopologyMode() string {
+	return s.topologyMode
 }
 
 type servicePort struct {
@@ -455,15 +463,19 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		ServicePort: baseSvc,
 	}
 
-	if v, ok := s.ObjectMeta.Annotations[ExcludeServiceAnnotation]; ok && v == "true" {
+	if v, ok := s.Annotations[ExcludeServiceAnnotation]; ok && v == "true" {
 		svc.excludeService = true
 		goto out
 	}
 
 	if baseSvc.Protocol() == v1.ProtocolUDP {
-		if v, ok := s.ObjectMeta.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
+		if v, ok := s.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
 			svc.reapTerminatingUDP = true
 		}
+	}
+
+	if v, ok := s.Annotations[v1.AnnotationTopologyMode]; ok {
+		svc.topologyMode = v
 	}
 
 out:

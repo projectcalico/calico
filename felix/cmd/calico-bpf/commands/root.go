@@ -27,7 +27,8 @@ var (
 	cfgFile  string
 	logLevel string
 
-	ipv6 *bool
+	ipv6       *bool
+	jsonOutput *bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -56,6 +57,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "warn", "Set log level")
 
 	ipv6 = rootCmd.PersistentFlags().BoolP("ipv6", "6", false, "Use IPv6 instead of IPv4")
+	jsonOutput = rootCmd.PersistentFlags().BoolP("json", "j", false, "Output in JSON format")
 	rootCmd.SetOut(os.Stdout)
 }
 

@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/logutils"
-	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 )
@@ -133,7 +132,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 		// Remove a non-existent chain. It should not trigger any new updates.
 		table.RemoveChains([]*generictables.Chain{
-			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: Match(), Action: AcceptAction{}}}},
 		})
 		table.Apply()
 		Expect(f.transactions).To(HaveLen(1))
@@ -141,10 +140,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 	It("Should defer updates until Apply is called", func() {
 		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-			{Match: nftables.Match(), Action: DropAction{}},
+			{Match: Match(), Action: DropAction{}},
 		})
 		table.UpdateChains([]*generictables.Chain{
-			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: Match(), Action: AcceptAction{}}}},
 		})
 		Expect(f.transactions).To(BeEmpty())
 		table.Apply()
@@ -154,7 +153,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	It("Should panic on nft failures", func() {
 		// Insert rules into a non-existent chain.
 		table.InsertOrAppendRules("badchain", []generictables.Rule{
-			{Match: nftables.Match(), Action: DropAction{}},
+			{Match: Match(), Action: DropAction{}},
 		})
 		Expect(func() {
 			table.Apply()
@@ -164,7 +163,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	Describe("after inserting a rule", func() {
 		BeforeEach(func() {
 			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				{Match: nftables.Match(), Action: DropAction{}},
+				{Match: Match(), Action: DropAction{}},
 			})
 			table.Apply()
 			Expect(f.transactions).To(HaveLen(1))
@@ -182,7 +181,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 		It("further inserts should be idempotent", func() {
 			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				{Match: nftables.Match(), Action: DropAction{}},
+				{Match: Match(), Action: DropAction{}},
 			})
 			table.Apply()
 
@@ -198,10 +197,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Describe("after inserting a rule then updating the insertions", func() {
 			BeforeEach(func() {
 				table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-					{Match: nftables.Match(), Action: DropAction{}},
-					{Match: nftables.Match(), Action: AcceptAction{}},
-					{Match: nftables.Match(), Action: DropAction{}},
-					{Match: nftables.Match(), Action: AcceptAction{}},
+					{Match: Match(), Action: DropAction{}},
+					{Match: Match(), Action: AcceptAction{}},
+					{Match: Match(), Action: DropAction{}},
+					{Match: Match(), Action: AcceptAction{}},
 				})
 				table.Apply()
 				Expect(f.transactions).To(HaveLen(2))
@@ -254,7 +253,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			BeforeEach(func() {
 				// Append a rule to the filter-FORWARD base chain, and trigger programming.
 				table.AppendRules("filter-FORWARD", []generictables.Rule{
-					{Match: nftables.Match(), Action: AcceptAction{}},
+					{Match: Match(), Action: AcceptAction{}},
 				})
 				table.Apply()
 
@@ -813,7 +812,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			})
 
 			// Send the map add.
-			meta := nftables.MapMetadata{Name: "cali-tw-dispatch", Type: nftables.MapTypeInterfaceMatch}
+			meta := MapMetadata{Name: "cali-tw-dispatch", Type: MapTypeInterfaceMatch}
 			members := map[string][]string{"cali1234": {"jump cali-tw-1234"}, "cali5678": {"jump cali-tw-5678"}}
 			table.AddOrReplaceMap(meta, members)
 
@@ -921,5 +920,124 @@ var _ = Describe("Insert early rules", func() {
 
 		res := table.CheckRulesPresent("filter-FORWARD", rls)
 		Expect(res).To(HaveLen(2))
+	})
+})
+
+var _ = Describe("Disabled table cache invalidation", func() {
+	var table *NftablesTable
+	var featureDetector *environment.FeatureDetector
+	var f *fakeNFT
+
+	BeforeEach(func() {
+		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		featureDetector = environment.NewFeatureDetector(nil)
+		table = NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			featureDetector,
+			TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+				Disabled:         true,
+			},
+			true,
+		)
+	})
+
+	Context("when there are chains in the dataplane to clean up", func() {
+		BeforeEach(func() {
+			// Simulate pre-existing nftables chains left over from a previous nftables mode run.
+			tx := f.NewTransaction()
+			tx.Add(&knftables.Table{})
+			tx.Add(&knftables.Chain{Name: "cali-foobar"})
+			tx.Add(&knftables.Rule{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")})
+			Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
+		})
+
+		It("should clean up chains and then skip cache invalidation on subsequent applies", func() {
+			// First Apply: discovers the chain and cleans it up in one transaction.
+			// This also deletes the nftables table itself since it's disabled.
+			table.Apply()
+
+			// Verify the table was deleted (List returns an error when the table doesn't exist).
+			_, err := f.Fake().List(context.Background(), "chain")
+			Expect(err).To(HaveOccurred(), "Expected table to be deleted after cleanup")
+
+			// Record list call count after first apply.
+			listCallsAfterFirstApply := f.ListCallCount
+
+			// Second Apply: cleanup is complete and chainToDataplaneHashes is empty,
+			// so cache should NOT have been invalidated — no new List calls.
+			table.Apply()
+			Expect(f.ListCallCount).To(Equal(listCallsAfterFirstApply),
+				"Expected no additional List calls after disabled table finished cleanup")
+
+			// Third Apply: should still be a no-op with no List calls.
+			table.Apply()
+			Expect(f.ListCallCount).To(Equal(listCallsAfterFirstApply),
+				"Expected no additional List calls on repeated applies after cleanup")
+		})
+	})
+
+	Context("when there are no chains in the dataplane", func() {
+		It("should not invalidate cache after apply (no cleanup needed)", func() {
+			// First Apply: empty dataplane, nothing to clean up. The first Apply will call
+			// loadDataplaneState to get in sync initially.
+			table.Apply()
+
+			// Record the list call count after the first apply completes.
+			listCallsAfterFirstApply := f.ListCallCount
+
+			// Second Apply: since the table is disabled and has no chains, cache should NOT
+			// have been invalidated, so no new List calls should be made.
+			table.Apply()
+			Expect(f.ListCallCount).To(Equal(listCallsAfterFirstApply),
+				"Expected no additional List calls because disabled table with no chains should skip cache invalidation")
+		})
+	})
+})
+
+var _ = Describe("Enabled table cache invalidation", func() {
+	var table *NftablesTable
+	var featureDetector *environment.FeatureDetector
+	var f *fakeNFT
+
+	BeforeEach(func() {
+		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		featureDetector = environment.NewFeatureDetector(nil)
+		table = NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			featureDetector,
+			TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+			},
+			true,
+		)
+	})
+
+	It("should always invalidate cache after apply", func() {
+		// First Apply: programs base chains.
+		table.Apply()
+
+		// Record list call count after first apply.
+		listCallsAfterFirstApply := f.ListCallCount
+
+		// Second Apply: cache should have been invalidated (enabled table always invalidates),
+		// so List should be called again to reload state.
+		table.Apply()
+		Expect(f.ListCallCount).To(BeNumerically(">", listCallsAfterFirstApply),
+			"Expected List to be called again because enabled table always invalidates cache after apply")
 	})
 })

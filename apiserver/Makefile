@@ -135,7 +135,7 @@ run-kubernetes-server: run-k8s-controller-manager
 		--rm \
 		-v  $(CURDIR):/manifests \
 		-v $(CERTS_PATH):/home/user/certs \
-		rancher/kubectl:$(K8S_VERSION) \
+		registry.k8s.io/kubectl:$(K8S_VERSION) \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/mock-node.yaml
 
@@ -146,7 +146,7 @@ run-kubernetes-server: run-k8s-controller-manager
 		--rm \
 		-v  $(CURDIR):/manifests \
 		-v $(CERTS_PATH):/home/user/certs \
-		rancher/kubectl:$(K8S_VERSION) \
+		registry.k8s.io/kubectl:$(K8S_VERSION) \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/namespaces.yaml
 

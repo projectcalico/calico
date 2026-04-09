@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 )
 
 // TunnelStrategy is a strategy for assigning tunnel configuration to a topology.
@@ -41,9 +41,9 @@ func NewDefaultTunnelStrategy(v4Pool, v6Pool string) TunnelStrategy {
 
 func NewDefaultTunnelStrategyWithOffset(v4Pool, v6Pool string, offset int) TunnelStrategy {
 	_, v4cidr, err := net.ParseCIDR(v4Pool)
-	Expect(err).To(BeNil())
+	gomega.Expect(err).To(gomega.BeNil())
 	_, v6cidr, err := net.ParseCIDR(v6Pool)
-	Expect(err).To(BeNil())
+	gomega.Expect(err).To(gomega.BeNil())
 
 	return &defaultTunnelStrategy{
 		v4Pool: v4cidr,
@@ -73,9 +73,9 @@ type borrowedIPTunnelStrategy struct {
 
 func NewBorrowedIPTunnelStrategy(v4Pool, v6Pool string, numFelixes int) TunnelStrategy {
 	_, v4cidr, err := net.ParseCIDR(v4Pool)
-	Expect(err).To(BeNil())
+	gomega.Expect(err).To(gomega.BeNil())
 	_, v6cidr, err := net.ParseCIDR(v6Pool)
-	Expect(err).To(BeNil())
+	gomega.Expect(err).To(gomega.BeNil())
 
 	return &borrowedIPTunnelStrategy{
 		v4Pool:     v4cidr,

@@ -549,7 +549,7 @@ func (s *IPSets) tryResync() error {
 }
 
 func LegalizeSetName(setName string) string {
-	return strings.Replace(setName, ":", "-", -1)
+	return strings.ReplaceAll(setName, ":", "-")
 }
 
 func (s *IPSets) NFTablesSet(name string) *knftables.Set {

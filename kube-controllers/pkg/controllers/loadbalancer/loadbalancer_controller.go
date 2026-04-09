@@ -77,6 +77,9 @@ func (t *allocationTracker) assignAddressToBlock(key string, ip string, svcKey s
 
 func (t *allocationTracker) releaseAddressFromBlock(key string, ip string) {
 	delete(t.ipsByBlock[key], ip)
+	if len(t.ipsByBlock[key]) == 0 {
+		delete(t.ipsByBlock, key)
+	}
 	t.releaseAddressFromService(t.servicesByIP[ip], ip)
 }
 
@@ -99,11 +102,20 @@ func (t *allocationTracker) assignAddressToService(svcKey serviceKey, ip string)
 func (t *allocationTracker) releaseAddressFromService(svcKey serviceKey, ip string) {
 	delete(t.servicesByIP, ip)
 	delete(t.ipsByService[svcKey], ip)
+	for block, ips := range t.ipsByBlock {
+		if ips[ip] {
+			delete(ips, ip)
+			if len(ips) == 0 {
+				delete(t.ipsByBlock, block)
+			}
+			break
+		}
+	}
 }
 
 func (t *allocationTracker) deleteService(svcKey serviceKey) {
 	for ip := range t.ipsByService[svcKey] {
-		delete(t.servicesByIP, ip)
+		t.releaseAddressFromService(svcKey, ip)
 	}
 	delete(t.ipsByService, svcKey)
 }
@@ -290,17 +302,22 @@ func (c *loadBalancerController) handleUpdate(update interface{}) {
 }
 
 func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
-	if kvp.Value == nil {
+	block, ok := kvp.Value.(*model.AllocationBlock)
+	if !ok {
+		log.WithField("key", kvp.Key.String()).Errorf("unexpected type for AllocationBlock value: %T", kvp.Value)
+		c.allocationTracker.deleteBlock(kvp.Key.String())
+		return
+	}
+	if block == nil {
 		c.allocationTracker.deleteBlock(kvp.Key.String())
 		return
 	}
 
-	affinity := kvp.Value.(*model.AllocationBlock).Affinity
-	block := kvp.Value.(*model.AllocationBlock)
+	affinity := block.Affinity
 	key := kvp.Key.String()
 
-	if affinity != nil && *affinity != fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
-		c.allocationTracker.deleteBlock(kvp.Key.String())
+	if affinity == nil || *affinity != fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
+		c.allocationTracker.deleteBlock(key)
 		return
 	}
 

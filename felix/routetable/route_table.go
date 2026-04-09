@@ -487,6 +487,7 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 
 	// Clean out the pending ARP list, then recalculate it below.
 	delete(r.permanentARPs, ifaceName)
+	r.ifacesToARP.Discard(ifaceName)
 	for cidr, target := range newTargets {
 		// addOwningIface() calls recalculateDesiredKernelRoute.
 		r.addOwningIface(routeClass, ifaceName, cidr)
@@ -548,6 +549,7 @@ func (r *RouteTable) updatePermanentARP(ifaceName string, addr ip.Addr, mac net.
 		r.permanentARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
 	}
 	r.permanentARPs[ifaceName][addr] = mac
+	r.ifacesToARP.Add(ifaceName)
 }
 
 func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
@@ -558,6 +560,7 @@ func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
 		delete(arps, addr)
 		if len(arps) == 0 {
 			delete(r.permanentARPs, ifaceName)
+			r.ifacesToARP.Discard(ifaceName)
 		}
 	}
 }
@@ -791,7 +794,7 @@ func (r *RouteTable) ReadRoutesFromKernel(ifaceName string) ([]Target, error) {
 
 	ifaceIndex, ok := r.ifaceIndexForName(ifaceName)
 	if !ok {
-		return nil, IfaceNotPresent
+		return nil, ErrIfaceNotPresent
 	}
 
 	var allTargets []Target
@@ -912,11 +915,12 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 	nl, err := r.nl.Handle()
 	if err != nil {
 		r.logCxt.WithError(err).Error("Failed to connect to netlink.")
-		return ConnectFailed
+		return ErrConnectFailed
 	}
 
 	if r.fullResyncNeeded {
 		// Mark to reprogram static ARP for all interfaces.
+		r.ifacesToARP.Clear()
 		for ifaceName := range r.permanentARPs {
 			r.ifacesToARP.Add(ifaceName)
 		}
@@ -1099,8 +1103,8 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
-		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
-		if errors.Is(filteredErr, ListFailed) {
+		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ErrListFailed, false)
+		if errors.Is(filteredErr, ErrListFailed) {
 			r.logCxt.WithError(err).WithFields(log.Fields{
 				"iface":       ifaceName,
 				"routeFilter": routeFilter,
@@ -1362,7 +1366,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	nl, err := r.nl.Handle()
 	if err != nil {
 		r.logCxt.Debug("Failed to connect to netlink")
-		return ConnectFailed
+		return ErrConnectFailed
 	}
 
 	// First clean up any old routes.
@@ -1465,7 +1469,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 					attempt == 0,
 				)
 
-				if errors.Is(err, IfaceDown) || errors.Is(err, IfaceNotPresent) {
+				if errors.Is(err, ErrIfaceDown) || errors.Is(err, ErrIfaceNotPresent) {
 					// Very common race: the interface was taken down/deleted
 					// by the CNI plugin while we were trying to update it.
 					// Mark for a lazy rescan so that we won't try to program
@@ -1485,37 +1489,44 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 		return deltatracker.IterActionUpdateDataplane
 	})
 
+	// Program static ARP entries for dirty interfaces.  We iterate ifacesToARP
+	// (the dirty set) rather than permanentARPs (all desired state) since the
+	// dirty set is typically much smaller between resyncs.
+	//
+	// Static ARP entries help in two ways:
+	//
+	// 1. They slightly reduce TTFP (time to first ping) for a new endpoint, by
+	// removing the need for the host kernel to send an ARP request to the
+	// endpoint and to wait for its response.
+	//
+	// 2. They support VMs with a restrictive arp_ignore setting.  For example,
+	// we are aware of OpenStack VMs with arp_ignore set to 2, which means
+	// "reply only if the target IP address is local address configured on the
+	// incoming interface and both with the sender's IP address are part from
+	// same subnet on this interface" - which will never be True for the way
+	// that Calico provisions VM IPs.
+	//
+	// For (2) it is important that Felix maintains the ARP programming for an
+	// interface beyond the point when that interface is first configured.  In
+	// particular, dnsmasq overwrites our ARP programming - with an entry that
+	// is identical to ours, except without the PERMANENT flag - when it
+	// receives a DHCP request from an OpenStack VM and issues its IP address.
+	// Also interface flaps can lose the ARP programming.  In all such cases,
+	// our PERMANENT static ARP programming needs to be reinstated; otherwise
+	// we lose connectivity to VMs with arp_ignore=2.
 	arpErrs := map[string]error{}
-	for ifaceName, addrToMAC := range r.permanentARPs {
-		if !r.ifacesToARP.Contains(ifaceName) {
-			continue
+	r.ifacesToARP.Iter(func(ifaceName string) error {
+		addrToMAC := r.permanentARPs[ifaceName]
+		if len(addrToMAC) == 0 {
+			// Defensive: no ARP entries for this interface, nothing to do.
+			return set.RemoveItem
 		}
-		// Add static ARP entries (for workload endpoints).  As far as we're aware, this
-		// helps in two ways.
-		//
-		// 1. It slightly reduces the TTFP (time to first ping) for a new endpoint, by
-		// removing the need for the host kernel to send an ARP request to the endpoint and
-		// to wait for its response.
-		//
-		// 2. It supports VMs with a restrictive arp_ignore setting.  For example, we are
-		// aware of OpenStack VMs with arp_ignore set to 2, which means "reply only if the
-		// target IP address is local address configured on the incoming interface and both
-		// with the sender's IP address are part from same subnet on this interface" - which
-		// will never be True for the way that Calico provisions VM IPs.
-		//
-		// For (2) it is important that Felix maintains the ARP programming for an interface
-		// beyond the point when that interface is first configured.  In particular, dnsmasq
-		// overwrites our ARP programming - with an entry that is identical to ours, except
-		// without the PERMANENT flag - when it receives a DHCP request from an OpenStack VM
-		// and issues its IP address.  Also interface flaps can lose the ARP programming.
-		// In all such cases, our PERMANENT static ARP programming needs to be reinstated;
-		// otherwise we lose connectivity to VMs with arp_ignore=2.
 		ifaceIdx, ok := r.ifaceIndexForName(ifaceName)
 		if !ok {
 			// Asked to add ARP entries but the interface isn't known (yet).
 			// Leave them pending.  We'll clean up the pending set if the
 			// datastore stops asking us to add ARP entries for this interface.
-			continue
+			return nil
 		}
 		ifaceARPDone := true
 		for addr, mac := range addrToMAC {
@@ -1529,7 +1540,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 					attempt == 0,
 				)
 
-				if errors.Is(err, IfaceDown) || errors.Is(err, IfaceNotPresent) {
+				if errors.Is(err, ErrIfaceDown) || errors.Is(err, ErrIfaceNotPresent) {
 					// Very common race: the interface was taken down/deleted
 					// by the CNI plugin while we were trying to update it.
 					// Mark for a lazy rescan so that we won't try to program
@@ -1548,25 +1559,26 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 		if ifaceARPDone {
 			// Don't need to program ARP again for this interface until its state
 			// changes or we're asked to do a full resync.
-			r.ifacesToARP.Discard(ifaceName)
+			return set.RemoveItem
 		}
-	}
+		return nil
+	})
 
 	err = nil
 	if len(deletionErrs) > 0 {
 		r.logCxt.WithField("errors", formatErrMap(deletionErrs)).Warn(
 			"Encountered some errors when trying to delete old routes.")
-		err = UpdateFailed
+		err = ErrUpdateFailed
 	}
 	if len(updateErrs) > 0 {
 		r.logCxt.WithField("errors", formatErrMap(updateErrs)).Warn(
 			"Encountered some errors when trying to update routes.  Will retry.")
-		err = UpdateFailed
+		err = ErrUpdateFailed
 	}
 	if len(arpErrs) > 0 {
 		r.logCxt.WithField("errors", formatErrMap(arpErrs)).Warn(
 			"Encountered some errors when trying to add static ARP entries.  Will retry.")
-		err = UpdateFailed
+		err = ErrUpdateFailed
 	}
 
 	return err
@@ -1627,7 +1639,7 @@ func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKe
 }
 
 // filterErrorByIfaceState checks the current state of the interface; if it's down or gone, it
-// returns IfaceDown or IfaceNotPresent, otherwise, it returns the given defaultErr.
+// returns ErrIfaceDown or ErrIfaceNotPresent, otherwise, it returns the given defaultErr.
 func (r *RouteTable) filterErrorByIfaceState(
 	ifaceName string,
 	currentErr, defaultErr error,
@@ -1649,13 +1661,13 @@ func (r *RouteTable) filterErrorByIfaceState(
 		// the status in this case, we open a race where the interface gets created and
 		// we log an error when we're about to re-trigger programming anyway.
 		logCxt.Debug("Interface doesn't exist, perhaps workload is being torn down?")
-		return IfaceNotPresent
+		return ErrIfaceNotPresent
 	}
 
 	if errors.Is(currentErr, syscall.ENETDOWN) {
 		// Another clear error: interface is down.
 		logCxt.Debug("Interface down, perhaps workload is being torn down?")
-		return IfaceDown
+		return ErrIfaceDown
 	}
 
 	// If the current error wasn't clear, try to look up the interface to see if there's a
@@ -1666,7 +1678,7 @@ func (r *RouteTable) filterErrorByIfaceState(
 			"ifaceName":  ifaceName,
 			"currentErr": currentErr,
 		}).Error("Failed to (re)connect to netlink while processing another error")
-		return ConnectFailed
+		return ErrConnectFailed
 	}
 	if link, err := nl.LinkByName(ifaceName); err == nil {
 		// Link still exists.  Check if it's up.
@@ -1684,12 +1696,12 @@ func (r *RouteTable) filterErrorByIfaceState(
 		} else {
 			// Special case: Link exists and it's down.  Assume that's the problem.
 			logCxt.WithField("link", link).Debug("Interface is down")
-			return IfaceDown
+			return ErrIfaceDown
 		}
 	} else if isNotFoundError(err) {
 		// Special case: Link no longer exists.
 		logCxt.Info("Interface was deleted during operation, filtering error")
-		return IfaceNotPresent
+		return ErrIfaceNotPresent
 	} else {
 		// Failed to list routes, then failed to check if interface exists.
 		logCxt.WithError(err).Error("Failed to access interface after a failure")

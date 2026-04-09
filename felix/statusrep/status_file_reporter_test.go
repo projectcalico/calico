@@ -24,7 +24,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
@@ -107,7 +106,7 @@ func clearDir(dirPath string) {
 }
 
 var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(log.DebugLevel)
 	var endpointUpdatesC chan interface{}
 	var ctx context.Context
 	var cancel context.CancelFunc

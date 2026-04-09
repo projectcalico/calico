@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script publishes xunit test reports that were retrieved from the remote
+# VMs and copied to the artifacts directory.  It expects the COMPONENT env var
+# to be set and it takes one argument, which controls the name of the pushed
+# report.
+
+set -e
+set -x
+
+job_tag="$1"
+
+my_dir="$(dirname $0)"
+repo_dir="$my_dir/../.."
+artifacts_dir="${repo_dir}/artifacts"
+
+echo "Publishing any reports from the artifacts directory."
+
+cd "$artifacts_dir"
+
+if [ "$COMPONENT" = "felix" ]; then
+  # The UTs get lost amongst the FVs, so split them into separate reports.
+  mapfile -t report_names < <(find . -name '*.xml' | grep '_fv_')
+  echo "FV reports:" "${report_names[@]}"
+  json_files=()
+  if [ ${#report_names[@]} -ne 0 ]; then
+    # No suite prefix for the FVs, they already generate unique names.
+    test-results compile --name "Felix: FV" "${report_names[@]}" fv_report.json
+    json_files+=(fv_report.json)
+  fi
+  mapfile -t report_names < <(find . -name '*.xml' | grep -v '_fv_')
+  echo "UT reports:" "${report_names[@]}"
+  if [ ${#report_names[@]} -ne 0 ]; then
+    # Suite prefix ensures that names don't clash when the reports get combined
+    # into the workflow report.  Without it, tests clobber each other and don't
+    # all show up.
+    test-results compile --suite-prefix "$job_tag" --name "Felix: UT" "${report_names[@]}" ut_report.json
+    json_files+=(ut_report.json)
+  fi
+  if [ ${#json_files[@]} -ne 0 ]; then
+    # Simulate test-results publish.
+    test-results combine "${json_files[@]}" report.json
+    artifact push job report.json -d test-results/junit.json || true
+    artifact push workflow report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
+  fi
+else
+  find . -name '*.xml' -print0 | xargs -r -0 test-results publish --name "$job_tag"
+fi

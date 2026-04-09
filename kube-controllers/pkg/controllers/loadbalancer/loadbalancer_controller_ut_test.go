@@ -291,6 +291,27 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		Expect(c.allocationTracker.servicesByIP).To(BeEmpty())
 	})
 
+	It("should not panic on handleBlockUpdate with nil *AllocationBlock", func() {
+		cidr := cnet.MustParseCIDR("10.0.0.4/30")
+		key := model.BlockKey{CIDR: cidr}
+
+		// A nil *AllocationBlock wrapped in a non-nil interface passes the
+		// "kvp.Value == nil" check but causes a nil-pointer dereference on
+		// field access.
+		var nilBlock *model.AllocationBlock
+		kvp := model.KVPair{
+			Key:   key,
+			Value: nilBlock, // non-nil interface, nil underlying pointer
+		}
+
+		Expect(func() {
+			c.handleBlockUpdate(kvp)
+		}).ToNot(Panic())
+
+		// The block should have been cleaned up from the tracker.
+		Expect(c.allocationTracker.ipsByBlock).To(BeEmpty())
+	})
+
 	It("should parse calico annotations", func() {
 		ipv4poolName := "ipv4pool"
 		ipv6poolName := "ipv6pool"

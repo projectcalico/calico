@@ -98,6 +98,13 @@ func EndpointInfoOptZoneHints(b sets.Set[string]) EndpoiontInfoOpt {
 	}
 }
 
+// EndpointInfoOptNodeHints applies the given set to the endpoint's nodeHints field.
+func EndpointInfoOptNodeHints(s sets.Set[string]) EndpoiontInfoOpt {
+	return func(ep *endpointInfo) {
+		ep.nodeHints = s
+	}
+}
+
 // NewEndpointInfo creates a new endpointInfo, returning it as a k8s proxy Endpoint.
 func NewEndpointInfo(ip string, port int, opts ...EndpoiontInfoOpt) k8sp.Endpoint {
 	ep := &endpointInfo{

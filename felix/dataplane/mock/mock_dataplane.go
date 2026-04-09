@@ -19,8 +19,8 @@ import (
 	"reflect"
 	"sync"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
@@ -294,16 +294,16 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	d.numEvents++
 
 	evType := reflect.TypeOf(event).String()
-	fmt.Fprintf(GinkgoWriter, "       <- Event: %v %v\n", evType, event)
-	Expect(event).NotTo(BeNil())
-	Expect(reflect.TypeOf(event).Kind()).To(Equal(reflect.Ptr))
+	fmt.Fprintf(ginkgo.GinkgoWriter, "       <- Event: %v %v\n", evType, event)
+	gomega.Expect(event).NotTo(gomega.BeNil())
+	gomega.Expect(reflect.TypeOf(event).Kind()).To(gomega.Equal(reflect.Ptr))
 
 	// Test wrapping the message for the external dataplane
 	switch event := event.(type) {
 	case *calc.DatastoreNotReady:
 	default:
 		_, err := extdataplane.WrapPayloadWithEnvelope(event, 0)
-		Expect(err).To(BeNil())
+		gomega.Expect(err).To(gomega.BeNil())
 	}
 
 	switch event := event.(type) {
@@ -312,7 +312,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.IPSetUpdate:
 		newMembers := set.New[string]()
 		for _, ip := range event.Members {
-			Expect(newMembers.Contains(ip)).To(BeFalse(),
+			gomega.Expect(newMembers.Contains(ip)).To(gomega.BeFalse(),
 				"Initial IP set update contained duplicates")
 			newMembers.Add(ip)
 		}
@@ -320,18 +320,18 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.IPSetDeltaUpdate:
 		members, ok := d.ipSets[event.Id]
 		if !ok {
-			Fail(fmt.Sprintf("IP set delta to missing ipset %v", event.Id))
+			ginkgo.Fail(fmt.Sprintf("IP set delta to missing ipset %v", event.Id))
 			return
 		}
 
 		for _, ip := range event.AddedMembers {
-			Expect(members.Contains(ip)).To(BeFalse(),
+			gomega.Expect(members.Contains(ip)).To(gomega.BeFalse(),
 				fmt.Sprintf("IP Set %v already contained added IP %v",
 					event.Id, ip))
 			members.Add(ip)
 		}
 		for _, ip := range event.RemovedMembers {
-			Expect(members.Contains(ip)).To(BeTrue(),
+			gomega.Expect(members.Contains(ip)).To(gomega.BeTrue(),
 				fmt.Sprintf("IP Set %v did not contain removed IP %v",
 					event.Id, ip))
 			members.Discard(ip)
@@ -339,7 +339,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.IPSetRemove:
 		_, ok := d.ipSets[event.Id]
 		if !ok {
-			Fail(fmt.Sprintf("IP set remove for unknown ipset %v", event.Id))
+			ginkgo.Fail(fmt.Sprintf("IP set remove for unknown ipset %v", event.Id))
 			return
 		}
 		delete(d.ipSets, event.Id)
@@ -360,7 +360,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.ActivePolicyRemove:
 		policyID := types.ProtoToPolicyID(event.GetId())
 		for ep, allPols := range d.endpointToAllPolicyIDs {
-			Expect(allPols).NotTo(ContainElement(policyID),
+			gomega.Expect(allPols).NotTo(gomega.ContainElement(policyID),
 				fmt.Sprintf("Policy %s removed while still in use by endpoint %s", policyID, ep))
 		}
 		delete(d.activePolicies, policyID)
@@ -373,7 +373,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		for ep, profs := range d.endpointToProfiles {
 			for _, p := range profs {
 				if p == event.Id.Name {
-					Fail(fmt.Sprintf("Profile %s removed while still in use by endpoint %s", p, ep))
+					ginkgo.Fail(fmt.Sprintf("Profile %s removed while still in use by endpoint %s", p, ep))
 				}
 			}
 		}
@@ -395,7 +395,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 			for _, polName := range combinedPolNames {
 				polID := types.PolicyID{Tier: tier.Name, Name: polName}
 				allPolsIDs = append(allPolsIDs, polID)
-				Expect(d.activePolicies).To(HaveKey(polID),
+				gomega.Expect(d.activePolicies).To(gomega.HaveKey(polID),
 					fmt.Sprintf("Expected policy %v referenced by workload endpoint "+
 						"update %v to be active", polID, event))
 			}
@@ -410,7 +410,7 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		// is one of the guarantees provided by the EventSequencer.
 		for _, profName := range event.Endpoint.ProfileIds {
 			profID := types.ProfileID{Name: profName}
-			Expect(d.activeProfiles.Contains(profID)).To(BeTrue(),
+			gomega.Expect(d.activeProfiles.Contains(profID)).To(gomega.BeTrue(),
 				fmt.Sprintf("Expected profile %v referenced by workload endpoint "+
 					"update %v to be active", profID, event))
 		}
@@ -459,13 +459,13 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		d.serviceAccounts[types.ProtoToServiceAccountID(event.GetId())] = event
 	case *proto.ServiceAccountRemove:
 		id := types.ProtoToServiceAccountID(event.GetId())
-		Expect(d.serviceAccounts).To(HaveKey(id))
+		gomega.Expect(d.serviceAccounts).To(gomega.HaveKey(id))
 		delete(d.serviceAccounts, id)
 	case *proto.NamespaceUpdate:
 		d.namespaces[types.ProtoToNamespaceID(event.GetId())] = event
 	case *proto.NamespaceRemove:
 		id := types.ProtoToNamespaceID(event.GetId())
-		Expect(d.namespaces).To(HaveKey(id))
+		gomega.Expect(d.namespaces).To(gomega.HaveKey(id))
 		delete(d.namespaces, id)
 	case *proto.RouteUpdate:
 		d.activeRoutes.Iter(func(r types.RouteUpdate) error {
@@ -485,24 +485,24 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.VXLANTunnelEndpointUpdate:
 		d.activeVTEPs[event.Node] = types.ProtoToVXLANTunnelEndpointUpdate(event)
 	case *proto.VXLANTunnelEndpointRemove:
-		Expect(d.activeVTEPs).To(HaveKey(event.Node), "delete for unknown VTEP")
+		gomega.Expect(d.activeVTEPs).To(gomega.HaveKey(event.Node), "delete for unknown VTEP")
 		delete(d.activeVTEPs, event.Node)
 	case *proto.WireguardEndpointUpdate:
 		d.activeWireguardEndpoints[event.Hostname] = types.ProtoToWireguardEndpointUpdate(event)
 	case *proto.WireguardEndpointRemove:
-		Expect(d.activeWireguardEndpoints).To(HaveKey(event.Hostname), "delete for unknown IPv4 Wireguard Endpoint")
+		gomega.Expect(d.activeWireguardEndpoints).To(gomega.HaveKey(event.Hostname), "delete for unknown IPv4 Wireguard Endpoint")
 		delete(d.activeWireguardEndpoints, event.Hostname)
 	case *proto.WireguardEndpointV6Update:
 		d.activeWireguardV6Endpoints[event.Hostname] = types.ProtoToWireguardEndpointV6Update(event)
 	case *proto.WireguardEndpointV6Remove:
-		Expect(d.activeWireguardV6Endpoints).To(HaveKey(event.Hostname), "delete for unknown IPv6 Wireguard Endpoint")
+		gomega.Expect(d.activeWireguardV6Endpoints).To(gomega.HaveKey(event.Hostname), "delete for unknown IPv6 Wireguard Endpoint")
 		delete(d.activeWireguardV6Endpoints, event.Hostname)
 	case *proto.Encapsulation:
 		d.encapsulation = event
 	case *proto.HostMetadataV4V6Update:
 		d.activeHostMetadataV4V6[event.Hostname] = event
 	case *proto.HostMetadataV4V6Remove:
-		Expect(d.activeHostMetadataV4V6).To(HaveKey(event.Hostname), "delete for unknown HostmetadataV4V6")
+		gomega.Expect(d.activeHostMetadataV4V6).To(gomega.HaveKey(event.Hostname), "delete for unknown HostmetadataV4V6")
 		delete(d.activeHostMetadataV4V6, event.Hostname)
 	}
 }

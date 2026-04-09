@@ -218,6 +218,7 @@ func openAndReadNFNLSocket(
 	resChan := make(chan [][]byte, chanCap)
 	// Start a goroutine for receiving netlink messages from the kernel.
 	go func() {
+		defer close(resChan)
 		logCtx := log.WithFields(log.Fields{
 			"groupNum": groupNum,
 		})
@@ -289,14 +290,21 @@ func parseAndAggregateFlowLogs(groupNum int, resChan <-chan [][]byte, ch chan<- 
 		// We batch NFLOG objects and send them to the subscriber every
 		// "AggregationDuration" time interval.
 		sendTicker := time.NewTicker(AggregationDuration)
+		defer sendTicker.Stop()
+
 		// Batching is done like so:
 		// For each NflogPacketTuple if it's a prefix we've already seen we update
 		// packet and byte counters on exising NflogPrefix and discard the parsed
 		// packet.
 		aggregate := make(map[NflogPacketTuple]*NflogPacketAggregate)
+	loop:
 		for {
 			select {
-			case res := <-resChan:
+			case res, ok := <-resChan:
+				if !ok {
+					logCtx.Info("parseAndAggregateFlowLogs: result channel closed.")
+					break loop
+				}
 				for _, m := range res {
 					msg := nfnl.DeserializeNfGenMsg(m)
 					nflogPacket, err := parseNflog(m[msg.Len():])
@@ -353,6 +361,12 @@ func parseAndAggregateFlowLogs(groupNum int, resChan <-chan [][]byte, ch chan<- 
 				}
 			}
 		}
+		if len(aggregate) > 0 {
+			logCtx.Info("parseAndAggregateFlowLogs: sending final aggregate.")
+			ch <- aggregate
+			numAggregatesFlushed.Add(float64(len(aggregate)))
+		}
+		logCtx.Info("parseAndAggregateFlowLogs: done.")
 	}()
 }
 
