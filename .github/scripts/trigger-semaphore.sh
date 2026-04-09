@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Tigera, Inc. All rights reserved.
 # Triggers a Semaphore pipeline and extracts the workflow ID.
 # Required env vars: SEMAPHORE_ORG, SEMAPHORE_TOKEN, SEMAPHORE_PROJECT_ID,
-#   BRANCH, SHA, PIPELINE_FILE, TAG, E2E_IMAGE, LABEL_FILTER
+#   BRANCH, SHA, PIPELINE_FILE, TAG, LABEL_FILTER
 set -euo pipefail
 
 HTTP_CODE=$(curl -s -o /tmp/sem-response.json -w "%{http_code}" -X POST \
@@ -19,7 +19,6 @@ HTTP_CODE=$(curl -s -o /tmp/sem-response.json -w "%{http_code}" -X POST \
         "IMAGE_REGISTRY": "gcr.io",
         "IMAGE_PATH": "unique-caldron-775/ci/calico",
         "IMAGE_TAG": "${TAG}",
-        "E2E_IMAGE": "${E2E_IMAGE}",
         "LABEL_FILTER": "${LABEL_FILTER}"
     }
 }

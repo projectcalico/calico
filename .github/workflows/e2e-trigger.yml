@@ -191,30 +191,16 @@ jobs:
           TAG="${{ steps.pr.outputs.image_tag }}"
           REGISTRY="gcr.io/unique-caldron-775/ci/calico"
 
-          # Check calico component images and e2e image separately - e2e
-          # test code changes more often than component images.
           NODE_EXISTS=$(gcloud container images list-tags "${REGISTRY}/node" \
-            --filter="tags:${TAG}" --format="value(tags)" 2>/dev/null || true)
-          E2E_EXISTS=$(gcloud container images list-tags "${REGISTRY}/e2e" \
             --filter="tags:${TAG}" --format="value(tags)" 2>/dev/null || true)
 
           if [[ -n "$NODE_EXISTS" ]]; then
-            echo "Calico images already exist for tag ${TAG}, skipping component build"
+            echo "Calico images already exist for tag ${TAG}, skipping build"
             echo "calico_exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "Calico images not found for tag ${TAG}, building"
             echo "calico_exists=false" >> "$GITHUB_OUTPUT"
           fi
-
-          if [[ -n "$E2E_EXISTS" ]]; then
-            echo "E2E image already exists for tag ${TAG}, skipping e2e build"
-            echo "e2e_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "E2E image not found for tag ${TAG}, building"
-            echo "e2e_exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          echo "e2e_image=${REGISTRY}/e2e:${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Calico images
         if: >
@@ -229,33 +215,12 @@ jobs:
             DEV_IMAGE_PATH=unique-caldron-775/ci/calico \
             DEV_IMAGE_TAG="${TAG}"
 
-      - name: Build e2e test binary and image
-        if: >
-          steps.auth.outputs.authorized == 'true' &&
-          steps.validate.outputs.profile_invalid == 'false' &&
-          steps.check-images.outputs.e2e_exists == 'false'
-        id: build-e2e
-        run: |
-          TAG="${{ steps.pr.outputs.image_tag }}"
-          E2E_IMAGE="gcr.io/unique-caldron-775/ci/calico/e2e:${TAG}"
-
-          make -C e2e build
-
-          cat > /tmp/e2e.Dockerfile <<'DOCKERFILE'
-          FROM gcr.io/distroless/static:nonroot
-          COPY e2e/bin/e2e.test /e2e.test
-          ENTRYPOINT ["/e2e.test"]
-          DOCKERFILE
-
-          docker build -f /tmp/e2e.Dockerfile -t "$E2E_IMAGE" .
-          docker push "$E2E_IMAGE"
 
       - name: Update status comment after build success
         if: >
           steps.auth.outputs.authorized == 'true' &&
           steps.validate.outputs.profile_invalid == 'false' &&
-          (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success') &&
-          (steps.check-images.outputs.e2e_exists == 'true' || steps.build-e2e.outcome == 'success')
+          (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success')
         run: |
           LABEL_LINE=""
           if [[ -n "$LABEL_FILTER" ]]; then
@@ -281,8 +246,7 @@ jobs:
         if: >
           steps.auth.outputs.authorized == 'true' &&
           steps.validate.outputs.profile_invalid == 'false' &&
-          (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success') &&
-          (steps.check-images.outputs.e2e_exists == 'true' || steps.build-e2e.outcome == 'success')
+          (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success')
         id: semaphore-trigger
         run: .github/scripts/trigger-semaphore.sh
         env:
@@ -290,7 +254,7 @@ jobs:
           BRANCH: ${{ steps.pr.outputs.branch }}
           SHA: ${{ steps.pr.outputs.sha }}
           PIPELINE_FILE: ${{ steps.validate.outputs.semaphore_pipeline }}
-          E2E_IMAGE: ${{ steps.check-images.outputs.e2e_image }}
+
           LABEL_FILTER: ${{ steps.validate.outputs.effective_label_filter }}
 
       - name: Update status comment with Semaphore link
@@ -388,12 +352,10 @@ jobs:
           always() &&
           steps.status-comment.outputs.comment_id != '' &&
           steps.poll.outcome != 'success' &&
-          (steps.build-images.outcome == 'failure' || steps.build-e2e.outcome == 'failure' || steps.semaphore-trigger.outcome == 'failure')
+          (steps.build-images.outcome == 'failure' || steps.semaphore-trigger.outcome == 'failure')
         run: |
           if [[ "$SEMAPHORE_TRIGGER_OUTCOME" == "failure" ]]; then
             REASON="Semaphore pipeline trigger failed"
-          elif [[ "$BUILD_E2E_OUTCOME" == "failure" ]]; then
-            REASON="E2E image build failed"
           else
             REASON="Image build failed"
           fi
@@ -406,7 +368,6 @@ jobs:
           PROFILE: ${{ steps.parse.outputs.profile }}
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SEMAPHORE_TRIGGER_OUTCOME: ${{ steps.semaphore-trigger.outcome }}
-          BUILD_E2E_OUTCOME: ${{ steps.build-e2e.outcome }}
           REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           COMMENT_ID: ${{ steps.status-comment.outputs.comment_id }}
