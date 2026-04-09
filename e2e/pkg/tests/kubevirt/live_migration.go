@@ -122,14 +122,16 @@ var _ = describe.CalicoDescribe(
 			vm.Create(ctx)
 			DeferCleanup(vm.Delete)
 
-			originalIP, sourceNode := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
+			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx)
 			logrus.Infof("VM %s running on node %s with IP %s", vmName, sourceNode, originalIP)
 
 			By("Verifying connectivity to VM before migration")
 			expectPingSuccess(ns, pingPod.Name, originalIP)
 
-			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-migration")
-			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-migration")
+			mig := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			mig.Create(ctx)
+			DeferCleanup(mig.Delete)
+			mig.WaitForSuccess(ctx)
 
 			By("Verifying VMI IP is preserved after migration")
 			// F6: Use Eventually to avoid reading stale VMI status after migration.
@@ -172,9 +174,9 @@ var _ = describe.CalicoDescribe(
 
 			vm.Create(ctx)
 			DeferCleanup(vm.Delete)
-			originalIP, _ := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
+			originalIP, _ := vm.WaitForRunningWithIP(ctx)
 
-			sourcePod, err := findVirtLauncherPod(ctx, f, ns, vmName)
+			sourcePod, err := vm.FindVirtLauncherPod(ctx, f)
 			Expect(err).NotTo(HaveOccurred())
 			sourcePodName := sourcePod.Name
 			logrus.Infof("Original pod: %s, IP: %s", sourcePodName, originalIP)
@@ -187,7 +189,7 @@ var _ = describe.CalicoDescribe(
 
 			By("Waiting for a new virt-launcher pod with the same IP")
 			Eventually(func() error {
-				pod, err := findVirtLauncherPod(ctx, f, ns, vmName)
+				pod, err := vm.FindVirtLauncherPod(ctx, f)
 				if err != nil {
 					return err
 				}
@@ -220,7 +222,7 @@ var _ = describe.CalicoDescribe(
 
 			vm.Create(ctx)
 			DeferCleanup(vm.Delete)
-			originalIP, _ := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
+			originalIP, _ := vm.WaitForRunningWithIP(ctx)
 
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -278,21 +280,23 @@ var _ = describe.CalicoDescribe(
 
 			vm.Create(ctx)
 			DeferCleanup(vm.Delete)
-			originalIP, _ := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
+			originalIP, _ := vm.WaitForRunningWithIP(ctx)
 
-			sourcePod, err := findVirtLauncherPod(ctx, f, ns, vmName)
+			sourcePod, err := vm.FindVirtLauncherPod(ctx, f)
 			Expect(err).NotTo(HaveOccurred())
 			logrus.Infof("Source pod: %s, IP: %s", sourcePod.Name, originalIP)
 
 			By("Triggering live migration")
-			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-migration")
+			mig := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			mig.Create(ctx)
+			DeferCleanup(mig.Delete)
 
 			By("Waiting for migration to reach an active phase, then deleting source pod")
 			// F2: Migration can be very fast. Accept any non-empty phase including Succeeded.
 			// If already Succeeded, we skip the pod deletion — the test still verifies IP persistence.
 			var alreadySucceeded bool
 			Eventually(func() bool {
-				m, mErr := kvClient.VirtualMachineInstanceMigrations(ns).Get(ctx, vmName+"-migration", metav1.GetOptions{})
+				m, mErr := kvClient.VirtualMachineInstanceMigrations(ns).Get(ctx, mig.name, metav1.GetOptions{})
 				if mErr != nil || m == nil {
 					return false
 				}
@@ -325,7 +329,7 @@ var _ = describe.CalicoDescribe(
 			By("Waiting for migration to complete (succeed or fail)")
 			var migrationPhase kubevirtv1.VirtualMachineInstanceMigrationPhase
 			Eventually(func() bool {
-				m, mErr := kvClient.VirtualMachineInstanceMigrations(ns).Get(ctx, vmName+"-migration", metav1.GetOptions{})
+				m, mErr := kvClient.VirtualMachineInstanceMigrations(ns).Get(ctx, mig.name, metav1.GetOptions{})
 				if mErr != nil || m == nil {
 					return false
 				}
@@ -345,7 +349,7 @@ var _ = describe.CalicoDescribe(
 				vm.Start(ctx)
 			}
 
-			recoveredIP, _ := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
+			recoveredIP, _ := vm.WaitForRunningWithIP(ctx)
 			Expect(recoveredIP).To(Equal(originalIP), "IP should be preserved after failed migration recovery")
 			logrus.Infof("VM recovered with same IP %s (migration was %s)", recoveredIP, migrationPhase)
 		})
@@ -365,7 +369,7 @@ var _ = describe.CalicoDescribe(
 
 			vm.Create(ctx)
 			DeferCleanup(vm.Delete)
-			originalIP, sourceNode := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
+			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx)
 
 			// F7: Route may take a moment to be programmed after WEP creation.
 			By("Verifying local route on source node before migration")
@@ -374,9 +378,11 @@ var _ = describe.CalicoDescribe(
 			}, 30*time.Second, 2*time.Second).Should(ContainSubstring("scope link"),
 				"expected local route on source node")
 
-			By("Triggering live migration")
-			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-migration")
-			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-migration")
+				By("Triggering live migration")
+			mig := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			mig.Create(ctx)
+			DeferCleanup(mig.Delete)
+			mig.WaitForSuccess(ctx)
 
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -412,9 +418,9 @@ var _ = describe.CalicoDescribe(
 
 			vm.Create(ctx)
 			DeferCleanup(vm.Delete)
-			originalIP, sourceNode := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
+			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx)
 
-			sourcePod, err := findVirtLauncherPod(ctx, f, ns, vmName)
+			sourcePod, err := vm.FindVirtLauncherPod(ctx, f)
 			Expect(err).NotTo(HaveOccurred())
 			logrus.Infof("Source pod: %s on %s, IP: %s", sourcePod.Name, sourceNode, originalIP)
 
@@ -430,9 +436,11 @@ var _ = describe.CalicoDescribe(
 			_, alternateAttrs := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
 			Expect(alternateAttrs).To(BeEmpty())
 
-			By("Triggering live migration")
-			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-migration")
-			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-migration")
+				By("Triggering live migration")
+			mig := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			mig.Create(ctx)
+			DeferCleanup(mig.Delete)
+			mig.WaitForSuccess(ctx)
 
 			By("Verifying ActiveOwnerAttrs changed to target pod after migration")
 			var finalActivePod, finalActiveNode string
@@ -474,7 +482,7 @@ var _ = describe.CalicoDescribe(
 			serverVM.Create(ctx)
 			DeferCleanup(serverVM.Delete)
 
-			serverIP, node1 := waitForVMIRunningWithIP(ctx, kvClient, ns, serverVMName)
+			serverIP, node1 := serverVM.WaitForRunningWithIP(ctx)
 			logrus.Infof("Server VM: %s on %s", serverIP, node1)
 
 			By("Creating client pod on a different node than server VM")
@@ -501,8 +509,10 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Pre-migration: %d lines on client pod", preLines)
 
 			By("First migration")
-			migrateAndCleanup(ctx, kvClient, ns, serverVMName, serverVMName+"-mig1")
-			waitForMigrationSuccess(ctx, kvClient, ns, serverVMName+"-mig1")
+			mig1 := &testVMIM{name: serverVMName + "-mig1", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
+			mig1.Create(ctx)
+			DeferCleanup(mig1.Delete)
+			mig1.WaitForSuccess(ctx)
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, serverVMName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			node2 := vmi.Status.NodeName
@@ -522,8 +532,10 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("After first migration: %d lines", midLines)
 
 			By("Second migration")
-			migrateAndCleanup(ctx, kvClient, ns, serverVMName, serverVMName+"-mig2")
-			waitForMigrationSuccess(ctx, kvClient, ns, serverVMName+"-mig2")
+			mig2 := &testVMIM{name: serverVMName + "-mig2", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
+			mig2.Create(ctx)
+			DeferCleanup(mig2.Delete)
+			mig2.WaitForSuccess(ctx)
 			vmi, err = kvClient.VirtualMachineInstances(ns).Get(ctx, serverVMName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			node3 := vmi.Status.NodeName
@@ -583,7 +595,7 @@ var _ = describe.CalicoDescribe(
 			vm.Create(ctx)
 			DeferCleanup(vm.Delete)
 
-			vmIP, node1 := waitForVMIRunningWithIP(ctx, kvClient, ns, vmName)
+			vmIP, node1 := vm.WaitForRunningWithIP(ctx)
 
 			By("Waiting for VM TCP server")
 			probePod := setupPingPod(ctx, f, ns)
@@ -610,8 +622,10 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Pre-migration: %d lines received on TOR", preLines)
 
 			By("First migration")
-			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-mig1")
-			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-mig1")
+			mig1 := &testVMIM{name: vmName + "-mig1", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			mig1.Create(ctx)
+			DeferCleanup(mig1.Delete)
+			mig1.WaitForSuccess(ctx)
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			node2 := vmi.Status.NodeName
@@ -629,8 +643,10 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("After first eBGP migration: %d lines", midLines)
 
 			By("Second migration")
-			migrateAndCleanup(ctx, kvClient, ns, vmName, vmName+"-mig2")
-			waitForMigrationSuccess(ctx, kvClient, ns, vmName+"-mig2")
+			mig2 := &testVMIM{name: vmName + "-mig2", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			mig2.Create(ctx)
+			DeferCleanup(mig2.Delete)
+			mig2.WaitForSuccess(ctx)
 			vmi, err = kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			node3 := vmi.Status.NodeName
@@ -766,7 +782,8 @@ func (v *testVM) Create(ctx context.Context) {
 // Delete removes the VirtualMachine from the cluster.
 func (v *testVM) Delete() {
 	logrus.Infof("Cleaning up VM %s/%s", v.namespace, v.name)
-	_ = v.kvClient.VirtualMachines(v.namespace).Delete(context.Background(), v.name, metav1.DeleteOptions{})
+	err := v.kvClient.VirtualMachines(v.namespace).Delete(context.Background(), v.name, metav1.DeleteOptions{})
+	Expect(err).NotTo(HaveOccurred())
 }
 
 // Stop sets RunStrategy to Halted, causing KubeVirt to delete the VMI and pod.
@@ -803,6 +820,46 @@ func (v *testVM) Start(ctx context.Context) {
 		}
 		return nil
 	}, 1*time.Minute, 5*time.Second).Should(Succeed(), "failed to start VM %s", v.name)
+}
+
+// WaitForRunningWithIP polls the VMI until it reaches Running phase and has an IP
+// address assigned. Returns the IP and the node where the VMI is scheduled.
+func (v *testVM) WaitForRunningWithIP(ctx context.Context) (ip, node string) {
+	By(fmt.Sprintf("Waiting for VMI %s to be Running with IP", v.name))
+	Eventually(func() error {
+		vmi, err := v.kvClient.VirtualMachineInstances(v.namespace).Get(ctx, v.name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if vmi.Status.Phase != kubevirtv1.Running {
+			return fmt.Errorf("phase is %s", vmi.Status.Phase)
+		}
+		if len(vmi.Status.Interfaces) == 0 || vmi.Status.Interfaces[0].IP == "" {
+			return fmt.Errorf("no IP yet")
+		}
+		ip = vmi.Status.Interfaces[0].IP
+		node = vmi.Status.NodeName
+		return nil
+	}, 5*time.Minute, 5*time.Second).Should(Succeed())
+	return
+}
+
+// FindVirtLauncherPod finds the running virt-launcher pod for this VM by label selector.
+// Returns the first Running pod that is not being deleted, or an error if none found.
+func (v *testVM) FindVirtLauncherPod(ctx context.Context, f *framework.Framework) (*corev1.Pod, error) {
+	pods, err := f.ClientSet.CoreV1().Pods(v.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("kubevirt.io=virt-launcher,vm.kubevirt.io/name=%s", v.name),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.Status.Phase == corev1.PodRunning && pod.DeletionTimestamp == nil {
+			return pod, nil
+		}
+	}
+	return nil, fmt.Errorf("no running virt-launcher pod found for VM %s (total pods: %d)", v.name, len(pods.Items))
 }
 
 // setupPingPod creates a long-running Alpine pod for connectivity checks (ping, nc).
@@ -867,78 +924,48 @@ func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, ns, avoid
 	return created
 }
 
-// migrateAndCleanup creates a VirtualMachineInstanceMigration (VMIM) resource to trigger
-// a live migration of the specified VMI, and registers a DeferCleanup to delete the VMIM.
-func migrateAndCleanup(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmiName, vmimName string) {
-	By(fmt.Sprintf("Creating migration %s", vmimName))
+// testVMIM encapsulates a KubeVirt VirtualMachineInstanceMigration for e2e tests.
+type testVMIM struct {
+	name      string
+	namespace string
+	vmiName   string
+	kvClient  kubevirtcorev1.KubevirtV1Interface
+}
+
+// Create creates the VMIM resource to trigger a live migration.
+func (m *testVMIM) Create(ctx context.Context) {
+	By(fmt.Sprintf("Creating migration %s", m.name))
 	vmim := &kubevirtv1.VirtualMachineInstanceMigration{
-		ObjectMeta: metav1.ObjectMeta{Name: vmimName, Namespace: ns},
-		Spec:       kubevirtv1.VirtualMachineInstanceMigrationSpec{VMIName: vmiName},
+		ObjectMeta: metav1.ObjectMeta{Name: m.name, Namespace: m.namespace},
+		Spec:       kubevirtv1.VirtualMachineInstanceMigrationSpec{VMIName: m.vmiName},
 	}
-	_, err := kvClient.VirtualMachineInstanceMigrations(ns).Create(ctx, vmim, metav1.CreateOptions{})
+	_, err := m.kvClient.VirtualMachineInstanceMigrations(m.namespace).Create(ctx, vmim, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	DeferCleanup(func() {
-		_ = kvClient.VirtualMachineInstanceMigrations(ns).Delete(context.Background(), vmimName, metav1.DeleteOptions{})
-	})
 }
 
-// waitForVMIRunningWithIP polls the VMI until it reaches Running phase and has an IP
-// address assigned. Returns the IP and the node where the VMI is scheduled.
-func waitForVMIRunningWithIP(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmName string) (ip, node string) {
-	By(fmt.Sprintf("Waiting for VMI %s to be Running with IP", vmName))
-	Eventually(func() error {
-		vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		if vmi.Status.Phase != kubevirtv1.Running {
-			return fmt.Errorf("phase is %s", vmi.Status.Phase)
-		}
-		if len(vmi.Status.Interfaces) == 0 || vmi.Status.Interfaces[0].IP == "" {
-			return fmt.Errorf("no IP yet")
-		}
-		ip = vmi.Status.Interfaces[0].IP
-		node = vmi.Status.NodeName
-		return nil
-	}, 5*time.Minute, 5*time.Second).Should(Succeed())
-	return
+// Delete removes the VMIM resource from the cluster.
+func (m *testVMIM) Delete() {
+	err := m.kvClient.VirtualMachineInstanceMigrations(m.namespace).Delete(context.Background(), m.name, metav1.DeleteOptions{})
+	Expect(err).NotTo(HaveOccurred())
 }
 
-// waitForMigrationSuccess polls the VMIM until it reaches MigrationSucceeded phase.
+// WaitForSuccess polls the VMIM until it reaches MigrationSucceeded phase.
 // Immediately stops polling with a fatal error if MigrationFailed is observed.
-func waitForMigrationSuccess(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, ns, vmimName string) {
-	By(fmt.Sprintf("Waiting for migration %s to succeed", vmimName))
+func (m *testVMIM) WaitForSuccess(ctx context.Context) {
+	By(fmt.Sprintf("Waiting for migration %s to succeed", m.name))
 	Eventually(func() error {
-		m, err := kvClient.VirtualMachineInstanceMigrations(ns).Get(ctx, vmimName, metav1.GetOptions{})
+		vmim, err := m.kvClient.VirtualMachineInstanceMigrations(m.namespace).Get(ctx, m.name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
-		if m.Status.Phase == kubevirtv1.MigrationFailed {
+		if vmim.Status.Phase == kubevirtv1.MigrationFailed {
 			return StopTrying("migration failed")
 		}
-		if m.Status.Phase != kubevirtv1.MigrationSucceeded {
-			return fmt.Errorf("phase is %s", m.Status.Phase)
+		if vmim.Status.Phase != kubevirtv1.MigrationSucceeded {
+			return fmt.Errorf("phase is %s", vmim.Status.Phase)
 		}
 		return nil
 	}, 5*time.Minute, 5*time.Second).Should(Succeed())
-}
-
-// findVirtLauncherPod finds the running virt-launcher pod for a given VMI by label selector.
-// Returns the first Running pod that is not being deleted, or an error if none found.
-func findVirtLauncherPod(ctx context.Context, f *framework.Framework, namespace, vmiName string) (*corev1.Pod, error) {
-	pods, err := f.ClientSet.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("kubevirt.io=virt-launcher,vm.kubevirt.io/name=%s", vmiName),
-	})
-	if err != nil {
-		return nil, err
-	}
-	for i := range pods.Items {
-		pod := &pods.Items[i]
-		if pod.Status.Phase == corev1.PodRunning && pod.DeletionTimestamp == nil {
-			return pod, nil
-		}
-	}
-	return nil, fmt.Errorf("no running virt-launcher pod found for VMI %s (total pods: %d)", vmiName, len(pods.Items))
 }
 
 // expectPingSuccess verifies ICMP connectivity from a pod to the target IP.
