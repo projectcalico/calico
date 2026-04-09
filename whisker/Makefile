@@ -1,10 +1,8 @@
-include ../metadata.mk
-
 PACKAGE_NAME = github.com/projectcalico/calico/whisker
 IMAGE_BUILD_MARKER = whisker_container-$(ARCH).created
 # Only amd64 and arm64 are supported. `=` (not `?=`) so env-provided ARCHES
 # from the release manager doesn't override the allowlist.
-ARCHES             = amd64 arm64
+ARCHES             =$(call _read_default_list,.architectures.whisker)
 
 # Configure variables used by ci/cd common targets from lib.Makefile.
 BUILD_IMAGES=whisker

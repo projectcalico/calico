@@ -1,0 +1,139 @@
+# defaults.yaml — Centralized build defaults for the Calico monorepo.
+#
+# PURPOSE: Single source of truth for build configuration — toolchain versions,
+# dependency pins, architecture lists, registries, and git/CI settings — that
+# was previously scattered across Makefiles and scripts.
+#
+# USAGE:
+#   Makefiles:  $(call _read_default,.toolchain.go_build_ver)
+#   Shell:      yq '.toolchain.go_build_ver' defaults.yaml
+#
+# NOTE: This file covers build infrastructure only. Component-local settings
+# (image names, test parameters) live in each component's Makefile.
+# Runtime/production configuration (Felix env vars, Typha config, etc.) is
+# not managed here.
+
+# =============================================================================
+# ARCHITECTURES — Supported build/test platforms
+# =============================================================================
+architectures:
+  default: [amd64, arm64, ppc64le, s390x]
+
+  # Components with reduced arch support
+  envoy_proxy: [amd64, arm64]
+  istio: [amd64, arm64]
+  whisker: [amd64, arm64]
+
+# =============================================================================
+# BASE IMAGES — Container base images
+# =============================================================================
+base_images:
+  calico_base: calico/base
+  etcd: quay.io/coreos/etcd
+  ubi: registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+# =============================================================================
+# CI — Semaphore CI defaults (only values consumed by Makefiles/scripts)
+# =============================================================================
+ci:
+  manifest_retries: 5
+  manifest_retry_delay_seconds: 5
+
+# =============================================================================
+# FIPS — FIPS compliance build flag (all default to false)
+# =============================================================================
+fips:
+  default: false
+
+# =============================================================================
+# GIT & REPOSITORY — Organization, branches, release settings
+# =============================================================================
+git:
+  organization: projectcalico
+  repo: calico
+  use_ssh: true
+
+  # Release
+  dev_tag_suffix: 0.dev
+  release_branch_prefix: release
+
+  # Operator repo
+  operator_branch: master
+  operator_organization: tigera
+  operator_repo: operator
+
+# =============================================================================
+# REGISTRIES
+# =============================================================================
+registries:
+  dev: calico
+  dockerhub: registry.hub.docker.com
+  quay_expire_days: 90
+
+# =============================================================================
+# TOOLCHAIN — Compiler, library, and build tool versions
+# =============================================================================
+toolchain:
+  # Go build container (includes Go + LLVM + K8s tools)
+  go_build_image: calico/go-build
+  go_build_ver: 1.26.2-llvm20.1.8-k8s1.35.3-1
+
+  # Rust build container
+  rust_build_image: calico/rust-build
+  rust_build_ver: 1.94.1
+
+  # Go build settings (amd64 BoringCrypto/FIPS)
+  go_build_tags: boringcrypto,osusergo,netgo
+  go_experiment: boringcrypto
+
+  # BPF toolchain
+  bpftool_image: calico/bpftool:v7.5.0
+  libbpf_ver: v1.6.2
+
+  # Cross-compilation / multi-arch emulation
+  binfmt_image: calico/binfmt:qemu-v10.1.4
+
+  # Linting
+  golangci_lint_args: --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
+
+# =============================================================================
+# VERSIONS — Pinned dependency and tool versions
+# =============================================================================
+versions:
+  # Base images
+  calico_base: ubi9-1776282488
+
+  # Kubernetes ecosystem
+  coredns: 1.14.2
+  etcd: v3.5.29
+  kubernetes: v1.35.2
+  min_kubernetes: v1.31.0
+
+  # Networking components
+  bird: v0.3.3-211-g9111ec3c
+
+  # Source branches for vendored dependencies
+  cni_branch: master
+  flannel_branch: main
+
+  # Upstream dependencies
+  envoy_binary_image: quay.io/tigera/envoybinary:v1.37.1-0a0b20ed98
+  istio: 1.28.1
+  # https://github.com/kubernetes-csi/node-driver-registrar/commit/f0fd46fc3fbdb6fe20fc2d2614631816b551a143
+  node_driver_registrar: f0fd46fc3fbdb6fe20fc2d2614631816b551a143
+
+  # Build, test, and release tools
+  crane: v0.21.4
+  ghr: v0.18.0
+  github_cli: 2.89.0
+  gotestsum: v1.13.0
+  helm: v3.20.0
+  kind: v0.31.0
+  kindest_node: v1.35.1
+
+# =============================================================================
+# WINDOWS — Windows-specific build settings
+# =============================================================================
+windows:
+  dist_dir: dist/windows
+  versions: [ltsc2019, ltsc2022]

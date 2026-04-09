@@ -1,6 +1,5 @@
 PACKAGE_NAME = github.com/projectcalico/calico
 
-include metadata.mk
 include lib.Makefile
 
 DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
@@ -283,13 +282,13 @@ release-prep: release/bin/release bin/gh
 
 # Install ghr for publishing to github.
 bin/ghr:
-	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(call _read_default,.versions.ghr)
 
 # Install GitHub CLI
 bin/gh:
 	@mkdir -p bin
-	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
-	@tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
+	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(call _read_default,.versions.github_cli)/gh_$(call _read_default,.versions.github_cli)_linux_amd64.tar.gz
+	@tar -zxvf bin/gh.tgz -C bin/ gh_$(call _read_default,.versions.github_cli)_linux_amd64/bin/gh --strip-components=2
 	@chmod +x $@
 	@rm bin/gh.tgz
 
@@ -365,7 +364,7 @@ update-pins: update-go-build-pin update-calico-base-pin
 # Post-release validation
 ###############################################################################
 bin/gotestsum:
-	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(call _read_default,.versions.gotestsum)
 
 postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate

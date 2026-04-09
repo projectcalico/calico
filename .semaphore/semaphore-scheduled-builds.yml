@@ -239,7 +239,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/.semaphore', '/hack', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
+        change_in(['/.semaphore', '/hack', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'track'})
     dependencies: []
     task:
       jobs:
@@ -251,7 +251,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/**/*.yml', '/**/*.yaml', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
+        change_in(['/**/*.yml', '/**/*.yaml', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'track'})
     dependencies: []
     task:
       jobs:
@@ -262,7 +262,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       env_vars:
@@ -294,7 +294,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/networking-calico', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/networking-calico', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -321,7 +321,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -333,7 +333,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -384,7 +384,7 @@ blocks:
   - name: API
     run:
       when: >-
-        true or change_in(['/metadata.mk', '/lib.Makefile', '/api/', '/test/'],
+        true or change_in(['/defaults.yaml', '/lib.Makefile', '/api/', '/test/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -646,7 +646,7 @@ blocks:
         true or change_in(['/.semaphore/end-to-end/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
-      minutes: 5
+      minutes: 15
     dependencies:
       - Prerequisites
     task:
@@ -719,7 +719,7 @@ blocks:
   - name: Envoy Gateway
     run:
       when: >-
-        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'],
+        true or change_in(['/defaults.yaml', '/lib.Makefile', '/third_party/envoy-gateway'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -745,7 +745,7 @@ blocks:
   - name: Envoy Proxy
     run:
       when: >-
-        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'],
+        true or change_in(['/defaults.yaml', '/lib.Makefile', '/third_party/envoy-proxy'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -771,7 +771,7 @@ blocks:
   - name: "Envoy Ratelimit"
     run:
       when: >-
-        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'],
+        true or change_in(['/defaults.yaml', '/lib.Makefile', '/third_party/envoy-ratelimit'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -1395,7 +1395,7 @@ blocks:
       jobs:
         - name: "Node: kind-cluster tests"
           execution_time_limit:
-            minutes: 120
+            hours: 2
           env_vars:
             - name: JOB_TIMEOUT_MINUTES
               value: "120"
@@ -1425,7 +1425,7 @@ blocks:
   - name: "Tools (hack directory)"
     run:
       when: >-
-        true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'],
+        true or change_in(['/defaults.yaml', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     dependencies:
       - Prerequisites
@@ -1522,7 +1522,7 @@ blocks:
   - name: Whisker
     run:
       when: >-
-        true or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'],
+        true or change_in(['/defaults.yaml', '/lib.Makefile', '/whisker/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -1577,7 +1577,7 @@ blocks:
   - name: "OpenStack integration (Caracal)"
     run:
       when: >-
-        true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'],
+        true or change_in(['/defaults.yaml', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'],
         {pipeline_file: 'ignore'})
     dependencies:
       - Prerequisites

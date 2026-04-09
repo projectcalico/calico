@@ -226,8 +226,8 @@ lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
 
 ### Docker Build System
 
-- All builds run inside Docker containers using `calico/go-build` (version pinned in `metadata.mk`)
-- Base images configured in `metadata.mk`
+- All builds run inside Docker containers using `calico/go-build` (version pinned in `defaults.yaml`)
+- Base images configured in `defaults.yaml`
 - Build cache in `.go-pkg-cache/` (speeds up rebuilds)
 - Supported architectures: amd64, arm64, ppc64le, s390x (plus Windows builds)
 - Cross-compilation via `ARCH=<target>` and binfmt registration (`calico/binfmt`)
@@ -257,7 +257,7 @@ lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
 - eBPF programs: `felix/bpf-gpl/` (GPL v2.0 license for Linux compatibility)
 - Apache licensed BPF code: `felix/bpf-apache/`
 - Before building: `make -C felix clone-libbpf`
-- BPF tooling configured in `metadata.mk` (LIBBPF_VERSION, BPFTOOL_IMAGE)
+- BPF tooling configured in `defaults.yaml` (LIBBPF_VERSION, BPFTOOL_IMAGE)
 
 ### Kind Cluster Development
 
@@ -287,7 +287,7 @@ Image loading is incremental — `kind-reload` and `kind-deploy` compare local D
 ## Critical Files and Locations
 
 **Build Configuration:**
-- `metadata.mk` - Version pins, tool versions, registry config (all tool/image versions pinned here)
+- `defaults.yaml` - Version pins, tool versions, registry config (all tool/image versions pinned here)
 - `lib.Makefile` - Shared Makefile logic for all components
 - `Makefile` - Root orchestration
 

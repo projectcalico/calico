@@ -1,5 +1,3 @@
-include ../metadata.mk
-
 PACKAGE_NAME = github.com/projectcalico/calico/whisker-backend
 
 # Configure variables used by ci/cd common targets from lib.Makefile.

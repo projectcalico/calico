@@ -1,5 +1,3 @@
-include ../../metadata.mk
-
 PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-proxy
 
 ENVOY_PROXY_IMAGE ?= envoy-proxy
@@ -8,11 +6,11 @@ BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
 # See https://gateway.envoyproxy.io/news/releases/matrix/ for version compatibility.
-ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.37.1-0a0b20ed98
+ENVOYBINARY_IMAGE ?= $(call _read_default,.versions.envoy_binary_image)
 
 # Only amd64 and arm64 are supported. `=` (not `?=`) so env-provided ARCHES
 # from the release manager doesn't override the allowlist.
-ARCHES = amd64 arm64
+ARCHES = $(call _read_default_list,.architectures.envoy_proxy)
 
 ##############################################################################
 # Include lib.Makefile before anything else

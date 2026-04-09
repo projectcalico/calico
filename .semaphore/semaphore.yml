@@ -239,7 +239,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/.semaphore', '/hack', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
+        change_in(['/.semaphore', '/hack', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'track'})
     dependencies: []
     task:
       jobs:
@@ -251,7 +251,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/**/*.yml', '/**/*.yaml', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
+        change_in(['/**/*.yml', '/**/*.yaml', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'track'})
     dependencies: []
     task:
       jobs:
@@ -262,7 +262,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       env_vars:
@@ -294,7 +294,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/networking-calico', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/networking-calico', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -321,7 +321,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -333,7 +333,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -384,7 +384,7 @@ blocks:
   - name: API
     run:
       when: >-
-        false or change_in(['/metadata.mk', '/lib.Makefile', '/api/', '/test/'],
+        false or change_in(['/defaults.yaml', '/lib.Makefile', '/api/', '/test/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -422,6 +422,7 @@ blocks:
         '/api/pkg/openapi/*.go',
         '/apiserver/**',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/std/uniquelabels/*.go',
@@ -454,7 +455,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/pkg/buildinfo/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -514,6 +514,7 @@ blocks:
         '/api/pkg/lib/numorstring/*.go',
         '/app-policy/**',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/bpf/tc/defs/*.go',
         '/felix/calc/*.go',
         '/felix/config/*.go',
@@ -583,7 +584,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
@@ -629,6 +629,7 @@ blocks:
         '/api/pkg/lib/numorstring/*.go',
         '/calicoctl/**',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/loadbalancer/*.go',
@@ -670,7 +671,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/pkg/buildinfo/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -720,6 +720,7 @@ blocks:
         '/api/pkg/lib/numorstring/*.go',
         '/cni-plugin/**',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/std/uniquelabels/*.go',
@@ -755,7 +756,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/node/pkg/cni/*.go',
         '/pkg/buildinfo/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
@@ -810,6 +810,7 @@ blocks:
         '/api/pkg/lib/numorstring/*.go',
         '/cni-plugin/**',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/std/uniquelabels/*.go',
@@ -845,7 +846,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/node/pkg/cni/*.go',
         '/pkg/buildinfo/*.go',
         '/process/testing/aso',
@@ -929,6 +929,7 @@ blocks:
         '/api/pkg/lib/numorstring/*.go',
         '/confd/**',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/std/uniquelabels/*.go',
@@ -966,7 +967,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/pkg/buildinfo/*.go',
         '/typha/pkg/discovery/*.go',
         '/typha/pkg/syncclient/*.go',
@@ -1074,7 +1074,7 @@ blocks:
         false or change_in(['/.semaphore/end-to-end/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
-      minutes: 5
+      minutes: 15
     dependencies:
       - Prerequisites
     task:
@@ -1183,6 +1183,7 @@ blocks:
         '/confd/pkg/resource/template/*.go',
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/e2e/**',
         '/felix/aws/*.go',
         '/felix/bpf-apache',
@@ -1395,7 +1396,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/cmd/calico-ipam/*.go',
         '/node/cmd/calico-node/*.go',
         '/node/cmd/calico-node/bpf/*.go',
@@ -1631,6 +1631,7 @@ blocks:
         '/confd/pkg/resource/template/*.go',
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/e2e/**',
         '/felix/aws/*.go',
         '/felix/bpf-apache',
@@ -1843,7 +1844,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/cmd/calico-ipam/*.go',
         '/node/cmd/calico-node/*.go',
         '/node/cmd/calico-node/bpf/*.go',
@@ -1987,7 +1987,7 @@ blocks:
   - name: Envoy Gateway
     run:
       when: >-
-        false or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'],
+        false or change_in(['/defaults.yaml', '/lib.Makefile', '/third_party/envoy-gateway'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -2013,7 +2013,7 @@ blocks:
   - name: Envoy Proxy
     run:
       when: >-
-        false or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'],
+        false or change_in(['/defaults.yaml', '/lib.Makefile', '/third_party/envoy-proxy'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -2039,7 +2039,7 @@ blocks:
   - name: "Envoy Ratelimit"
     run:
       when: >-
-        false or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'],
+        false or change_in(['/defaults.yaml', '/lib.Makefile', '/third_party/envoy-ratelimit'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -2081,6 +2081,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -2150,7 +2151,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -2271,6 +2271,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -2335,7 +2336,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -2398,6 +2398,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -2462,7 +2463,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -2518,6 +2518,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -2582,7 +2583,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -2669,6 +2669,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -2738,7 +2739,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -2822,6 +2822,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -2891,7 +2892,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -2975,6 +2975,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -3044,7 +3045,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -3128,6 +3128,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -3197,7 +3198,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -3285,6 +3285,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -3354,7 +3355,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -3441,6 +3441,7 @@ blocks:
         '/cni-plugin/pkg/dataplane/linux/*.go',
         '/cni-plugin/pkg/types/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -3510,7 +3511,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -3591,6 +3591,7 @@ blocks:
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/proto/*.go',
         '/felix/types/*.go',
         '/goldmane/**',
@@ -3610,8 +3611,7 @@ blocks:
         '/libcalico-go/lib/namespace/*.go',
         '/libcalico-go/lib/net/*.go',
         '/libcalico-go/lib/prometheus/*.go',
-        '/libcalico-go/lib/set/*.go',
-        '/metadata.mk'],
+        '/libcalico-go/lib/set/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -3672,6 +3672,7 @@ blocks:
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/guardian/**',
         '/hack/test/certs/',
         '/lib.Makefile',
@@ -3679,7 +3680,6 @@ blocks:
         '/lib/std/cryptoutils/*.go',
         '/lib/std/time/*.go',
         '/libcalico-go/lib/logutils/*.go',
-        '/metadata.mk',
         '/pkg/buildinfo/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -3734,10 +3734,10 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/istio/**',
-        '/lib.Makefile',
-        '/metadata.mk'],
+        '/lib.Makefile'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -3775,10 +3775,10 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/istio/**',
-        '/lib.Makefile',
-        '/metadata.mk'],
+        '/lib.Makefile'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -3823,6 +3823,7 @@ blocks:
         '/api/pkg/defaults/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/bpf/tc/defs/*.go',
         '/felix/calc/*.go',
         '/felix/config/*.go',
@@ -3905,7 +3906,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
@@ -3990,12 +3990,12 @@ blocks:
         '/api/pkg/defaults/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/**',
-        '/metadata.mk',
         '/typha/pkg/discovery/*.go',
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncproto/*.go',
@@ -4082,6 +4082,7 @@ blocks:
         '/confd/pkg/resource/template/*.go',
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/aws/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
@@ -4256,7 +4257,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/node/**',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -4351,6 +4351,7 @@ blocks:
         '/confd/pkg/resource/template/*.go',
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/aws/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
@@ -4525,7 +4526,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/node/**',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
@@ -4679,6 +4679,7 @@ blocks:
         '/confd/pkg/resource/template/*.go',
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/aws/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
@@ -4890,7 +4891,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/node/**',
         '/node/pkg/cni/*.go',
         '/pkg/buildinfo/*.go',
@@ -5004,7 +5004,7 @@ blocks:
       jobs:
         - name: "Node: kind-cluster tests"
           execution_time_limit:
-            minutes: 120
+            hours: 2
           env_vars:
             - name: JOB_TIMEOUT_MINUTES
               value: "120"
@@ -5026,10 +5026,10 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-pod2daemon.yml',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/libcalico-go/lib/logutils/*.go',
-        '/metadata.mk',
         '/pod2daemon/**'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -5054,7 +5054,7 @@ blocks:
   - name: "Tools (hack directory)"
     run:
       when: >-
-        false or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'],
+        false or change_in(['/defaults.yaml', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     dependencies:
       - Prerequisites
@@ -5079,6 +5079,7 @@ blocks:
         '/api/pkg/defaults/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/std/uniquelabels/*.go',
@@ -5128,7 +5129,6 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
-        '/metadata.mk',
         '/pkg/buildinfo/*.go',
         '/typha/**'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
@@ -5225,6 +5225,7 @@ blocks:
         '/apiserver/pkg/storage/calico/*.go',
         '/apiserver/pkg/storage/etcd/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/std/uniquelabels/*.go',
@@ -5257,7 +5258,6 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/pkg/buildinfo/*.go',
         '/webhooks/**',
         'api/**/*Dockerfile*',
@@ -5312,6 +5312,7 @@ blocks:
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/felix/proto/*.go',
         '/felix/types/*.go',
         '/goldmane/pkg/client/*.go',
@@ -5338,7 +5339,6 @@ blocks:
         '/libcalico-go/lib/logutils/*.go',
         '/libcalico-go/lib/namespace/*.go',
         '/libcalico-go/lib/net/*.go',
-        '/metadata.mk',
         '/whisker-backend/**'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -5382,7 +5382,7 @@ blocks:
   - name: Whisker
     run:
       when: >-
-        false or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'],
+        false or change_in(['/defaults.yaml', '/lib.Makefile', '/whisker/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -5420,10 +5420,10 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/30-key-cert-provisioner.yml',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/key-cert-provisioner/**',
-        '/lib.Makefile',
-        '/metadata.mk'],
+        '/lib.Makefile'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -5455,7 +5455,7 @@ blocks:
   - name: "OpenStack integration (Caracal)"
     run:
       when: >-
-        false or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'],
+        false or change_in(['/defaults.yaml', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'],
         {pipeline_file: 'ignore'})
     dependencies:
       - Prerequisites
@@ -5507,6 +5507,7 @@ blocks:
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/crypto/pkg/tls/*.go',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/std/uniquelabels/*.go',
@@ -5522,7 +5523,6 @@ blocks:
         '/libcalico-go/lib/net/*.go',
         '/libcalico-go/lib/readlogger/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk',
         '/pkg/buildinfo/*.go',
         '/test-tools/mocknode/**',
         '/typha/pkg/discovery/*.go',
@@ -5568,10 +5568,10 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/90-release.yml',
+        '/defaults.yaml',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/libcalico-go/lib/logutils/*.go',
-        '/metadata.mk',
         '/release/**'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
