@@ -163,11 +163,10 @@ done
 ##########################################################################
 if [[ $CALICO_VERSION != master ]]; then
 echo "Replacing image versions for static manifests"
-	for img in $NON_HELM_MANIFEST_IMAGES; do
-		curr_img=${defaultRegistry}/${img}
-		new_img=${REGISTRY}/${img}
-		echo "$curr_img:$defaultCalicoVersion --> $new_img:$CALICO_VERSION"
-		find . -type f -exec sed -i "s|${curr_img}:[A-Za-z0-9_.-]*|${new_img}:$CALICO_VERSION|g" {} \;
-	done
-  find ../test-tools/mocknode/mock-node.yaml -type f -exec sed -i "s|${defaultRegistry}/mock-node:[A-Za-z0-9_.-]*|${REGISTRY}/mock-node:$CALICO_VERSION|g" {} \;
+for img in $NON_HELM_MANIFEST_IMAGES; do
+  new_img=${REGISTRY}/${img}
+  echo "Update $img image to $new_img:$CALICO_VERSION"
+  find . -type f -exec sed -i "s|image: [a-zA-Z0-9/._-]*/${img}:[A-Za-z0-9_.-]*|image: ${new_img}:$CALICO_VERSION|g" {} \;
+done
+  find ../test-tools/mocknode/mock-node.yaml -type f -exec sed -i "s|image: [a-zA-Z0-9/._-]*/mock-node:[A-Za-z0-9_.-]*|image: ${REGISTRY}/mock-node:$CALICO_VERSION|g" {} \;
 fi
