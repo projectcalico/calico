@@ -1074,14 +1074,14 @@ sub-manifest-%:
 	$(call retry_docker_cmd,docker manifest push,$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 
 push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
-	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
-	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(GIT_VERSION) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) VALIDARCHES="$(VALIDARCHES)"
+	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(GIT_VERSION) VALIDARCHES="$(VALIDARCHES)"
 
 # cd-common tags and pushes images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGE,
 # and BRANCH_NAME env variables to figure out what to tag and where to push it to.
 cd-common: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
-	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
-	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) VALIDARCHES="$(VALIDARCHES)"
+	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12) VALIDARCHES="$(VALIDARCHES)"
 
 ###############################################################################
 # Release targets and helpers
@@ -1578,9 +1578,11 @@ KIND_IMAGE_MARKERS = \
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
+	touch $@
 
 $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
+	touch $@
 
 $(REPO_ROOT)/.calico.created-$(ARCH): $(call local-deps-go-files,cmd)
 	$(MAKE) -C $(REPO_ROOT) calico-image
@@ -1669,6 +1671,20 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
 	touch $@
+
+###############################################################################
+# Dev image build variables. Targets that use these are in the root Makefile.
+###############################################################################
+DEV_IMAGE_PATH ?= calico
+DEV_IMAGE_TAG ?= $(GIT_VERSION)
+DEV_IMAGE_REGISTRY ?= docker.io
+DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
+
+# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
+# filter-registry strips "docker.io/" since Docker Hub doesn't use it in image refs.
+DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
+DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
+DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
 
 ###############################################################################
 # Common functions for launching a local etcd instance.

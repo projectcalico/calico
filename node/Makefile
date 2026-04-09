@@ -288,8 +288,12 @@ $(BIRD_SOURCE): .bird-source.created
 	touch $@
 
 # include GPL felix code in the image.
+# Order-only depend on filesystem/usr/lib/calico/bpf so that BPF compilation
+# finishes before we tar up the source tree — otherwise tar races with the
+# build and fails with "file changed as we read it". Order-only (|) so that
+# bpf-apache changes don't trigger unnecessary re-tars.
 $(FELIX_GPL_SOURCE): .felix-gpl-source.created
-.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d' -not -path '*/libbpf/*')
+.felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d' -not -path '*/libbpf/*') | filesystem/usr/lib/calico/bpf
 	rm -rf filesystem/included-source/felix*
 	mkdir -p filesystem/included-source/
 	tar cf $(FELIX_GPL_SOURCE) \

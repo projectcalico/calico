@@ -6,7 +6,7 @@
   "baseBranchPatterns": ["release-v3.31"],
   "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}",
   "separateMinorPatch": true,
-  "enabledManagers": ["gomod", "custom.regex"],
+  "enabledManagers": ["gomod", "custom.regex", "npm"],
   "prHourlyLimit": 20,
   "prConcurrentLimit": 20,
   "addLabels": ["docs-not-required", "release-note-not-required", "dependencies"],
@@ -27,7 +27,7 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^go\\.mod$/", "/^api\\/go\\.mod$/"],
+      "managerFilePatterns": ["/^go\\.mod$/", "/^api\\/go\\.mod$/", "/^lib\\/std\\/go\\.mod$/", "/^lib\\/httpmachinery\\/go\\.mod$/"],
       "matchStrings": ["\\ngo (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "depNameTemplate": "golang",
       "datasourceTemplate": "golang-version"
@@ -53,6 +53,11 @@
     {
       "description": "Disable all Go module updates",
       "matchManagers": ["gomod"],
+      "enabled": false
+    },
+    {
+      "description": "Disable all npm updates",
+      "matchManagers": ["npm"],
       "enabled": false
     },
     {
