@@ -1,4 +1,3 @@
-include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
 
@@ -35,7 +34,7 @@ DEPLOY_CONTAINER_FIPS_MARKER=cni_deploy_container-$(ARCH)-fips.created
 # Set FIPS to true to enable a FIPS compliant build using BoringSSL and CGO.
 # Note that this produces binaries that are dynamically linked, and so have dependencies
 # on the host machine.
-FIPS ?= false
+FIPS ?= $(call _read_default,.fips.default)
 
 ifeq ($(FIPS),true)
 BIN=bin/$(ARCH)-fips

@@ -1,6 +1,5 @@
 PACKAGE_NAME = github.com/projectcalico/calico
 
-include ../metadata.mk
 include ../lib.Makefile
 
 ###############################################################################

@@ -1,4 +1,3 @@
-include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/node
 
@@ -41,7 +40,7 @@ CALICO_API_GROUP ?= projectcalico.org/v3
 ###############################################################################
 include ../lib.Makefile
 
-FIPS ?= false
+FIPS ?= $(call _read_default,.fips.default)
 
 ifeq ($(FIPS),true)
 NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
