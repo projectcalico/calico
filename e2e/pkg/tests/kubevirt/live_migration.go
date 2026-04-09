@@ -134,7 +134,7 @@ var _ = describe.CalicoDescribe(
 			mig.WaitForSuccess(ctx)
 
 			By("Verifying VMI IP is preserved after migration")
-			// F6: Use Eventually to avoid reading stale VMI status after migration.
+			// Use Eventually to avoid reading stale VMI status after migration.
 			var postMigrationIP, postMigrationNode string
 			Eventually(func() error {
 				vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
@@ -233,7 +233,7 @@ var _ = describe.CalicoDescribe(
 			vm.Stop(ctx)
 
 			By("Waiting for VMI to be deleted")
-			// F12: Check for specific NotFound error, not any error.
+			// Check for specific NotFound error, not any error.
 			Eventually(func() bool {
 				_, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 				return kerrors.IsNotFound(err)
@@ -292,7 +292,7 @@ var _ = describe.CalicoDescribe(
 			DeferCleanup(mig.Delete)
 
 			By("Waiting for migration to reach an active phase, then deleting source pod")
-			// F2: Migration can be very fast. Accept any non-empty phase including Succeeded.
+			// Migration can be very fast. Accept any non-empty phase including Succeeded.
 			// If already Succeeded, we skip the pod deletion — the test still verifies IP persistence.
 			var alreadySucceeded bool
 			Eventually(func() bool {
@@ -313,7 +313,7 @@ var _ = describe.CalicoDescribe(
 			}, 2*time.Minute, 500*time.Millisecond).Should(BeTrue())
 
 			if !alreadySucceeded {
-				// F3: Source pod may already be gone if migration completed in the window
+				// Source pod may already be gone if migration completed in the window
 				// between our phase check and this delete call.
 				err = f.ClientSet.CoreV1().Pods(ns).Delete(ctx, sourcePod.Name, metav1.DeleteOptions{
 					GracePeriodSeconds: ptrInt64(0),
@@ -371,14 +371,14 @@ var _ = describe.CalicoDescribe(
 			DeferCleanup(vm.Delete)
 			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx)
 
-			// F7: Route may take a moment to be programmed after WEP creation.
+			// Route may take a moment to be programmed after WEP creation.
 			By("Verifying local route on source node before migration")
 			Eventually(func() string {
 				return getRouteOnNode(f, sourceNode, originalIP)
 			}, 30*time.Second, 2*time.Second).Should(ContainSubstring("scope link"),
 				"expected local route on source node")
 
-				By("Triggering live migration")
+			By("Triggering live migration")
 			mig := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
 			mig.Create(ctx)
 			DeferCleanup(mig.Delete)
@@ -424,7 +424,7 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 			logrus.Infof("Source pod: %s on %s, IP: %s", sourcePod.Name, sourceNode, originalIP)
 
-			// F8: IPAM attributes may take a moment to be set after CNI ADD.
+			// IPAM attributes may take a moment to be set after CNI ADD.
 			By("Verifying IPAM attributes before migration")
 			lcgc := newLibcalicoClient(f)
 			Eventually(func() map[string]string {
@@ -436,7 +436,7 @@ var _ = describe.CalicoDescribe(
 			_, alternateAttrs := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
 			Expect(alternateAttrs).To(BeEmpty())
 
-				By("Triggering live migration")
+			By("Triggering live migration")
 			mig := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
 			mig.Create(ctx)
 			DeferCleanup(mig.Delete)
@@ -490,13 +490,13 @@ var _ = describe.CalicoDescribe(
 			expectPingSuccess(ns, clientPod.Name, serverIP)
 			waitForTCPServer(ns, clientPod.Name, serverIP)
 
-			// F4: Use nohup to prevent SIGHUP when kubectl exec session closes.
+			// Use nohup to prevent SIGHUP when kubectl exec session closes.
 			By("Starting TCP client")
 			_, err := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
 				"sh", "-c", fmt.Sprintf("nohup nc %s 9999 > /tmp/tcp_stream 2>&1 &", serverIP)).Exec()
 			Expect(err).NotTo(HaveOccurred())
 
-			// F5: Poll for data instead of fixed sleep.
+			// Poll for data instead of fixed sleep.
 			By("Verifying TCP data is flowing before migration")
 			var preLines int
 			Eventually(func() int {
@@ -519,7 +519,7 @@ var _ = describe.CalicoDescribe(
 			Expect(node2).NotTo(Equal(node1))
 			logrus.Infof("First migration: %s -> %s", node1, node2)
 
-			// F5: Poll for data growth instead of fixed sleep.
+			// Poll for data growth instead of fixed sleep.
 			By("Verifying TCP stream survived first migration")
 			var midLines int
 			Eventually(func() int {
@@ -544,7 +544,7 @@ var _ = describe.CalicoDescribe(
 			Expect(node3).NotTo(Equal(node2))
 			logrus.Infof("Second migration: %s -> %s", node2, node3)
 
-			// F5: Poll for data growth instead of fixed sleep.
+			// Poll for data growth instead of fixed sleep.
 			By("Waiting for TCP data to grow after second migration")
 			Eventually(func() int {
 				postOutput, _ := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
@@ -607,7 +607,7 @@ var _ = describe.CalicoDescribe(
 			}, 1*time.Minute, 5*time.Second).Should(ContainSubstring("0% packet loss"),
 				"TOR cannot reach VM — eBGP routing may not be configured")
 
-			// F9: Use setsid to fully detach nc from SSH session.
+			// Use setsid to fully detach nc from SSH session.
 			By("Starting TCP client on TOR connecting to VM")
 			runOnTOR(tor, fmt.Sprintf("rm -f /tmp/tcp_stream; setsid nc %s 9999 > /tmp/tcp_stream 2>&1 &", vmIP))
 
@@ -1023,7 +1023,7 @@ func getIPAMOwnerAttributes(ctx context.Context, c clientv3.Interface, ipStr str
 }
 
 // waitForTCPServer waits for the VM's TCP server on port 9999 to accept connections.
-// F13: Increased timeout to 5s for nc, and 2 minutes overall for slow-booting VMs.
+// Increased timeout to 5s for nc, and 2 minutes overall for slow-booting VMs.
 func waitForTCPServer(ns, podName, vmIP string) {
 	By(fmt.Sprintf("Waiting for TCP server on %s:9999", vmIP))
 	Eventually(func() error {
