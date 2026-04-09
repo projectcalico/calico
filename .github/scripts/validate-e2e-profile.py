@@ -15,6 +15,10 @@ profiles = config.get("profiles", {})
 profile = os.environ.get("PROFILE_INPUT", "")
 output_file = os.environ["GITHUB_OUTPUT"]
 
+print(f"[DEBUG] profile={profile!r}")
+print(f"[DEBUG] available profiles={list(profiles.keys())}")
+print(f"[DEBUG] profile in profiles: {profile in profiles}")
+
 with open(output_file, "a") as out:
     if not profile:
         names = "\n".join(f"- `{k}` \u2014 {v['description']}" for k, v in profiles.items())

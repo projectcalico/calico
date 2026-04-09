@@ -78,15 +78,14 @@ jobs:
 
       - name: Post invalid profile comment
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.profile_invalid == 'true' && steps.validate.outputs.help_mode == 'false'
+        env:
+          PROFILES: ${{ steps.validate.outputs.available_profiles }}
+          PROFILE: ${{ steps.parse.outputs.profile }}
         run: |
-          PROFILES="${{ steps.validate.outputs.available_profiles }}"
-          PROFILE="${{ steps.parse.outputs.profile }}"
+          printf '{"body": "❌ Unknown e2e profile `%s`.\n\nAvailable profiles:\n%s\n\nUsage: `/e2e <profile> [--label-filter=\"<filter>\"]`"}' \
+            "$PROFILE" "$PROFILES" | \
           gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
-            -X POST --input - <<EOF
-          {
-            "body": "❌ Unknown e2e profile \`${PROFILE}\`.\n\nAvailable profiles:\n${PROFILES}\n\nUsage: \`/e2e <profile> [--label-filter=\"<filter>\"]\`"
-          }
-          EOF
+            -X POST --input -
 
       - name: Post available profiles (help mode)
         if: steps.auth.outputs.authorized == 'true' && steps.validate.outputs.help_mode == 'true'
