@@ -2,7 +2,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/.semaphore', '/hack', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
+      change_in(['/.semaphore', '/hack', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'track'})
   dependencies: []
   task:
     jobs:
@@ -14,7 +14,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/**/*.yml', '/**/*.yaml', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
+      change_in(['/**/*.yml', '/**/*.yaml', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'track'})
   dependencies: []
   task:
     jobs:
@@ -25,7 +25,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/go.mod', '/go.sum', '/**/*.go', '/**/deps.txt', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     env_vars:
@@ -57,7 +57,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/networking-calico', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/networking-calico', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     jobs:
@@ -84,7 +84,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/**/*.pb.go', '/**/*.proto', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     jobs:
@@ -96,7 +96,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/defaults.yaml'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     jobs:
