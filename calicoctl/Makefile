@@ -1,5 +1,3 @@
-include ../metadata.mk
-
 PACKAGE_NAME = github.com/projectcalico/calico/calicoctl
 
 KUBE_APISERVER_PORT?=6443

@@ -1,5 +1,3 @@
-include ../../metadata.mk
-
 PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-gateway
 
 ENVOY_GATEWAY_IMAGE ?= envoy-gateway
