@@ -37,8 +37,49 @@ else
     cache delete $SEMAPHORE_JOB_ID
     cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}
 
-    echo "[INFO] starting bz install..."
-    bz install $VERBOSE |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/install.log.gz)
+    if [[ "${CUSTOM_IMAGES:-}" == "true" ]]; then
+      # Install from the PR's manifests and helm chart instead of a hashrelease.
+      echo "[INFO] installing Calico from PR source..."
+      CALICO_SRC="${HOME}/${SEMAPHORE_GIT_DIR}"
+      KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig"
+
+      # Generate the operator manifest with the custom operator image baked in.
+      helm template calico "${CALICO_SRC}/charts/tigera-operator" \
+        --include-crds \
+        --set tigeraOperator.registry="${IMAGE_REGISTRY}" \
+        --set tigeraOperator.image="${IMAGE_PATH}/operator" \
+        --set tigeraOperator.version="${IMAGE_TAG}" \
+        --namespace tigera-operator \
+        > /tmp/tigera-operator.yaml
+
+      KUBECONFIG="${KUBECONFIG}" kubectl create namespace tigera-operator 2>/dev/null || true
+      KUBECONFIG="${KUBECONFIG}" kubectl create -f "${CALICO_SRC}/manifests/operator-crds.yaml"
+      KUBECONFIG="${KUBECONFIG}" kubectl apply -f /tmp/tigera-operator.yaml
+
+      # Wait for the operator to be ready before applying custom resources.
+      KUBECONFIG="${KUBECONFIG}" kubectl wait pod --for=condition=Ready -n tigera-operator -l k8s-app=tigera-operator --timeout=120s
+
+      # Select the right custom resources for the dataplane.
+      CR_MANIFEST="${CALICO_SRC}/manifests/custom-resources.yaml"
+      if [[ "${DATAPLANE:-}" == "CalicoBPF" ]]; then
+        CR_MANIFEST="${CALICO_SRC}/manifests/custom-resources-bpf.yaml"
+      fi
+      KUBECONFIG="${KUBECONFIG}" kubectl create -f "${CR_MANIFEST}"
+
+      # Patch the Installation for nftables if needed.
+      if [[ "${DATAPLANE:-}" == "CalicoNftables" ]]; then
+        KUBECONFIG="${KUBECONFIG}" kubectl patch installation default --type=merge \
+          -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Nftables"}}}'
+      fi
+
+      echo "[INFO] waiting for Calico to be ready..."
+      KUBECONFIG="${KUBECONFIG}" kubectl wait --for=condition=Available --timeout=300s tigerastatus/calico
+
+      echo "[INFO] Calico installed from PR source"
+    else
+      echo "[INFO] starting bz install..."
+      bz install $VERBOSE |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/install.log.gz)
+    fi
 
     if [[ "${HCP_STAGE}" == "setup-hosting" ]]; then
       echo "[INFO] HCP_STAGE=${HCP_STAGE}, storing hosting cluster profile in cache"
