@@ -37,8 +37,39 @@ else
     cache delete $SEMAPHORE_JOB_ID
     cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}
 
-    echo "[INFO] starting bz install..."
-    bz install $VERBOSE |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/install.log.gz)
+    if [[ -n "${IMAGE_TAG:-}" ]]; then
+      # Install from the OCI helm chart pushed by the GHA workflow.
+      echo "[INFO] installing Calico from PR helm chart..."
+      KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig"
+      CHART_REF="oci://${IMAGE_REGISTRY}/${IMAGE_PATH}/charts/tigera-operator"
+      CHART_VERSION="0.0.0-${IMAGE_TAG}"
+
+      # Map banzai DATAPLANE values to helm linuxDataplane values.
+      HELM_DATAPLANE_ARGS=""
+      case "${DATAPLANE:-CalicoIptables}" in
+        CalicoBPF)
+          HELM_DATAPLANE_ARGS="--set installation.calicoNetwork.linuxDataplane=BPF --set installation.calicoNetwork.bpfNetworkBootstrap=Enabled --set installation.calicoNetwork.kubeProxyManagement=Enabled" ;;
+        CalicoNftables)
+          HELM_DATAPLANE_ARGS="--set installation.calicoNetwork.linuxDataplane=Nftables" ;;
+        CalicoVPP)
+          HELM_DATAPLANE_ARGS="--set installation.calicoNetwork.linuxDataplane=VPP" ;;
+      esac
+
+      #shellcheck disable=SC2086
+      KUBECONFIG="${KUBECONFIG}" helm install calico "${CHART_REF}" \
+        --version "${CHART_VERSION}" \
+        --namespace tigera-operator --create-namespace \
+        --wait --timeout 300s \
+        ${HELM_DATAPLANE_ARGS}
+
+      echo "[INFO] waiting for Calico to be ready..."
+      KUBECONFIG="${KUBECONFIG}" kubectl wait --for=condition=Available --timeout=300s tigerastatus/calico
+
+      echo "[INFO] Calico installed from PR helm chart"
+    else
+      echo "[INFO] starting bz install..."
+      bz install $VERBOSE |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/install.log.gz)
+    fi
 
     if [[ "${HCP_STAGE}" == "setup-hosting" ]]; then
       echo "[INFO] HCP_STAGE=${HCP_STAGE}, storing hosting cluster profile in cache"
@@ -88,6 +119,12 @@ else
   if [[ ${MCM_STAGE:-} != *-mgmt* ]] && [[ ${HCP_STAGE:-} != *-hosting* ]]; then
     echo "[INFO] Test logs will be available here after the run: ${SEMAPHORE_ORGANIZATION_URL}/artifacts/jobs/${SEMAPHORE_JOB_ID}?path=semaphore%2Flogs"
     echo "[INFO] Alternatively, you can view logs while job is running using 'sem attach ${SEMAPHORE_JOB_ID}' and then 'tail -f ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log'"
+
+    # Apply label filter if specified.
+    if [ -n "${LABEL_FILTER:-}" ]; then
+      K8S_E2E_FLAGS="${K8S_E2E_FLAGS} --ginkgo.label-filter=${LABEL_FILTER}"
+      echo "[INFO] Applied label filter: ${LABEL_FILTER}"
+    fi
 
     if [[ -n "$RUN_LOCAL_TESTS" ]]; then
       echo "[INFO] starting e2e testing from local binary..."
