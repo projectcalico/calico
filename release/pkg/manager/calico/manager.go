@@ -1573,8 +1573,7 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 	// Modify values in defaults.yaml
 	logrus.WithField("operator_branch", r.operatorBranch).Debug("Updating variables in defaults.yaml")
 	defaultsFilePath := filepath.Join(r.repoRoot, "defaults.yaml")
-	if out, err := r.runner.Run("yq", []string{"-i", fmt.Sprintf(`.git.operator_branch = "%s"`, r.operatorBranch), defaultsFilePath}, nil); err != nil {
-		logrus.Error(out)
+	if err := updateDefaultsYAML(defaultsFilePath, []string{"git", "operator_branch"}, r.operatorBranch); err != nil {
 		return fmt.Errorf("failed to update operator branch in %s: %w", defaultsFilePath, err)
 	}
 
@@ -1851,4 +1850,46 @@ func ownerFromRemoteURL(raw string) (string, error) {
 	}
 
 	return "", fmt.Errorf("unable to determine owner from remote URL %q", raw)
+}
+
+// updateDefaultsYAML reads a YAML file, sets the value at the given key path,
+// and writes it back preserving comments and formatting.
+func updateDefaultsYAML(filePath string, keyPath []string, value string) error {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", filePath, err)
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("parsing %s: %w", filePath, err)
+	}
+
+	// doc.Content[0] is the root mapping node.
+	node := doc.Content[0]
+	for i, key := range keyPath {
+		found := false
+		for j := 0; j < len(node.Content)-1; j += 2 {
+			if node.Content[j].Value == key {
+				if i == len(keyPath)-1 {
+					// Leaf: set the value.
+					node.Content[j+1].Value = value
+				} else {
+					// Intermediate: descend into the mapping.
+					node = node.Content[j+1]
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("key %q not found in %s", strings.Join(keyPath[:i+1], "."), filePath)
+		}
+	}
+
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return fmt.Errorf("marshaling %s: %w", filePath, err)
+	}
+	return os.WriteFile(filePath, out, 0644)
 }
