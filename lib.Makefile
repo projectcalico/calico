@@ -1740,7 +1740,7 @@ DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
 ###############################################################################
 .PHONY: ci-e2e
 ci-e2e:
-	@$(REPO_ROOT)/hack/ci-e2e.sh \
+	@go run $(REPO_ROOT)/hack/cmd/ci-e2e \
 		$(if $(PROFILE),--profile=$(PROFILE)) \
 		$(if $(LABEL_FILTER),--label-filter=$(LABEL_FILTER)) \
 		$(if $(PR),--pr=$(PR))
