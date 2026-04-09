@@ -12,7 +12,7 @@ HTTP_CODE=$(curl -s -o /tmp/sem-response.json -w "%{http_code}" -X POST \
     -d @- <<EOF
 {
     "project_id": "${SEMAPHORE_PROJECT_ID}",
-    "reference": "${BRANCH}",
+    "reference": "refs/heads/${BRANCH}",
     "commit_sha": "${SHA}",
     "pipeline_file": "${PIPELINE_FILE}",
     "parameters": {

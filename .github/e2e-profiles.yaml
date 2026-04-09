@@ -4,21 +4,21 @@
 profiles:
   bpf-gcp:
     description: "BPF dataplane on GCP kubeadm"
-    semaphore_pipeline: end-to-end/pipelines/bpf.yml
+    semaphore_pipeline: .semaphore/end-to-end/pipelines/bpf.yml
     default_label_filter: ""
   nft-gcp:
     description: "nftables dataplane on GCP kubeadm"
-    semaphore_pipeline: end-to-end/pipelines/nftables.yml
+    semaphore_pipeline: .semaphore/end-to-end/pipelines/nftables.yml
     default_label_filter: ""
   iptables-gcp:
     description: "iptables dataplane on GCP kubeadm"
-    semaphore_pipeline: end-to-end/pipelines/iptables.yml
+    semaphore_pipeline: .semaphore/end-to-end/pipelines/iptables.yml
     default_label_filter: ""
   upgrade-gcp:
     description: "Upgrade tests on GCP kubeadm"
-    semaphore_pipeline: end-to-end/pipelines/upgrade.yml
+    semaphore_pipeline: .semaphore/end-to-end/pipelines/upgrade.yml
     default_label_filter: ""
   windows:
     description: "Windows tests"
-    semaphore_pipeline: end-to-end/pipelines/windows.yml
+    semaphore_pipeline: .semaphore/end-to-end/pipelines/windows.yml
     default_label_filter: ""
