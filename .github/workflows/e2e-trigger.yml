@@ -220,10 +220,10 @@ jobs:
         id: build-images
         run: |
           TAG="${{ steps.pr.outputs.image_tag }}"
-          make dev-push \
-            DEV_IMAGE_REGISTRY=gcr.io \
-            DEV_IMAGE_PATH=unique-caldron-775/ci/calico \
-            DEV_IMAGE_TAG="${TAG}"
+          make push \
+            PUSH_IMAGE_REGISTRY=gcr.io \
+            PUSH_IMAGE_PATH=unique-caldron-775/ci/calico \
+            PUSH_IMAGE_TAG="${TAG}"
 
       - name: Build e2e test binary and image
         if: >
