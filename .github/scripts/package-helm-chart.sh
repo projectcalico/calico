@@ -22,18 +22,9 @@ set -euo pipefail
 
 HELM="${HELM:-helm}"
 
-if [[ -z "${TAG:-}" ]]; then
-    echo "[ERROR] TAG is required" >&2
-    exit 1
-fi
-if [[ -z "${REGISTRY:-}" ]]; then
-    echo "[ERROR] REGISTRY is required" >&2
-    exit 1
-fi
-if [[ -z "${IMAGE_PATH:-}" ]]; then
-    echo "[ERROR] IMAGE_PATH is required" >&2
-    exit 1
-fi
+: "${TAG:?[ERROR] TAG is required.}"
+: "${REGISTRY:?[ERROR] REGISTRY is required.}"
+: "${IMAGE_PATH:?[ERROR] IMAGE_PATH is required.}"
 
 CHART_DIR="charts/tigera-operator"
 WORK_DIR=$(mktemp -d)
