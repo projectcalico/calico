@@ -213,6 +213,15 @@ push: image
 	  STAMP_DIR="$(DEV_STAMP_DIR)" \
 	  $(REPO_ROOT)/hack/dev-build.sh --push
 
+.PHONY: push-chart
+## Package the tigera-operator helm chart with custom image refs and push to OCI registry.
+push-chart: bin/helm
+	@TAG="$(DEV_IMAGE_TAG)" \
+	  REGISTRY="$(DEV_IMAGE_REGISTRY)" \
+	  IMAGE_PATH="$(DEV_IMAGE_PATH)" \
+	  HELM="$(REPO_ROOT)/bin/helm" \
+	  $(REPO_ROOT)/.github/scripts/package-helm-chart.sh
+
 ###############################################################################
 # Run local e2e smoke test against the checked-out code
 # using a local kind cluster.
