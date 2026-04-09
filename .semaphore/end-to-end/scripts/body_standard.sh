@@ -40,9 +40,21 @@ else
     if [[ -n "${IMAGE_TAG:-}" ]]; then
       # Install from the OCI helm chart pushed by the GHA workflow.
       echo "[INFO] installing Calico from PR helm chart..."
+      CALICO_SRC="${HOME}/${SEMAPHORE_GIT_DIR}"
       KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig"
       CHART_REF="oci://${IMAGE_REGISTRY}/${IMAGE_PATH}/charts/tigera-operator"
       CHART_VERSION="0.0.0-${IMAGE_TAG}"
+
+      # Install helm if not already available.
+      if ! command -v helm &>/dev/null; then
+        echo "[INFO] installing helm..."
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      fi
+
+      # Install CRDs first from the local checkout.
+      echo "[INFO] installing CRDs..."
+      KUBECONFIG="${KUBECONFIG}" helm install calico-crds "${CALICO_SRC}/charts/crd.projectcalico.org.v1" \
+        --namespace tigera-operator --create-namespace
 
       # Map banzai DATAPLANE values to helm linuxDataplane values.
       HELM_DATAPLANE_ARGS=""
@@ -55,10 +67,11 @@ else
           HELM_DATAPLANE_ARGS="--set installation.calicoNetwork.linuxDataplane=VPP" ;;
       esac
 
+      echo "[INFO] installing tigera-operator chart..."
       #shellcheck disable=SC2086
       KUBECONFIG="${KUBECONFIG}" helm install calico "${CHART_REF}" \
         --version "${CHART_VERSION}" \
-        --namespace tigera-operator --create-namespace \
+        --namespace tigera-operator \
         --wait --timeout 300s \
         ${HELM_DATAPLANE_ARGS}
 
