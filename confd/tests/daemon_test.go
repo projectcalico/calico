@@ -85,7 +85,8 @@ func TestNodeMeshBGPPassword(t *testing.T) {
 			_, err := be.k8sClientset.CoreV1().Secrets("kube-system").Create(ctx, secret, metav1.CreateOptions{})
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
+				err := be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
+				require.NoError(t, err)
 			})
 			d.expectOutput("mesh/password/step2")
 
@@ -140,7 +141,8 @@ func TestBGPPeerPassword(t *testing.T) {
 			_, err := be.k8sClientset.CoreV1().Secrets("kube-system").Create(ctx, secret1, metav1.CreateOptions{})
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
+				err := be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
+				require.NoError(t, err)
 			})
 			d.expectOutput("password/step2")
 
@@ -159,7 +161,8 @@ func TestBGPPeerPassword(t *testing.T) {
 			_, err = be.k8sClientset.CoreV1().Secrets("kube-system").Create(ctx, secret2, metav1.CreateOptions{})
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-2", metav1.DeleteOptions{})
+				err := be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-2", metav1.DeleteOptions{})
+				require.NoError(t, err)
 			})
 			d.expectOutput("password/step3")
 
@@ -209,7 +212,8 @@ func TestBGPPasswordDeadlock(t *testing.T) {
 			_, err := be.k8sClientset.CoreV1().Secrets("kube-system").Create(ctx, secret, metav1.CreateOptions{})
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
+				err := be.k8sClientset.CoreV1().Secrets("kube-system").Delete(ctx, "my-secrets-1", metav1.DeleteOptions{})
+				require.NoError(t, err)
 			})
 
 			// Create scale nodes and BGPPeers with password refs.
@@ -236,8 +240,10 @@ func TestBGPPasswordDeadlock(t *testing.T) {
 				_, err = be.calicoClient.Nodes().Update(ctx, cNode, options.SetOptions{})
 				require.NoError(t, err)
 				t.Cleanup(func() {
-					be.calicoClient.Nodes().Delete(ctx, nodeName, options.DeleteOptions{})
-					be.k8sClientset.CoreV1().Nodes().Delete(ctx, nodeName, metav1.DeleteOptions{})
+					_, err := be.calicoClient.Nodes().Delete(ctx, nodeName, options.DeleteOptions{})
+					require.NoError(t, err)
+					err = be.k8sClientset.CoreV1().Nodes().Delete(ctx, nodeName, metav1.DeleteOptions{})
+					require.NoError(t, err)
 				})
 
 				peer := &apiv3.BGPPeer{
@@ -257,7 +263,8 @@ func TestBGPPasswordDeadlock(t *testing.T) {
 				_, err = be.calicoClient.BGPPeers().Create(ctx, peer, options.SetOptions{})
 				require.NoError(t, err)
 				t.Cleanup(func() {
-					be.calicoClient.BGPPeers().Delete(ctx, peerName, options.DeleteOptions{})
+					_, err := be.calicoClient.BGPPeers().Delete(ctx, peerName, options.DeleteOptions{})
+					require.NoError(t, err)
 				})
 			}
 
