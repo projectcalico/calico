@@ -50,7 +50,9 @@ jobs:
         if: steps.auth.outputs.authorized == 'true'
         uses: actions/checkout@v4
         with:
-          sparse-checkout: .github/e2e-profiles.yaml
+          sparse-checkout: |
+            .github/e2e-profiles.yaml
+            .github/scripts/
           sparse-checkout-cone-mode: false
 
       - name: Parse comment
