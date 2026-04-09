@@ -1871,6 +1871,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
 
+							// Wait for the new policy to be programmed and BPF
+							// dataplane to settle before sending fragmented traffic.
+							cc.Expect(Some, w[0][0], w[1][0])
+							cc.CheckConnectivity()
+							cc.ResetExpectations()
+
 							// Send a packet with large payload without the DNF flag
 							// 16,000 bytes is the typical limit on the size of a
 							// single skb, which in turn is the limit on the size
