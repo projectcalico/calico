@@ -104,7 +104,9 @@ var _ = describe.CalicoDescribe(
 			nodeIPs = allIPs[:2]
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
-			// Detect BPF dataplane mode.
+			// Detect BPF dataplane mode. Reset before checking to avoid
+			// retaining a stale value from a prior spec's BeforeEach.
+			bpfMode = false
 			felixCfg := &v3.FelixConfiguration{}
 			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixCfg)
 			if err != nil {
