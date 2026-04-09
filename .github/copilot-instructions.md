@@ -147,7 +147,7 @@ confd/            - Configuration management
 
 ### Configuration Files Locations
 - **Go modules**: `go.mod`, `go.sum` (root)
-- **Build config**: `metadata.mk`, `lib.Makefile` 
+- **Build config**: `defaults.yaml`, `lib.Makefile` 
 - **Linting**: `.yamllint.yaml`, `.golangci.yaml` (per component)
 - **CI/CD**: `.semaphore/semaphore.yml` (generated from template)
 - **Docker**: `Dockerfile.*` in each component directory
