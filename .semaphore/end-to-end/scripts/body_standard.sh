@@ -89,7 +89,32 @@ else
     echo "[INFO] Test logs will be available here after the run: ${SEMAPHORE_ORGANIZATION_URL}/artifacts/jobs/${SEMAPHORE_JOB_ID}?path=semaphore%2Flogs"
     echo "[INFO] Alternatively, you can view logs while job is running using 'sem attach ${SEMAPHORE_JOB_ID}' and then 'tail -f ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log'"
 
-    if [[ -n "$RUN_LOCAL_TESTS" ]]; then
+    # Apply label filter if specified (self-service e2e trigger).
+    if [ -n "${LABEL_FILTER:-}" ]; then
+      K8S_E2E_FLAGS="${K8S_E2E_FLAGS} --ginkgo.label-filter=${LABEL_FILTER}"
+      echo "[INFO] Applied label filter: ${LABEL_FILTER}"
+    fi
+
+    if [[ -n "${E2E_IMAGE:-}" ]]; then
+      echo "[INFO] running e2e tests from custom image: ${E2E_IMAGE}"
+      docker pull "${E2E_IMAGE}"
+      #shellcheck disable=SC2086
+      docker run --rm --init --net=host \
+        -e KUBECONFIG=/kubeconfig \
+        -e PRODUCT=calico \
+        -e CREATE_WINDOWS_NODES \
+        -e FUNCTIONAL_AREA \
+        -e INSTALLER \
+        -e PROVISIONER \
+        -e K8S_VERSION \
+        -e DATAPLANE \
+        -e ENCAPSULATION_TYPE \
+        -e WINDOWS_OS \
+        -e USE_VENDORED_CNI \
+        -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
+        "${E2E_IMAGE}" \
+        -procs="${E2E_PROCS:-4}" -- ${K8S_E2E_FLAGS} |& tee -a >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
+    elif [[ -n "$RUN_LOCAL_TESTS" ]]; then
       echo "[INFO] starting e2e testing from local binary..."
       pushd "${HOME}/calico"
       make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
