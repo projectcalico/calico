@@ -54,6 +54,16 @@ export PROVISIONER=${PROVISIONER:-"gcp-kubeadm"}
 export INSTALLER=${INSTALLER:-"manual"}
 export DATAPLANE=${DATAPLANE:-"CalicoIptables"}  # Temporarily set all runs which don't specify a DATAPLANE to iptables.
 export PRODUCT=${PRODUCT:-calico}
+
+# When IMAGE_TAG is set, the pipeline uses custom-built images instead of hashrelease images.
+if [ -n "${IMAGE_TAG:-}" ] && [ -z "${IMAGE_PATH:-}" ]; then echo "[ERROR] IMAGE_TAG is set but IMAGE_PATH is empty"; false; fi
+if [ -n "${IMAGE_TAG:-}" ]; then echo "[INFO] Using custom images: ${IMAGE_REGISTRY:-gcr.io}/${IMAGE_PATH}/*:${IMAGE_TAG}"; fi
+if [ -n "${IMAGE_TAG:-}" ]; then export CUSTOM_IMAGES=true; fi
+if [ -n "${IMAGE_TAG:-}" ]; then export IMAGE_REGISTRY="${IMAGE_REGISTRY:-gcr.io}"; fi
+if [ -n "${IMAGE_TAG:-}" ]; then export IMAGE_PATH="${IMAGE_PATH}"; fi
+if [ -n "${IMAGE_TAG:-}" ]; then export IMAGE_TAG="${IMAGE_TAG}"; fi
+if [ -n "${IMAGE_TAG:-}" ]; then export RUN_LOCAL_TESTS=true; fi
+
 export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 export NUM_INFRA_NODES=${NUM_INFRA_NODES:-0}
 export SEMAPHORE_ARTIFACT_EXPIRY=${SEMAPHORE_ARTIFACT_EXPIRY:-2w}

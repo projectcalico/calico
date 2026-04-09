@@ -89,6 +89,12 @@ else
     echo "[INFO] Test logs will be available here after the run: ${SEMAPHORE_ORGANIZATION_URL}/artifacts/jobs/${SEMAPHORE_JOB_ID}?path=semaphore%2Flogs"
     echo "[INFO] Alternatively, you can view logs while job is running using 'sem attach ${SEMAPHORE_JOB_ID}' and then 'tail -f ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log'"
 
+    # Apply label filter if specified.
+    if [ -n "${LABEL_FILTER:-}" ]; then
+      K8S_E2E_FLAGS="${K8S_E2E_FLAGS} --ginkgo.label-filter=${LABEL_FILTER}"
+      echo "[INFO] Applied label filter: ${LABEL_FILTER}"
+    fi
+
     if [[ -n "$RUN_LOCAL_TESTS" ]]; then
       echo "[INFO] starting e2e testing from local binary..."
       pushd "${HOME}/calico"
