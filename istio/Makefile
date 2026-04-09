@@ -2,8 +2,6 @@
 # Istio Component Makefile
 # Builds the Istio install-cni and pilot-discovery components
 ###############################################################################
-include ../metadata.mk
-
 PACKAGE_NAME ?= github.com/projectcalico/calico/istio
 
 ISTIO_CNI_IMAGE ?= istio-install-cni
@@ -14,10 +12,10 @@ ISTIO_ZTUNNEL_IMAGE ?= istio-ztunnel
 BUILD_IMAGES ?= $(ISTIO_CNI_IMAGE) $(ISTIO_PILOT_IMAGE) $(ISTIO_PROXYV2_IMAGE) $(ISTIO_ZTUNNEL_IMAGE)
 
 # Istio artifacts are only supported for amd64 and arm64.
-ARCHES ?= amd64 arm64
+ARCHES ?= $(call _read_default_list,.architectures.istio)
 
 # Upstream version (configurable)
-ISTIO_VERSION ?= 1.28.1
+ISTIO_VERSION ?= $(call _read_default,.versions.istio)
 
 ##############################################################################
 # Include lib.Makefile before anything else

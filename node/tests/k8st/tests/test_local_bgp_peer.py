@@ -331,12 +331,12 @@ metadata:
 spec:
   containers:
   - name: bird
-    image: calico/bird:v0.3.3-211-g9111ec3c
+    image: %s
     securityContext:
       privileged: true
   nodeName: %s
   terminationGracePeriodSeconds: 0
-""" % (name, ns, color, host))
+""" % (name, ns, color, os.environ["ROUTER_IMAGE"], host))
         self.add_cleanup(pod.delete)
         return pod
 

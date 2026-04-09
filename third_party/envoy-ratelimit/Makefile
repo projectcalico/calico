@@ -1,5 +1,3 @@
-include ../../metadata.mk
-
 PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-ratelimit
 
 ENVOY_RATELIMIT_IMAGE ?= envoy-ratelimit
