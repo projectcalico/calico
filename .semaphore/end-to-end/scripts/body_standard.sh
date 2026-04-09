@@ -37,7 +37,7 @@ else
     cache delete $SEMAPHORE_JOB_ID
     cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}
 
-    if [[ "${CUSTOM_IMAGES:-}" == "true" ]]; then
+    if [[ -n "${IMAGE_TAG:-}" ]]; then
       # Install from the PR's manifests and helm chart instead of a hashrelease.
       echo "[INFO] installing Calico from PR source..."
       CALICO_SRC="${HOME}/${SEMAPHORE_GIT_DIR}"
