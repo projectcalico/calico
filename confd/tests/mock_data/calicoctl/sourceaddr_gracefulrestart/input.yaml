@@ -1,0 +1,24 @@
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node1
+spec:
+  bgp:
+    ipv4Address: 172.17.0.5/24
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node2
+spec:
+  bgp:
+    ipv4Address: 172.17.0.6/24
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-1
+spec:
+  node: node1
+  peerIP: 172.17.0.6
+  asNumber: 64512
