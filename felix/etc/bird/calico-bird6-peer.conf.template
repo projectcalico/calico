@@ -5,7 +5,7 @@ protocol bgp '@ID@' {
   local as @AS_NUMBER@;
   neighbor @PEER_IPV6_ADDRESS@ as @AS_NUMBER@;
   multihop;
-  import all;
+  import filter import_bgp;
   graceful restart;
   export filter export_bgp;
   next hop self;    # Disable next hop processing and always advertise our
