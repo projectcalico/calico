@@ -224,7 +224,7 @@ jobs:
         id: build-images
         run: |
           TAG="${{ steps.pr.outputs.image_tag }}"
-          make push \
+          make -j$(nproc) push \
             DEV_IMAGE_REGISTRY=gcr.io \
             DEV_IMAGE_PATH=unique-caldron-775/ci/calico \
             DEV_IMAGE_TAG="${TAG}"
