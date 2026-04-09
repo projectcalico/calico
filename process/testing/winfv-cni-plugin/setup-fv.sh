@@ -42,7 +42,7 @@ function setup_etcd() {
   ${MASTER_CONNECT_COMMAND} "sudo ctr -n k8s.io container delete calico-etcd" || true
 
   # Start etcd container
-  ETCD_CONTAINER="quay.io/coreos/etcd:v3.4.6"
+  ETCD_CONTAINER="$(yq '.base_images.etcd' "${CALICO_HOME}/defaults.yaml"):$(yq '.versions.etcd' "${CALICO_HOME}/defaults.yaml")"
   ${MASTER_CONNECT_COMMAND} "sudo ctr -n k8s.io images pull ${ETCD_CONTAINER}"
   ${MASTER_CONNECT_COMMAND} "sudo ctr -n k8s.io run --detach --net-host ${ETCD_CONTAINER} calico-etcd etcd --advertise-client-urls 'http://${LINUX_PIP}:2389,http://127.0.0.1:2389,http://${LINUX_PIP}:8001,http://127.0.0.1:8001' --listen-client-urls 'http://0.0.0.0:2389,http://0.0.0.0:8001'"
 

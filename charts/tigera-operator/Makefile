@@ -1,4 +1,3 @@
-include ../../metadata.mk
 include ../../lib.Makefile
 
 OPERATOR_REPO ?= tigera/operator
