@@ -42,7 +42,7 @@ blocks:
       jobs:
         - name: "Release on Semaphore VM"
           execution_time_limit:
-            minutes: 360
+            hours: 6
           env_vars:
             - name: VAR_FILE
               value: /home/semaphore/secrets/release.tfvars
