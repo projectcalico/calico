@@ -119,7 +119,7 @@ func main() {
 }
 
 var defaultInclusions = []string{
-	"/metadata.mk",
+	"/defaults.yaml",
 	"/lib.Makefile",
 	"/hack/test/certs/",
 }
