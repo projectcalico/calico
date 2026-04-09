@@ -61,13 +61,6 @@ include ../lib.Makefile
 SRC_FILES += $(GENERATED_FILES)
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 
-# Set the platform correctly for building docker images.
-ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
-# Required for eBPF support.
-# We need to force target arch build image to be used in a cross-compilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-endif
-
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
 FV_K8SIMAGE=$(CALICO_BUILD)
@@ -130,7 +123,13 @@ ARCH_CGO_CFLAGS=
 ifeq ($(ARCH),ppc64le)
 	ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
 endif
-CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
+# When cross-compiling, pass linker flags so the linker can find
+# target-arch libelf and libz in the sysroot.
+CROSS_CGO_LDFLAGS=
+ifneq ($(CROSS_SYSROOT),)
+	CROSS_CGO_LDFLAGS=$(CROSS_LDFLAGS)
+endif
+CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 FV_RACE_DETECTOR_ENABLED?=true
 BUILD_TARGETS+=build-bpf
@@ -156,18 +155,19 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 libbpf: $(LIBBPF_A)
 clone-libbpf: $(LIBBPF_FILE_CREATED)
 
-$(LIBBPF_FILE_CREATED): | register
+$(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
 	mkdir -p bpf-gpl/include/src/$(ARCH)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
+	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
-bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
+LIBBPF_DEP=$(if $(filter 1,$(CGO_ENABLED)),$(LIBBPF_A))
+bin/calico-felix-$(ARCH): $(LIBBPF_DEP) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
@@ -221,12 +221,12 @@ $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	mkdir -p bin/bpf
 	cp $(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES) bin/bpf
 
-$(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile | register
+$(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
 	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache all
 	touch -c $@
 
-$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile | register
-	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-gpl all ut-objs map-objs
+$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile
+	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-gpl ARCH=$(ARCH) all ut-objs map-objs
 	touch -c $@
 
 bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
