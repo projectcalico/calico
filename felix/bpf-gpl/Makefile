@@ -41,18 +41,23 @@ CFLAGS +=  \
 	-I ./libbpf/src/ \
 	-I ./libbpf/include/uapi
 
-# Workaround for Debian placing "asm/types.h" in /usr/include/x86_64-linux-gnu
-# We also pick up a couple of other definitions from here, such as the socket
-# type constants (which are architecture dependent for historical reasons).
-TRIPLET := $(shell gcc -dumpmachine)
-CFLAGS += -I/usr/include/$(TRIPLET)
+# Host architecture define — BPF compilation uses "-target bpf" which
+# doesn't define the host arch, but glibc's gnu/stubs.h needs it to
+# select the right stubs file.  Since BPF always compiles natively,
+# derive this from the build host.
+HOST_ARCH := $(shell uname -m)
+ifeq ($(HOST_ARCH),x86_64)
+CFLAGS += -D__x86_64__
+endif
 
-ifeq ($(findstring x86_64,$(TRIPLET)),x86_64)
-	CFLAGS += -D__TARGET_ARCH_x86 -D__x86_64__
-else ifeq ($(findstring aarch64,$(TRIPLET)),aarch64)
-	CFLAGS += -D__TARGET_ARCH_arm64
-else ifeq ($(findstring ppc64le,$(TRIPLET)),ppc64le)
-	CFLAGS += -D__TARGET_ARCH_powerpc -D__SANE_USERSPACE_TYPES__
+# Set target-arch defines for BPF compilation.  ARCH is passed from
+# felix/Makefile (defined in lib.Makefile as the target architecture).
+ifeq ($(ARCH),amd64)
+CFLAGS += -D__TARGET_ARCH_x86
+else ifeq ($(ARCH),arm64)
+CFLAGS += -D__TARGET_ARCH_arm64
+else ifeq ($(ARCH),ppc64le)
+CFLAGS += -D__TARGET_ARCH_powerpc -D__SANE_USERSPACE_TYPES__
 endif
 CC := clang
 LD := llc
