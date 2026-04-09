@@ -55,15 +55,10 @@ export INSTALLER=${INSTALLER:-"manual"}
 export DATAPLANE=${DATAPLANE:-"CalicoIptables"}  # Temporarily set all runs which don't specify a DATAPLANE to iptables.
 export PRODUCT=${PRODUCT:-calico}
 
-# Self-service e2e: when IMAGE_TAG is set, the pipeline uses custom-built
-# images from the CI registry instead of hashrelease images.
-if [ -n "${IMAGE_TAG:-}" ]; then
-  echo "[INFO] Using custom images: ${IMAGE_REGISTRY:-gcr.io}/${IMAGE_PATH:-}/*:${IMAGE_TAG}"
-  export CUSTOM_IMAGES=true
-  export IMAGE_REGISTRY="${IMAGE_REGISTRY:-gcr.io}"
-  export IMAGE_PATH="${IMAGE_PATH}"
-  export IMAGE_TAG="${IMAGE_TAG}"
-fi
+# When IMAGE_TAG is set, the pipeline uses custom-built images instead of hashrelease images.
+custom_images_cmd="echo '[INFO] custom images not requested, skipping'"
+if [ -n "${IMAGE_TAG:-}" ]; then custom_images_cmd="if [ -z \"${IMAGE_PATH:-}\" ]; then echo '[ERROR] IMAGE_TAG is set but IMAGE_PATH is empty'; false; else echo '[INFO] Using custom images: ${IMAGE_REGISTRY:-gcr.io}/${IMAGE_PATH}/*:${IMAGE_TAG}'; export CUSTOM_IMAGES=true; export IMAGE_REGISTRY=\"${IMAGE_REGISTRY:-gcr.io}\"; export IMAGE_PATH=\"${IMAGE_PATH}\"; export IMAGE_TAG=\"${IMAGE_TAG}\"; export RUN_LOCAL_TESTS=true; fi"; fi
+eval "$custom_images_cmd"
 
 export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 export NUM_INFRA_NODES=${NUM_INFRA_NODES:-0}
