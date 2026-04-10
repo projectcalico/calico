@@ -497,7 +497,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 	})
 })
 
-var _ = infrastructure.DatastoreDescribe("pepper cluster network policy flow logs _BPF-SAFE_", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("cluster network policy flow logs _BPF-SAFE_", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const wepPort = 8055
 	wepPortStr := fmt.Sprintf("%d", wepPort)
 
