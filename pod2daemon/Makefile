@@ -84,7 +84,7 @@ protobuf proto/udsver.pb.go: proto/udsver.proto
 	$(MAKE) fix-changed
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= f0fd46fc3fbdb6fe20fc2d2614631816b551a143 #https://github.com/kubernetes-csi/node-driver-registrar/commit/f0fd46fc3fbdb6fe20fc2d2614631816b551a143
+UPSTREAM_REGISTRAR_TAG     ?= 3d20cc82ea58e2fcff1ea61fc9e8f6f51c811a7b #https://github.com/kubernetes-csi/node-driver-registrar/commit/3d20cc82ea58e2fcff1ea61fc9e8f6f51c811a7b
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
