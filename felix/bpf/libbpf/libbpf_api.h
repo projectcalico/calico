@@ -90,13 +90,15 @@ void bpf_get_prog_name(uint prog_id, char *prog_name) {
 		set_errno(-prog_fd);
 		return;
         }
-	int len = sizeof(info);
+	__u32 len = sizeof(info);
 	int err = bpf_prog_get_info_by_fd(prog_fd, &info, &len);
 	if (err) {
+		close(prog_fd);
 		set_errno(err);
 		return;
 	}
 	memcpy(prog_name, info.name, strlen(info.name));
+	close(prog_fd);
 }
 
 struct bpf_link *bpf_link_open(char *path) {
@@ -280,7 +282,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.ipfrag_timeout = ipfrag_timeout,
 	};
 
-	strncpy(v4.iface_name, iface_name, sizeof(v4.iface_name));
+	strncpy((char *)v4.iface_name, iface_name, sizeof(v4.iface_name));
 	v4.iface_name[sizeof(v4.iface_name)-1] = '\0';
 
 	struct cali_tc_global_data v6 = v4;
@@ -415,7 +417,7 @@ void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps, uin
 	struct cali_xdp_preamble_globals data = {
 	};
 
-	strncpy(data.v4.iface_name, iface_name, sizeof(data.v4.iface_name));
+	strncpy((char *)data.v4.iface_name, iface_name, sizeof(data.v4.iface_name));
 	data.v4.iface_name[sizeof(data.v4.iface_name)-1] = '\0';
 	data.v6 = data.v4;
 
