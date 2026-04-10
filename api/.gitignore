@@ -21,4 +21,6 @@ bin/
 /.idea/
 /.vscode/
 
+# Generated from bad patches.
 *.orig
+*.rej
