@@ -116,20 +116,20 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 				},
 			}
 
-			// Check for direct-name matches: both exact endpoint-level and workload-level.
-			workloadID := exactID.workloadLevel()
-			for _, sot := range []sourceOrTarget{source, target} {
-				if lmc.endpointKeys[sot][exactID] != nil {
-					wd.directNameKeys[sot].AddSet(lmc.endpointKeys[sot][exactID])
+			lmc.withRoleUpdateIfNeeded(wd, func() {
+				// Check for direct-name matches: both exact endpoint-level and workload-level.
+				workloadID := exactID.workloadLevel()
+				for _, sot := range []sourceOrTarget{source, target} {
+					if lmc.endpointKeys[sot][exactID] != nil {
+						wd.directNameKeys[sot].AddSet(lmc.endpointKeys[sot][exactID])
+					}
+					if lmc.workloadKeys[sot][workloadID] != nil {
+						wd.directNameKeys[sot].AddSet(lmc.workloadKeys[sot][workloadID])
+					}
 				}
-				if lmc.workloadKeys[sot][workloadID] != nil {
-					wd.directNameKeys[sot].AddSet(lmc.workloadKeys[sot][workloadID])
-				}
-			}
+			})
 
 			lmc.weps[exactID] = wd
-			role, uid := lmc.liveMigrationRoleAndUID(wd)
-			lmc.indicateRole(key, role, uid)
 		} else {
 			logrus.WithField("wep", exactID).Debug("LiveMigrationCalculator: WEP deleted")
 			// Don't need anything here to "reset the role that we previously said"
@@ -165,9 +165,9 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 				"source":   newSourceID,
 				"target":   newTargetID,
 				"selector": newSelector,
-			}).Debug("LiveMigrationCalculator: LiveMigration created/updated")
+			}).Info("LiveMigrationCalculator: LiveMigration created/updated")
 		} else {
-			logrus.WithField("lm", key).Debug("LiveMigrationCalculator: LiveMigration deleted")
+			logrus.WithField("lm", key).Info("LiveMigrationCalculator: LiveMigration deleted")
 			delete(lmc.liveMigrations, key)
 		}
 
@@ -490,20 +490,16 @@ func (lmc *LiveMigrationCalculator) withRoleUpdateIfNeeded(wepData *wepData, upd
 	// the same WEP are transient; avoiding a UID churn keeps the downstream
 	// state (and logs) more stable.
 	if newRole != oldRole {
-		lmc.indicateRole(wepData.key, newRole, newUID)
+		logrus.WithFields(logrus.Fields{
+			"wep":  wepData.key,
+			"role": newRole,
+			"uid":  newUID,
+		}).Info("LiveMigrationCalculator: emitting role for WEP")
+		lmc.OnEndpointComputedData(wepData.key, EPCompDataKindLiveMigration, &liveMigrationRole{role: newRole, uid: newUID})
 	}
 }
 
 const EPCompDataKindLiveMigration = EndpointComputedDataKind("LiveMigration")
-
-func (lmc *LiveMigrationCalculator) indicateRole(key model.WorkloadEndpointKey, role proto.LiveMigrationRole, uid string) {
-	logrus.WithFields(logrus.Fields{
-		"wep":  key,
-		"role": role,
-		"uid":  uid,
-	}).Debug("LiveMigrationCalculator: emitting role for WEP")
-	lmc.OnEndpointComputedData(key, EPCompDataKindLiveMigration, &liveMigrationRole{role: role, uid: uid})
-}
 
 type liveMigrationRole struct {
 	role proto.LiveMigrationRole

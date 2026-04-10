@@ -11,7 +11,7 @@ diff --git a/api/config/crd/projectcalico.org_ipamblocks.yaml b/api/config/crd/p
 index a6159008d1..20beb8de45 100644
 --- a/api/config/crd/projectcalico.org_ipamblocks.yaml
 +++ b/api/config/crd/projectcalico.org_ipamblocks.yaml
-@@ -44,6 +44,9 @@ spec:
+@@ -48,6 +48,9 @@ spec:
                  allocations:
                    items:
                      type: integer
@@ -19,8 +19,8 @@ index a6159008d1..20beb8de45 100644
 +                    # to handle []*int properly itself.
 +                    nullable: true
                    type: array
+                   x-kubernetes-list-type: atomic
                  attributes:
-                   items:
 --
 2.34.1
 
