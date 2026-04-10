@@ -365,15 +365,15 @@ int bpf_program_attach_xdp(struct bpf_object *obj, char *name, int ifIndex, int 
 
 	int prog_fd = bpf_program__fd(prog);
 	if (prog_fd < 0) {
-		errno = -prog_fd;
-		return prog_fd;
+		err = prog_fd;
+		goto out;
 	}
 
 	err = bpf_xdp_attach(ifIndex, prog_fd, flags, &opts);
-	set_errno(err);
-	return err;
 
 out:
+	if (opts.old_prog_fd >= 0)
+		close(opts.old_prog_fd);
 	set_errno(err);
 	return err;
 }
