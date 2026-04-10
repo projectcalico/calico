@@ -17,19 +17,18 @@ package networking
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -104,14 +103,9 @@ var _ = describe.CalicoDescribe(
 			nodeIPs = allIPs[:2]
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
-			// Detect BPF dataplane mode. Reset before checking to avoid
-			// retaining a stale value from a prior spec's BeforeEach.
+			// Detect BPF dataplane mode.
 			bpfMode = false
-			felixCfg := &v3.FelixConfiguration{}
-			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixCfg)
-			if err != nil {
-				logrus.WithError(err).Warn("Failed to get FelixConfiguration, assuming non-BPF mode")
-			} else if felixCfg.Spec.BPFEnabled != nil && *felixCfg.Spec.BPFEnabled {
+			if dp := detectDataplane(cli, f.ClientSet); dp.Calico == dataplaneBPF {
 				bpfMode = true
 			}
 		})
@@ -233,9 +227,17 @@ var _ = describe.CalicoDescribe(
 
 			// Create server pod on the appropriate node.
 			serverName := fmt.Sprintf("server-%d", scenario.dstPod)
+			// Host-networked pods bind directly to the node's network stack, so
+			// port 80 (the default) can conflict with other host-networked pods or
+			// services on the same node. Use a random high port instead.
+			serverPort := 80
+			if scenario.dstHostNetworked {
+				serverPort = 10000 + rand.Intn(50000)
+			}
 			serverOpts := []conncheck.ServerOption{
 				conncheck.WithEchoServer(),
 				conncheck.WithNodePortService(),
+				conncheck.WithPorts(serverPort),
 				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(dstNode)),
 			}
 			if scenario.dstHostNetworked {
@@ -271,7 +273,7 @@ var _ = describe.CalicoDescribe(
 
 			switch scenario.accessType {
 			case "clusterIP":
-				target = server.ClusterIPv4(clientIPOpt).Port(80)
+				target = server.ClusterIPv4(clientIPOpt).Port(serverPort)
 				if scenario.dstHostNetworked {
 					expectSNAT = true
 				}
@@ -283,7 +285,7 @@ var _ = describe.CalicoDescribe(
 				target = server.NodePort(nodeIPs[1], clientIPOpt)
 			case "externalIP":
 				expectSNAT = true
-				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(80)
+				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(serverPort)
 			default:
 				Fail(fmt.Sprintf("unhandled accessType: %s", scenario.accessType))
 			}
