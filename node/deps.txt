@@ -383,6 +383,7 @@ local:node/pkg/lifecycle/startup/autodetection
 local:node/pkg/lifecycle/startup/autodetection/ipv4
 local:node/pkg/lifecycle/utils
 local:node/pkg/nodeinit
+local:node/pkg/nodeservices
 local:node/pkg/status
 local:node/pkg/status/populators
 local:node/windows-packaging/tests
