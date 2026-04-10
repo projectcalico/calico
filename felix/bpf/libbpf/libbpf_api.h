@@ -93,10 +93,12 @@ void bpf_get_prog_name(uint prog_id, char *prog_name) {
 	__u32 len = sizeof(info);
 	int err = bpf_prog_get_info_by_fd(prog_fd, &info, &len);
 	if (err) {
+		close(prog_fd);
 		set_errno(err);
 		return;
 	}
 	memcpy(prog_name, info.name, strlen(info.name));
+	close(prog_fd);
 }
 
 struct bpf_link *bpf_link_open(char *path) {
