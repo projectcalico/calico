@@ -38,12 +38,11 @@ FROM docker:25
 ARG ETCD_VERSION
 ARG TARGETARCH
 
-# Update apk repositories first
-RUN apk update
-
 # Running STs in this container requires that it has all dependencies installed
 # for executing the tests. Install these dependencies:
-RUN apk add --no-cache \
+# The upgrade ensures base image packages (e.g. libexpat) stay ABI-compatible
+# with newly installed packages (e.g. python3's pyexpat).
+RUN apk update && apk upgrade && apk add --no-cache \
     curl \
     gcc \
     ip6tables \
