@@ -24,13 +24,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -106,11 +104,8 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
 			// Detect BPF dataplane mode.
-			felixCfg := &v3.FelixConfiguration{}
-			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixCfg)
-			if err != nil {
-				logrus.WithError(err).Warn("Failed to get FelixConfiguration, assuming non-BPF mode")
-			} else if felixCfg.Spec.BPFEnabled != nil && *felixCfg.Spec.BPFEnabled {
+			bpfMode = false
+			if dp := detectDataplane(cli, f.ClientSet); dp.Calico == dataplaneBPF {
 				bpfMode = true
 			}
 		})
