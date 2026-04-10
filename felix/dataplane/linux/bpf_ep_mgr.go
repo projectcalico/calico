@@ -409,6 +409,7 @@ type bpfEndpointManager struct {
 
 	QoSMap        maps.MapWithUpdateWithFlags
 	maglevLUTSize int
+	ipFragTimeout uint32
 
 	workloadSourceSpoofing bool
 }
@@ -442,6 +443,45 @@ type bpfAllowChainRenderer interface {
 type ManagerWithHEPUpdate interface {
 	Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
+}
+
+// getIPFragTimeout returns the IP fragment timeout in seconds.
+// If configuredTimeout is 0, it reads the value from the Linux kernel sysctl
+// net.ipv4.ipfrag_time. Otherwise, it converts the configured duration to seconds.
+func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
+	var timeoutSecs int64
+
+	if configuredTimeout == 0 {
+		// Try to read from /proc/sys/net/ipv4/ipfrag_time
+		data, err := os.ReadFile("/proc/sys/net/ipv4/ipfrag_time")
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to read net.ipv4.ipfrag_time, using default of 30 seconds")
+			return 30
+		}
+
+		timeoutStr := strings.TrimSpace(string(data))
+		timeout, err := strconv.Atoi(timeoutStr)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to parse net.ipv4.ipfrag_time, using default of 30 seconds")
+			return 30
+		}
+
+		timeoutSecs = int64(timeout)
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout read from net.ipv4.ipfrag_time")
+	} else {
+		timeoutSecs = int64(configuredTimeout.Seconds())
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout set from configuration")
+	}
+
+	if timeoutSecs < 1 {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too low, clamping to 1 second")
+		timeoutSecs = 1
+	} else if timeoutSecs > int64(^uint32(0)) {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too high, clamping to max uint32")
+		timeoutSecs = int64(^uint32(0))
+	}
+
+	return uint32(timeoutSecs)
 }
 
 func NewBPFEndpointManager(
@@ -536,6 +576,7 @@ func NewBPFEndpointManager(
 
 		QoSMap:                 bpfmaps.CommonMaps.QoSMap,
 		maglevLUTSize:          config.BPFMaglevLUTSize,
+		ipFragTimeout:          getIPFragTimeout(config.BPFIPFragTimeout),
 		workloadSourceSpoofing: config.WorkloadSourceSpoofing,
 	}
 
@@ -3123,6 +3164,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.UDPGSOLinearize = m.bpfUDPGSOLinearize
 	ap.OverlayTunnelID = m.overlayTunnelID
 	ap.AttachType = m.bpfAttachType
+	ap.IPFragTimeout = m.ipFragTimeout
 	ap.RedirectPeer = true
 	ap.WorkloadSrcSpoofingConfigured = m.workloadSourceSpoofing
 	if m.bpfRedirectToPeer == "Disabled" {
