@@ -307,14 +307,14 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 // matching continue to be delivered to all registered PolicyMatchListeners while the selector is
 // present.
 func AddExtraComputedSelector[T comparable](arc *ActiveRulesCalculator, cs string, caller T) {
-	sel, err := selector.Parse(cs)
-	if err != nil {
-		log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
-	}
 	callers := arc.computedSelectorCallers[cs]
 	if callers == nil {
 		arc.computedSelectorCallers[cs] = set.New[any]()
 		callers = arc.computedSelectorCallers[cs]
+		sel, err := selector.Parse(cs)
+		if err != nil {
+			log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
+		}
 		arc.labelIndex.UpdateSelector(computedSelector(cs), sel)
 	}
 	callers.Add(any(caller))
