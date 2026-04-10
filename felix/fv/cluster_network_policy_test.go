@@ -44,7 +44,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("pepper cluster network policy conversion _BPF-SAFE_", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF-SAFE_", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const wepPort = 8055
 	wepPortStr := fmt.Sprintf("%d", wepPort)
 
