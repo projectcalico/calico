@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -45,6 +46,8 @@ const (
 	rbacNoPolicyUser  = "e2e-rbac-no-policy-access"
 	rbacOtherTierUser = "e2e-rbac-other-tier-admin"
 	rbacReadOnlyUser  = "e2e-rbac-read-only"
+	rbacExactNameUser = "e2e-rbac-exact-name"
+	rbacWatchUser     = "e2e-rbac-watch"
 
 	// Common prefix for RBAC resources created by these tests.
 	rbacResourcePrefix = "e2e-tiered-rbac-"
@@ -449,6 +452,101 @@ var _ = describe.CalicoDescribe(
 				Expect(adminCli.Delete(ctx, np)).To(Succeed())
 			})
 		})
+
+		// Verifies that Calico's tier-scoped resource name convention works for
+		// exact resource names. A user with get/update/delete on a specific
+		// tier.policyName should be able to operate on that policy but not others.
+		// Note: create is excluded because K8s RBAC does not carry a resource name
+		// on create requests, so resourceNames filtering is meaningless for create.
+		Context("resource-name exact match", func() {
+			It("should allow access to the named policy but deny access to others", func() {
+				cli := newImpersonatedClient(rbacExactNameUser)
+
+				By("Creating the target policy as admin")
+				allowed := v3.NewNetworkPolicy()
+				allowed.Name = "rbac-test-exact-allowed"
+				allowed.Namespace = f.Namespace.Name
+				allowed.Spec.Tier = rbacTestTier
+				allowed.Spec.Order = ptr.To(100.0)
+				allowed.Spec.Selector = "all()"
+				allowed.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, allowed)).To(Succeed())
+				DeferCleanup(func() {
+					if err := adminCli.Delete(ctx, allowed); err != nil && !apierrors.IsNotFound(err) {
+						framework.Logf("WARNING: failed to delete policy: %v", err)
+					}
+				})
+
+				By("Verifying the exact-name user can get the named policy")
+				got := v3.NewNetworkPolicy()
+				Expect(cli.Get(ctx, ctrlclient.ObjectKeyFromObject(allowed), got)).To(Succeed(),
+					"user with exact resource name should be able to get that specific policy")
+
+				By("Verifying the exact-name user can update the named policy")
+				got.Spec.Order = ptr.To(200.0)
+				Expect(cli.Update(ctx, got)).To(Succeed(),
+					"user with exact resource name should be able to update that specific policy")
+
+				By("Creating a second policy as admin to test denial")
+				other := v3.NewNetworkPolicy()
+				other.Name = "rbac-test-exact-denied"
+				other.Namespace = f.Namespace.Name
+				other.Spec.Tier = rbacTestTier
+				other.Spec.Order = ptr.To(100.0)
+				other.Spec.Selector = "all()"
+				other.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, other)).To(Succeed())
+				DeferCleanup(func() {
+					if err := adminCli.Delete(ctx, other); err != nil && !apierrors.IsNotFound(err) {
+						framework.Logf("WARNING: failed to delete policy: %v", err)
+					}
+				})
+
+				By("Verifying the exact-name user cannot get a differently-named policy")
+				denied := v3.NewNetworkPolicy()
+				err := cli.Get(ctx, ctrlclient.ObjectKeyFromObject(other), denied)
+				Expect(err).To(HaveOccurred(), "user with exact resource name should not be able to get other policies")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+			})
+		})
+
+		// Verifies that a user with list permissions scoped to a tier's policies
+		// can list policies within that tier.
+		Context("list via tier RBAC", func() {
+			It("should allow listing policies in the permitted tier", func() {
+				By("Creating a policy in the test tier")
+				np := v3.NewNetworkPolicy()
+				np.Name = "rbac-test-watch-target"
+				np.Namespace = f.Namespace.Name
+				np.Spec.Tier = rbacTestTier
+				np.Spec.Order = ptr.To(100.0)
+				np.Spec.Selector = "all()"
+				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, np)).To(Succeed())
+				DeferCleanup(func() {
+					if err := adminCli.Delete(ctx, np); err != nil && !apierrors.IsNotFound(err) {
+						framework.Logf("WARNING: failed to delete policy: %v", err)
+					}
+				})
+
+				cli := newImpersonatedClient(rbacWatchUser)
+
+				By("Listing policies in the test tier namespace")
+				list := &v3.NetworkPolicyList{}
+				err := cli.List(ctx, list, ctrlclient.InNamespace(f.Namespace.Name))
+				Expect(err).NotTo(HaveOccurred(), "user with list permission should be able to list policies")
+
+				// Verify the created policy is in the list.
+				found := false
+				for _, p := range list.Items {
+					if p.Name == np.Name {
+						found = true
+						break
+					}
+				}
+				Expect(found).To(BeTrue(), "expected to find policy %s in list", np.Name)
+			})
+		})
 	},
 )
 
@@ -557,6 +655,47 @@ func buildTieredRBACResources() tieredRBACSetup {
 			ResourceNames: []string{rbacOtherTier + ".*"},
 		},
 	))
+
+	// Exact name: has tier GET and policy access for a specific resource name only
+	// (not the wildcard). Should be able to get/update/delete the exact named policy
+	// but not others. Note: create is excluded because K8s RBAC does not carry a
+	// resource name on create requests, so resourceNames filtering cannot restrict it.
+	addRoleAndBinding("exact-name", rbacExactNameUser, append(baseRules(),
+		rbacv1.PolicyRule{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tiers"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{rbacTestTier},
+		},
+		rbacv1.PolicyRule{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies"},
+			Verbs:         []string{"update", "delete", "get"},
+			ResourceNames: []string{rbacTestTier + ".rbac-test-exact-allowed"},
+		},
+	))
+
+	// Watch user: has tier GET and list/watch on tier.networkpolicies for the test
+	// tier. Tests Calico's per-tier watch expansion logic.
+	addRoleAndBinding("watch", rbacWatchUser, []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tiers"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{rbacTestTier},
+		},
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies"},
+			Verbs:         []string{"get", "list", "watch"},
+			ResourceNames: []string{rbacTestTier + ".*"},
+		},
+	})
 
 	// Read-only: has tier GET and read-only policy access (get/list/watch).
 	// Should be able to get/list/watch policies but not create, update, or delete.
