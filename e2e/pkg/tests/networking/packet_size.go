@@ -56,21 +56,35 @@ const (
 )
 
 // generatePacketLengths returns payload sizes for GET, POST, and UDP tests.
+// Each set samples densely around the MTU boundary where fragmentation begins,
+// adjusted for protocol overhead:
+//   - 190 = approximate HTTP response overhead (headers + framing) for GET
+//   - 52 = IP (20) + TCP (32 with options) headers for POST body
+//   - 20 = IP header (20 bytes; UDP header is 8 bytes but included in the datagram)
+//   - 80 = how far below the boundary to start sampling
+//   - 30 = how far above the boundary to continue sampling (TCP)
+//   - 60 = narrower upper range for UDP (doesn't fragment the same way)
+//   - 5 = step size for dense sampling
 func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) {
+	// GET: HTTP response headers (~190 bytes) reduce the payload that fits in a
+	// single MTU-sized frame. Sample densely around the fragmentation boundary.
 	getLengths = []int{10}
-	for i := mtu - 190 - 80; i <= mtu-190+30; i += 5 {
+	for i := mtu - 190 - 80; i <= mtu-190+30; i += 5 { // 80 below to 30 above boundary
 		getLengths = append(getLengths, i)
 	}
 	getLengths = append(getLengths, 10000)
 
+	// POST: request body plus IP/TCP headers (52 bytes) determines on-wire size.
 	postLengths = []int{10}
-	for i := mtu - 52 - 80; i <= mtu-52+30; i += 5 {
+	for i := mtu - 52 - 80; i <= mtu-52+30; i += 5 { // 80 below to 30 above boundary
 		postLengths = append(postLengths, i)
 	}
 	postLengths = append(postLengths, 10000)
 
+	// UDP: only IP header (20 bytes) overhead. Narrower upper range (60 below
+	// boundary only) since UDP doesn't fragment the same way as TCP.
 	udpLengths = []int{10}
-	for i := mtu - 20 - 80; i <= mtu-20-60; i += 5 {
+	for i := mtu - 20 - 80; i <= mtu-20-60; i += 5 { // 80 below to 60 below boundary
 		udpLengths = append(udpLengths, i)
 	}
 
