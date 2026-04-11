@@ -73,10 +73,13 @@ spec:
                     - CrossSubnet
                   type: string
                 namespaceSelector:
+                  maxLength: 1024
                   type: string
                 natOutgoing:
                   type: boolean
                 nodeSelector:
+                  default: all()
+                  maxLength: 1024
                   type: string
                 vxlanMode:
                   enum:
@@ -111,8 +114,76 @@ spec:
                 - message: IPIP is not supported on IPv6 pools
                   reason: FieldValueForbidden
                   rule:
-                    "!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode
-                    == 'Never' || size(self.ipipMode) == 0"
+                    cidr(self.cidr).ip().family() != 6 || !has(self.ipipMode) || self.ipipMode
+                    == 'Never' || size(self.ipipMode) == 0
+                - message: LoadBalancer IP pools cannot disable BGP export
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || !has(self.disableBGPExport) || !self.disableBGPExport"
+                - message:
+                    IP Pool with AllowedUse LoadBalancer must have nodeSelector
+                    set to all()
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || self.nodeSelector == 'all()'"
+                - message: IP Pool with AllowedUse Tunnel cannot have namespaceSelector
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'Tunnel')
+                    || !has(self.namespaceSelector) || size(self.namespaceSelector) ==
+                    0"
+                - message: global() selector is not valid for IPPool nodeSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.nodeSelector) || !self.nodeSelector.contains('global(')"
+                - message: global() selector is not valid for IPPool namespaceSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+            status:
+              properties:
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+              type: object
           type: object
       served: true
       storage: true
+      subresources:
+        status: {}

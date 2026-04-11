@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -144,18 +145,7 @@ func (c *connectionTester) deploy() error {
 			continue
 		}
 		By(fmt.Sprintf("Deploying server pod %s/%s", server.namespace.Name, server.name))
-		pod, svc := CreateServerPodAndServiceX(
-			c.f,
-			server.namespace,
-			server.name,
-			server.ports,
-			server.labels,
-			server.composedPodCustomizer(),
-			server.composedSvcCustomizer(),
-			server.autoCreateSvc,
-		)
-		server.pod = pod
-		server.service = svc
+		server.pod, server.service = server.deploy(c.f)
 	}
 
 	// Wait for all pods to be running.
@@ -470,7 +460,7 @@ func (c *connectionTester) runConnection(ctx context.Context, exp *Expectation, 
 	// those changes taking effect. So a short retry loop is helpful.
 
 loop:
-	for err != nil || result != exp.ExpectedResult {
+	for result != exp.ExpectedResult {
 		select {
 		case <-ctx.Done():
 			break loop
@@ -560,18 +550,32 @@ func (c *connectionTester) command(t Target) string {
 		// Linux.
 		switch t.GetProtocol() {
 		case TCP:
-			cmd = fmt.Sprintf("wget -qO- -T 5 %s", t.Destination())
+			cmd = fmt.Sprintf("wget -qO- -T 5 http://%s", t.Destination())
 		case ICMP:
 			cmd = fmt.Sprintf("ping -c 5 %s", t.Destination())
 		case HTTP:
-			cmdArgs := []string{"curl", "--connect-timeout", "5", "--verbose", "--fail"}
+			cmdArgs := []string{"curl", "-s", "--connect-timeout", "5", "--fail"}
 			req := t.HTTPParams()
 			cmdArgs = append(cmdArgs, "--request", req.Method)
 			for _, header := range req.Headers {
 				cmdArgs = append(cmdArgs, "--header", fmt.Sprintf("'%s'", header))
 			}
+			if req.Body != "" {
+				cmdArgs = append(cmdArgs, "-d", fmt.Sprintf("'%s'", req.Body))
+			}
 			cmdArgs = append(cmdArgs, fmt.Sprintf("'http://%s%s'", t.Destination(), req.Path))
 			cmd = strings.Join(cmdArgs, " ")
+		case UDP:
+			req := t.HTTPParams()
+			host, port, err := net.SplitHostPort(t.Destination())
+			if err != nil {
+				framework.Failf("UDP target must have a port: %v", err)
+			}
+			if strings.Contains(host, ":") {
+				cmd = fmt.Sprintf("echo '%s' | nc -6 -u -w1 %s %s", req.Body, host, port)
+			} else {
+				cmd = fmt.Sprintf("echo '%s' | nc -u -w1 %s %s", req.Body, host, port)
+			}
 		default:
 			framework.Failf("Unsupported protocol %s", t.GetProtocol())
 		}

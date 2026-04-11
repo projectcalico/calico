@@ -13,7 +13,7 @@
     - [Setting up the branch](#setting-up-the-branch)
     - [Updating milestones for the new branch](#updating-milestones-for-the-new-branch)
   - [4. Performing a release](#4-performing-a-release)
-    - [4.a Create a temporary branch for this release against origin](#4a-create-a-temporary-branch-for-this-release-against-origin)
+    - [4.a Prepare the release branch](#4a-prepare-the-release-branch)
     - [4.b Build and publish the repository in Semaphore](#4b-build-and-publish-the-repository-in-semaphore)
     - [4.c Build and publish tigera/operator](#4c-build-and-publish-tigeraoperator)
     - [4.d Publish the release on Github](#4d-publish-the-release-on-github)
@@ -84,47 +84,27 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
 ## 4. Performing a release
 
-### 4.a Create a temporary branch for this release against origin
+### 4.a Prepare the release branch
 
-1. Create a new branch `build-vX.Y.Z` based off of `release-vX.Y`.
+1. Checkout the release branch `release-vX.Y` and pull the latest changes.
 
    ```sh
    git checkout release-vX.Y && git pull origin release-vX.Y
    ```
 
-   ```sh
-   git checkout -b build-vX.Y.Z
-   ```
-
-1. Update version information in the following files:
-
-   - `charts/calico/values.yaml`: Calico version used in manifest generation.
-   - `charts/tigera-operator/values.yaml`: Versions of operator and calicoctl used in the helm chart and manifests.
-
-1. Update manifests (and other auto-generated code) by running the following command in the repository root.
+1. Run `make release-prep` to create a `build-vX.Y.Z` branch with updated charts, manifests, and release notes.
 
    ```sh
-   make generate
+   make release-prep
    ```
 
-1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
+   This creates a `build-vX.Y.Z` branch, updates version references in charts and manifests,
+   runs `make generate`, generates release notes, and commits the changes.
+   The version is auto-detected from git state.
 
-   Then, add the newly created release note file to git.
+1. Review the generated release notes in `release-notes/<VERSION>-release-notes.md` for accuracy and format appropriately. Amend the commit if changes are needed.
 
-   ```sh
-   git add release-notes/<VERSION>-release-notes.md
-   ```
-
-   > [!TIP]
-   > You likely have a draft from [step 2.4](#2-verify-the-code-is-ready-for-release) that you can edit and finalize.
-
-1. Commit your changes. For example:
-
-   ```sh
-   git commit -m "build: vX.Y.Z release"
-   ```
-
-1. Push the branch to `github.com/projectcalico/calico` and create a pull request. Get it reviewed and ensure it passes CI before moving to the next step.
+1. Get the PR reviewed and ensure it passes CI before moving to the next step.
 
 1. If this is the first release from this release branch i.e. `vX.Y.0`, create a new Calico X.Y.x PPA in launchpad
 

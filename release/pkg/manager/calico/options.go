@@ -125,9 +125,9 @@ func WithPublishCharts(publish bool) Option {
 	}
 }
 
-func WithPublishGitTag(publish bool) Option {
+func WithPublishGitRef(publish bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishTag = publish
+		r.publishGitRef = publish
 		return nil
 	}
 }

@@ -12,6 +12,7 @@ import (
 // with apply.
 //
 // IPAMBlockSpec contains the specification for an IPAMBlock resource.
+// This resource is managed internally by Calico IPAM and should not be modified manually.
 type IPAMBlockSpecApplyConfiguration struct {
 	// The block's CIDR.
 	CIDR *string `json:"cidr,omitempty"`

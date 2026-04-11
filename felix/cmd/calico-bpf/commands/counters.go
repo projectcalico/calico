@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 
@@ -127,7 +128,20 @@ func doForAllInterfaces(cmd *cobra.Command, action string, fn func(*cobra.Comman
 	}
 }
 
-func dumpInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {
+type counterJSON struct {
+	Category string  `json:"category"`
+	Type     string  `json:"type"`
+	Ingress  *uint64 `json:"ingress"`
+	Egress   *uint64 `json:"egress"`
+	XDP      *uint64 `json:"xdp"`
+}
+
+type ifaceCountersJSON struct {
+	Interface string        `json:"interface"`
+	Counters  []counterJSON `json:"counters"`
+}
+
+func readInterfaceCounters(m maps.Map, iface *net.Interface) ([][]uint64, error) {
 	values := make([][]uint64, len(hook.All))
 	for _, hook := range hook.All {
 		val, err := counters.Read(m, iface.Index, hook)
@@ -135,11 +149,26 @@ func dumpInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {
 			continue
 		}
 		if len(val) < counters.MaxCounterNumber {
-			return fmt.Errorf("failed to read enough data from bpf counters. iface=%v hook=%s", iface.Name, hook)
+			return nil, fmt.Errorf("failed to read enough data from bpf counters. iface=%v hook=%s", iface.Name, hook)
 		}
 		values[hook] = val
 	}
+	return values, nil
+}
 
+func dumpInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {
+	values, err := readInterfaceCounters(m, iface)
+	if err != nil {
+		return err
+	}
+
+	if *jsonOutput {
+		return dumpInterfaceJSON(cmd, iface, values)
+	}
+	return dumpInterfaceTable(cmd, iface, values)
+}
+
+func dumpInterfaceTable(cmd *cobra.Command, iface *net.Interface, values [][]uint64) error {
 	table := tablewriter.NewWriter(cmd.OutOrStdout())
 	table.SetCaption(true, fmt.Sprintf("dumped %s counters.", iface.Name))
 	table.SetHeader([]string{"CATEGORY", "TYPE", "INGRESS", "EGRESS", "XDP"})
@@ -147,7 +176,6 @@ func dumpInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {
 	var rows [][]string
 	for _, c := range counters.Descriptions() {
 		newRow := []string{c.Category, c.Caption}
-		// Now add value related to each hook, i.e. ingress, egress and XDP
 		for hook := range hook.All {
 			if values[hook] == nil {
 				newRow = append(newRow, "N/A")
@@ -162,6 +190,35 @@ func dumpInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {
 	table.SetAutoMergeCellsByColumnIndex([]int{0})
 	table.Render()
 	return nil
+}
+
+func dumpInterfaceJSON(cmd *cobra.Command, iface *net.Interface, values [][]uint64) error {
+	result := ifaceCountersJSON{
+		Interface: iface.Name,
+	}
+	for _, c := range counters.Descriptions() {
+		entry := counterJSON{
+			Category: c.Category,
+			Type:     c.Caption,
+		}
+		if values[hook.Ingress] != nil {
+			v := values[hook.Ingress][c.Counter]
+			entry.Ingress = &v
+		}
+		if values[hook.Egress] != nil {
+			v := values[hook.Egress][c.Counter]
+			entry.Egress = &v
+		}
+		if values[hook.XDP] != nil {
+			v := values[hook.XDP][c.Counter]
+			entry.XDP = &v
+		}
+		result.Counters = append(result.Counters, entry)
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
 }
 
 func flushInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {

@@ -92,7 +92,7 @@ else
     if [[ -n "$RUN_LOCAL_TESTS" ]]; then
       echo "[INFO] starting e2e testing from local binary..."
       pushd "${HOME}/calico"
-      make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
+      make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
       GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
       # Disable shellcheck double quote validation for ${K8S_E2E_FLAGS} as this var can contain multiple args and should be word split
       #shellcheck disable=SC2086
@@ -116,7 +116,14 @@ else
         -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
         -w /go/src/github.com/projectcalico/calico \
         "calico/go-build:${GO_BUILD_VER}" \
-        go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} |& tee -a >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
+        go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" \
+          --junit-report=junit.xml --output-dir=report \
+          ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} \
+        |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log"
+
+      # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
+      mkdir -p "${REPORT_DIR}"
+      cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
       popd
     else
       echo "[INFO] starting bz testing..."

@@ -42,7 +42,7 @@ spec:
                   format: int32
                   type: integer
                 localWorkloadSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 maxRestartTime:
                   type: string
@@ -56,7 +56,7 @@ spec:
                   maxLength: 253
                   type: string
                 nodeSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 numAllowedLocalASNumbers:
                   format: int32
@@ -81,9 +81,10 @@ spec:
                   maxLength: 64
                   type: string
                 peerSelector:
-                  maxLength: 4096
+                  maxLength: 1024
                   type: string
                 reachableBy:
+                  maxLength: 64
                   type: string
                 reversePeering:
                   allOf:
@@ -133,6 +134,18 @@ spec:
                   rule:
                     (!has(self.localWorkloadSelector) || size(self.localWorkloadSelector)
                     == 0) || (has(self.asNumber) && self.asNumber != 0)
+                - message: reachableBy must be empty when peerIP is empty
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.reachableBy) || size(self.reachableBy) == 0 || (has(self.peerIP)
+                    && size(self.peerIP) > 0)"
+                - message:
+                    keepOriginalNextHop and nextHopMode cannot both be set; keepOriginalNextHop
+                    is deprecated, use nextHopMode instead
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.keepOriginalNextHop) || !self.keepOriginalNextHop ||
+                    !has(self.nextHopMode)"
           type: object
       served: true
       storage: true

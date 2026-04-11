@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -168,6 +168,7 @@ type Goldmane struct {
 	// The following channels are input channels to make resuests of the main loop.
 	listRequests        chan listRequest
 	filterHintsRequests chan filterHintsRequest
+	statisticsRequests  chan statisticsRequest
 	sinkChan            chan *sinkRequest
 	recvChan            chan *types.Flow
 }
@@ -179,6 +180,7 @@ func NewGoldmane(opts ...Option) *Goldmane {
 		done:                make(chan struct{}),
 		listRequests:        make(chan listRequest),
 		filterHintsRequests: make(chan filterHintsRequest),
+		statisticsRequests:  make(chan statisticsRequest),
 		sinkChan:            make(chan *sinkRequest, 10),
 		recvChan:            make(chan *types.Flow, channelDepth),
 		rolloverFunc:        time.After,
@@ -277,6 +279,8 @@ func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 			req.respCh <- a.queryFlows(req.req)
 		case req := <-a.filterHintsRequests:
 			req.respCh <- a.queryFilterHints(req.req)
+		case req := <-a.statisticsRequests:
+			req.respCh <- a.queryStatistics(req.req)
 		case stream := <-a.streams.Backfills():
 			a.backfill(stream)
 		case req := <-a.sinkChan:
@@ -337,15 +341,37 @@ func (a *Goldmane) validateTimeRange(startTimeGt, startTimeLt int64) error {
 	return nil
 }
 
+// statisticsRequest is an internal helper used to synchronously request statistics from the aggregator.
+type statisticsRequest struct {
+	respCh chan *statisticsResponse
+	req    *proto.StatisticsRequest
+}
+
+type statisticsResponse struct {
+	results []*proto.StatisticsResult
+	err     error
+}
+
+// Statistics returns statistics matching the given request. It uses a channel to
+// synchronously request the data from the aggregator's main loop.
 func (a *Goldmane) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
+	respCh := make(chan *statisticsResponse)
+	defer close(respCh)
+	a.statisticsRequests <- statisticsRequest{respCh, req}
+	resp := <-respCh
+	return resp.results, resp.err
+}
+
+func (a *Goldmane) queryStatistics(req *proto.StatisticsRequest) *statisticsResponse {
 	// Sanitize the time range, resolving any relative time values.
 	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
 
 	if err := a.validateTimeRange(req.StartTimeGte, req.StartTimeLt); err != nil {
 		logrus.WithField("req", req).WithError(err).Debug("Invalid time range")
-		return nil, err
+		return &statisticsResponse{err: err}
 	}
-	return a.flowStore.Statistics(req)
+	results, err := a.flowStore.Statistics(req)
+	return &statisticsResponse{results: results, err: err}
 }
 
 // backfill fills a new Stream instance with historical Flow data based on the request.
