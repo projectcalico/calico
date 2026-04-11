@@ -17,19 +17,18 @@ package networking
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -41,16 +40,12 @@ const defaultExternalIP = "60.70.80.90"
 
 // egressScenario defines a single egress test scenario.
 type egressScenario struct {
-	name string
-
 	// dstPod is the destination pod number (0, 1, or 2).
 	dstPod int
 	// dstHostNetworked indicates the destination pod is host-networked.
 	dstHostNetworked bool
 	// accessType is how the client accesses the service.
 	accessType string // "clusterIP", "node0NodePort", "node1NodePort", "externalIP"
-	// svcTweak customizes the destination service.
-	svcTweak func(svc conncheck.ServerOption)
 	// svcOpts are additional server options for the destination service.
 	svcOpts []conncheck.ServerOption
 	// expectPolicyBypass indicates policy won't be applied (e.g., BPF self-connection).
@@ -81,15 +76,13 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("workload-egress")
 
 		var (
-			cli       ctrlclient.Client
 			nodeNames []string
 			nodeIPs   []string
 			bpfMode   bool
 		)
 
 		BeforeEach(func() {
-			var err error
-			cli, err = client.New(f.ClientConfig())
+			cli, err := client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -100,14 +93,19 @@ var _ = describe.CalicoDescribe(
 				"workload egress tests require at least 2 schedulable nodes")
 
 			nodesInfo := utils.GetNodesInfo(f, nodes, false)
-			nodeNames = nodesInfo.GetNames()[:2]
-			nodeIPs = nodesInfo.GetIPv4s()[:2]
+			allNames := nodesInfo.GetNames()
+			allIPs := nodesInfo.GetIPv4s()
+			Expect(len(allNames)).To(BeNumerically(">=", 2),
+				"workload egress tests require at least 2 non-master nodes with names")
+			Expect(len(allIPs)).To(BeNumerically(">=", 2),
+				"workload egress tests require at least 2 non-master nodes with IPv4 addresses")
+			nodeNames = allNames[:2]
+			nodeIPs = allIPs[:2]
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
 			// Detect BPF dataplane mode.
-			felixCfg := &v3.FelixConfiguration{}
-			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixCfg)
-			if err == nil && felixCfg.Spec.BPFEnabled != nil && *felixCfg.Spec.BPFEnabled {
+			bpfMode = false
+			if dp := detectDataplane(cli, f.ClientSet); dp.Calico == dataplaneBPF {
 				bpfMode = true
 			}
 		})
@@ -229,9 +227,17 @@ var _ = describe.CalicoDescribe(
 
 			// Create server pod on the appropriate node.
 			serverName := fmt.Sprintf("server-%d", scenario.dstPod)
+			// Host-networked pods bind directly to the node's network stack, so
+			// port 80 (the default) can conflict with other host-networked pods or
+			// services on the same node. Use a random high port instead.
+			serverPort := 80
+			if scenario.dstHostNetworked {
+				serverPort = 10000 + rand.Intn(50000)
+			}
 			serverOpts := []conncheck.ServerOption{
 				conncheck.WithEchoServer(),
 				conncheck.WithNodePortService(),
+				conncheck.WithPorts(serverPort),
 				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(dstNode)),
 			}
 			if scenario.dstHostNetworked {
@@ -246,22 +252,12 @@ var _ = describe.CalicoDescribe(
 			var clientPod *conncheck.Client
 			var applyLabels map[string]string
 
-			if scenario.dstPod == 0 {
-				// Loopback: use a client that will be co-located with the server.
-				// We still need a conncheck client for Connect().
-				clientPod = conncheck.NewClient("client-0", f.Namespace,
-					conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeNames[0])),
-					conncheck.WithClientCustomizer(withCurlClient),
-				)
-				ct.AddClient(clientPod)
-			} else {
-				clientPod = conncheck.NewClient("client-0", f.Namespace,
-					conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeNames[0])),
-					conncheck.WithClientCustomizer(withCurlClient),
-					conncheck.WithClientLabels(map[string]string{"pod-name": "client-0"}),
-				)
-				ct.AddClient(clientPod)
-			}
+			clientPod = conncheck.NewClient("client-0", f.Namespace,
+				conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeNames[0])),
+				conncheck.WithClientCustomizer(withCurlClient),
+				conncheck.WithClientLabels(map[string]string{"pod-name": "client-0"}),
+			)
+			ct.AddClient(clientPod)
 
 			ct.Deploy()
 			DeferCleanup(ct.Stop)
@@ -277,7 +273,7 @@ var _ = describe.CalicoDescribe(
 
 			switch scenario.accessType {
 			case "clusterIP":
-				target = server.ClusterIPv4(clientIPOpt).Port(80)
+				target = server.ClusterIPv4(clientIPOpt).Port(serverPort)
 				if scenario.dstHostNetworked {
 					expectSNAT = true
 				}
@@ -289,7 +285,7 @@ var _ = describe.CalicoDescribe(
 				target = server.NodePort(nodeIPs[1], clientIPOpt)
 			case "externalIP":
 				expectSNAT = true
-				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(80)
+				target = conncheck.NewTarget(defaultExternalIP, conncheck.TypeClusterIP, conncheck.HTTP, clientIPOpt).Port(serverPort)
 			default:
 				Fail(fmt.Sprintf("unhandled accessType: %s", scenario.accessType))
 			}
@@ -307,15 +303,13 @@ var _ = describe.CalicoDescribe(
 		Context("ClusterIP access", func() {
 			It("scenario-0C0: pod0 -> clusterIP -> pod0 (loopback)", func() {
 				setupAndRun(egressScenario{
-					name:       "0C0",
 					dstPod:     0,
 					accessType: "clusterIP",
 				})
 			})
 
-			framework.ConformanceIt("scenario-0C1: pod0 -> clusterIP -> pod1 (same node)", func() {
+			It("scenario-0C1: pod0 -> clusterIP -> pod1 (same node)", func() {
 				setupAndRun(egressScenario{
-					name:       "0C1",
 					dstPod:     1,
 					accessType: "clusterIP",
 				})
@@ -323,7 +317,6 @@ var _ = describe.CalicoDescribe(
 
 			framework.ConformanceIt("scenario-0C2: pod0 -> clusterIP -> pod2 (cross node)", func() {
 				setupAndRun(egressScenario{
-					name:       "0C2",
 					dstPod:     2,
 					accessType: "clusterIP",
 				})
@@ -335,7 +328,6 @@ var _ = describe.CalicoDescribe(
 		Context("NodePort access", func() {
 			It("scenario-0N00: pod0 -> node0 NodePort -> pod0", func() {
 				setupAndRun(egressScenario{
-					name:       "0N00",
 					dstPod:     0,
 					accessType: "node0NodePort",
 				})
@@ -343,7 +335,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0L00: pod0 -> node0 NodePort local-only -> pod0", func() {
 				setupAndRun(egressScenario{
-					name:       "0L00",
 					dstPod:     0,
 					accessType: "node0NodePort",
 					svcOpts:    []conncheck.ServerOption{conncheck.WithExternalTrafficPolicy("Local")},
@@ -352,7 +343,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0N10: pod0 -> node1 NodePort -> pod0", func() {
 				setupAndRun(egressScenario{
-					name:       "0N10",
 					dstPod:     0,
 					accessType: "node1NodePort",
 				})
@@ -360,7 +350,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0N11: pod0 -> node1 NodePort -> pod1 (hairpin)", func() {
 				setupAndRun(egressScenario{
-					name:       "0N11",
 					dstPod:     1,
 					accessType: "node1NodePort",
 					skipPolicy: "NAT happens on remote node",
@@ -369,7 +358,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0N01: pod0 -> node0 NodePort -> pod1 (same node)", func() {
 				setupAndRun(egressScenario{
-					name:       "0N01",
 					dstPod:     1,
 					accessType: "node0NodePort",
 				})
@@ -377,16 +365,14 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0L01: pod0 -> node0 NodePort local-only -> pod1", func() {
 				setupAndRun(egressScenario{
-					name:       "0L01",
 					dstPod:     1,
 					accessType: "node0NodePort",
 					svcOpts:    []conncheck.ServerOption{conncheck.WithExternalTrafficPolicy("Local")},
 				})
 			})
 
-			It("scenario-0N02: pod0 -> node0 NodePort -> pod2 (other node)", func() {
+			framework.ConformanceIt("scenario-0N02: pod0 -> node0 NodePort -> pod2 (other node)", func() {
 				setupAndRun(egressScenario{
-					name:       "0N02",
 					dstPod:     2,
 					accessType: "node0NodePort",
 				})
@@ -394,7 +380,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0N12: pod0 -> node1 NodePort -> pod2 (pod on other node)", func() {
 				setupAndRun(egressScenario{
-					name:       "0N12",
 					dstPod:     2,
 					accessType: "node1NodePort",
 				})
@@ -402,7 +387,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0L12: pod0 -> node1 NodePort local-only -> pod2", func() {
 				setupAndRun(egressScenario{
-					name:       "0L12",
 					dstPod:     2,
 					accessType: "node1NodePort",
 					svcOpts:    []conncheck.ServerOption{conncheck.WithExternalTrafficPolicy("Local")},
@@ -415,7 +399,6 @@ var _ = describe.CalicoDescribe(
 		Context("ExternalIP access", func() {
 			It("scenario-0EL1: pod0 -> externalIP local-only -> pod1", func() {
 				setupAndRun(egressScenario{
-					name:       "0EL1",
 					dstPod:     1,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
@@ -427,7 +410,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0EC1: pod0 -> externalIP Cluster -> pod1", func() {
 				setupAndRun(egressScenario{
-					name:       "0EC1",
 					dstPod:     1,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
@@ -437,9 +419,8 @@ var _ = describe.CalicoDescribe(
 				})
 			})
 
-			It("scenario-0EC2: pod0 -> externalIP Cluster -> pod2 (other node)", func() {
+			framework.ConformanceIt("scenario-0EC2: pod0 -> externalIP Cluster -> pod2 (other node)", func() {
 				setupAndRun(egressScenario{
-					name:       "0EC2",
 					dstPod:     2,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
@@ -451,7 +432,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0EL0: pod0 -> externalIP local-only -> pod0", func() {
 				setupAndRun(egressScenario{
-					name:       "0EL0",
 					dstPod:     0,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
@@ -463,7 +443,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0EC0: pod0 -> externalIP Cluster -> pod0", func() {
 				setupAndRun(egressScenario{
-					name:       "0EC0",
 					dstPod:     0,
 					accessType: "externalIP",
 					svcOpts: []conncheck.ServerOption{
@@ -479,7 +458,6 @@ var _ = describe.CalicoDescribe(
 		Context("Host-networked destination", func() {
 			It("scenario-0H1: pod0 -> clusterIP -> host-networked pod1 (same node)", func() {
 				setupAndRun(egressScenario{
-					name:             "0H1",
 					dstPod:           1,
 					dstHostNetworked: true,
 					accessType:       "clusterIP",
@@ -489,7 +467,6 @@ var _ = describe.CalicoDescribe(
 
 			It("scenario-0H2: pod0 -> clusterIP -> host-networked pod2 (other node)", func() {
 				setupAndRun(egressScenario{
-					name:             "0H2",
 					dstPod:           2,
 					dstHostNetworked: true,
 					accessType:       "clusterIP",

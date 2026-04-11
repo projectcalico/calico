@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 )
 
 type Protocol string
@@ -157,7 +158,7 @@ func NewTarget(dst string, targetType AccessType, proto Protocol, opts ...Target
 	}
 	for _, opt := range opts {
 		if err := opt(t); err != nil {
-			panic(fmt.Sprintf("NewTarget option error: %v", err))
+			framework.Failf("NewTarget option error: %v", err)
 		}
 	}
 	return t

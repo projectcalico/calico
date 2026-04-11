@@ -94,6 +94,8 @@ func detectDataplane(cli ctrlclient.Client, clientset kubernetes.Interface) clus
 		if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, felixCfg); err == nil {
 			if felixCfg.Spec.BPFEnabled != nil && *felixCfg.Spec.BPFEnabled {
 				dp.Calico = dataplaneBPF
+			} else if felixCfg.Spec.NFTablesMode != nil && *felixCfg.Spec.NFTablesMode == v3.NFTablesModeEnabled {
+				dp.Calico = dataplaneNftables
 			} else if felixCfg.Spec.UseInternalDataplaneDriver != nil && !*felixCfg.Spec.UseInternalDataplaneDriver {
 				dp.Calico = dataplaneVPP
 			}
@@ -127,16 +129,7 @@ func detectKubeProxyMode(clientset kubernetes.Interface) kubeProxyMode {
 
 	configData, ok := cm.Data["config.conf"]
 	if !ok {
-		configData, ok = cm.Data["kubeconfig.conf"]
-	}
-	if !ok {
-		// Try the common key used by kubeadm.
-		for key, val := range cm.Data {
-			if key == "config.conf" || key == "kubeconfig.conf" {
-				configData = val
-				break
-			}
-		}
+		configData = cm.Data["kubeconfig.conf"]
 	}
 
 	if configData == "" {

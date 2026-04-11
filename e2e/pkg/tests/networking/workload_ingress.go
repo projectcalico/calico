@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -80,169 +79,170 @@ type ingressScenario struct {
 	hostNetworked bool
 	// dest describes how the client connects: "clusterIP", "svcNodePort", "node1NodePort", or "node0NodePort".
 	dest string
-	// per-dataplane expectations
-	bpfExpect      ingressExpectation
-	iptablesExpect ingressExpectation
-	ipvsExpect     ingressExpectation
-	vppExpect      ingressExpectation
+	// Per-dataplane expectations. xtablesExpect covers both iptables and
+	// nftables dataplanes, which have identical SNAT behavior.
+	bpfExpect     ingressExpectation
+	xtablesExpect ingressExpectation
+	ipvsExpect    ingressExpectation
+	vppExpect     ingressExpectation
 }
 
 var ingressScenarioTable = []ingressScenario{
 	// Scenario 1: pod on svcNode -> clusterIP
 	{
-		num:            1,
-		srcNode:        "svcNode",
-		hostNetworked:  false,
-		dest:           "clusterIP",
-		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
-		ipvsExpect:     noSNAT,
-		vppExpect:      noSNAT,
+		num:           1,
+		srcNode:       "svcNode",
+		hostNetworked: false,
+		dest:          "clusterIP",
+		bpfExpect:     noSNAT,
+		xtablesExpect: noSNAT,
+		ipvsExpect:    noSNAT,
+		vppExpect:     noSNAT,
 	},
 	// Scenario 2: host-networked pod on svcNode -> clusterIP
 	{
-		num:            2,
-		srcNode:        "svcNode",
-		hostNetworked:  true,
-		dest:           "clusterIP",
-		bpfExpect:      alwaysAllowed,
-		iptablesExpect: alwaysAllowed,
-		ipvsExpect:     alwaysAllowed,
-		vppExpect:      alwaysAllowed,
+		num:           2,
+		srcNode:       "svcNode",
+		hostNetworked: true,
+		dest:          "clusterIP",
+		bpfExpect:     alwaysAllowed,
+		xtablesExpect: alwaysAllowed,
+		ipvsExpect:    alwaysAllowed,
+		vppExpect:     alwaysAllowed,
 	},
 	// Scenario 3: pod on node1 -> clusterIP
 	{
-		num:            3,
-		srcNode:        "node1",
-		hostNetworked:  false,
-		dest:           "clusterIP",
-		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
-		ipvsExpect:     noSNAT,
-		vppExpect:      noSNAT,
+		num:           3,
+		srcNode:       "node1",
+		hostNetworked: false,
+		dest:          "clusterIP",
+		bpfExpect:     noSNAT,
+		xtablesExpect: noSNAT,
+		ipvsExpect:    noSNAT,
+		vppExpect:     noSNAT,
 	},
 	// Scenario 4: host-networked pod on node1 -> clusterIP
 	{
-		num:            4,
-		srcNode:        "node1",
-		hostNetworked:  true,
-		dest:           "clusterIP",
-		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
-		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
-		vppExpect:      noSNAT,
+		num:           4,
+		srcNode:       "node1",
+		hostNetworked: true,
+		dest:          "clusterIP",
+		bpfExpect:     noSNAT,
+		xtablesExpect: noSNAT,
+		ipvsExpect:    snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
+		vppExpect:     noSNAT,
 	},
 	// Scenario 5: pod on svcNode -> svcNodePort
 	{
-		num:            5,
-		srcNode:        "svcNode",
-		hostNetworked:  false,
-		dest:           "svcNodePort",
-		bpfExpect:      noSNAT,
-		iptablesExpect: snatWorkingPolicy,
-		ipvsExpect:     snatWorkingPolicy,
-		vppExpect:      noSNAT,
+		num:           5,
+		srcNode:       "svcNode",
+		hostNetworked: false,
+		dest:          "svcNodePort",
+		bpfExpect:     noSNAT,
+		xtablesExpect: snatWorkingPolicy,
+		ipvsExpect:    snatWorkingPolicy,
+		vppExpect:     noSNAT,
 	},
 	// Scenario 6: host-networked pod on svcNode -> svcNodePort
 	{
-		num:            6,
-		srcNode:        "svcNode",
-		hostNetworked:  true,
-		dest:           "svcNodePort",
-		bpfExpect:      alwaysAllowed,
-		iptablesExpect: alwaysAllowed,
-		ipvsExpect:     alwaysAllowed,
-		vppExpect:      alwaysAllowed,
+		num:           6,
+		srcNode:       "svcNode",
+		hostNetworked: true,
+		dest:          "svcNodePort",
+		bpfExpect:     alwaysAllowed,
+		xtablesExpect: alwaysAllowed,
+		ipvsExpect:    alwaysAllowed,
+		vppExpect:     alwaysAllowed,
 	},
 	// Scenario 7: pod on node1 -> svcNodePort
 	{
-		num:            7,
-		srcNode:        "node1",
-		hostNetworked:  false,
-		dest:           "svcNodePort",
-		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
-		ipvsExpect:     snatNoWorkingPolicy,
-		vppExpect:      noSNAT,
+		num:           7,
+		srcNode:       "node1",
+		hostNetworked: false,
+		dest:          "svcNodePort",
+		bpfExpect:     noSNAT,
+		xtablesExpect: snatNoWorkingPolicy,
+		ipvsExpect:    snatNoWorkingPolicy,
+		vppExpect:     noSNAT,
 	},
 	// Scenario 8: host-networked pod on node1 -> svcNodePort
 	{
-		num:            8,
-		srcNode:        "node1",
-		hostNetworked:  true,
-		dest:           "svcNodePort",
-		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
-		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
-		vppExpect:      noSNAT,
+		num:           8,
+		srcNode:       "node1",
+		hostNetworked: true,
+		dest:          "svcNodePort",
+		bpfExpect:     noSNAT,
+		xtablesExpect: noSNAT,
+		ipvsExpect:    snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
+		vppExpect:     noSNAT,
 	},
 	// Scenario 9: pod on node1 -> node1NodePort (local NodePort)
 	{
-		num:            9,
-		srcNode:        "node1",
-		hostNetworked:  false,
-		dest:           "node1NodePort",
-		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
-		ipvsExpect:     snatNoWorkingPolicy,
-		vppExpect:      noSNAT,
+		num:           9,
+		srcNode:       "node1",
+		hostNetworked: false,
+		dest:          "node1NodePort",
+		bpfExpect:     noSNAT,
+		xtablesExpect: snatNoWorkingPolicy,
+		ipvsExpect:    snatNoWorkingPolicy,
+		vppExpect:     noSNAT,
 	},
 	// Scenario 10: host-networked pod on node1 -> node1NodePort
 	{
-		num:            10,
-		srcNode:        "node1",
-		hostNetworked:  true,
-		dest:           "node1NodePort",
-		bpfExpect:      noSNAT,
-		iptablesExpect: noSNAT,
-		ipvsExpect:     snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
-		vppExpect:      noSNAT,
+		num:           10,
+		srcNode:       "node1",
+		hostNetworked: true,
+		dest:          "node1NodePort",
+		bpfExpect:     noSNAT,
+		xtablesExpect: noSNAT,
+		ipvsExpect:    snatWorkingPolicy, // IPVS SNATs to tunnel IP, CIDR policy matches it
+		vppExpect:     noSNAT,
 	},
 	// Scenario 11: pod on node0 -> node1NodePort (remote NodePort)
 	{
-		num:            11,
-		srcNode:        "node0",
-		hostNetworked:  false,
-		dest:           "node1NodePort",
-		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
-		ipvsExpect:     snatNoWorkingPolicy,
-		vppExpect:      snatNoWorkingPolicy,
+		num:           11,
+		srcNode:       "node0",
+		hostNetworked: false,
+		dest:          "node1NodePort",
+		bpfExpect:     noSNAT,
+		xtablesExpect: snatNoWorkingPolicy,
+		ipvsExpect:    snatNoWorkingPolicy,
+		vppExpect:     snatNoWorkingPolicy,
 	},
 	// Scenario 12: host-networked pod on node0 -> node1NodePort
 	{
-		num:            12,
-		srcNode:        "node0",
-		hostNetworked:  true,
-		dest:           "node1NodePort",
-		bpfExpect:      noSNAT,
-		iptablesExpect: snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
-		ipvsExpect:     snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
-		vppExpect:      snatNoWorkingPolicy,
+		num:           12,
+		srcNode:       "node0",
+		hostNetworked: true,
+		dest:          "node1NodePort",
+		bpfExpect:     noSNAT,
+		xtablesExpect: snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
+		ipvsExpect:    snatWorkingPolicy, // SNATs to tunnel IP, CIDR policy matches it
+		vppExpect:     snatNoWorkingPolicy,
 	},
 	// Scenario 13 (localhost NodePort) is intentionally omitted.
 
 	// Scenario 14: external node -> node0NodePort
 	{
-		num:            14,
-		srcNode:        "external",
-		hostNetworked:  false,
-		dest:           "node0NodePort",
-		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
-		ipvsExpect:     snatNoWorkingPolicy,
-		vppExpect:      snatNoWorkingPolicy,
+		num:           14,
+		srcNode:       "external",
+		hostNetworked: false,
+		dest:          "node0NodePort",
+		bpfExpect:     noSNAT,
+		xtablesExpect: snatNoWorkingPolicy,
+		ipvsExpect:    snatNoWorkingPolicy,
+		vppExpect:     snatNoWorkingPolicy,
 	},
 	// Scenario 15: external node -> svcNodePort
 	{
-		num:            15,
-		srcNode:        "external",
-		hostNetworked:  false,
-		dest:           "svcNodePort",
-		bpfExpect:      noSNAT,
-		iptablesExpect: snatNoWorkingPolicy,
-		ipvsExpect:     snatNoWorkingPolicy,
-		vppExpect:      noSNAT,
+		num:           15,
+		srcNode:       "external",
+		hostNetworked: false,
+		dest:          "svcNodePort",
+		bpfExpect:     noSNAT,
+		xtablesExpect: snatNoWorkingPolicy,
+		ipvsExpect:    snatNoWorkingPolicy,
+		vppExpect:     noSNAT,
 	},
 }
 
@@ -271,7 +271,6 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("workload-ingress")
 
 		var (
-			cli       ctrlclient.Client
 			nodeNames []string
 			nodeIPs   []string
 			tunnelIPs []string
@@ -279,8 +278,7 @@ var _ = describe.CalicoDescribe(
 		)
 
 		BeforeEach(func() {
-			var err error
-			cli, err = client.New(f.ClientConfig())
+			cli, err := client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -306,7 +304,8 @@ var _ = describe.CalicoDescribe(
 				dp.Calico, dp.IsBPF(), dp.IsIPVS(), dp.IsVPP())
 		})
 
-		// expectForDP returns the ingressExpectation appropriate for the detected dataplane.
+		// expectForDP returns the ingressExpectation appropriate for the detected
+		// dataplane. IPVS has its own column; iptables and nftables share xtablesExpect.
 		expectForDP := func(s ingressScenario) ingressExpectation {
 			switch {
 			case dp.IsBPF():
@@ -316,7 +315,7 @@ var _ = describe.CalicoDescribe(
 			case dp.IsIPVS():
 				return s.ipvsExpect
 			default:
-				return s.iptablesExpect
+				return s.xtablesExpect
 			}
 		}
 
@@ -366,18 +365,20 @@ var _ = describe.CalicoDescribe(
 		}
 
 		// buildTarget returns the connection target for the given scenario, using the
-		// already-deployed server.
+		// already-deployed server. All targets use HTTP GET /clientip so that
+		// checkConnection can verify SNAT behavior from the response body.
 		buildTarget := func(s ingressScenario, server *conncheck.Server) conncheck.Target {
+			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
 			switch s.dest {
 			case "clusterIP":
 				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
-				return server.ClusterIPv4().Port(80)
+				return server.ClusterIPv4(clientIPOpt).Port(80)
 			case "svcNodePort":
-				return server.NodePort(nodeIPs[2])
+				return server.NodePort(nodeIPs[2], clientIPOpt)
 			case "node1NodePort":
-				return server.NodePort(nodeIPs[1])
+				return server.NodePort(nodeIPs[1], clientIPOpt)
 			case "node0NodePort":
-				return server.NodePort(nodeIPs[0])
+				return server.NodePort(nodeIPs[0], clientIPOpt)
 			default:
 				framework.Failf("unknown dest %q", s.dest)
 				return nil
@@ -411,6 +412,7 @@ var _ = describe.CalicoDescribe(
 				opts := []conncheck.ClientOption{
 					conncheck.WithClientLabels(map[string]string{"pod-name": name}),
 					conncheck.WithClientCustomizer(conncheck.WithNodeName(srcNodeName(s.srcNode))),
+					conncheck.WithClientCustomizer(withCurlClient),
 				}
 				if s.hostNetworked {
 					opts = append(opts, conncheck.WithClientCustomizer(func(pod *corev1.Pod) {
@@ -579,10 +581,14 @@ var _ = describe.CalicoDescribe(
 			Eventually(tryConnectBlocked, 30*time.Second, 2*time.Second).Should(Succeed())
 			Consistently(tryConnectBlocked, 5*time.Second, 1*time.Second).Should(Succeed())
 
-			// Build /32 CIDRs for the external node's source IPs.
+			// Build /32 (IPv4) or /128 (IPv6) CIDRs for the external node's source IPs.
 			cidrs := make([]string, 0, len(extIPs))
 			for _, ip := range extIPs {
-				cidrs = append(cidrs, ip+"/32")
+				if net.ParseIP(ip).To4() != nil {
+					cidrs = append(cidrs, ip+"/32")
+				} else {
+					cidrs = append(cidrs, ip+"/128")
+				}
 			}
 			By(fmt.Sprintf("Installing allow-by-CIDR policy for external node IPs: %v", cidrs))
 			allowExt := ingressCreateAllowByCIDRPolicy(f, cidrs)
@@ -600,15 +606,19 @@ var _ = describe.CalicoDescribe(
 			}
 		}
 
-		// Register test cases for all scenarios.
+		// Register test cases for all scenarios. Scenario 3 (cross-node
+		// ClusterIP, pod-networked) is marked as conformance since it's the
+		// most fundamental ingress path.
 		for _, scenario := range ingressScenarioTable {
 			s := scenario // capture loop variable
+			if s.srcNode == "external" {
+				continue
+			}
 			name := fmt.Sprintf("scenario-%d: %s hostNet=%v -> %s",
 				s.num, s.srcNode, s.hostNetworked, s.dest)
-
-			if s.srcNode == "external" {
-				It(name, Label("ExternalNode"), func() {
-					runExternalIngressTest(s)
+			if s.num == 3 {
+				framework.ConformanceIt(name, func() {
+					runStandardIngressTest(s)
 				})
 			} else {
 				It(name, func() {
@@ -616,6 +626,21 @@ var _ = describe.CalicoDescribe(
 				})
 			}
 		}
+
+		// External node scenarios run from a machine outside the cluster via SSH.
+		Context("external node", Label("ExternalNode"), func() {
+			for _, scenario := range ingressScenarioTable {
+				s := scenario // capture loop variable
+				if s.srcNode != "external" {
+					continue
+				}
+				name := fmt.Sprintf("scenario-%d: %s hostNet=%v -> %s",
+					s.num, s.srcNode, s.hostNetworked, s.dest)
+				It(name, func() {
+					runExternalIngressTest(s)
+				})
+			}
+		})
 	},
 )
 
@@ -671,9 +696,8 @@ func ingressCreateAllowByPodLabelPolicy(f *framework.Framework, clientName strin
 func ingressCreateAllowByCIDRPolicy(f *framework.Framework, cidrs []string) *networkingv1.NetworkPolicy {
 	peers := make([]networkingv1.NetworkPolicyPeer, 0, len(cidrs))
 	for _, cidr := range cidrs {
-		c := cidr
 		peers = append(peers, networkingv1.NetworkPolicyPeer{
-			IPBlock: &networkingv1.IPBlock{CIDR: c},
+			IPBlock: &networkingv1.IPBlock{CIDR: cidr},
 		})
 	}
 	policy := &networkingv1.NetworkPolicy{
