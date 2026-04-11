@@ -34,6 +34,7 @@ type BirdBGPConfig struct {
 	BGPExportFilterForEnabledIPPools  []string
 	KernelFilterForIPPools            []string
 	SetMetricForBGPRoutes             []string
+	WireguardPeerKernelFilter         []string
 	NormalRoutePriority               int // IPv4 or IPv6 normal route priority (default 1024)
 }
 
