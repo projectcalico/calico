@@ -461,6 +461,7 @@ type Config struct {
 	NATOutgoingAddress             net.IP
 	NATOutgoingExclusions          string
 	BPFEnabled                     bool
+	BPFOverlayIPOnDevice           bool
 	BPFForceTrackPacketsFromIfaces []string
 	ServiceLoopPrevention          string
 
