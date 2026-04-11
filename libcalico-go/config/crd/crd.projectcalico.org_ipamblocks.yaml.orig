@@ -3,9 +3,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipamblocks.projectcalico.org
+  name: ipamblocks.crd.projectcalico.org
 spec:
-  group: projectcalico.org
+  group: crd.projectcalico.org
   names:
     kind: IPAMBlock
     listKind: IPAMBlockList
@@ -14,20 +14,7 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
-    - additionalPrinterColumns:
-        - description: The block CIDR
-          jsonPath: .spec.cidr
-          name: CIDR
-          type: string
-        - description: The block affinity
-          jsonPath: .spec.affinity
-          name: Affinity
-          type: string
-        - description: The time at which affinity was claimed
-          jsonPath: .spec.affinityClaimTime
-          name: ClaimTime
-          type: date
-      name: v3
+    - name: v1
       schema:
         openAPIV3Schema:
           properties:
@@ -49,18 +36,16 @@ spec:
             metadata:
               type: object
             spec:
-              description: |-
-                IPAMBlockSpec contains the specification for an IPAMBlock resource.
-                This resource is managed internally by Calico IPAM and should not be modified manually.
+              description:
+                IPAMBlockSpec contains the specification for an IPAMBlock
+                resource.
               properties:
                 affinity:
                   description: |-
                     Affinity of the block, if this block has one. If set, it will be of the form
-                    "host:<hostname>" or "virtual:<hostname>". If not set, this block is not affine to a host.
-                  pattern: ^(host|virtual):[a-zA-Z0-9\.\-_]+$
+                    "host:<hostname>". If not set, this block is not affine to a host.
                   type: string
                 affinityClaimTime:
-                  description: Time at which affinity was claimed.
                   format: date-time
                   type: string
                 allocations:
@@ -70,46 +55,35 @@ spec:
                     and the value is the index of the associated attributes in the Attributes array.
                   items:
                     type: integer
-                    # TODO: This nullable is manually added in. We should update controller-gen
-                    # to handle []*int properly itself.
-                    nullable: true
                   type: array
-                  x-kubernetes-list-type: atomic
                 attributes:
                   description: |-
                     Attributes is an array of arbitrary metadata associated with allocations in the block. To find
                     attributes for a given allocation, use the value of the allocation's entry in the Allocations array
                     as the index of the element in this array.
                   items:
-                    description:
-                      AllocationAttribute holds metadata associated with
-                      a single IP allocation within a block.
                     properties:
                       alternateOwnerAttrs:
                         additionalProperties:
                           type: string
-                        description:
-                          AlternateOwnerAttrs stores attributes of a secondary
-                          owner, used during IP address migration.
+                        description: |-
+                          AlternateOwnerAttrs contains attributes of the previous or potential owner
+                          (used during live migration to track the source or target pod).
                         type: object
                       handle_id:
-                        description:
-                          HandleID is the ID of the IPAM handle that owns
-                          this allocation.
+                        description: HandleID is the primary identifier for the allocation.
                         type: string
                       secondary:
                         additionalProperties:
                           type: string
                         description:
-                          ActiveOwnerAttrs stores attributes of the primary
-                          owner of this allocation (e.g., pod name, namespace).
+                          ActiveOwnerAttrs contains attributes of the active
+                          owner (the pod currently using the IP).
                         type: object
                     type: object
                   type: array
-                  x-kubernetes-list-type: atomic
                 cidr:
                   description: The block's CIDR.
-                  format: cidr
                   type: string
                 deleted:
                   description: |-
@@ -147,7 +121,6 @@ spec:
                   items:
                     type: integer
                   type: array
-                  x-kubernetes-list-type: atomic
               required:
                 - allocations
                 - attributes
@@ -155,10 +128,6 @@ spec:
                 - strictAffinity
                 - unallocated
               type: object
-          required:
-            - metadata
-            - spec
           type: object
       served: true
       storage: true
-      subresources: {}
