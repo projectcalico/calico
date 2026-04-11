@@ -366,6 +366,11 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	NftablesMarkMask *uint32 `json:"nftablesMarkMask,omitempty"`
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty"`
+	// BPFOverlayIPOnDevice, if enabled, Felix assigns an IP address to overlay tunnel devices (IPIP/VXLAN) in
+	// BPF mode and uses it as the encapsulation source IP.  When disabled (the default), BPF programs use the
+	// node IP directly for encapsulation without requiring a separate tunnel device IP.  This option has no
+	// effect on WireGuard tunnels, which always use a tunnel device IP.  [Default: false]
+	BPFOverlayIPOnDevice *bool `json:"bpfOverlayIPOnDevice,omitempty"`
 	// BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable
 	// unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and
 	// cannot insert their own BPF programs to interfere with Calico's. [Default: true]
@@ -1542,6 +1547,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithNftablesMarkMask(value ui
 // If called multiple times, the BPFEnabled field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithBPFEnabled(value bool) *FelixConfigurationSpecApplyConfiguration {
 	b.BPFEnabled = &value
+	return b
+}
+
+// WithBPFOverlayIPOnDevice sets the BPFOverlayIPOnDevice field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BPFOverlayIPOnDevice field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithBPFOverlayIPOnDevice(value bool) *FelixConfigurationSpecApplyConfiguration {
+	b.BPFOverlayIPOnDevice = &value
 	return b
 }
 
