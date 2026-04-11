@@ -241,13 +241,16 @@ skip_redir_ifindex:
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
-			ipv6_addr_t host_ip_copy = CALI_CONFIGURABLE(host_ip);
+			ipv6_addr_t local_ip_copy = CALI_CONFIGURABLE(host_tunnel_ip);
+			if (ip_void(local_ip_copy)) {
+				local_ip_copy = CALI_CONFIGURABLE(host_ip);
+			}
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
-			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &host_ip_copy);
+			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &local_ip_copy);
 			flags |= BPF_F_TUNINFO_IPV6;
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
-			key.local_ipv4 = bpf_htonl(HOST_IP);
+			key.local_ipv4 = ip_void(HOST_TUNNEL_IP) ? bpf_htonl(HOST_IP) : bpf_htonl(HOST_TUNNEL_IP);
 			flags |= BPF_F_ZERO_CSUM_TX;
 #endif
 			size = sizeof(struct bpf_tunnel_key);
@@ -290,13 +293,16 @@ skip_redir_ifindex:
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
-			ipv6_addr_t host_ip_copy = CALI_CONFIGURABLE(host_ip);
+			ipv6_addr_t local_ip_copy = CALI_CONFIGURABLE(host_tunnel_ip);
+			if (ip_void(local_ip_copy)) {
+				local_ip_copy = CALI_CONFIGURABLE(host_ip);
+			}
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
-			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &host_ip_copy);
+			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &local_ip_copy);
 			flags |= BPF_F_TUNINFO_IPV6;
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
-			key.local_ipv4 = bpf_htonl(HOST_IP);
+			key.local_ipv4 = ip_void(HOST_TUNNEL_IP) ? bpf_htonl(HOST_IP) : bpf_htonl(HOST_TUNNEL_IP);
 			flags |= BPF_F_ZERO_CSUM_TX;
 #endif
 			size = sizeof(struct bpf_tunnel_key);

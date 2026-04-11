@@ -194,7 +194,7 @@ func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {
 		LinkAttrs: la,
 	}
 
-	if m.dpConfig.BPFEnabled {
+	if m.dpConfig.BPFEnabled && !m.dpConfig.BPFOverlayIPOnDevice {
 		// BPF dataplane handles encap/decap and source IP selection itself,
 		// so it doesn't need an IP assigned to the tunnel device.
 		return ipip, "", nil
