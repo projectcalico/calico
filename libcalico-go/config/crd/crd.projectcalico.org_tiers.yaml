@@ -78,3 +78,5 @@ spec:
                 self.spec.order == 10000000.0)
       served: true
       storage: true
+      subresources:
+        status: {}
