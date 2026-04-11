@@ -145,7 +145,7 @@ ut combined.coverprofile: $(SRC_FILES)
 ###############################################################################
 .PHONY: cd ci version
 version: image
-	docker run --rm $(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version
+	docker run --rm $(TYPHA_IMAGE):latest-$(ARCH) calico-typha version
 
 ci: mod-download image-all version static-checks ut
 ifeq (,$(filter k8sfv-test, $(EXCEPT)))
@@ -188,8 +188,8 @@ release-publish: release-prereqs .release-$(VERSION).published
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-prereqs
 	# Check latest versions match.
-	if ! docker run $(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version | grep '$(VERSION)'; then echo "Reported version:" `docker run $(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/$(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version | grep '$(VERSION)'; then echo "Reported version:" `docker run quay.io/$(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run $(TYPHA_IMAGE):latest-$(ARCH) calico-typha version | grep '$(VERSION)'; then echo "Reported version:" `docker run $(TYPHA_IMAGE):latest-$(ARCH) calico-typha version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(TYPHA_IMAGE):latest-$(ARCH) calico-typha version | grep '$(VERSION)'; then echo "Reported version:" `docker run quay.io/$(TYPHA_IMAGE):latest-$(ARCH) calico-typha version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
