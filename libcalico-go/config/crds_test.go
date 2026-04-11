@@ -109,12 +109,17 @@ func TestV1CRDsMatchV3CELRules(t *testing.T) {
 		v3Rules := v3Schema.XValidations
 		v1Rules := v1Schema.XValidations
 
-		// Build a set of v1 rules keyed by message for comparison.
+		// Build maps keyed by message for bidirectional comparison.
 		v1RulesByMsg := make(map[string]v1.ValidationRule, len(v1Rules))
 		for _, r := range v1Rules {
 			v1RulesByMsg[r.Message] = r
 		}
+		v3RulesByMsg := make(map[string]v1.ValidationRule, len(v3Rules))
+		for _, r := range v3Rules {
+			v3RulesByMsg[r.Message] = r
+		}
 
+		// Check that every v3 rule exists in v1 with matching fields.
 		for _, v3Rule := range v3Rules {
 			v1Rule, ok := v1RulesByMsg[v3Rule.Message]
 			if !ok {
@@ -124,8 +129,28 @@ func TestV1CRDsMatchV3CELRules(t *testing.T) {
 			if v1Rule.Rule != v3Rule.Rule {
 				t.Errorf("%s: CEL rule %q differs:\n  v3: %s\n  v1: %s", kind, v3Rule.Message, v3Rule.Rule, v1Rule.Rule)
 			}
+			if v1Rule.Reason != v3Rule.Reason {
+				t.Errorf("%s: CEL rule %q reason differs:\n  v3: %s\n  v1: %s", kind, v3Rule.Message, ptrStr(v3Rule.Reason), ptrStr(v1Rule.Reason))
+			}
+			if v1Rule.FieldPath != v3Rule.FieldPath {
+				t.Errorf("%s: CEL rule %q fieldPath differs:\n  v3: %s\n  v1: %s", kind, v3Rule.Message, v3Rule.FieldPath, v1Rule.FieldPath)
+			}
+		}
+
+		// Check that v1 doesn't have extra rules not in v3.
+		for _, v1Rule := range v1Rules {
+			if _, ok := v3RulesByMsg[v1Rule.Message]; !ok {
+				t.Errorf("%s: v1 CEL rule not present in v3 CRD: %q", kind, v1Rule.Message)
+			}
 		}
 	}
+}
+
+func ptrStr(p *v1.FieldValueErrorReason) string {
+	if p == nil {
+		return "<nil>"
+	}
+	return string(*p)
 }
 
 // storageVersionSchema returns the OpenAPI v3 schema for the storage version
