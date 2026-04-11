@@ -28,7 +28,6 @@ import (
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	logrus "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -56,7 +55,6 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	typhadaemon "github.com/projectcalico/calico/typha/pkg/daemon"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
 
@@ -827,7 +825,6 @@ type confdDaemonOption func(*confdDaemonConfig)
 type confdDaemonConfig struct {
 	nodeName       string
 	skipAffinities bool
-	useTypha       bool
 
 	// endpointStatusFiles maps filename → JSON content to write under
 	// <tmpDir>/endpoint-status/ before starting confd.
@@ -843,12 +840,6 @@ func withNodeName(name string) confdDaemonOption {
 // withoutBlockAffinities skips creating the standard block affinities.
 func withoutBlockAffinities() confdDaemonOption {
 	return func(c *confdDaemonConfig) { c.skipAffinities = true }
-}
-
-// withTypha starts a Typha instance and routes confd through it.
-// KDD-only (requires a K8s API server).
-func withTypha() confdDaemonOption {
-	return func(c *confdDaemonConfig) { c.useTypha = true }
 }
 
 // withEndpointStatus writes endpoint-status files and sets the env var so
@@ -900,14 +891,6 @@ func startConfdDaemon(t *testing.T, be *datastoreBackend, opts ...confdDaemonOpt
 		createBlockAffinities(t, be)
 	}
 
-	typhaConfig := &syncclientutils.TyphaConfig{}
-	if cfg.useTypha {
-		require.NotNil(t, be.restConfig, "withTypha requires KDD backend")
-		typhaAddr := startTypha(t, be)
-		typhaConfig.Addr = typhaAddr
-		typhaConfig.ReadTimeout = 50 * time.Second
-	}
-
 	confdCalicoClient, err := client.New(apiconfig.CalicoAPIConfig{Spec: be.datastoreConfig})
 	require.NoError(t, err, "creating confd Calico client")
 
@@ -925,7 +908,7 @@ func startConfdDaemon(t *testing.T, be *datastoreBackend, opts ...confdDaemonOpt
 			confdCalicoClient,
 			be.k8sClientset,
 			be.datastoreConfig,
-			typhaConfig,
+			&syncclientutils.TyphaConfig{},
 			nil,
 		)
 	}()
@@ -942,42 +925,6 @@ func startConfdDaemon(t *testing.T, be *datastoreBackend, opts ...confdDaemonOpt
 	}
 	t.Cleanup(d.stop)
 	return d
-}
-
-// startTypha starts an in-process Typha instance connected to the same envtest
-// K8s API. Returns the address (host:port) for confd to connect to.
-func startTypha(t *testing.T, be *datastoreBackend) string {
-	t.Helper()
-
-	// Write a minimal config file (Typha requires one).
-	cfgFile := filepath.Join(t.TempDir(), "typha.cfg")
-	require.NoError(t, os.WriteFile(cfgFile, []byte("[default]\nLogFilePath=none\n"), 0644))
-
-	// Point Typha at the envtest K8s API via env vars.
-	t.Setenv("TYPHA_DATASTORETYPE", "kubernetes")
-	t.Setenv("TYPHA_LOGSEVERITYSCREEN", "error")
-	t.Setenv("TYPHA_LOGSEVERITYSYS", "none")
-	t.Setenv("TYPHA_LOGFILEPATH", "none")
-
-	td := typhadaemon.New()
-	td.ConfigFilePath = cfgFile
-	td.BuildInfoLogCxt = logrus.WithField("component", "typha-test")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	err := td.LoadConfiguration(ctx)
-	require.NoError(t, err, "typha LoadConfiguration")
-	td.CreateServer()
-	td.Start(ctx)
-
-	// Port() blocks until Typha is actually listening.
-	port := td.Server.Port()
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	t.Logf("Typha listening on %s", addr)
-
-	t.Cleanup(func() {
-		cancel()
-	})
-	return addr
 }
 
 // stop shuts down the running confd instance.
