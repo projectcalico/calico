@@ -17,6 +17,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -202,7 +203,7 @@ func TestBGPPasswordDeadlock(t *testing.T) {
 		}
 		t.Run(be.name, func(t *testing.T) {
 			ctx := context.Background()
-			scale := 30
+			scale := 99
 
 			// Disable node-to-node mesh so the golden file (which only expects
 			// the explicit peer) matches.
@@ -390,4 +391,59 @@ func TestBGPFilterDeletion(t *testing.T) {
 			cleanup()
 		})
 	}
+}
+
+// TestDaemonModeRendering verifies that confd's watch/re-render loop correctly
+// picks up resource changes for representative scenarios that are otherwise only
+// tested in oneshot mode. A single long-lived confd instance processes a
+// sequence of apply → verify → cleanup cycles, exercising the same code path as
+// the old shell suite's execute_tests_daemon function. KDD mode runs through
+// Typha to match the old test topology.
+func TestDaemonModeRendering(t *testing.T) {
+	meshScenarios := []string{
+		"mesh/bgp-export",
+		"mesh/ipip-always",
+		"mesh/communities",
+		"mesh/restart-time",
+	}
+	explicitScenarios := []string{
+		"explicit_peering/global",
+		"explicit_peering/selectors",
+		"explicit_peering/route_reflector",
+	}
+	filterScenarios := []string{
+		"bgpfilter/single_filter/global_peer",
+	}
+
+	for _, be := range activeBackends {
+		t.Run(be.name, func(t *testing.T) {
+			var opts []confdDaemonOption
+			if be.restConfig != nil {
+				opts = append(opts, withTypha())
+			}
+			d := startConfdDaemon(t, be, opts...)
+
+			for _, sc := range meshScenarios {
+				runDaemonScenario(t, d, be, sc)
+			}
+			for _, sc := range explicitScenarios {
+				runDaemonScenario(t, d, be, sc)
+			}
+			for _, sc := range filterScenarios {
+				runDaemonScenario(t, d, be, sc)
+			}
+		})
+	}
+}
+
+// runDaemonScenario applies resources for a single scenario, verifies that
+// confd renders the expected output, then cleans up all resources so the next
+// scenario starts from a clean state.
+func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, goldenDir string) {
+	t.Helper()
+
+	inputPath := filepath.Join("mock_data", "calicoctl", goldenDir, "input.yaml")
+	cleanup := applyResources(t, be, inputPath)
+	d.expectOutput(goldenDir)
+	cleanup()
 }

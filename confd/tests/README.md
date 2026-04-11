@@ -23,6 +23,6 @@ The mock data and compiled templates were originally generated in a cluster with
 
 ## Compiled Templates
 
-If changes are needed, and simple enough, the compiled templates can just be adjusted by hand. However if there were large changes to the templates, it would be better to spin up a new cluster, configure it, and pull the compiled templates from there so it can be verified that the new templates also work in a live cluster.
+Golden files live in `compiled_templates/`. For small changes, edit them by hand. For large template changes, spin up a cluster and pull the rendered output from a running `calico/node` at `/etc/calico/confd/config/`.
 
-In a running `calico/node` you can find the compiled config files in `/etc/calico/confd/config/`.
+When a test fails, the diff output shows the expected vs actual content and the paths to both files on disk — update the golden file to match the actual output if the change is intentional.
