@@ -16,6 +16,7 @@ package policy
 
 import (
 	"context"
+	"time"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -472,7 +473,9 @@ var _ = describe.CalicoDescribe(
 				allowed.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 				Expect(adminCli.Create(ctx, allowed)).To(Succeed())
 				DeferCleanup(func() {
-					if err := adminCli.Delete(ctx, allowed); err != nil && !apierrors.IsNotFound(err) {
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					if err := adminCli.Delete(cleanupCtx, allowed); err != nil && !apierrors.IsNotFound(err) {
 						framework.Logf("WARNING: failed to delete policy: %v", err)
 					}
 				})
@@ -497,7 +500,9 @@ var _ = describe.CalicoDescribe(
 				other.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 				Expect(adminCli.Create(ctx, other)).To(Succeed())
 				DeferCleanup(func() {
-					if err := adminCli.Delete(ctx, other); err != nil && !apierrors.IsNotFound(err) {
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					if err := adminCli.Delete(cleanupCtx, other); err != nil && !apierrors.IsNotFound(err) {
 						framework.Logf("WARNING: failed to delete policy: %v", err)
 					}
 				})
@@ -524,7 +529,9 @@ var _ = describe.CalicoDescribe(
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
 				Expect(adminCli.Create(ctx, np)).To(Succeed())
 				DeferCleanup(func() {
-					if err := adminCli.Delete(ctx, np); err != nil && !apierrors.IsNotFound(err) {
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					if err := adminCli.Delete(cleanupCtx, np); err != nil && !apierrors.IsNotFound(err) {
 						framework.Logf("WARNING: failed to delete policy: %v", err)
 					}
 				})
