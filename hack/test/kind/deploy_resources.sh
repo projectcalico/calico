@@ -209,3 +209,39 @@ echo
 # Show all the pods running for diags purposes.
 ${kubectl} get po --all-namespaces -o wide
 ${kubectl} get svc
+
+# Wait for ALL tigerastatus resources to become Available. This ensures every
+# component the operator manages is fully ready before tests begin.
+echo "Wait for all TigeraStatus resources to become Available"
+for attempt in $(seq 1 120); do
+  # Get all tigerastatus resources and check if any are not Available.
+  not_ready=$(${kubectl} get tigerastatus -o jsonpath='{range .items[*]}{.metadata.name}{" "}{range .status.conditions[?(@.type=="Available")]}{.status}{end}{"\n"}{end}' 2>/dev/null \
+    | grep -v "True$" || true)
+
+  if [ -z "$not_ready" ]; then
+    # All are Available — but make sure at least the critical ones exist.
+    count=$(${kubectl} get tigerastatus --no-headers 2>/dev/null | wc -l)
+    if [ "$count" -ge 1 ]; then
+      echo "All $count TigeraStatus resources are Available"
+      ${kubectl} get tigerastatus 2>&1
+      break
+    fi
+  fi
+
+  if [ "$attempt" -eq 120 ]; then
+    echo "FAIL: Timed out waiting for all TigeraStatus to become Available after 600s"
+    ${kubectl} get tigerastatus 2>&1 || true
+    echo "Not ready:"
+    echo "$not_ready"
+    exit 1
+  fi
+
+  # Every 60s, poke the operator to re-reconcile in case it's in backoff.
+  if (( attempt % 12 == 0 )); then
+    echo "Still waiting (${attempt}x5s)... poking operator to re-reconcile"
+    ${kubectl} get tigerastatus 2>&1 || true
+    ${kubectl} annotate installation default --overwrite triggerReconcile=$(date +%s) 2>/dev/null || true
+  fi
+
+  sleep 5
+done
