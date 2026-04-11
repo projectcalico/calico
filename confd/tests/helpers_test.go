@@ -726,28 +726,26 @@ func compareOutput(t *testing.T, outputDir, goldenDir string) {
 		"bird6_aggr.cfg",
 	}
 	for _, f := range goldenFiles {
-		t.Run(f, func(t *testing.T) {
-			actualPath := filepath.Join(outputDir, f)
-			got, err := os.ReadFile(actualPath)
-			require.NoError(t, err, "reading output %s", f)
+		actualPath := filepath.Join(outputDir, f)
+		got, err := os.ReadFile(actualPath)
+		require.NoError(t, err, "reading output %s", f)
 
-			expectedPath := filepath.Join("compiled_templates", goldenDir, f)
-			want, err := os.ReadFile(expectedPath)
-			require.NoError(t, err, "reading golden file %s", expectedPath)
+		expectedPath := filepath.Join("compiled_templates", goldenDir, f)
+		want, err := os.ReadFile(expectedPath)
+		require.NoError(t, err, "reading golden file %s", expectedPath)
 
-			gotNorm := normalizeBlankLines(string(got))
-			wantNorm := normalizeBlankLines(string(want))
-			if gotNorm != wantNorm {
-				if updateGoldenFiles {
-					t.Logf("updating golden file %s", expectedPath)
-					if err := os.WriteFile(expectedPath, []byte(gotNorm), 0644); err != nil {
-						t.Fatalf("failed to update golden file %s: %v", expectedPath, err)
-					}
-					return
+		gotNorm := normalizeBlankLines(string(got))
+		wantNorm := normalizeBlankLines(string(want))
+		if gotNorm != wantNorm {
+			if updateGoldenFiles {
+				t.Logf("updating golden file %s", expectedPath)
+				if err := os.WriteFile(expectedPath, []byte(gotNorm), 0644); err != nil {
+					t.Fatalf("failed to update golden file %s: %v", expectedPath, err)
 				}
-				t.Errorf("output mismatch for %s\n\n%s", f, fileDiff(t, expectedPath, actualPath, wantNorm, gotNorm))
+				continue
 			}
-		})
+			t.Errorf("output mismatch for %s\n\n%s", f, fileDiff(t, expectedPath, actualPath, wantNorm, gotNorm))
+		}
 	}
 }
 
