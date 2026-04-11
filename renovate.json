@@ -9,7 +9,7 @@
   "enabledManagers": ["gomod", "custom.regex", "npm"],
   "prHourlyLimit": 20,
   "prConcurrentLimit": 20,
-  "addLabels": ["docs-not-required", "release-note-not-required", "dependencies"],
+  "addLabels": ["docs-not-required", "release-note-not-required", "dependencies", "merge-when-ready", "delete-branch"],
   "gomod": {
     "managerFilePatterns": ["/^go\\.mod$/"]
   },
