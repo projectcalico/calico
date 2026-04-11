@@ -1688,7 +1688,7 @@ spec:
                           type:
                             description: |-
                               Type indicates whether this peer is configured via the node-to-node mesh,
-                              or via en explicit global or per-node BGPPeer object.
+                              or via an explicit global or per-node BGPPeer object.
                             enum:
                               - NodeMesh
                               - NodePeer
@@ -1726,7 +1726,7 @@ spec:
                           type:
                             description: |-
                               Type indicates whether this peer is configured via the node-to-node mesh,
-                              or via en explicit global or per-node BGPPeer object.
+                              or via an explicit global or per-node BGPPeer object.
                             enum:
                               - NodeMesh
                               - NodePeer
