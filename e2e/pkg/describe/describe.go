@@ -100,6 +100,7 @@ func RequiresGoldmane() any {
 func RequiresBGPMesh() any {
 	return framework.WithLabel("RequiresBGPMesh")
 }
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {
