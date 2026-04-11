@@ -16,6 +16,7 @@ package networking
 
 import (
 	"context"
+	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -29,8 +30,11 @@ import (
 //   - VXLAN (Always or CrossSubnet) → "vxlan.calico"
 //   - No encapsulation → ""
 func detectEncapInterface(cli ctrlclient.Client) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	pools := &v3.IPPoolList{}
-	if err := cli.List(context.Background(), pools); err != nil {
+	if err := cli.List(ctx, pools); err != nil {
 		logrus.WithError(err).Warn("Could not list IPPools for encap detection, assuming no tunnel")
 		return ""
 	}

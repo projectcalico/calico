@@ -312,6 +312,9 @@ var _ = describe.CalicoDescribe(
 			ct.Deploy()
 			DeferCleanup(ct.Stop)
 
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
 			// Build the target based on access type.
 			var target conncheck.Target
 			expectSNAT := false
@@ -363,9 +366,11 @@ var _ = describe.CalicoDescribe(
 					}},
 				},
 			}
-			Expect(cli.Create(context.Background(), kubeletPolicy)).To(Succeed())
+			Expect(cli.Create(ctx, kubeletPolicy)).To(Succeed())
 			DeferCleanup(func() {
-				if err := cli.Delete(context.Background(), kubeletPolicy); err != nil && !apierrors.IsNotFound(err) {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cleanupCancel()
+				if err := cli.Delete(cleanupCtx, kubeletPolicy); err != nil && !apierrors.IsNotFound(err) {
 					framework.Logf("WARNING: failed to delete kubelet policy: %v", err)
 				}
 			})
@@ -386,9 +391,11 @@ var _ = describe.CalicoDescribe(
 			if ifaceName != "" {
 				hep.Spec.InterfaceName = ifaceName
 			}
-			Expect(cli.Create(context.Background(), hep)).To(Succeed())
+			Expect(cli.Create(ctx, hep)).To(Succeed())
 			DeferCleanup(func() {
-				if err := cli.Delete(context.Background(), hep); err != nil && !apierrors.IsNotFound(err) {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cleanupCancel()
+				if err := cli.Delete(cleanupCtx, hep); err != nil && !apierrors.IsNotFound(err) {
 					framework.Logf("WARNING: failed to delete HEP: %v", err)
 				}
 			})
@@ -413,9 +420,11 @@ var _ = describe.CalicoDescribe(
 				s.policyDirection,
 				v3.Allow,
 			)
-			Expect(cli.Create(context.Background(), allowPolicy)).To(Succeed())
+			Expect(cli.Create(ctx, allowPolicy)).To(Succeed())
 			DeferCleanup(func() {
-				if err := cli.Delete(context.Background(), allowPolicy); err != nil && !apierrors.IsNotFound(err) {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cleanupCancel()
+				if err := cli.Delete(cleanupCtx, allowPolicy); err != nil && !apierrors.IsNotFound(err) {
 					framework.Logf("WARNING: failed to delete allow policy: %v", err)
 				}
 			})
@@ -432,9 +441,11 @@ var _ = describe.CalicoDescribe(
 				s.policyDirection,
 				v3.Deny,
 			)
-			Expect(cli.Create(context.Background(), denyPolicy)).To(Succeed())
+			Expect(cli.Create(ctx, denyPolicy)).To(Succeed())
 			DeferCleanup(func() {
-				if err := cli.Delete(context.Background(), denyPolicy); err != nil && !apierrors.IsNotFound(err) {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cleanupCancel()
+				if err := cli.Delete(cleanupCtx, denyPolicy); err != nil && !apierrors.IsNotFound(err) {
 					framework.Logf("WARNING: failed to delete deny policy: %v", err)
 				}
 			})
