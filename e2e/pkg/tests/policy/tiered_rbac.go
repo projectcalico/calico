@@ -43,13 +43,15 @@ const (
 	rbacOtherTier = "e2e-rbac-other"
 
 	// Impersonated user names.
-	rbacTierAdminUser = "e2e-rbac-tier-admin"
-	rbacNoTierGetUser = "e2e-rbac-no-tier-get"
-	rbacNoPolicyUser  = "e2e-rbac-no-policy-access"
-	rbacOtherTierUser = "e2e-rbac-other-tier-admin"
-	rbacReadOnlyUser  = "e2e-rbac-read-only"
-	rbacExactNameUser = "e2e-rbac-exact-name"
-	rbacWatchUser     = "e2e-rbac-watch"
+	rbacTierAdminUser    = "e2e-rbac-tier-admin"
+	rbacNoTierGetUser    = "e2e-rbac-no-tier-get"
+	rbacNoPolicyUser     = "e2e-rbac-no-policy-access"
+	rbacOtherTierUser    = "e2e-rbac-other-tier-admin"
+	rbacReadOnlyUser     = "e2e-rbac-read-only"
+	rbacExactNameUser    = "e2e-rbac-exact-name"
+	rbacWatchUser        = "e2e-rbac-watch"
+	rbacBareNameUser     = "e2e-rbac-bare-name"
+	rbacPrefixedNameUser = "e2e-rbac-prefixed-name"
 
 	// Common prefix for RBAC resources created by these tests.
 	rbacResourcePrefix = "e2e-tiered-rbac-"
@@ -553,6 +555,79 @@ var _ = describe.CalicoDescribe(
 				Expect(found).To(BeTrue(), "expected to find policy %s in list", np.Name)
 			})
 		})
+
+		// Verifies that old-style (tier-prefixed) and new-style (bare) policy
+		// names are independently addressable via RBAC. Creates two policies
+		// in the same tier whose names would collide under naive tier-prefix
+		// logic, then proves each user can only access the policy their RBAC
+		// grants match.
+		Context("old-style vs new-style name disambiguation", func() {
+			const (
+				bareName     = "rbac-test-disambig"
+				prefixedName = rbacTestTier + ".rbac-test-disambig"
+			)
+
+			It("should independently authorize bare and tier-prefixed policy names", func() {
+				By("Creating a bare-named policy (new-style)")
+				barePolicy := v3.NewNetworkPolicy()
+				barePolicy.Name = bareName
+				barePolicy.Namespace = f.Namespace.Name
+				barePolicy.Spec.Tier = rbacTestTier
+				barePolicy.Spec.Order = ptr.To(100.0)
+				barePolicy.Spec.Selector = "all()"
+				barePolicy.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, barePolicy)).To(Succeed())
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					if err := adminCli.Delete(cleanupCtx, barePolicy); err != nil && !apierrors.IsNotFound(err) {
+						framework.Logf("WARNING: failed to delete bare-named policy: %v", err)
+					}
+				})
+
+				By("Creating a tier-prefixed policy (old-style)")
+				prefixedPolicy := v3.NewNetworkPolicy()
+				prefixedPolicy.Name = prefixedName
+				prefixedPolicy.Namespace = f.Namespace.Name
+				prefixedPolicy.Spec.Tier = rbacTestTier
+				prefixedPolicy.Spec.Order = ptr.To(101.0)
+				prefixedPolicy.Spec.Selector = "all()"
+				prefixedPolicy.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, prefixedPolicy)).To(Succeed())
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					if err := adminCli.Delete(cleanupCtx, prefixedPolicy); err != nil && !apierrors.IsNotFound(err) {
+						framework.Logf("WARNING: failed to delete prefixed-name policy: %v", err)
+					}
+				})
+
+				bareNameCli := newImpersonatedClient(rbacBareNameUser)
+				prefixedNameCli := newImpersonatedClient(rbacPrefixedNameUser)
+
+				By("Verifying bare-name user can get the bare-named policy")
+				got := v3.NewNetworkPolicy()
+				Expect(bareNameCli.Get(ctx, ctrlclient.ObjectKeyFromObject(barePolicy), got)).To(Succeed(),
+					"bare-name user should be able to get the bare-named policy")
+
+				By("Verifying bare-name user cannot get the tier-prefixed policy")
+				got = v3.NewNetworkPolicy()
+				err := bareNameCli.Get(ctx, ctrlclient.ObjectKeyFromObject(prefixedPolicy), got)
+				Expect(err).To(HaveOccurred(), "bare-name user should not be able to get the prefixed policy")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden, got: %v", err)
+
+				By("Verifying prefixed-name user can get the tier-prefixed policy")
+				got = v3.NewNetworkPolicy()
+				Expect(prefixedNameCli.Get(ctx, ctrlclient.ObjectKeyFromObject(prefixedPolicy), got)).To(Succeed(),
+					"prefixed-name user should be able to get the prefixed policy")
+
+				By("Verifying prefixed-name user cannot get the bare-named policy")
+				got = v3.NewNetworkPolicy()
+				err = prefixedNameCli.Get(ctx, ctrlclient.ObjectKeyFromObject(barePolicy), got)
+				Expect(err).To(HaveOccurred(), "prefixed-name user should not be able to get the bare-named policy")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden, got: %v", err)
+			})
+		})
 	},
 )
 
@@ -702,6 +777,41 @@ func buildTieredRBACResources() tieredRBACSetup {
 			ResourceNames: []string{rbacTestTier + ".*"},
 		},
 	})
+
+	// Bare-name user: has tier GET and exact-name access for the bare policy
+	// name "rbac-test-disambig" (without tier prefix). Used in the disambiguation
+	// test to prove old-style and new-style names are independently addressable.
+	addRoleAndBinding("bare-name", rbacBareNameUser, append(baseRules(),
+		rbacv1.PolicyRule{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tiers"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{rbacTestTier},
+		},
+		rbacv1.PolicyRule{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{"rbac-test-disambig"},
+		},
+	))
+
+	// Prefixed-name user: has tier GET and exact-name access for the
+	// tier-prefixed policy name "e2e-rbac-test.rbac-test-disambig" (old-style).
+	addRoleAndBinding("prefixed-name", rbacPrefixedNameUser, append(baseRules(),
+		rbacv1.PolicyRule{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tiers"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{rbacTestTier},
+		},
+		rbacv1.PolicyRule{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{rbacTestTier + ".rbac-test-disambig"},
+		},
+	))
 
 	// Read-only: has tier GET and read-only policy access (get/list/watch).
 	// Should be able to get/list/watch policies but not create, update, or delete.
