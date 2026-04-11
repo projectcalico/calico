@@ -50,6 +50,7 @@ const (
 	rbacReadOnlyUser     = "e2e-rbac-read-only"
 	rbacExactNameUser    = "e2e-rbac-exact-name"
 	rbacWatchUser        = "e2e-rbac-watch"
+	rbacWatchNoTierUser  = "e2e-rbac-watch-no-tier"
 	rbacBareNameUser     = "e2e-rbac-bare-name"
 	rbacPrefixedNameUser = "e2e-rbac-prefixed-name"
 
@@ -98,7 +99,7 @@ var _ = describe.CalicoDescribe(
 
 		BeforeEach(func() {
 			var err error
-			ctx, cancel = context.WithCancel(context.Background())
+			ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
 			DeferCleanup(cancel)
 
 			adminCli, err = client.New(f.ClientConfig())
@@ -116,7 +117,7 @@ var _ = describe.CalicoDescribe(
 				tier.Name = t.name
 				tier.Spec.Order = ptr.To(t.order)
 				tier.Labels = map[string]string{utils.TestResourceLabel: "true"}
-				Expect(adminCli.Create(ctx, tier)).To(Succeed())
+				Expect(adminCli.Create(ctx, tier)).To(Succeed(), "failed to create tier %s", t.name)
 
 				// Tier cleanup is registered per-tier so LIFO ordering ensures
 				// it runs after any policy DeferCleanup registered in It blocks.
@@ -461,7 +462,7 @@ var _ = describe.CalicoDescribe(
 		// Note: create is excluded because K8s RBAC does not carry a resource name
 		// on create requests, so resourceNames filtering is meaningless for create.
 		Context("resource-name exact match", func() {
-			It("should allow access to the named policy but deny access to others", func() {
+			framework.ConformanceIt("should allow access to the named policy but deny access to others", func() {
 				cli := newImpersonatedClient(rbacExactNameUser)
 
 				By("Creating the target policy as admin")
@@ -472,12 +473,12 @@ var _ = describe.CalicoDescribe(
 				allowed.Spec.Order = ptr.To(100.0)
 				allowed.Spec.Selector = "all()"
 				allowed.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				Expect(adminCli.Create(ctx, allowed)).To(Succeed())
+				Expect(adminCli.Create(ctx, allowed)).To(Succeed(), "admin failed to create target policy")
 				DeferCleanup(func() {
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					if err := adminCli.Delete(cleanupCtx, allowed); err != nil && !apierrors.IsNotFound(err) {
-						framework.Logf("WARNING: failed to delete policy: %v", err)
+						logrus.WithError(err).WithField("name", allowed.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -499,12 +500,12 @@ var _ = describe.CalicoDescribe(
 				other.Spec.Order = ptr.To(100.0)
 				other.Spec.Selector = "all()"
 				other.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				Expect(adminCli.Create(ctx, other)).To(Succeed())
+				Expect(adminCli.Create(ctx, other)).To(Succeed(), "admin failed to create second policy")
 				DeferCleanup(func() {
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					if err := adminCli.Delete(cleanupCtx, other); err != nil && !apierrors.IsNotFound(err) {
-						framework.Logf("WARNING: failed to delete policy: %v", err)
+						logrus.WithError(err).WithField("name", other.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -517,9 +518,10 @@ var _ = describe.CalicoDescribe(
 		})
 
 		// Verifies that a user with list permissions scoped to a tier's policies
-		// can list policies within that tier.
+		// can list policies within that tier, and that a user without tier
+		// policy access is denied.
 		Context("list via tier RBAC", func() {
-			It("should allow listing policies in the permitted tier", func() {
+			framework.ConformanceIt("should allow listing policies in the permitted tier", func() {
 				By("Creating a policy in the test tier")
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-watch-target"
@@ -528,12 +530,12 @@ var _ = describe.CalicoDescribe(
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				Expect(adminCli.Create(ctx, np)).To(Succeed())
+				Expect(adminCli.Create(ctx, np)).To(Succeed(), "admin failed to create watch target policy")
 				DeferCleanup(func() {
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					if err := adminCli.Delete(cleanupCtx, np); err != nil && !apierrors.IsNotFound(err) {
-						framework.Logf("WARNING: failed to delete policy: %v", err)
+						logrus.WithError(err).WithField("name", np.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -554,6 +556,37 @@ var _ = describe.CalicoDescribe(
 				}
 				Expect(found).To(BeTrue(), "expected to find policy %s in list", np.Name)
 			})
+
+			// Verifies that a user with base networkpolicies list but no
+			// tier.networkpolicies permission and no tier GET is denied by
+			// the tier authorizer. This proves the tier expansion path is
+			// enforced and that base K8s RBAC alone is not sufficient.
+			framework.ConformanceIt("should deny listing when user lacks tier policy access", func() {
+				By("Creating a policy in the test tier")
+				np := v3.NewNetworkPolicy()
+				np.Name = "rbac-test-watch-denied"
+				np.Namespace = f.Namespace.Name
+				np.Spec.Tier = rbacTestTier
+				np.Spec.Order = ptr.To(100.0)
+				np.Spec.Selector = "all()"
+				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, np)).To(Succeed(), "admin failed to create policy for watch denial test")
+				DeferCleanup(func() {
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					if err := adminCli.Delete(cleanupCtx, np); err != nil && !apierrors.IsNotFound(err) {
+						logrus.WithError(err).WithField("name", np.Name).Error("Failed to delete policy")
+					}
+				})
+
+				cli := newImpersonatedClient(rbacWatchNoTierUser)
+
+				By("Verifying the user without tier policy access cannot list policies")
+				list := &v3.NetworkPolicyList{}
+				err := cli.List(ctx, list, ctrlclient.InNamespace(f.Namespace.Name))
+				Expect(err).To(HaveOccurred(), "user without tier policy access should not be able to list policies")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+			})
 		})
 
 		// Verifies that old-style (tier-prefixed) and new-style (bare) policy
@@ -567,7 +600,7 @@ var _ = describe.CalicoDescribe(
 				prefixedName = rbacTestTier + ".rbac-test-disambig"
 			)
 
-			It("should independently authorize bare and tier-prefixed policy names", func() {
+			framework.ConformanceIt("should independently authorize bare and tier-prefixed policy names", func() {
 				By("Creating a bare-named policy (new-style)")
 				barePolicy := v3.NewNetworkPolicy()
 				barePolicy.Name = bareName
@@ -576,12 +609,12 @@ var _ = describe.CalicoDescribe(
 				barePolicy.Spec.Order = ptr.To(100.0)
 				barePolicy.Spec.Selector = "all()"
 				barePolicy.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				Expect(adminCli.Create(ctx, barePolicy)).To(Succeed())
+				Expect(adminCli.Create(ctx, barePolicy)).To(Succeed(), "admin failed to create bare-named policy")
 				DeferCleanup(func() {
 					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cleanupCancel()
 					if err := adminCli.Delete(cleanupCtx, barePolicy); err != nil && !apierrors.IsNotFound(err) {
-						framework.Logf("WARNING: failed to delete bare-named policy: %v", err)
+						logrus.WithError(err).WithField("name", barePolicy.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -593,12 +626,12 @@ var _ = describe.CalicoDescribe(
 				prefixedPolicy.Spec.Order = ptr.To(101.0)
 				prefixedPolicy.Spec.Selector = "all()"
 				prefixedPolicy.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
-				Expect(adminCli.Create(ctx, prefixedPolicy)).To(Succeed())
+				Expect(adminCli.Create(ctx, prefixedPolicy)).To(Succeed(), "admin failed to create tier-prefixed policy")
 				DeferCleanup(func() {
 					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cleanupCancel()
 					if err := adminCli.Delete(cleanupCtx, prefixedPolicy); err != nil && !apierrors.IsNotFound(err) {
-						framework.Logf("WARNING: failed to delete prefixed-name policy: %v", err)
+						logrus.WithError(err).WithField("name", prefixedPolicy.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -756,8 +789,12 @@ func buildTieredRBACResources() tieredRBACSetup {
 		},
 	))
 
-	// Watch user: has tier GET and list/watch on tier.networkpolicies for the test
-	// tier. Tests Calico's per-tier watch expansion logic.
+	// Watch user: has tier GET, base networkpolicies access, and tier-scoped
+	// list/watch on tier.networkpolicies. The ResourceNames wildcard on
+	// tier.networkpolicies is how Calico's authorizer checks tier-scoped
+	// access: for list/watch (which have no resource name in K8s RBAC), the
+	// authorizer explicitly queries with the synthetic name "tier.*", which
+	// matches the ResourceNames entry.
 	addRoleAndBinding("watch", rbacWatchUser, []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{"projectcalico.org"},
@@ -775,6 +812,18 @@ func buildTieredRBACResources() tieredRBACSetup {
 			Resources:     []string{"tier.networkpolicies"},
 			Verbs:         []string{"get", "list", "watch"},
 			ResourceNames: []string{rbacTestTier + ".*"},
+		},
+	})
+
+	// Watch-no-tier user: has base networkpolicies list but NO
+	// tier.networkpolicies permission and no tier GET. If the tier authorizer
+	// enforces list operations, this user should be denied even though
+	// base K8s RBAC allows listing networkpolicies.
+	addRoleAndBinding("watch-no-tier", rbacWatchNoTierUser, []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
 		},
 	})
 

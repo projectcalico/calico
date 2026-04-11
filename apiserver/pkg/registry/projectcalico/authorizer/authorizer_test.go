@@ -54,8 +54,8 @@ var (
 	}
 )
 
-// createGnpAttr returns the expected attributes for a GNP
-func createGnpAttr(verb string) k8sauth.Attributes {
+// createGlobalNetworkPolicyAttr returns the expected RBAC attributes for a GlobalNetworkPolicy.
+func createGlobalNetworkPolicyAttr(verb string) k8sauth.Attributes {
 	ar := k8sauth.AttributesRecord{
 		User:            testUser,
 		Verb:            verb,
@@ -73,8 +73,8 @@ func createGnpAttr(verb string) k8sauth.Attributes {
 	return ar
 }
 
-// createGnpTierAttr returns the expected attributes for a tier wildcard GNP match
-func createGnpTierAttr(verb string) k8sauth.Attributes {
+// createGlobalNetworkPolicyTierAttr returns the expected attributes for a tier wildcard GlobalNetworkPolicy match.
+func createGlobalNetworkPolicyTierAttr(verb string) k8sauth.Attributes {
 	return k8sauth.AttributesRecord{
 		User:            testUser,
 		Verb:            verb,
@@ -87,8 +87,8 @@ func createGnpTierAttr(verb string) k8sauth.Attributes {
 	}
 }
 
-// createNpAttr returns the expected attributes for a NP
-func createNpAttr(verb string) k8sauth.Attributes {
+// createNetworkPolicyAttr returns the expected RBAC attributes for a NetworkPolicy.
+func createNetworkPolicyAttr(verb string) k8sauth.Attributes {
 	ar := k8sauth.AttributesRecord{
 		User:            testUser,
 		Verb:            verb,
@@ -107,8 +107,8 @@ func createNpAttr(verb string) k8sauth.Attributes {
 	return ar
 }
 
-// createNpTierAttr returns the expected attributes for a tier wildcard NP match
-func createNpTierAttr(verb string) k8sauth.Attributes {
+// createNetworkPolicyTierAttr returns the expected attributes for a tier wildcard NetworkPolicy match.
+func createNetworkPolicyTierAttr(verb string) k8sauth.Attributes {
 	return k8sauth.AttributesRecord{
 		User:            testUser,
 		Verb:            verb,
@@ -122,8 +122,8 @@ func createNpTierAttr(verb string) k8sauth.Attributes {
 	}
 }
 
-// createGnpContext returns the expected attributes for a tier wildcard NP match
-func createGnpContext(verb string) context.Context {
+// createGlobalNetworkPolicyContext returns a request context for a GlobalNetworkPolicy.
+func createGlobalNetworkPolicyContext(verb string) context.Context {
 	ctx := genericapirequest.NewContext()
 	ctx = genericapirequest.WithUser(ctx, testUser)
 	ri := &genericapirequest.RequestInfo{
@@ -143,8 +143,8 @@ func createGnpContext(verb string) context.Context {
 	return ctx
 }
 
-// createNpContext returns the expected attributes for a tier wildcard NP match
-func createNpContext(verb string) context.Context {
+// createNetworkPolicyContext returns a request context for a NetworkPolicy.
+func createNetworkPolicyContext(verb string) context.Context {
 	ctx := genericapirequest.NewContext()
 	ctx = genericapirequest.WithUser(ctx, testUser)
 	ctx = genericapirequest.WithNamespace(ctx, "test-namespace")
@@ -166,7 +166,7 @@ func createNpContext(verb string) context.Context {
 	return ctx
 }
 
-func createNpError(verb string, cannotGetTier bool) string {
+func createNetworkPolicyError(verb string, cannotGetTier bool) string {
 	msg := "networkpolicies.projectcalico.org "
 	if verb != "list" {
 		msg += "\"test-tier.test-np\" "
@@ -179,7 +179,7 @@ func createNpError(verb string, cannotGetTier bool) string {
 	return msg
 }
 
-func createGnpError(verb string, cannotGetTier bool) string {
+func createGlobalNetworkPolicyError(verb string, cannotGetTier bool) string {
 	msg := "globalnetworkpolicies.projectcalico.org "
 	if verb != "list" {
 		msg += "\"test-tier.test-gnp\" "
@@ -194,257 +194,257 @@ func createGnpError(verb string, cannotGetTier bool) string {
 
 func TestNetworkPolicyNoTierGet(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpAttr("create")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("create")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpAttr("list")):       k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("list")):   k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpAttr("delete")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("delete")): k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                           k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("create")):     k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("list")):       k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):   k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("delete")):     k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")): k8sauth.DecisionAllow,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("create"), "test-tier.test-np", "test-tier",
+		createNetworkPolicyContext("create"), "test-tier.test-np", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned creating NP when tier GET not permitted")
-	} else if err.Error() != createNpError("create", true) {
-		t.Fatalf("Incorrect error message creating NP when tier GET not permitted: %v", err)
+		t.Fatalf("No error returned creating NetworkPolicy when tier GET not permitted")
+	} else if err.Error() != createNetworkPolicyError("create", true) {
+		t.Fatalf("Incorrect error message creating NetworkPolicy when tier GET not permitted: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("delete"), "test-tier.test-np", "test-tier",
+		createNetworkPolicyContext("delete"), "test-tier.test-np", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned deleting NP when tier GET not permitted")
-	} else if err.Error() != createNpError("delete", true) {
-		t.Fatalf("Incorrect error message deleting NP when tier GET not permitted: %v", err)
+		t.Fatalf("No error returned deleting NetworkPolicy when tier GET not permitted")
+	} else if err.Error() != createNetworkPolicyError("delete", true) {
+		t.Fatalf("Incorrect error message deleting NetworkPolicy when tier GET not permitted: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("list"), "", "test-tier",
+		createNetworkPolicyContext("list"), "", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned listing NP when tier GET not permitted")
-	} else if err.Error() != createNpError("list", true) {
-		t.Fatalf("Incorrect error message listing NP when tier GET not permitted: %v", err)
+		t.Fatalf("No error returned listing NetworkPolicy when tier GET not permitted")
+	} else if err.Error() != createNetworkPolicyError("list", true) {
+		t.Fatalf("Incorrect error message listing NetworkPolicy when tier GET not permitted: %v", err)
 	}
 }
 
 func TestGlobalNetworkPolicyNoTierGet(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                 k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpAttr("create")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpTierAttr("create")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpAttr("list")):       k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpTierAttr("list")):   k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpAttr("get")):        k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpTierAttr("get")):    k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                 k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):     k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):       k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):   k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):        k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):    k8sauth.DecisionAllow,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("create"), "test-tier.test-gnp", "test-tier",
+		createGlobalNetworkPolicyContext("create"), "test-tier.test-gnp", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned creating GNP when tier GET not permitted")
-	} else if err.Error() != createGnpError("create", true) {
-		t.Fatalf("Incorrect error message creating GNP when tier GET not permitted: %v", err)
+		t.Fatalf("No error returned creating GlobalNetworkPolicy when tier GET not permitted")
+	} else if err.Error() != createGlobalNetworkPolicyError("create", true) {
+		t.Fatalf("Incorrect error message creating GlobalNetworkPolicy when tier GET not permitted: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("get"), "test-tier.test-gnp", "test-tier",
+		createGlobalNetworkPolicyContext("get"), "test-tier.test-gnp", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned getting GNP when tier GET not permitted")
-	} else if err.Error() != createGnpError("get", true) {
-		t.Fatalf("Incorrect error message getting GNP when tier GET not permitted: %v", err)
+		t.Fatalf("No error returned getting GlobalNetworkPolicy when tier GET not permitted")
+	} else if err.Error() != createGlobalNetworkPolicyError("get", true) {
+		t.Fatalf("Incorrect error message getting GlobalNetworkPolicy when tier GET not permitted: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("list"), "", "test-tier",
+		createGlobalNetworkPolicyContext("list"), "", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned listing GNP when tier GET not permitted")
-	} else if err.Error() != createGnpError("list", true) {
-		t.Fatalf("Incorrect error message listing GNP when tier GET not permitted: %v", err)
+		t.Fatalf("No error returned listing GlobalNetworkPolicy when tier GET not permitted")
+	} else if err.Error() != createGlobalNetworkPolicyError("list", true) {
+		t.Fatalf("Incorrect error message listing GlobalNetworkPolicy when tier GET not permitted: %v", err)
 	}
 }
 
 func TestNetworkPolicyTierWildcard(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpAttr("create")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("create")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpAttr("list")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("list")):   k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpAttr("delete")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("delete")): k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                           k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("create")):     k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("list")):       k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):   k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("delete")):     k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")): k8sauth.DecisionAllow,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("create"), "test-tier.test-np", "test-tier",
+		createNetworkPolicyContext("create"), "test-tier.test-np", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned creating NP when tier GET and wildcard match permit the request: %v", err)
+		t.Fatalf("Error returned creating NetworkPolicy when tier GET and wildcard match permit the request: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("delete"), "test-tier.test-np", "test-tier",
+		createNetworkPolicyContext("delete"), "test-tier.test-np", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned deleting NP when tier GET and wildcard match permit the request: %v", err)
+		t.Fatalf("Error returned deleting NetworkPolicy when tier GET and wildcard match permit the request: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("list"), "", "test-tier",
+		createNetworkPolicyContext("list"), "", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned listing NP when tier GET and wildcard match permit the request: %v", err)
+		t.Fatalf("Error returned listing NetworkPolicy when tier GET and wildcard match permit the request: %v", err)
 	}
 }
 
 func TestGlobalNetworkPolicyTierWildcard(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                 k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpAttr("create")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpTierAttr("create")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpAttr("list")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpTierAttr("list")):   k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpAttr("delete")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpTierAttr("delete")): k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                 k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):     k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):       k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):   k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("delete")):     k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("delete")): k8sauth.DecisionAllow,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("create"), "test-tier.test-gnp", "test-tier",
+		createGlobalNetworkPolicyContext("create"), "test-tier.test-gnp", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned creating GNP when tier GET and wildcard match permit the request: %v", err)
+		t.Fatalf("Error returned creating GlobalNetworkPolicy when tier GET and wildcard match permit the request: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("delete"), "test-tier.test-gnp", "test-tier",
+		createGlobalNetworkPolicyContext("delete"), "test-tier.test-gnp", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned deleting GNP when tier GET and wildcard match permit the request: %v", err)
+		t.Fatalf("Error returned deleting GlobalNetworkPolicy when tier GET and wildcard match permit the request: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("list"), "", "test-tier",
+		createGlobalNetworkPolicyContext("list"), "", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned listing GNP when tier GET and wildcard match permit the request: %v", err)
+		t.Fatalf("Error returned listing GlobalNetworkPolicy when tier GET and wildcard match permit the request: %v", err)
 	}
 }
 
 func TestNetworkPolicyByName(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpAttr("create")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("create")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpAttr("list")):       k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("list")):   k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpAttr("get")):        k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("get")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                           k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("create")):     k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("list")):       k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("get")):        k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):    k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("create"), "test-tier.test-np", "test-tier",
+		createNetworkPolicyContext("create"), "test-tier.test-np", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned creating NP when tier GET and named match permit the request: %v", err)
+		t.Fatalf("Error returned creating NetworkPolicy when tier GET and named match permit the request: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("get"), "test-tier.test-np", "test-tier",
+		createNetworkPolicyContext("get"), "test-tier.test-np", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned getting NP when tier GET and named match permit the request: %v", err)
+		t.Fatalf("Error returned getting NetworkPolicy when tier GET and named match permit the request: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("list"), "", "test-tier",
+		createNetworkPolicyContext("list"), "", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned listing NP when tier GET and named match permit the request: %v", err)
+		t.Fatalf("Error returned listing NetworkPolicy when tier GET and named match permit the request: %v", err)
 	}
 }
 
 func TestGlobalNetworkPolicyByName(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                 k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpAttr("create")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpTierAttr("create")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpAttr("list")):       k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpTierAttr("list")):   k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpAttr("get")):        k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpTierAttr("get")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                 k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):     k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):       k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):        k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):    k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("create"), "test-tier.test-gnp", "test-tier",
+		createGlobalNetworkPolicyContext("create"), "test-tier.test-gnp", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned creating GNP when tier GET and named match permit the request: %v", err)
+		t.Fatalf("Error returned creating GlobalNetworkPolicy when tier GET and named match permit the request: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("get"), "test-tier.test-gnp", "test-tier",
+		createGlobalNetworkPolicyContext("get"), "test-tier.test-gnp", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned getting GNP when tier GET and named match permit the request: %v", err)
+		t.Fatalf("Error returned getting GlobalNetworkPolicy when tier GET and named match permit the request: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("list"), "", "test-tier",
+		createGlobalNetworkPolicyContext("list"), "", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned listing GNP when tier GET and named match permit the request: %v", err)
+		t.Fatalf("Error returned listing GlobalNetworkPolicy when tier GET and named match permit the request: %v", err)
 	}
 }
 
 func TestNetworkPolicyDenied(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpAttr("create")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("create")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpAttr("list")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("list")):   k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpAttr("delete")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("delete")): k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                           k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("create")):     k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("list")):       k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("delete")):     k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")): k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("create"), "test-tier.test-np", "test-tier",
+		createNetworkPolicyContext("create"), "test-tier.test-np", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned creating NP when not permitted by NP RBAC")
-	} else if err.Error() != createNpError("create", false) {
-		t.Fatalf("Incorrect error message creating NP when not permitted by NP RBAC: %v", err)
+		t.Fatalf("No error returned creating NetworkPolicy when not permitted by NetworkPolicy RBAC")
+	} else if err.Error() != createNetworkPolicyError("create", false) {
+		t.Fatalf("Incorrect error message creating NetworkPolicy when not permitted by NetworkPolicy RBAC: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("delete"), "test-tier.test-np", "test-tier",
+		createNetworkPolicyContext("delete"), "test-tier.test-np", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned deleting NP when not permitted by NP RBAC")
-	} else if err.Error() != createNpError("delete", false) {
-		t.Fatalf("Incorrect error message deleting NP when not permitted by NP RBAC: %v", err)
+		t.Fatalf("No error returned deleting NetworkPolicy when not permitted by NetworkPolicy RBAC")
+	} else if err.Error() != createNetworkPolicyError("delete", false) {
+		t.Fatalf("Incorrect error message deleting NetworkPolicy when not permitted by NetworkPolicy RBAC: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createNpContext("list"), "", "test-tier",
+		createNetworkPolicyContext("list"), "", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned listing NP when not permitted by NP RBAC")
-	} else if err.Error() != createNpError("list", false) {
-		t.Fatalf("Incorrect error message listing NP when not permitted by NP RBAC: %v", err)
+		t.Fatalf("No error returned listing NetworkPolicy when not permitted by NetworkPolicy RBAC")
+	} else if err.Error() != createNetworkPolicyError("list", false) {
+		t.Fatalf("Incorrect error message listing NetworkPolicy when not permitted by NetworkPolicy RBAC: %v", err)
 	}
 }
 
 func TestGlobalNetworkPolicyDenied(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                 k8sauth.DecisionAllow,
-		getAttributesMapkey(createGnpAttr("create")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpTierAttr("create")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpAttr("list")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpTierAttr("list")):   k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpAttr("get")):        k8sauth.DecisionDeny,
-		getAttributesMapkey(createGnpTierAttr("get")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                 k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):     k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):       k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):        k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):    k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("create"), "test-tier.test-gnp", "test-tier",
+		createGlobalNetworkPolicyContext("create"), "test-tier.test-gnp", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned creating GNP when not permitted by GNP RBAC")
-	} else if err.Error() != createGnpError("create", false) {
-		t.Fatalf("Incorrect error message creating GNP when not permitted by NP RBAC: %v", err)
+		t.Fatalf("No error returned creating GlobalNetworkPolicy when not permitted by GlobalNetworkPolicyRBAC")
+	} else if err.Error() != createGlobalNetworkPolicyError("create", false) {
+		t.Fatalf("Incorrect error message creating GlobalNetworkPolicy when not permitted by NetworkPolicy RBAC: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("get"), "test-tier.test-gnp", "test-tier",
+		createGlobalNetworkPolicyContext("get"), "test-tier.test-gnp", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned deleting GNP when not permitted by GNP RBAC")
-	} else if err.Error() != createGnpError("get", false) {
-		t.Fatalf("Incorrect error message getting GNP when not permitted by NP RBAC: %v", err)
+		t.Fatalf("No error returned deleting GlobalNetworkPolicy when not permitted by GlobalNetworkPolicyRBAC")
+	} else if err.Error() != createGlobalNetworkPolicyError("get", false) {
+		t.Fatalf("Incorrect error message getting GlobalNetworkPolicy when not permitted by NetworkPolicy RBAC: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		createGnpContext("list"), "", "test-tier",
+		createGlobalNetworkPolicyContext("list"), "", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned listing GNP when not permitted by GNP RBAC")
-	} else if err.Error() != createGnpError("list", false) {
-		t.Fatalf("Incorrect error message listing GNP when not permitted by NP RBAC: %v", err)
+		t.Fatalf("No error returned listing GlobalNetworkPolicy when not permitted by GlobalNetworkPolicyRBAC")
+	} else if err.Error() != createGlobalNetworkPolicyError("list", false) {
+		t.Fatalf("Incorrect error message listing GlobalNetworkPolicy when not permitted by NetworkPolicy RBAC: %v", err)
 	}
 }
 
@@ -457,8 +457,8 @@ func TestGlobalNetworkPolicyDenied(t *testing.T) {
 // from the request for RBAC resource name matching.
 // ============================================================================
 
-// makeNpAttr returns the expected RBAC attributes for a NP with the given name.
-func makeNpAttr(verb, name string) k8sauth.Attributes {
+// makeNetworkPolicyAttr returns the expected RBAC attributes for a NetworkPolicy with the given name.
+func makeNetworkPolicyAttr(verb, name string) k8sauth.Attributes {
 	ar := k8sauth.AttributesRecord{
 		User:            testUser,
 		Verb:            verb,
@@ -477,8 +477,10 @@ func makeNpAttr(verb, name string) k8sauth.Attributes {
 	return ar
 }
 
-// makeNpContext returns a request context for a NP with the given name.
-func makeNpContext(verb, name string) context.Context {
+// makeNetworkPolicyContext returns a request context for a NetworkPolicy with the given name.
+// The context uses the base "networkpolicies" resource (how the real request arrives),
+// while the authorizer internally re-checks against "tier.networkpolicies" for RBAC.
+func makeNetworkPolicyContext(verb, name string) context.Context {
 	ctx := genericapirequest.NewContext()
 	ctx = genericapirequest.WithUser(ctx, testUser)
 	ctx = genericapirequest.WithNamespace(ctx, "test-namespace")
@@ -500,7 +502,7 @@ func makeNpContext(verb, name string) context.Context {
 	return ctx
 }
 
-func makeNpError(verb, policyName string, cannotGetTier bool) string {
+func makeNetworkPolicyError(verb, policyName string, cannotGetTier bool) string {
 	msg := "networkpolicies.projectcalico.org "
 	if verb != "list" {
 		msg += fmt.Sprintf("%q ", policyName)
@@ -518,22 +520,22 @@ func makeNpError(verb, policyName string, cannotGetTier bool) string {
 // (the bare policy name), not "test-tier.test-np".
 func TestNewStyleNetworkPolicyByName(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                   k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNpAttr("get", "test-np")):  k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("get")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(makeNpAttr("list", "test-np")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("list")):      k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                              k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):  k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):       k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNetworkPolicyAttr("list", "test-np")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):      k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		makeNpContext("get", "test-np"), "test-np", "test-tier",
+		makeNetworkPolicyContext("get", "test-np"), "test-np", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned getting NP with bare name when named match permits: %v", err)
+		t.Fatalf("Error returned getting NetworkPolicy with bare name when named match permits: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		makeNpContext("list", "test-np"), "", "test-tier",
+		makeNetworkPolicyContext("list", "test-np"), "", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned listing NP with bare name when named match permits: %v", err)
+		t.Fatalf("Error returned listing NetworkPolicy with bare name when named match permits: %v", err)
 	}
 }
 
@@ -541,22 +543,22 @@ func TestNewStyleNetworkPolicyByName(t *testing.T) {
 // for bare (new-style) policy names, same as for old-style names.
 func TestNewStyleNetworkPolicyTierWildcard(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                     k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNpAttr("create", "test-np")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("create")):      k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNpAttr("delete", "test-np")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("delete")):      k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("create", "test-np")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")):      k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):      k8sauth.DecisionAllow,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		makeNpContext("create", "test-np"), "test-np", "test-tier",
+		makeNetworkPolicyContext("create", "test-np"), "test-np", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned creating NP with bare name when wildcard permits: %v", err)
+		t.Fatalf("Error returned creating NetworkPolicy with bare name when wildcard permits: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		makeNpContext("delete", "test-np"), "test-np", "test-tier",
+		makeNetworkPolicyContext("delete", "test-np"), "test-np", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned deleting NP with bare name when wildcard permits: %v", err)
+		t.Fatalf("Error returned deleting NetworkPolicy with bare name when wildcard permits: %v", err)
 	}
 }
 
@@ -564,25 +566,25 @@ func TestNewStyleNetworkPolicyTierWildcard(t *testing.T) {
 // is correctly denied when neither the exact name nor the tier wildcard match.
 func TestNewStyleNetworkPolicyDenied(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                     k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNpAttr("get", "test-np")):    k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("get")):         k8sauth.DecisionDeny,
-		getAttributesMapkey(makeNpAttr("delete", "test-np")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNpTierAttr("delete")):      k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):      k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		makeNpContext("get", "test-np"), "test-np", "test-tier",
+		makeNetworkPolicyContext("get", "test-np"), "test-np", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned getting NP with bare name when not permitted")
-	} else if err.Error() != makeNpError("get", "test-np", false) {
+		t.Fatalf("No error returned getting NetworkPolicy with bare name when not permitted")
+	} else if err.Error() != makeNetworkPolicyError("get", "test-np", false) {
 		t.Fatalf("Incorrect error message: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		makeNpContext("delete", "test-np"), "test-np", "test-tier",
+		makeNetworkPolicyContext("delete", "test-np"), "test-np", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned deleting NP with bare name when not permitted")
-	} else if err.Error() != makeNpError("delete", "test-np", false) {
+		t.Fatalf("No error returned deleting NetworkPolicy with bare name when not permitted")
+	} else if err.Error() != makeNetworkPolicyError("delete", "test-np", false) {
 		t.Fatalf("Incorrect error message: %v", err)
 	}
 }
@@ -592,17 +594,17 @@ func TestNewStyleNetworkPolicyDenied(t *testing.T) {
 // and wildcard match would both allow.
 func TestNewStyleNetworkPolicyNoTierGet(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                     k8sauth.DecisionDeny,
-		getAttributesMapkey(makeNpAttr("get", "test-np")):    k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("get")):         k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNpAttr("delete", "test-np")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("delete")):      k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):    k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):      k8sauth.DecisionAllow,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		makeNpContext("get", "test-np"), "test-np", "test-tier",
+		makeNetworkPolicyContext("get", "test-np"), "test-np", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned getting NP with bare name when tier GET denied")
-	} else if err.Error() != makeNpError("get", "test-np", true) {
+		t.Fatalf("No error returned getting NetworkPolicy with bare name when tier GET denied")
+	} else if err.Error() != makeNetworkPolicyError("get", "test-np", true) {
 		t.Fatalf("Incorrect error message: %v", err)
 	}
 }
@@ -614,23 +616,23 @@ func TestNewStyleNetworkPolicyNoTierGet(t *testing.T) {
 func TestNameDisambiguation(t *testing.T) {
 	// Bare name "test-np" is allowed, old-style "test-tier.test-np" is denied.
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                            k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNpAttr("get", "test-np")):           k8sauth.DecisionAllow,
-		getAttributesMapkey(createNpTierAttr("get")):                k8sauth.DecisionDeny,
-		getAttributesMapkey(makeNpAttr("get", "test-tier.test-np")): k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                       k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):           k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):                k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-tier.test-np")): k8sauth.DecisionDeny,
 	}}
 
 	// Bare name should succeed.
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		makeNpContext("get", "test-np"), "test-np", "test-tier",
+		makeNetworkPolicyContext("get", "test-np"), "test-np", "test-tier",
 	); err != nil {
-		t.Fatalf("Error returned getting bare-named NP when permitted: %v", err)
+		t.Fatalf("Error returned getting bare-named NetworkPolicy when permitted: %v", err)
 	}
 
 	// Old-style name should be denied (different RBAC resource name).
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
-		makeNpContext("get", "test-tier.test-np"), "test-tier.test-np", "test-tier",
+		makeNetworkPolicyContext("get", "test-tier.test-np"), "test-tier.test-np", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned getting old-style NP when only bare name is permitted")
+		t.Fatalf("No error returned getting old-style NetworkPolicy when only bare name is permitted")
 	}
 }
