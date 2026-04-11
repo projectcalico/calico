@@ -97,6 +97,7 @@ var _ = describe.CalicoDescribe(
 		BeforeEach(func() {
 			var err error
 			ctx, cancel = context.WithCancel(context.Background())
+			DeferCleanup(cancel)
 
 			adminCli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
@@ -114,6 +115,19 @@ var _ = describe.CalicoDescribe(
 				tier.Spec.Order = ptr.To(t.order)
 				tier.Labels = map[string]string{utils.TestResourceLabel: "true"}
 				Expect(adminCli.Create(ctx, tier)).To(Succeed())
+
+				// Tier cleanup is registered per-tier so LIFO ordering ensures
+				// it runs after any policy DeferCleanup registered in It blocks.
+				tierName := t.name
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					toDelete := v3.NewTier()
+					toDelete.Name = tierName
+					if err := adminCli.Delete(cleanupCtx, toDelete); err != nil && !apierrors.IsNotFound(err) {
+						logrus.WithError(err).WithField("name", tierName).Error("Failed to delete Tier")
+					}
+				})
 			}
 
 			By("Creating RBAC resources for test users")
@@ -121,43 +135,27 @@ var _ = describe.CalicoDescribe(
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
+				roleName := setup.roles[i].Name
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					if err := f.ClientSet.RbacV1().ClusterRoles().Delete(cleanupCtx, roleName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+						logrus.WithError(err).WithField("name", roleName).Error("Failed to delete ClusterRole")
+					}
+				})
 			}
 			for i := range setup.bindings {
 				_, err := f.ClientSet.RbacV1().ClusterRoleBindings().Create(ctx, &setup.bindings[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
+				bindingName := setup.bindings[i].Name
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(cleanupCtx, bindingName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+						logrus.WithError(err).WithField("name", bindingName).Error("Failed to delete ClusterRoleBinding")
+					}
+				})
 			}
-		})
-
-		AfterEach(func() {
-			defer cancel()
-			var errOccurred bool
-
-			By("Cleaning up RBAC resources")
-			setup := buildTieredRBACResources()
-			for _, binding := range setup.bindings {
-				if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil {
-					logrus.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
-					errOccurred = true
-				}
-			}
-			for _, role := range setup.roles {
-				if err := f.ClientSet.RbacV1().ClusterRoles().Delete(ctx, role.Name, metav1.DeleteOptions{}); err != nil {
-					logrus.WithError(err).WithField("name", role.Name).Error("Failed to delete ClusterRole")
-					errOccurred = true
-				}
-			}
-
-			By("Cleaning up test tiers")
-			for _, name := range []string{rbacTestTier, rbacOtherTier} {
-				tier := v3.NewTier()
-				tier.Name = name
-				if err := adminCli.Delete(ctx, tier); err != nil {
-					logrus.WithError(err).WithField("name", name).Error("Failed to delete Tier")
-					errOccurred = true
-				}
-			}
-
-			Expect(errOccurred).To(BeFalse(), "errors occurred during teardown")
 		})
 
 		Context("NetworkPolicy", func() {
