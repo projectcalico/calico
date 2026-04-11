@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 package ippool
 
@@ -31,9 +31,14 @@ func (apiServerStrategy) NamespaceScoped() bool {
 }
 
 func (apiServerStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
+	pool := obj.(*calico.IPPool)
+	pool.Status = nil
 }
 
 func (apiServerStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newPool := obj.(*calico.IPPool)
+	oldPool := old.(*calico.IPPool)
+	newPool.Status = oldPool.Status
 }
 
 func (apiServerStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
@@ -60,6 +65,25 @@ func (apiServerStrategy) Canonicalize(obj runtime.Object) {
 }
 
 func (apiServerStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
+	return field.ErrorList{}
+}
+
+type apiServerStatusStrategy struct {
+	apiServerStrategy
+}
+
+func NewStatusStrategy(strategy apiServerStrategy) apiServerStatusStrategy {
+	return apiServerStatusStrategy{strategy}
+}
+
+func (apiServerStatusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newPool := obj.(*calico.IPPool)
+	oldPool := old.(*calico.IPPool)
+	newPool.Spec = oldPool.Spec
+	newPool.Labels = oldPool.Labels
+}
+
+func (apiServerStatusStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
 	return field.ErrorList{}
 }
 

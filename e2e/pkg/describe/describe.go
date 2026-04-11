@@ -85,6 +85,14 @@ func RequiresNoEncap() any {
 	return framework.WithLabel("NoEncap")
 }
 
+// RequiresGoldmane marks tests that depend on Goldmane (and Whisker) being installed
+// in the cluster. These tests read flow logs via the Whisker API, which requires
+// the Goldmane flow aggregation backend. Skip on clusters without Goldmane
+// via --ginkgo.skip=RequiresGoldmane.
+func RequiresGoldmane() any {
+	return framework.WithLabel("RequiresGoldmane")
+}
+
 // RequiresBGPMesh marks tests that depend on the BGP node-to-node mesh being the sole
 // routing mechanism. These tests disable the mesh and expect connectivity to break, which
 // only works when there's no other routing path (e.g., VXLAN). Skip these on VXLAN clusters

@@ -307,9 +307,11 @@ printf '{
   "job_url": %s,
   "git_branch": %s,
   "git_repo_url": %s,
+  "pr_title": %s,
   "batches": [%s]
 }' "$(json_escape "$CALICO_REPO")" "$UT_MODE" "$(json_escape "$job_url")" \
-  "$(json_escape "${SEMAPHORE_GIT_WORKING_BRANCH:-$SEMAPHORE_GIT_BRANCH}")" "$(json_escape "$SEMAPHORE_GIT_URL")" "$batches_json" \
+  "$(json_escape "${SEMAPHORE_GIT_WORKING_BRANCH:-$SEMAPHORE_GIT_BRANCH}")" "$(json_escape "$SEMAPHORE_GIT_URL")" \
+  "$(json_escape "${SEMAPHORE_GIT_PR_NAME:-}")" "$batches_json" \
   | timeout 660 fv-tests-guru-sem-integration || true
 
 echo "analyze-test-failures: Done."
