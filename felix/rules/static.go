@@ -920,9 +920,10 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 
 	var tunnelIfaces []string
 
-	if !r.BPFEnabled {
-		// In BPF mode, encap/decap and source IP selection are handled by BPF programs
-		// directly, so these masquerade rules for IPIP/VXLAN tunnels are not needed.
+	if !r.BPFEnabled || r.BPFOverlayIPOnDevice {
+		// In BPF mode (without BPFOverlayIPOnDevice), encap/decap and source IP
+		// selection are handled by BPF programs directly, so these masquerade
+		// rules for IPIP/VXLAN tunnels are not needed.
 		if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
 			tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
 		}

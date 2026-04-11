@@ -2370,6 +2370,13 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayIPOnDevice:
+                  description: |-
+                    BPFOverlayIPOnDevice, if enabled, Felix assigns an IP address to overlay tunnel devices (IPIP/VXLAN) in
+                    BPF mode and uses it as the encapsulation source IP.  When disabled (the default), BPF programs use the
+                    node IP directly for encapsulation without requiring a separate tunnel device IP.  This option has no
+                    effect on WireGuard tunnels, which always use a tunnel device IP.  [Default: false]
+                  type: boolean
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
