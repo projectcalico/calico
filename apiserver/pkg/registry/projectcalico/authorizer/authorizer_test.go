@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 package authorizer_test
 
@@ -445,5 +445,192 @@ func TestGlobalNetworkPolicyDenied(t *testing.T) {
 		t.Fatalf("No error returned listing GNP when not permitted by GNP RBAC")
 	} else if err.Error() != createGnpError("list", false) {
 		t.Fatalf("Incorrect error message listing GNP when not permitted by NP RBAC: %v", err)
+	}
+}
+
+// ============================================================================
+// New-style (bare) policy name tests
+//
+// These test the same authorization paths as the old-style tests above, but
+// with bare policy names (e.g., "test-np") instead of tier-prefixed names
+// (e.g., "test-tier.test-np"). The authorizer should use the raw policy name
+// from the request for RBAC resource name matching.
+// ============================================================================
+
+// makeNpAttr returns the expected RBAC attributes for a NP with the given name.
+func makeNpAttr(verb, name string) k8sauth.Attributes {
+	ar := k8sauth.AttributesRecord{
+		User:            testUser,
+		Verb:            verb,
+		Namespace:       "test-namespace",
+		APIGroup:        "projectcalico.org",
+		APIVersion:      "v3",
+		Resource:        "tier.networkpolicies",
+		Name:            name,
+		ResourceRequest: true,
+		Path:            "/apis/projectcalico.org/v3/namespaces/test-namespace/tier.networkpolicies/" + name,
+	}
+	if verb == "list" || verb == "create" {
+		ar.Path = "/apis/projectcalico.org/v3/namespaces/test-namespace/tier.networkpolicies"
+		ar.Name = ""
+	}
+	return ar
+}
+
+// makeNpContext returns a request context for a NP with the given name.
+func makeNpContext(verb, name string) context.Context {
+	ctx := genericapirequest.NewContext()
+	ctx = genericapirequest.WithUser(ctx, testUser)
+	ctx = genericapirequest.WithNamespace(ctx, "test-namespace")
+	ri := &genericapirequest.RequestInfo{
+		IsResourceRequest: true,
+		Path:              "/apis/projectcalico.org/v3/namespaces/test-namespace/networkpolicies/" + name,
+		Verb:              verb,
+		APIGroup:          "projectcalico.org",
+		APIVersion:        "v3",
+		Resource:          "networkpolicies",
+		Namespace:         "test-namespace",
+		Name:              name,
+	}
+	if verb == "list" || verb == "create" {
+		ri.Name = ""
+		ri.Path = "/apis/projectcalico.org/v3/namespaces/test-namespace/networkpolicies"
+	}
+	ctx = genericapirequest.WithRequestInfo(ctx, ri)
+	return ctx
+}
+
+func makeNpError(verb, policyName string, cannotGetTier bool) string {
+	msg := "networkpolicies.projectcalico.org "
+	if verb != "list" {
+		msg += fmt.Sprintf("%q ", policyName)
+	}
+	msg += "is forbidden: User \"testuser\" cannot " + verb +
+		" networkpolicies.projectcalico.org in tier \"test-tier\" and namespace \"test-namespace\""
+	if cannotGetTier {
+		msg += " (user cannot get tier)"
+	}
+	return msg
+}
+
+// TestNewStyleNetworkPolicyByName verifies that a bare (new-style) policy name
+// works with exact resource name matching. The RBAC resourceName is "test-np"
+// (the bare policy name), not "test-tier.test-np".
+func TestNewStyleNetworkPolicyByName(t *testing.T) {
+	ta := &testAuth{t, map[string]k8sauth.Decision{
+		getAttributesMapkey(getTierAttr):                   k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNpAttr("get", "test-np")):  k8sauth.DecisionAllow,
+		getAttributesMapkey(createNpTierAttr("get")):       k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNpAttr("list", "test-np")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createNpTierAttr("list")):      k8sauth.DecisionDeny,
+	}}
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNpContext("get", "test-np"), "test-np", "test-tier",
+	); err != nil {
+		t.Fatalf("Error returned getting NP with bare name when named match permits: %v", err)
+	}
+
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNpContext("list", "test-np"), "", "test-tier",
+	); err != nil {
+		t.Fatalf("Error returned listing NP with bare name when named match permits: %v", err)
+	}
+}
+
+// TestNewStyleNetworkPolicyTierWildcard verifies that the tier.* wildcard works
+// for bare (new-style) policy names, same as for old-style names.
+func TestNewStyleNetworkPolicyTierWildcard(t *testing.T) {
+	ta := &testAuth{t, map[string]k8sauth.Decision{
+		getAttributesMapkey(getTierAttr):                     k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNpAttr("create", "test-np")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNpTierAttr("create")):      k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNpAttr("delete", "test-np")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNpTierAttr("delete")):      k8sauth.DecisionAllow,
+	}}
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNpContext("create", "test-np"), "test-np", "test-tier",
+	); err != nil {
+		t.Fatalf("Error returned creating NP with bare name when wildcard permits: %v", err)
+	}
+
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNpContext("delete", "test-np"), "test-np", "test-tier",
+	); err != nil {
+		t.Fatalf("Error returned deleting NP with bare name when wildcard permits: %v", err)
+	}
+}
+
+// TestNewStyleNetworkPolicyDenied verifies that a bare (new-style) policy name
+// is correctly denied when neither the exact name nor the tier wildcard match.
+func TestNewStyleNetworkPolicyDenied(t *testing.T) {
+	ta := &testAuth{t, map[string]k8sauth.Decision{
+		getAttributesMapkey(getTierAttr):                     k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNpAttr("get", "test-np")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(createNpTierAttr("get")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNpAttr("delete", "test-np")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNpTierAttr("delete")):      k8sauth.DecisionDeny,
+	}}
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNpContext("get", "test-np"), "test-np", "test-tier",
+	); err == nil {
+		t.Fatalf("No error returned getting NP with bare name when not permitted")
+	} else if err.Error() != makeNpError("get", "test-np", false) {
+		t.Fatalf("Incorrect error message: %v", err)
+	}
+
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNpContext("delete", "test-np"), "test-np", "test-tier",
+	); err == nil {
+		t.Fatalf("No error returned deleting NP with bare name when not permitted")
+	} else if err.Error() != makeNpError("delete", "test-np", false) {
+		t.Fatalf("Incorrect error message: %v", err)
+	}
+}
+
+// TestNewStyleNetworkPolicyNoTierGet verifies that bare (new-style) policy names
+// are still denied when the user lacks tier GET access, even if the policy match
+// and wildcard match would both allow.
+func TestNewStyleNetworkPolicyNoTierGet(t *testing.T) {
+	ta := &testAuth{t, map[string]k8sauth.Decision{
+		getAttributesMapkey(getTierAttr):                     k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNpAttr("get", "test-np")):    k8sauth.DecisionAllow,
+		getAttributesMapkey(createNpTierAttr("get")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNpAttr("delete", "test-np")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createNpTierAttr("delete")):      k8sauth.DecisionAllow,
+	}}
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNpContext("get", "test-np"), "test-np", "test-tier",
+	); err == nil {
+		t.Fatalf("No error returned getting NP with bare name when tier GET denied")
+	} else if err.Error() != makeNpError("get", "test-np", true) {
+		t.Fatalf("Incorrect error message: %v", err)
+	}
+}
+
+// TestNameDisambiguation verifies that old-style (tier-prefixed) and new-style
+// (bare) policy names resolve to different RBAC resource names and can be
+// independently authorized. A user with access to "test-np" should not
+// automatically have access to "test-tier.test-np", and vice versa.
+func TestNameDisambiguation(t *testing.T) {
+	// Bare name "test-np" is allowed, old-style "test-tier.test-np" is denied.
+	ta := &testAuth{t, map[string]k8sauth.Decision{
+		getAttributesMapkey(getTierAttr):                            k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNpAttr("get", "test-np")):           k8sauth.DecisionAllow,
+		getAttributesMapkey(createNpTierAttr("get")):                k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNpAttr("get", "test-tier.test-np")): k8sauth.DecisionDeny,
+	}}
+
+	// Bare name should succeed.
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNpContext("get", "test-np"), "test-np", "test-tier",
+	); err != nil {
+		t.Fatalf("Error returned getting bare-named NP when permitted: %v", err)
+	}
+
+	// Old-style name should be denied (different RBAC resource name).
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNpContext("get", "test-tier.test-np"), "test-tier.test-np", "test-tier",
+	); err == nil {
+		t.Fatalf("No error returned getting old-style NP when only bare name is permitted")
 	}
 }
