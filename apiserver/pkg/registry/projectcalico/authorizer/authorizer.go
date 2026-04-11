@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 package authorizer
 
@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -98,9 +99,17 @@ func (a *authorizer) AuthorizeTierOperation(
 	}
 	go func() {
 		defer wg.Done()
+		// Construct the tier-qualified name (e.g., "my-tier.my-policy") to match
+		// the format used in RBAC resourceNames for tiered policy resources.
+		// Some callers already include the tier prefix in the request name, so
+		// only prepend when it's missing.
+		tierQualifiedName := attributes.GetName()
+		if tierQualifiedName != "" && !strings.HasPrefix(tierQualifiedName, tierName+".") {
+			tierQualifiedName = tierName + "." + tierQualifiedName
+		}
 		path := pathPrefix
-		if attributes.GetName() != "" {
-			path = pathPrefix + "/" + attributes.GetName()
+		if tierQualifiedName != "" {
+			path = pathPrefix + "/" + tierQualifiedName
 		}
 		attrs := k8sauth.AttributesRecord{
 			User:            attributes.GetUser(),
@@ -110,7 +119,7 @@ func (a *authorizer) AuthorizeTierOperation(
 			APIVersion:      attributes.GetAPIVersion(),
 			Resource:        tierScopedResource,
 			Subresource:     attributes.GetSubresource(),
-			Name:            attributes.GetName(),
+			Name:            tierQualifiedName,
 			ResourceRequest: true,
 			Path:            path,
 		}
