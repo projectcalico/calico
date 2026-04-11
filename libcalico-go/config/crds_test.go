@@ -129,7 +129,7 @@ func TestV1CRDsMatchV3CELRules(t *testing.T) {
 			if v1Rule.Rule != v3Rule.Rule {
 				t.Errorf("%s: CEL rule %q differs:\n  v3: %s\n  v1: %s", kind, v3Rule.Message, v3Rule.Rule, v1Rule.Rule)
 			}
-			if v1Rule.Reason != v3Rule.Reason {
+			if ptrStr(v1Rule.Reason) != ptrStr(v3Rule.Reason) {
 				t.Errorf("%s: CEL rule %q reason differs:\n  v3: %s\n  v1: %s", kind, v3Rule.Message, ptrStr(v3Rule.Reason), ptrStr(v1Rule.Reason))
 			}
 			if v1Rule.FieldPath != v3Rule.FieldPath {
