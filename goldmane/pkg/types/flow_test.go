@@ -159,6 +159,33 @@ func TestKeyEquality(t *testing.T) {
 	}
 }
 
+func TestFlowLogPolicyToProtoSortsByPolicyIndex(t *testing.T) {
+	// Policies stored in goldmane come from Felix where they are iterated from a Go map,
+	// so the order is non-deterministic. FlowLogPolicyToProto should sort them by PolicyIndex
+	// so the UI displays them in evaluation order.
+	trace := &proto.PolicyTrace{
+		EnforcedPolicies: []*proto.PolicyHit{
+			{Name: "end-of-tier", Tier: "default", PolicyIndex: 1, Action: proto.Action_Deny},
+			{Name: "pass-to-np", Tier: "kube-admin", PolicyIndex: 0, Action: proto.Action_Pass},
+		},
+		PendingPolicies: []*proto.PolicyHit{
+			{Name: "staged-c", Tier: "tier-c", PolicyIndex: 2},
+			{Name: "staged-a", Tier: "tier-a", PolicyIndex: 0},
+			{Name: "staged-b", Tier: "tier-b", PolicyIndex: 1},
+		},
+	}
+
+	h := types.ProtoToFlowLogPolicy(trace)
+	result := types.FlowLogPolicyToProto(h)
+
+	require.Equal(t, "pass-to-np", result.EnforcedPolicies[0].Name)
+	require.Equal(t, "end-of-tier", result.EnforcedPolicies[1].Name)
+
+	require.Equal(t, "staged-a", result.PendingPolicies[0].Name)
+	require.Equal(t, "staged-b", result.PendingPolicies[1].Name)
+	require.Equal(t, "staged-c", result.PendingPolicies[2].Name)
+}
+
 // TestIdentical verifies that the exported fields on types.Flow and proto.Flow are identical. This ensures
 // we don't accidentally add new fields to one type and forget to add them to the other.
 func TestIdentical(t *testing.T) {

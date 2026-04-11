@@ -472,7 +472,7 @@ func (c *connectionTester) runConnection(ctx context.Context, exp *Expectation, 
 	// those changes taking effect. So a short retry loop is helpful.
 
 loop:
-	for err != nil || result != exp.ExpectedResult {
+	for result != exp.ExpectedResult {
 		select {
 		case <-ctx.Done():
 			break loop

@@ -29,6 +29,7 @@ import (
 // #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
 // #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/amd64 -lbpf -lelf -lz
 // #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/arm64 -lbpf -lelf -lz
+// #cgo ppc64le LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/ppc64le -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
@@ -594,6 +595,7 @@ func (t *TcGlobalData) Set(m *Map) error {
 		C.short(t.DSCP),
 		C.short(t.IstioDSCP),
 		C.uint(t.MaglevLUTSize),
+		C.uint(t.IPFragTimeout),
 	)
 
 	return err
