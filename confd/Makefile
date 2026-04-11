@@ -41,6 +41,9 @@ endif
 
 test: ut fv
 
+# No system tests for confd; override the st prerequisite from lib.Makefile.
+st:
+
 .PHONY: ut
 ## Run the fast set of unit tests in a container.
 ut:
