@@ -548,6 +548,49 @@ func applyCalicoNode(t *testing.T, be *datastoreBackend, yamlBytes []byte) func(
 	}
 }
 
+// waitForResources polls the Calico client until all CRD resources from the
+// input YAML are visible via List. Under CI load, the envtest API server can
+// briefly return stale list results after a Create.
+func waitForResources(t *testing.T, cc client.Interface, inputPath string) {
+	t.Helper()
+
+	data, err := os.ReadFile(inputPath)
+	require.NoError(t, err)
+
+	expected := countResourcesByKind(data)
+	ctx := context.Background()
+	listCount := map[string]func() int{
+		"BGPPeer":          func() int { l, _ := cc.BGPPeers().List(ctx, options.ListOptions{}); return len(l.Items) },
+		"BGPConfiguration": func() int { l, _ := cc.BGPConfigurations().List(ctx, options.ListOptions{}); return len(l.Items) },
+		"BGPFilter":        func() int { l, _ := cc.BGPFilter().List(ctx, options.ListOptions{}); return len(l.Items) },
+		"IPPool":           func() int { l, _ := cc.IPPools().List(ctx, options.ListOptions{}); return len(l.Items) },
+	}
+
+	require.Eventually(t, func() bool {
+		for kind, want := range expected {
+			if counter, ok := listCount[kind]; ok && counter() < want {
+				return false
+			}
+		}
+		return true
+	}, 5*time.Second, 50*time.Millisecond, "timed out waiting for resources to be visible via Calico client")
+}
+
+func countResourcesByKind(data []byte) map[string]int {
+	counts := map[string]int{}
+	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
+	for {
+		var raw map[string]any
+		if err := decoder.Decode(&raw); err != nil {
+			break
+		}
+		if kind, _ := raw["kind"].(string); kind != "" {
+			counts[kind]++
+		}
+	}
+	return counts
+}
+
 // blockAffinityEntry defines a block affinity for test setup.
 type blockAffinityEntry struct {
 	cidr  string
@@ -691,6 +734,11 @@ func runConfdTest(t *testing.T, be *datastoreBackend, inputYAML, goldenDir strin
 	// Create a fresh Calico client for confd so its syncer gets a clean snapshot.
 	confdCalicoClient, err := client.New(apiconfig.CalicoAPIConfig{Spec: be.datastoreConfig})
 	require.NoError(t, err, "creating confd Calico client")
+
+	// Wait for all resources to be visible through the Calico client. Under
+	// CI load the envtest API server can return stale list results briefly
+	// after a Create returns, causing the syncer to miss resources.
+	waitForResources(t, confdCalicoClient, inputPath)
 
 	confdConfig := &config.Config{
 		ConfDir:  confDir,
