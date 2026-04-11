@@ -23,6 +23,10 @@ The mock data and compiled templates were originally generated in a cluster with
 
 ## Compiled Templates
 
-Golden files live in `compiled_templates/`. For small changes, edit them by hand. For large template changes, spin up a cluster and pull the rendered output from a running `calico/node` at `/etc/calico/confd/config/`.
+Golden files live in `compiled_templates/`. For small changes, edit them by hand. For large template changes, run with `UPDATE_EXPECTED_DATA=true` to automatically overwrite the golden files with the actual rendered output:
 
-When a test fails, the diff output shows the expected vs actual content and the paths to both files on disk — update the golden file to match the actual output if the change is intentional.
+```bash
+make -C confd fv UPDATE_EXPECTED_DATA=true
+```
+
+When a test fails without this flag, the diff output shows the expected vs actual content and the paths to both files on disk.

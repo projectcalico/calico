@@ -86,6 +86,10 @@ var (
 
 	// etcd process (etcd only).
 	etcdCmd *exec.Cmd
+
+	// updateGoldenFiles, when true, overwrites golden files with actual output
+	// instead of failing on mismatch. Set via UPDATE_EXPECTED_DATA=true.
+	updateGoldenFiles = os.Getenv("UPDATE_EXPECTED_DATA") == "true"
 )
 
 func TestMain(m *testing.M) {
@@ -734,6 +738,13 @@ func compareOutput(t *testing.T, outputDir, goldenDir string) {
 			gotNorm := normalizeBlankLines(string(got))
 			wantNorm := normalizeBlankLines(string(want))
 			if gotNorm != wantNorm {
+				if updateGoldenFiles {
+					t.Logf("updating golden file %s", expectedPath)
+					if err := os.WriteFile(expectedPath, []byte(gotNorm), 0644); err != nil {
+						t.Fatalf("failed to update golden file %s: %v", expectedPath, err)
+					}
+					return
+				}
 				t.Errorf("output mismatch for %s\n\n%s", f, fileDiff(t, expectedPath, actualPath, wantNorm, gotNorm))
 			}
 		})
@@ -985,9 +996,31 @@ func (d *confdDaemon) expectOutput(goldenDir string) {
 		}
 
 		if time.Now().After(deadline) {
+			if updateGoldenFiles {
+				d.updateGoldenFiles(goldenDir, goldenFiles)
+				return
+			}
 			d.t.Fatalf("timed out waiting for output to match %s (last mismatch: %s)", goldenDir, lastMismatch)
 		}
 		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// updateGoldenFiles overwrites the golden files with the current rendered output.
+func (d *confdDaemon) updateGoldenFiles(goldenDir string, files []string) {
+	d.t.Helper()
+	for _, f := range files {
+		actualPath := filepath.Join(d.outputDir, f)
+		got, err := os.ReadFile(actualPath)
+		if err != nil {
+			d.t.Logf("skipping %s: %v", f, err)
+			continue
+		}
+		expectedPath := filepath.Join("compiled_templates", goldenDir, f)
+		d.t.Logf("updating golden file %s", expectedPath)
+		if err := os.WriteFile(expectedPath, []byte(normalizeBlankLines(string(got))), 0644); err != nil {
+			d.t.Fatalf("failed to update golden file %s: %v", expectedPath, err)
+		}
 	}
 }
 
