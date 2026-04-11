@@ -677,7 +677,7 @@ func buildTieredRBACResources() tieredRBACSetup {
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tier.networkpolicies"},
 			Verbs:         []string{"update", "delete", "get"},
-			ResourceNames: []string{rbacTestTier + ".rbac-test-exact-allowed"},
+			ResourceNames: []string{"rbac-test-exact-allowed"},
 		},
 	))
 
