@@ -32,20 +32,42 @@ spec:
         openAPIV3Schema:
           properties:
             apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
               type: string
             kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
               type: string
             metadata:
               type: object
             spec:
+              description: |-
+                IPAMBlockSpec contains the specification for an IPAMBlock resource.
+                This resource is managed internally by Calico IPAM and should not be modified manually.
               properties:
                 affinity:
+                  description: |-
+                    Affinity of the block, if this block has one. If set, it will be of the form
+                    "host:<hostname>" or "virtual:<hostname>". If not set, this block is not affine to a host.
                   pattern: ^(host|virtual):[a-zA-Z0-9\.\-_]+$
                   type: string
                 affinityClaimTime:
+                  description: Time at which affinity was claimed.
                   format: date-time
                   type: string
                 allocations:
+                  description: |-
+                    Array of allocations in-use within this block. nil entries mean the allocation is free.
+                    For non-nil entries at index i, the index is the ordinal of the allocation within this block
+                    and the value is the index of the associated attributes in the Attributes array.
                   items:
                     type: integer
                     # TODO: This nullable is manually added in. We should update controller-gen
@@ -54,38 +76,74 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
                 attributes:
+                  description: |-
+                    Attributes is an array of arbitrary metadata associated with allocations in the block. To find
+                    attributes for a given allocation, use the value of the allocation's entry in the Allocations array
+                    as the index of the element in this array.
                   items:
+                    description:
+                      AllocationAttribute holds metadata associated with
+                      a single IP allocation within a block.
                     properties:
                       alternateOwnerAttrs:
                         additionalProperties:
                           type: string
+                        description:
+                          AlternateOwnerAttrs stores attributes of a secondary
+                          owner, used during IP address migration.
                         type: object
                       handle_id:
+                        description:
+                          HandleID is the ID of the IPAM handle that owns
+                          this allocation.
                         type: string
                       secondary:
                         additionalProperties:
                           type: string
+                        description:
+                          ActiveOwnerAttrs stores attributes of the primary
+                          owner of this allocation (e.g., pod name, namespace).
                         type: object
                     type: object
                   type: array
                   x-kubernetes-list-type: atomic
                 cidr:
+                  description: The block's CIDR.
                   format: cidr
                   type: string
                 deleted:
+                  description: |-
+                    Deleted is an internal boolean used to workaround a limitation in the Kubernetes API whereby
+                    deletion will not return a conflict error if the block has been updated. It should not be set manually.
                   type: boolean
                 sequenceNumber:
                   default: 0
+                  description: |-
+                    We store a sequence number that is updated each time the block is written.
+                    Each allocation will also store the sequence number of the block at the time of its creation.
+                    When releasing an IP, passing the sequence number associated with the allocation allows us
+                    to protect against a race condition and ensure the IP hasn't been released and re-allocated
+                    since the release request.
                   format: int64
                   type: integer
                 sequenceNumberForAllocation:
                   additionalProperties:
                     format: int64
                     type: integer
+                  description: |-
+                    Map of allocated ordinal within the block to sequence number of the block at
+                    the time of allocation. Kubernetes does not allow numerical keys for maps, so
+                    the key is cast to a string.
                   type: object
                 strictAffinity:
+                  description:
+                    StrictAffinity on the IPAMBlock is deprecated and no
+                    longer used by the code. Use IPAMConfig StrictAffinity instead.
                   type: boolean
                 unallocated:
+                  description:
+                    Unallocated is an ordered list of allocations which are
+                    free in the block.
                   items:
                     type: integer
                   type: array
