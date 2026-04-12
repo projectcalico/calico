@@ -95,7 +95,10 @@ else
       make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
       GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
       # Disable shellcheck double quote validation for ${K8S_E2E_FLAGS} as this var can contain multiple args and should be word split
+      # Capture the exit code so that the JUnit copy below runs even when
+      # tests fail (set -e would otherwise bail out before the cp).
       #shellcheck disable=SC2086
+      e2e_rc=0
       docker run --rm --init --net=host \
         -e LOCAL_USER_ID="$(id -u)" \
         -e GOCACHE=/go-cache \
@@ -119,12 +122,15 @@ else
         go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" \
           --junit-report=junit.xml --output-dir=report \
           ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} \
-        |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log"
+        |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
 
       # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
       mkdir -p "${REPORT_DIR}"
       cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
       popd
+
+      # Propagate the original test exit code.
+      exit $e2e_rc
     else
       echo "[INFO] starting bz testing..."
       bz tests $VERBOSE |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
