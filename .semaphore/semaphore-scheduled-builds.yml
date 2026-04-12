@@ -707,6 +707,10 @@ blocks:
           env_vars:
             - name: CLUSTER_ROUTING
               value: "FELIX"
+            - name: KIND_CALICO_API_GROUP
+              value: "crd.projectcalico.org/v1"
+            - name: E2E_FOCUS
+              value: "sig-network.*Conformance|sig-calico.*Conformance|BGP|RequiresCalicoAPIServer"
             - name: E2E_SKIP
               value: "BGP"
             - name: STORE_BUILD_CACHE

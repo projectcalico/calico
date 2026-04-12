@@ -468,7 +468,7 @@ var _ = describe.CalicoDescribe(
 		// tier RBAC, which the admission webhook cannot enforce.
 		Context("resource-name exact match", describe.RequiresCalicoAPIServer(), func() {
 			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
-			framework.ConformanceIt("should allow access to the named policy but deny access to others", func() {
+			It("should allow access to the named policy but deny access to others", func() {
 				cli := newImpersonatedClient(rbacExactNameUser)
 
 				By("Creating the target policy as admin")
@@ -531,7 +531,7 @@ var _ = describe.CalicoDescribe(
 		// tier RBAC, which the admission webhook cannot enforce.
 		Context("list via tier RBAC", describe.RequiresCalicoAPIServer(), func() {
 			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
-			framework.ConformanceIt("should allow listing policies in the permitted tier", func() {
+			It("should allow listing policies in the permitted tier", func() {
 				By("Creating a policy in the test tier")
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-watch-target"
@@ -571,7 +571,7 @@ var _ = describe.CalicoDescribe(
 			// tier.networkpolicies permission and no tier GET is denied by
 			// the tier authorizer. This proves the tier expansion path is
 			// enforced and that base K8s RBAC alone is not sufficient.
-			framework.ConformanceIt("should deny listing when user lacks tier policy access", func() {
+			It("should deny listing when user lacks tier policy access", func() {
 				By("Creating a policy in the test tier")
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-watch-denied"
@@ -614,7 +614,7 @@ var _ = describe.CalicoDescribe(
 				prefixedName = rbacTestTier + ".rbac-test-disambig"
 			)
 
-			framework.ConformanceIt("should independently authorize bare and tier-prefixed policy names", func() {
+			It("should independently authorize bare and tier-prefixed policy names", func() {
 				By("Creating a bare-named policy (new-style)")
 				barePolicy := v3.NewNetworkPolicy()
 				barePolicy.Name = bareName
