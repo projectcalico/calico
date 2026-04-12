@@ -466,7 +466,7 @@ var _ = describe.CalicoDescribe(
 		//
 		// Requires the aggregated API server because this test verifies GET-path
 		// tier RBAC, which the admission webhook cannot enforce.
-		Context("resource-name exact match", describe.RequiresCalicoAPIServer(), func() {
+		framework.Context("resource-name exact match", describe.RequiresCalicoAPIServer(), func() {
 			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			It("should allow access to the named policy but deny access to others", func() {
 				cli := newImpersonatedClient(rbacExactNameUser)
@@ -529,7 +529,7 @@ var _ = describe.CalicoDescribe(
 		//
 		// Requires the aggregated API server because this test verifies LIST-path
 		// tier RBAC, which the admission webhook cannot enforce.
-		Context("list via tier RBAC", describe.RequiresCalicoAPIServer(), func() {
+		framework.Context("list via tier RBAC", describe.RequiresCalicoAPIServer(), func() {
 			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			It("should allow listing policies in the permitted tier", func() {
 				By("Creating a policy in the test tier")
@@ -607,7 +607,7 @@ var _ = describe.CalicoDescribe(
 		//
 		// Requires the aggregated API server because this test verifies GET-path
 		// tier RBAC, which the admission webhook cannot enforce.
-		Context("old-style vs new-style name disambiguation", describe.RequiresCalicoAPIServer(), func() {
+		framework.Context("old-style vs new-style name disambiguation", describe.RequiresCalicoAPIServer(), func() {
 			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			const (
 				bareName     = "rbac-test-disambig"
