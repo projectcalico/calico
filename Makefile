@@ -227,7 +227,7 @@ push-chart: bin/helm
 # using a local kind cluster.
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
-E2E_SKIP ?= ""
+E2E_SKIP ?= "RequiresCalicoAPIServer"
 E2E_PROCS ?= 4
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
