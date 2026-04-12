@@ -227,13 +227,13 @@ LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
 $(WINDOWS_BINARY): $(SRC_FILES)
-	$(call build_windows_binary, ../cmd/calico, $@)
+	$(call build_windows_binary, ../cmd/calico-windows, $@)
 
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
-	$(call build_windows_binary, ./cmd/calico, $@)
+$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
+	cp $(WINDOWS_BINARY) $@
 
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
-	$(call build_windows_binary, ./cmd/calico-ipam, $@)
+$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe: $(WINDOWS_BINARY)
+	cp $(WINDOWS_BINARY) $@
 
 $(TOOLS_MOUNTNS_BINARY):
 ifeq ($(CGO_ENABLED),1)
