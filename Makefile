@@ -48,7 +48,88 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
-	rm -rf ./bin .stamp.*
+	rm -rf ./bin .stamp.* .calico.created-* .calico.created-*-fips
+
+###############################################################################
+# Combined calico binary and image
+###############################################################################
+CALICO_PACKAGE = github.com/projectcalico/calico/cmd/calico
+CALICO_IMAGE ?= calico
+CALICO_BINDIR ?= bin
+
+# Source files for the combined binary, derived from cmd/deps.txt.
+CALICO_SRC_FILES := $(call local-deps-go-files,cmd)
+
+# Paths within the build container for BPF source (needed for CGO builds).
+LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src/
+BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
+LIBBPF_A=felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
+
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+endif
+
+.PHONY: calico-build
+calico-build: $(CALICO_BINDIR)/calico-$(ARCH)
+
+$(CALICO_BINDIR)/calico-$(ARCH): $(CALICO_SRC_FILES)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, $(CALICO_PACKAGE), $@)
+else
+	$(call build_binary, $(CALICO_PACKAGE), $@)
+endif
+
+.PHONY: calico-build-cgo
+calico-build-cgo: $(CALICO_BINDIR)/calico-cgo-$(ARCH)
+
+$(CALICO_BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(CALICO_SRC_FILES)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, $(CALICO_PACKAGE), $@)
+else
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+	$(call build_cgo_binary, $(CALICO_PACKAGE), $@)
+else
+	$(call build_binary, $(CALICO_PACKAGE), $@)
+endif
+endif
+
+$(LIBBPF_A):
+	$(MAKE) -C felix libbpf ARCH=$(ARCH)
+
+bin/LICENSE: LICENSE.md
+	mkdir -p bin
+	cp LICENSE.md $@
+
+CALICO_CONTAINER_CREATED = .calico.created-$(ARCH)
+CALICO_CONTAINER_FIPS_CREATED = .calico.created-$(ARCH)-fips
+
+ifeq ($(FIPS),true)
+CALICO_CONTAINER_MARKER = $(CALICO_CONTAINER_FIPS_CREATED)
+CALICO_BINDIR = bin/$(ARCH)-fips
+else
+CALICO_CONTAINER_MARKER = $(CALICO_CONTAINER_CREATED)
+endif
+
+REGISTRAR_BIN = pod2daemon/bin/node-driver-registrar-$(ARCH)
+$(REGISTRAR_BIN):
+	$(MAKE) -C pod2daemon bin/node-driver-registrar-$(ARCH)
+
+.PHONY: calico-image
+calico-image: $(CALICO_IMAGE)
+$(CALICO_IMAGE): $(CALICO_CONTAINER_MARKER)
+
+$(CALICO_CONTAINER_MARKER): docker/calico/Dockerfile $(CALICO_BINDIR)/calico-$(ARCH) bin/LICENSE $(REGISTRAR_BIN)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(CALICO_BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):latest-$(ARCH) -f docker/calico/Dockerfile .
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(CALICO_IMAGE)
+	touch $@
+
+.PHONY: calico-image-all
+calico-image-all: $(addprefix sub-calico-image-,$(VALIDARCHES)) sub-calico-image-fips-amd64
+sub-calico-image-%:
+	$(MAKE) calico-image ARCH=$*
+sub-calico-image-fips-%:
+	$(MAKE) calico-image FIPS=true ARCH=$*
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
@@ -226,8 +307,8 @@ push-chart: bin/helm
 # Run local e2e smoke test against the checked-out code
 # using a local kind cluster.
 ###############################################################################
-E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
-E2E_SKIP ?= ""
+E2E_FOCUS ?= sig-network.*Conformance|sig-calico.*Conformance|BGP
+E2E_SKIP ?=
 E2E_PROCS ?= 4
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
@@ -263,7 +344,7 @@ e2e-test-clusternetworkpolicy:
 ## Run the general e2e tests against a pre-existing kind cluster.
 e2e-run-test:
 	mkdir -p report
-	KUBECONFIG=$(KIND_KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) -focus=$(E2E_FOCUS) -skip=$(E2E_SKIP) --junit-report=e2e_conformance.xml --output-dir=report/ ./e2e/bin/k8s/e2e.test
+	KUBECONFIG=$(KIND_KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) -focus="$(E2E_FOCUS)" -skip="$(E2E_SKIP)" --junit-report=e2e_conformance.xml --output-dir=report/ ./e2e/bin/k8s/e2e.test
 
 ## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
 e2e-run-cnp-test:

@@ -103,6 +103,10 @@ goldmane:
     spec:
       template:
         spec:
+          # Pin to control-plane so goldmane starts as soon as calico-node
+          # is ready there, without waiting for worker nodes.
+          nodeSelector:
+            kubernetes.io/hostname: kind-control-plane
           containers:
           - name: goldmane
             resources:

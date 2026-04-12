@@ -422,7 +422,7 @@ def main():
 
     for image_spec in args.image_names:
         image_spec = image_spec.removeprefix("https://")
-        if not image_spec.startswith("quay.io/"):
+        if not image_spec.startswith("quay.io"):
             log.error(
                 "Image '%s' does not appear to be a quay.io image, skipping", image_spec
             )
