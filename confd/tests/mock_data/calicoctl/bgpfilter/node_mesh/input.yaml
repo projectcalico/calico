@@ -1,0 +1,87 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  nodeToNodeMeshEnabled: true
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+      interface: "*.calico"
+    - action: Reject
+      source: RemotePeers
+      matchOperator: In
+      cidr: 77.1.0.0/16
+    - action: Accept
+      source: RemotePeers
+    - action: Reject
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      interface: "someiface"
+      source: RemotePeers
+      matchOperator: In
+      cidr: 44.1.0.0/16
+    - action: Accept
+      source: RemotePeers
+    - action: Reject
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      source: RemotePeers
+      matchOperator: In
+      cidr: 9000:1::0/64
+    - action: Accept
+      interface: "some*iface"
+      source: RemotePeers
+    - action: Reject
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      source: RemotePeers
+      matchOperator: In
+      cidr: 5000:1::0/64
+    - action: Accept
+      source: RemotePeers
+    - action: Reject
+      interface: "cali*"
