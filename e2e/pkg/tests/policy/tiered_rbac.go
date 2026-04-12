@@ -16,6 +16,7 @@ package policy
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -27,6 +28,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
@@ -461,7 +463,11 @@ var _ = describe.CalicoDescribe(
 		// tier.policyName should be able to operate on that policy but not others.
 		// Note: create is excluded because K8s RBAC does not carry a resource name
 		// on create requests, so resourceNames filtering is meaningless for create.
-		Context("resource-name exact match", func() {
+		//
+		// Requires the aggregated API server because this test verifies GET-path
+		// tier RBAC, which the admission webhook cannot enforce.
+		Context("resource-name exact match", describe.RequiresCalicoAPIServer(), func() {
+			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			framework.ConformanceIt("should allow access to the named policy but deny access to others", func() {
 				cli := newImpersonatedClient(rbacExactNameUser)
 
@@ -520,7 +526,11 @@ var _ = describe.CalicoDescribe(
 		// Verifies that a user with list permissions scoped to a tier's policies
 		// can list policies within that tier, and that a user without tier
 		// policy access is denied.
-		Context("list via tier RBAC", func() {
+		//
+		// Requires the aggregated API server because this test verifies LIST-path
+		// tier RBAC, which the admission webhook cannot enforce.
+		Context("list via tier RBAC", describe.RequiresCalicoAPIServer(), func() {
+			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			framework.ConformanceIt("should allow listing policies in the permitted tier", func() {
 				By("Creating a policy in the test tier")
 				np := v3.NewNetworkPolicy()
@@ -594,7 +604,11 @@ var _ = describe.CalicoDescribe(
 		// in the same tier whose names would collide under naive tier-prefix
 		// logic, then proves each user can only access the policy their RBAC
 		// grants match.
-		Context("old-style vs new-style name disambiguation", func() {
+		//
+		// Requires the aggregated API server because this test verifies GET-path
+		// tier RBAC, which the admission webhook cannot enforce.
+		Context("old-style vs new-style name disambiguation", describe.RequiresCalicoAPIServer(), func() {
+			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			const (
 				bareName     = "rbac-test-disambig"
 				prefixedName = rbacTestTier + ".rbac-test-disambig"
@@ -1002,3 +1016,28 @@ var _ = describe.CalicoDescribe(
 		})
 	},
 )
+
+// requireCalicoAPIServer checks that the aggregated Calico API server is
+// deployed (as opposed to v3 CRD mode). In v3 CRD mode, GET/LIST/WATCH
+// requests bypass tier RBAC because the admission webhook only covers
+// mutating operations. Tests that verify read-path tier RBAC enforcement
+// must call this in a BeforeEach so they fail immediately with a clear
+// message when the API server is absent.
+func requireCalicoAPIServer(cfg *rest.Config) {
+	cs, err := kubernetes.NewForConfig(cfg)
+	Expect(err).NotTo(HaveOccurred())
+
+	pods, err := cs.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-apiserver",
+	})
+	Expect(err).NotTo(HaveOccurred())
+	if len(pods.Items) == 0 {
+		Fail(fmt.Sprintf(
+			"This test requires the aggregated Calico API server (calico-apiserver), " +
+				"but no calico-apiserver pods were found. In v3 CRD mode, GET/LIST/WATCH " +
+				"requests bypass tier RBAC because the admission webhook only covers " +
+				"CREATE/UPDATE/DELETE. Deploy the aggregated API server or skip these " +
+				"tests with -skip=RequiresCalicoAPIServer.",
+		))
+	}
+}

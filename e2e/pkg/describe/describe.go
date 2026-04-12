@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,6 +75,16 @@ var features = map[string]bool{
 	"QoS":             true,
 	"Datapath":        true,
 	"Istio":           true,
+}
+
+// RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
+// server (calico-apiserver) being deployed. In v3 CRD mode, Calico resources
+// are served directly by the K8s CRD controller, and GET/LIST/WATCH requests
+// bypass tier RBAC entirely because the admission webhook only covers mutating
+// operations. These tests verify read-path tier RBAC enforcement, which only
+// works when the aggregated API server is handling requests.
+func RequiresCalicoAPIServer() any {
+	return framework.WithLabel("RequiresCalicoAPIServer")
 }
 
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
