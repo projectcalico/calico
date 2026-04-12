@@ -45,19 +45,20 @@ FIPS ?= false
 
 ifeq ($(FIPS),true)
 NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
 else
 NODE_CONTAINER_BIN_DIR=dist/bin
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
 
+# The node image uses the uber calico binary built with CGO for BPF support.
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
+
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
-# Required for eBPF support.
-# We need to force target arch build image to be used in a cross-compilation run.
+ifeq ($(ARCH),arm64)
+# Required for eBPF support in ARM64.
+# We need to force ARM64 build image to be used in a crosscompilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -195,7 +196,7 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
 
-filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
+filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d' -not -path '*/libbpf/*') $(shell find ../felix/bpf-apache -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d')
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
 	# Clean stale build artifacts that may reference headers from a previous
 	# build environment (e.g., Docker container with different clang version).
@@ -205,45 +206,34 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 
-# We need CGO when compiling in Felix for BPF support.
-# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64 ppc64le))
+# CGO is needed on amd64/arm64 for the mountns binary.
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
-# Normalize userspace types to ensure consistency across architectures.
-ARCH_CGO_CFLAGS=
-ifeq ($(ARCH),ppc64le)
-    ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
-endif
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
 else
 CGO_ENABLED=0
 CGO_LDFLAGS=""
 CGO_CFLAGS=""
 endif
 
+# The node image uses the uber calico binary built with CGO for BPF support.
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
-else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
-	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
-else
-	$(call build_binary, ./cmd/calico-node/main.go, $@)
-endif
-endif
+	$(MAKE) -C .. calico-build-cgo ARCH=$(ARCH)
+	mkdir -p $(NODE_CONTAINER_BIN_DIR)
+	cp ../bin/calico-cgo-$(ARCH) $@
 
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
 $(WINDOWS_BINARY): $(SRC_FILES)
-	$(call build_windows_binary, ./cmd/calico-node/main.go, $@)
+	$(call build_windows_binary, ../cmd/calico-windows, $@)
 
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
-	$(call build_windows_binary, ./cmd/calico, $@)
+$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
+	cp $(WINDOWS_BINARY) $@
 
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
-	$(call build_windows_binary, ./cmd/calico-ipam, $@)
+$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe: $(WINDOWS_BINARY)
+	cp $(WINDOWS_BINARY) $@
 
 $(TOOLS_MOUNTNS_BINARY):
 ifeq ($(CGO_ENABLED),1)
@@ -391,6 +381,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v $(KIND_KUBECONFIG):/root/.kube/config \
 	    -v $(KUBECTL):/bin/kubectl \
+	    -v $(REPO_ROOT)/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
