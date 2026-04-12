@@ -28,9 +28,10 @@ spec:
   serviceAccountName: calicoctl
   containers:
     - name: calicoctl
-      image: calico/ctl:test-build
+      image: calico/calico:test-build
       command:
-        - calicoctl
+        - calico
+        - ctl
       args:
         - version
         - --poll=1m
