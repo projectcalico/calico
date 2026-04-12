@@ -62,6 +62,11 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPMode = api.IPIPModeNever
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
+
+		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALREPORTER"] = "Enabled"
 
 		tc, calicoClient = infrastructure.StartNNodeTopology(2, opts, infra)
 		infra.AddDefaultAllow()
@@ -112,9 +117,10 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 		)
 		if err == nil {
 			for _, cnp := range cnps.Items {
-				_ = cnpClient.ClusterNetworkPolicies().Delete(
+				err := cnpClient.ClusterNetworkPolicies().Delete(
 					context.Background(), cnp.Name, metav1.DeleteOptions{},
 				)
+				Expect(err).NotTo(HaveOccurred())
 			}
 		}
 
@@ -146,8 +152,25 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 		}
 	}
 
+	policyProgrammedOn := func(felix *infrastructure.Felix, ifaceName, policyName string) func() bool {
+		return func() bool {
+			if BPFMode() {
+				out := bpfDumpPolicy(felix, ifaceName, "ingress")
+				return strings.Contains(out, policyName)
+			}
+			if NFTMode() {
+				out, err := felix.ExecOutput("nft", "list", "ruleset")
+				Expect(err).NotTo(HaveOccurred())
+				return strings.Contains(out, policyName)
+			}
+			out, err := felix.ExecOutput("iptables-save", "-t", "filter")
+			Expect(err).NotTo(HaveOccurred())
+			return strings.Contains(out, policyName)
+		}
+	}
+
 	Context("with an AdminTier ClusterNetworkPolicy that denies ingress", func() {
-		JustBeforeEach(func() {
+		It("should deny all ingress traffic to workloads", func() {
 			// Create a ClusterNetworkPolicy that denies ingress to all pods in
 			// the "default" namespace.
 			cnp := &clusternetpol.ClusterNetworkPolicy{
@@ -177,26 +200,14 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 				context.Background(), cnp, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should deny all ingress traffic to workloads", func() {
 			Eventually(policyProgrammed("deny-ingress"), "15s", "200ms").Should(BeTrue())
 
 			cc = &connectivity.Checker{}
 			cc.ExpectNone(w[0], w[1])
 			cc.ExpectNone(w[0], w[2])
 			cc.CheckConnectivity()
-		})
 
-		It("should restore connectivity when the CNP is deleted", func() {
-			Eventually(policyProgrammed("deny-ingress"), "15s", "200ms").Should(BeTrue())
-
-			cc = &connectivity.Checker{}
-			cc.ExpectNone(w[0], w[1])
-			cc.CheckConnectivity()
-
-			By("Deleting the ClusterNetworkPolicy")
-			err := cnpClient.ClusterNetworkPolicies().Delete(
+			err = cnpClient.ClusterNetworkPolicies().Delete(
 				context.Background(), "deny-ingress", metav1.DeleteOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -211,7 +222,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 	})
 
 	Context("with CNP priority ordering: deny-all then allow-all", func() {
-		JustBeforeEach(func() {
+		It("should deny traffic after deleting the allow CNP", func() {
 			// Create a deny-all CNP at lower priority (higher number = evaluated later).
 			cnpDeny := &clusternetpol.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -277,9 +288,6 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 				context.Background(), cnpAllow, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should allow traffic when the higher-priority allow CNP matches", func() {
 			Eventually(policyProgrammed("allow-ingress-tcp"), "15s", "200ms").Should(BeTrue())
 			Eventually(policyProgrammed("deny-all-ingress"), "15s", "200ms").Should(BeTrue())
 
@@ -287,18 +295,9 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 			cc.ExpectSome(w[0], w[1])
 			cc.ExpectSome(w[0], w[2])
 			cc.CheckConnectivity()
-		})
-
-		It("should deny traffic after deleting the allow CNP", func() {
-			Eventually(policyProgrammed("allow-ingress-tcp"), "15s", "200ms").Should(BeTrue())
-			Eventually(policyProgrammed("deny-all-ingress"), "15s", "200ms").Should(BeTrue())
-
-			cc = &connectivity.Checker{}
-			cc.ExpectSome(w[0], w[1])
-			cc.CheckConnectivity()
 
 			By("Deleting the allow CNP so only the deny remains")
-			err := cnpClient.ClusterNetworkPolicies().Delete(
+			err = cnpClient.ClusterNetworkPolicies().Delete(
 				context.Background(), "allow-ingress-tcp", metav1.DeleteOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -313,7 +312,12 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 	})
 
 	Context("with a BaselineTier ClusterNetworkPolicy", func() {
-		JustBeforeEach(func() {
+		It("should deny egress traffic", func() {
+			cc := &connectivity.Checker{}
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[0], w[2])
+			cc.CheckConnectivity()
+
 			// Create a BaselineTier CNP that denies egress.
 			cnp := &clusternetpol.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -342,9 +346,6 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 				context.Background(), cnp, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should deny egress traffic", func() {
 			Eventually(policyProgrammed("baseline-deny-egress"), "15s", "200ms").Should(BeTrue())
 
 			cc = &connectivity.Checker{}
@@ -355,7 +356,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 	})
 
 	Context("with a KCNP pass rule and a GNP deny in the default tier", func() {
-		JustBeforeEach(func() {
+		It("should allow traffic once the GNP is removed", func() {
 			// Create a KCNP in the kube-admin tier (order 1000) that passes
 			// ingress traffic to the next tier.
 			cnp := &clusternetpol.ClusterNetworkPolicy{
@@ -398,9 +399,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 			gnp.Spec.Ingress = []api.Rule{{Action: api.Deny}}
 			_, err = calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, gnp, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
-		})
 
-		It("should deny traffic via the GNP after the KCNP passes", func() {
 			Eventually(policyProgrammed("pass-ingress"), "15s", "200ms").Should(BeTrue())
 			Eventually(policyProgrammed("deny-all-ingress"), "15s", "200ms").Should(BeTrue())
 
@@ -408,18 +407,9 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 			cc.ExpectNone(w[0], w[1])
 			cc.ExpectNone(w[0], w[2])
 			cc.CheckConnectivity()
-		})
-
-		It("should allow traffic once the GNP is removed", func() {
-			Eventually(policyProgrammed("pass-ingress"), "15s", "200ms").Should(BeTrue())
-			Eventually(policyProgrammed("deny-all-ingress"), "15s", "200ms").Should(BeTrue())
-
-			cc = &connectivity.Checker{}
-			cc.ExpectNone(w[0], w[1])
-			cc.CheckConnectivity()
 
 			By("Deleting the GNP so traffic falls through to the default-allow profile")
-			_, err := calicoClient.GlobalNetworkPolicies().Delete(utils.Ctx, "default.deny-all-ingress", options.DeleteOptions{})
+			_, err = calicoClient.GlobalNetworkPolicies().Delete(utils.Ctx, "default.deny-all-ingress", options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(policyProgrammed("deny-all-ingress"), "15s", "200ms").Should(BeFalse())
@@ -432,7 +422,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 	})
 
 	Context("with a KCNP allow in kube-admin overriding a GNP deny in default tier", func() {
-		JustBeforeEach(func() {
+		It("should allow traffic because kube-admin allow takes precedence over default deny", func() {
 			// Create a GNP in the default tier that denies all ingress.
 			gnp := api.NewGlobalNetworkPolicy()
 			gnp.Name = "default.deny-all-ingress"
@@ -483,9 +473,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 				context.Background(), cnp, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		})
 
-		It("should allow traffic because kube-admin allow takes precedence over default deny", func() {
 			Eventually(policyProgrammed("allow-ingress-tcp"), "15s", "200ms").Should(BeTrue())
 			Eventually(policyProgrammed("deny-all-ingress"), "15s", "200ms").Should(BeTrue())
 
@@ -495,112 +483,9 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 			cc.CheckConnectivity()
 		})
 	})
-})
-
-var _ = infrastructure.DatastoreDescribe("cluster network policy flow logs _BPF-SAFE_", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-	const wepPort = 8055
-	wepPortStr := fmt.Sprintf("%d", wepPort)
-
-	var (
-		infra        infrastructure.DatastoreInfra
-		opts         infrastructure.TopologyOptions
-		tc           infrastructure.TopologyContainers
-		calicoClient client.Interface
-		cnpClient    *netpolicyclient.PolicyV1alpha2Client
-		w            [2]*workload.Workload
-		cc           *connectivity.Checker
-	)
-
-	newCnpClient := func() *netpolicyclient.PolicyV1alpha2Client {
-		k8sInfra := infra.(*infrastructure.K8sDatastoreInfra)
-		c, err := netpolicyclient.NewForConfig(&rest.Config{
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				DialContext: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).DialContext,
-				TLSHandshakeTimeout: 10 * time.Second,
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true,
-				},
-			},
-			Host: k8sInfra.Endpoint,
-		})
-		Expect(err).NotTo(HaveOccurred())
-		return c
-	}
-
-	policyProgrammedOn := func(felix *infrastructure.Felix, ifaceName, policyName string) func() bool {
-		return func() bool {
-			if BPFMode() {
-				out := bpfDumpPolicy(felix, ifaceName, "ingress")
-				return strings.Contains(out, policyName)
-			}
-			if NFTMode() {
-				out, err := felix.ExecOutput("nft", "list", "ruleset")
-				Expect(err).NotTo(HaveOccurred())
-				return strings.Contains(out, policyName)
-			}
-			out, err := felix.ExecOutput("iptables-save", "-t", "filter")
-			Expect(err).NotTo(HaveOccurred())
-			return strings.Contains(out, policyName)
-		}
-	}
-
-	JustAfterEach(func() {
-		if cnpClient != nil {
-			cnps, err := cnpClient.ClusterNetworkPolicies().List(
-				context.Background(), metav1.ListOptions{},
-			)
-			if err == nil {
-				for _, cnp := range cnps.Items {
-					_ = cnpClient.ClusterNetworkPolicies().Delete(
-						context.Background(), cnp.Name, metav1.DeleteOptions{},
-					)
-				}
-			}
-		}
-
-		for _, wl := range w {
-			if wl != nil {
-				wl.Stop()
-			}
-		}
-
-		tc.Stop()
-		infra.Stop()
-	})
 
 	Context("with AdminTier deny-all ingress CNP", func() {
-		JustBeforeEach(func() {
-			infra = getInfra()
-			opts = infrastructure.DefaultTopologyOptions()
-			opts.IPIPMode = api.IPIPModeNever
-			opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
-
-			opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
-			opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-			opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALREPORTER"] = "Enabled"
-
-			tc, calicoClient = infrastructure.StartNNodeTopology(2, opts, infra)
-			infra.AddDefaultAllow()
-
-			infrastructure.AssignIP("w0", "10.65.0.0", tc.Felixes[0].Hostname, calicoClient)
-			w[0] = workload.Run(tc.Felixes[0], "w0", "default", "10.65.0.0", wepPortStr, "tcp")
-			w[0].ConfigureInInfra(infra)
-
-			infrastructure.AssignIP("w1", "10.65.1.0", tc.Felixes[1].Hostname, calicoClient)
-			w[1] = workload.Run(tc.Felixes[1], "w1", "default", "10.65.1.0", wepPortStr, "tcp")
-			w[1].ConfigureInInfra(infra)
-
-			ensureRoutesProgrammed(tc.Felixes)
-			if BPFMode() {
-				ensureAllNodesBPFProgramsAttached(tc.Felixes)
-			}
-
-			cnpClient = newCnpClient()
-
+		It("should generate deny flow logs with correct KCNP policy", func() {
 			cnp := &clusternetpol.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "deny-ingress",
@@ -628,9 +513,6 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy flow logs _BPF-
 				context.Background(), cnp, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should generate deny flow logs with correct KCNP policy", func() {
 			Eventually(policyProgrammedOn(tc.Felixes[1], w[1].InterfaceName, "deny-ingress"), "15s", "200ms").Should(BeTrue())
 
 			cc = &connectivity.Checker{}
@@ -703,34 +585,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy flow logs _BPF-
 	})
 
 	Context("with AdminTier allow CNP overriding deny CNP", func() {
-		JustBeforeEach(func() {
-			infra = getInfra()
-			opts = infrastructure.DefaultTopologyOptions()
-			opts.IPIPMode = api.IPIPModeNever
-			opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
-
-			opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
-			opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-			opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALREPORTER"] = "Enabled"
-
-			tc, calicoClient = infrastructure.StartNNodeTopology(2, opts, infra)
-			infra.AddDefaultAllow()
-
-			infrastructure.AssignIP("w0", "10.65.0.0", tc.Felixes[0].Hostname, calicoClient)
-			w[0] = workload.Run(tc.Felixes[0], "w0", "default", "10.65.0.0", wepPortStr, "tcp")
-			w[0].ConfigureInInfra(infra)
-
-			infrastructure.AssignIP("w1", "10.65.1.0", tc.Felixes[1].Hostname, calicoClient)
-			w[1] = workload.Run(tc.Felixes[1], "w1", "default", "10.65.1.0", wepPortStr, "tcp")
-			w[1].ConfigureInInfra(infra)
-
-			ensureRoutesProgrammed(tc.Felixes)
-			if BPFMode() {
-				ensureAllNodesBPFProgramsAttached(tc.Felixes)
-			}
-
-			cnpClient = newCnpClient()
-
+		It("should generate allow flow logs with higher-priority KCNP policy", func() {
 			// Deny-all at lower priority (higher number = evaluated later).
 			cnpDeny := &clusternetpol.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -796,9 +651,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy flow logs _BPF-
 				context.Background(), cnpAllow, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-		})
 
-		It("should generate allow flow logs with higher-priority KCNP policy", func() {
 			Eventually(policyProgrammedOn(tc.Felixes[1], w[1].InterfaceName, "allow-ingress-tcp"), "15s", "200ms").Should(BeTrue())
 			Eventually(policyProgrammedOn(tc.Felixes[1], w[1].InterfaceName, "deny-all-ingress"), "15s", "200ms").Should(BeTrue())
 
