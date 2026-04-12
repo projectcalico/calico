@@ -62,18 +62,7 @@ build: gen-files examples
 # Regenerate all files if the gen exes changed or any "types.go" files changed
 .PHONY: gen-files
 generate gen-files .generate_files: lint-cache-dir clean-generated
-	# Run generation script.
-	$(DOCKER_RUN) \
-		-e PACKAGE_NAME=$(PACKAGE_NAME) \
-		$(CALICO_BUILD) \
-		sh -c '$(BUILD_DIR)/generate.sh'
-
-	# Run prettier to fix CRD indentation.
-	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
-
-	# Patch in manual tweaks to the generated CRDs.
-	patch --no-backup-if-mismatch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
-
+	DOCKER_RUN="$(DOCKER_RUN)" CALICO_BUILD="$(CALICO_BUILD)" PACKAGE_NAME="$(PACKAGE_NAME)" $(BUILD_DIR)/generate.sh
 	touch .generate_files
 	$(MAKE) fix
 
