@@ -54,7 +54,6 @@ ip6tables-save -c > ip6tables
 ipset list > ipset
 ip -6 neigh > ip6neigh
 birdc show protocols > bird_protocols 2>&1
-birdc6 show protocols > bird6_protocols 2>&1
 
 service calico-felix status > felix_status 2>&1
 service neutron-server status > neutron_server_status 2>&1
@@ -69,10 +68,10 @@ eval ${ETCDCTL_V3} get --prefix /calico | tee -a etcdctl_get
 
 echo "  copying config files..."
 
-if [ -d /etc/bird ]; then
-    cp /etc/bird/bird*.conf /etc/bird/bird*.cfg . 2>/dev/null
-elif [ -f /etc/bird.conf ]; then
-    cp /etc/bird.conf /etc/bird6.conf . 2>/dev/null
+if [ -f /etc/bird.conf ]; then
+    cp /etc/bird.conf bird.conf
+else
+    cp /etc/bird/bird.conf bird.conf
 fi
 
 cp -a "$CALICO_CFG" etc_calico

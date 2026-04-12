@@ -19,8 +19,6 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-
-	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 )
 
 func NewClient(id string, ns *v1.Namespace, opts ...ClientOption) *Client {
@@ -98,7 +96,7 @@ func WithClientCustomizer(customizer func(pod *v1.Pod)) ClientOption {
 
 // WithCapture configures the client pod with NET_RAW and NET_ADMIN capabilities required
 // for packet capture with tcpdump. Use this when calling ExpectEncrypted/ExpectPlaintext.
-// Switches the image to netshoot which includes tcpdump and other network tools.
+// The client image must include tcpdump (e.g., netshoot or a custom image).
 func WithCapture() ClientOption {
 	return WithClientCustomizer(func(pod *v1.Pod) {
 		if pod.Spec.SecurityContext == nil {
@@ -107,7 +105,6 @@ func WithCapture() ClientOption {
 		pod.Spec.SecurityContext.RunAsUser = ptrInt64(0)
 		if len(pod.Spec.Containers) > 0 {
 			c := &pod.Spec.Containers[0]
-			c.Image = images.Netshoot
 			if c.SecurityContext == nil {
 				c.SecurityContext = &v1.SecurityContext{}
 			}
