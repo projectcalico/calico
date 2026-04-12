@@ -68,8 +68,12 @@ generate gen-files .generate_files: lint-cache-dir clean-generated
 		$(CALICO_BUILD) \
 		sh -c '$(BUILD_DIR)/generate.sh'
 
-	# Run prettier to fix indentation.
+	# Run prettier to fix CRD indentation.
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
+
+	# Patch in manual tweaks to the generated CRDs.
+	patch --no-backup-if-mismatch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
+
 	touch .generate_files
 	$(MAKE) fix
 
